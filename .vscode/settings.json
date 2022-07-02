@@ -1,0 +1,4 @@
+{
+    "go.formatTool": "gofumpt", 
+    "go.lintOnSave": "package"
+}
