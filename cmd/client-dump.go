@@ -30,7 +30,7 @@ func init() {
 }
 
 var dumpCommand = &cobra.Command{
-	Use:   "client",
+	Use:   "dump",
 	Short: "Initialize Client and dump a PID",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := instantiate_client()
@@ -53,7 +53,7 @@ func dump(c *criu.Criu, pidS string) error {
 
 	// TODO - Configurable storage location
 	// TODO - Dynamic storage (depending on process)
-	img, err := os.Open("~/dump_images")
+	img, err := os.Open("/home/nravic/dump_images")
 	if err != nil {
 		return fmt.Errorf("Can't open image dir")
 	}
@@ -61,13 +61,14 @@ func dump(c *criu.Criu, pidS string) error {
 
 	opts := rpc.CriuOpts{
 		// TODO: need to annotate this stuff, make it programmable/configurable
-		Pid:         proto.Int32(int32(pid)),
-		LogLevel:    proto.Int32(1),
-		LogFile:     proto.String("dump.log"),
-		ImagesDirFd: proto.Int32(int32(img.Fd())),
-		ExtMasters:  proto.Bool(true),
-		ShellJob:    proto.Bool(true),
-		ExtUnixSk:   proto.Bool(true),
+		Pid:          proto.Int32(int32(pid)),
+		LogLevel:     proto.Int32(1),
+		LogFile:      proto.String("dump.log"),
+		ImagesDirFd:  proto.Int32(int32(img.Fd())),
+		ExtMasters:   proto.Bool(true),
+		ShellJob:     proto.Bool(true),
+		ExtUnixSk:    proto.Bool(true),
+		LeaveRunning: proto.Bool(true),
 	}
 
 	err = c.Dump(opts, criu.NoNotify{})

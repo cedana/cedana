@@ -14,7 +14,7 @@ import (
 // going to stay REST for faster hacking
 
 func init() {
-	rootCmd.AddCommand(clientCommand)
+	rootCmd.AddCommand(serverCmd)
 }
 
 var serverCmd = &cobra.Command{

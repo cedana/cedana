@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"net/http"
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/spf13/cobra"
@@ -10,7 +9,7 @@ import (
 
 var clientCommand = &cobra.Command{
 	Use:   "client",
-	Short: "Actually does nothing",
+	Short: "Use with dump or restore (dump first obviously)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return nil
 	},
@@ -34,11 +33,11 @@ func instantiate_client() (*criu.Criu, error) {
 	}
 
 	// client server
-	_, err = http.Get("someUrl/init")
-	if err != nil {
-		log.Fatal("Could not init w/ server", err)
-		// do nothing for now here, want to be able to test
-	}
+	// 	_, err = http.Get("someUrl/init")
+	// if err != nil {
+	// log.Fatal("Could not init w/ server", err)
+	// // do nothing for now here, want to be able to test
+	// }
 
 	// TODO: How to clean up client? Don't want to instatiate every time
 
