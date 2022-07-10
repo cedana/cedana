@@ -1,12 +1,8 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 
@@ -33,19 +29,21 @@ var dumpCommand = &cobra.Command{
 	Use:   "dump",
 	Short: "Initialize Client and dump a PID",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := instantiate_client()
+		c, err := instantiateClient()
 		if err != nil {
 			return err
 		}
-		err = dump(c, args[0])
+		err = c.dump(args[0])
 		if err != nil {
 			return err
 		}
+
+		c.cleanupClient()
 		return nil
 	},
 }
 
-func dump(c *criu.Criu, pidS string) error {
+func (c *Client) dump(pidS string) error {
 	pid, err := strconv.ParseInt(pidS, 10, 0)
 	if err != nil {
 		return fmt.Errorf("can't parse pid: %w", err)
@@ -55,12 +53,12 @@ func dump(c *criu.Criu, pidS string) error {
 	// TODO - Dynamic storage (depending on process)
 	img, err := os.Open("/home/nravic/dump_images")
 	if err != nil {
-		return fmt.Errorf("Can't open image dir")
+		return fmt.Errorf("can't open image dir: %v", err)
 	}
 	defer img.Close()
 
 	opts := rpc.CriuOpts{
-		// TODO: need to annotate this stuff, make it programmable/configurable
+		// TODO: need to annotate this stuff, load from server on boot
 		Pid:          proto.Int32(int32(pid)),
 		LogLevel:     proto.Int32(1),
 		LogFile:      proto.String("dump.log"),
@@ -71,43 +69,11 @@ func dump(c *criu.Criu, pidS string) error {
 		LeaveRunning: proto.Bool(true),
 	}
 
-	err = c.Dump(opts, criu.NoNotify{})
+	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
 		log.Fatal("Error dumping process: ", err)
 		return err
 	}
 
-	c.Cleanup()
-
 	return nil
-}
-
-func poll_server() (*StateHandlerResponse, error) {
-	postBody, _ := json.Marshal(StateHandlerRequest{
-		State: "ready",
-	})
-
-	responseBody := bytes.NewBuffer(postBody)
-	resp, err := http.Post("someUrl/state", "application/json", responseBody)
-
-	if err != nil {
-		log.Fatal("Could not post state to server")
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var response StateHandlerResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		log.Fatal("Could not unmarshal JSON correctly")
-		return nil, err
-	}
-
-	return &response, nil
-
-}
-
-func dump_with_server() {
-	// call poll_server, get instructions and dump
 }

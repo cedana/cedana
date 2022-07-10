@@ -4,8 +4,19 @@ import (
 	"log"
 
 	"github.com/checkpoint-restore/go-criu"
+	pb "github.com/nravic/oort/rpc"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
+
+// TODO: (Big one) - We destroy the client object (or rather let the object get garbage collected after cleanup)
+
+type Client struct {
+	CRIU          *criu.Criu
+	rpcClient     *pb.OortClient
+	rpcConnection *grpc.ClientConn
+}
 
 var clientCommand = &cobra.Command{
 	Use:   "client",
@@ -15,7 +26,7 @@ var clientCommand = &cobra.Command{
 	},
 }
 
-func instantiate_client() (*criu.Criu, error) {
+func instantiateClient() (*Client, error) {
 	c := criu.MakeCriu()
 	// check if version is good, otherwise get out
 	_, err := c.GetCriuVersion()
@@ -32,16 +43,22 @@ func instantiate_client() (*criu.Criu, error) {
 		return nil, err
 	}
 
-	// client server
-	// 	_, err = http.Get("someUrl/init")
-	// if err != nil {
-	// log.Fatal("Could not init w/ server", err)
-	// // do nothing for now here, want to be able to test
-	// }
+	var opts []grpc.DialOption
+	// TODO: Config with setup and transport credentials
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("localhost:5000", opts...)
+	if err != nil {
+		log.Fatalf("Could not connect to RPC server %v", err)
+	}
+	rpcClient := pb.NewOortClient(conn)
+	return &Client{c, &rpcClient, conn}, err
+}
 
-	// TODO: How to clean up client? Don't want to instatiate every time
-
-	return c, nil
+func (c *Client) cleanupClient() error {
+	c.CRIU.Cleanup()
+	c.rpcConnection.Close()
+	// TODO: should be deferrable maybe?
+	return nil
 }
 
 func init() {

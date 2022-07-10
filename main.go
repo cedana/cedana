@@ -54,6 +54,8 @@ func runRecordState(client pb.OortClient) {
 
 // TODO: Send out better state
 func getState() *pb.ClientState {
+	// TODO: Populate w/ process data and other stuff in the RPC definition
+
 	return &pb.ClientState{
 		Timestamp: time.Now().Unix(),
 	}
@@ -64,6 +66,7 @@ func main() {
 	// TODO: think about concurrency
 	// TODO: connection options??
 	var opts []grpc.DialOption
+	// TODO: Config with setup and transport credentials
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial("localhost:5000", opts...)
 	if err != nil {
