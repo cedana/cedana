@@ -5,10 +5,20 @@ import (
 	"log"
 	"time"
 
+	"github.com/checkpoint-restore/go-criu"
 	pb "github.com/nravic/oort/rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+type Client struct {
+	client *pb.OortClient
+	criu   *criu.Criu
+	config ClientConfig
+}
+
+type ClientConfig struct {
+}
 
 func initializeClient(client pb.OortClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -19,7 +29,7 @@ func initializeClient(client pb.OortClient) {
 	if err != nil {
 		log.Fatalf("client.RegisterClient failed: %v", err)
 	}
-
+	// take params, marshal it
 	log.Println(params)
 }
 
@@ -42,6 +52,7 @@ func runRecordState(client pb.OortClient) {
 	log.Printf("Response: %v", reply)
 }
 
+// TODO: Send out better state
 func getState() *pb.ClientState {
 	return &pb.ClientState{
 		Timestamp: time.Now().Unix(),
@@ -50,6 +61,8 @@ func getState() *pb.ClientState {
 }
 
 func main() {
+	// TODO: think about concurrency
+	// TODO: connection options??
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial("localhost:5000", opts...)
