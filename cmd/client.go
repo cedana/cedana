@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/checkpoint-restore/go-criu"
 	pb "github.com/nravic/oort/rpc"
@@ -43,6 +45,8 @@ func instantiateClient() (*Client, error) {
 		return nil, err
 	}
 
+	// TODO: think about concurrency
+	// TODO: connection options??
 	var opts []grpc.DialOption
 	// TODO: Config with setup and transport credentials
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -59,6 +63,48 @@ func (c *Client) cleanupClient() error {
 	c.rpcConnection.Close()
 	// TODO: should be deferrable maybe?
 	return nil
+}
+
+// server comm functions
+func initializeClient(client pb.OortClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	state := getState()
+	params, err := client.RegisterClient(ctx, state)
+	if err != nil {
+		log.Fatalf("client.RegisterClient failed: %v", err)
+	}
+	// take params, marshal it
+	log.Println(params)
+}
+
+func runRecordState(client pb.OortClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := client.RecordState(ctx)
+	if err != nil {
+		log.Fatalf("client.RecordState failed: %v", err)
+	}
+	for i := 1; i < 10; i++ {
+		stream.Send(&pb.ClientState{
+			Timestamp: time.Now().Unix(),
+		})
+	}
+	reply, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Fatalf("client.RecordState failed: %v", err)
+	}
+	log.Printf("Response: %v", reply)
+}
+
+// TODO: Send out better state
+func getState() *pb.ClientState {
+	// TODO: Populate w/ process data and other stuff in the RPC definition
+
+	return &pb.ClientState{
+		Timestamp: time.Now().Unix(),
+	}
 }
 
 func init() {

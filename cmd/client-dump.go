@@ -24,7 +24,7 @@ type StateHandlerResponse struct {
 func init() {
 	clientCommand.AddCommand(dumpCommand)
 }
-
+// This is a direct dump command. Won't be used in practice, we want to start a daemon
 var dumpCommand = &cobra.Command{
 	Use:   "dump",
 	Short: "Initialize Client and dump a PID",

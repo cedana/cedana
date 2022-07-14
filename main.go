@@ -1,82 +1,31 @@
 package main
 
 import (
-	"context"
-	"log"
-	"time"
+	"fmt"
+	"os"
 
-	"github.com/checkpoint-restore/go-criu"
-	pb "github.com/nravic/oort/rpc"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/nravic/oort/cmd"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-type Client struct {
-	client *pb.OortClient
-	criu   *criu.Criu
-	config ClientConfig
-}
+func initConfig() {
+	home, err := os.UserHomeDir()
+	cobra.CheckErr(err)
 
-type ClientConfig struct {
-}
+	// search for config in home dir w/ ".cobra"
+	viper.AddConfigPath(home)
+	viper.SetConfigType("yaml")
+	viper.SetConfigName(".cobra")
 
-func initializeClient(client pb.OortClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	viper.AutomaticEnv()
 
-	state := getState()
-	params, err := client.RegisterClient(ctx, state)
-	if err != nil {
-		log.Fatalf("client.RegisterClient failed: %v", err)
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
-	// take params, marshal it
-	log.Println(params)
-}
-
-func runRecordState(client pb.OortClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	stream, err := client.RecordState(ctx)
-	if err != nil {
-		log.Fatalf("client.RecordState failed: %v", err)
-	}
-	for i := 1; i < 10; i++ {
-		stream.Send(&pb.ClientState{
-			Timestamp: time.Now().Unix(),
-		})
-	}
-	reply, err := stream.CloseAndRecv()
-	if err != nil {
-		log.Fatalf("client.RecordState failed: %v", err)
-	}
-	log.Printf("Response: %v", reply)
-}
-
-// TODO: Send out better state
-func getState() *pb.ClientState {
-	// TODO: Populate w/ process data and other stuff in the RPC definition
-
-	return &pb.ClientState{
-		Timestamp: time.Now().Unix(),
-	}
-	// garbage data for now
 }
 
 func main() {
-	// TODO: think about concurrency
-	// TODO: connection options??
-	var opts []grpc.DialOption
-	// TODO: Config with setup and transport credentials
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial("localhost:5000", opts...)
-	if err != nil {
-		log.Fatalf("Could not connect to RPC server %v", err)
-	}
-
-	defer conn.Close()
-	client := pb.NewOortClient(conn)
-
-	initializeClient(client)
-	runRecordState(client)
-
+	initConfig()
+	cmd.Execute()
 }

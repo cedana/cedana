@@ -31,7 +31,7 @@ var clientRestoreCmd = &cobra.Command{
 func restore(c *criu.Criu) error {
 	img, err := os.Open("/home/nravic/dump_images")
 	if err != nil {
-		return fmt.Errorf("Can't open image dir")
+		return fmt.Errorf("can't open image dir")
 	}
 	defer img.Close()
 
