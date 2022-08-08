@@ -20,7 +20,7 @@ var clientRestoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		err = restore(c.CRIU)
+		err = c.restore()
 		if err != nil {
 			return err
 		}
@@ -28,7 +28,7 @@ var clientRestoreCmd = &cobra.Command{
 	},
 }
 
-func restore(c *criu.Criu) error {
+func (c *Client) restore() error {
 	img, err := os.Open("/home/nravic/dump_images")
 	if err != nil {
 		return fmt.Errorf("can't open image dir")
@@ -41,13 +41,13 @@ func restore(c *criu.Criu) error {
 		LogFile:     proto.String("dump.log"),
 	}
 
-	err = c.Restore(opts, criu.NoNotify{})
+	err = c.CRIU.Restore(opts, criu.NoNotify{})
 	if err != nil {
 		log.Fatal("Error restoring process!", err)
 		return err
 	}
 
-	c.Cleanup()
+	c.cleanupClient()
 
 	return nil
 }

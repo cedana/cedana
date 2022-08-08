@@ -36,15 +36,12 @@ func instantiateClient() (*Client, error) {
 		log.Fatal("Error checking CRIU version!", err)
 		return nil, err
 	}
-
 	// prepare client
-
 	err = c.Prepare()
 	if err != nil {
 		log.Fatal("Error preparing CRIU client", err)
 		return nil, err
 	}
-
 	// TODO: think about concurrency
 	// TODO: connection options??
 	var opts []grpc.DialOption
@@ -65,8 +62,8 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-// server comm functions
-func initializeClient(client pb.OortClient) {
+// Register client with RPC server
+func registerRPCClient(client pb.OortClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -79,6 +76,7 @@ func initializeClient(client pb.OortClient) {
 	log.Println(params)
 }
 
+// record and send state
 func runRecordState(client pb.OortClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -86,10 +84,10 @@ func runRecordState(client pb.OortClient) {
 	if err != nil {
 		log.Fatalf("client.RecordState failed: %v", err)
 	}
+
+	// TODO - spawn a goroutine here
 	for i := 1; i < 10; i++ {
-		stream.Send(&pb.ClientState{
-			Timestamp: time.Now().Unix(),
-		})
+		stream.Send(getState())
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
