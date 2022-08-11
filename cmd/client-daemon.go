@@ -20,13 +20,12 @@ var clientDaemonCmd = &cobra.Command{
 			return err
 		}
 
-		startDaemon(c)
+		c.startDaemon()
 		return nil
 	},
 }
 
-// want to start a daemon!
-func startDaemon(c *Client) chan struct{} {
+func (c *Client) startDaemon() chan struct{} {
 	// on start, check w/ server w/ initializeClient
 	// start pushing out state regularly to server
 	// on intervals from config, dump
@@ -41,9 +40,13 @@ func startDaemon(c *Client) chan struct{} {
 		log.Fatal("Error getting process pid", err)
 	}
 
+	// when the config is statically typed, we won't be worried about getting a weird
+	// var from this, because the act of initing config will error out
+	dumping_frequency := viper.GetInt("dumping_frequency_min")
+
 	// start dumping loop
 	// TODO - this should eventually be a function that takes event hooks
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(time.Duration(dumping_frequency) * time.Minute)
 	quit := make(chan struct{})
 
 	go func() {

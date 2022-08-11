@@ -7,7 +7,9 @@ import (
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
+	"github.com/nravic/oort/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,7 +31,8 @@ var clientRestoreCmd = &cobra.Command{
 }
 
 func (c *Client) restore() error {
-	img, err := os.Open("/home/nravic/dump_images")
+	utils.InitConfig()
+	img, err := os.Open(viper.GetViper().GetString("dump_storage_location"))
 	if err != nil {
 		return fmt.Errorf("can't open image dir")
 	}
@@ -41,6 +44,7 @@ func (c *Client) restore() error {
 		LogFile:     proto.String("dump.log"),
 	}
 
+	// TODO: restore needs to do some work here (restoring connections/)
 	err = c.CRIU.Restore(opts, criu.NoNotify{})
 	if err != nil {
 		log.Fatal("Error restoring process!", err)

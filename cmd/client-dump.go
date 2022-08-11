@@ -8,22 +8,16 @@ import (
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
+	"github.com/nravic/oort/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
-
-type StateHandlerRequest struct {
-	State string `valid:"state"`
-}
-
-type StateHandlerResponse struct {
-	State       string `valid:"state"`
-	Instruction string `valid:"instruction"`
-}
 
 func init() {
 	clientCommand.AddCommand(dumpCommand)
 }
+
 // This is a direct dump command. Won't be used in practice, we want to start a daemon
 var dumpCommand = &cobra.Command{
 	Use:   "dump",
@@ -49,14 +43,16 @@ func (c *Client) dump(pidS string) error {
 		return fmt.Errorf("can't parse pid: %w", err)
 	}
 
-	// TODO - Configurable storage location
+	utils.InitConfig()
 	// TODO - Dynamic storage (depending on process)
-	img, err := os.Open("/home/nravic/dump_images")
+	img, err := os.Open(viper.GetString("dump_storage_location"))
 	if err != nil {
 		return fmt.Errorf("can't open image dir: %v", err)
 	}
 	defer img.Close()
 
+	// ideally we can load and unmarshal this entire struct, from a partial block in the config
+	
 	opts := rpc.CriuOpts{
 		// TODO: need to annotate this stuff, load from server on boot
 		Pid:          proto.Int32(int32(pid)),
