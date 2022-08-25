@@ -52,17 +52,18 @@ func (c *Client) dump(pidS string) error {
 	defer img.Close()
 
 	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-	
+
 	opts := rpc.CriuOpts{
 		// TODO: need to annotate this stuff, load from server on boot
-		Pid:          proto.Int32(int32(pid)),
-		LogLevel:     proto.Int32(1),
-		LogFile:      proto.String("dump.log"),
-		ImagesDirFd:  proto.Int32(int32(img.Fd())),
-		ExtMasters:   proto.Bool(true),
-		ShellJob:     proto.Bool(true),
-		ExtUnixSk:    proto.Bool(true),
-		LeaveRunning: proto.Bool(true),
+		Pid:            proto.Int32(int32(pid)),
+		LogLevel:       proto.Int32(1),
+		LogFile:        proto.String("dump.log"),
+		ImagesDirFd:    proto.Int32(int32(img.Fd())),
+		ExtMasters:     proto.Bool(true),
+		ShellJob:       proto.Bool(true),
+		ExtUnixSk:      proto.Bool(true),
+		LeaveRunning:   proto.Bool(true),
+		TcpEstablished: proto.Bool(true),
 	}
 
 	err = c.CRIU.Dump(opts, criu.NoNotify{})

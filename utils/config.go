@@ -2,24 +2,22 @@ package utils
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 func InitConfig() {
-	home, err := os.UserHomeDir()
-	cobra.CheckErr(err)
 
 	// search for config in home dir w/ ".cobra"
-	viper.AddConfigPath(home)
+	viper.AddConfigPath(".")
 	viper.SetConfigType("yaml")
-	viper.SetConfigName(".cobra")
+	viper.SetConfigName("client_config")
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	err := viper.ReadInConfig()
+	if err != nil { // Handle errors reading the config file
+		panic(fmt.Errorf("fatal error config file: %w", err))
 	}
+
 }

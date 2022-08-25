@@ -1,4 +1,4 @@
 ---
-process_name: "vscode", 
-dump_frequency_min: 10, 
-dump_storage_location: "/home/nravic/dump_images"
+ process_name: "vscode" 
+ dump_frequency_min: 10
+ dump_storage_location: "/home/nravic/dump_images"

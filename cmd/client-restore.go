@@ -32,7 +32,7 @@ var clientRestoreCmd = &cobra.Command{
 
 func (c *Client) restore() error {
 	utils.InitConfig()
-	img, err := os.Open(viper.GetViper().GetString("dump_storage_location"))
+	img, err := os.Open(viper.GetString("dump_storage_location"))
 	if err != nil {
 		return fmt.Errorf("can't open image dir")
 	}
@@ -41,10 +41,11 @@ func (c *Client) restore() error {
 	opts := rpc.CriuOpts{
 		ImagesDirFd: proto.Int32(int32(img.Fd())),
 		LogLevel:    proto.Int32(4),
-		LogFile:     proto.String("dump.log"),
+		LogFile:     proto.String("restore.log"),
+		ShellJob:    proto.Bool(true),
 	}
 
-	// TODO: restore needs to do some work here (restoring connections/)
+	// TODO: restore needs to do some work here (restoring connections?)
 	err = c.CRIU.Restore(opts, criu.NoNotify{})
 	if err != nil {
 		log.Fatal("Error restoring process!", err)
