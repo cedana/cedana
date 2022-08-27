@@ -13,8 +13,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// TODO: (Big one) - We destroy the client object (or rather let the object get garbage collected after cleanup)
-
 type Client struct {
 	CRIU          *criu.Criu
 	rpcClient     *pb.OortClient
@@ -31,10 +29,9 @@ var clientCommand = &cobra.Command{
 
 func instantiateClient() (*Client, error) {
 	c := criu.MakeCriu()
-	// check if version is good, otherwise get out
 	_, err := c.GetCriuVersion()
 	if err != nil {
-		log.Fatal("Error checking CRIU version!", err)
+		log.Fatal("Error checking CRIU version:", err)
 		return nil, err
 	}
 	// prepare client
@@ -63,7 +60,6 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-// Register client with RPC server
 func registerRPCClient(client pb.OortClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

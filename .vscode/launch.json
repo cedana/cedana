@@ -12,7 +12,7 @@
             "program": "main.go",
             "console": "integratedTerminal",
             "asRoot": true,
-            "args": ["client", "restore"]
+            "args": ["client", "dump"]
         }
     ]
 }
