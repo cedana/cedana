@@ -9,7 +9,6 @@ import (
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/oort/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -31,8 +30,11 @@ var clientRestoreCmd = &cobra.Command{
 }
 
 func (c *Client) restore() error {
-	utils.InitConfig()
-	img, err := os.Open(viper.GetString("dump_storage_location"))
+	config, err := utils.InitConfig()
+	if err != nil {
+		return fmt.Errorf("could not load config")
+	}
+	img, err := os.Open(config.Client.DumpStorageDir)
 	if err != nil {
 		return fmt.Errorf("can't open image dir")
 	}

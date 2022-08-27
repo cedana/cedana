@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/nravic/oort/utils"
@@ -12,7 +11,7 @@ import (
 
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Initialize client, start listening",
+	Short: "Start daemon, and dump checkpoints to disk on a timer",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// want to be able to get the criu object from the root, but that's neither here nor there
 		c, err := instantiateClient()
@@ -20,7 +19,8 @@ var clientDaemonCmd = &cobra.Command{
 			return err
 		}
 
-		c.startDaemon()
+		daemonChan := c.startDaemon()
+		defer killDaemon(daemonChan)
 		return nil
 	},
 }
@@ -30,7 +30,10 @@ func (c *Client) startDaemon() chan struct{} {
 	// start pushing out state regularly to server
 	// on intervals from config, dump
 	registerRPCClient(*c.rpcClient)
-	utils.InitConfig()
+	config, err := utils.InitConfig()
+	if err != nil {
+		log.Fatal("Error loading config", err)
+	}
 
 	// goroutine for a listener
 	go runRecordState(*c.rpcClient)
@@ -42,7 +45,8 @@ func (c *Client) startDaemon() chan struct{} {
 
 	// when the config is statically typed, we won't be worried about getting a weird
 	// var from this, because the act of initing config will error out
-	dumping_frequency := viper.GetInt("dumping_frequency_min")
+	dumping_frequency := config.Client.DumpFrequencyMin
+	dump_storage_dir := config.Client.DumpStorageDir
 
 	// start dumping loop
 	// TODO - this should eventually be a function that takes event hooks
@@ -53,9 +57,10 @@ func (c *Client) startDaemon() chan struct{} {
 		for {
 			select {
 			case <-ticker.C:
-				err := c.dump(strconv.Itoa(pid))
+				// todo add incremental checkpointing
+				err := c.dump(pid, dump_storage_dir)
 				if err != nil {
-					// don't throw, just log
+					log.Fatal("error dumping process", err)
 				}
 			case <-quit:
 				ticker.Stop()
