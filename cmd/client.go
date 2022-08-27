@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -22,9 +23,9 @@ type Client struct {
 
 var clientCommand = &cobra.Command{
 	Use:   "client",
-	Short: "Use with dump or restore (dump first obviously)",
+	Short: "Directly dump/restore a checkpoint or start a daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return nil
+		return fmt.Errorf("error: must also specify dump, restore or daemon")
 	},
 }
 
