@@ -17,13 +17,12 @@ func GetPid(process_name string) (int, error) {
 	similarity := 0.0
 	var proc ps.Process
 	for x := range processList {
-		var process ps.Process
-		process = processList[x]
+		process := processList[x]
 		sim := strutil.Similarity(process.Executable(), process_name, metrics.NewHamming())
 		if sim > similarity {
 			similarity = sim
 			proc = process
 		}
 	}
-	return proc.PPid(), nil
+	return proc.Pid(), nil
 }
