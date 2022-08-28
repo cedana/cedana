@@ -78,10 +78,12 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 		ExtUnixSk:      proto.Bool(true),
 		LeaveRunning:   proto.Bool(true),
 		TcpEstablished: proto.Bool(true),
+		GhostLimit:     proto.Uint32(uint32(10000000)),
 	}
 
 	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
+		// TODO - better error handling
 		log.Fatal("Error dumping process: ", err)
 		return err
 	}

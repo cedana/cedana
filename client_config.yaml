@@ -1,6 +1,6 @@
 ---
  client:
-  process_name: "vscode" 
+  process_name: "code-server" 
   dump_frequency_min: 10
   dump_storage_dir: "/home/nravic/dump_images"
  connection:
