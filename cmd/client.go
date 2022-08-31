@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
-	pb "github.com/nravic/oort/rpc"
+	pb "github.com/nravic/cedana-client/rpc"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -15,7 +15,7 @@ import (
 
 type Client struct {
 	CRIU          *criu.Criu
-	rpcClient     *pb.OortClient
+	rpcClient     *pb.CedanaClient
 	rpcConnection *grpc.ClientConn
 }
 
@@ -49,7 +49,7 @@ func instantiateClient() (*Client, error) {
 	if err != nil {
 		log.Fatalf("Could not connect to RPC server %v", err)
 	}
-	rpcClient := pb.NewOortClient(conn)
+	rpcClient := pb.NewCedanaClient(conn)
 	return &Client{c, &rpcClient, conn}, err
 }
 
@@ -60,7 +60,7 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-func registerRPCClient(client pb.OortClient) {
+func registerRPCClient(client pb.CedanaClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -74,7 +74,7 @@ func registerRPCClient(client pb.OortClient) {
 }
 
 // record and send state
-func runRecordState(client pb.OortClient) {
+func runRecordState(client pb.CedanaClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	stream, err := client.RecordState(ctx)

@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/nravic/oort/utils"
+	"github.com/nravic/cedana-client/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

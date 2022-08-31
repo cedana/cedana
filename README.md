@@ -1,7 +1,7 @@
-# Oort
+# Cedana 
 ## Fast and efficient checkpointing client for real-time and distributed systems
 
-Oort-client leverages CRIU to provide checkpoint and restore functionality for most linux processes. 
+Cedana-client leverages CRIU to provide checkpoint and restore functionality for most linux processes. 
 
 
 ## Limitations

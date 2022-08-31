@@ -1,4 +1,4 @@
-module github.com/nravic/oort
+module github.com/nravic/cedana-client
 
 go 1.18
 
