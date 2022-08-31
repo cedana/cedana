@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
-1
+
 var clientRestoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Initialize client and restore from dumped image",
