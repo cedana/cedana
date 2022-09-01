@@ -44,7 +44,6 @@ func (c *Client) restore() error {
 		ImagesDirFd: proto.Int32(int32(img.Fd())),
 		LogLevel:    proto.Int32(4),
 		LogFile:     proto.String("restore.log"),
-		ShellJob:    proto.Bool(true),
 	}
 
 	// TODO: restore needs to do some work here (restoring connections?)
