@@ -7,7 +7,7 @@ import (
 var (
 	// Used for flags.
 	rootCmd = &cobra.Command{
-		Use:   "oort",
+		Use:   "cedana",
 		Short: "simple criu dump/restore client",
 	}
 )
