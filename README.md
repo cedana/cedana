@@ -15,3 +15,4 @@ The following are outstanding tasks to make this a full-fledged product:
 - Use CRIT to extract info from the dumps 
 - Implement incremental checkpoints 
 - Improvements to go-criu 
+- Get dat RPC interface b/ween client and orchestrator looking noice 
