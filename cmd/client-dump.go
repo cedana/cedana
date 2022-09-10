@@ -67,6 +67,21 @@ func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
 }
 
+func (c *Client) prepare_opts() rpc.CriuOpts {
+	opts := rpc.CriuOpts{
+		// TODO: need to annotate this stuff, load from server on boot
+		Pid:            proto.Int32(int32(pid)),
+		LogLevel:       proto.Int32(1),
+		LogFile:        proto.String("dump.log"),
+		ShellJob:       proto.Bool(false),
+		LeaveRunning:   proto.Bool(true),
+		TcpEstablished: proto.Bool(true),
+		GhostLimit:     proto.Uint32(uint32(10000000)),
+	}
+	return opts
+
+}
+
 func (c *Client) dump(pid int, dump_storage_dir string) error {
 
 	// TODO - Dynamic storage (depending on process)
@@ -77,19 +92,8 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 	defer img.Close()
 
 	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-
-	opts := rpc.CriuOpts{
-		// TODO: need to annotate this stuff, load from server on boot
-		Pid:            proto.Int32(int32(pid)),
-		LogLevel:       proto.Int32(1),
-		LogFile:        proto.String("dump.log"),
-		ImagesDirFd:    proto.Int32(int32(img.Fd())),
-		ShellJob:       proto.Bool(false),
-		LeaveRunning:   proto.Bool(true),
-		TcpEstablished: proto.Bool(true),
-		GhostLimit:     proto.Uint32(uint32(10000000)),
-	}
-
+	opts := c.prepare_opts()
+	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	// perform multiple consecutive passes of the dump, altering opts as needed
 	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
