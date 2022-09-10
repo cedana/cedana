@@ -48,21 +48,6 @@ message ClientStateAck {
     bool acked = 2;
 }
 
-message DumpCommandRequest {
-
-}
-
-message DumpCommandResponse {
-
-}
-
-message RestoreCommand {
-
-}
-
-message RestoreCommandResponse {
-
-}
 
 message TransferCheckpoint {
 

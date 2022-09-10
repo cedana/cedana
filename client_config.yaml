@@ -2,7 +2,7 @@
  client:
   process_name: "code-server" 
   dump_frequency_min: 10
-  dump_storage_dir: "/home/nravic/dump_images"
+  dump_storage_dir: "/home/nravichandra/dump_images"
  connection:
   server_addr: "localhost"
   server_port: 5000

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
@@ -56,6 +57,16 @@ var dumpCommand = &cobra.Command{
 	},
 }
 
+func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
+	// copy all open file descriptors for a process
+	cmd := exec.Command("ls", "-l", `/proc/${pid}/fd`)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal(`could not ls /proc for pid ${pid}`, err)
+	}
+	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
+}
+
 func (c *Client) dump(pid int, dump_storage_dir string) error {
 
 	// TODO - Dynamic storage (depending on process)
@@ -79,6 +90,7 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 		GhostLimit:     proto.Uint32(uint32(10000000)),
 	}
 
+	// perform multiple consecutive passes of the dump, altering opts as needed
 	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
 		// TODO - better error handling
