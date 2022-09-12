@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 
@@ -58,8 +57,9 @@ func (c *Client) restore() error {
 	// TODO: restore needs to do some work here (restoring connections?)
 	err = c.CRIU.Restore(opts, criu.NoNotify{})
 	if err != nil {
-		log.Fatal("Error restoring process!", err)
+		c.logger.Fatal().Err(err).Msg("error restoring process")
 		return err
+
 	}
 
 	c.cleanupClient()

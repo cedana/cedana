@@ -8,6 +8,8 @@ import (
 
 	"github.com/checkpoint-restore/go-criu"
 	pb "github.com/nravic/cedana-client/rpc"
+	"github.com/nravic/cedana-client/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -17,6 +19,7 @@ type Client struct {
 	CRIU          *criu.Criu
 	rpcClient     *pb.CedanaClient
 	rpcConnection *grpc.ClientConn
+	logger        *zerolog.Logger
 }
 
 var clientCommand = &cobra.Command{
@@ -28,16 +31,19 @@ var clientCommand = &cobra.Command{
 }
 
 func instantiateClient() (*Client, error) {
+	// instantiate logger
+	logger := utils.GetLogger()
+
 	c := criu.MakeCriu()
 	_, err := c.GetCriuVersion()
 	if err != nil {
-		log.Fatal("Error checking CRIU version:", err)
+		logger.Fatal().Err(err).Msg("Error checking CRIU version")
 		return nil, err
 	}
 	// prepare client
 	err = c.Prepare()
 	if err != nil {
-		log.Fatal("Error preparing CRIU client", err)
+		logger.Fatal().Err(err).Msg("Error preparing CRIU client")
 		return nil, err
 	}
 	// TODO: think about concurrency
@@ -47,15 +53,17 @@ func instantiateClient() (*Client, error) {
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial("localhost:5000", opts...)
 	if err != nil {
-		log.Fatalf("Could not connect to RPC server %v", err)
+		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
 	}
 	rpcClient := pb.NewCedanaClient(conn)
-	return &Client{c, &rpcClient, conn}, err
+
+	return &Client{c, &rpcClient, conn, &logger}, err
 }
 
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
 	c.rpcConnection.Close()
+	c.logger.Info().Msg("Cleaning up client")
 	// TODO: should be deferrable maybe?
 	return nil
 }

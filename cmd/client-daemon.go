@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"time"
 
 	"github.com/nravic/cedana-client/utils"
@@ -32,7 +31,7 @@ func (c *Client) startDaemon() chan struct{} {
 	registerRPCClient(*c.rpcClient)
 	config, err := utils.InitConfig()
 	if err != nil {
-		log.Fatal("Error loading config", err)
+		c.logger.Fatal().Err(err).Msg("error loading config")
 	}
 
 	// goroutine for a listener
@@ -40,7 +39,7 @@ func (c *Client) startDaemon() chan struct{} {
 
 	pid, err := utils.GetPid(viper.GetString("process_name"))
 	if err != nil {
-		log.Fatal("Error getting process pid", err)
+		c.logger.Fatal().Err(err).Msg("error getting process pid")
 	}
 
 	// when the config is statically typed, we won't be worried about getting a weird
@@ -60,7 +59,7 @@ func (c *Client) startDaemon() chan struct{} {
 				// todo add incremental checkpointing
 				err := c.dump(pid, dump_storage_dir)
 				if err != nil {
-					log.Fatal("error dumping process", err)
+					c.logger.Fatal().Err(err).Msg("error dumping process")
 				}
 			case <-quit:
 				ticker.Stop()

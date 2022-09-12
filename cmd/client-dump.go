@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"os/exec"
 
@@ -33,7 +31,7 @@ var dumpCommand = &cobra.Command{
 		}
 		config, err := utils.InitConfig()
 		if err != nil {
-			log.Fatal("Could not read config", err)
+			c.logger.Fatal().Err(err).Msg("Could not read config")
 		}
 		// load from config if flags aren't set
 		if dump_storage_dir == "" {
@@ -43,7 +41,8 @@ var dumpCommand = &cobra.Command{
 		if pid == 0 {
 			pid, err = utils.GetPid(config.Client.ProcessName)
 			if err != nil {
-				return fmt.Errorf("could not parse process name from config")
+				c.logger.Err(err).Msg("Could not parse process name from config")
+				return err
 			}
 		}
 
@@ -62,8 +61,9 @@ func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 	cmd := exec.Command("ls", "-l", `/proc/${pid}/fd`)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(`could not ls /proc for pid ${pid}`, err)
+		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid ${pid}`)
 	}
+	c.logger.Debug().Bytes(`open fds for pid ${pid}`, out)
 	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
 }
 
@@ -86,7 +86,8 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 	// TODO - Dynamic storage (depending on process)
 	img, err := os.Open(dump_storage_dir)
 	if err != nil {
-		return fmt.Errorf("can't open image dir: %v", err)
+		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dump_storage_dir)
+		return err
 	}
 	defer img.Close()
 
@@ -103,11 +104,11 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 	// fmt.Printf("starting dump with opts: %+v\n", opts)
 
 	// do some process checks here and add opts accordingly
-
+	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
 	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
 		// TODO - better error handling
-		log.Fatal("Error dumping process: ", err)
+		c.logger.Fatal().Err(err).Msg("Error dumping process")
 		return err
 	}
 
