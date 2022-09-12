@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
@@ -41,10 +42,18 @@ func (c *Client) restore() error {
 	defer img.Close()
 
 	opts := rpc.CriuOpts{
-		ImagesDirFd: proto.Int32(int32(img.Fd())),
-		LogLevel:    proto.Int32(4),
-		LogFile:     proto.String("restore.log"),
+		ImagesDirFd:    proto.Int32(int32(img.Fd())),
+		LogLevel:       proto.Int32(4),
+		LogFile:        proto.String("restore.log"),
+		TcpEstablished: proto.Bool(true),
 	}
+
+	// automate
+	cmd := exec.Command("mv", "code-server.log.bak", "code-server.log")
+	cmd.Run()
+
+	cmd = exec.Command("chmod", "664", "code-server.log")
+	cmd.Run()
 
 	// TODO: restore needs to do some work here (restoring connections?)
 	err = c.CRIU.Restore(opts, criu.NoNotify{})

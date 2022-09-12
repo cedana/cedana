@@ -3,6 +3,10 @@
   process_name: "code-server" 
   dump_frequency_min: 10
   dump_storage_dir: "/home/nravichandra/dump_images"
+ action_scripts: 
+  pre_dump: "scripts/pre_dump.sh"
+  post_dump: "scripts/post_dump.sh"
+  pre_restore: "scripts/pres_restore.sh"
  connection:
   server_addr: "localhost"
   server_port: 5000

@@ -69,14 +69,13 @@ func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 
 func (c *Client) prepare_opts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		// TODO: need to annotate this stuff, load from server on boot
-		Pid:            proto.Int32(int32(pid)),
-		LogLevel:       proto.Int32(1),
+		LogLevel:       proto.Int32(4),
 		LogFile:        proto.String("dump.log"),
 		ShellJob:       proto.Bool(false),
 		LeaveRunning:   proto.Bool(true),
 		TcpEstablished: proto.Bool(true),
 		GhostLimit:     proto.Uint32(uint32(10000000)),
+		ExtMasters:     proto.Bool(true),
 	}
 	return opts
 
@@ -92,15 +91,29 @@ func (c *Client) dump(pid int, dump_storage_dir string) error {
 	defer img.Close()
 
 	// ideally we can load and unmarshal this entire struct, from a partial block in the config
+	c.prepare_dump(pid, dump_storage_dir)
 	opts := c.prepare_opts()
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
+	opts.Pid = proto.Int32(int32(pid))
+
 	// perform multiple consecutive passes of the dump, altering opts as needed
+	// go-CRIU doesn't expose some of this stuff, need to hand-code
+	// incrementally add as you test different processes and they fail
+
+	// fmt.Printf("starting dump with opts: %+v\n", opts)
+
+	// do some process checks here and add opts accordingly
+
 	err = c.CRIU.Dump(opts, criu.NoNotify{})
 	if err != nil {
 		// TODO - better error handling
 		log.Fatal("Error dumping process: ", err)
 		return err
 	}
+
+	// automate later
+	cmd := exec.Command("cp", "code-server.log", "code-server.log.bak")
+	cmd.Run()
 
 	return nil
 }
