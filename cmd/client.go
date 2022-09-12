@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -53,6 +54,10 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Err(err).Msg("Could not read config")
 		return nil, err
 	}
+	jsconfig, err := json.Marshal(config)
+	if err != nil {
+		logger.Debug().RawJSON("config loaded", jsconfig)
+	}
 
 	// TODO: think about concurrency
 	// TODO: connection options??
@@ -68,11 +73,11 @@ func instantiateClient() (*Client, error) {
 	return &Client{c, &rpcClient, conn, &logger, config}, err
 }
 
+// TODO: this should probably be deferrable
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
 	c.rpcConnection.Close()
-	c.logger.Info().Msg("Cleaning up client")
-	// TODO: should be deferrable maybe?
+	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
 

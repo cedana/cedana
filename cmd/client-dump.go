@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana-client/utils"
@@ -53,10 +54,10 @@ var dumpCommand = &cobra.Command{
 
 func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 	// copy all open file descriptors for a process
-	cmd := exec.Command("ls", "-l", `/proc/${pid}/fd`)
+	cmd := exec.Command("ls", "-l", "/proc/"+strconv.Itoa(pid)+"/fd")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid ${pid}`)
+		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
 	}
 	c.logger.Debug().Bytes(`open fds for pid ${pid}`, out)
 	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
@@ -113,10 +114,6 @@ func (c *Client) dump(pid int, dir string) error {
 		c.logger.Fatal().Err(err).Msg("error dumping process")
 		return err
 	}
-
-	// automate later
-	cmd := exec.Command("cp", "code-server.log", "code-server.log.bak")
-	cmd.Run()
 
 	return nil
 }

@@ -3,9 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
-	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana-client/utils"
 	"github.com/spf13/cobra"
@@ -47,15 +45,17 @@ func (c *Client) restore() error {
 		TcpEstablished: proto.Bool(true),
 	}
 
+	nfy := utils.Notify{
+		Config:          c.config,
+		Logger:          c.logger,
+		PreDumpAvail:    true,
+		PostDumpAvail:   true,
+		PreRestoreAvail: true,
+	}
+
 	// automate
-	cmd := exec.Command("mv", "code-server.log.bak", "code-server.log")
-	cmd.Run()
-
-	cmd = exec.Command("chmod", "664", "code-server.log")
-	cmd.Run()
-
 	// TODO: restore needs to do some work here (restoring connections?)
-	err = c.CRIU.Restore(opts, criu.NoNotify{})
+	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error restoring process")
 		return err
