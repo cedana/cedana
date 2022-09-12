@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana-client/utils"
 	"github.com/spf13/cobra"
@@ -41,16 +39,27 @@ func (c *Client) restore() error {
 	defer img.Close()
 
 	opts := rpc.CriuOpts{
-		ImagesDirFd: proto.Int32(int32(img.Fd())),
-		LogLevel:    proto.Int32(4),
-		LogFile:     proto.String("restore.log"),
+		ImagesDirFd:    proto.Int32(int32(img.Fd())),
+		LogLevel:       proto.Int32(4),
+		LogFile:        proto.String("restore.log"),
+		TcpEstablished: proto.Bool(true),
 	}
 
+	nfy := utils.Notify{
+		Config:          c.config,
+		Logger:          c.logger,
+		PreDumpAvail:    true,
+		PostDumpAvail:   true,
+		PreRestoreAvail: true,
+	}
+
+	// automate
 	// TODO: restore needs to do some work here (restoring connections?)
-	err = c.CRIU.Restore(opts, criu.NoNotify{})
+	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
-		log.Fatal("Error restoring process!", err)
+		c.logger.Fatal().Err(err).Msg("error restoring process")
 		return err
+
 	}
 
 	c.cleanupClient()

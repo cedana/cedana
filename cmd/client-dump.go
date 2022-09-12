@@ -1,24 +1,22 @@
 package cmd
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"os/exec"
+	"strconv"
 
-	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana-client/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
 
-var dump_storage_dir string
+var dir string
 var pid int
 
 func init() {
 	clientCommand.AddCommand(dumpCommand)
-	dumpCommand.Flags().StringVarP(&dump_storage_dir, "dumpdir", "d", "", "folder to dump checkpoint into")
+	dumpCommand.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to dump checkpoint into")
 	dumpCommand.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
@@ -31,23 +29,20 @@ var dumpCommand = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		config, err := utils.InitConfig()
-		if err != nil {
-			log.Fatal("Could not read config", err)
-		}
 		// load from config if flags aren't set
-		if dump_storage_dir == "" {
-			dump_storage_dir = config.Client.DumpStorageDir
+		if dir == "" {
+			dir = c.config.Client.DumpStorageDir
 		}
 
 		if pid == 0 {
-			pid, err = utils.GetPid(config.Client.ProcessName)
+			pid, err = utils.GetPid(c.config.Client.ProcessName)
 			if err != nil {
-				return fmt.Errorf("could not parse process name from config")
+				c.logger.Err(err).Msg("Could not parse process name from config")
+				return err
 			}
 		}
 
-		err = c.dump(pid, dump_storage_dir)
+		err = c.dump(pid, dir)
 		if err != nil {
 			return err
 		}
@@ -59,42 +54,64 @@ var dumpCommand = &cobra.Command{
 
 func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 	// copy all open file descriptors for a process
-	cmd := exec.Command("ls", "-l", `/proc/${pid}/fd`)
+	cmd := exec.Command("ls", "-l", "/proc/"+strconv.Itoa(pid)+"/fd")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(`could not ls /proc for pid ${pid}`, err)
+		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
 	}
+	c.logger.Debug().Bytes(`open fds for pid ${pid}`, out)
 	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
 }
 
-func (c *Client) dump(pid int, dump_storage_dir string) error {
-
-	// TODO - Dynamic storage (depending on process)
-	img, err := os.Open(dump_storage_dir)
-	if err != nil {
-		return fmt.Errorf("can't open image dir: %v", err)
-	}
-	defer img.Close()
-
-	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-
+func (c *Client) prepare_opts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		// TODO: need to annotate this stuff, load from server on boot
-		Pid:            proto.Int32(int32(pid)),
-		LogLevel:       proto.Int32(1),
+		LogLevel:       proto.Int32(4),
 		LogFile:        proto.String("dump.log"),
-		ImagesDirFd:    proto.Int32(int32(img.Fd())),
 		ShellJob:       proto.Bool(false),
 		LeaveRunning:   proto.Bool(true),
 		TcpEstablished: proto.Bool(true),
 		GhostLimit:     proto.Uint32(uint32(10000000)),
+		ExtMasters:     proto.Bool(true),
+	}
+	return opts
+
+}
+
+func (c *Client) dump(pid int, dir string) error {
+
+	// TODO - Dynamic storage (depending on process)
+	img, err := os.Open(dir)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
+		return err
+	}
+	defer img.Close()
+
+	// ideally we can load and unmarshal this entire struct, from a partial block in the config
+	c.prepare_dump(pid, dir)
+	opts := c.prepare_opts()
+	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
+	opts.Pid = proto.Int32(int32(pid))
+
+	nfy := utils.Notify{
+		Config:          c.config,
+		Logger:          c.logger,
+		PreDumpAvail:    true,
+		PostDumpAvail:   true,
+		PreRestoreAvail: true,
 	}
 
+	c.logger.Debug().Msgf("starting dump with opts: %+v\n", opts)
+
 	// perform multiple consecutive passes of the dump, altering opts as needed
-	err = c.CRIU.Dump(opts, criu.NoNotify{})
+	// go-CRIU doesn't expose some of this stuff, need to hand-code
+	// incrementally add as you test different processes and they fail
+
+	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
+	err = c.CRIU.Dump(opts, nfy)
 	if err != nil {
 		// TODO - better error handling
-		log.Fatal("Error dumping process: ", err)
+		c.logger.Fatal().Err(err).Msg("error dumping process")
 		return err
 	}
 

@@ -7,14 +7,21 @@ import (
 )
 
 type Config struct {
-	Client     Client     `mapstructure:"client"`
-	Connection Connection `mapstructure:"connection"`
+	Client        Client        `mapstructure:"client"`
+	ActionScripts ActionScripts `mapstructure:"action_scripts"`
+	Connection    Connection    `mapstructure:"connection"`
 }
 
 type Client struct {
 	ProcessName      string `mapstructure:"process_name"`
 	DumpFrequencyMin int    `mapstructure:"dump_frequency_min"`
 	DumpStorageDir   string `mapstructure:"dump_storage_dir"`
+}
+
+type ActionScripts struct {
+	PreDump    string `mapstructure:"pre_dump"`
+	PostDump   string `mapstructure:"post_dump"`
+	PreRestore string `mapstructure:"pre_restore"`
 }
 
 type Connection struct {
