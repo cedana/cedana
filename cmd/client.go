@@ -20,6 +20,7 @@ type Client struct {
 	rpcClient     *pb.CedanaClient
 	rpcConnection *grpc.ClientConn
 	logger        *zerolog.Logger
+	config        *utils.Config
 }
 
 var clientCommand = &cobra.Command{
@@ -46,6 +47,13 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Err(err).Msg("Error preparing CRIU client")
 		return nil, err
 	}
+
+	config, err := utils.InitConfig()
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not read config")
+		return nil, err
+	}
+
 	// TODO: think about concurrency
 	// TODO: connection options??
 	var opts []grpc.DialOption
@@ -57,7 +65,7 @@ func instantiateClient() (*Client, error) {
 	}
 	rpcClient := pb.NewCedanaClient(conn)
 
-	return &Client{c, &rpcClient, conn, &logger}, err
+	return &Client{c, &rpcClient, conn, &logger, config}, err
 }
 
 func (c *Client) cleanupClient() error {

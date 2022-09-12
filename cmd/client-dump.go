@@ -4,19 +4,18 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/checkpoint-restore/go-criu"
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana-client/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
 
-var dump_storage_dir string
+var dir string
 var pid int
 
 func init() {
 	clientCommand.AddCommand(dumpCommand)
-	dumpCommand.Flags().StringVarP(&dump_storage_dir, "dumpdir", "d", "", "folder to dump checkpoint into")
+	dumpCommand.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to dump checkpoint into")
 	dumpCommand.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
@@ -29,24 +28,20 @@ var dumpCommand = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		config, err := utils.InitConfig()
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("Could not read config")
-		}
 		// load from config if flags aren't set
-		if dump_storage_dir == "" {
-			dump_storage_dir = config.Client.DumpStorageDir
+		if dir == "" {
+			dir = c.config.Client.DumpStorageDir
 		}
 
 		if pid == 0 {
-			pid, err = utils.GetPid(config.Client.ProcessName)
+			pid, err = utils.GetPid(c.config.Client.ProcessName)
 			if err != nil {
 				c.logger.Err(err).Msg("Could not parse process name from config")
 				return err
 			}
 		}
 
-		err = c.dump(pid, dump_storage_dir)
+		err = c.dump(pid, dir)
 		if err != nil {
 			return err
 		}
@@ -81,34 +76,41 @@ func (c *Client) prepare_opts() rpc.CriuOpts {
 
 }
 
-func (c *Client) dump(pid int, dump_storage_dir string) error {
+func (c *Client) dump(pid int, dir string) error {
 
 	// TODO - Dynamic storage (depending on process)
-	img, err := os.Open(dump_storage_dir)
+	img, err := os.Open(dir)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dump_storage_dir)
+		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
 		return err
 	}
 	defer img.Close()
 
 	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-	c.prepare_dump(pid, dump_storage_dir)
+	c.prepare_dump(pid, dir)
 	opts := c.prepare_opts()
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(int32(pid))
+
+	nfy := utils.Notify{
+		Config:          c.config,
+		Logger:          c.logger,
+		PreDumpAvail:    true,
+		PostDumpAvail:   true,
+		PreRestoreAvail: true,
+	}
+
+	c.logger.Debug().Msgf("starting dump with opts: %+v\n", opts)
 
 	// perform multiple consecutive passes of the dump, altering opts as needed
 	// go-CRIU doesn't expose some of this stuff, need to hand-code
 	// incrementally add as you test different processes and they fail
 
-	// fmt.Printf("starting dump with opts: %+v\n", opts)
-
-	// do some process checks here and add opts accordingly
 	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
-	err = c.CRIU.Dump(opts, criu.NoNotify{})
+	err = c.CRIU.Dump(opts, nfy)
 	if err != nil {
 		// TODO - better error handling
-		c.logger.Fatal().Err(err).Msg("Error dumping process")
+		c.logger.Fatal().Err(err).Msg("error dumping process")
 		return err
 	}
 

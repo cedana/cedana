@@ -44,12 +44,12 @@ func (c *Client) startDaemon() chan struct{} {
 
 	// when the config is statically typed, we won't be worried about getting a weird
 	// var from this, because the act of initing config will error out
-	dumping_frequency := config.Client.DumpFrequencyMin
-	dump_storage_dir := config.Client.DumpStorageDir
+	freq := config.Client.DumpFrequencyMin
+	dir := config.Client.DumpStorageDir
 
 	// start dumping loop
 	// TODO - this should eventually be a function that takes event hooks
-	ticker := time.NewTicker(time.Duration(dumping_frequency) * time.Minute)
+	ticker := time.NewTicker(time.Duration(freq) * time.Minute)
 	quit := make(chan struct{})
 
 	go func() {
@@ -57,7 +57,7 @@ func (c *Client) startDaemon() chan struct{} {
 			select {
 			case <-ticker.C:
 				// todo add incremental checkpointing
-				err := c.dump(pid, dump_storage_dir)
+				err := c.dump(pid, dir)
 				if err != nil {
 					c.logger.Fatal().Err(err).Msg("error dumping process")
 				}

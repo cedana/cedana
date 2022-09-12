@@ -1,6 +1,10 @@
 package utils
 
-import "os/exec"
+import (
+	"os/exec"
+
+	"github.com/rs/zerolog"
+)
 
 // implement go-criu's Notify interface
 // type Notify interface {
@@ -16,16 +20,19 @@ import "os/exec"
 //}
 
 type Notify struct {
-	config           *Config
-	PreDumpAvail     bool
-	PostDumpAvail    bool
-	PreRestoreAvail  bool
+	Config          *Config
+	Logger          *zerolog.Logger
+	PreDumpAvail    bool
+	PostDumpAvail   bool
+	PreRestoreAvail bool
 }
 
 // PreDump NoNotify
 func (n Notify) PreDump() error {
 	if n.PreDumpAvail {
-		exec.Command("/bin/sh", n.config.ActionScripts.PreDump).Run()
+		script := n.Config.ActionScripts.PreDump
+		n.Logger.Debug().Msgf("executing predump script: %s", script)
+		exec.Command("/bin/sh", script).Run()
 	}
 	return nil
 }
@@ -33,7 +40,9 @@ func (n Notify) PreDump() error {
 // PostDump NoNotify
 func (n Notify) PostDump() error {
 	if n.PostDumpAvail {
-		exec.Command("/bin/sh", n.config.ActionScripts.PostDump).Run()
+		script := n.Config.ActionScripts.PostDump
+		n.Logger.Debug().Msgf("executing postdump script: %s", script)
+		exec.Command("/bin/sh", script).Run()
 	}
 	return nil
 }
@@ -41,7 +50,9 @@ func (n Notify) PostDump() error {
 // PreRestore NoNotify
 func (n Notify) PreRestore() error {
 	if n.PreRestoreAvail {
-		exec.Command("/bin/sh", n.config.ActionScripts.PreRestore).Run()
+		script := n.Config.ActionScripts.PreRestore
+		n.Logger.Debug().Msgf("executing prerestore script: %s", script)
+		exec.Command("/bin/sh", script).Run()
 	}
 	return nil
 }
