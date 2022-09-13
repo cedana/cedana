@@ -36,6 +36,9 @@ message NetworkParams {
 
 message ProcessInfo { 
     int32 process_pid = 1;
+    int32 num_fds = 2;
+    FileDescriptors fds = 3;
+    TCPs tcps = 4;
 }
 
 message ConfigClient {
@@ -43,12 +46,21 @@ message ConfigClient {
     string orchestrator_info = 2;
 }
 
+message FileDescriptor {
+    string file_path = 1; 
+    int32 file_size = 2;
+}
+
 message ClientStateAck {
     int64 timestamp = 1;
     bool acked = 2;
 }
 
+message FileDescriptors {
+    repeated FileDescriptor array = 1;
+}
 
-message TransferCheckpoint {
+message TCPs {
+    repeated TCP array = 1;
+}
 
-} 
