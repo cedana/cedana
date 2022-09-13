@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -59,8 +60,8 @@ func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 	if err != nil {
 		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
 	}
-	c.logger.Debug().Bytes(`open fds for pid ${pid}`, out)
-	err = os.WriteFile(`${dump_storage_dir}/open_fds`, out, 0644)
+	c.logger.Debug().Bytes(fmt.Sprintf(`open fds for pid %d`, pid), out)
+	err = os.WriteFile(fmt.Sprintf(`%s/open_fds`, dump_storage_dir), out, 0644)
 }
 
 func (c *Client) prepare_opts() rpc.CriuOpts {
