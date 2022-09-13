@@ -6,7 +6,7 @@ Cedana-client leverages CRIU to provide checkpoint and restore functionality for
 
 ## Build
 
-`go build`
+```go build```
 
 ## Usage
 
@@ -14,13 +14,15 @@ At it's most basic level, `cedana-client` functions as an extension to [criu](ht
 
 To checkpoint a running process:
 
-`./cedana-client client dump -p PROCESS -d DIR`
+```./cedana-client client dump -p PROCESS -d DIR```
 
 To restore the same process:
 
-`./cedana-client client restore -d DIR`
+```./cedana-client client restore -d DIR```
 
 The added functionality offered by the `cedana` cli is to make it easier to add hooks to pre and post dump/restores. You can write bash scripts, stick them in the `scripts` folder, and modify `client_config` accordingly.
 
-## Note 
-This is still a WIP! There's a lot to be done, so use with caution. 
+## Note
+This is still a WIP! There's a lot to be done, so use with caution. We are in the process of taking out code from our orchestrator platform and adding it to this repo, so there's a lot more to be added.
+
+## References
