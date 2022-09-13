@@ -1,8 +1,8 @@
 ---
  client:
-  process_name: "code-server" 
+  process_name: "" 
   dump_frequency_min: 10
-  dump_storage_dir: "/home/nravichandra/dump_images"
+  dump_storage_dir: ""
  action_scripts: 
   pre_dump: "scripts/pre_dump.sh"
   post_dump: "scripts/post_dump.sh"

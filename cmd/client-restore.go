@@ -10,6 +10,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func init() {
+	clientCommand.AddCommand(clientRestoreCmd)
+	dumpCommand.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to restore checkpoint from")
+}
+
 var clientRestoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Initialize client and restore from dumped image",
@@ -19,6 +24,11 @@ var clientRestoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		if dir == "" {
+			dir = c.config.Client.DumpStorageDir
+		}
+
 		err = c.restore()
 		if err != nil {
 			return err
@@ -65,8 +75,4 @@ func (c *Client) restore() error {
 	c.cleanupClient()
 
 	return nil
-}
-
-func init() {
-	clientCommand.AddCommand(clientRestoreCmd)
 }

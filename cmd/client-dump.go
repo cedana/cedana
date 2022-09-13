@@ -17,7 +17,7 @@ var pid int
 
 func init() {
 	clientCommand.AddCommand(dumpCommand)
-	dumpCommand.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to dump checkpoint into")
+	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
 	dumpCommand.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
@@ -53,7 +53,7 @@ var dumpCommand = &cobra.Command{
 	},
 }
 
-func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
+func (c *Client) prepare_dump(pid int, dir string) {
 	// copy all open file descriptors for a process
 	cmd := exec.Command("ls", "-l", "/proc/"+strconv.Itoa(pid)+"/fd")
 	out, err := cmd.CombinedOutput()
@@ -61,7 +61,7 @@ func (c *Client) prepare_dump(pid int, dump_storage_dir string) {
 		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
 	}
 	c.logger.Debug().Bytes(fmt.Sprintf(`open fds for pid %d`, pid), out)
-	err = os.WriteFile(fmt.Sprintf(`%s/open_fds`, dump_storage_dir), out, 0644)
+	err = os.WriteFile(fmt.Sprintf(`%s/open_fds`, dir), out, 0644)
 }
 
 func (c *Client) prepare_opts() rpc.CriuOpts {
