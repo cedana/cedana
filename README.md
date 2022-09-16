@@ -32,6 +32,6 @@ The added functionality offered by the `cedana` cli is to make it easier to add 
 
 
 ## Note
-This is still a WIP! There's a lot to be done, so use with caution. We are in the process of taking out code from our orchestrator platform and adding it to this repo, so there's a lot more to be added.
+This is still a WIP! There's a lot to be done, so use with caution.
 
 ## References
