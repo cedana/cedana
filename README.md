@@ -25,6 +25,11 @@ To restore the same process:
 
 The added functionality offered by the `cedana` cli is to make it easier to add hooks to pre and post dump/restores. You can write bash scripts, stick them in the `scripts` folder, and modify `client_config` accordingly.
 
+### Demo
+[code-server](https://github.com/coder/code-server) is checkpointed, killed and restored, demonstrating restoration of a TCP connection. 
+
+[demo](https://www.youtube.com/watch?v=1MVj7rJemDM)
+
 ## Note
 This is still a WIP! There's a lot to be done, so use with caution. We are in the process of taking out code from our orchestrator platform and adding it to this repo, so there's a lot more to be added.
 
