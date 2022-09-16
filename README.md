@@ -27,8 +27,9 @@ The added functionality offered by the `cedana` cli is to make it easier to add 
 
 ### Demo
 [code-server](https://github.com/coder/code-server) is checkpointed, killed and restored, demonstrating restoration of a TCP connection. 
+![demo](https://user-images.githubusercontent.com/409327/190646592-6a2db9b0-d0c8-4e3b-9511-f7fa2245e393.gif)
 
-[demo](https://www.youtube.com/watch?v=1MVj7rJemDM)
+
 
 ## Note
 This is still a WIP! There's a lot to be done, so use with caution. We are in the process of taking out code from our orchestrator platform and adding it to this repo, so there's a lot more to be added.
