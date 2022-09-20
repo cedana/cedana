@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/nravic/cedana-client/cmd"
-	"github.com/nravic/cedana-client/utils"
+	"github.com/nravic/cedana/cmd"
+	"github.com/nravic/cedana/utils"
 )
 
 func main() {

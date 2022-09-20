@@ -3,7 +3,7 @@ package cmd
 import (
 	"time"
 
-	"github.com/nravic/cedana-client/utils"
+	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

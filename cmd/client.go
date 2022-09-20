@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
-	pb "github.com/nravic/cedana-client/rpc"
-	"github.com/nravic/cedana-client/utils"
+	pb "github.com/nravic/cedana/rpc"
+	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"

@@ -33,7 +33,7 @@ func GetLogger() zerolog.Logger {
 
 		if os.Getenv("APP_ENV") != "development" {
 			fileLogger := &lumberjack.Logger{
-				Filename:   "cedana-client.log",
+				Filename:   "cedana.log",
 				MaxSize:    5, //
 				MaxBackups: 10,
 				MaxAge:     14,

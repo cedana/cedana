@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/checkpoint-restore/go-criu/rpc"
-	"github.com/nravic/cedana-client/utils"
+	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
