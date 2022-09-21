@@ -11,11 +11,11 @@ import (
 )
 
 func init() {
-	clientCommand.AddCommand(clientRestoreCmd)
-	dumpCommand.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to restore checkpoint from")
+	clientCommand.AddCommand(restoreCmd)
+	restoreCmd.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to restore checkpoint from")
 }
 
-var clientRestoreCmd = &cobra.Command{
+var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Initialize client and restore from dumped image",
 	RunE: func(cmd *cobra.Command, args []string) error {
