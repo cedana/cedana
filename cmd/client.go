@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
+	"github.com/docker/docker/client"
 	pb "github.com/nravic/cedana/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
@@ -18,6 +19,14 @@ import (
 
 type Client struct {
 	CRIU          *criu.Criu
+	rpcClient     *pb.CedanaClient
+	rpcConnection *grpc.ClientConn
+	logger        *zerolog.Logger
+	config        *utils.Config
+}
+
+type DockerClient struct {
+	Docker        *client.Client // confusing, I know
 	rpcClient     *pb.CedanaClient
 	rpcConnection *grpc.ClientConn
 	logger        *zerolog.Logger
@@ -70,7 +79,40 @@ func instantiateClient() (*Client, error) {
 	}
 	rpcClient := pb.NewCedanaClient(conn)
 
-	return &Client{c, &rpcClient, conn, &logger, config}, err
+	return &Client{c, &rpcClient, conn, &logger, config}, nil
+}
+
+func instantiateDockerClient() (*DockerClient, error) {
+	// use a docker client instead of CRIU directly
+	logger := utils.GetLogger()
+
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Error instantiating docker client")
+	}
+
+	config, err := utils.InitConfig()
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not read config")
+		return nil, err
+	}
+	jsconfig, err := json.Marshal(config)
+	if err != nil {
+		logger.Debug().RawJSON("config loaded", jsconfig)
+	}
+
+	// TODO: think about concurrency
+	// TODO: connection options??
+	var opts []grpc.DialOption
+	// TODO: Config with setup and transport credentials
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("localhost:5000", opts...)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
+	}
+	rpcClient := pb.NewCedanaClient(conn)
+
+	return &DockerClient{cli, &rpcClient, conn, &logger, config}, nil
 }
 
 // TODO: this should probably be deferrable
