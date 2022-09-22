@@ -35,7 +35,7 @@ type DockerClient struct {
 
 var clientCommand = &cobra.Command{
 	Use:   "client",
-	Short: "Directly dump/restore a checkpoint or start a daemon",
+	Short: "Directly dump/restore a process or start a daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error: must also specify dump, restore or daemon")
 	},
