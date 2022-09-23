@@ -24,6 +24,15 @@ To restore the same process:
 ```./cedana client restore -d DIR```
 
 The added functionality offered by the `cedana` cli is to make it easier to add hooks to pre and post dump/restores. You can write bash scripts, stick them in the `scripts` folder, and modify `client_config` accordingly. 
+
+Checkpointing and restoring docker containers is still an experimental feature, but you can go about it with similar syntax: 
+
+```./cedana client docker dump -c CONTAINER_NAME -d DIR``` 
+
+Leaving the container running or not is toggle-able via config. To restore from the latest checkpoint: 
+
+```./cedana client docker restore -c CONTAINER_NAME```
+
 ### Demo
 [code-server](https://github.com/coder/code-server) is checkpointed, killed and restored, demonstrating restoration of a TCP connection. 
 ![demo](https://user-images.githubusercontent.com/409327/190646592-6a2db9b0-d0c8-4e3b-9511-f7fa2245e393.gif)
