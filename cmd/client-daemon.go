@@ -25,9 +25,7 @@ var clientDaemonCmd = &cobra.Command{
 }
 
 func (c *Client) startDaemon() chan struct{} {
-	// on start, check w/ server w/ initializeClient
-	// start pushing out state regularly to server
-	// on intervals from config, dump
+	// start process checkpointing daemon
 	registerRPCClient(*c.rpcClient)
 	config, err := utils.InitConfig()
 	if err != nil {
