@@ -14,7 +14,7 @@ var container string
 func init() {
 	dockerCmd.AddCommand(dockerDumpCmd)
 	dockerDumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
-	dockerDumpCmd.Flags().IntVarP(&pid, "container", "c", 0, "container to dump")
+	dockerDumpCmd.Flags().StringVarP(&container, "container", "c", "", "container to dump")
 }
 
 // This inherits the EXPERIMENTAL tag from the docs https://docs.docker.com/engine/reference/commandline/checkpoint/,

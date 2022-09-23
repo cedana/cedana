@@ -12,19 +12,15 @@ import (
 func init() {
 	dockerCmd.AddCommand(dockerRestoreCmd)
 	dockerRestoreCmd.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
-	dockerRestoreCmd.Flags().IntVarP(&pid, "container", "c", 0, "container to dump")
+	dockerRestoreCmd.Flags().StringVarP(&container, "container", "c", "", "container to dump")
 }
 
 // This inherits the EXPERIMENTAL tag from the docs https://docs.docker.com/engine/reference/commandline/checkpoint/,
 // even though it uses CRIU behind the scenes.
 
-// Need to have experimental features enabled for this to work, something like:
-/// echo "{\"experimental\": true}" >> /etc/docker/daemon.json
-/// systemctl restart docker
-
 var dockerRestoreCmd = &cobra.Command{
 	Use:   "restore",
-	Short: "Directly dump a docker container to disk",
+	Short: "Restore a docker checkpoint",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dc, err := instantiateDockerClient()
 		if err != nil {
@@ -40,16 +36,16 @@ var dockerRestoreCmd = &cobra.Command{
 			CheckpointDir: dir,
 		}
 		// The way checkpointing is orchestrated within docker
-		err = dc.Docker.ContainerStart(cmd.Context(), "checkpoint", opts)
+		err = dc.Docker.ContainerStart(cmd.Context(), container, opts)
 		if err != nil {
-			dc.logger.Fatal().Err(err).Msg("Docker checkpoint dump failed")
-			// yoinking what the docker sdk does here with the dumplog because there's currently no way to configure where it goes
+			dc.logger.Fatal().Err(err).Msg("Docker checkpoint restore failed")
+
 			re := regexp.MustCompile("path= (.*): ")
 			m := re.FindStringSubmatch(fmt.Sprintf("%s", err))
 			if len(m) >= 2 {
-				dumpLog := m[1]
-				dc.logger.Info().Msgf("%s", dumpLog)
-				cmd := exec.Command("cat", dumpLog)
+				restoreLog := m[1]
+				dc.logger.Info().Msgf("%s", restoreLog)
+				cmd := exec.Command("cat", restoreLog)
 				stdoutStderr, _ := cmd.CombinedOutput()
 				dc.logger.Fatal().Msgf("%s", stdoutStderr)
 			}
