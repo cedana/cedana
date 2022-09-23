@@ -10,6 +10,7 @@ type Config struct {
 	Client        Client        `mapstructure:"client"`
 	ActionScripts ActionScripts `mapstructure:"action_scripts"`
 	Connection    Connection    `mapstructure:"connection"`
+	Docker        Docker        `mapstructure:"docker"`
 }
 
 type Client struct {
@@ -27,6 +28,12 @@ type ActionScripts struct {
 type Connection struct {
 	ServerAddr string `mapstructure:"server_addr"`
 	ServerPort int    `mapstructure:"server_port"`
+}
+
+type Docker struct {
+	LeaveRunning  bool   `mapstructure:"leave_running"`
+	ContainerName string `mapstructure:"container_name"`
+	ContainerID   string `mapstructure:"container_id"`
 }
 
 func InitConfig() (*Config, error) {
