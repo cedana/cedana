@@ -23,8 +23,8 @@ var clientDaemonCmd = &cobra.Command{
 }
 
 func (c *Client) startDaemon() chan int {
-	// start process checkpointing daemon
-	registerRPCClient(*c.rpcClient)
+	// start process checkpointing daemongo c.registerRPCClient()
+
 	config, err := utils.InitConfig()
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error loading config")
@@ -37,6 +37,8 @@ func (c *Client) startDaemon() chan int {
 
 	dir := config.Client.DumpStorageDir
 
+	go c.registerRPCClient(pid)
+
 	// verify channels exist to listen on
 	if c.channels == nil {
 		c.logger.Fatal().Msg("Dump and restore channels uninitialized!")
@@ -45,7 +47,7 @@ func (c *Client) startDaemon() chan int {
 	quit := make(chan int)
 
 	// start goroutines
-	go runRecordState(*c.rpcClient)
+	go c.pollForCommand(pid)
 
 	go func() {
 		for {
