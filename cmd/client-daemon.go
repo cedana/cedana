@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"time"
-
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,7 +22,7 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startDaemon() chan struct{} {
+func (c *Client) startDaemon() chan int {
 	// start process checkpointing daemon
 	registerRPCClient(*c.rpcClient)
 	config, err := utils.InitConfig()
@@ -32,35 +30,38 @@ func (c *Client) startDaemon() chan struct{} {
 		c.logger.Fatal().Err(err).Msg("error loading config")
 	}
 
-	// goroutine for a listener
-	go runRecordState(*c.rpcClient)
-
 	pid, err := utils.GetPid(viper.GetString("process_name"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error getting process pid")
 	}
 
-	// when the config is statically typed, we won't be worried about getting a weird
-	// var from this, because the act of initing config will error out
-	freq := config.Client.DumpFrequencyMin
 	dir := config.Client.DumpStorageDir
 
-	// start dumping loop
-	// TODO - this should eventually be a function that takes event hooks
-	ticker := time.NewTicker(time.Duration(freq) * time.Minute)
-	quit := make(chan struct{})
+	// verify channels exist to listen on
+	if c.channels == nil {
+		c.logger.Fatal().Msg("Dump and restore channels uninitialized!")
+	}
+
+	quit := make(chan int)
+
+	// start goroutines
+	go runRecordState(*c.rpcClient)
 
 	go func() {
 		for {
 			select {
-			case <-ticker.C:
+			case <-c.channels.dump_command:
 				// todo add incremental checkpointing
 				err := c.dump(pid, dir)
 				if err != nil {
 					c.logger.Fatal().Err(err).Msg("error dumping process")
 				}
+			case <-c.channels.restore_command:
+				err := c.restore()
+				if err != nil {
+					c.logger.Fatal().Err(err).Msg("error restoring process")
+				}
 			case <-quit:
-				ticker.Stop()
 				return
 			}
 		}
@@ -69,7 +70,7 @@ func (c *Client) startDaemon() chan struct{} {
 	return quit
 }
 
-func killDaemon(quit chan struct{}) {
+func killDaemon(quit chan int) {
 	close(quit)
 }
 

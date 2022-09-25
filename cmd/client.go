@@ -23,6 +23,7 @@ type Client struct {
 	rpcConnection *grpc.ClientConn
 	logger        *zerolog.Logger
 	config        *utils.Config
+	channels      *CommandChannels
 }
 
 type DockerClient struct {
@@ -31,6 +32,11 @@ type DockerClient struct {
 	rpcConnection *grpc.ClientConn
 	logger        *zerolog.Logger
 	config        *utils.Config
+}
+
+type CommandChannels struct {
+	dump_command    chan int
+	restore_command chan int
 }
 
 var clientCommand = &cobra.Command{
@@ -79,7 +85,11 @@ func instantiateClient() (*Client, error) {
 	}
 	rpcClient := pb.NewCedanaClient(conn)
 
-	return &Client{c, &rpcClient, conn, &logger, config}, nil
+	// set up channels for daemon to listen on
+	dump_command := make(chan int)
+	restore_command := make(chan int)
+	channels := &CommandChannels{dump_command, restore_command}
+	return &Client{c, &rpcClient, conn, &logger, config, channels}, nil
 }
 
 func instantiateDockerClient() (*DockerClient, error) {
