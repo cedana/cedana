@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
@@ -12,6 +12,8 @@ import (
 	pb "github.com/nravic/cedana/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,7 +21,7 @@ import (
 
 type Client struct {
 	CRIU          *criu.Criu
-	rpcClient     *pb.CedanaClient
+	rpcClient     pb.CedanaClient
 	rpcConnection *grpc.ClientConn
 	logger        *zerolog.Logger
 	config        *utils.Config
@@ -89,7 +91,7 @@ func instantiateClient() (*Client, error) {
 	dump_command := make(chan int)
 	restore_command := make(chan int)
 	channels := &CommandChannels{dump_command, restore_command}
-	return &Client{c, &rpcClient, conn, &logger, config, channels}, nil
+	return &Client{c, rpcClient, conn, &logger, config, channels}, nil
 }
 
 func instantiateDockerClient() (*DockerClient, error) {
@@ -133,45 +135,61 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-func registerRPCClient(client pb.CedanaClient) {
+func (c *Client) registerRPCClient(pid int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	state := getState()
-	params, err := client.RegisterClient(ctx, state)
+	state := getState(pid)
+	_, err := c.rpcClient.RegisterClient(ctx, state)
 	if err != nil {
-		log.Fatalf("client.RegisterClient failed: %v", err)
+		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
 	}
 	// take params, marshal it
-	log.Println(params)
 }
 
-// record and send state
-func runRecordState(client pb.CedanaClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	stream, err := client.RecordState(ctx)
-	if err != nil {
-		log.Fatalf("client.RecordState failed: %v", err)
-	}
-
-	// TODO - spawn a goroutine here
-	for i := 1; i < 10; i++ {
-		stream.Send(getState())
-	}
-	reply, err := stream.CloseAndRecv()
-	if err != nil {
-		log.Fatalf("client.RecordState failed: %v", err)
-	}
-	log.Printf("Response: %v", reply)
+func (c *Client) pollForCommand(pid int) {
+	stream, _ := c.rpcClient.PollForCommand(context.Background())
+	waitc := make(chan struct{})
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				// read done
+				close(waitc)
+				return
+			}
+			if err != nil {
+				c.logger.Fatal().Msgf("client.pollForCommand failed: %v", err)
+			}
+			if resp.Checkpoint {
+				c.channels.dump_command <- 1
+			}
+			if resp.Restore {
+				c.channels.restore_command <- 1
+			}
+			stream.Send(getState(pid))
+		}
+	}()
 }
 
-// TODO: Send out better state
-func getState() *pb.ClientState {
-	// TODO: Populate w/ process data and other stuff in the RPC definition
+func getState(pid int) *pb.ClientState {
+
+	m, _ := mem.VirtualMemory()
+	h, _ := host.Info()
+
+	// ignore sending network for now, little complicated
 
 	return &pb.ClientState{
 		Timestamp: time.Now().Unix(),
+		ProcessInfo: &pb.ProcessInfo{
+			ProcessPid: uint32(pid),
+		},
+		ClientInfo: &pb.ClientInfo{
+			RemainingMemory: int32(m.Free),
+			Os:              h.OS,
+			Platform:        h.Platform,
+			Uptime:          uint32(h.Uptime),
+		},
 	}
 }
 

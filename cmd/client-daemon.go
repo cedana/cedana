@@ -3,8 +3,12 @@ package cmd
 import (
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
+
+func init() {
+	clientCommand.AddCommand(clientDaemonCmd)
+	clientDaemonCmd.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
+}
 
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
@@ -23,19 +27,22 @@ var clientDaemonCmd = &cobra.Command{
 }
 
 func (c *Client) startDaemon() chan int {
-	// start process checkpointing daemon
-	registerRPCClient(*c.rpcClient)
+
 	config, err := utils.InitConfig()
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error loading config")
 	}
 
-	pid, err := utils.GetPid(viper.GetString("process_name"))
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error getting process pid")
+	if pid == 0 {
+		pid, err = utils.GetPid(c.config.Client.ProcessName)
+		if err != nil {
+			c.logger.Err(err).Msg("Could not parse process name from config")
+		}
 	}
 
 	dir := config.Client.DumpStorageDir
+
+	go c.registerRPCClient(pid)
 
 	// verify channels exist to listen on
 	if c.channels == nil {
@@ -45,7 +52,7 @@ func (c *Client) startDaemon() chan int {
 	quit := make(chan int)
 
 	// start goroutines
-	go runRecordState(*c.rpcClient)
+	go c.pollForCommand(pid)
 
 	go func() {
 		for {
@@ -72,8 +79,4 @@ func (c *Client) startDaemon() chan int {
 
 func killDaemon(quit chan int) {
 	close(quit)
-}
-
-func init() {
-	clientCommand.AddCommand(clientDaemonCmd)
 }
