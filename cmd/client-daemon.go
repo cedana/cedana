@@ -27,7 +27,6 @@ var clientDaemonCmd = &cobra.Command{
 }
 
 func (c *Client) startDaemon() chan int {
-	// start process checkpointing daemongo c.registerRPCClient()
 
 	config, err := utils.InitConfig()
 	if err != nil {
