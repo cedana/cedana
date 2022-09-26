@@ -61,7 +61,7 @@ func (c *Client) prepare_dump(pid int, dir string) {
 		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
 	}
 	c.logger.Debug().Bytes(fmt.Sprintf(`open fds for pid %d`, pid), out)
-	err = os.WriteFile(fmt.Sprintf(`%s/open_fds`, dir), out, 0644)
+	os.WriteFile(fmt.Sprintf(`%s/open_fds`, dir), out, 0644)
 }
 
 func (c *Client) prepare_opts() rpc.CriuOpts {
