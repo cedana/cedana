@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/json"
 	"os"
-	"os/exec"
-	"strconv"
+	"syscall"
 
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana/utils"
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
@@ -53,26 +53,47 @@ var dumpCommand = &cobra.Command{
 	},
 }
 
-func (c *Client) prepare_dump(pid int, dir string) {
-	// copy all open file descriptors for a process
-	cmd := exec.Command("ls", "-l", "/proc/"+strconv.Itoa(pid)+"/fd")
-	out, err := cmd.CombinedOutput()
+func (c *Client) prepare_dump(pid int, dir string, opts *rpc.CriuOpts) {
+	p, err := process.NewProcess(int32(pid))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msgf(`could not ls /proc for pid %d`, pid)
+		c.logger.Fatal().Err(err).Msg("Could not instantiate new gopsutil process")
 	}
-	c.logger.Debug().Bytes(fmt.Sprintf(`open fds for pid %d`, pid), out)
-	os.WriteFile(fmt.Sprintf(`%s/open_fds`, dir), out, 0644)
+	// check file descriptors
+	open_files, err := p.OpenFiles()
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	// marshal to dir folder for now
+	b, _ := json.Marshal(open_files)
+	c.logger.Info().Msg(string(b))
+	// check network connections
+	var hasTCP bool
+	var hasExtUnixSocket bool
+	conns, err := p.Connections()
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	for _, conn := range conns {
+		if conn.Type == syscall.SOCK_STREAM { // TCP
+			hasTCP = true
+		}
+
+		if conn.Type == syscall.AF_UNIX { // interprocess
+			hasExtUnixSocket = true
+		}
+	}
+	opts.TcpEstablished = proto.Bool(hasTCP)
+	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 }
 
 func (c *Client) prepare_opts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(4),
-		LogFile:        proto.String("dump.log"),
-		ShellJob:       proto.Bool(false),
-		LeaveRunning:   proto.Bool(true),
-		TcpEstablished: proto.Bool(true),
-		GhostLimit:     proto.Uint32(uint32(10000000)),
-		ExtMasters:     proto.Bool(true),
+		LogLevel:     proto.Int32(4),
+		LogFile:      proto.String("dump.log"),
+		ShellJob:     proto.Bool(false),
+		LeaveRunning: proto.Bool(true),
+		GhostLimit:   proto.Uint32(uint32(10000000)),
+		ExtMasters:   proto.Bool(true),
 	}
 	return opts
 
@@ -89,8 +110,9 @@ func (c *Client) dump(pid int, dir string) error {
 	defer img.Close()
 
 	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-	c.prepare_dump(pid, dir)
 	opts := c.prepare_opts()
+	c.prepare_dump(pid, dir, &opts)
+
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(int32(pid))
 

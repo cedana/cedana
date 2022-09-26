@@ -58,7 +58,6 @@ func (c *Client) startDaemon() chan int {
 		for {
 			select {
 			case <-c.channels.dump_command:
-				// todo add incremental checkpointing
 				err := c.dump(pid, dir)
 				if err != nil {
 					c.logger.Fatal().Err(err).Msg("error dumping process")
