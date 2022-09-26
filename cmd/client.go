@@ -113,12 +113,10 @@ func instantiateDockerClient() (*DockerClient, error) {
 		logger.Debug().RawJSON("config loaded", jsconfig)
 	}
 
-	// TODO: think about concurrency
-	// TODO: connection options??
 	var opts []grpc.DialOption
-	// TODO: Config with setup and transport credentials
+	// TODO
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial("localhost:5000", opts...)
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
 	}
@@ -127,7 +125,6 @@ func instantiateDockerClient() (*DockerClient, error) {
 	return &DockerClient{cli, &rpcClient, conn, &logger, config}, nil
 }
 
-// TODO: this should probably be deferrable
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
 	c.rpcConnection.Close()
