@@ -8,11 +8,12 @@
             "name": "Launch Package",
             "type": "go",
             "request": "launch",
-            "mode": "auto",
+            "mode": "exec",
             "program": "main.go",
             "console": "integratedTerminal",
             "asRoot": true,
-            "args": ["client", "dump"]
+            "args": ["client", "daemon"],
+        
         }
     ]
 }
