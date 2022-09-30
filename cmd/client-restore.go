@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana/utils"
@@ -38,6 +39,7 @@ var restoreCmd = &cobra.Command{
 }
 
 func (c *Client) restore() error {
+	defer c.timeTrack(time.Now(), "restore")
 	config, err := utils.InitConfig()
 	if err != nil {
 		return fmt.Errorf("could not load config")
@@ -63,8 +65,6 @@ func (c *Client) restore() error {
 		PreRestoreAvail: true,
 	}
 
-	// automate
-	// TODO: restore needs to do some work here (restoring connections?)
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error restoring process")

@@ -53,3 +53,4 @@ func GetLogger() zerolog.Logger {
 
 	return log
 }
+

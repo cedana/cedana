@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana/utils"
@@ -65,7 +66,7 @@ func (c *Client) prepare_dump(pid int, dir string, opts *rpc.CriuOpts) {
 	}
 	// marshal to dir folder for now
 	b, _ := json.Marshal(open_files)
-	c.logger.Info().Msg(string(b))
+	c.logger.Debug().Msgf("pid has open fds: %s", string(b))
 	// check network connections
 	var hasTCP bool
 	var hasExtUnixSocket bool
@@ -100,6 +101,7 @@ func (c *Client) prepare_opts() rpc.CriuOpts {
 }
 
 func (c *Client) dump(pid int, dir string) error {
+	defer c.timeTrack(time.Now(), "dump")
 
 	// TODO - Dynamic storage (depending on process)
 	img, err := os.Open(dir)
@@ -124,13 +126,8 @@ func (c *Client) dump(pid int, dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Debug().Msgf("starting dump with opts: %+v\n", opts)
-
-	// perform multiple consecutive passes of the dump, altering opts as needed
-	// go-CRIU doesn't expose some of this stuff, need to hand-code
-	// incrementally add as you test different processes and they fail
-
 	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
+
 	err = c.CRIU.Dump(opts, nfy)
 	if err != nil {
 		// TODO - better error handling
