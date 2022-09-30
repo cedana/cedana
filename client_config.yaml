@@ -5,6 +5,8 @@
   dump_storage_dir: "/home/nravichandra/dump_images"
  docker: 
   leave_running: true
+  dump_storage_dir: "home/nravichandra/dump_images"
+  container_id: ""
  action_scripts: 
   pre_dump: "scripts/pre_dump.sh"
   post_dump: "scripts/post_dump.sh"

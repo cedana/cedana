@@ -71,7 +71,7 @@ func instantiateDockerClient() (*DockerClient, error) {
 	return &DockerClient{cli, rpcClient, conn, &logger, config, channels}, nil
 }
 
-func (c *DockerClient) pollForCommand(pid int) {
+func (c *DockerClient) pollForCommand(containerId int) {
 	stream, _ := c.rpcClient.PollForCommand(context.Background())
 	waitc := make(chan struct{})
 	go func() {
@@ -91,7 +91,12 @@ func (c *DockerClient) pollForCommand(pid int) {
 			if resp.Restore {
 				c.channels.restore_command <- 1
 			}
-			stream.Send(getState(pid))
+			stream.Send(getContainerInfo(containerId))
 		}
 	}()
+}
+
+func getContainerInfo(containerId int) *pb.ClientState {
+
+	return &pb.ClientState{}
 }

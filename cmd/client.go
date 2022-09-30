@@ -96,7 +96,7 @@ func (c *Client) registerRPCClient(pid int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	state := getState(pid)
+	state := getProcessState(pid)
 	_, err := c.rpcClient.RegisterClient(ctx, state)
 	if err != nil {
 		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
@@ -124,7 +124,7 @@ func (c *Client) pollForCommand(pid int) {
 			if resp.Restore {
 				c.channels.restore_command <- 1
 			}
-			stream.Send(getState(pid))
+			stream.Send(getProcessState(pid))
 		}
 	}()
 }
@@ -134,7 +134,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func getState(pid int) *pb.ClientState {
+func getProcessState(pid int) *pb.ClientState {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
