@@ -35,7 +35,7 @@ Leaving the container running or not is toggle-able via config. To restore from 
 
 ### Demo
 [code-server](https://github.com/coder/code-server) is checkpointed, killed and restored, demonstrating restoration of a TCP connection. 
-![demo](https://user-images.githubusercontent.com/409327/190646592-6a2db9b0-d0c8-4e3b-9511-f7fa2245e393.gif)
+![demo](https://github.com/nravic/cedana/blob/main/img/code-server-demo.gif)
 
 
 
