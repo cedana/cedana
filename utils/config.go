@@ -33,7 +33,7 @@ type Connection struct {
 type Docker struct {
 	LeaveRunning  bool   `mapstructure:"leave_running"`
 	ContainerName string `mapstructure:"container_name"`
-	ContainerID   string `mapstructure:"container_id"`
+	CheckpointID  string `mapstructure:"checkpoint_id"`
 }
 
 func InitConfig() (*Config, error) {

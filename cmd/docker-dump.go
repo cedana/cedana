@@ -10,6 +10,7 @@ import (
 )
 
 var container string
+var checkpointId string
 
 func init() {
 	dockerCmd.AddCommand(dockerDumpCmd)
@@ -35,6 +36,14 @@ var dockerDumpCmd = &cobra.Command{
 
 		if dir == "" {
 			dir = dc.config.Client.DumpStorageDir
+		}
+
+		if container == "" {
+			container = dc.config.Docker.ContainerName
+		}
+
+		if checkpointId == "" {
+			checkpointId = dc.config.Docker.CheckpointID
 		}
 
 		opts := dockertypes.CheckpointCreateOptions{

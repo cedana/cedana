@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
-	"github.com/docker/docker/client"
 	pb "github.com/nravic/cedana/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
@@ -26,14 +25,6 @@ type Client struct {
 	logger        *zerolog.Logger
 	config        *utils.Config
 	channels      *CommandChannels
-}
-
-type DockerClient struct {
-	Docker        *client.Client // confusing, I know
-	rpcClient     *pb.CedanaClient
-	rpcConnection *grpc.ClientConn
-	logger        *zerolog.Logger
-	config        *utils.Config
 }
 
 type CommandChannels struct {
@@ -94,37 +85,6 @@ func instantiateClient() (*Client, error) {
 	return &Client{c, rpcClient, conn, &logger, config, channels}, nil
 }
 
-func instantiateDockerClient() (*DockerClient, error) {
-	// use a docker client instead of CRIU directly
-	logger := utils.GetLogger()
-
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error instantiating docker client")
-	}
-
-	config, err := utils.InitConfig()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not read config")
-		return nil, err
-	}
-	jsconfig, err := json.Marshal(config)
-	if err != nil {
-		logger.Debug().RawJSON("config loaded", jsconfig)
-	}
-
-	var opts []grpc.DialOption
-	// TODO
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
-	}
-	rpcClient := pb.NewCedanaClient(conn)
-
-	return &DockerClient{cli, &rpcClient, conn, &logger, config}, nil
-}
-
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
 	c.rpcConnection.Close()
@@ -136,7 +96,7 @@ func (c *Client) registerRPCClient(pid int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	state := getState(pid)
+	state := getProcessState(pid)
 	_, err := c.rpcClient.RegisterClient(ctx, state)
 	if err != nil {
 		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
@@ -164,12 +124,17 @@ func (c *Client) pollForCommand(pid int) {
 			if resp.Restore {
 				c.channels.restore_command <- 1
 			}
-			stream.Send(getState(pid))
+			stream.Send(getProcessState(pid))
 		}
 	}()
 }
 
-func getState(pid int) *pb.ClientState {
+func (c *Client) timeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	c.logger.Debug().Msgf("%s took %s", name, elapsed)
+}
+
+func getProcessState(pid int) *pb.ClientState {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
