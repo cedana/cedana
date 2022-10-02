@@ -47,7 +47,7 @@ var dockerDumpCmd = &cobra.Command{
 		}
 
 		opts := dockertypes.CheckpointCreateOptions{
-			CheckpointID:  "checkpoint", // TODO: generate uuid based on container name?
+			CheckpointID:  checkpointId, 
 			CheckpointDir: dir,
 			Exit:          dc.config.Docker.LeaveRunning, // defaults to false - leaves container running
 		}
