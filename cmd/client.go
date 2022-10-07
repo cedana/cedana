@@ -133,38 +133,90 @@ func (c *Client) cleanupClient() error {
 }
 
 func (c *Client) registerRPCClient(pid int) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancel()
 
 	state := getState(pid)
-	_, err := c.rpcClient.RegisterClient(ctx, state)
+	resp, err := c.rpcClient.RegisterClient(ctx, state)
 	if err != nil {
 		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
 	}
-	// take params, marshal it
+	c.logger.Info().Msgf("Response from orchestrator: %v", resp)
+}
+
+func (c *Client) recordState() {
+	state := getState(pid)
+	stream, err := c.rpcClient.RecordState(context.TODO())
+	if err != nil {
+		c.logger.Fatal().Err(err).Msgf("Could not open stream to send state")
+	}
+
+	quit := make(chan struct{})
+	ticker := time.NewTicker(5 * time.Second)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				c.logger.Debug().Msgf("sending state: %v", state)
+				err := stream.Send(state)
+				if err != nil {
+					c.logger.Fatal().Err(err).Msg("Error sending state to orchestrator")
+				}
+			case <-quit:
+				ticker.Stop()
+				return
+			default:
+			}
+		}
+	}()
 }
 
 func (c *Client) pollForCommand(pid int) {
-	stream, _ := c.rpcClient.PollForCommand(context.Background())
+	stream, _ := c.rpcClient.PollForCommand(context.TODO())
+	c.logger.Debug().Msg("polling for command at ")
+
 	waitc := make(chan struct{})
+	ticker := time.NewTicker(5 * time.Second)
+
 	go func() {
 		for {
+			c.logger.Debug().Msgf("polling for command at %v", time.Now())
+			select {
+			// send state every 5 seconds
+			case <-ticker.C:
+				state := getState(pid)
+				c.logger.Debug().Msgf("Sent state %v:", state)
+				stream.Send(state)
+			// do nothing otherwise (don't block for loop)
+			default:
+			}
+
+			// action w/ command
 			resp, err := stream.Recv()
+			c.logger.Info().Msg(resp.String())
 			if err == io.EOF {
 				// read done
 				close(waitc)
 				return
 			}
+
+			if resp == nil {
+				// do nothing if we don't have a command yet
+				return
+			}
+
 			if err != nil {
-				c.logger.Fatal().Msgf("client.pollForCommand failed: %v", err)
+				c.logger.Fatal().Err(err).Msg("client.pollForCommand failed")
 			}
 			if resp.Checkpoint {
+				c.logger.Info().Msgf("checkpoint command received: %v", resp)
 				c.channels.dump_command <- 1
 			}
 			if resp.Restore {
+				c.logger.Info().Msgf("restore command received: %v", resp)
 				c.channels.restore_command <- 1
 			}
-			stream.Send(getState(pid))
 		}
 	}()
 }
