@@ -10,6 +10,7 @@ import (
 )
 
 var container string
+var checkpointId string
 
 func init() {
 	dockerCmd.AddCommand(dockerDumpCmd)
@@ -37,8 +38,16 @@ var dockerDumpCmd = &cobra.Command{
 			dir = dc.config.Client.DumpStorageDir
 		}
 
+		if container == "" {
+			container = dc.config.Docker.ContainerName
+		}
+
+		if checkpointId == "" {
+			checkpointId = dc.config.Docker.CheckpointID
+		}
+
 		opts := dockertypes.CheckpointCreateOptions{
-			CheckpointID:  "checkpoint", // TODO: generate uuid based on container name?
+			CheckpointID:  checkpointId, 
 			CheckpointDir: dir,
 			Exit:          dc.config.Docker.LeaveRunning, // defaults to false - leaves container running
 		}
