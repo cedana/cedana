@@ -186,7 +186,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func getProcessState(pid int) *pb.ClientState {
+func getState(pid int) *pb.ClientState {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
