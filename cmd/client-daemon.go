@@ -53,9 +53,9 @@ var clientDaemonCmd = &cobra.Command{
 
 		ctx := &gd.Context{
 			PidFileName: "cedana.pid",
-			PidFilePerm: 0644,
+			PidFilePerm: 0o644,
 			LogFileName: "cedana-daemon.log",
-			LogFilePerm: 0640,
+			LogFilePerm: 0o640,
 			WorkDir:     "./",
 			Umask:       027,
 			Args:        []string{executable, "client", "daemon", "-p", fmt.Sprint(pid)},
