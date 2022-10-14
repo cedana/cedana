@@ -6,12 +6,13 @@ require (
 	github.com/checkpoint-restore/go-criu v4.0.0+incompatible
 	github.com/gorilla/mux v1.8.0
 	github.com/spf13/cobra v1.5.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0 // indirect
+	github.com/checkpoint-restore/go-criu/v6 v6.2.0 // indirect
 	github.com/cilium/ebpf v0.9.2 // indirect
 	github.com/containerd/console v1.0.3 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534 // indirect
