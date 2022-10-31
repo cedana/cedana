@@ -139,8 +139,29 @@ func (c *Container) Checkpoint(extraFiles []*os.File) error {
 			return err
 		}
 		if !resp.GetSuccess() {
-			
+			typeString := req.GetType().String()
+			if typeString == "VERSION" {
+				return nil
+			}
 		}
+
+		t := resp.GetType()
+		switch {
+		case t == rpc.CriuReqType_DUMP:
+		case t == rpc.CriuReqType_RESTORE:
+		case t == rpc.CriuReqType_PRE_DUMP:
+		default:
+			logger.Fatal().Msgf("unable to parse response %s", resp.String())
+			return nil
+		}
+
+		break
+	}
+
+	criuClientCon.CloseWrite()
+	_, err = cmd.Process.Wait()
+	if err != nil {
+		return err
 	}
 
 	return nil
