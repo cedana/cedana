@@ -74,7 +74,6 @@ var clientDaemonCmd = &cobra.Command{
 
 		defer ctx.Release()
 
-		c.logger.Info().Msg("--------------------------------")
 		c.logger.Info().Msg("daemon started")
 
 		c.registerRPCClient(pid)

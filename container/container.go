@@ -29,6 +29,9 @@ import (
 // below to override some of the defaults. We can't call some of the functions directly, and criuSwrk needs to be modified to add some cedana-specific
 // functionality.
 
+// Restoring like this is HARD though. We need to 100x make sure that the running process/container is killed before trying to restore this container. 
+// Maybe runc exec can take care of it? That way we circumvent podman/docker/etc
+
 // TODO - split this off and add changes to a forked version of runc.
 const descriptorsFilename = "descriptors.json"
 
