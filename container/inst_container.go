@@ -5,7 +5,7 @@ package container
 func InstantiateContainer() *Container {
 	// get pid of running parent process
 
-	// get cgroups manager
+	// get cgroups manager. We might need to create one?
 	c := &Container{}
 	return c
 }

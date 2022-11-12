@@ -26,7 +26,7 @@ import (
 )
 
 // We grab a good chunk of https://github.com/opencontainers/runc/libcontainer/process_linux.go
-// below to override some of the defaults. We can't call some of the functions directly, and criuSwrk needs to be modified to add some cedana-specific
+// below to override some of the defaults because we can't call some of the functions directly, and criuSwrk needs to be modified to add some cedana-specific
 // functionality.
 
 // Restoring like this is HARD though. We need to 100x make sure that the running process/container is killed before trying to restore this container. 
