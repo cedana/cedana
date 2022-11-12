@@ -96,7 +96,7 @@ func (c *Client) registerRPCClient(pid int) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancel()
 
-	state := getState(pid)
+	state := c.getState(pid)
 	resp, err := c.rpcClient.RegisterClient(ctx, state)
 	if err != nil {
 		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
@@ -105,7 +105,7 @@ func (c *Client) registerRPCClient(pid int) {
 }
 
 func (c *Client) recordState() {
-	state := getState(pid)
+	state := c.getState(pid)
 	stream, err := c.rpcClient.RecordState(context.TODO())
 	if err != nil {
 		c.logger.Fatal().Err(err).Msgf("Could not open stream to send state")
@@ -133,28 +133,24 @@ func (c *Client) recordState() {
 }
 
 func (c *Client) pollForCommand(pid int) {
-	stream, _ := c.rpcClient.PollForCommand(context.TODO())
-	c.logger.Debug().Msg("polling for command at ")
+	// start a loop
+	refresher := time.NewTicker(5 * time.Second)
+	defer refresher.Stop()
 
 	waitc := make(chan struct{})
-	ticker := time.NewTicker(5 * time.Second)
 
-	go func() {
-		for {
-			c.logger.Debug().Msgf("polling for command at %v", time.Now())
-			select {
-			// send state every 5 seconds
-			case <-ticker.C:
-				state := getState(pid)
-				c.logger.Debug().Msgf("Sent state %v:", state)
-				stream.Send(state)
-			// do nothing otherwise (don't block for loop)
-			default:
-			}
+	for {
+		select {
+		case <-refresher.C:
+			c.logger.Debug().Msgf("polling for command at %v", time.Now().Local())
+			stream, _ := c.rpcClient.PollForCommand(context.TODO())
 
-			// action w/ command
+			state := c.getState(pid)
+			c.logger.Debug().Msgf("Sent state %v:", state)
+			stream.Send(state)
+
 			resp, err := stream.Recv()
-			c.logger.Info().Msg(resp.String())
+			c.logger.Info().Msgf("received response: %s", resp.String())
 			if err == io.EOF {
 				// read done
 				close(waitc)
@@ -177,8 +173,10 @@ func (c *Client) pollForCommand(pid int) {
 				c.logger.Info().Msgf("restore command received: %v", resp)
 				c.channels.restore_command <- 1
 			}
+		default:
+			// do nothing otherwise (don't block for loop)
 		}
-	}()
+	}
 }
 
 func (c *Client) timeTrack(start time.Time, name string) {
@@ -186,14 +184,14 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func getState(pid int) *pb.ClientState {
+func (c *Client) getState(pid int) *pb.ClientState {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
 
-	return &pb.ClientState{
+	state := &pb.ClientState{
 		Timestamp: time.Now().Unix(),
 		ProcessInfo: &pb.ProcessInfo{
 			ProcessPid: uint32(pid),
@@ -205,6 +203,8 @@ func getState(pid int) *pb.ClientState {
 			Uptime:          uint32(h.Uptime),
 		},
 	}
+
+	return state
 }
 
 func init() {
