@@ -53,9 +53,9 @@ var clientDaemonCmd = &cobra.Command{
 
 		ctx := &gd.Context{
 			PidFileName: "cedana.pid",
-			PidFilePerm: 0644,
+			PidFilePerm: 0o644,
 			LogFileName: "cedana-daemon.log",
-			LogFilePerm: 0640,
+			LogFilePerm: 0o640,
 			WorkDir:     "./",
 			Umask:       027,
 			Args:        []string{executable, "client", "daemon", "-p", fmt.Sprint(pid)},
@@ -74,16 +74,15 @@ var clientDaemonCmd = &cobra.Command{
 
 		defer ctx.Release()
 
-		c.logger.Info().Msg("--------------------------------")
-		c.logger.Info().Msg("daemon started")
+		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
 		c.registerRPCClient(pid)
 
-		// start polling orchestrator for work, in one goroutine
+		// poll for a command in one goroutine
 		go c.pollForCommand(pid)
 
 		// start daemon worker in another
-		go c.startDaemon()
+		go c.startDaemon(pid)
 
 		err = gd.ServeSignals()
 		if err != nil {
@@ -94,21 +93,18 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startDaemon() {
+func (c *Client) startDaemon(pid int) {
 LOOP:
 	for {
-		time.Sleep(time.Second)
 		select {
 		case <-c.channels.dump_command:
-			err := c.dump(pid, dir)
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("error dumping process")
-			}
+			c.logger.Info().Msg("received checkpoint command from grpc server")
+			// spawn the dump in another goroutine. If it fails there, bubble up
+			// it's goroutines all the way down!
+			go c.dump(pid, dir)
 		case <-c.channels.restore_command:
-			err := c.restore()
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("error restoring process")
-			}
+			c.logger.Info().Msg("received restore command from grpc server")
+			go c.restore()
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP
