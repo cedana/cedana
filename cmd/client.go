@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -62,13 +61,7 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Err(err).Msg("Could not read config")
 		return nil, err
 	}
-	jsconfig, err := json.Marshal(config)
-	if err != nil {
-		logger.Debug().RawJSON("config loaded", jsconfig)
-	}
-
-	// TODO: think about concurrency
-	// TODO: connection options??
+	
 	var opts []grpc.DialOption
 	// TODO: Config with setup and transport credentials
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))

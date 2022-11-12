@@ -11,6 +11,7 @@ type Config struct {
 	ActionScripts ActionScripts `mapstructure:"action_scripts"`
 	Connection    Connection    `mapstructure:"connection"`
 	Docker        Docker        `mapstructure:"docker"`
+	AWS           AWS           `mapstructure:"aws"`
 }
 
 type Client struct {
@@ -34,6 +35,10 @@ type Docker struct {
 	LeaveRunning  bool   `mapstructure:"leave_running"`
 	ContainerName string `mapstructure:"container_name"`
 	CheckpointID  string `mapstructure:"checkpoint_id"`
+}
+
+type AWS struct {
+	EFSId string `mapstructure:"efs_id"`
 }
 
 func InitConfig() (*Config, error) {
