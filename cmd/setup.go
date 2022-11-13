@@ -9,7 +9,7 @@ import (
 )
 
 var setupCommand = &cobra.Command{
-	Use:   "client",
+	Use:   "setup",
 	Short: "Commands to set up an instantiated remote instance for Cedana",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error: must also specify setup subcommands")
@@ -40,7 +40,7 @@ var efsAttachCommand = &cobra.Command{
 
 		efs_id := config.AWS.EFSId
 
-		// mount EFS locally 
+		// mount EFS locally
 		out, err := exec.Command(
 			"sudo", "mount",
 			"-t", "nfs",
@@ -54,8 +54,8 @@ var efsAttachCommand = &cobra.Command{
 
 		logger.Info().Msgf("mounted volume successfully with output: %v", out)
 
-		// Config storage here takes some finagling because we're dumping everything into the EFS storage. 
-		// For now, we should be OK with simply copying from local storage dir to the attached instance. 
+		// Config storage here takes some finagling because we're dumping everything into the EFS storage.
+		// For now, we should be OK with simply copying from local storage dir to the attached instance.
 
 		return nil
 	},
