@@ -26,7 +26,7 @@ var awsCommand = &cobra.Command{
 
 var efsAttachCommand = &cobra.Command{
 	Use:   "efs-attach",
-	Short: "Attach an EFS volume to an EC2 instance",
+	Short: "Attach an EFS volume to an EC2 instance. Must have installed efs-utils!",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// verify that we're in the correct region?
 		// instantiate logger
@@ -43,9 +43,8 @@ var efsAttachCommand = &cobra.Command{
 		// mount EFS locally
 		out, err := exec.Command(
 			"sudo", "mount",
-			"-t", "nfs",
-			"-o", "nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport",
-			efs_id, "efs",
+			"-t", "efs",
+			efs_id, "/home/ubuntu/efs/",
 		).Output()
 
 		if err != nil {
