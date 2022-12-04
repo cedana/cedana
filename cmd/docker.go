@@ -96,7 +96,7 @@ func (c *DockerClient) pollForCommand(containerId int) {
 	}()
 }
 
-func getContainerInfo(containerId int) *pb.ClientState {
+func getContainerInfo(containerId int) *pb.ClientData {
 
-	return &pb.ClientState{}
+	return &pb.ClientData{}
 }

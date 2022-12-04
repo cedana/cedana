@@ -61,7 +61,7 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Err(err).Msg("Could not read config")
 		return nil, err
 	}
-	
+
 	var opts []grpc.DialOption
 	// TODO: Config with setup and transport credentials
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -177,29 +177,37 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int) *pb.ClientState {
+func (c *Client) getState(pid int) *pb.ClientData {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
-
-	state := &pb.ClientState{
-		Timestamp: time.Now().Unix(),
+	data := &pb.ClientData{
 		ProcessInfo: &pb.ProcessInfo{
 			ProcessPid: uint32(pid),
 		},
 		ClientInfo: &pb.ClientInfo{
+			Os:       h.OS,
+			Platform: h.Platform,
+		},
+		State: &pb.ClientState{
 			RemainingMemory: int32(m.Free),
-			Os:              h.OS,
-			Platform:        h.Platform,
-			Uptime:          uint32(h.Uptime),
+			Uptime:          int32(h.Uptime),
 		},
 	}
 
-	return state
+	return data
 }
 
 func init() {
 	rootCmd.AddCommand(clientCommand)
+}
+
+func (c *Client) getId() string {
+	// returns an ID to pass up to an orchestrator.
+	// variable depending on implementation method, doing AWS only for now.
+
+	// weird introspection problem - daemon needs to know what service it's running on.
+	// hardcode in config for now
 }
