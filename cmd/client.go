@@ -203,11 +203,3 @@ func (c *Client) getState(pid int) *pb.ClientData {
 func init() {
 	rootCmd.AddCommand(clientCommand)
 }
-
-func (c *Client) getId() string {
-	// returns an ID to pass up to an orchestrator.
-	// variable depending on implementation method, doing AWS only for now.
-
-	// weird introspection problem - daemon needs to know what service it's running on.
-	// hardcode in config for now
-}

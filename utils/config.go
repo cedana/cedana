@@ -38,7 +38,8 @@ type Docker struct {
 }
 
 type AWS struct {
-	EFSId string `mapstructure:"efs_id"`
+	EFSId         string `mapstructure:"efs_id"`
+	EFSMountPoint string `mapstructure:"efs_id"`
 }
 
 func InitConfig() (*Config, error) {

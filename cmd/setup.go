@@ -39,12 +39,13 @@ var efsAttachCommand = &cobra.Command{
 		}
 
 		efs_id := config.AWS.EFSId
+		efs_mountpoint := config.AWS.EFSMountPoint
 
 		// mount EFS locally
 		out, err := exec.Command(
 			"sudo", "mount",
 			"-t", "efs",
-			efs_id, "/home/ubuntu/efs/",
+			efs_id, efs_mountpoint,
 		).Output()
 
 		if err != nil {
