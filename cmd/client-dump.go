@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,7 +55,7 @@ var dumpCommand = &cobra.Command{
 	},
 }
 
-func (c *Client) prepare_dump(pid int, dir string, opts *rpc.CriuOpts) {
+func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Could not instantiate new gopsutil process")
@@ -67,6 +68,13 @@ func (c *Client) prepare_dump(pid int, dir string, opts *rpc.CriuOpts) {
 	// marshal to dir folder for now
 	b, _ := json.Marshal(open_files)
 	c.logger.Debug().Msgf("pid has open fds: %s", string(b))
+
+	// write to file for restore to use
+	err = os.WriteFile("open_fds.json", b, 0o644)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error writing open_fds to disk")
+	}
+
 	// check network connections
 	var hasTCP bool
 	var hasExtUnixSocket bool
@@ -85,14 +93,24 @@ func (c *Client) prepare_dump(pid int, dir string, opts *rpc.CriuOpts) {
 	}
 	opts.TcpEstablished = proto.Bool(hasTCP)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
+
+	// check tty state
+	// if pts is in open fds, chances are it's a shell job
+	var isShellJob bool
+	for _, f := range open_files {
+		if strings.Contains(f.Path, "pts") {
+			isShellJob = true
+			break
+		}
+	}
+	opts.ShellJob = proto.Bool(isShellJob)
 }
 
-func (c *Client) prepare_opts() rpc.CriuOpts {
+func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:     proto.Int32(4),
 		LogFile:      proto.String("dump.log"),
-		ShellJob:     proto.Bool(false),
-		LeaveRunning: proto.Bool(true),
+		LeaveRunning: proto.Bool(c.config.Client.LeaveRunning), // defaults to false
 		GhostLimit:   proto.Uint32(uint32(10000000)),
 		ExtMasters:   proto.Bool(true),
 	}
@@ -111,9 +129,8 @@ func (c *Client) dump(pid int, dir string) error {
 	}
 	defer img.Close()
 
-	// ideally we can load and unmarshal this entire struct, from a partial block in the config
-	opts := c.prepare_opts()
-	c.prepare_dump(pid, dir, &opts)
+	opts := c.prepareCheckpointOpts()
+	c.prepareDump(pid, dir, &opts)
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(int32(pid))

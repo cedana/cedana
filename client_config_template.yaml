@@ -1,11 +1,11 @@
 ---
  client:
-  process_name: "1226634" 
+  process_name: "some_process_name" 
   dump_frequency_min: 10
-  dump_storage_dir: "/home/nravichandra/dump_images"
+  dump_storage_dir: "/path/to/storage/dir"
  docker: 
   leave_running: true
-  dump_storage_dir: "home/nravichandra/dump_images"
+  dump_storage_dir: "/path/to/storage/dir"
   container_id: ""
  action_scripts: 
   pre_dump: "scripts/pre_dump.sh"
@@ -14,3 +14,6 @@
  connection:
   server_addr: "localhost"
   server_port: 5000
+ aws: 
+  efs_id : "1234567"
+  efs_mount_point: "/path/to/efs/mountpoint"

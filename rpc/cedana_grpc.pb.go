@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CedanaClient interface {
 	// unary call registering client with server
-	RegisterClient(ctx context.Context, in *ClientState, opts ...grpc.CallOption) (*ConfigClient, error)
+	RegisterClient(ctx context.Context, in *ClientData, opts ...grpc.CallOption) (*ConfigClient, error)
 	// client-server streaming state
 	RecordState(ctx context.Context, opts ...grpc.CallOption) (Cedana_RecordStateClient, error)
 	// get commands from orchestration server
@@ -38,7 +38,7 @@ func NewCedanaClient(cc grpc.ClientConnInterface) CedanaClient {
 	return &cedanaClient{cc}
 }
 
-func (c *cedanaClient) RegisterClient(ctx context.Context, in *ClientState, opts ...grpc.CallOption) (*ConfigClient, error) {
+func (c *cedanaClient) RegisterClient(ctx context.Context, in *ClientData, opts ...grpc.CallOption) (*ConfigClient, error) {
 	out := new(ConfigClient)
 	err := c.cc.Invoke(ctx, "/cedana.Cedana/RegisterClient", in, out, opts...)
 	if err != nil {
@@ -57,7 +57,7 @@ func (c *cedanaClient) RecordState(ctx context.Context, opts ...grpc.CallOption)
 }
 
 type Cedana_RecordStateClient interface {
-	Send(*ClientState) error
+	Send(*ClientData) error
 	CloseAndRecv() (*ClientStateAck, error)
 	grpc.ClientStream
 }
@@ -66,7 +66,7 @@ type cedanaRecordStateClient struct {
 	grpc.ClientStream
 }
 
-func (x *cedanaRecordStateClient) Send(m *ClientState) error {
+func (x *cedanaRecordStateClient) Send(m *ClientData) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -91,7 +91,7 @@ func (c *cedanaClient) PollForCommand(ctx context.Context, opts ...grpc.CallOpti
 }
 
 type Cedana_PollForCommandClient interface {
-	Send(*ClientState) error
+	Send(*ClientData) error
 	Recv() (*ClientCommand, error)
 	grpc.ClientStream
 }
@@ -100,7 +100,7 @@ type cedanaPollForCommandClient struct {
 	grpc.ClientStream
 }
 
-func (x *cedanaPollForCommandClient) Send(m *ClientState) error {
+func (x *cedanaPollForCommandClient) Send(m *ClientData) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -117,7 +117,7 @@ func (x *cedanaPollForCommandClient) Recv() (*ClientCommand, error) {
 // for forward compatibility
 type CedanaServer interface {
 	// unary call registering client with server
-	RegisterClient(context.Context, *ClientState) (*ConfigClient, error)
+	RegisterClient(context.Context, *ClientData) (*ConfigClient, error)
 	// client-server streaming state
 	RecordState(Cedana_RecordStateServer) error
 	// get commands from orchestration server
@@ -129,7 +129,7 @@ type CedanaServer interface {
 type UnimplementedCedanaServer struct {
 }
 
-func (UnimplementedCedanaServer) RegisterClient(context.Context, *ClientState) (*ConfigClient, error) {
+func (UnimplementedCedanaServer) RegisterClient(context.Context, *ClientData) (*ConfigClient, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterClient not implemented")
 }
 func (UnimplementedCedanaServer) RecordState(Cedana_RecordStateServer) error {
@@ -152,7 +152,7 @@ func RegisterCedanaServer(s grpc.ServiceRegistrar, srv CedanaServer) {
 }
 
 func _Cedana_RegisterClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClientState)
+	in := new(ClientData)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func _Cedana_RegisterClient_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: "/cedana.Cedana/RegisterClient",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CedanaServer).RegisterClient(ctx, req.(*ClientState))
+		return srv.(CedanaServer).RegisterClient(ctx, req.(*ClientData))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -175,7 +175,7 @@ func _Cedana_RecordState_Handler(srv interface{}, stream grpc.ServerStream) erro
 
 type Cedana_RecordStateServer interface {
 	SendAndClose(*ClientStateAck) error
-	Recv() (*ClientState, error)
+	Recv() (*ClientData, error)
 	grpc.ServerStream
 }
 
@@ -187,8 +187,8 @@ func (x *cedanaRecordStateServer) SendAndClose(m *ClientStateAck) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *cedanaRecordStateServer) Recv() (*ClientState, error) {
-	m := new(ClientState)
+func (x *cedanaRecordStateServer) Recv() (*ClientData, error) {
+	m := new(ClientData)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func _Cedana_PollForCommand_Handler(srv interface{}, stream grpc.ServerStream) e
 
 type Cedana_PollForCommandServer interface {
 	Send(*ClientCommand) error
-	Recv() (*ClientState, error)
+	Recv() (*ClientData, error)
 	grpc.ServerStream
 }
 
@@ -213,8 +213,8 @@ func (x *cedanaPollForCommandServer) Send(m *ClientCommand) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *cedanaPollForCommandServer) Recv() (*ClientState, error) {
-	m := new(ClientState)
+func (x *cedanaPollForCommandServer) Recv() (*ClientData, error) {
+	m := new(ClientData)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
