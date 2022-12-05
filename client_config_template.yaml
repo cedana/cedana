@@ -14,3 +14,6 @@
  connection:
   server_addr: "localhost"
   server_port: 5000
+ aws: 
+  efs_id : "1234567"
+  efs_mount_point: "/path/to/efs/mountpoint"
