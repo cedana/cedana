@@ -24,6 +24,7 @@ type Client struct {
 	logger        *zerolog.Logger
 	config        *utils.Config
 	channels      *CommandChannels
+	context       context.Context
 }
 
 type CommandChannels struct {
@@ -75,7 +76,7 @@ func instantiateClient() (*Client, error) {
 	dump_command := make(chan int)
 	restore_command := make(chan int)
 	channels := &CommandChannels{dump_command, restore_command}
-	return &Client{c, rpcClient, conn, &logger, config, channels}, nil
+	return &Client{c, rpcClient, conn, &logger, config, channels, context.Background()}, nil
 }
 
 func (c *Client) cleanupClient() error {
@@ -86,7 +87,7 @@ func (c *Client) cleanupClient() error {
 }
 
 func (c *Client) registerRPCClient(pid int) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(c.context, 10*time.Second)
 	defer cancel()
 
 	state := c.getState(pid)
@@ -99,7 +100,7 @@ func (c *Client) registerRPCClient(pid int) {
 
 func (c *Client) recordState() {
 	state := c.getState(pid)
-	stream, err := c.rpcClient.RecordState(context.TODO())
+	stream, err := c.rpcClient.RecordState(c.context)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msgf("Could not open stream to send state")
 	}
@@ -126,7 +127,7 @@ func (c *Client) recordState() {
 }
 
 func (c *Client) pollForCommand(pid int) {
-	// start a loop
+	// TODO: should fail gracefully
 	refresher := time.NewTicker(5 * time.Second)
 	defer refresher.Stop()
 
@@ -136,7 +137,7 @@ func (c *Client) pollForCommand(pid int) {
 		select {
 		case <-refresher.C:
 			c.logger.Debug().Msgf("polling for command at %v", time.Now().Local())
-			stream, _ := c.rpcClient.PollForCommand(context.TODO())
+			stream, _ := c.rpcClient.PollForCommand(c.context)
 
 			state := c.getState(pid)
 			c.logger.Debug().Msgf("Sent state %v:", state)

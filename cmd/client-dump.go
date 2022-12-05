@@ -129,7 +129,6 @@ func (c *Client) dump(pid int, dir string) error {
 	}
 	defer img.Close()
 
-	// ideally we can load and unmarshal this entire struct, from a partial block in the config
 	opts := c.prepareCheckpointOpts()
 	c.prepareDump(pid, dir, &opts)
 
