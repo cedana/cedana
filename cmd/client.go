@@ -140,7 +140,10 @@ func (c *Client) pollForCommand(pid int) {
 
 			state := c.getState(pid)
 			c.logger.Debug().Msgf("Sent state %v:", state)
-			stream.Send(state)
+			err := stream.Send(state)
+			if err != nil {
+				c.logger.Fatal().Err(err)
+			}
 
 			resp, err := stream.Recv()
 			c.logger.Info().Msgf("received response: %s", resp.String())
