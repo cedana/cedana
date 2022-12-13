@@ -14,7 +14,6 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
@@ -64,8 +63,9 @@ func instantiateClient() (*Client, error) {
 	}
 
 	var opts []grpc.DialOption
+
 	// TODO: Config with setup and transport credentials
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	opts = append(opts, grpc.PerRPCCredentials())
 	conn, err := grpc.Dial("localhost:5000", opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to RPC server")

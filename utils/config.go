@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
+	pb "github.com/nravic/cedana/rpc"
 	"github.com/spf13/viper"
 )
 
@@ -61,5 +64,29 @@ func InitConfig() (*Config, error) {
 		fmt.Println(err)
 		return nil, err
 	}
+	loadServerOverrides(&config)
 	return &config, nil
+}
+
+func loadServerOverrides(c *Config) {
+	var serverOverrides pb.ConfigClient
+
+	// load override from file. Fail silently if it doesn't exist
+	// overrides are added during instance setup/creation/instantiation (?)
+	f, err := os.ReadFile("server_overrides.json")
+	if err != nil {
+		return
+	} else {
+		err = json.Unmarshal(f, &serverOverrides)
+
+		// no better way right now than just loading each override into the config
+
+		// AWS Overrides
+		c.AWS.EFSId = serverOverrides.Aws.EfsId
+		c.AWS.EFSMountPoint = serverOverrides.Aws.EfsMountPoint
+
+		// Connection Overrides
+		c.Connection.ServerAddr = serverOverrides.Connection.ServerAddr
+		c.Connection.ServerPort = int(serverOverrides.Connection.ServerPort)
+	}
 }
