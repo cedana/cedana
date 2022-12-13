@@ -23,7 +23,6 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Initialize client and restore from dumped image",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// want to be able to get the criu object from the root, but that's neither here nor there
 		c, err := instantiateClient()
 		if err != nil {
 			return err
