@@ -81,6 +81,7 @@ require (
 
 require (
 	github.com/adrg/strutil v0.3.0
+	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/mitchellh/go-ps v1.0.0

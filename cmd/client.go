@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
@@ -14,6 +15,10 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
@@ -37,6 +42,31 @@ var clientCommand = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error: must also specify dump, restore or daemon")
 	},
+}
+
+func UnaryClientInterceptor(
+	ctx context.Context,
+	method string,
+	req interface{},
+	reply interface{},
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	jwt, exists := os.LookupEnv("CEDANA_JWT_TOKEN")
+	if !exists {
+		return fmt.Errorf("JWT env var unset! Something likely went wrong during instance setup")
+	}
+
+	authCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer"+jwt)
+	err := invoker(authCtx, method, req, reply, cc, opts...)
+
+	// TODO: Need way to refresh JWT token
+	if status.Code(err) == codes.Unauthenticated {
+		return fmt.Errorf("JWT token expired")
+	}
+
+	return err
 }
 
 func instantiateClient() (*Client, error) {
@@ -64,9 +94,13 @@ func instantiateClient() (*Client, error) {
 
 	var opts []grpc.DialOption
 
-	// TODO: Config with setup and transport credentials
-	opts = append(opts, grpc.PerRPCCredentials())
-	conn, err := grpc.Dial("localhost:5000", opts...)
+	// Transport credentials are intentionally insecure here - JWT takes over
+	opts = append(
+		opts,
+		grpc.WithUnaryInterceptor(UnaryClientInterceptor),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
 	}
@@ -141,7 +175,10 @@ func (c *Client) pollForCommand(pid int) {
 
 			state := c.getState(pid)
 			c.logger.Debug().Msgf("Sent state %v:", state)
-			stream.Send(state)
+			err := stream.Send(state)
+			if err != nil {
+				c.logger.Fatal().Err(err)
+			}
 
 			resp, err := stream.Recv()
 			c.logger.Info().Msgf("received response: %s", resp.String())

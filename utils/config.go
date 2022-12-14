@@ -78,6 +78,10 @@ func loadServerOverrides(c *Config) {
 		return
 	} else {
 		err = json.Unmarshal(f, &serverOverrides)
+		if err != nil {
+			// we don't care - drop and leave
+			return
+		}
 
 		// no better way right now than just loading each override into the config
 
