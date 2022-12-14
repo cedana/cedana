@@ -100,7 +100,7 @@ func instantiateClient() (*Client, error) {
 		grpc.WithUnaryInterceptor(UnaryClientInterceptor),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
 	}
