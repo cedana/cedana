@@ -24,3 +24,25 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+nfpms:
+  - 
+    id: default
+    package_name: cedana
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Cedana Systems
+
+    homepage: cedana.notion.site
+    maintainer: Niranjan Ravichandra <nravic@cedana.co>
+
+    description: |-
+      Fast, adaptive checkpointing for orchestrated cloud brokerage.
+
+    license: GNU APLv3
+
+    formats:
+      - deb
+      - rpm
+      - archlinux  # Since GoReleaser v1.13.
+    
+    suggests:
+      - criu 
