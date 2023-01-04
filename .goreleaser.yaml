@@ -1,10 +1,6 @@
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
-    # you may remove this if you don't need go generate
     - go generate ./...
 builds:
   - env:
@@ -28,7 +24,25 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+nfpms:
+  - 
+    id: default
+    package_name: cedana
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Cedana Systems
 
-# modelines, feel free to remove those if you don't want/use them:
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+    homepage: cedana.notion.site
+    maintainer: Niranjan Ravichandra <nravic@cedana.co>
+
+    description: |-
+      Fast, adaptive checkpointing for orchestrated cloud brokerage.
+
+    license: GNU APLv3
+
+    formats:
+      - deb
+      - rpm
+      - archlinux  # Since GoReleaser v1.13.
+    
+    suggests:
+      - criu 
