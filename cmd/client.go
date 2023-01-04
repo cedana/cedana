@@ -162,7 +162,7 @@ func (c *Client) recordState() {
 
 func (c *Client) pollForCommand(pid int) {
 	// TODO: should fail gracefully
-	refresher := time.NewTicker(5 * time.Second)
+	refresher := time.NewTicker(10 * time.Second)
 	defer refresher.Stop()
 
 	waitc := make(chan struct{})
@@ -171,38 +171,41 @@ func (c *Client) pollForCommand(pid int) {
 		select {
 		case <-refresher.C:
 			c.logger.Debug().Msgf("polling for command at %v", time.Now().Local())
-			stream, _ := c.rpcClient.PollForCommand(c.context)
-
-			state := c.getState(pid)
-			c.logger.Debug().Msgf("Sent state %v:", state)
-			err := stream.Send(state)
+			stream, err := c.rpcClient.PollForCommand(c.context)
 			if err != nil {
-				c.logger.Fatal().Err(err)
-			}
+				c.logger.Info().Msgf("could not reach orchestrator server: %v", err)
+			} else {
+				state := c.getState(pid)
+				c.logger.Debug().Msgf("Sent state %v:", state)
+				err = stream.Send(state)
+				if err != nil {
+					c.logger.Info().Msgf("could not reach orchestrator server: %v", err)
+				}
 
-			resp, err := stream.Recv()
-			c.logger.Info().Msgf("received response: %s", resp.String())
-			if err == io.EOF {
-				// read done
-				close(waitc)
-				return
-			}
+				resp, err := stream.Recv()
+				c.logger.Info().Msgf("received response: %s", resp.String())
+				if err == io.EOF {
+					// read done
+					close(waitc)
+					return
+				}
 
-			if resp == nil {
-				// do nothing if we don't have a command yet
-				return
-			}
+				if resp == nil {
+					// do nothing if we don't have a command yet
+					return
+				}
 
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("client.pollForCommand failed")
-			}
-			if resp.Checkpoint {
-				c.logger.Info().Msgf("checkpoint command received: %v", resp)
-				c.channels.dump_command <- 1
-			}
-			if resp.Restore {
-				c.logger.Info().Msgf("restore command received: %v", resp)
-				c.channels.restore_command <- 1
+				if err != nil {
+					c.logger.Fatal().Err(err).Msg("client.pollForCommand failed")
+				}
+				if resp.Checkpoint {
+					c.logger.Info().Msgf("checkpoint command received: %v", resp)
+					c.channels.dump_command <- 1
+				}
+				if resp.Restore {
+					c.logger.Info().Msgf("restore command received: %v", resp)
+					c.channels.restore_command <- 1
+				}
 			}
 		default:
 			// do nothing otherwise (don't block for loop)
@@ -220,12 +223,15 @@ func (c *Client) getState(pid int) *pb.ClientData {
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
+	id := os.Getenv("CEDANA_CLIENT_ID")
+
 	// ignore sending network for now, little complicated
 	data := &pb.ClientData{
 		ProcessInfo: &pb.ProcessInfo{
 			ProcessPid: uint32(pid),
 		},
 		ClientInfo: &pb.ClientInfo{
+			Id:       id,
 			Os:       h.OS,
 			Platform: h.Platform,
 		},
