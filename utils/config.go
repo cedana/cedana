@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	pb "github.com/nravic/cedana/rpc"
 	"github.com/spf13/viper"
@@ -48,7 +49,7 @@ type AWS struct {
 
 func InitConfig() (*Config, error) {
 
-	viper.AddConfigPath(".")
+	viper.AddConfigPath(filepath.Join(os.Getenv("HOME"), ".cedana/"))
 	viper.SetConfigType("yaml")
 	viper.SetConfigName("client_config")
 
