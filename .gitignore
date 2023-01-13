@@ -1,5 +1,6 @@
 cedana
 client_config.yaml
-
+cedana-daemon.log
+cedana.pid 
 
 dist/

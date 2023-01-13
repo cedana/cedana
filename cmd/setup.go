@@ -20,7 +20,7 @@ var awsCommand = &cobra.Command{
 	Use:   "aws",
 	Short: "Command for AWS-specific setup",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("error: must also specifcy aws subcommands")
+		return fmt.Errorf("error: must also specify aws subcommands")
 	},
 }
 
