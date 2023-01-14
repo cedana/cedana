@@ -2,11 +2,11 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	pb "github.com/nravic/cedana/rpc"
 	"github.com/spf13/viper"
 )
 
@@ -50,13 +50,29 @@ type AWS struct {
 func InitConfig() (*Config, error) {
 
 	viper.AddConfigPath(filepath.Join(os.Getenv("HOME"), ".cedana/"))
+	homedir, _ := os.UserHomeDir()
+	viper.AddConfigPath(filepath.Join(homedir, ".cedana/"))
 	viper.SetConfigType("json")
 	viper.SetConfigName("client_config")
+
+	// InitConfig should do the testing for path
+	_, err := os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o644)
+	if errors.Is(err, os.ErrNotExist) {
+		fmt.Println("client_config.json does not exist, creating sample config...")
+		_, err = os.Create(filepath.Join(homedir, ".cedana", "client_config.json"))
+		if err != nil {
+			panic(fmt.Errorf("error creating config file: %v", err))
+		}
+		// Set some dummy defaults, that are only loaded if the file doesn't exist.
+		// If it does exist, this isn't called, so the dummy isn't an override.
+		viper.Set("client.process_name", "cedana")
+		viper.WriteConfig()
+	}
 
 	viper.AutomaticEnv()
 
 	var config Config
-	err := viper.ReadInConfig()
+	err = viper.ReadInConfig()
 	if err != nil {
 		panic(fmt.Errorf("error: %v, have you run bootstrap?, ", err))
 	}
@@ -66,59 +82,33 @@ func InitConfig() (*Config, error) {
 		return nil, err
 	}
 	so := *loadOverrides()
-	aws := AWS{}
-	if so.Aws != nil {
-		aws.EFSId = so.Aws.EfsId
-		aws.EFSMountPoint = so.Aws.EfsMountPoint
-	}
 
-	// no better way right now than just loading each override into the config
-	viper.Set("efs_id", aws.EFSId)
-	viper.Set("efs_mountpoint", aws.EFSMountPoint)
+	// there HAS to be a better way to do this
+	viper.Set("aws.efs_id", so.AWS.EFSId)
+	viper.Set("aws.efs_mountpoint", so.AWS.EFSMountPoint)
 
 	viper.WriteConfig()
 	return &config, nil
 }
 
-func loadOverrides() *pb.ConfigClient {
-	var serverOverrides pb.ConfigClient
+func loadOverrides() *Config {
+	var serverOverrides Config
 
 	// load override from file. Fail silently if it doesn't exist, or GenSampleConfig instead
 	// overrides are added during instance setup/creation/instantiation (?)
 	f, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".cedana", "server_overrides.json"))
 	if err != nil {
 		fmt.Printf("error looking for server overrides %v", err)
-		return &pb.ConfigClient{}
+		return &Config{}
 	} else {
 		fmt.Printf("found server specified overrides, overriding config...\n")
 		err = json.Unmarshal(f, &serverOverrides)
 		if err != nil {
 			fmt.Printf("some err: %v", err)
 			// we don't care - drop and leave
-			return &pb.ConfigClient{}
+			return &Config{}
 		}
 		return &serverOverrides
 	}
 }
-
-func GenSampleConfig(path string) error {
-	c := Config{
-		Client: Client{
-			LeaveRunning:   true,         // sanest/least impact default for leaveRunning
-			DumpStorageDir: "~/.cedana/", // folder likely exists
-		},
-	}
-
-	b, err := json.Marshal(c)
-	if err != nil {
-		return fmt.Errorf("err: %v, could not marshal spot config struct to file", err)
-	}
-	err = os.WriteFile(path, b, 0o644)
-	if err != nil {
-		return fmt.Errorf("err: %v, could not write file to path %s", err, path)
-	}
-
-	return err
-}
-
 // write to disk
