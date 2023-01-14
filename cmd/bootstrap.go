@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -45,14 +44,6 @@ func (b *Bootstrap) bootstrap() {
 	}
 
 	// check configFolderPath for cfg
-	_, err = os.OpenFile(filepath.Join(homeDir, ".cedana/client_config.json"), 0, 0o644)
-	if errors.Is(err, os.ErrNotExist) {
-		b.l.Info().Msg("client_config.json does not exist, creating sample config...")
-		// TODO: promptui?
-		// Generate some sane defaults
-		utils.GenSampleConfig(filepath.Join(configFolderPath, "client_config.json"))
-	}
-
 	// let InitConfig populate with overrides (if any)
 	_, err = utils.InitConfig()
 	if err != nil {
