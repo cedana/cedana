@@ -38,8 +38,8 @@ var efsAttachCommand = &cobra.Command{
 			return err
 		}
 
-		efs_id := config.AWS.EFSId
-		efs_mountpoint := config.AWS.EFSMountPoint
+		efs_id := config.SharedStorage.EFSId
+		efs_mountpoint := config.SharedStorage.MountPoint
 
 		// mount EFS locally
 		out, err := exec.Command(

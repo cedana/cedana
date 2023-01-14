@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"os"
 	"strings"
@@ -106,6 +107,14 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) {
 	opts.ShellJob = proto.Bool(isShellJob)
 }
 
+func (c *Client) postDump() {
+	// if shared network storage is enabled, compress and shoot over
+	if c.config.SharedStorage.MountPoint != "" {
+	}
+	// validate md5 checksum, timetag
+
+}
+
 func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:     proto.Int32(4),
@@ -121,7 +130,6 @@ func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
 func (c *Client) dump(pid int, dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
-	// TODO - Dynamic storage (depending on process)
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dir)

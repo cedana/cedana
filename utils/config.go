@@ -15,7 +15,7 @@ type Config struct {
 	ActionScripts ActionScripts `mapstructure:"action_scripts"`
 	Connection    Connection    `mapstructure:"connection"`
 	Docker        Docker        `mapstructure:"docker"`
-	AWS           AWS           `mapstructure:"aws"`
+	SharedStorage SharedStorage `mapstructure:"shared_storage"`
 }
 
 type Client struct {
@@ -42,9 +42,9 @@ type Docker struct {
 	CheckpointID  string `mapstructure:"checkpoint_id"`
 }
 
-type AWS struct {
-	EFSId         string `mapstructure:"efs_id"`
-	EFSMountPoint string `mapstructure:"efs_mount_point"`
+type SharedStorage struct {
+	EFSId      string `mapstructure:"efs_id"`
+	MountPoint string `mapstructure:"shared_mount_point"`
 }
 
 func InitConfig() (*Config, error) {
@@ -84,8 +84,8 @@ func InitConfig() (*Config, error) {
 	so := *loadOverrides()
 
 	// there HAS to be a better way to do this
-	viper.Set("aws.efs_id", so.AWS.EFSId)
-	viper.Set("aws.efs_mountpoint", so.AWS.EFSMountPoint)
+	viper.Set("aws.efs_id", so.SharedStorage.EFSId)
+	viper.Set("aws.efs_mountpoint", so.SharedStorage.MountPoint)
 
 	viper.WriteConfig()
 	return &config, nil
@@ -111,4 +111,5 @@ func loadOverrides() *Config {
 		return &serverOverrides
 	}
 }
+
 // write to disk
