@@ -12,7 +12,7 @@ func GetPid(process_name string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// brittle search, TODO make more robust, need to be able to grab a 
+	// brittle search, TODO make more robust, need to be able to grab a
 	// range of processes too (here assuming root process is most similar)
 	similarity := 0.0
 	var proc ps.Process
@@ -25,4 +25,13 @@ func GetPid(process_name string) (int, error) {
 		}
 	}
 	return proc.Pid(), nil
+}
+
+func GetProcessName(pid int) (*string, error) {
+	p, err := ps.FindProcess(pid)
+	if err != nil {
+		return nil, err
+	}
+	name := p.Executable()
+	return &name, err
 }

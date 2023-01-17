@@ -35,7 +35,7 @@ var dockerDumpCmd = &cobra.Command{
 		}
 
 		if dir == "" {
-			dir = dc.config.Client.DumpStorageDir
+			dir = dc.config.SharedStorage.DumpStorageDir
 		}
 
 		if container == "" {
