@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/spf13/viper"
@@ -15,13 +16,12 @@ type Config struct {
 	ActionScripts ActionScripts `mapstructure:"action_scripts"`
 	Connection    Connection    `mapstructure:"connection"`
 	Docker        Docker        `mapstructure:"docker"`
-	AWS           AWS           `mapstructure:"aws"`
+	SharedStorage SharedStorage `mapstructure:"shared_storage"`
 }
 
 type Client struct {
 	ProcessName      string `mapstructure:"process_name"`
 	DumpFrequencyMin int    `mapstructure:"dump_frequency_min"`
-	DumpStorageDir   string `mapstructure:"dump_storage_dir"`
 	LeaveRunning     bool   `mapstructure:"leave_running"`
 }
 
@@ -42,21 +42,28 @@ type Docker struct {
 	CheckpointID  string `mapstructure:"checkpoint_id"`
 }
 
-type AWS struct {
-	EFSId         string `mapstructure:"efs_id"`
-	EFSMountPoint string `mapstructure:"efs_mount_point"`
+type SharedStorage struct {
+	EFSId string `mapstructure:"efs_id"`
+	// only useful for multi-machine checkpoint/restore
+	MountPoint     string `mapstructure:"shared_mount_point"`
+	DumpStorageDir string `mapstructure:"dump_storage_dir"`
 }
 
 func InitConfig() (*Config, error) {
+	// have to run cedana as root, but it overrides os.UserHomeDir w/ /root
+	username := os.Getenv("SUDO_USER")
+	u, err := user.Lookup(username)
+	if err != nil {
+		return nil, err
+	}
 
-	viper.AddConfigPath(filepath.Join(os.Getenv("HOME"), ".cedana/"))
-	homedir, _ := os.UserHomeDir()
+	homedir := u.HomeDir
 	viper.AddConfigPath(filepath.Join(homedir, ".cedana/"))
 	viper.SetConfigType("json")
 	viper.SetConfigName("client_config")
 
 	// InitConfig should do the testing for path
-	_, err := os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o644)
+	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o644)
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Println("client_config.json does not exist, creating sample config...")
 		_, err = os.Create(filepath.Join(homedir, ".cedana", "client_config.json"))
@@ -84,8 +91,8 @@ func InitConfig() (*Config, error) {
 	so := *loadOverrides()
 
 	// there HAS to be a better way to do this
-	viper.Set("aws.efs_id", so.AWS.EFSId)
-	viper.Set("aws.efs_mountpoint", so.AWS.EFSMountPoint)
+	viper.Set("aws.efs_id", so.SharedStorage.EFSId)
+	viper.Set("aws.efs_mountpoint", so.SharedStorage.MountPoint)
 
 	viper.WriteConfig()
 	return &config, nil
@@ -98,7 +105,6 @@ func loadOverrides() *Config {
 	// overrides are added during instance setup/creation/instantiation (?)
 	f, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".cedana", "server_overrides.json"))
 	if err != nil {
-		fmt.Printf("error looking for server overrides %v", err)
 		return &Config{}
 	} else {
 		fmt.Printf("found server specified overrides, overriding config...\n")
@@ -111,4 +117,5 @@ func loadOverrides() *Config {
 		return &serverOverrides
 	}
 }
+
 // write to disk

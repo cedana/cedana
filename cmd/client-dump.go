@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -34,7 +35,7 @@ var dumpCommand = &cobra.Command{
 		}
 		// load from config if flags aren't set
 		if dir == "" {
-			dir = c.config.Client.DumpStorageDir
+			dir = c.config.SharedStorage.DumpStorageDir
 		}
 
 		if pid == 0 {
@@ -55,10 +56,14 @@ var dumpCommand = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) {
+func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Could not instantiate new gopsutil process")
+	}
+	pname, err := utils.GetProcessName(pid)
+	if err != nil {
+		c.logger.Fatal().Err(err)
 	}
 	// check file descriptors
 	open_files, err := p.OpenFiles()
@@ -104,6 +109,46 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) {
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
+
+	// create subfolder to dump in
+	// TODO: We're not taking advantage of incremental dumps with this
+
+	// processname + datetime
+	newdirname := strings.Join([]string{*pname, time.Now().Format("02_01_2006_1504")}, "_")
+	dumpdir := filepath.Join(dir, newdirname)
+	_, err = os.Stat(filepath.Join(dumpdir))
+	if err != nil {
+		if err := os.Mkdir(dumpdir, 0o755); err != nil {
+			c.logger.Fatal().Err(err).Msg("error creating dump subfolder")
+		}
+	}
+
+	return dumpdir
+}
+
+func (c *Client) postDump(dumpdir string) {
+	c.logger.Info().Msg("compressing checkpoints")
+	// if shared network storage is enabled, compress and shoot over
+	if c.config.SharedStorage.MountPoint != "" {
+		// dump onto mountpoint w/ folder name
+		c.logger.Debug().Msgf("zipping into: %s", filepath.Join(
+			c.config.SharedStorage.MountPoint, strings.Join(
+				[]string{filepath.Base(dumpdir), ".tar.gz"}, "")))
+		out, err := os.Create(
+			filepath.Join(
+				c.config.SharedStorage.MountPoint, strings.Join(
+					[]string{filepath.Base(dumpdir), ".tar.gz"}, ""),
+			),
+		)
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("could not create compressed object")
+		}
+		err = utils.Compress(dumpdir, out)
+		if err != nil {
+			c.logger.Fatal().Err(err)
+		}
+	}
+	// TODO: md5 checksum validation
 }
 
 func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
@@ -121,16 +166,15 @@ func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
 func (c *Client) dump(pid int, dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
-	// TODO - Dynamic storage (depending on process)
-	img, err := os.Open(dir)
+	opts := c.prepareCheckpointOpts()
+	dumpdir := c.prepareDump(pid, dir, &opts)
+
+	img, err := os.Open(dumpdir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
 		return err
 	}
 	defer img.Close()
-
-	opts := c.prepareCheckpointOpts()
-	c.prepareDump(pid, dir, &opts)
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(int32(pid))
@@ -151,6 +195,10 @@ func (c *Client) dump(pid int, dir string) error {
 		c.logger.Fatal().Err(err).Msg("error dumping process")
 		return err
 	}
+
+	// CRIU ntfy hooks get run before this,
+	// so have to ensure that image files aren't tampered with
+	c.postDump(dumpdir)
 
 	return nil
 }

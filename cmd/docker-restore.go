@@ -28,7 +28,7 @@ var dockerRestoreCmd = &cobra.Command{
 		}
 
 		if dir == "" {
-			dir = dc.config.Client.DumpStorageDir
+			dir = dc.config.SharedStorage.DumpStorageDir
 		}
 
 		opts := dockertypes.ContainerStartOptions{

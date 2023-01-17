@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,7 +29,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		if dir == "" {
-			dir = c.config.Client.DumpStorageDir
+			dir = c.config.SharedStorage.DumpStorageDir
 		}
 
 		err = c.restore()
@@ -40,7 +40,7 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 	// check open_fds. Useful for checking if process being restored
 	// is a pts slave and for determining how to handle files that were being written to.
 	// TODO: We should be looking at the images instead
@@ -66,11 +66,46 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts) {
 
 	// TODO: network restore logic
 
+	// if shared network storage is enabled, grab last modified object
+	if c.config.SharedStorage.MountPoint != "" {
+		c.logger.Info().Msg("decompressing checkpoints")
+		var f string
+		var lastModifiedTime time.Time
+
+		files, _ := os.ReadDir(c.config.SharedStorage.MountPoint)
+		for _, file := range files {
+			fsinfo, err := file.Info()
+			if err != nil {
+				c.logger.Fatal().Err(err)
+			}
+			if fsinfo.ModTime().After(lastModifiedTime) {
+				f = file.Name()
+				lastModifiedTime = fsinfo.ModTime()
+			}
+		}
+
+		// hack: fsInfo for whatever reason doesn't expose the absolute path. Thankfully we have enough
+		// information to piece it together, but this feels brittle.
+		f = filepath.Join(c.config.SharedStorage.MountPoint, f)
+		c.logger.Info().Msgf("found cedana checkpoint %s", f)
+		obj, err := os.Open(f)
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("could not read file")
+		}
+
+		// from a shared volume (like efs) -> local storage
+		c.logger.Info().Msgf("decompressing %s to %s", obj.Name(), dumpdir)
+		err = utils.Decompress(obj, dumpdir)
+		if err != nil {
+			// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
+			c.logger.Info().Err(err).Msg("error decompressing checkpoints")
+		}
+	}
+	// TODO: md5 checksum validation
 }
 
-func (c *Client) prepareRestoreOpts(img *os.File) rpc.CriuOpts {
+func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		ImagesDirFd:    proto.Int32(int32(img.Fd())),
 		LogLevel:       proto.Int32(4),
 		LogFile:        proto.String("restore.log"),
 		TcpEstablished: proto.Bool(true),
@@ -80,20 +115,37 @@ func (c *Client) prepareRestoreOpts(img *os.File) rpc.CriuOpts {
 
 }
 
+// reach into DumpStorageDir and pick last modified folder
+func getLatestCheckpointDir(dumpdir string) (string, error) {
+	// potentially funny hack here instead is splitting the directory string
+	// and getting the date out of that
+	var dir string
+	var lastModifiedTime time.Time
+
+	folders, _ := os.ReadDir(dumpdir)
+	for _, folder := range folders {
+		fsinfo, err := folder.Info()
+		if err != nil {
+			return dir, err
+		}
+		if folder.IsDir() && fsinfo.ModTime().After(lastModifiedTime) {
+			// see https://github.com/golang/go/issues/32300 about names
+			// TL;DR - full name is only returned if the file is opened with the full name
+			// TODO: audit code to find places where absolute paths _aren't_ used
+			// hack: same as in prepareRestore, join folder.Name w/ dumpdir
+			dir = filepath.Join(dumpdir, folder.Name())
+			lastModifiedTime = fsinfo.ModTime()
+		}
+	}
+
+	return dir, nil
+}
+
 func (c *Client) restore() error {
 	defer c.timeTrack(time.Now(), "restore")
-	config, err := utils.InitConfig()
-	if err != nil {
-		return fmt.Errorf("could not load config")
-	}
-	img, err := os.Open(config.Client.DumpStorageDir)
-	if err != nil {
-		return fmt.Errorf("can't open image dir")
-	}
-	defer img.Close()
 
-	opts := c.prepareRestoreOpts(img)
-	c.prepareRestore(&opts)
+	opts := c.prepareRestoreOpts()
+	c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -103,11 +155,25 @@ func (c *Client) restore() error {
 		PreRestoreAvail: true,
 	}
 
+	// even if external storage is used, checkpoints dumped by cedana will be in the format
+	// /dumpdir/processname_date/...
+	dir, err := getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("could not get latest checkpoint directory")
+	}
+
+	img, err := os.Open(dir)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("could not open directory")
+	}
+	defer img.Close()
+
+	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
+
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error restoring process")
 		return err
-
 	}
 
 	c.cleanupClient()

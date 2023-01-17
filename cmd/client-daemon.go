@@ -38,7 +38,7 @@ var clientDaemonCmd = &cobra.Command{
 		}
 
 		if dir == "" {
-			dir = c.config.Client.DumpStorageDir
+			dir = c.config.SharedStorage.DumpStorageDir
 		}
 
 		// verify channels exist to listen on
