@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 
+	pb "github.com/nravic/cedana/rpc"
 	"github.com/spf13/viper"
 )
 
@@ -45,7 +46,7 @@ type Docker struct {
 type SharedStorage struct {
 	EFSId string `mapstructure:"efs_id"`
 	// only useful for multi-machine checkpoint/restore
-	MountPoint     string `mapstructure:"shared_mount_point"`
+	MountPoint     string `mapstructure:"mount_point"`
 	DumpStorageDir string `mapstructure:"dump_storage_dir"`
 }
 
@@ -77,11 +78,7 @@ func InitConfig() (*Config, error) {
 		}
 		// Set some dummy defaults, that are only loaded if the file doesn't exist.
 		// If it does exist, this isn't called, so the dummy isn't an override.
-		viper.Set("client", Client{
-			ProcessName:      "cedana",
-			DumpFrequencyMin: 10,
-			LeaveRunning:     false,
-		})
+		viper.Set("client.process_name", "cedana")
 		viper.WriteConfig()
 	}
 
@@ -99,14 +96,18 @@ func InitConfig() (*Config, error) {
 	}
 	so := *loadOverrides(filepath.Join(homedir, ".cedana"))
 
-	viper.Set("shared_storage", so.SharedStorage)
+	// override setting is ugly, need to abstract this away somehow
+	// SharedStorage
+	viper.Set("shared_storage.efs_id", so.SharedStorage.EfsId)
+	viper.Set("shared_storage.mount_point", so.SharedStorage.SharedMountPoint)
+	viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
 
 	viper.WriteConfig()
 	return &config, nil
 }
 
-func loadOverrides(cdir string) *Config {
-	var serverOverrides Config
+func loadOverrides(cdir string) *pb.ConfigClient {
+	var serverOverrides pb.ConfigClient
 
 	// load override from file. Fail silently if it doesn't exist, or GenSampleConfig instead
 	// overrides are added during instance setup/creation/instantiation (?)
@@ -120,6 +121,7 @@ func loadOverrides(cdir string) *Config {
 	} else {
 		f, err := os.ReadFile(overridePath)
 		if err != nil {
+			fmt.Printf("error reading overrides file: %v", err)
 			// couldn't read file :shrug:
 			return &serverOverrides
 		} else {
@@ -130,6 +132,7 @@ func loadOverrides(cdir string) *Config {
 				// again, we don't care - drop and leave
 				return &serverOverrides
 			}
+			fmt.Printf("overrides: %v", serverOverrides)
 			// to catch resetting if the config has been written once already, delete the override
 			err = os.Remove(overridePath)
 			if err != nil {
