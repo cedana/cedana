@@ -50,8 +50,13 @@ type SharedStorage struct {
 }
 
 func InitConfig() (*Config, error) {
+	var username string
 	// have to run cedana as root, but it overrides os.UserHomeDir w/ /root
-	username := os.Getenv("SUDO_USER")
+	username = os.Getenv("SUDO_USER")
+	if username == "" {
+		username = os.Getenv("USER")
+	}
+
 	u, err := user.Lookup(username)
 	if err != nil {
 		return nil, err

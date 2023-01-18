@@ -47,7 +47,7 @@ func (b *Bootstrap) bootstrap() {
 	// let InitConfig populate with overrides (if any)
 	_, err = utils.InitConfig()
 	if err != nil {
-		b.l.Fatal().Err(err).Msg("could not initiate generatedconfig")
+		b.l.Fatal().Err(err).Msg("could not initiate generated config")
 	}
 }
 
