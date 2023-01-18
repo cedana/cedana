@@ -72,7 +72,11 @@ func InitConfig() (*Config, error) {
 		}
 		// Set some dummy defaults, that are only loaded if the file doesn't exist.
 		// If it does exist, this isn't called, so the dummy isn't an override.
-		viper.Set("client.process_name", "cedana")
+		viper.Set("client", Client{
+			ProcessName:      "cedana",
+			DumpFrequencyMin: 10,
+			LeaveRunning:     false,
+		})
 		viper.WriteConfig()
 	}
 
@@ -88,33 +92,46 @@ func InitConfig() (*Config, error) {
 		fmt.Println(err)
 		return nil, err
 	}
-	so := *loadOverrides()
+	so := *loadOverrides(filepath.Join(homedir, ".cedana"))
 
-	// there HAS to be a better way to do this
-	viper.Set("aws.efs_id", so.SharedStorage.EFSId)
-	viper.Set("aws.efs_mountpoint", so.SharedStorage.MountPoint)
+	viper.Set("shared_storage", so.SharedStorage)
 
 	viper.WriteConfig()
 	return &config, nil
 }
 
-func loadOverrides() *Config {
+func loadOverrides(cdir string) *Config {
 	var serverOverrides Config
 
 	// load override from file. Fail silently if it doesn't exist, or GenSampleConfig instead
 	// overrides are added during instance setup/creation/instantiation (?)
-	f, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".cedana", "server_overrides.json"))
-	if err != nil {
-		return &Config{}
-	} else {
-		fmt.Printf("found server specified overrides, overriding config...\n")
-		err = json.Unmarshal(f, &serverOverrides)
-		if err != nil {
-			fmt.Printf("some err: %v", err)
-			// we don't care - drop and leave
-			return &Config{}
-		}
+	overridePath := filepath.Join(cdir, "server_overrides.json")
+	// do this all in an exists block
+	_, err := os.OpenFile(overridePath, 0, 0o644)
+	if errors.Is(err, os.ErrNotExist) {
+		// do nothing, drop and leave
+		fmt.Printf("could not find server overrides")
 		return &serverOverrides
+	} else {
+		f, err := os.ReadFile(overridePath)
+		if err != nil {
+			// couldn't read file :shrug:
+			return &serverOverrides
+		} else {
+			fmt.Printf("found server specified overrides, overriding config...\n")
+			err = json.Unmarshal(f, &serverOverrides)
+			if err != nil {
+				fmt.Printf("some err: %v", err)
+				// again, we don't care - drop and leave
+				return &serverOverrides
+			}
+			// to catch resetting if the config has been written once already, delete the override
+			err = os.Remove(overridePath)
+			if err != nil {
+				fmt.Printf("could not remove override file")
+			}
+			return &serverOverrides
+		}
 	}
 }
 
