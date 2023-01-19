@@ -47,21 +47,20 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 	var open_fds []process.OpenFilesStat
 	var isShellJob bool
 	data, err := os.ReadFile("open_fds.json")
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not read open_fds json")
-	}
-	err = json.Unmarshal(data, &open_fds)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not unmarshal open_fds to []process.OpenFilesStat")
-	}
+	if err == nil {
+		err = json.Unmarshal(data, &open_fds)
+		if err != nil {
+			// we don't really care if we can't read this file
+			c.logger.Info().Err(err).Msg("could not unmarshal open_fds to []process.OpenFilesStat")
+		}
 
-	for _, f := range open_fds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-			break
+		for _, f := range open_fds {
+			if strings.Contains(f.Path, "pts") {
+				isShellJob = true
+				break
+			}
 		}
 	}
-
 	opts.ShellJob = proto.Bool(isShellJob)
 
 	// TODO: network restore logic
@@ -78,7 +77,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 			if err != nil {
 				c.logger.Fatal().Err(err)
 			}
-			if fsinfo.ModTime().After(lastModifiedTime) {
+			if fsinfo.ModTime().After(lastModifiedTime) && filepath.Ext(fsinfo.Name()) == "zip" {
 				f = file.Name()
 				lastModifiedTime = fsinfo.ModTime()
 			}
@@ -88,17 +87,12 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 		// information to piece it together, but this feels brittle.
 		f = filepath.Join(c.config.SharedStorage.MountPoint, f)
 		c.logger.Info().Msgf("found cedana checkpoint %s", f)
-		obj, err := os.Open(f)
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("could not read file")
-		}
-
 		// from a shared volume (like efs) -> local storage
-		c.logger.Info().Msgf("decompressing %s to %s", obj.Name(), dumpdir)
-		err = utils.Decompress(obj, dumpdir)
+		c.logger.Info().Msgf("decompressing %s to %s", f, dumpdir)
+		err = utils.DecompressFolder(f, dumpdir)
 		if err != nil {
 			// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-			c.logger.Info().Err(err).Msg("error decompressing checkpoints")
+			c.logger.Info().Err(err).Msg("error decompressing checkpoint")
 		}
 	}
 	// TODO: md5 checksum validation

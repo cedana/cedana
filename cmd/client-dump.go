@@ -133,17 +133,12 @@ func (c *Client) postDump(dumpdir string) {
 		// dump onto mountpoint w/ folder name
 		c.logger.Debug().Msgf("zipping into: %s", filepath.Join(
 			c.config.SharedStorage.MountPoint, strings.Join(
-				[]string{filepath.Base(dumpdir), ".tar.gz"}, "")))
-		out, err := os.Create(
-			filepath.Join(
-				c.config.SharedStorage.MountPoint, strings.Join(
-					[]string{filepath.Base(dumpdir), ".tar.gz"}, ""),
-			),
-		)
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("could not create compressed object")
-		}
-		err = utils.Compress(dumpdir, out)
+				[]string{filepath.Base(dumpdir), ".zip"}, "")))
+		out := filepath.Join(
+			c.config.SharedStorage.MountPoint, strings.Join(
+				[]string{filepath.Base(dumpdir), ".zip"}, ""))
+
+		err := utils.CompressFolder(dumpdir, out)
 		if err != nil {
 			c.logger.Fatal().Err(err)
 		}
