@@ -94,19 +94,21 @@ func InitConfig() (*Config, error) {
 		fmt.Println(err)
 		return nil, err
 	}
-	so := *loadOverrides(filepath.Join(homedir, ".cedana"))
+	so, err := loadOverrides(filepath.Join(homedir, ".cedana"))
 
 	// override setting is ugly, need to abstract this away somehow
 	// SharedStorage
-	viper.Set("shared_storage.efs_id", so.SharedStorage.EfsId)
-	viper.Set("shared_storage.mount_point", so.SharedStorage.SharedMountPoint)
-	viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
+	if err == nil && so != nil {
+		viper.Set("shared_storage.efs_id", so.SharedStorage.EfsId)
+		viper.Set("shared_storage.mount_point", so.SharedStorage.SharedMountPoint)
+		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
+	}
 
 	viper.WriteConfig()
 	return &config, nil
 }
 
-func loadOverrides(cdir string) *pb.ConfigClient {
+func loadOverrides(cdir string) (*pb.ConfigClient, error) {
 	var serverOverrides pb.ConfigClient
 
 	// load override from file. Fail silently if it doesn't exist, or GenSampleConfig instead
@@ -117,20 +119,20 @@ func loadOverrides(cdir string) *pb.ConfigClient {
 	if errors.Is(err, os.ErrNotExist) {
 		// do nothing, drop and leave
 		fmt.Printf("could not find server overrides")
-		return &serverOverrides
+		return nil, err
 	} else {
 		f, err := os.ReadFile(overridePath)
 		if err != nil {
 			fmt.Printf("error reading overrides file: %v", err)
 			// couldn't read file :shrug:
-			return &serverOverrides
+			return nil, err
 		} else {
 			fmt.Printf("found server specified overrides, overriding config...\n")
 			err = json.Unmarshal(f, &serverOverrides)
 			if err != nil {
 				fmt.Printf("some err: %v", err)
 				// again, we don't care - drop and leave
-				return &serverOverrides
+				return nil, err
 			}
 			fmt.Printf("overrides: %v", serverOverrides)
 			// to catch resetting if the config has been written once already, delete the override
@@ -138,7 +140,7 @@ func loadOverrides(cdir string) *pb.ConfigClient {
 			if err != nil {
 				fmt.Printf("could not remove override file")
 			}
-			return &serverOverrides
+			return &serverOverrides, nil
 		}
 	}
 }
