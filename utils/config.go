@@ -79,6 +79,7 @@ func InitConfig() (*Config, error) {
 		// Set some dummy defaults, that are only loaded if the file doesn't exist.
 		// If it does exist, this isn't called, so the dummy isn't an override.
 		viper.Set("client.process_name", "cedana")
+		viper.Set("client.leave_running", true)
 		viper.WriteConfig()
 	}
 
@@ -118,7 +119,7 @@ func loadOverrides(cdir string) (*pb.ConfigClient, error) {
 	_, err := os.OpenFile(overridePath, 0, 0o644)
 	if errors.Is(err, os.ErrNotExist) {
 		// do nothing, drop and leave
-		fmt.Printf("could not find server overrides")
+		fmt.Printf("No server overrides found..\n")
 		return nil, err
 	} else {
 		f, err := os.ReadFile(overridePath)
@@ -134,7 +135,6 @@ func loadOverrides(cdir string) (*pb.ConfigClient, error) {
 				// again, we don't care - drop and leave
 				return nil, err
 			}
-			fmt.Printf("overrides: %v", serverOverrides)
 			// to catch resetting if the config has been written once already, delete the override
 			err = os.Remove(overridePath)
 			if err != nil {
