@@ -34,8 +34,7 @@ Leaving the container running or not is toggle-able via config. To restore from 
 ```./cedana client docker restore -c CONTAINER_NAME```
 
 ### Demo
-[code-server](https://github.com/coder/code-server) is checkpointed, killed and restored, demonstrating restoration of a TCP connection. 
-![demo](https://github.com/nravic/cedana/blob/main/img/code-server-demo.gif)
+Check out cedana.notion.site for more info and a demo!
 
 
 
