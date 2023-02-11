@@ -95,6 +95,12 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 			c.logger.Info().Err(err).Msg("error decompressing checkpoint")
 		}
 	}
+
+	// clean up open fds
+	err = os.Remove("open_fds.json")
+	if err != nil {
+		c.logger.Info().Msgf("error %v deleting openfds file", err)
+	}
 	// TODO: md5 checksum validation
 }
 

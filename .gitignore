@@ -4,3 +4,4 @@ cedana-daemon.log
 cedana.pid 
 
 dist/
+open_fds.json

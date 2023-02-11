@@ -18,6 +18,13 @@ import (
 var dir string
 var pid int
 
+// used for pid comms
+const (
+	sys_pidfd_send_signal = 424
+	sys_pidfd_open        = 434
+	sys_pidfd_getfd       = 438
+)
+
 func init() {
 	clientCommand.AddCommand(dumpCommand)
 	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
@@ -54,6 +61,24 @@ var dumpCommand = &cobra.Command{
 		defer c.cleanupClient()
 		return nil
 	},
+}
+
+// Signals a process prior to dumping with SIGUSR1
+func (c *Client) signalProcessAndWait(pid int, timeout int) {
+	fd, _, err := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
+	if err != 0 {
+		c.logger.Fatal().Err(err).Msg("could not open pid")
+	}
+	s := syscall.SIGUSR1
+	_, _, err = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
+	if err != 0 {
+		c.logger.Info().Msgf("could not send signal to pid %s", pid)
+	}
+
+	// we want to sleep the dumping thread here to wait for the process
+	// to finish executing. This likely won't have any effects when run in daemon mode,
+	// it'll just pause the spawned dump goroutine
+	time.Sleep(time.Duration(timeout) * time.Second)
 }
 
 func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
@@ -110,8 +135,22 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	// create subfolder to dump in
-	// TODO: We're not taking advantage of incremental dumps with this
+	// check for GPU & send a simple signal if active
+	// this is hacky, but more often than not a sign that we've got a GPU
+	// TODO: only checks nvidia?
+	var isUsingGPU bool
+	for _, f := range open_files {
+		if strings.Contains(f.Path, "nvidia") {
+			isUsingGPU = true
+			break
+		}
+	}
+	// if the user hasn't configured signaling in the case they're using the GPU
+	// they haven't read the docs and the signal just gets lost in the aether anyway
+	if isUsingGPU || c.config.Client.SignalProcessPreDump {
+		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
+		c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
+	}
 
 	// processname + datetime
 	newdirname := strings.Join([]string{*pname, time.Now().Format("02_01_2006_1504")}, "_")
