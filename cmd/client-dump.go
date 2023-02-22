@@ -53,7 +53,9 @@ var dumpCommand = &cobra.Command{
 			}
 		}
 
-		err = c.dump(pid, dir)
+		c.process.pid = pid
+
+		err = c.dump(dir)
 		if err != nil {
 			return err
 		}
@@ -138,17 +140,23 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	// check for GPU & send a simple signal if active
 	// this is hacky, but more often than not a sign that we've got a GPU
 	// TODO: only checks nvidia?
-	var isUsingGPU bool
+	var attachedToHardwareAccel bool
+	var gpuFds []process.OpenFilesStat
 	for _, f := range open_files {
 		if strings.Contains(f.Path, "nvidia") {
-			isUsingGPU = true
-			break
+			gpuFds = append(gpuFds, f)
 		}
+	}
+	if len(gpuFds) != 0 {
+		attachedToHardwareAccel = true
 	}
 	// if the user hasn't configured signaling in the case they're using the GPU
 	// they haven't read the docs and the signal just gets lost in the aether anyway
-	if isUsingGPU || c.config.Client.SignalProcessPreDump {
+	if attachedToHardwareAccel || c.config.Client.SignalProcessPreDump {
 		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
+		// for now, don't set any opts and skip using CRIU. Future work to integrate Cricket and intercept CUDA calls
+
+		c.process.attachedToHardwareAccel = attachedToHardwareAccel
 		c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
 	}
 
@@ -197,11 +205,11 @@ func (c *Client) prepareCheckpointOpts() rpc.CriuOpts {
 
 }
 
-func (c *Client) dump(pid int, dir string) error {
+func (c *Client) dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir := c.prepareDump(pid, dir, &opts)
+	dumpdir := c.prepareDump(c.process.pid, dir, &opts)
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
@@ -211,7 +219,7 @@ func (c *Client) dump(pid int, dir string) error {
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(pid))
+	opts.Pid = proto.Int32(int32(c.process.pid))
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -221,13 +229,15 @@ func (c *Client) dump(pid int, dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
+	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.pid)
 
-	err = c.CRIU.Dump(opts, nfy)
-	if err != nil {
-		// TODO - better error handling
-		c.logger.Fatal().Err(err).Msg("error dumping process")
-		return err
+	if c.process.attachedToHardwareAccel == false {
+		err = c.CRIU.Dump(opts, nfy)
+		if err != nil {
+			// TODO - better error handling
+			c.logger.Fatal().Err(err).Msg("error dumping process")
+			return err
+		}
 	}
 
 	// CRIU ntfy hooks get run before this,

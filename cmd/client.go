@@ -29,11 +29,18 @@ type Client struct {
 	config        *utils.Config
 	channels      *CommandChannels
 	context       context.Context
+	process       Process
 }
 
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan int
+}
+
+type Process struct {
+	pid int
+	// cedana-context process state
+	attachedToHardwareAccel bool
 }
 
 var clientCommand = &cobra.Command{
@@ -110,7 +117,7 @@ func instantiateClient() (*Client, error) {
 	dump_command := make(chan int)
 	restore_command := make(chan int)
 	channels := &CommandChannels{dump_command, restore_command}
-	return &Client{c, rpcClient, conn, &logger, config, channels, context.Background()}, nil
+	return &Client{c, rpcClient, conn, &logger, config, channels, context.Background(), Process{}}, nil
 }
 
 func (c *Client) cleanupClient() error {
