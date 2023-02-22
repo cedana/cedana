@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,6 +176,45 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 
 func (c *Client) postDump(dumpdir string) {
 	c.logger.Info().Msg("compressing checkpoints")
+	// HACK! just copy the pytorch checkpoint into the dumpdir - make this better
+	if c.process.attachedToHardwareAccel {
+		// find latest pt file in dump_storage_dir
+		var pt string
+		latestModTime := time.Time{}
+		err := filepath.Walk(c.config.SharedStorage.DumpStorageDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && filepath.Ext(path) == ".pt" {
+				modTime := info.ModTime()
+				if modTime.After(latestModTime) {
+					pt = path
+					latestModTime = modTime
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		if pt == "" {
+			c.logger.Debug().Msg("could not find a pytorch checkpoint")
+		} else {
+			c.logger.Debug().Msgf("found checkpoint, moving to %s", dumpdir)
+			// copy to dumpdir
+			data, err := os.ReadFile(pt)
+			if err != nil {
+				// drop
+				return
+			}
+			err = os.WriteFile(strings.Join([]string{dumpdir, filepath.Base(pt)}, "/"), data, 0o644)
+			if err != nil {
+				c.logger.Debug().Msgf("could not move checkpoint %v", err)
+				return
+			}
+		}
+	}
 	// if shared network storage is enabled, compress and shoot over
 	if c.config.SharedStorage.MountPoint != "" {
 		// dump onto mountpoint w/ folder name
@@ -231,7 +271,7 @@ func (c *Client) dump(dir string) error {
 
 	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.pid)
 
-	if c.process.attachedToHardwareAccel == false {
+	if !c.process.attachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)
 		if err != nil {
 			// TODO - better error handling
