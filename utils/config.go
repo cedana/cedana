@@ -21,9 +21,11 @@ type Config struct {
 }
 
 type Client struct {
-	ProcessName      string `mapstructure:"process_name"`
-	DumpFrequencyMin int    `mapstructure:"dump_frequency_min"`
-	LeaveRunning     bool   `mapstructure:"leave_running"`
+	ProcessName          string `mapstructure:"process_name"`
+	DumpFrequencyMin     int    `mapstructure:"dump_frequency_min"`
+	LeaveRunning         bool   `mapstructure:"leave_running"`
+	SignalProcessPreDump bool   `mapstructure:"signal_process_pre_dump"`
+	SignalProcessTimeout int    `mapstructure:"signal_process_timeout"`
 }
 
 type ActionScripts struct {

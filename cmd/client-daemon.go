@@ -37,6 +37,8 @@ var clientDaemonCmd = &cobra.Command{
 			}
 		}
 
+		c.process.pid = pid
+
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
 		}
@@ -101,7 +103,7 @@ LOOP:
 			c.logger.Info().Msg("received checkpoint command from grpc server")
 			// spawn the dump in another goroutine. If it fails there, bubble up
 			// it's goroutines all the way down!
-			go c.dump(pid, dir)
+			go c.dump(dir)
 		case <-c.channels.restore_command:
 			c.logger.Info().Msg("received restore command from grpc server")
 			go c.restore()
