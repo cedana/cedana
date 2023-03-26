@@ -10,7 +10,6 @@ import (
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/nats-io/nats.go"
-	pb "github.com/nravic/cedana/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
@@ -49,6 +48,21 @@ type Process struct {
 	pid int
 	// cedana-context process state
 	attachedToHardwareAccel bool
+}
+
+// TODO: Until there's a shared library, we'll have to duplicate this struct
+type ClientState struct {
+	ProcessInfo Process    `mapstructure:"process_info"`
+	ClientInfo  ClientInfo `mapstructure:"client_info"`
+}
+
+type ClientInfo struct {
+	Id              string `mapstructure:"id"`
+	Hostname        string `mapstructure:"hostname"`
+	Platform        string `mapstructure:"platform"`
+	OS              string `mapstructure:"os"`
+	Uptime          uint64 `mapstructure:"uptime"`
+	RemainingMemory uint64 `mapstructure:"remaining_memory"`
 }
 
 var clientCommand = &cobra.Command{
@@ -176,29 +190,25 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int) *pb.ClientData {
+func (c *Client) getState(pid int) *ClientState {
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
-	id := os.Getenv("CEDANA_CLIENT_ID")
-
 	// ignore sending network for now, little complicated
-	data := &pb.ClientData{
-		ProcessInfo: &pb.ProcessInfo{
-			ProcessPid: uint32(pid),
+	data := &ClientState{
+		ProcessInfo: Process{
+			pid: pid,
 		},
-		ClientInfo: &pb.ClientInfo{
-			Id:       id,
-			Os:       h.OS,
-			Platform: h.Platform,
-		},
-		State: &pb.ClientState{
-			RemainingMemory: int32(m.Free),
-			Uptime:          int32(h.Uptime),
+		ClientInfo: ClientInfo{
+			Id:              c.config.Client.ID,
+			Hostname:        h.Hostname,
+			Platform:        h.Platform,
+			OS:              h.OS,
+			Uptime:          h.Uptime,
+			RemainingMemory: m.Available,
 		},
 	}
-
 	return data
 }
 
