@@ -58,7 +58,7 @@ func instantiateDockerClient() (*DockerClient, error) {
 	var opts []grpc.DialOption
 	// TODO
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.NATSUrl, config.Connection.NATSPort), opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
 	}

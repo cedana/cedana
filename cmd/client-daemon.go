@@ -19,7 +19,7 @@ func init() {
 
 var stop = make(chan struct{})
 var done = make(chan struct{})
-var signal = flag.String("s", "", "")
+var daemonSignal = flag.String("s", "", "")
 
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
@@ -63,7 +63,7 @@ var clientDaemonCmd = &cobra.Command{
 			Args:        []string{executable, "client", "daemon", "-p", fmt.Sprint(pid)},
 		}
 
-		gd.AddCommand(gd.StringFlag(signal, "stop"), syscall.SIGTERM, termHandler)
+		gd.AddCommand(gd.StringFlag(daemonSignal, "stop"), syscall.SIGTERM, termHandler)
 
 		d, err := ctx.Reborn()
 		if err != nil {
@@ -78,10 +78,11 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		c.registerRPCClient(pid)
-
 		// poll for a command in one goroutine
-		go c.pollForCommand(pid)
+		go c.susbcribeToCheckpointCommands()
+
+		// push state information to orchestrator in another
+		go c.publishState()
 
 		// start daemon worker in another
 		go c.startDaemon(pid)

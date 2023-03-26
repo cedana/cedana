@@ -21,6 +21,7 @@ type Config struct {
 }
 
 type Client struct {
+	ID                   string `mapstructure:"id"` // unique instance ID for this client
 	ProcessName          string `mapstructure:"process_name"`
 	DumpFrequencyMin     int    `mapstructure:"dump_frequency_min"`
 	LeaveRunning         bool   `mapstructure:"leave_running"`
@@ -35,8 +36,8 @@ type ActionScripts struct {
 }
 
 type Connection struct {
-	ServerAddr string `mapstructure:"server_addr"`
-	ServerPort int    `mapstructure:"server_port"`
+	NATSUrl  string `mapstructure:"nats_url"`
+	NATSPort int    `mapstructure:"nats_port"`
 }
 
 type Docker struct {

@@ -3,33 +3,41 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
+	"github.com/nats-io/nats.go"
 	pb "github.com/nravic/cedana/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 type Client struct {
-	CRIU          *criu.Criu
-	rpcClient     pb.CedanaClient
-	rpcConnection *grpc.ClientConn
-	logger        *zerolog.Logger
-	config        *utils.Config
-	channels      *CommandChannels
-	context       context.Context
-	process       Process
+	CRIU     *criu.Criu
+	nc       *nats.EncodedConn // we want an encoded connection
+	logger   *zerolog.Logger
+	config   *utils.Config
+	channels *CommandChannels
+	context  context.Context
+	process  Process
+}
+
+// struct to hold logs from a process/Job
+// assume this is good enough for now!
+type Logs struct {
+	Stdout string `mapstructure:"stdout"`
+	Stderr string `mapstructure:"stderr"`
+}
+
+type JobInfo struct {
+	logs    Logs          `mapstructure:"logs"`
+	elapsed time.Duration `mapstructure:"elapsed"`
 }
 
 type CommandChannels struct {
@@ -49,31 +57,6 @@ var clientCommand = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error: must also specify dump, restore or daemon")
 	},
-}
-
-func UnaryClientInterceptor(
-	ctx context.Context,
-	method string,
-	req interface{},
-	reply interface{},
-	cc *grpc.ClientConn,
-	invoker grpc.UnaryInvoker,
-	opts ...grpc.CallOption,
-) error {
-	jwt, exists := os.LookupEnv("CEDANA_JWT_TOKEN")
-	if !exists {
-		return fmt.Errorf("JWT env var unset! Something likely went wrong during instance setup")
-	}
-
-	authCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer"+jwt)
-	err := invoker(authCtx, method, req, reply, cc, opts...)
-
-	// TODO: Need way to refresh JWT token
-	if status.Code(err) == codes.Unauthenticated {
-		return fmt.Errorf("JWT token expired")
-	}
-
-	return err
 }
 
 func instantiateClient() (*Client, error) {
@@ -99,127 +82,95 @@ func instantiateClient() (*Client, error) {
 		return nil, err
 	}
 
-	var opts []grpc.DialOption
-
-	// Transport credentials are intentionally insecure here - JWT takes over
-	opts = append(
-		opts,
-		grpc.WithUnaryInterceptor(UnaryClientInterceptor),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", config.Connection.ServerAddr, config.Connection.ServerPort), opts...)
+	// connect to NATS
+	opts := []nats.Option{nats.Name(fmt.Sprintf("Cedana client %s", config.Client.ID))}
+	opts = setupConnOptions(opts, &logger)
+	nc, err := nats.Connect(config.Connection.NATSUrl, opts...)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not connect to RPC server")
+		logger.Fatal().Err(err).Msg("Could not connect to NATS")
 	}
-	rpcClient := pb.NewCedanaClient(conn)
-
+	ecNats, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not create encoded connection to NATS")
+	}
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
 	restore_command := make(chan int)
 	channels := &CommandChannels{dump_command, restore_command}
-	return &Client{c, rpcClient, conn, &logger, config, channels, context.Background(), Process{}}, nil
+	return &Client{
+		CRIU:     c,
+		nc:       ecNats,
+		logger:   &logger,
+		config:   config,
+		channels: channels,
+		context:  context.Background(),
+	}, nil
 }
 
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
-	c.rpcConnection.Close()
+	c.nc.Close()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
 
-func (c *Client) registerRPCClient(pid int) {
-	ctx, cancel := context.WithTimeout(c.context, 10*time.Second)
-	defer cancel()
-
-	state := c.getState(pid)
-	resp, err := c.rpcClient.RegisterClient(ctx, state)
-	if err != nil {
-		c.logger.Fatal().Msgf("client.RegisterClient failed: %v", err)
-	}
-	c.logger.Info().Msgf("Response from orchestrator: %v", resp)
-}
-
-func (c *Client) recordState() {
-	state := c.getState(pid)
-	stream, err := c.rpcClient.RecordState(c.context)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msgf("Could not open stream to send state")
-	}
-
-	quit := make(chan struct{})
+// gets and publishes state over ecNats
+func (c *Client) publishState() {
 	ticker := time.NewTicker(5 * time.Second)
-
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				c.logger.Debug().Msgf("sending state: %v", state)
-				err := stream.Send(state)
-				if err != nil {
-					c.logger.Fatal().Err(err).Msg("Error sending state to orchestrator")
-				}
-			case <-quit:
-				ticker.Stop()
-				return
-			default:
+	// publish state continuously
+	for {
+		select {
+		case <-ticker.C:
+			data := c.getState(c.process.pid)
+			err := c.nc.Publish("state", data)
+			if err != nil {
+				c.logger.Info().Msgf("could not publish state: %v", err)
 			}
+
+		default:
+			// do nothing
 		}
-	}()
+	}
 }
 
-func (c *Client) pollForCommand(pid int) {
-	// TODO: should fail gracefully
-	refresher := time.NewTicker(10 * time.Second)
-	defer refresher.Stop()
+func (c *Client) susbcribeToCheckpointCommands() {
+	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_commands_checkpoint")
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("could not subscribe to NATS checkpoint channel")
+	}
 
-	waitc := make(chan struct{})
+	// exit gracefully on interrupt
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 
 	for {
 		select {
-		case <-refresher.C:
-			c.logger.Debug().Msgf("polling for command at %v", time.Now().Local())
-			stream, err := c.rpcClient.PollForCommand(c.context)
-			if err != nil {
-				c.logger.Info().Msgf("could not reach orchestrator server: %v", err)
-			} else {
-				state := c.getState(pid)
-				c.logger.Debug().Msgf("Sent state %v:", state)
-				err = stream.Send(state)
-				if err != nil {
-					c.logger.Info().Msgf("could not reach orchestrator server: %v", err)
-				}
-
-				resp, err := stream.Recv()
-				c.logger.Info().Msgf("received response: %s", resp.String())
-				if err == io.EOF {
-					// read done
-					close(waitc)
-					return
-				}
-
-				if resp == nil {
-					// do nothing if we don't have a command yet
-					return
-				}
-
-				if err != nil {
-					c.logger.Fatal().Err(err).Msg("client.pollForCommand failed")
-				}
-				if resp.Checkpoint {
-					c.logger.Info().Msgf("checkpoint command received: %v", resp)
-					c.channels.dump_command <- 1
-				}
-				if resp.Restore {
-					c.logger.Info().Msgf("restore command received: %v", resp)
-					c.channels.restore_command <- 1
-				}
-			}
+		case <-ch:
+			os.Exit(0)
 		default:
-			// do nothing otherwise (don't block for loop)
+			// wait indefinitely for a message
+			msg, err := sub.NextMsg(1 * time.Minute)
+			if err != nil {
+				// not fatal error, just keep going?
+				c.logger.Info().Msgf("could not get next message: %v", err)
+			}
+			cmd := string(msg.Data)
+			switch cmd {
+			case "dump":
+				c.logger.Info().Msgf("received checkpoint command")
+				c.channels.dump_command <- 1
+			case "restore":
+				c.logger.Info().Msgf("received restore command")
+				c.channels.restore_command <- 1
+			default:
+				c.logger.Info().Msgf("received unknown command: %s", cmd)
+			}
+
 		}
 	}
 }
 
+// sets up subscribers for dump and restore commands
 func (c *Client) timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
@@ -249,6 +200,24 @@ func (c *Client) getState(pid int) *pb.ClientData {
 	}
 
 	return data
+}
+
+func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option {
+	totalWait := 10 * time.Minute
+	reconnectDelay := time.Second
+
+	opts = append(opts, nats.ReconnectWait(reconnectDelay))
+	opts = append(opts, nats.MaxReconnects(int(totalWait/reconnectDelay)))
+	opts = append(opts, nats.DisconnectHandler(func(nc *nats.Conn) {
+		logger.Info().Msgf("Disconnected: will attempt reconnects for %.0fm", totalWait.Minutes())
+	}))
+	opts = append(opts, nats.ReconnectHandler(func(nc *nats.Conn) {
+		logger.Info().Msgf("Reconnected [%s]", nc.ConnectedUrl())
+	}))
+	opts = append(opts, nats.ClosedHandler(func(nc *nats.Conn) {
+		logger.Info().Msgf("Exiting: %v", nc.LastError())
+	}))
+	return opts
 }
 
 func init() {
