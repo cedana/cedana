@@ -136,7 +136,7 @@ func (c *Client) publishState() {
 		select {
 		case <-ticker.C:
 			data := c.getState(c.process.pid)
-			err := c.nc.Publish("state", data)
+			err := c.nc.Publish(c.config.Client.ID+"_state", data)
 			if err != nil {
 				c.logger.Info().Msgf("could not publish state: %v", err)
 			}
@@ -148,7 +148,7 @@ func (c *Client) publishState() {
 }
 
 func (c *Client) susbcribeToCheckpointCommands() {
-	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_commands_checkpoint")
+	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_command")
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not subscribe to NATS checkpoint channel")
 	}
