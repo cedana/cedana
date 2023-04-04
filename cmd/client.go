@@ -3,9 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
@@ -129,8 +126,8 @@ func (c *Client) cleanupClient() error {
 }
 
 // gets and publishes state over ecNats
-func (c *Client) publishState() {
-	ticker := time.NewTicker(5 * time.Second)
+func (c *Client) publishState(timeoutSec int) {
+	ticker := time.NewTicker(time.Duration(timeoutSec) * time.Second)
 	// publish state continuously
 	for {
 		select {
@@ -140,47 +137,47 @@ func (c *Client) publishState() {
 			if err != nil {
 				c.logger.Info().Msgf("could not publish state: %v", err)
 			}
-
 		default:
 			// do nothing
 		}
 	}
 }
 
-func (c *Client) susbcribeToCheckpointCommands() {
+func (c *Client) subscribeToCommands(timeoutMin int) {
 	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_command")
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not subscribe to NATS checkpoint channel")
 	}
 
-	// exit gracefully on interrupt
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-
-	for {
-		select {
-		case <-ch:
-			os.Exit(0)
+	// sub.NextMsg blocks until a message is received, so this timeout
+	// should be more transparent
+	msg, err := sub.NextMsg(time.Duration(timeoutMin) * time.Minute)
+	if err != nil {
+		// not a fatal error, just exit this function.
+		// we expect function to be run as a goroutine anyway
+		c.logger.Info().Msgf("could not get next message: %v", err)
+		return
+	}
+	if msg != nil {
+		cmd := string(msg.Data)
+		switch cmd {
+		case "dump":
+			c.logger.Info().Msgf("received checkpoint command")
+			c.channels.dump_command <- 1
+		case "restore":
+			c.logger.Info().Msgf("received restore command")
+			c.channels.restore_command <- 1
 		default:
-			// wait indefinitely for a message
-			msg, err := sub.NextMsg(1 * time.Minute)
-			if err != nil {
-				// not fatal error, just keep going?
-				c.logger.Info().Msgf("could not get next message: %v", err)
-			}
-			cmd := string(msg.Data)
-			switch cmd {
-			case "dump":
-				c.logger.Info().Msgf("received checkpoint command")
-				c.channels.dump_command <- 1
-			case "restore":
-				c.logger.Info().Msgf("received restore command")
-				c.channels.restore_command <- 1
-			default:
-				c.logger.Info().Msgf("received unknown command: %s", cmd)
-			}
-
+			c.logger.Info().Msgf("received unknown command: %s", cmd)
 		}
+	}
+}
+
+func (c *Client) ackCommand() {
+	c.logger.Info().Msgf("acknowledging command")
+	err := c.nc.Publish(c.config.Client.ID+"_commands_checkpoint_ack", "ack")
+	if err != nil {
+		c.logger.Info().Msgf("could not publish ack: %v", err)
 	}
 }
 

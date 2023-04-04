@@ -78,13 +78,26 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		// poll for a command in one goroutine
-		go c.susbcribeToCheckpointCommands()
+		// poll for commands
+		go func() {
+			for {
+				select {
+				case <-stop:
+					c.logger.Info().Msg("interrupted")
+					done <- struct{}{}
+					return
+				default:
+					// timeout for a minute, and then sleep for 30 seconds.
+					c.subscribeToCommands(1)
+					time.Sleep(30 * time.Second)
+				}
+			}
+		}()
 
-		// push state information to orchestrator in another
-		go c.publishState()
+		// publish state already has a for loop
+		go c.publishState(30)
 
-		// start daemon worker in another
+		// start daemon worker
 		go c.startDaemon(pid)
 
 		err = gd.ServeSignals()
@@ -101,12 +114,12 @@ LOOP:
 	for {
 		select {
 		case <-c.channels.dump_command:
-			c.logger.Info().Msg("received checkpoint command from grpc server")
+			c.logger.Info().Msg("received checkpoint command from NATS server")
 			// spawn the dump in another goroutine. If it fails there, bubble up
 			// it's goroutines all the way down!
 			go c.dump(dir)
 		case <-c.channels.restore_command:
-			c.logger.Info().Msg("received restore command from grpc server")
+			c.logger.Info().Msg("received restore command from the NATS server")
 			go c.restore()
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
