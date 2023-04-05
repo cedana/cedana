@@ -19,7 +19,7 @@ func init() {
 
 var stop = make(chan struct{})
 var done = make(chan struct{})
-var signal = flag.String("s", "", "")
+var daemonSignal = flag.String("s", "", "")
 
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
@@ -63,7 +63,7 @@ var clientDaemonCmd = &cobra.Command{
 			Args:        []string{executable, "client", "daemon", "-p", fmt.Sprint(pid)},
 		}
 
-		gd.AddCommand(gd.StringFlag(signal, "stop"), syscall.SIGTERM, termHandler)
+		gd.AddCommand(gd.StringFlag(daemonSignal, "stop"), syscall.SIGTERM, termHandler)
 
 		d, err := ctx.Reborn()
 		if err != nil {
@@ -78,12 +78,26 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		c.registerRPCClient(pid)
+		// poll for commands
+		go func() {
+			for {
+				select {
+				case <-stop:
+					c.logger.Info().Msg("interrupted")
+					done <- struct{}{}
+					return
+				default:
+					// timeout for a minute, and then sleep for 10 seconds.
+					c.subscribeToCommands(1)
+					time.Sleep(10 * time.Second)
+				}
+			}
+		}()
 
-		// poll for a command in one goroutine
-		go c.pollForCommand(pid)
+		// publish state already has a for loop
+		go c.publishState(30)
 
-		// start daemon worker in another
+		// start daemon worker
 		go c.startDaemon(pid)
 
 		err = gd.ServeSignals()
@@ -100,12 +114,12 @@ LOOP:
 	for {
 		select {
 		case <-c.channels.dump_command:
-			c.logger.Info().Msg("received checkpoint command from grpc server")
+			c.logger.Info().Msg("received checkpoint command from NATS server")
 			// spawn the dump in another goroutine. If it fails there, bubble up
 			// it's goroutines all the way down!
 			go c.dump(dir)
 		case <-c.channels.restore_command:
-			c.logger.Info().Msg("received restore command from grpc server")
+			c.logger.Info().Msg("received restore command from the NATS server")
 			go c.restore()
 		case <-stop:
 			c.logger.Info().Msg("stop hit")

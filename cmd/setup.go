@@ -8,9 +8,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Hidden because this is no longer useful
 var setupCommand = &cobra.Command{
-	Use:   "setup",
-	Short: "Commands to set up an instantiated remote instance for Cedana",
+	Use:    "setup",
+	Short:  "Commands to set up an instantiated remote instance for Cedana",
+	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error: must also specify setup subcommands")
 	},
