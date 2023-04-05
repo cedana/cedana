@@ -87,9 +87,9 @@ var clientDaemonCmd = &cobra.Command{
 					done <- struct{}{}
 					return
 				default:
-					// timeout for a minute, and then sleep for 30 seconds.
+					// timeout for a minute, and then sleep for 10 seconds.
 					c.subscribeToCommands(1)
-					time.Sleep(30 * time.Second)
+					time.Sleep(10 * time.Second)
 				}
 			}
 		}()

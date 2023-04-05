@@ -144,7 +144,7 @@ func (c *Client) publishState(timeoutSec int) {
 }
 
 func (c *Client) subscribeToCommands(timeoutMin int) {
-	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_command")
+	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_commands")
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not subscribe to NATS checkpoint channel")
 	}
@@ -155,19 +155,19 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 	if err != nil {
 		// not a fatal error, just exit this function.
 		// we expect function to be run as a goroutine anyway
-		c.logger.Info().Msgf("could not get next message: %v", err)
 		return
 	}
 	if msg != nil {
 		cmd := string(msg.Data)
-		switch cmd {
-		case "dump":
+		c.logger.Info().Msgf("received command: %v", msg)
+		// TODO: NR - there's some weird escaping happening, debug later
+		if cmd == "\"checkpoint\"" {
 			c.logger.Info().Msgf("received checkpoint command")
 			c.channels.dump_command <- 1
-		case "restore":
+		} else if cmd == "\"restore\"" {
 			c.logger.Info().Msgf("received restore command")
 			c.channels.restore_command <- 1
-		default:
+		} else {
 			c.logger.Info().Msgf("received unknown command: %s", cmd)
 		}
 	}
@@ -175,7 +175,7 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 
 func (c *Client) ackCommand() {
 	c.logger.Info().Msgf("acknowledging command")
-	err := c.nc.Publish(c.config.Client.ID+"_commands_checkpoint_ack", "ack")
+	err := c.nc.Publish(c.config.Client.ID+"_commands_ack", "ack")
 	if err != nil {
 		c.logger.Info().Msgf("could not publish ack: %v", err)
 	}
