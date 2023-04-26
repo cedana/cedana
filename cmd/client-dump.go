@@ -54,7 +54,7 @@ var dumpCommand = &cobra.Command{
 			}
 		}
 
-		c.process.pid = pid
+		c.process.Pid = pid
 
 		err = c.dump(dir)
 		if err != nil {
@@ -157,7 +157,7 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
 		// for now, don't set any opts and skip using CRIU. Future work to integrate Cricket and intercept CUDA calls
 
-		c.process.attachedToHardwareAccel = attachedToHardwareAccel
+		c.process.AttachedToHardwareAccel = attachedToHardwareAccel
 		c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
 	}
 
@@ -177,7 +177,7 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 func (c *Client) postDump(dumpdir string) {
 	c.logger.Info().Msg("compressing checkpoints")
 	// HACK! just copy the pytorch checkpoint into the dumpdir - make this better
-	if c.process.attachedToHardwareAccel {
+	if c.process.AttachedToHardwareAccel {
 		// find latest pt file in dump_storage_dir
 		var pt string
 		latestModTime := time.Time{}
@@ -249,7 +249,7 @@ func (c *Client) dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir := c.prepareDump(c.process.pid, dir, &opts)
+	dumpdir := c.prepareDump(c.process.Pid, dir, &opts)
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
@@ -259,7 +259,7 @@ func (c *Client) dump(dir string) error {
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(c.process.pid))
+	opts.Pid = proto.Int32(int32(c.process.Pid))
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -269,9 +269,9 @@ func (c *Client) dump(dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.pid)
+	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.Pid)
 
-	if !c.process.attachedToHardwareAccel {
+	if !c.process.AttachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)
 		if err != nil {
 			// TODO - better error handling

@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu"
@@ -16,12 +19,15 @@ import (
 
 type Client struct {
 	CRIU     *criu.Criu
-	nc       *nats.EncodedConn // we want an encoded connection
+	nc       *nats.Conn
+	js       nats.JetStreamContext
 	logger   *zerolog.Logger
 	config   *utils.Config
 	channels *CommandChannels
 	context  context.Context
 	process  Process
+	jobId    string
+	selfId   string
 }
 
 // struct to hold logs from a process/Job
@@ -42,24 +48,24 @@ type CommandChannels struct {
 }
 
 type Process struct {
-	pid int
+	Pid int `json:"pid" mapstructure:"pid"`
 	// cedana-context process state
-	attachedToHardwareAccel bool
+	AttachedToHardwareAccel bool `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
 }
 
 // TODO: Until there's a shared library, we'll have to duplicate this struct
 type ClientState struct {
-	ProcessInfo Process    `mapstructure:"process_info"`
-	ClientInfo  ClientInfo `mapstructure:"client_info"`
+	ProcessInfo Process    `json:"process_info" mapstructure:"process_info"`
+	ClientInfo  ClientInfo `json:"client_info" mapstructure:"client_info"`
 }
 
 type ClientInfo struct {
-	Id              string `mapstructure:"id"`
-	Hostname        string `mapstructure:"hostname"`
-	Platform        string `mapstructure:"platform"`
-	OS              string `mapstructure:"os"`
-	Uptime          uint64 `mapstructure:"uptime"`
-	RemainingMemory uint64 `mapstructure:"remaining_memory"`
+	Id              string `json:"id" mapstructure:"id"`
+	Hostname        string `json:"hostname" mapstructure:"hostname"`
+	Platform        string `json: "platform" mapstructure:"platform"`
+	OS              string `json: "os" mapstructure:"os"`
+	Uptime          uint64 `json: "uptime" mapstructure:"uptime"`
+	RemainingMemory uint64 `json: "remaining_memory" mapstructure:"remaining_memory"`
 }
 
 var clientCommand = &cobra.Command{
@@ -94,27 +100,40 @@ func instantiateClient() (*Client, error) {
 	}
 
 	// connect to NATS
-	opts := []nats.Option{nats.Name(fmt.Sprintf("Cedana client %s", config.Client.ID))}
+	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", config.Client.ID))}
 	opts = setupConnOptions(opts, &logger)
 	nc, err := nats.Connect(config.Connection.NATSUrl, opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to NATS")
 	}
-	ecNats, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	js, err := nc.JetStream()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not create encoded connection to NATS")
+		logger.Fatal().Err(err).Msg("Could not set up JetStream context")
 	}
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
 	restore_command := make(chan int)
 	channels := &CommandChannels{dump_command, restore_command}
+
+	// get ids. TODO NR: uuid verification
+	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
+	if !exists {
+		logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
+	}
+	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
+	if !exists {
+		logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
+	}
 	return &Client{
 		CRIU:     c,
-		nc:       ecNats,
+		nc:       nc,
+		js:       js,
 		logger:   &logger,
 		config:   config,
 		channels: channels,
 		context:  context.Background(),
+		selfId:   selfId,
+		jobId:    jobId,
 	}, nil
 }
 
@@ -132,8 +151,13 @@ func (c *Client) publishState(timeoutSec int) {
 	for {
 		select {
 		case <-ticker.C:
-			data := c.getState(c.process.pid)
-			err := c.nc.Publish(c.config.Client.ID+"_state", data)
+			state := c.getState(c.process.Pid)
+			data, err := json.Marshal(state)
+			if err != nil {
+				// do nothing
+				c.logger.Info().Msgf("could not marshal state: %v", err)
+			}
+			_, err = c.js.Publish(strings.Join([]string{"cedana", c.jobId, c.selfId, "state"}, "."), data)
 			if err != nil {
 				c.logger.Info().Msgf("could not publish state: %v", err)
 			}
@@ -144,40 +168,38 @@ func (c *Client) publishState(timeoutSec int) {
 }
 
 func (c *Client) subscribeToCommands(timeoutMin int) {
-	sub, err := c.nc.Conn.SubscribeSync(c.config.Client.ID + "_commands")
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not subscribe to NATS checkpoint channel")
-	}
-
-	// sub.NextMsg blocks until a message is received, so this timeout
-	// should be more transparent
-	msg, err := sub.NextMsg(time.Duration(timeoutMin) * time.Minute)
-	if err != nil {
-		// not a fatal error, just exit this function.
-		// we expect function to be run as a goroutine anyway
-		return
-	}
-	if msg != nil {
-		cmd := string(msg.Data)
-		c.logger.Info().Msgf("received command: %v", msg)
-		// TODO: NR - there's some weird escaping happening, debug later
-		if cmd == "\"checkpoint\"" {
-			c.logger.Info().Msgf("received checkpoint command")
-			c.channels.dump_command <- 1
-		} else if cmd == "\"restore\"" {
-			c.logger.Info().Msgf("received restore command")
-			c.channels.restore_command <- 1
-		} else {
-			c.logger.Info().Msgf("received unknown command: %s", cmd)
+	sub, err := c.js.Subscribe(strings.Join([]string{"cedana", c.jobId, c.selfId, "commands"}, "."), func(msg *nats.Msg) {
+		if msg != nil {
+			cmd := string(msg.Data)
+			c.logger.Info().Msgf("received command: %v", msg)
+			// TODO: NR - there's some weird escaping happening, debug later
+			if cmd == "\"checkpoint\"" {
+				c.logger.Info().Msgf("received checkpoint command")
+				c.channels.dump_command <- 1
+			} else if cmd == "\"restore\"" {
+				c.logger.Info().Msgf("received restore command")
+				c.channels.restore_command <- 1
+			} else {
+				c.logger.Info().Msgf("received unknown command: %s", cmd)
+			}
 		}
-	}
-}
-
-func (c *Client) ackCommand() {
-	c.logger.Info().Msgf("acknowledging command")
-	err := c.nc.Publish(c.config.Client.ID+"_commands_ack", "ack")
+		msg.Ack()
+	})
 	if err != nil {
-		c.logger.Info().Msgf("could not publish ack: %v", err)
+		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
+	}
+
+	timeout := time.Duration(timeoutMin) * time.Minute
+	ctx, cancel := context.WithTimeout(c.context, timeout)
+	defer cancel()
+
+	for {
+		// msg handled by handler
+		_, err := sub.NextMsgWithContext(ctx)
+		if err != nil {
+			c.logger.Info().Msgf("could not receive message: %v", err)
+		}
+		time.Sleep(time.Duration(timeoutMin) * time.Minute)
 	}
 }
 
@@ -195,7 +217,7 @@ func (c *Client) getState(pid int) *ClientState {
 	// ignore sending network for now, little complicated
 	data := &ClientState{
 		ProcessInfo: Process{
-			pid: pid,
+			Pid: pid,
 		},
 		ClientInfo: ClientInfo{
 			Id:              c.config.Client.ID,

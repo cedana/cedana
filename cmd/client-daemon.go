@@ -37,7 +37,7 @@ var clientDaemonCmd = &cobra.Command{
 			}
 		}
 
-		c.process.pid = pid
+		c.process.Pid = pid
 
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
@@ -78,23 +78,7 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		// poll for commands
-		go func() {
-			for {
-				select {
-				case <-stop:
-					c.logger.Info().Msg("interrupted")
-					done <- struct{}{}
-					return
-				default:
-					// timeout for a minute, and then sleep for 10 seconds.
-					c.subscribeToCommands(1)
-					time.Sleep(10 * time.Second)
-				}
-			}
-		}()
-
-		// publish state already has a for loop
+		go c.subscribeToCommands(1)
 		go c.publishState(30)
 
 		// start daemon worker
