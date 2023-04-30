@@ -99,12 +99,16 @@ LOOP:
 		select {
 		case <-c.channels.dump_command:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
-			// spawn the dump in another goroutine. If it fails there, bubble up
-			// it's goroutines all the way down!
-			go c.dump(dir)
-		case <-c.channels.restore_command:
+			err := c.dump(dir)
+			if err != nil {
+				c.logger.Info().Msgf("could not checkpoint with error: %v", err)
+			}
+		case path := <-c.channels.restore_command:
 			c.logger.Info().Msg("received restore command from the NATS server")
-			go c.restore()
+			err := c.restore(&path)
+			if err != nil {
+				c.logger.Info().Msgf("could not restore with error: %v", err)
+			}
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP

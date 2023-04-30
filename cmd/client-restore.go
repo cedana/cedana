@@ -32,7 +32,7 @@ var restoreCmd = &cobra.Command{
 			dir = c.config.SharedStorage.DumpStorageDir
 		}
 
-		err = c.restore()
+		err = c.restore(nil)
 		if err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func getLatestCheckpointDir(dumpdir string) (string, error) {
 	return dir, nil
 }
 
-func (c *Client) restore() error {
+func (c *Client) restore(path *string) error {
 	defer c.timeTrack(time.Now(), "restore")
 
 	opts := c.prepareRestoreOpts()
@@ -157,6 +157,8 @@ func (c *Client) restore() error {
 
 	// even if external storage is used, checkpoints dumped by cedana will be in the format
 	// /dumpdir/processname_date/...
+
+	// need to restore a pytorch too?
 	dir, err := getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not get latest checkpoint directory")

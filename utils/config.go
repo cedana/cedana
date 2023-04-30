@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	CedanaManaged bool          `mapstructure:"cedana_managed"`
 	Client        Client        `mapstructure:"client"`
 	ActionScripts ActionScripts `mapstructure:"action_scripts"`
 	Connection    Connection    `mapstructure:"connection"`
@@ -19,9 +20,7 @@ type Config struct {
 }
 
 type Client struct {
-	ID                   string `mapstructure:"id"` // unique instance ID for this client
 	ProcessName          string `mapstructure:"process_name"`
-	DumpFrequencyMin     int    `mapstructure:"dump_frequency_min"`
 	LeaveRunning         bool   `mapstructure:"leave_running"`
 	SignalProcessPreDump bool   `mapstructure:"signal_process_pre_dump"`
 	SignalProcessTimeout int    `mapstructure:"signal_process_timeout"`
@@ -45,7 +44,6 @@ type Docker struct {
 }
 
 type SharedStorage struct {
-	EFSId string `mapstructure:"efs_id"`
 	// only useful for multi-machine checkpoint/restore
 	MountPoint     string `mapstructure:"mount_point"`
 	DumpStorageDir string `mapstructure:"dump_storage_dir"`
@@ -101,8 +99,7 @@ func InitConfig() (*Config, error) {
 	// override setting is ugly, need to abstract this away somehow
 	// SharedStorage
 	if err == nil && so != nil {
-		viper.Set("client.id", so.Client.ID)
-		viper.Set("shared_storage.efs_id", so.SharedStorage.EFSId)
+		viper.Set("cedana_managed", so.CedanaManaged)
 		viper.Set("shared_storage.mount_point", so.SharedStorage.MountPoint)
 		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
 	}
