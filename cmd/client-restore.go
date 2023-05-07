@@ -104,6 +104,41 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
 	// TODO: md5 checksum validation
 }
 
+// restore function for systems managed by the cedana orchestrator
+func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (*string, error) {
+	checkpoint := cmd.CheckpointPath
+
+	var isShellJob bool
+	fds := cmd.OpenFds
+	for _, f := range fds {
+		if strings.Contains(f.Path, "pts") {
+			isShellJob = true
+			break
+		}
+	}
+	opts.ShellJob = proto.Bool(isShellJob)
+
+	file, err := c.getCheckpointFile(checkpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	tmpdir := "cedana_restore"
+	// make temporary folder to decompress into
+	err = os.Mkdir(tmpdir, 0755)
+	if err != nil {
+		return nil, err
+	}
+
+	err = utils.UnzipFolder(*file, tmpdir)
+	if err != nil {
+		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
+		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+	}
+
+	return &tmpdir, nil
+}
+
 func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:       proto.Int32(4),
@@ -141,12 +176,25 @@ func getLatestCheckpointDir(dumpdir string) (string, error) {
 	return dir, nil
 }
 
-func (c *Client) restore(path *string) error {
+func (c *Client) restore(cmd *ServerCommand) error {
 	defer c.timeTrack(time.Now(), "restore")
+	var dir string
+	var err error
 
 	opts := c.prepareRestoreOpts()
-	c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
-
+	if cmd != nil {
+		tmpdir, err := c.prepareManagedRestore(&opts, cmd)
+		if err != nil {
+			return err
+		}
+		dir = *tmpdir
+	} else {
+		c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
+		dir, err = getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("could not get latest checkpoint directory")
+		}
+	}
 	nfy := utils.Notify{
 		Config:          c.config,
 		Logger:          c.logger,
@@ -159,11 +207,6 @@ func (c *Client) restore(path *string) error {
 	// /dumpdir/processname_date/...
 
 	// need to restore a pytorch too?
-	dir, err := getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not get latest checkpoint directory")
-	}
-
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not open directory")
@@ -178,6 +221,11 @@ func (c *Client) restore(path *string) error {
 		return err
 	}
 
+	// clean up
+	err = os.RemoveAll(dir)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error removing directory")
+	}
 	c.cleanupClient()
 
 	return nil

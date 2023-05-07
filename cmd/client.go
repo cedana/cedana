@@ -12,6 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
+	"github.com/shirou/gopsutil/process"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
@@ -25,7 +26,7 @@ type Client struct {
 	config   *utils.Config
 	channels *CommandChannels
 	context  context.Context
-	process  Process
+	process  ProcessInfo
 	jobId    string
 	selfId   string
 }
@@ -44,19 +45,19 @@ type JobInfo struct {
 
 type CommandChannels struct {
 	dump_command    chan int
-	restore_command chan string
+	restore_command chan ServerCommand
 }
 
-type Process struct {
-	Pid int `json:"pid" mapstructure:"pid"`
-	// cedana-context process state
-	AttachedToHardwareAccel bool `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
+type ProcessInfo struct {
+	Pid                     int                     `json:"pid" mapstructure:"pid"`
+	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
+	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"`
 }
 
 // TODO: Until there's a shared library, we'll have to duplicate this struct
 type ClientState struct {
-	ProcessInfo Process    `json:"process_info" mapstructure:"process_info"`
-	ClientInfo  ClientInfo `json:"client_info" mapstructure:"client_info"`
+	ProcessInfo ProcessInfo `json:"process_info" mapstructure:"process_info"`
+	ClientInfo  ClientInfo  `json:"client_info" mapstructure:"client_info"`
 }
 
 type ClientInfo struct {
@@ -69,9 +70,10 @@ type ClientInfo struct {
 }
 
 type ServerCommand struct {
-	Command        string         `json:"command" mapstructure:"command"`
-	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
-	CheckpointPath string         `json:"checkpoint_path" mapstructure:"checkpoint_path"`
+	Command        string                  `json:"command" mapstructure:"command"`
+	CheckpointType CheckpointType          `json:"checkpoint_type" mapstructure:"checkpoint_type"`
+	CheckpointPath string                  `json:"checkpoint_path" mapstructure:"checkpoint_path"`
+	OpenFds        []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // CRIU needs some information about fds to restore correctly
 }
 
 type CheckpointType string
@@ -115,7 +117,7 @@ func instantiateClient() (*Client, error) {
 
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
-	restore_command := make(chan string)
+	restore_command := make(chan ServerCommand)
 	channels := &CommandChannels{dump_command, restore_command}
 
 	// get ids. TODO NR: uuid verification
@@ -155,30 +157,32 @@ func instantiateClient() (*Client, error) {
 
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
-	c.nc.Close()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
 
-func (c *Client) publishState(timeoutSec int) {
+func (c *Client) publishStateContinuous(timeoutSec int) {
 	ticker := time.NewTicker(time.Duration(timeoutSec) * time.Second)
 	// publish state continuously
 	for {
 		select {
 		case <-ticker.C:
-			state := c.getState(c.process.Pid)
-			data, err := json.Marshal(state)
-			if err != nil {
-				// do nothing
-				c.logger.Info().Msgf("could not marshal state: %v", err)
-			}
-			_, err = c.js.Publish(strings.Join([]string{"cedana", c.jobId, c.selfId, "state"}, "."), data)
-			if err != nil {
-				c.logger.Info().Msgf("could not publish state: %v", err)
-			}
+			c.publishStateOnce()
 		default:
 			// do nothing
 		}
+	}
+}
+
+func (c *Client) publishStateOnce() {
+	state := c.getState(c.process.Pid)
+	data, err := json.Marshal(state)
+	if err != nil {
+		c.logger.Info().Msgf("could not marshal state: %v", err)
+	}
+	_, err = c.js.Publish(strings.Join([]string{"cedana", c.jobId, c.selfId, "state"}, "."), data)
+	if err != nil {
+		c.logger.Info().Msgf("could not publish state: %v", err)
 	}
 }
 
@@ -194,13 +198,16 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 			if cmd.Command == "checkpoint" {
 				c.logger.Info().Msgf("received checkpoint command")
 				c.channels.dump_command <- 1
+				c.publishStateOnce()
 			} else if cmd.Command == "restore" {
 				c.logger.Info().Msgf("received restore command")
-				c.channels.restore_command <- cmd.CheckpointPath
+				c.channels.restore_command <- cmd
+				c.publishStateOnce()
 			} else {
 				c.logger.Info().Msgf("received unknown command: %s", cmd)
 			}
 		}
+
 		msg.Ack()
 
 		// should be a lot more careful about deliverNew().
@@ -244,20 +251,30 @@ func (c *Client) publishCheckpointFile(filepath string) error {
 	return nil
 }
 
-func (c *Client) getCheckpointFile(bucketFilePath string) error {
+func (c *Client) getCheckpointFile(bucketFilePath string) (*string, error) {
 	store, err := c.js.ObjectStore(strings.Join([]string{"cedana", c.jobId, "checkpoints"}, "_"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = store.GetFile(bucketFilePath, strings.Join([]string{"cedana", "checkpoint"}, "_"))
+	downloadedFileName := "cedana_checkpoint.zip"
+
+	err = store.GetFile(bucketFilePath, downloadedFileName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.logger.Info().Msgf("downloaded checkpoint file: %v", bucketFilePath)
+	c.logger.Info().Msgf("downloaded checkpoint file: %s to %s", bucketFilePath, downloadedFileName)
 
-	return nil
+	// verify file exists
+	// TODO NR: checksum
+	_, err = os.Stat(downloadedFileName)
+	if err != nil {
+		c.logger.Fatal().Msg("error downloading checkpoint file")
+		return nil, err
+	}
+
+	return &downloadedFileName, nil
 }
 
 // sets up subscribers for dump and restore commands
@@ -267,14 +284,29 @@ func (c *Client) timeTrack(start time.Time, name string) {
 }
 
 func (c *Client) getState(pid int) *ClientState {
+	// inefficient - but unsure about race condition issues
+	p, err := process.NewProcess(int32(pid))
+	if err != nil {
+		c.logger.Info().Msgf("Could not instantiate new gopsutil process")
+	}
+
+	var open_files []process.OpenFilesStat
+
+	if p != nil {
+		open_files, err = p.OpenFiles()
+		if err != nil {
+			c.logger.Fatal().Err(err)
+		}
+	}
 
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
 	data := &ClientState{
-		ProcessInfo: Process{
-			Pid: pid,
+		ProcessInfo: ProcessInfo{
+			Pid:     pid,
+			OpenFds: open_files,
 		},
 		ClientInfo: ClientInfo{
 			Id:              c.selfId,

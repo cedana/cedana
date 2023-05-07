@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -162,7 +163,10 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	}
 
 	// processname + datetime
-	newdirname := strings.Join([]string{*pname, time.Now().Format("02_01_2006_1504")}, "_")
+	// strip out non posix-compliant characters from the processname
+	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
+	formattedProcessName = strings.ReplaceAll(formattedProcessName, ".", "_")
+	newdirname := strings.Join([]string{formattedProcessName, time.Now().Format("02_01_2006_1504")}, "_")
 	dumpdir := filepath.Join(dir, newdirname)
 	_, err = os.Stat(filepath.Join(dumpdir))
 	if err != nil {
@@ -292,6 +296,7 @@ func (c *Client) dump(dir string) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	c.postDump(dumpdir)
+	c.cleanupClient()
 
 	return nil
 }
