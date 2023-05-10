@@ -11,42 +11,42 @@ import (
 )
 
 type Config struct {
-	CedanaManaged bool          `mapstructure:"cedana_managed"`
-	Client        Client        `mapstructure:"client"`
-	ActionScripts ActionScripts `mapstructure:"action_scripts"`
-	Connection    Connection    `mapstructure:"connection"`
-	Docker        Docker        `mapstructure:"docker"`
-	SharedStorage SharedStorage `mapstructure:"shared_storage"`
+	CedanaManaged bool          `json:"cedana_managed" mapstructure:"cedana_managed"`
+	Client        Client        `json:"client" mapstructure:"client"`
+	ActionScripts ActionScripts `json:"action_scripts" mapstructure:"action_scripts"`
+	Connection    Connection    `json:"connection" mapstructure:"connection"`
+	Docker        Docker        `json:"docker" mapstructure:"docker"`
+	SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
 }
 
 type Client struct {
-	ProcessName          string `mapstructure:"process_name"`
-	LeaveRunning         bool   `mapstructure:"leave_running"`
-	SignalProcessPreDump bool   `mapstructure:"signal_process_pre_dump"`
-	SignalProcessTimeout int    `mapstructure:"signal_process_timeout"`
+	ProcessName          string `json:"process_name" mapstructure:"process_name"`
+	LeaveRunning         bool   `json:"leave_running" mapstructure:"leave_running"`
+	SignalProcessPreDump bool   `json:"signal_process_pre_dump" mapstructure:"signal_process_pre_dump"`
+	SignalProcessTimeout int    `json:"signal_process_timeout" mapstructure:"signal_process_timeout"`
 }
 
 type ActionScripts struct {
-	PreDump    string `mapstructure:"pre_dump"`
-	PostDump   string `mapstructure:"post_dump"`
-	PreRestore string `mapstructure:"pre_restore"`
+	PreDump    string `json:"pre_dump" mapstructure:"pre_dump"`
+	PostDump   string `json:"post_dump" mapstructure:"post_dump"`
+	PreRestore string `json:"pre_restore" mapstructure:"pre_restore"`
 }
 
 type Connection struct {
-	NATSUrl  string `mapstructure:"nats_url"`
-	NATSPort int    `mapstructure:"nats_port"`
+	NATSUrl  string `json:"nats_url" mapstructure:"nats_url"`
+	NATSPort int    `json:"nats_port" mapstructure:"nats_port"`
 }
 
 type Docker struct {
-	LeaveRunning  bool   `mapstructure:"leave_running"`
-	ContainerName string `mapstructure:"container_name"`
-	CheckpointID  string `mapstructure:"checkpoint_id"`
+	LeaveRunning  bool   `json:"leave_running" mapstructure:"leave_running"`
+	ContainerName string `json:"container_name" mapstructure:"container_name"`
+	CheckpointID  string `json:"checkpoint_id" mapstructure:"checkpoint_id"`
 }
 
 type SharedStorage struct {
 	// only useful for multi-machine checkpoint/restore
-	MountPoint     string `mapstructure:"mount_point"`
-	DumpStorageDir string `mapstructure:"dump_storage_dir"`
+	MountPoint     string `json:"mount_point" mapstructure:"mount_point"`
+	DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 }
 
 func InitConfig() (*Config, error) {

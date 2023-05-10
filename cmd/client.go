@@ -130,9 +130,15 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
 	}
 
+	authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
+	if !exists {
+		logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
+	}
+
 	// connect to NATS
 	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
 	opts = setupConnOptions(opts, &logger)
+	opts = append(opts, nats.Token(authToken))
 	nc, err := nats.Connect(config.Connection.NATSUrl, opts...)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to NATS")
