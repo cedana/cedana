@@ -121,6 +121,8 @@ func instantiateClient() (*Client, error) {
 	channels := &CommandChannels{dump_command, restore_command}
 
 	// get ids. TODO NR: uuid verification
+	// these should also be added to the config just in case
+	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
 	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
 	if !exists {
 		logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
