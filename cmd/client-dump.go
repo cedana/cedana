@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -153,7 +154,7 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	}
 	// if the user hasn't configured signaling in the case they're using the GPU
 	// they haven't read the docs and the signal just gets lost in the aether anyway
-	if attachedToHardwareAccel || c.config.Client.SignalProcessPreDump {
+	if attachedToHardwareAccel && c.config.Client.SignalProcessPreDump {
 		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
 		// for now, don't set any opts and skip using CRIU. Future work to integrate Cricket and intercept CUDA calls
 
@@ -162,7 +163,10 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	}
 
 	// processname + datetime
-	newdirname := strings.Join([]string{*pname, time.Now().Format("02_01_2006_1504")}, "_")
+	// strip out non posix-compliant characters from the processname
+	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
+	formattedProcessName = strings.ReplaceAll(formattedProcessName, ".", "_")
+	newdirname := strings.Join([]string{formattedProcessName, time.Now().Format("02_01_2006_1504")}, "_")
 	dumpdir := filepath.Join(dir, newdirname)
 	_, err = os.Stat(filepath.Join(dumpdir))
 	if err != nil {
@@ -185,6 +189,7 @@ func (c *Client) postDump(dumpdir string) {
 			if err != nil {
 				return err
 			}
+			// pytorch checkpoints only
 			if !info.IsDir() && filepath.Ext(path) == ".pt" {
 				modTime := info.ModTime()
 				if modTime.After(latestModTime) {
@@ -198,6 +203,7 @@ func (c *Client) postDump(dumpdir string) {
 			fmt.Println(err)
 			return
 		}
+		// TODO: add other application/GPU-level checkpoints
 		if pt == "" {
 			c.logger.Debug().Msg("could not find a pytorch checkpoint")
 		} else {
@@ -215,7 +221,6 @@ func (c *Client) postDump(dumpdir string) {
 			}
 		}
 	}
-	// if shared network storage is enabled, compress and shoot over
 	if c.config.SharedStorage.MountPoint != "" {
 		// dump onto mountpoint w/ folder name
 		c.logger.Debug().Msgf("zipping into: %s", filepath.Join(
@@ -229,7 +234,15 @@ func (c *Client) postDump(dumpdir string) {
 		if err != nil {
 			c.logger.Fatal().Err(err)
 		}
+		if c.config.CedanaManaged {
+			c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
+			err := c.publishCheckpointFile(out)
+			if err != nil {
+				c.logger.Info().Msgf("error pushing checkpoint: %v", err)
+			}
+		}
 	}
+
 	// TODO: md5 checksum validation
 }
 
@@ -283,6 +296,7 @@ func (c *Client) dump(dir string) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	c.postDump(dumpdir)
+	c.cleanupClient()
 
 	return nil
 }

@@ -4,7 +4,9 @@ import (
 	"archive/zip"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func CompressFolder(folderPath, zipFilePath string) error {
@@ -53,6 +55,38 @@ func CompressFolder(folderPath, zipFilePath string) error {
 	})
 
 	return nil
+}
+
+// The decompress function is broken - this is a hack for now
+func UnzipFolder(zipPath, destPath string) error {
+	dirName, err := getDirectoryName(zipPath)
+	if err != nil {
+		return err
+	}
+
+	d := *dirName
+
+	cmd := exec.Command("unzip", "-j", zipPath, d+"/*", "-d", destPath)
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getDirectoryName(zipFilePath string) (*string, error) {
+	var dirName string
+	r, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	// just grab the first directorDecompressZipToTempFolde
+	// get first part of name (the folder)
+	f := r.File[0]
+	dirName = strings.Split(f.Name, "/")[0]
+	return &dirName, nil
 }
 
 func DecompressFolder(zipFilePath, destination string) error {

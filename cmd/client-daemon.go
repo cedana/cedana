@@ -3,6 +3,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"syscall"
 	"time"
@@ -79,7 +80,8 @@ var clientDaemonCmd = &cobra.Command{
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
 		go c.subscribeToCommands(1)
-		go c.publishState(30)
+		go c.publishStateContinuous(30)
+		go c.logForwardingServer()
 
 		// start daemon worker
 		go c.startDaemon(pid)
@@ -99,12 +101,16 @@ LOOP:
 		select {
 		case <-c.channels.dump_command:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
-			// spawn the dump in another goroutine. If it fails there, bubble up
-			// it's goroutines all the way down!
-			go c.dump(dir)
-		case <-c.channels.restore_command:
+			err := c.dump(dir)
+			if err != nil {
+				c.logger.Info().Msgf("could not checkpoint with error: %v", err)
+			}
+		case cmd := <-c.channels.restore_command:
 			c.logger.Info().Msg("received restore command from the NATS server")
-			go c.restore()
+			err := c.restore(&cmd)
+			if err != nil {
+				c.logger.Info().Msgf("could not restore with error: %v", err)
+			}
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP
@@ -119,4 +125,36 @@ func termHandler(sig os.Signal) error {
 		<-done
 	}
 	return gd.ErrStop
+}
+
+// This is slightly insane lol.
+// When a job is set up via the orchestrator, we expect that it's logging is redirected
+// using socat (e.g `program | socat - TCP:localhost:3376`). This way we can avoid any pesky
+// logging issues (managing open fds) on CRIU restores + also pipe from the machine the daemon is run on to
+// the user's CLI.
+func (c *Client) logForwardingServer() error {
+	listener, err := net.Listen("tcp", "localhost:3376")
+	if err != nil {
+		return err
+	}
+
+	defer listener.Close()
+
+	// accept incoming socat connection
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			c.logger.Info().Msgf("could not accept socat connection: %v", err)
+			return err
+		}
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			c.logger.Info().Msgf("could not read from socat connection: %v", err)
+			return err
+		}
+
+		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
+	}
 }

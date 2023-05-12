@@ -12,6 +12,7 @@ import (
 // dupe of client_config.go in orchestrator, fine for now until we have a shared library
 
 type ConfigClient struct {
+	CedanaManaged bool
 	Client        Client        `protobuf:"bytes,1,opt,name=client" json:"client,omitempty"`
 	ActionScripts ActionScripts `protobuf:"bytes,2,opt,name=action_scripts,json=actionScripts" json:"action_scripts,omitempty"`
 	Connection    Connection    `protobuf:"bytes,3,opt,name=connection" json:"connection,omitempty"`
