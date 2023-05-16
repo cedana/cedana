@@ -103,9 +103,11 @@ LOOP:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
 			err := c.dump(dir)
 			if err != nil {
+				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Info().Msgf("could not checkpoint with error: %v", err)
 			}
 		case cmd := <-c.channels.restore_command:
+			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.restore(&cmd)
 			if err != nil {
@@ -156,5 +158,6 @@ func (c *Client) logForwardingServer() error {
 		}
 
 		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
+
 	}
 }

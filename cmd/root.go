@@ -19,7 +19,7 @@ var (
                                                                  
                                                                  
                                                                  ` + "\n Instance Brokerage, Orchestration and Migration System." +
-			"\n Property of Cedana, Inc.",
+			"\n Property of Cedana, Corp.",
 	}
 )
 
