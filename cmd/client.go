@@ -141,10 +141,25 @@ func instantiateClient() (*Client, error) {
 	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
 	opts = setupConnOptions(opts, &logger)
 	opts = append(opts, nats.Token(authToken))
-	nc, err := nats.Connect(config.Connection.NATSUrl, opts...)
+	var nc *nats.Conn
+	for i := 0; i < 5; i++ {
+		nc, err = nats.Connect(config.Connection.NATSUrl, opts...)
+		if err == nil {
+			break
+		}
+		logger.Warn().Msgf(
+			"NATS connection failed (attempt %d/%d) with error: %v. Retrying...",
+			i+1,
+			5,
+			err,
+		)
+		time.Sleep(30 * time.Second)
+	}
+
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not connect to NATS")
 	}
+
 	js, err := nc.JetStream()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not set up JetStream context")
