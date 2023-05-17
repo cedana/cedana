@@ -45,11 +45,6 @@ func LoadOverrides(cdir string) (*ConfigClient, error) {
 				// again, we don't care - drop and leave
 				return nil, err
 			}
-			// to catch resetting if the config has been written once already, delete the override
-			err = os.Remove(overridePath)
-			if err != nil {
-				fmt.Printf("could not remove override file")
-			}
 			return &serverOverrides, nil
 		}
 	}
