@@ -141,6 +141,8 @@ func instantiateClient() (*Client, error) {
 	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
 	opts = setupConnOptions(opts, &logger)
 	opts = append(opts, nats.Token(authToken))
+
+	logger.Info().Msgf("connecting to NATS at %s:%s w/ token %s", config.Connection.NATSUrl, config.Connection.NATSPort, authToken)
 	var nc *nats.Conn
 	for i := 0; i < 5; i++ {
 		nc, err = nats.Connect(config.Connection.NATSUrl, opts...)
