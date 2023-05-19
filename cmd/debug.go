@@ -6,6 +6,7 @@ import (
 
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var debugCmd = &cobra.Command{
@@ -24,6 +25,7 @@ var cfgCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		fmt.Sprintf("config file used: %s", viper.GetViper().ConfigFileUsed())
 		// pretty print config for debugging to make sure it's been loaded correctly
 		prettyCfg, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
