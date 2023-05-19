@@ -23,10 +23,10 @@ nfpms:
     id: default
     package_name: cedana
     file_name_template: "{{ .ConventionalFileName }}"
-    vendor: Cedana Systems
+    vendor: Cedana Corp
 
-    homepage: cedana.notion.site
-    maintainer: Niranjan Ravichandra <nravic@cedana.co>
+    homepage: cedana.ai
+    maintainer: Niranjan Ravichandra <nravic@cedana.ai>
 
     description: |-
       Fast, adaptive checkpointing for orchestrated cloud brokerage.
