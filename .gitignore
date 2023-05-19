@@ -5,4 +5,3 @@ cedana.pid
 
 dist/
 open_fds.json
-cmd/debug.go
