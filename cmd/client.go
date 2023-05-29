@@ -149,6 +149,10 @@ func instantiateClient() (*Client, error) {
 		if err == nil {
 			break
 		}
+		// reread config - I think there's a race that happens here with
+		// read server overrides and the NATS connection.
+		// TODO NR: should probably fix this
+		config, _ = utils.InitConfig()
 		logger.Warn().Msgf(
 			"NATS connection failed (attempt %d/%d) with error: %v. Retrying...",
 			i+1,
@@ -209,6 +213,12 @@ func (c *Client) publishStateOnce() {
 	if err != nil {
 		c.logger.Info().Msgf("could not publish state: %v", err)
 	}
+}
+
+func (c *Client) publishLogs() {
+	// don't want to blast NATS server w/ constant logging
+	// set up a queue to ship logging
+
 }
 
 func (c *Client) subscribeToCommands(timeoutMin int) {
@@ -312,7 +322,7 @@ func (c *Client) getState(pid int) *ClientState {
 	// inefficient - but unsure about race condition issues
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
-		c.logger.Info().Msgf("Could not instantiate new gopsutil process")
+		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
 	}
 
 	var open_files []process.OpenFilesStat
