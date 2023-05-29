@@ -98,7 +98,6 @@ func InitConfig() (*Config, error) {
 	so, err := LoadOverrides(filepath.Join(homedir, ".cedana"))
 
 	// override setting is ugly, need to abstract this away somehow
-	// SharedStorage
 	if err == nil && so != nil {
 		viper.Set("cedana_managed", so.CedanaManaged)
 		viper.Set("shared_storage.mount_point", so.SharedStorage.MountPoint)

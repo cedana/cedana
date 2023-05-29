@@ -36,6 +36,7 @@ var clientDaemonCmd = &cobra.Command{
 			if err != nil {
 				c.logger.Err(err).Msg("Could not parse process name from config")
 			}
+			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
 
 		c.process.Pid = pid
@@ -81,7 +82,7 @@ var clientDaemonCmd = &cobra.Command{
 
 		go c.subscribeToCommands(1)
 		go c.publishStateContinuous(30)
-		go c.logForwardingServer()
+		go c.forwardSocatLogs()
 
 		// start daemon worker
 		go c.startDaemon(pid)
@@ -134,7 +135,7 @@ func termHandler(sig os.Signal) error {
 // using socat (e.g `program | socat - TCP:localhost:3376`). This way we can avoid any pesky
 // logging issues (managing open fds) on CRIU restores + also pipe from the machine the daemon is run on to
 // the user's CLI.
-func (c *Client) logForwardingServer() error {
+func (c *Client) forwardSocatLogs() error {
 	listener, err := net.Listen("tcp", "localhost:3376")
 	if err != nil {
 		return err
@@ -158,6 +159,13 @@ func (c *Client) logForwardingServer() error {
 		}
 
 		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
+	}
+}
+
+func (c *Client) monitorProcess() error {
+	for {
+		// check if it's been killed
 
 	}
+	return nil
 }
