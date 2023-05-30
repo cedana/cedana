@@ -165,7 +165,6 @@ func (c *Client) forwardSocatLogs() error {
 func (c *Client) monitorProcess() error {
 	for {
 		// check if it's been killed
-
 	}
 	return nil
 }
