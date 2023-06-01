@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/checkpoint-restore/go-criu v4.0.0+incompatible
-	github.com/nats-io/nats.go v1.24.0
+	github.com/nats-io/nats.go v1.26.0
 	github.com/sevlyar/go-daemon v0.1.6
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/spf13/cobra v1.5.0
@@ -16,13 +16,14 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
+	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.15 // indirect
-	github.com/nats-io/nkeys v0.3.0 // indirect
+	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
