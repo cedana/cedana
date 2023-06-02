@@ -85,14 +85,16 @@ func (c *Client) signalProcessAndWait(pid int, timeout int) {
 	time.Sleep(time.Duration(timeout) * time.Second)
 }
 
-func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
+func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) (string, error) {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Could not instantiate new gopsutil process")
+		return "", err
 	}
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
 		c.logger.Fatal().Err(err)
+		return "", err
 	}
 	// check file descriptors
 	open_files, err := p.OpenFiles()
@@ -107,6 +109,7 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	err = os.WriteFile("open_fds.json", b, 0o644)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error writing open_fds to disk")
+		return "", err
 	}
 
 	// check network connections
@@ -172,10 +175,11 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) string {
 	if err != nil {
 		if err := os.Mkdir(dumpdir, 0o755); err != nil {
 			c.logger.Fatal().Err(err).Msg("error creating dump subfolder")
+			return "", err
 		}
 	}
 
-	return dumpdir
+	return dumpdir, nil
 }
 
 func (c *Client) postDump(dumpdir string) {
@@ -262,7 +266,10 @@ func (c *Client) dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir := c.prepareDump(c.process.Pid, dir, &opts)
+	dumpdir, err := c.prepareDump(c.process.Pid, dir, &opts)
+	if err != nil {
+		return err
+	}
 
 	img, err := os.Open(dumpdir)
 	if err != nil {

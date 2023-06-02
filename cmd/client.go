@@ -73,6 +73,7 @@ type ClientInfo struct {
 
 type ServerCommand struct {
 	Command        string                  `json:"command" mapstructure:"command"`
+	Heartbeat      bool                    `json:"heartbeat" mapstructure:"heartbeat"`
 	CheckpointType CheckpointType          `json:"checkpoint_type" mapstructure:"checkpoint_type"`
 	CheckpointPath string                  `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 	OpenFds        []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // CRIU needs some information about fds to restore correctly
@@ -220,7 +221,7 @@ func (c *Client) publishStateOnce() {
 	if err != nil {
 		c.logger.Info().Msgf("could not marshal state: %v", err)
 	}
-	_, err = c.js.Publish(ctx, strings.Join([]string{"cedana", c.jobId, c.selfId, "state"}, "."), data)
+	_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "state"}, "."), data)
 	if err != nil {
 		c.logger.Info().Msgf("could not publish state: %v", err)
 	}
@@ -236,9 +237,10 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 	defer cancel()
 
 	// FetchNoWait - only get latest
-	cons, err := c.js.AddConsumer(ctx, "ORCH_COMMANDS", jetstream.ConsumerConfig{
+	cons, err := c.js.AddConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: strings.Join([]string{"cedana", c.jobId, c.selfId, "commands"}, "."),
+		DeliverPolicy: jetstream.DeliverNewPolicy,
+		FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
 	})
 
 	if err != nil {
@@ -280,7 +282,7 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 
 func (c *Client) publishCheckpointFile(filepath string) error {
 	// TODO: Bucket & KV needs to be set up as part of instantiation
-	store, err := c.jsc.ObjectStore(strings.Join([]string{"cedana", c.jobId, "checkpoints"}, "_"))
+	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
 	if err != nil {
 		return err
 	}
@@ -296,7 +298,7 @@ func (c *Client) publishCheckpointFile(filepath string) error {
 }
 
 func (c *Client) getCheckpointFile(bucketFilePath string) (*string, error) {
-	store, err := c.jsc.ObjectStore(strings.Join([]string{"cedana", c.jobId, "checkpoints"}, "_"))
+	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
 	if err != nil {
 		return nil, err
 	}
