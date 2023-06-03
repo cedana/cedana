@@ -10,6 +10,7 @@ import (
 
 	"github.com/checkpoint-restore/go-criu"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/process"
@@ -21,7 +22,8 @@ import (
 type Client struct {
 	CRIU     *criu.Criu
 	nc       *nats.Conn
-	js       nats.JetStreamContext
+	js       jetstream.JetStream
+	jsc      nats.JetStreamContext
 	logger   *zerolog.Logger
 	config   *utils.Config
 	channels *CommandChannels
@@ -71,6 +73,7 @@ type ClientInfo struct {
 
 type ServerCommand struct {
 	Command        string                  `json:"command" mapstructure:"command"`
+	Heartbeat      bool                    `json:"heartbeat" mapstructure:"heartbeat"`
 	CheckpointType CheckpointType          `json:"checkpoint_type" mapstructure:"checkpoint_type"`
 	CheckpointPath string                  `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 	OpenFds        []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // CRIU needs some information about fds to restore correctly
@@ -142,7 +145,6 @@ func instantiateClient() (*Client, error) {
 	opts = setupConnOptions(opts, &logger)
 	opts = append(opts, nats.Token(authToken))
 
-	logger.Info().Msgf("connecting to NATS at %s:%s w/ token %s", config.Connection.NATSUrl, config.Connection.NATSPort, authToken)
 	var nc *nats.Conn
 	for i := 0; i < 5; i++ {
 		nc, err = nats.Connect(config.Connection.NATSUrl, opts...)
@@ -166,7 +168,13 @@ func instantiateClient() (*Client, error) {
 		logger.Fatal().Err(err).Msg("Could not connect to NATS")
 	}
 
-	js, err := nc.JetStream()
+	// set up JetStream
+	js, err := jetstream.New(nc)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not set up JetStream management interface")
+	}
+
+	jsc, err := nc.JetStream()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not set up JetStream context")
 	}
@@ -175,6 +183,7 @@ func instantiateClient() (*Client, error) {
 		CRIU:     c,
 		nc:       nc,
 		js:       js,
+		jsc:      jsc,
 		logger:   &logger,
 		config:   config,
 		channels: channels,
@@ -204,12 +213,15 @@ func (c *Client) publishStateContinuous(timeoutSec int) {
 }
 
 func (c *Client) publishStateOnce() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	state := c.getState(c.process.Pid)
 	data, err := json.Marshal(state)
 	if err != nil {
 		c.logger.Info().Msgf("could not marshal state: %v", err)
 	}
-	_, err = c.js.Publish(strings.Join([]string{"cedana", c.jobId, c.selfId, "state"}, "."), data)
+	_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "state"}, "."), data)
 	if err != nil {
 		c.logger.Info().Msgf("could not publish state: %v", err)
 	}
@@ -218,60 +230,59 @@ func (c *Client) publishStateOnce() {
 func (c *Client) publishLogs() {
 	// don't want to blast NATS server w/ constant logging
 	// set up a queue to ship logging
-
 }
 
 func (c *Client) subscribeToCommands(timeoutMin int) {
-	sub, err := c.js.Subscribe(strings.Join([]string{"cedana", c.jobId, c.selfId, "commands"}, "."), func(msg *nats.Msg) {
-		if msg != nil {
-			var cmd ServerCommand
-			err := json.Unmarshal(msg.Data, &cmd)
-			if err != nil {
-				c.logger.Info().Msgf("could not unmarshal command: %v", err)
-			}
-			c.logger.Debug().Msgf("received command: %v", msg)
-			if cmd.Command == "checkpoint" {
-				c.logger.Info().Msgf("received checkpoint command")
-				c.channels.dump_command <- 1
-				c.publishStateOnce()
-			} else if cmd.Command == "restore" {
-				c.logger.Info().Msgf("received restore command")
-				c.channels.restore_command <- cmd
-				c.publishStateOnce()
-			} else {
-				c.logger.Info().Msgf("received unknown command: %s", cmd)
-			}
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMin)*time.Minute)
+	defer cancel()
 
-		msg.Ack()
+	// FetchNoWait - only get latest
+	cons, err := c.js.AddConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
+		FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
+	})
 
-		// should be a lot more careful about deliverNew().
-		// there's a lot of thought that can be put in here (that hasn't been) regarding message replay
-		// and durability in the case of checkpoint/restore and the daemon going down temporarily.
-
-	}, nats.DeliverNew())
 	if err != nil {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
 	}
 
-	timeout := time.Duration(timeoutMin) * time.Minute
-	ctx, cancel := context.WithTimeout(c.context, timeout)
-	defer cancel()
+	msg, err := cons.FetchNoWait(1)
+	if err != nil {
+		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
+	}
 
-	for {
-		// msg handled by handler
-		// illegal call on async subscription!
-		_, err := sub.NextMsgWithContext(ctx)
-		if err != nil {
-			c.logger.Debug().Msgf("could not receive message: %v", err)
+	for msg := range msg.Messages() {
+		c.logger.Debug().Msgf("received command: %v", msg)
+		if msg != nil {
+			var cmd ServerCommand
+			err := json.Unmarshal(msg.Data(), &cmd)
+			if err != nil {
+				c.logger.Info().Msgf("could not unmarshal command: %v", err)
+			}
+
+			c.logger.Debug().Msgf("received command: %v", msg)
+			if cmd.Command == "checkpoint" {
+				c.logger.Info().Msgf("received checkpoint command")
+				msg.Ack()
+				c.channels.dump_command <- 1
+				c.publishStateOnce()
+			} else if cmd.Command == "restore" {
+				c.logger.Info().Msgf("received restore command")
+				msg.Ack()
+				c.channels.restore_command <- cmd
+				c.publishStateOnce()
+			} else {
+				c.logger.Info().Msgf("received unknown command: %s", cmd)
+				msg.Ack()
+			}
 		}
-		time.Sleep(time.Duration(timeoutMin) * time.Minute)
 	}
 }
 
 func (c *Client) publishCheckpointFile(filepath string) error {
 	// TODO: Bucket & KV needs to be set up as part of instantiation
-	store, err := c.js.ObjectStore(strings.Join([]string{"cedana", c.jobId, "checkpoints"}, "_"))
+	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
 	if err != nil {
 		return err
 	}
@@ -287,7 +298,7 @@ func (c *Client) publishCheckpointFile(filepath string) error {
 }
 
 func (c *Client) getCheckpointFile(bucketFilePath string) (*string, error) {
-	store, err := c.js.ObjectStore(strings.Join([]string{"cedana", c.jobId, "checkpoints"}, "_"))
+	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
 	if err != nil {
 		return nil, err
 	}
