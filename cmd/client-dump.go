@@ -76,7 +76,7 @@ func (c *Client) signalProcessAndWait(pid int, timeout int) {
 	s := syscall.SIGUSR1
 	_, _, err = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
 	if err != 0 {
-		c.logger.Info().Msgf("could not send signal to pid %s", pid)
+		c.logger.Info().Msgf("could not send signal to pid %d", pid)
 	}
 
 	// we want to sleep the dumping thread here to wait for the process
