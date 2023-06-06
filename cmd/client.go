@@ -273,7 +273,7 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 				c.channels.restore_command <- cmd
 				c.publishStateOnce()
 			} else {
-				c.logger.Info().Msgf("received unknown command: %s", cmd)
+				c.logger.Info().Msgf("received unknown command: %v", cmd)
 				msg.Ack()
 			}
 		}
