@@ -200,15 +200,11 @@ func (c *Client) cleanupClient() error {
 }
 
 func (c *Client) publishStateContinuous(timeoutSec int) {
+	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(timeoutSec) * time.Second)
 	// publish state continuously
-	for {
-		select {
-		case <-ticker.C:
-			c.publishStateOnce()
-		default:
-			// do nothing
-		}
+	for range ticker.C {
+		c.publishStateOnce()
 	}
 }
 
@@ -232,8 +228,8 @@ func (c *Client) publishLogs() {
 	// set up a queue to ship logging
 }
 
-func (c *Client) subscribeToCommands(timeoutMin int) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMin)*time.Minute)
+func (c *Client) subscribeToCommands(timeoutSec int) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
 	// FetchNoWait - only get latest
@@ -247,34 +243,36 @@ func (c *Client) subscribeToCommands(timeoutMin int) {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
 	}
 
-	msg, err := cons.FetchNoWait(1)
-	if err != nil {
-		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
-	}
+	for {
+		// on timer, initiate fetch and wait until we timeout
+		// waits until timeout
+		msg, err := cons.Fetch(1)
+		if err != nil {
+			c.logger.Info().Msgf("could not subscribe to commands: %v", err)
+		}
 
-	for msg := range msg.Messages() {
-		c.logger.Debug().Msgf("received command: %v", msg)
-		if msg != nil {
-			var cmd ServerCommand
-			err := json.Unmarshal(msg.Data(), &cmd)
-			if err != nil {
-				c.logger.Info().Msgf("could not unmarshal command: %v", err)
-			}
+		for msg := range msg.Messages() {
+			c.logger.Debug().Msgf("received raw command: %v", msg)
+			if msg != nil {
+				var cmd ServerCommand
+				err := json.Unmarshal(msg.Data(), &cmd)
+				if err != nil {
+					c.logger.Info().Msgf("could not unmarshal command: %v", err)
+				}
 
-			c.logger.Debug().Msgf("received command: %v", msg)
-			if cmd.Command == "checkpoint" {
-				c.logger.Info().Msgf("received checkpoint command")
-				msg.Ack()
-				c.channels.dump_command <- 1
-				c.publishStateOnce()
-			} else if cmd.Command == "restore" {
-				c.logger.Info().Msgf("received restore command")
-				msg.Ack()
-				c.channels.restore_command <- cmd
-				c.publishStateOnce()
-			} else {
-				c.logger.Info().Msgf("received unknown command: %v", cmd)
-				msg.Ack()
+				c.logger.Info().Msgf("received command: %v", cmd)
+				if cmd.Command == "checkpoint" {
+					msg.Ack()
+					c.channels.dump_command <- 1
+					c.publishStateOnce()
+				} else if cmd.Command == "restore" {
+					msg.Ack()
+					c.channels.restore_command <- cmd
+					c.publishStateOnce()
+				} else {
+					c.logger.Info().Msgf("received unknown command: %v", cmd)
+					msg.Ack()
+				}
 			}
 		}
 	}

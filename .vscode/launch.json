@@ -12,6 +12,14 @@
             "program": "${fileDirname}",
             "console": "integratedTerminal",
             "args": ["client", "daemon"],
+            "env": {
+                "CEDANA_ORCH_ID": "orch123",
+                "CEDANA_JOB_ID": "testjob",
+                "CEDANA_CLIENT_ID": "client123",
+                "CEDANA_AUTH_TOKEN": "XQZFFM2hnV7m",
+                "CEDANA_LOG_LEVEL": "0",
+            },
+       
         
         }
     ]
