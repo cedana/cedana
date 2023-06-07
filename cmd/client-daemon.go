@@ -80,7 +80,7 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		go c.subscribeToCommands(1)
+		go c.subscribeToCommands(300)
 		go c.publishStateContinuous(30)
 		go c.forwardSocatLogs()
 
@@ -105,19 +105,20 @@ LOOP:
 			err := c.dump(dir)
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
-				c.logger.Info().Msgf("could not checkpoint with error: %v", err)
+				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
 			}
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.restore(&cmd)
 			if err != nil {
-				c.logger.Info().Msgf("could not restore with error: %v", err)
+				c.logger.Warn().Msgf("could not restore with error: %v", err)
 			}
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP
 		default:
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
@@ -160,11 +161,4 @@ func (c *Client) forwardSocatLogs() error {
 
 		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
 	}
-}
-
-func (c *Client) monitorProcess() error {
-	for {
-		// check if it's been killed
-	}
-	return nil
 }

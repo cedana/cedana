@@ -174,7 +174,6 @@ func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) (string, e
 	_, err = os.Stat(filepath.Join(dumpdir))
 	if err != nil {
 		if err := os.Mkdir(dumpdir, 0o755); err != nil {
-			c.logger.Fatal().Err(err).Msg("error creating dump subfolder")
 			return "", err
 		}
 	}
