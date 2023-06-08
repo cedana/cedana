@@ -47,7 +47,6 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
-	github.com/mitchellh/go-ps v1.0.0
 	github.com/rs/zerolog v1.28.0
 	github.com/shirou/gopsutil/v3 v3.22.8
 	github.com/spf13/pflag v1.0.5 // indirect

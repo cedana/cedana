@@ -55,7 +55,7 @@ var dumpCommand = &cobra.Command{
 			}
 		}
 
-		c.process.Pid = pid
+		c.process.PID = pid
 
 		err = c.dump(dir)
 		if err != nil {
@@ -265,7 +265,7 @@ func (c *Client) dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(c.process.Pid, dir, &opts)
+	dumpdir, err := c.prepareDump(c.process.PID, dir, &opts)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (c *Client) dump(dir string) error {
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(c.process.Pid))
+	opts.Pid = proto.Int32(int32(c.process.PID))
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -288,7 +288,7 @@ func (c *Client) dump(dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.Pid)
+	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.PID)
 
 	if !c.process.AttachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)

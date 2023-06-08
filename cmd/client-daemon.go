@@ -39,7 +39,7 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
 
-		c.process.Pid = pid
+		c.process.PID = pid
 
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
