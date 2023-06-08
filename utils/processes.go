@@ -1,37 +1,49 @@
 package utils
 
 import (
+	"fmt"
+
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
-
-	ps "github.com/mitchellh/go-ps"
+	ps "github.com/shirou/gopsutil/v3/process"
 )
 
-func GetPid(process_name string) (int, error) {
+func GetPid(process_name string) (int32, error) {
 	processList, err := ps.Processes()
 	if err != nil {
 		return 0, err
 	}
-	// brittle search, TODO make more robust, need to be able to grab a
-	// range of processes too (here assuming root process is most similar)
 	similarity := 0.0
-	var proc ps.Process
-	for x := range processList {
-		process := processList[x]
-		sim := strutil.Similarity(process.Executable(), process_name, metrics.NewHamming())
+	var proc *ps.Process
+
+	for _, p := range processList {
+		exec, err := p.Exe()
+		if err != nil {
+			continue
+		}
+
+		// compute similarity score
+		sim := strutil.Similarity(exec, process_name, metrics.NewHamming())
+		fmt.Printf("%s:\t%f\n", exec, sim)
 		if sim > similarity {
 			similarity = sim
-			proc = process
+			proc = p
 		}
+		return proc.Pid, nil
 	}
-	return proc.Pid(), nil
+
+	return 0, nil
 }
 
-func GetProcessName(pid int) (*string, error) {
-	p, err := ps.FindProcess(pid)
+func GetProcessName(pid int32) (*string, error) {
+	// new process checks if exists as well
+	p, err := ps.NewProcess(pid)
+
 	if err != nil {
 		return nil, err
 	}
-	name := p.Executable()
-	return &name, err
+
+	name, _ := p.Exe()
+
+	return &name, nil
 }

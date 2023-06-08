@@ -15,7 +15,7 @@ import (
 
 func init() {
 	clientCommand.AddCommand(clientDaemonCmd)
-	clientDaemonCmd.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
+	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
 var stop = make(chan struct{})
@@ -96,7 +96,7 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startDaemon(pid int) {
+func (c *Client) startDaemon(pid int32) {
 LOOP:
 	for {
 		select {

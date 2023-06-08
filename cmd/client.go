@@ -51,7 +51,7 @@ type CommandChannels struct {
 }
 
 type ProcessInfo struct {
-	Pid                     int                     `json:"pid" mapstructure:"pid"`
+	Pid                     int32                   `json:"pid" mapstructure:"pid"`
 	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
 	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"`
 }
@@ -327,7 +327,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int) *ClientState {
+func (c *Client) getState(pid int32) *ClientState {
 	// inefficient - but unsure about race condition issues
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
