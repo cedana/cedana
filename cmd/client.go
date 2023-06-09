@@ -21,17 +21,18 @@ import (
 )
 
 type Client struct {
-	CRIU     *criu.Criu
-	nc       *nats.Conn
-	js       jetstream.JetStream
-	jsc      nats.JetStreamContext
-	logger   *zerolog.Logger
-	config   *utils.Config
-	channels *CommandChannels
-	context  context.Context
-	process  ProcessInfo
-	jobId    string
-	selfId   string
+	CRIU       *criu.Criu
+	chkptState ChkptState
+	nc         *nats.Conn
+	js         jetstream.JetStream
+	jsc        nats.JetStreamContext
+	logger     *zerolog.Logger
+	config     *utils.Config
+	channels   *CommandChannels
+	context    context.Context
+	process    ProcessInfo
+	jobId      string
+	selfId     string
 }
 
 // struct to hold logs from a process/Job
@@ -41,9 +42,24 @@ type Logs struct {
 	Stderr string `mapstructure:"stderr"`
 }
 
-type JobInfo struct {
-	logs    Logs          `mapstructure:"logs"`
-	elapsed time.Duration `mapstructure:"elapsed"`
+type ChkptState struct {
+	CheckpointState string `json:"checkpoint_state" mapstructure:"checkpoint_state"`
+	RestoreState    string `json:"restore_state" mapstructure:"restore_state"`
+}
+
+const (
+	NullState         = "NONE"
+	CheckpointSuccess = "CHECKPOINTED"
+	CheckpointFailed  = "CHECKPOINT_FAILED"
+	RestoreSuccess    = "RESTORED"
+	RestoreFailed     = "RESTORE_FAILED"
+)
+
+func NewChkptState() *ChkptState {
+	return &ChkptState{
+		CheckpointState: NullState,
+		RestoreState:    NullState,
+	}
 }
 
 type CommandChannels struct {
@@ -58,12 +74,14 @@ type ProcessInfo struct {
 	OpenConnections         []net.ConnectionStat    `json:"open_connections" mapstructure:"open_connections"` // open network connections
 	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
 	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
+	Status                  string                  `json:"status" mapstructure:"status"`
 }
 
 // TODO: Until there's a shared library, we'll have to duplicate this struct
 type ClientState struct {
 	ProcessInfo ProcessInfo `json:"process_info" mapstructure:"process_info"`
 	ClientInfo  ClientInfo  `json:"client_info" mapstructure:"client_info"`
+	ChkptState  ChkptState  `json:"chkpt_state" mapstructure:"chkpt_state"`
 }
 
 type ClientInfo struct {
@@ -209,9 +227,9 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-func (c *Client) publishStateContinuous(timeoutSec int) {
+func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
-	ticker := time.NewTicker(time.Duration(timeoutSec) * time.Second)
+	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	// publish state continuously
 	for range ticker.C {
 		c.publishStateOnce()
@@ -223,6 +241,10 @@ func (c *Client) publishStateOnce() {
 	defer cancel()
 
 	state := c.getState(c.process.PID)
+	if state == nil {
+		// we got no state, not necessarily an error condition - skip this iteration
+		return
+	}
 	data, err := json.Marshal(state)
 	if err != nil {
 		c.logger.Info().Msgf("could not marshal state: %v", err)
@@ -231,11 +253,6 @@ func (c *Client) publishStateOnce() {
 	if err != nil {
 		c.logger.Info().Msgf("could not publish state: %v", err)
 	}
-}
-
-func (c *Client) publishLogs() {
-	// don't want to blast NATS server w/ constant logging
-	// set up a queue to ship logging
 }
 
 func (c *Client) subscribeToCommands(timeoutSec int) {
@@ -362,6 +379,10 @@ func (c *Client) getState(pid int32) *ClientState {
 	memoryUsed, _ := p.MemoryPercent()
 	isRunning, _ := p.IsRunning()
 
+	// this is the status as returned by gopsutil.
+	// ideally we want more than this, or some parsing to happen from this end
+	status, _ := p.Status()
+
 	m, _ := mem.VirtualMemory()
 	h, _ := host.Info()
 
@@ -373,6 +394,7 @@ func (c *Client) getState(pid int32) *ClientState {
 			MemoryPercent:   memoryUsed,
 			IsRunning:       isRunning,
 			OpenConnections: openConnections,
+			Status:          strings.Join(status, ""),
 		},
 		ClientInfo: ClientInfo{
 			Id:              c.selfId,
@@ -382,6 +404,7 @@ func (c *Client) getState(pid int32) *ClientState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
+		ChkptState: c.chkptState,
 	}
 	return data
 }

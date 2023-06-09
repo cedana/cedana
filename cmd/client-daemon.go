@@ -106,17 +106,28 @@ LOOP:
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
+				c.chkptState.CheckpointState = CheckpointFailed
+				c.publishStateOnce()
 			}
+			c.chkptState.CheckpointState = CheckpointSuccess
+			c.publishStateOnce()
+
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.restore(&cmd)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
+				c.chkptState.RestoreState = RestoreFailed
+				c.publishStateOnce()
 			}
+			c.chkptState.RestoreState = RestoreSuccess
+			c.publishStateOnce()
+
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP
+
 		default:
 			time.Sleep(1 * time.Second)
 		}
