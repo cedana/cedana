@@ -15,7 +15,7 @@ import (
 
 func init() {
 	clientCommand.AddCommand(clientDaemonCmd)
-	clientDaemonCmd.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
+	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
 var stop = make(chan struct{})
@@ -39,7 +39,7 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
 
-		c.process.Pid = pid
+		c.process.PID = pid
 
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
@@ -96,7 +96,7 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startDaemon(pid int) {
+func (c *Client) startDaemon(pid int32) {
 LOOP:
 	for {
 		select {
@@ -106,17 +106,28 @@ LOOP:
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
+				c.chkptState.CheckpointState = CheckpointFailed
+				c.publishStateOnce()
 			}
+			c.chkptState.CheckpointState = CheckpointSuccess
+			c.publishStateOnce()
+
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.restore(&cmd)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
+				c.chkptState.RestoreState = RestoreFailed
+				c.publishStateOnce()
 			}
+			c.chkptState.RestoreState = RestoreSuccess
+			c.publishStateOnce()
+
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
 			break LOOP
+
 		default:
 			time.Sleep(1 * time.Second)
 		}

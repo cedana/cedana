@@ -18,7 +18,7 @@ import (
 )
 
 var dir string
-var pid int
+var pid int32
 
 // used for pid comms
 const (
@@ -30,7 +30,7 @@ const (
 func init() {
 	clientCommand.AddCommand(dumpCommand)
 	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
-	dumpCommand.Flags().IntVarP(&pid, "pid", "p", 0, "pid to dump")
+	dumpCommand.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
 }
 
 // This is a direct dump command. Won't be used in practice, we want to start a daemon
@@ -55,7 +55,7 @@ var dumpCommand = &cobra.Command{
 			}
 		}
 
-		c.process.Pid = pid
+		c.process.PID = pid
 
 		err = c.dump(dir)
 		if err != nil {
@@ -68,7 +68,7 @@ var dumpCommand = &cobra.Command{
 }
 
 // Signals a process prior to dumping with SIGUSR1
-func (c *Client) signalProcessAndWait(pid int, timeout int) {
+func (c *Client) signalProcessAndWait(pid int32, timeout int) {
 	fd, _, err := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
 	if err != 0 {
 		c.logger.Fatal().Err(err).Msg("could not open pid")
@@ -85,7 +85,7 @@ func (c *Client) signalProcessAndWait(pid int, timeout int) {
 	time.Sleep(time.Duration(timeout) * time.Second)
 }
 
-func (c *Client) prepareDump(pid int, dir string, opts *rpc.CriuOpts) (string, error) {
+func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Could not instantiate new gopsutil process")
@@ -265,7 +265,7 @@ func (c *Client) dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(c.process.Pid, dir, &opts)
+	dumpdir, err := c.prepareDump(c.process.PID, dir, &opts)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (c *Client) dump(dir string) error {
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(c.process.Pid))
+	opts.Pid = proto.Int32(int32(c.process.PID))
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -288,7 +288,7 @@ func (c *Client) dump(dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.Pid)
+	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.PID)
 
 	if !c.process.AttachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)

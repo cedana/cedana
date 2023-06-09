@@ -1,37 +1,64 @@
 package utils
 
 import (
+	"fmt"
+
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
-
-	ps "github.com/mitchellh/go-ps"
+	ps "github.com/shirou/gopsutil/v3/process"
 )
 
-func GetPid(process_name string) (int, error) {
+func GetPid(process_name string) (int32, error) {
 	processList, err := ps.Processes()
 	if err != nil {
 		return 0, err
 	}
-	// brittle search, TODO make more robust, need to be able to grab a
-	// range of processes too (here assuming root process is most similar)
 	similarity := 0.0
-	var proc ps.Process
-	for x := range processList {
-		process := processList[x]
-		sim := strutil.Similarity(process.Executable(), process_name, metrics.NewHamming())
+	var proc *ps.Process
+
+	/**
+
+	The best metric here is the LEvenshtein distance (also called the edit distance). It measures the min # of
+	single character edits (insertions, deletions, subs) required to transform one into another.
+
+	It's particularily better than the other methods strutil offers w.r.t process discovery because it takes
+	command variation into account, any flexibility and I think is also faster.
+
+	**/
+	lv := metrics.NewLevenshtein()
+
+	for _, p := range processList {
+		exec, err := p.Cmdline()
+		if err != nil {
+			continue
+		}
+
+		// compute similarity score
+		sim := strutil.Similarity(exec, process_name, lv)
 		if sim > similarity {
 			similarity = sim
-			proc = process
+			proc = p
 		}
 	}
-	return proc.Pid(), nil
+
+	if proc != nil {
+		exec, _ := proc.Cmdline()
+		fmt.Printf("found process PID %d and exe %s associated with name %s\n", proc.Pid, exec, process_name)
+		return proc.Pid, nil
+	}
+
+	return 0, nil
 }
 
-func GetProcessName(pid int) (*string, error) {
-	p, err := ps.FindProcess(pid)
+func GetProcessName(pid int32) (*string, error) {
+	// new process checks if exists as well
+	p, err := ps.NewProcess(pid)
+
 	if err != nil {
 		return nil, err
 	}
-	name := p.Executable()
-	return &name, err
+
+	name, _ := p.Exe()
+
+	return &name, nil
 }
