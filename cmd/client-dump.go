@@ -224,6 +224,7 @@ func (c *Client) postDump(dumpdir string) {
 			}
 		}
 	}
+	// mountPoint is used if there's a separate folder we want to move cedana checkpoints into
 	if c.config.SharedStorage.MountPoint != "" {
 		// dump onto mountpoint w/ folder name
 		c.logger.Debug().Msgf("zipping into: %s", filepath.Join(
@@ -272,7 +273,7 @@ func (c *Client) dump(dir string) error {
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
+		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
 		return err
 	}
 	defer img.Close()
@@ -294,7 +295,7 @@ func (c *Client) dump(dir string) error {
 		err = c.CRIU.Dump(opts, nfy)
 		if err != nil {
 			// TODO - better error handling
-			c.logger.Fatal().Err(err).Msg("error dumping process")
+			c.logger.Warn().Msgf("error dumping process: %v", err)
 			return err
 		}
 	}
