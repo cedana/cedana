@@ -136,6 +136,12 @@ func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
 	}
 
+	// clean up
+	err = os.Remove(*file)
+	if err != nil {
+		return nil, err
+	}
+
 	return &tmpdir, nil
 }
 
@@ -176,37 +182,7 @@ func getLatestCheckpointDir(dumpdir string) (string, error) {
 	return dir, nil
 }
 
-func (c *Client) restore(cmd *ServerCommand) error {
-	defer c.timeTrack(time.Now(), "restore")
-	var dir string
-	var err error
-
-	opts := c.prepareRestoreOpts()
-	if cmd != nil {
-		tmpdir, err := c.prepareManagedRestore(&opts, cmd)
-		if err != nil {
-			return err
-		}
-		dir = *tmpdir
-	} else {
-		c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
-		dir, err = getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("could not get latest checkpoint directory")
-		}
-	}
-	nfy := utils.Notify{
-		Config:          c.config,
-		Logger:          c.logger,
-		PreDumpAvail:    true,
-		PostDumpAvail:   true,
-		PreRestoreAvail: true,
-	}
-
-	// even if external storage is used, checkpoints dumped by cedana will be in the format
-	// /dumpdir/processname_date/...
-
-	// need to restore a pytorch too?
+func (c *Client) criuRestore(opts rpc.CriuOpts, nfy utils.Notify, dir string) error {
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not open directory")
@@ -217,7 +193,7 @@ func (c *Client) restore(cmd *ServerCommand) error {
 
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error restoring process")
+		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
 	}
 
@@ -227,6 +203,63 @@ func (c *Client) restore(cmd *ServerCommand) error {
 		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
 	c.cleanupClient()
+	return nil
+}
+
+func (c *Client) pyTorchRestore() error {
+	return nil
+}
+
+func (c *Client) CUDARestore() {
+
+}
+
+func (c *Client) restore(cmd *ServerCommand) error {
+	defer c.timeTrack(time.Now(), "restore")
+	var dir string
+	var err error
+
+	opts := c.prepareRestoreOpts()
+	nfy := utils.Notify{
+		Config:          c.config,
+		Logger:          c.logger,
+		PreDumpAvail:    true,
+		PostDumpAvail:   true,
+		PreRestoreAvail: true,
+	}
+
+	// if we have a server command, otherwise default to base CRIU wrapper mode
+	if cmd != nil {
+		switch cmd.CheckpointType {
+		case CheckpointTypeCRIU:
+			tmpdir, err := c.prepareManagedRestore(&opts, cmd)
+			if err != nil {
+				return err
+			}
+			dir = *tmpdir
+
+			err = c.criuRestore(opts, nfy, dir)
+			if err != nil {
+				return err
+			}
+		case CheckpointTypePytorch:
+			err := c.pyTorchRestore()
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
+		dir, err = getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
+		if err != nil {
+			c.logger.Warn().Msgf("could not get latest checkpoint directory with error: %v", err)
+		}
+
+		err = c.criuRestore(opts, nfy, dir)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
