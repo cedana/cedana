@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,30 +23,50 @@ import (
 )
 
 type Client struct {
-	CRIU       *criu.Criu
-	chkptState ChkptState
-	nc         *nats.Conn
-	js         jetstream.JetStream
-	jsc        nats.JetStreamContext
-	logger     *zerolog.Logger
-	config     *utils.Config
-	channels   *CommandChannels
-	context    context.Context
-	process    ProcessInfo
-	jobId      string
-	selfId     string
+	CRIU            *criu.Criu
+	nc              *nats.Conn
+	js              jetstream.JetStream
+	jsc             nats.JetStreamContext
+	logger          *zerolog.Logger
+	config          *utils.Config
+	channels        *CommandChannels
+	context         context.Context
+	process         ProcessInfo
+	jobId           string
+	selfId          string
+	checkpointState CedanaCheckpoint
 }
 
-// struct to hold logs from a process/Job
-// assume this is good enough for now!
+// CedanaCheckpoint encapsulates a CRIU checkpoint and includes
+// filesystem state for a full restore. Typically serialized and shot around
+// over the wire.
+type CedanaCheckpoint struct {
+	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
+	// either local or remote checkpoint path (url vs filesystem path)
+	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
+	// process state at time of checkpoint
+	ClientState ClientState `json:"state" mapstructure:"state"`
+}
+
+func (cc *CedanaCheckpoint) SerializeToFolder(dir string) error {
+	serialized, err := json.MarshalIndent(cc, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, cc.CheckpointPath, "checkpoint_state.json")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	_, err = file.Write(serialized)
+	return err
+}
+
 type Logs struct {
 	Stdout string `mapstructure:"stdout"`
 	Stderr string `mapstructure:"stderr"`
-}
-
-type ChkptState struct {
-	CheckpointState string `json:"checkpoint_state" mapstructure:"checkpoint_state"`
-	RestoreState    string `json:"restore_state" mapstructure:"restore_state"`
 }
 
 const (
@@ -55,13 +77,6 @@ const (
 	RestoreFailed     = "RESTORE_FAILED"
 )
 
-func NewChkptState() *ChkptState {
-	return &ChkptState{
-		CheckpointState: NullState,
-		RestoreState:    NullState,
-	}
-}
-
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan ServerCommand
@@ -70,7 +85,8 @@ type CommandChannels struct {
 type ProcessInfo struct {
 	PID                     int32                   `json:"pid" mapstructure:"pid"`
 	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
-	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"`                 // list of open FDs
+	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // list of open FDs
+	OpenWriteOnlyFilePaths  []string                `json:"open_write_only" mapstructure:"open_write_only"`
 	OpenConnections         []net.ConnectionStat    `json:"open_connections" mapstructure:"open_connections"` // open network connections
 	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
 	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
@@ -81,7 +97,6 @@ type ProcessInfo struct {
 type ClientState struct {
 	ProcessInfo ProcessInfo `json:"process_info" mapstructure:"process_info"`
 	ClientInfo  ClientInfo  `json:"client_info" mapstructure:"client_info"`
-	ChkptState  ChkptState  `json:"chkpt_state" mapstructure:"chkpt_state"`
 }
 
 type ClientInfo struct {
@@ -100,11 +115,9 @@ type GPUInfo struct {
 }
 
 type ServerCommand struct {
-	Command        string                  `json:"command" mapstructure:"command"`
-	Heartbeat      bool                    `json:"heartbeat" mapstructure:"heartbeat"`
-	CheckpointType CheckpointType          `json:"checkpoint_type" mapstructure:"checkpoint_type"`
-	CheckpointPath string                  `json:"checkpoint_path" mapstructure:"checkpoint_path"`
-	OpenFds        []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // CRIU needs some information about fds to restore correctly
+	Command          string           `json:"command" mapstructure:"command"`
+	Heartbeat        bool             `json:"heartbeat" mapstructure:"heartbeat"`
+	CedanaCheckpoint CedanaCheckpoint `json:"cedana_checkpoint" mapstructure:"cedana_checkpoint"`
 }
 
 type CheckpointType string
@@ -370,6 +383,7 @@ func (c *Client) getState(pid int32) *ClientState {
 			// don't want to error out and break
 			return nil
 		}
+		// used for network barriers (TODO: NR)
 		openConnections, err = p.Connections()
 		if err != nil {
 			return nil
@@ -404,9 +418,43 @@ func (c *Client) getState(pid int32) *ClientState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
-		ChkptState: c.chkptState,
 	}
 	return data
+}
+
+// WriteOnlyFds takes a snapshot of files that are open (in writeonly) by process PID
+// and outputs full paths. For concurrent processes (multithreaded) this can be dangerous and lead to
+// weird race conditions (maybe).
+// To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
+// flags.
+func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat) []string {
+	var paths []string
+	for _, fd := range openFds {
+		info, err := os.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", pid, fd.Fd))
+		if err != nil {
+			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+			continue
+		}
+
+		lines := strings.Split(string(info), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "flags:") {
+				// parsing out flags from the line and converting it out of octal.
+				// so converting flags: 0100002 -> 32770
+				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
+				if err != nil {
+					c.logger.Debug().Msgf("could not parse flags: %v", err)
+					continue
+				}
+
+				// bitwise compare flags with os.O_RDWR
+				if int(flags)&os.O_RDWR != 0 || int(flags)&os.O_WRONLY != 0 {
+					paths = append(paths, fd.Path)
+				}
+			}
+		}
+	}
+	return paths
 }
 
 func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option {

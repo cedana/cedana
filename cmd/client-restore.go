@@ -9,18 +9,21 @@ import (
 
 	"github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/nravic/cedana/utils"
-	"github.com/shirou/gopsutil/process"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )
 
+var checkpoint string
+
 func init() {
 	clientCommand.AddCommand(restoreCmd)
-	restoreCmd.Flags().StringVarP(&dir, "dumpdir", "d", "", "folder to restore checkpoint from")
 }
 
+// Restore command is only called when run manually.
+// Otherwise, daemon command is used and a network/cedana-managed restore occurs.
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
+	Args:  cobra.ExactArgs(1),
 	Short: "Initialize client and restore from dumped image",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := instantiateClient()
@@ -28,11 +31,14 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		if dir == "" {
-			dir = c.config.SharedStorage.DumpStorageDir
+		checkpointPath := args[0]
+		// check if it exists before passing to restore
+		_, err = os.Stat(checkpointPath)
+		if err != nil {
+			return err
 		}
 
-		err = c.restore(nil)
+		err = c.restore(nil, &checkpointPath)
 		if err != nil {
 			return err
 		}
@@ -40,76 +46,67 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, dumpdir string) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
+	tmpdir := "cedana_restore"
+	// make temporary folder to decompress into
+	err := os.Mkdir(tmpdir, 0755)
+	if err != nil {
+		return nil, err
+	}
+
+	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
+	err = utils.DecompressFolder(checkpointPath, tmpdir)
+	if err != nil {
+		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
+		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+	}
+
+	// read serialized cedanaCheckpoint
+	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		return nil, err
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
+		return nil, err
+	}
+
+	var cedanaCheckpoint CedanaCheckpoint
+	err = json.Unmarshal(data, &cedanaCheckpoint)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		return nil, err
+	}
+
 	// check open_fds. Useful for checking if process being restored
 	// is a pts slave and for determining how to handle files that were being written to.
 	// TODO: We should be looking at the images instead
-	var open_fds []process.OpenFilesStat
+	open_fds := cedanaCheckpoint.ClientState.ProcessInfo.OpenFds
 	var isShellJob bool
-	data, err := os.ReadFile("open_fds.json")
-	if err == nil {
-		err = json.Unmarshal(data, &open_fds)
-		if err != nil {
-			// we don't really care if we can't read this file
-			c.logger.Info().Err(err).Msg("could not unmarshal open_fds to []process.OpenFilesStat")
-		}
-
-		for _, f := range open_fds {
-			if strings.Contains(f.Path, "pts") {
-				isShellJob = true
-				break
-			}
+	for _, f := range open_fds {
+		if strings.Contains(f.Path, "pts") {
+			isShellJob = true
+			break
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
 	// TODO: network restore logic
+	// TODO: checksum val
 
-	// if shared network storage is enabled, grab last modified object
-	if c.config.SharedStorage.MountPoint != "" {
-		c.logger.Info().Msg("decompressing checkpoints")
-		var f string
-		var lastModifiedTime time.Time
-
-		files, _ := os.ReadDir(c.config.SharedStorage.MountPoint)
-		for _, file := range files {
-			fsinfo, err := file.Info()
-			if err != nil {
-				c.logger.Fatal().Err(err)
-			}
-			if fsinfo.ModTime().After(lastModifiedTime) && filepath.Ext(fsinfo.Name()) == "zip" {
-				f = file.Name()
-				lastModifiedTime = fsinfo.ModTime()
-			}
-		}
-
-		// hack: fsInfo for whatever reason doesn't expose the absolute path. Thankfully we have enough
-		// information to piece it together, but this feels brittle.
-		f = filepath.Join(c.config.SharedStorage.MountPoint, f)
-		c.logger.Info().Msgf("found cedana checkpoint %s", f)
-		// from a shared volume (like efs) -> local storage
-		c.logger.Info().Msgf("decompressing %s to %s", f, dumpdir)
-		err = utils.DecompressFolder(f, dumpdir)
-		if err != nil {
-			// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-			c.logger.Info().Err(err).Msg("error decompressing checkpoint")
-		}
-	}
-
-	// clean up open fds
-	err = os.Remove("open_fds.json")
-	if err != nil {
-		c.logger.Info().Msgf("error %v deleting openfds file", err)
-	}
-	// TODO: md5 checksum validation
+	return &tmpdir, nil
 }
 
-// restore function for systems managed by the cedana orchestrator
+// restore function for systems managed by a cedana orchestrator
 func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (*string, error) {
-	checkpoint := cmd.CheckpointPath
+	checkpoint := cmd.CedanaCheckpoint
 
 	var isShellJob bool
-	fds := cmd.OpenFds
+	// check openFds at time of checkpoint
+	fds := checkpoint.ClientState.ProcessInfo.OpenFds
 	for _, f := range fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
@@ -118,7 +115,7 @@ func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	file, err := c.getCheckpointFile(checkpoint)
+	file, err := c.getCheckpointFile(checkpoint.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +179,7 @@ func getLatestCheckpointDir(dumpdir string) (string, error) {
 	return dir, nil
 }
 
-func (c *Client) criuRestore(opts rpc.CriuOpts, nfy utils.Notify, dir string) error {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not open directory")
@@ -214,10 +211,9 @@ func (c *Client) CUDARestore() {
 
 }
 
-func (c *Client) restore(cmd *ServerCommand) error {
+func (c *Client) restore(cmd *ServerCommand, path *string) error {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
-	var err error
 
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
@@ -230,7 +226,7 @@ func (c *Client) restore(cmd *ServerCommand) error {
 
 	// if we have a server command, otherwise default to base CRIU wrapper mode
 	if cmd != nil {
-		switch cmd.CheckpointType {
+		switch cmd.CedanaCheckpoint.CheckpointType {
 		case CheckpointTypeCRIU:
 			tmpdir, err := c.prepareManagedRestore(&opts, cmd)
 			if err != nil {
@@ -238,24 +234,23 @@ func (c *Client) restore(cmd *ServerCommand) error {
 			}
 			dir = *tmpdir
 
-			err = c.criuRestore(opts, nfy, dir)
+			err = c.criuRestore(&opts, nfy, dir)
 			if err != nil {
 				return err
 			}
+
 		case CheckpointTypePytorch:
 			err := c.pyTorchRestore()
 			if err != nil {
 				return err
 			}
 		}
-	} else {
-		c.prepareRestore(&opts, c.config.SharedStorage.DumpStorageDir)
-		dir, err = getLatestCheckpointDir(c.config.SharedStorage.DumpStorageDir)
+	} else if path != nil {
+		dir, err := c.prepareRestore(&opts, *path)
 		if err != nil {
-			c.logger.Warn().Msgf("could not get latest checkpoint directory with error: %v", err)
+			return err
 		}
-
-		err = c.criuRestore(opts, nfy, dir)
+		err = c.criuRestore(&opts, nfy, *dir)
 		if err != nil {
 			return err
 		}
