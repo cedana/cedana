@@ -293,7 +293,7 @@ func (c *Client) dump(dir string) error {
 	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.PID)
 
 	if !c.process.AttachedToHardwareAccel {
-		err = c.CRIU.Dump(opts, nfy)
+		err = c.CRIU.Dump(*opts, nfy)
 		if err != nil {
 			// TODO - better error handling
 			c.logger.Warn().Msgf("error dumping process: %v", err)

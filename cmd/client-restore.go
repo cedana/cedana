@@ -188,7 +188,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	err = c.CRIU.Restore(opts, nfy)
+	err = c.CRIU.Restore(*opts, nfy)
 	if err != nil {
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
