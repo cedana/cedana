@@ -45,8 +45,7 @@ type Docker struct {
 }
 
 type SharedStorage struct {
-	// only useful for multi-machine checkpoint/restore
-	MountPoint     string `json:"mount_point" mapstructure:"mount_point"`
+	MountPoint     string `json:"mount_point" mapstructure:"mount_point"` // for multi-machine checkpoint/restore
 	DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 }
 
