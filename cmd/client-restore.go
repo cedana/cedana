@@ -153,32 +153,6 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 
 }
 
-// reach into DumpStorageDir and pick last modified folder
-func getLatestCheckpointDir(dumpdir string) (string, error) {
-	// potentially funny hack here instead is splitting the directory string
-	// and getting the date out of that
-	var dir string
-	var lastModifiedTime time.Time
-
-	folders, _ := os.ReadDir(dumpdir)
-	for _, folder := range folders {
-		fsinfo, err := folder.Info()
-		if err != nil {
-			return dir, err
-		}
-		if folder.IsDir() && fsinfo.ModTime().After(lastModifiedTime) {
-			// see https://github.com/golang/go/issues/32300 about names
-			// TL;DR - full name is only returned if the file is opened with the full name
-			// TODO: audit code to find places where absolute paths _aren't_ used
-			// hack: same as in prepareRestore, join folder.Name w/ dumpdir
-			dir = filepath.Join(dumpdir, folder.Name())
-			lastModifiedTime = fsinfo.ModTime()
-		}
-	}
-
-	return dir, nil
-}
-
 func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
 	img, err := os.Open(dir)
 	if err != nil {

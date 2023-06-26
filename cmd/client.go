@@ -23,18 +23,23 @@ import (
 )
 
 type Client struct {
-	CRIU            *criu.Criu
-	nc              *nats.Conn
-	js              jetstream.JetStream
-	jsc             nats.JetStreamContext
-	logger          *zerolog.Logger
-	config          *utils.Config
-	channels        *CommandChannels
-	context         context.Context
-	process         ProcessInfo
-	jobId           string
-	selfId          string
-	checkpointState CedanaCheckpoint
+	CRIU *criu.Criu
+
+	nc  *nats.Conn
+	js  jetstream.JetStream
+	jsc nats.JetStreamContext
+
+	logger *zerolog.Logger
+	config *utils.Config
+
+	channels *CommandChannels
+	context  context.Context
+	process  ProcessInfo
+
+	jobId  string
+	selfId string
+
+	cedanaCheckpoint CedanaCheckpoint // only ever modified at checkpoint/restore time
 }
 
 // CedanaCheckpoint encapsulates a CRIU checkpoint and includes
@@ -43,9 +48,11 @@ type Client struct {
 type CedanaCheckpoint struct {
 	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
 	// either local or remote checkpoint path (url vs filesystem path)
+
 	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 	// process state at time of checkpoint
-	ClientState ClientState `json:"state" mapstructure:"state"`
+	ClientState     ClientState     `json:"state" mapstructure:"state"`
+	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
 func (cc *CedanaCheckpoint) SerializeToFolder(dir string) error {
@@ -69,17 +76,16 @@ type Logs struct {
 	Stderr string `mapstructure:"stderr"`
 }
 
-const (
-	NullState         = "NONE"
-	CheckpointSuccess = "CHECKPOINTED"
-	CheckpointFailed  = "CHECKPOINT_FAILED"
-	RestoreSuccess    = "RESTORED"
-	RestoreFailed     = "RESTORE_FAILED"
-)
-
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan ServerCommand
+}
+
+// TODO: Until there's a shared library, we'll have to duplicate this struct
+type ClientState struct {
+	ProcessInfo     ProcessInfo     `json:"process_info" mapstructure:"process_info"`
+	ClientInfo      ClientInfo      `json:"client_info" mapstructure:"client_info"`
+	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
 type ProcessInfo struct {
@@ -91,12 +97,6 @@ type ProcessInfo struct {
 	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
 	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
 	Status                  string                  `json:"status" mapstructure:"status"`
-}
-
-// TODO: Until there's a shared library, we'll have to duplicate this struct
-type ClientState struct {
-	ProcessInfo ProcessInfo `json:"process_info" mapstructure:"process_info"`
-	ClientInfo  ClientInfo  `json:"client_info" mapstructure:"client_info"`
 }
 
 type ClientInfo struct {
@@ -121,11 +121,19 @@ type ServerCommand struct {
 }
 
 type CheckpointType string
+type CheckpointState string
 
 const (
 	CheckpointTypeNone    CheckpointType = "none"
 	CheckpointTypeCRIU    CheckpointType = "criu"
 	CheckpointTypePytorch CheckpointType = "pytorch"
+)
+
+const (
+	CheckpointSuccess CheckpointState = "CHECKPOINTED"
+	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
+	RestoreSuccess    CheckpointState = "RESTORED"
+	RestoreFailed     CheckpointState = "RESTORE_FAILED"
 )
 
 var clientCommand = &cobra.Command{
@@ -318,6 +326,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	}
 }
 
+// need to find a way to attach metadata here for checkpoint type? 
 func (c *Client) publishCheckpointFile(filepath string) error {
 	// TODO: Bucket & KV needs to be set up as part of instantiation
 	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
@@ -418,6 +427,7 @@ func (c *Client) getState(pid int32) *ClientState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
+		CheckpointState: c.cedanaCheckpoint.CheckpointState,
 	}
 	return data
 }
