@@ -12,11 +12,11 @@ import (
 // dupe of client_config.go in orchestrator, fine for now until we have a shared library
 
 type ConfigClient struct {
-	CedanaManaged bool
-	Client        Client        `protobuf:"bytes,1,opt,name=client" json:"client,omitempty"`
-	ActionScripts ActionScripts `protobuf:"bytes,2,opt,name=action_scripts,json=actionScripts" json:"action_scripts,omitempty"`
-	Connection    Connection    `protobuf:"bytes,3,opt,name=connection" json:"connection,omitempty"`
-	SharedStorage SharedStorage `protobuf:"bytes,4,opt,name=shared_storage,json=sharedStorage" json:"shared_storage,omitempty"`
+	CedanaManaged bool          `json:"cedana_managed"`
+	Client        Client        `json:"client"`
+	ActionScripts ActionScripts `json:"action_scripts"`
+	Connection    Connection    `json:"connection"`
+	SharedStorage SharedStorage `json:"shared_storage"`
 }
 
 func LoadOverrides(cdir string) (*ConfigClient, error) {

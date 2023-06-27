@@ -1,0 +1,1 @@
+sudo -E env CEDANA_JOB_ID=testjob CEDANA_CLIENT_ID=client123 ./cedana client daemon
