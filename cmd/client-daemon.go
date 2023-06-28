@@ -31,6 +31,11 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
 
+		err = c.AddDaemonLayer()
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
+		}
+
 		if pid == 0 {
 			pid, err = utils.GetPid(c.config.Client.ProcessName)
 			if err != nil {

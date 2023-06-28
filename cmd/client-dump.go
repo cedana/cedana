@@ -110,6 +110,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
+	c.process = state.ProcessInfo
+
 	// save state for serialization at this point
 	c.cedanaCheckpoint.ClientState = *state
 

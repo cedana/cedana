@@ -13,8 +13,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var checkpoint string
-
 func init() {
 	clientCommand.AddCommand(restoreCmd)
 }
@@ -94,10 +92,42 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
+	c.restoreFiles(&cedanaCheckpoint, tmpdir)
+
 	// TODO: network restore logic
 	// TODO: checksum val
 
 	return &tmpdir, nil
+}
+
+// restoreFiles looks at the files copied during checkpoint and copies them back to the
+// original path, creating folders along the way.
+func (c *Client) restoreFiles(cc *CedanaCheckpoint, dir string) {
+	_, err := os.Stat(filepath.Join(dir, "openFds"))
+	if err != nil {
+		return
+	}
+	err = filepath.Walk(filepath.Join(dir, "openFds"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		for _, f := range cc.ClientState.ProcessInfo.OpenWriteOnlyFilePaths {
+			if info.Name() == filepath.Base(f) {
+				// copy file to path
+				err = os.MkdirAll(filepath.Dir(f), 0755)
+				if err != nil {
+					return err
+				}
+
+				utils.CopyFile(path, f)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error copying files")
+	}
 }
 
 // restore function for systems managed by a cedana orchestrator
