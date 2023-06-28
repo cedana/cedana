@@ -39,24 +39,24 @@ type Client struct {
 	jobId  string
 	selfId string
 
-	cedanaCheckpoint CedanaCheckpoint // only ever modified at checkpoint/restore time
+	state CedanaState // only ever modified at checkpoint/restore time
 }
 
-// CedanaCheckpoint encapsulates a CRIU checkpoint and includes
+// CedanaState encapsulates a CRIU checkpoint and includes
 // filesystem state for a full restore. Typically serialized and shot around
 // over the wire.
-type CedanaCheckpoint struct {
+type CedanaState struct {
+	ClientInfo     ClientInfo     `json:"client_info" mapstructure:"client_info"`
+	ProcessInfo    ProcessInfo    `json:"process_info" mapstructure:"process_info"`
 	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
 	// either local or remote checkpoint path (url vs filesystem path)
-
 	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 	// process state at time of checkpoint
-	ClientState     ClientState     `json:"state" mapstructure:"state"`
 	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
-func (cc *CedanaCheckpoint) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(cc, "", "  ")
+func (cs *CedanaState) SerializeToFolder(dir string) error {
+	serialized, err := json.MarshalIndent(cs, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -82,11 +82,6 @@ type CommandChannels struct {
 }
 
 // TODO: Until there's a shared library, we'll have to duplicate this struct
-type ClientState struct {
-	ProcessInfo     ProcessInfo     `json:"process_info" mapstructure:"process_info"`
-	ClientInfo      ClientInfo      `json:"client_info" mapstructure:"client_info"`
-	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
-}
 
 type ProcessInfo struct {
 	PID                     int32                   `json:"pid" mapstructure:"pid"`
@@ -115,9 +110,9 @@ type GPUInfo struct {
 }
 
 type ServerCommand struct {
-	Command          string           `json:"command" mapstructure:"command"`
-	Heartbeat        bool             `json:"heartbeat" mapstructure:"heartbeat"`
-	CedanaCheckpoint CedanaCheckpoint `json:"cedana_checkpoint" mapstructure:"cedana_checkpoint"`
+	Command     string      `json:"command" mapstructure:"command"`
+	Heartbeat   bool        `json:"heartbeat" mapstructure:"heartbeat"`
+	CedanaState CedanaState `json:"cedana_state" mapstructure:"cedana_state"`
 }
 
 type CheckpointType string
@@ -386,7 +381,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *ClientState {
+func (c *Client) getState(pid int32) *CedanaState {
 	// inefficient - but unsure about race condition issues
 	p, err := process.NewProcess(pid)
 	if err != nil {
@@ -422,7 +417,7 @@ func (c *Client) getState(pid int32) *ClientState {
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
-	data := &ClientState{
+	return &CedanaState{
 		ProcessInfo: ProcessInfo{
 			PID:                    pid,
 			OpenFds:                openFiles,
@@ -440,9 +435,8 @@ func (c *Client) getState(pid int32) *ClientState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
-		CheckpointState: c.cedanaCheckpoint.CheckpointState,
+		CheckpointState: c.state.CheckpointState,
 	}
-	return data
 }
 
 // WriteOnlyFds takes a snapshot of files that are open (in writeonly) by process PID

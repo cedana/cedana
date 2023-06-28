@@ -111,10 +111,10 @@ LOOP:
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
-				c.cedanaCheckpoint.CheckpointState = CheckpointFailed
+				c.state.CheckpointState = CheckpointFailed
 				c.publishStateOnce()
 			}
-			c.cedanaCheckpoint.CheckpointState = CheckpointSuccess
+			c.state.CheckpointState = CheckpointSuccess
 			c.publishStateOnce()
 
 		case cmd := <-c.channels.restore_command:
@@ -123,10 +123,10 @@ LOOP:
 			err := c.restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
-				c.cedanaCheckpoint.CheckpointState = RestoreFailed
+				c.state.CheckpointState = RestoreFailed
 				c.publishStateOnce()
 			}
-			c.cedanaCheckpoint.CheckpointState = RestoreSuccess
+			c.state.CheckpointState = RestoreSuccess
 			c.publishStateOnce()
 
 		case <-stop:
