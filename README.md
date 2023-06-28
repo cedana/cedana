@@ -4,7 +4,7 @@ Build systems that bake realtime adaptiveness and elasticity using Cedana.
 
 Cedana-client serves as client code to the larger Cedana system. We leverages CRIU to provide checkpoint and restore functionality for most linux processes (including docker containers).
 
-We can monitor, migrate and automate checkpoints across a realtime network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website]cedana.ai for more information about our managed product. 
+We can monitor, migrate and automate checkpoints across a realtime network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website](https://cedana.ai) for more information about our managed product. 
 
 Some problems Cedana can help solve include: 
 - Cold-starts for containers/processes 
