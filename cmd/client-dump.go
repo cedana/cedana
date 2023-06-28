@@ -110,8 +110,10 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
+	c.process = state.ProcessInfo
+
 	// save state for serialization at this point
-	c.checkpointState.ClientState = *state
+	c.cedanaCheckpoint.ClientState = *state
 
 	// check network connections
 	var hasTCP bool
@@ -182,7 +184,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 				return "", err
 			}
 		}
-		c.checkpointState.CheckpointType = CheckpointTypePytorch
+		c.cedanaCheckpoint.CheckpointType = CheckpointTypePytorch
 		return checkpointFolderPath, nil
 	}
 
@@ -193,7 +195,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", err
 	}
 	c.copyOpenFiles(openFdsPath)
-	c.checkpointState.CheckpointType = CheckpointTypeCRIU
+	c.cedanaCheckpoint.CheckpointType = CheckpointTypeCRIU
 
 	return checkpointFolderPath, nil
 }
@@ -229,9 +231,9 @@ func (c *Client) postDump(dumpdir string) {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".zip"}, "")
 	}
 
-	c.checkpointState.CheckpointPath = compressedCheckpointPath
+	c.cedanaCheckpoint.CheckpointPath = compressedCheckpointPath
 	// sneak in a serialized cedanaCheckpoint object
-	err := c.checkpointState.SerializeToFolder(dumpdir)
+	err := c.cedanaCheckpoint.SerializeToFolder(dumpdir)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}

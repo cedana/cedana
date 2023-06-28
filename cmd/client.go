@@ -23,18 +23,23 @@ import (
 )
 
 type Client struct {
-	CRIU            *criu.Criu
-	nc              *nats.Conn
-	js              jetstream.JetStream
-	jsc             nats.JetStreamContext
-	logger          *zerolog.Logger
-	config          *utils.Config
-	channels        *CommandChannels
-	context         context.Context
-	process         ProcessInfo
-	jobId           string
-	selfId          string
-	checkpointState CedanaCheckpoint
+	CRIU *criu.Criu
+
+	nc  *nats.Conn
+	js  jetstream.JetStream
+	jsc nats.JetStreamContext
+
+	logger *zerolog.Logger
+	config *utils.Config
+
+	channels *CommandChannels
+	context  context.Context
+	process  ProcessInfo
+
+	jobId  string
+	selfId string
+
+	cedanaCheckpoint CedanaCheckpoint // only ever modified at checkpoint/restore time
 }
 
 // CedanaCheckpoint encapsulates a CRIU checkpoint and includes
@@ -43,9 +48,11 @@ type Client struct {
 type CedanaCheckpoint struct {
 	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
 	// either local or remote checkpoint path (url vs filesystem path)
+
 	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 	// process state at time of checkpoint
-	ClientState ClientState `json:"state" mapstructure:"state"`
+	ClientState     ClientState     `json:"state" mapstructure:"state"`
+	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
 func (cc *CedanaCheckpoint) SerializeToFolder(dir string) error {
@@ -53,7 +60,7 @@ func (cc *CedanaCheckpoint) SerializeToFolder(dir string) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, cc.CheckpointPath, "checkpoint_state.json")
+	path := filepath.Join(dir, "checkpoint_state.json")
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -69,17 +76,16 @@ type Logs struct {
 	Stderr string `mapstructure:"stderr"`
 }
 
-const (
-	NullState         = "NONE"
-	CheckpointSuccess = "CHECKPOINTED"
-	CheckpointFailed  = "CHECKPOINT_FAILED"
-	RestoreSuccess    = "RESTORED"
-	RestoreFailed     = "RESTORE_FAILED"
-)
-
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan ServerCommand
+}
+
+// TODO: Until there's a shared library, we'll have to duplicate this struct
+type ClientState struct {
+	ProcessInfo     ProcessInfo     `json:"process_info" mapstructure:"process_info"`
+	ClientInfo      ClientInfo      `json:"client_info" mapstructure:"client_info"`
+	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
 type ProcessInfo struct {
@@ -91,12 +97,6 @@ type ProcessInfo struct {
 	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
 	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
 	Status                  string                  `json:"status" mapstructure:"status"`
-}
-
-// TODO: Until there's a shared library, we'll have to duplicate this struct
-type ClientState struct {
-	ProcessInfo ProcessInfo `json:"process_info" mapstructure:"process_info"`
-	ClientInfo  ClientInfo  `json:"client_info" mapstructure:"client_info"`
 }
 
 type ClientInfo struct {
@@ -121,11 +121,19 @@ type ServerCommand struct {
 }
 
 type CheckpointType string
+type CheckpointState string
 
 const (
 	CheckpointTypeNone    CheckpointType = "none"
 	CheckpointTypeCRIU    CheckpointType = "criu"
 	CheckpointTypePytorch CheckpointType = "pytorch"
+)
+
+const (
+	CheckpointSuccess CheckpointState = "CHECKPOINTED"
+	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
+	RestoreSuccess    CheckpointState = "RESTORED"
+	RestoreFailed     CheckpointState = "RESTORE_FAILED"
 )
 
 var clientCommand = &cobra.Command{
@@ -164,39 +172,54 @@ func instantiateClient() (*Client, error) {
 	restore_command := make(chan ServerCommand)
 	channels := &CommandChannels{dump_command, restore_command}
 
+	return &Client{
+		CRIU:     c,
+		logger:   &logger,
+		config:   config,
+		channels: channels,
+		context:  context.Background(),
+	}, nil
+}
+
+// Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
+func (c *Client) AddDaemonLayer() error {
 	// get ids. TODO NR: uuid verification
 	// these should also be added to the config just in case
 	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
 	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
 	if !exists {
-		logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
+		c.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
 	}
+	c.selfId = selfId
+
 	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
 	if !exists {
-		logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
+		c.logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
 	}
+	c.jobId = jobId
 
 	authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
 	if !exists {
-		logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
+		c.logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
 	}
 
 	// connect to NATS
 	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
-	opts = setupConnOptions(opts, &logger)
+	opts = setupConnOptions(opts, c.logger)
 	opts = append(opts, nats.Token(authToken))
 
 	var nc *nats.Conn
+	var err error
 	for i := 0; i < 5; i++ {
-		nc, err = nats.Connect(config.Connection.NATSUrl, opts...)
+		nc, err = nats.Connect(c.config.Connection.NATSUrl, opts...)
 		if err == nil {
 			break
 		}
 		// reread config - I think there's a race that happens here with
 		// read server overrides and the NATS connection.
 		// TODO NR: should probably fix this
-		config, _ = utils.InitConfig()
-		logger.Warn().Msgf(
+		c.config, _ = utils.InitConfig()
+		c.logger.Warn().Msgf(
 			"NATS connection failed (attempt %d/%d) with error: %v. Retrying...",
 			i+1,
 			5,
@@ -206,32 +229,27 @@ func instantiateClient() (*Client, error) {
 	}
 
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not connect to NATS")
+		c.logger.Fatal().Err(err).Msg("Could not connect to NATS")
+		return err
 	}
+	c.nc = nc
 
 	// set up JetStream
 	js, err := jetstream.New(nc)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not set up JetStream management interface")
+		c.logger.Fatal().Err(err).Msg("Could not set up JetStream management interface")
+		return err
 	}
+	c.js = js
 
 	jsc, err := nc.JetStream()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not set up JetStream context")
+		c.logger.Fatal().Err(err).Msg("Could not set up JetStream context")
+		return err
 	}
+	c.jsc = jsc
 
-	return &Client{
-		CRIU:     c,
-		nc:       nc,
-		js:       js,
-		jsc:      jsc,
-		logger:   &logger,
-		config:   config,
-		channels: channels,
-		context:  context.Background(),
-		selfId:   selfId,
-		jobId:    jobId,
-	}, nil
+	return nil
 }
 
 func (c *Client) cleanupClient() error {
@@ -318,6 +336,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	}
 }
 
+// need to find a way to attach metadata here for checkpoint type?
 func (c *Client) publishCheckpointFile(filepath string) error {
 	// TODO: Bucket & KV needs to be set up as part of instantiation
 	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
@@ -375,6 +394,7 @@ func (c *Client) getState(pid int32) *ClientState {
 	}
 
 	var openFiles []process.OpenFilesStat
+	var writeOnlyFiles []string
 	var openConnections []net.ConnectionStat
 
 	if p != nil {
@@ -388,6 +408,7 @@ func (c *Client) getState(pid int32) *ClientState {
 		if err != nil {
 			return nil
 		}
+		writeOnlyFiles = c.WriteOnlyFds(openFiles)
 	}
 
 	memoryUsed, _ := p.MemoryPercent()
@@ -403,12 +424,13 @@ func (c *Client) getState(pid int32) *ClientState {
 	// ignore sending network for now, little complicated
 	data := &ClientState{
 		ProcessInfo: ProcessInfo{
-			PID:             pid,
-			OpenFds:         openFiles,
-			MemoryPercent:   memoryUsed,
-			IsRunning:       isRunning,
-			OpenConnections: openConnections,
-			Status:          strings.Join(status, ""),
+			PID:                    pid,
+			OpenFds:                openFiles,
+			OpenWriteOnlyFilePaths: writeOnlyFiles,
+			MemoryPercent:          memoryUsed,
+			IsRunning:              isRunning,
+			OpenConnections:        openConnections,
+			Status:                 strings.Join(status, ""),
 		},
 		ClientInfo: ClientInfo{
 			Id:              c.selfId,
@@ -418,6 +440,7 @@ func (c *Client) getState(pid int32) *ClientState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
+		CheckpointState: c.cedanaCheckpoint.CheckpointState,
 	}
 	return data
 }
@@ -430,7 +453,7 @@ func (c *Client) getState(pid int32) *ClientState {
 func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat) []string {
 	var paths []string
 	for _, fd := range openFds {
-		info, err := os.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", pid, fd.Fd))
+		info, err := os.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
 			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
@@ -449,7 +472,10 @@ func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat) []string {
 
 				// bitwise compare flags with os.O_RDWR
 				if int(flags)&os.O_RDWR != 0 || int(flags)&os.O_WRONLY != 0 {
-					paths = append(paths, fd.Path)
+					// gopsutil appends a (deleted) flag to the path sometimes, which I'm not fully sure of why yet
+					// TODO NR - figure this out
+					path := strings.Replace(fd.Path, " (deleted)", "", -1)
+					paths = append(paths, path)
 				}
 			}
 		}

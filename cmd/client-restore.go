@@ -13,8 +13,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var checkpoint string
-
 func init() {
 	clientCommand.AddCommand(restoreCmd)
 }
@@ -46,7 +44,7 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -54,8 +52,21 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err = utils.DecompressFolder(checkpointPath, tmpdir)
+	var zipFile string
+	if cmd != nil {
+		file, err := c.getCheckpointFile(cmd.CedanaCheckpoint.CheckpointPath)
+		if err != nil {
+			return nil, err
+		}
+		if file != nil {
+			zipFile = *file
+		}
+
+	} else {
+		zipFile = checkpointPath
+	}
+	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
+	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
@@ -94,52 +105,47 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
+	c.restoreFiles(&cedanaCheckpoint, tmpdir)
+
 	// TODO: network restore logic
 	// TODO: checksum val
+
+	err = os.Remove(zipFile)
+	if err != nil {
+		return nil, err
+	}
 
 	return &tmpdir, nil
 }
 
-// restore function for systems managed by a cedana orchestrator
-func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (*string, error) {
-	checkpoint := cmd.CedanaCheckpoint
-
-	var isShellJob bool
-	// check openFds at time of checkpoint
-	fds := checkpoint.ClientState.ProcessInfo.OpenFds
-	for _, f := range fds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-			break
+// restoreFiles looks at the files copied during checkpoint and copies them back to the
+// original path, creating folders along the way.
+func (c *Client) restoreFiles(cc *CedanaCheckpoint, dir string) {
+	_, err := os.Stat(filepath.Join(dir, "openFds"))
+	if err != nil {
+		return
+	}
+	err = filepath.Walk(filepath.Join(dir, "openFds"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
-	}
-	opts.ShellJob = proto.Bool(isShellJob)
+		for _, f := range cc.ClientState.ProcessInfo.OpenWriteOnlyFilePaths {
+			if info.Name() == filepath.Base(f) {
+				// copy file to path
+				err = os.MkdirAll(filepath.Dir(f), 0755)
+				if err != nil {
+					return err
+				}
 
-	file, err := c.getCheckpointFile(checkpoint.CheckpointPath)
+				utils.CopyFile(path, f)
+			}
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, err
+		c.logger.Fatal().Err(err).Msg("error copying files")
 	}
-
-	tmpdir := "cedana_restore"
-	// make temporary folder to decompress into
-	err = os.Mkdir(tmpdir, 0755)
-	if err != nil {
-		return nil, err
-	}
-
-	err = utils.UnzipFolder(*file, tmpdir)
-	if err != nil {
-		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
-	}
-
-	// clean up
-	err = os.Remove(*file)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tmpdir, nil
 }
 
 func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
@@ -151,32 +157,6 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 
 	return opts
 
-}
-
-// reach into DumpStorageDir and pick last modified folder
-func getLatestCheckpointDir(dumpdir string) (string, error) {
-	// potentially funny hack here instead is splitting the directory string
-	// and getting the date out of that
-	var dir string
-	var lastModifiedTime time.Time
-
-	folders, _ := os.ReadDir(dumpdir)
-	for _, folder := range folders {
-		fsinfo, err := folder.Info()
-		if err != nil {
-			return dir, err
-		}
-		if folder.IsDir() && fsinfo.ModTime().After(lastModifiedTime) {
-			// see https://github.com/golang/go/issues/32300 about names
-			// TL;DR - full name is only returned if the file is opened with the full name
-			// TODO: audit code to find places where absolute paths _aren't_ used
-			// hack: same as in prepareRestore, join folder.Name w/ dumpdir
-			dir = filepath.Join(dumpdir, folder.Name())
-			lastModifiedTime = fsinfo.ModTime()
-		}
-	}
-
-	return dir, nil
 }
 
 func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
@@ -228,7 +208,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 	if cmd != nil {
 		switch cmd.CedanaCheckpoint.CheckpointType {
 		case CheckpointTypeCRIU:
-			tmpdir, err := c.prepareManagedRestore(&opts, cmd)
+			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {
 				return err
 			}
@@ -246,7 +226,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 			}
 		}
 	} else if path != nil {
-		dir, err := c.prepareRestore(&opts, *path)
+		dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
 			return err
 		}

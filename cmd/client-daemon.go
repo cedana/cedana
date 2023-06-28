@@ -31,6 +31,11 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
 
+		err = c.AddDaemonLayer()
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
+		}
+
 		if pid == 0 {
 			pid, err = utils.GetPid(c.config.Client.ProcessName)
 			if err != nil {
@@ -106,8 +111,10 @@ LOOP:
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
+				c.cedanaCheckpoint.CheckpointState = CheckpointFailed
 				c.publishStateOnce()
 			}
+			c.cedanaCheckpoint.CheckpointState = CheckpointSuccess
 			c.publishStateOnce()
 
 		case cmd := <-c.channels.restore_command:
@@ -116,8 +123,10 @@ LOOP:
 			err := c.restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
+				c.cedanaCheckpoint.CheckpointState = RestoreFailed
 				c.publishStateOnce()
 			}
+			c.cedanaCheckpoint.CheckpointState = RestoreSuccess
 			c.publishStateOnce()
 
 		case <-stop:

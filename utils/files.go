@@ -27,10 +27,8 @@ func CopyFile(src, dstFolder string) error {
 		if !os.IsNotExist(err) {
 			return nil
 		}
-	} else {
-		return fmt.Errorf("File %s already exists.", dst)
 	}
-
+	// overwrites file if it already exists in dst
 	return copyFileContents(src, dst)
 }
 

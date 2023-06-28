@@ -1,8 +1,15 @@
 # Cedana
 
-## Fast and efficient checkpointing client for real-time and distributed systems
+Build systems that bake realtime adaptiveness and elasticity using Cedana.
 
-cedana leverages CRIU to provide checkpoint and restore functionality for most linux processes. With the addition of an orchestrator (leveraging the gRPC definitions), we can monitor and migrate checkpoints across a predefined network and compute configuration enabling ephemeral and hardware agnostic (depending on architecture) compute.
+Cedana-client serves as client code to the larger Cedana system. We leverages CRIU to provide checkpoint and restore functionality for most linux processes (including docker containers).
+
+We can monitor, migrate and automate checkpoints across a realtime network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website]cedana.ai for more information about our managed product. 
+
+Some problems Cedana can help solve include: 
+- Cold-starts for containers/processes 
+- Keeping a process running independent of hardware/network failure 
+- Managing multiprocess/multinode systems 
 
 ## Architecture 
 TODO
@@ -12,33 +19,8 @@ TODO
 ```go build```
 
 ## Usage
+To use Cedana in a standalone context, you can directly checkpoint and restore processes with: 
 
-At it's most basic level, `cedana` functions as an extension to [criu](https://criu.org/Main_Page) and leverages [go-criu](https://github.com/checkpoint-restore/go-criu) to do so.
-
-To checkpoint a running process:
-
-```./cedana client dump -p PROCESS -d DIR```
-
-To restore the same process:
-
-```./cedana client restore -d DIR```
-
-The added functionality offered by the `cedana` cli is to make it easier to add hooks to pre and post dump/restores. You can write bash scripts, stick them in the `scripts` folder, and modify `client_config` accordingly. 
-
-Checkpointing and restoring docker containers is still an experimental feature, but you can go about it with similar syntax: 
-
-```./cedana client docker dump -c CONTAINER_NAME -d DIR``` 
-
-Leaving the container running or not is toggle-able via config. To restore from the latest checkpoint: 
-
-```./cedana client docker restore -c CONTAINER_NAME```
-
-### Demo
-Check out cedana.notion.site for more info and a demo!
-
-
-
-## Note
-This is still a WIP! There's a lot to be done, so use with caution.
-
-## References
+```sh 
+cedana client dump/restore -p PID
+```
