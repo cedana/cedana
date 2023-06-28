@@ -57,6 +57,15 @@ func CompressFolder(folderPath, zipFilePath string) error {
 	return nil
 }
 
+func ZipFolder(folderPath, zipFilePath string) error {
+	cmd := exec.Command("zip", "-r", zipFilePath, folderPath)
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // The decompress function is broken - this is a hack for now
 func UnzipFolder(zipPath, destPath string) error {
 	dirName, err := getDirectoryName(zipPath)

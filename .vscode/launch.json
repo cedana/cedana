@@ -36,6 +36,23 @@
                 "CEDANA_AUTH_TOKEN": "test",
                 "CEDANA_LOG_LEVEL": "0",
             },
+        },
+        {
+            "name": "debug cedana restore",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "program": "${fileDirname}",
+            "console": "integratedTerminal",
+            "args": ["client", "restore", "${input:promptForCheckpoint}"],
+            "env": {
+                "CEDANA_ORCH_ID": "orch123",
+                "CEDANA_JOB_ID": "testjob",
+                "CEDANA_CLIENT_ID": "client123",
+                "CEDANA_AUTH_TOKEN": "test",
+                "CEDANA_LOG_LEVEL": "0",
+            },
         }
     ],
     "inputs": [
@@ -43,6 +60,12 @@
             "id": "promptForPID",
             "type": "promptString",
             "description": "enter PID",
+            "default": ""
+        },
+        {
+            "id": "promptForCheckpoint",
+            "type": "promptString",
+            "description": "enter path to checkpoint zipfile",
             "default": ""
         }
     ]
