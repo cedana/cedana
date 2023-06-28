@@ -44,7 +44,7 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -52,8 +52,21 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err = utils.UnzipFolder(checkpointPath, tmpdir)
+	var zipFile string
+	if cmd != nil {
+		file, err := c.getCheckpointFile(cmd.CedanaCheckpoint.CheckpointPath)
+		if err != nil {
+			return nil, err
+		}
+		if file != nil {
+			zipFile = *file
+		}
+
+	} else {
+		zipFile = checkpointPath
+	}
+	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
+	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
@@ -97,6 +110,11 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	// TODO: network restore logic
 	// TODO: checksum val
 
+	err = os.Remove(zipFile)
+	if err != nil {
+		return nil, err
+	}
+
 	return &tmpdir, nil
 }
 
@@ -128,48 +146,6 @@ func (c *Client) restoreFiles(cc *CedanaCheckpoint, dir string) {
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error copying files")
 	}
-}
-
-// restore function for systems managed by a cedana orchestrator
-func (c *Client) prepareManagedRestore(opts *rpc.CriuOpts, cmd *ServerCommand) (*string, error) {
-	checkpoint := cmd.CedanaCheckpoint
-
-	var isShellJob bool
-	// check openFds at time of checkpoint
-	fds := checkpoint.ClientState.ProcessInfo.OpenFds
-	for _, f := range fds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-			break
-		}
-	}
-	opts.ShellJob = proto.Bool(isShellJob)
-
-	file, err := c.getCheckpointFile(checkpoint.CheckpointPath)
-	if err != nil {
-		return nil, err
-	}
-
-	tmpdir := "cedana_restore"
-	// make temporary folder to decompress into
-	err = os.Mkdir(tmpdir, 0755)
-	if err != nil {
-		return nil, err
-	}
-
-	err = utils.UnzipFolder(*file, tmpdir)
-	if err != nil {
-		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
-	}
-
-	// clean up
-	err = os.Remove(*file)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tmpdir, nil
 }
 
 func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
@@ -232,7 +208,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 	if cmd != nil {
 		switch cmd.CedanaCheckpoint.CheckpointType {
 		case CheckpointTypeCRIU:
-			tmpdir, err := c.prepareManagedRestore(&opts, cmd)
+			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {
 				return err
 			}
@@ -250,7 +226,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 			}
 		}
 	} else if path != nil {
-		dir, err := c.prepareRestore(&opts, *path)
+		dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
 			return err
 		}
