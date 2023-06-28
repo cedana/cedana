@@ -54,7 +54,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 
 	var zipFile string
 	if cmd != nil {
-		file, err := c.getCheckpointFile(cmd.CedanaCheckpoint.CheckpointPath)
+		file, err := c.getCheckpointFile(cmd.CedanaState.CheckpointPath)
 		if err != nil {
 			return nil, err
 		}
@@ -85,8 +85,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 		return nil, err
 	}
 
-	var cedanaCheckpoint CedanaCheckpoint
-	err = json.Unmarshal(data, &cedanaCheckpoint)
+	var checkpointState CedanaState
+	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
 		return nil, err
@@ -95,7 +95,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 	// check open_fds. Useful for checking if process being restored
 	// is a pts slave and for determining how to handle files that were being written to.
 	// TODO: We should be looking at the images instead
-	open_fds := cedanaCheckpoint.ClientState.ProcessInfo.OpenFds
+	open_fds := checkpointState.ProcessInfo.OpenFds
 	var isShellJob bool
 	for _, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
@@ -105,7 +105,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	c.restoreFiles(&cedanaCheckpoint, tmpdir)
+	c.restoreFiles(&checkpointState, tmpdir)
 
 	// TODO: network restore logic
 	// TODO: checksum val
@@ -120,7 +120,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(cc *CedanaCheckpoint, dir string) {
+func (c *Client) restoreFiles(cc *CedanaState, dir string) {
 	_, err := os.Stat(filepath.Join(dir, "openFds"))
 	if err != nil {
 		return
@@ -129,7 +129,7 @@ func (c *Client) restoreFiles(cc *CedanaCheckpoint, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range cc.ClientState.ProcessInfo.OpenWriteOnlyFilePaths {
+		for _, f := range cc.ProcessInfo.OpenWriteOnlyFilePaths {
 			if info.Name() == filepath.Base(f) {
 				// copy file to path
 				err = os.MkdirAll(filepath.Dir(f), 0755)
@@ -206,7 +206,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 
 	// if we have a server command, otherwise default to base CRIU wrapper mode
 	if cmd != nil {
-		switch cmd.CedanaCheckpoint.CheckpointType {
+		switch cmd.CedanaState.CheckpointType {
 		case CheckpointTypeCRIU:
 			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {

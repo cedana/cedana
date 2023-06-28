@@ -113,7 +113,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	c.process = state.ProcessInfo
 
 	// save state for serialization at this point
-	c.cedanaCheckpoint.ClientState = *state
+	c.state = *state
 
 	// check network connections
 	var hasTCP bool
@@ -184,7 +184,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 				return "", err
 			}
 		}
-		c.cedanaCheckpoint.CheckpointType = CheckpointTypePytorch
+		c.state.CheckpointType = CheckpointTypePytorch
 		return checkpointFolderPath, nil
 	}
 
@@ -195,7 +195,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", err
 	}
 	c.copyOpenFiles(openFdsPath)
-	c.cedanaCheckpoint.CheckpointType = CheckpointTypeCRIU
+	c.state.CheckpointType = CheckpointTypeCRIU
 
 	return checkpointFolderPath, nil
 }
@@ -231,9 +231,9 @@ func (c *Client) postDump(dumpdir string) {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".zip"}, "")
 	}
 
-	c.cedanaCheckpoint.CheckpointPath = compressedCheckpointPath
+	c.state.CheckpointPath = compressedCheckpointPath
 	// sneak in a serialized cedanaCheckpoint object
-	err := c.cedanaCheckpoint.SerializeToFolder(dumpdir)
+	err := c.state.SerializeToFolder(dumpdir)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
@@ -305,6 +305,7 @@ func (c *Client) dump(dir string) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
+	c.state.CheckpointState = CheckpointSuccess
 	c.postDump(dumpdir)
 	c.cleanupClient()
 
