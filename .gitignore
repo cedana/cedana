@@ -5,3 +5,4 @@ cedana.pid
 
 dist/
 open_fds.json
+*.vhs

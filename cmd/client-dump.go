@@ -239,7 +239,7 @@ func (c *Client) postDump(dumpdir string) {
 	}
 
 	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
-	err = utils.CompressFolder(dumpdir, compressedCheckpointPath)
+	err = utils.ZipFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
