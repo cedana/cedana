@@ -19,59 +19,43 @@ func ZipFolder(folderPath, zipFilePath string) error {
 	return nil
 }
 
-func UnzipFolder(zipPath, destPath string) error {
-	r, err := zip.OpenReader(zipPath)
+func UnzipFolder(src, dest string) error {
+	r, err := zip.OpenReader(src)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	rootDir := strings.SplitN(r.File[0].Name, "/", 2)[0]
-
 	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
+		// Ignore directories, only process files
+		if !f.FileInfo().IsDir() {
+			fpath := filepath.Join(dest, filepath.Base(f.Name))
+			if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
+				return fmt.Errorf("%s: illegal file path", fpath)
+			}
 
-		defer rc.Close()
+			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+				return err
+			}
 
-		// Skip the root directory in the zip file
-		if !strings.HasPrefix(f.Name, rootDir+"/") {
-			continue
-		}
-
-		// Construct the path for the file to be extracted
-		relativePath := strings.TrimPrefix(f.Name, rootDir+"/")
-		targetPath := filepath.Join(destPath, relativePath)
-
-		// Create all necessary directories
-		if f.FileInfo().IsDir() {
-			// Make Folder
-			fmt.Printf("Creating Folder: %s\n", targetPath)
-			err := os.MkdirAll(targetPath, f.Mode())
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 			if err != nil {
 				return err
 			}
-		} else {
-			err := os.MkdirAll(filepath.Dir(targetPath), os.ModePerm)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("Creating File: %s\n", targetPath)
-			outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+
+			rc, err := f.Open()
 			if err != nil {
 				return err
 			}
 
 			_, err = io.Copy(outFile, rc)
+			outFile.Close()
+			rc.Close()
+
 			if err != nil {
 				return err
 			}
-
-			outFile.Close()
 		}
 	}
 	return nil
-
 }
