@@ -188,13 +188,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return checkpointFolderPath, nil
 	}
 
-	// create a separate openFiles folder for the process and add to criuFolderPath
-	// then copy open files to folder
-	openFdsPath := filepath.Join(checkpointFolderPath, "openFds")
-	if err := os.Mkdir(openFdsPath, 0o755); err != nil {
-		return "", err
-	}
-	c.copyOpenFiles(openFdsPath)
+	c.copyOpenFiles(checkpointFolderPath)
 	c.state.CheckpointType = CheckpointTypeCRIU
 
 	return checkpointFolderPath, nil

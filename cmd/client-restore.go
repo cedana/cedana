@@ -121,11 +121,11 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
 func (c *Client) restoreFiles(cc *CedanaState, dir string) {
-	_, err := os.Stat(filepath.Join(dir, "openFds"))
+	_, err := os.Stat(dir)
 	if err != nil {
 		return
 	}
-	err = filepath.Walk(filepath.Join(dir, "openFds"), func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
