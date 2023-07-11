@@ -36,16 +36,16 @@ func CopyFile(src, dstFolder string) error {
 // by dst. The file will be created if it does not already exist. If the
 // destination file exists, all it's contents will be replaced by the contents
 // of the source file.
-func copyFileContents(src, dst string) (err error) {
+func copyFileContents(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return
+		return err 
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return
+		return err 
 	}
 	defer func() {
 		cerr := out.Close()
@@ -55,8 +55,8 @@ func copyFileContents(src, dst string) (err error) {
 	}()
 
 	if _, err = io.Copy(out, in); err != nil {
-		return
+		return err 
 	}
 	err = out.Sync()
-	return
+	return err 
 }

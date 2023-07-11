@@ -129,7 +129,6 @@ func (c *Client) restoreFiles(cc *CedanaState, dir string) {
 		if err != nil {
 			return err
 		}
-		c.logger.Info().Msgf("checking dump directory for open write only files: %v", cc.ProcessInfo.OpenWriteOnlyFilePaths)
 		for _, f := range cc.ProcessInfo.OpenWriteOnlyFilePaths {
 			if info.Name() == filepath.Base(f) {
 				// copy file to path
@@ -139,7 +138,8 @@ func (c *Client) restoreFiles(cc *CedanaState, dir string) {
 				}
 
 				c.logger.Info().Msgf("copying file %s to %s", path, f)
-				err := utils.CopyFile(path, f)
+				// copyFile copies to folder, so grab folder path
+				err := utils.CopyFile(path, filepath.Dir(f))
 				if err != nil {
 					return err
 				}
