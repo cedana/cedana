@@ -18,7 +18,7 @@ func GetPid(process_name string) (int32, error) {
 
 	/**
 
-	The best metric here is the LEvenshtein distance (also called the edit distance). It measures the min # of
+	The best metric here is the Levenshtein distance (also called the edit distance). It measures the min # of
 	single character edits (insertions, deletions, subs) required to transform one into another.
 
 	It's particularily better than the other methods strutil offers w.r.t process discovery because it takes
