@@ -118,6 +118,11 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 	return &tmpdir, nil
 }
 
+func (c *Client) postRestore() {
+	// get PID of freshly restored process 
+
+}
+
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
 func (c *Client) restoreFiles(cc *CedanaState, dir string) {
