@@ -29,3 +29,6 @@ To use Cedana in a standalone context, you can directly checkpoint and restore p
 ```sh
 cedana client dump/restore -p PID
 ```
+
+## Contributing
+See CONTRIBUTING.md for guidelines. 
