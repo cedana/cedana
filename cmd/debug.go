@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/nravic/cedana/container"
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,7 +37,18 @@ var cfgCmd = &cobra.Command{
 	},
 }
 
+var containerCmd = &cobra.Command{
+	Use: "container",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id := args[0]
+		container.GetContainerFromDocker(id)
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(debugCmd)
 	debugCmd.AddCommand(cfgCmd)
+	debugCmd.AddCommand(containerCmd)
 }

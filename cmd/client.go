@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/checkpoint-restore/go-criu"
+	"github.com/checkpoint-restore/go-criu/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nravic/cedana/utils"

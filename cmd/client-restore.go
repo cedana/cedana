@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/checkpoint-restore/go-criu/rpc"
+	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
@@ -119,7 +119,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 }
 
 func (c *Client) postRestore() {
-	// get PID of freshly restored process 
+	// get PID of freshly restored process
 
 }
 
@@ -178,7 +178,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	err = c.CRIU.Restore(*opts, nfy)
+	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
