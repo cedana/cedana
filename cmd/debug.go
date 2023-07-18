@@ -41,7 +41,12 @@ var containerCmd = &cobra.Command{
 	Use: "container",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		container.GetContainerFromDocker(id)
+		dir := args[1]
+
+		err := container.Dump(dir, id)
+		if err != nil {
+			return err
+		}
 
 		return nil
 	},

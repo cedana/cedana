@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/nravic/cedana/utils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -29,6 +31,7 @@ import (
 type RuncContainer struct {
 	id                   string
 	root                 string
+	pid                  int
 	config               *configs.Config // standin for configs.Config from runc
 	cgroupManager        cgroups.Manager
 	initProcessStartTime uint64
@@ -68,7 +71,7 @@ type CriuOpts struct {
 
 // Pretty wacky function. "creates" a runc container from a docker container,
 // basically piecing it together from information we can parse out from the docker go lib
-func GetContainerFromDocker(containerID string) *RuncContainer {
+func getContainerFromDocker(containerID string) *RuncContainer {
 	l := utils.GetLogger()
 	cli, err := dockercli.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -94,21 +97,79 @@ func GetContainerFromDocker(containerID string) *RuncContainer {
 		Rootfs: container.GraphDriver.Data["MergedDir"], // does this work lol
 	}
 
+	// create a cgroup manager for cgroup freezing
+	// need c.Path, c.Parent & c.Name, c.Systemd. We can grab t his from proc/pid
+	var cgroupsConf *configs.Cgroup
+	if container.State.Pid != 0 {
+		cgroupPaths := []string{fmt.Sprintf("/proc/%d/cgroup", container.State.Pid)}
+		// assume we're in cgroup v2 unified
+		// for cgroup v2 unified hierarchy, there are no per-controller cgroup paths
+		cgroupsPaths, err := cgroups.ParseCgroupFile(cgroupPaths[0])
+		if err != nil {
+			l.Fatal().Err(err).Msg("could not parse cgroup paths")
+		}
+
+		path := cgroupsPaths[""]
+
+		// Splitting the string by / separator
+		cgroupParts := strings.Split(path, "/")
+
+		if len(cgroupParts) < 3 {
+			l.Fatal().Err(err).Msg("could not parse cgroup path")
+		}
+
+		name := cgroupParts[2]
+		parent := cgroupParts[1]
+		cgpath := "/" + parent + "/" + name
+
+		var isSystemd bool
+		if strings.Contains(path, ".slice") {
+			isSystemd = true
+		}
+
+		cgroupsConf = &configs.Cgroup{
+			Parent:  parent,
+			Name:    name,
+			Path:    cgpath,
+			Systemd: isSystemd,
+		}
+
+	}
+
+	cgroupManager, err := manager.New(cgroupsConf)
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not create cgroup manager")
+	}
+
 	// this is so stupid hahahaha
 	c := &RuncContainer{
-		id:           containerID,
-		root:         fmt.Sprintf("%s", container.Config.WorkingDir),
-		criuVersion:  criuVersion,
-		dockerConfig: &container,
-		config:       runcConf,
+		id:            containerID,
+		root:          fmt.Sprintf("%s", container.Config.WorkingDir),
+		criuVersion:   criuVersion,
+		cgroupManager: cgroupManager,
+		dockerConfig:  &container,
+		config:        runcConf,
+		pid:           container.State.Pid,
 	}
 
 	return c
 }
 
-func dump() {
+func Dump(dir string, containerID string) error {
 	// create a CriuOpts and pass into RuncCheckpoint
+	opts := &CriuOpts{
+		ImagesDirectory: dir,
+		LeaveRunning:    false,
+	}
 
+	c := getContainerFromDocker(containerID)
+
+	err := c.RuncCheckpoint(opts, c.pid)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
