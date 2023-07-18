@@ -209,7 +209,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		LogFile:         proto.String("dump.log"),
 		Root:            proto.String(c.config.Rootfs), // TODO NR:not sure if workingDir is analogous here
 		ManageCgroups:   proto.Bool(true),
-		NotifyScripts:   proto.Bool(true),
+		NotifyScripts:   proto.Bool(false),
 		Pid:             proto.Int32(int32(pid)),
 		ShellJob:        proto.Bool(criuOpts.ShellJob),
 		LeaveRunning:    proto.Bool(criuOpts.LeaveRunning),
