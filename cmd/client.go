@@ -19,8 +19,12 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
+
+// wrapper over filesystem, useful for mocking in tests
+var AppFs = afero.NewOsFs()
 
 type Client struct {
 	CRIU *criu.Criu
@@ -40,6 +44,9 @@ type Client struct {
 	selfId string
 
 	state CedanaState // only ever modified at checkpoint/restore time
+
+	// need to dependency inject a filesystem
+	fs *afero.Afero
 }
 
 // CedanaState encapsulates a CRIU checkpoint and includes
@@ -167,12 +174,16 @@ func instantiateClient() (*Client, error) {
 	restore_command := make(chan ServerCommand)
 	channels := &CommandChannels{dump_command, restore_command}
 
+	// set up filesystem wrapper
+	fs := &afero.Afero{Fs: AppFs}
+
 	return &Client{
 		CRIU:     c,
 		logger:   &logger,
 		config:   config,
 		channels: channels,
 		context:  context.Background(),
+		fs:       fs,
 	}, nil
 }
 
@@ -403,7 +414,7 @@ func (c *Client) getState(pid int32) *CedanaState {
 		if err != nil {
 			return nil
 		}
-		writeOnlyFiles = c.WriteOnlyFds(openFiles)
+		writeOnlyFiles = c.WriteOnlyFds(openFiles, pid)
 	}
 
 	memoryUsed, _ := p.MemoryPercent()
@@ -444,10 +455,10 @@ func (c *Client) getState(pid int32) *CedanaState {
 // weird race conditions (maybe).
 // To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
 // flags.
-func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat) []string {
+func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []string {
 	var paths []string
 	for _, fd := range openFds {
-		info, err := os.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
+		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
 			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
