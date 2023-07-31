@@ -37,6 +37,7 @@ var cfgCmd = &cobra.Command{
 	},
 }
 
+// experimental, testing out debugging the container checkpointing
 var containerCmd = &cobra.Command{
 	Use: "container",
 	RunE: func(cmd *cobra.Command, args []string) error {
