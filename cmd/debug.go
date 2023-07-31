@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/nravic/cedana/container"
 	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,7 +37,24 @@ var cfgCmd = &cobra.Command{
 	},
 }
 
+// experimental, testing out debugging the container checkpointing
+var containerCmd = &cobra.Command{
+	Use: "container",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id := args[0]
+		dir := args[1]
+
+		err := container.Dump(dir, id)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(debugCmd)
 	debugCmd.AddCommand(cfgCmd)
+	debugCmd.AddCommand(containerCmd)
 }
