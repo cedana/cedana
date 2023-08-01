@@ -7,7 +7,6 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
 checksum:
   name_template: 'checksums.txt'
 snapshot:
