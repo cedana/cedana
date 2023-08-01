@@ -296,10 +296,15 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	// FetchNoWait - only get latest
 	cons, err := c.js.AddConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverNewPolicy,
+		AckPolicy: jetstream.AckExplicitPolicy,
+		// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
+		// we get a message even if the consumer hasn't been created yet.
+
+		// this is especially useful for cases where we restore onto a fresh instance and there's some
+		// lag or delay in instantiation. Since it's tied to the self-id there's no chance a new instance
+		// gets the command of a destroyed/revoked one.
+		DeliverPolicy: jetstream.DeliverLastPerSubjectPolicy,
 		FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
 	})
 
