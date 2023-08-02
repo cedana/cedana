@@ -30,22 +30,29 @@ To use Cedana in a standalone context, you can directly checkpoint and restore p
 ```sh
 sudo cedana client dump -p PID -d DIR 
 ```
-Cedana needs `sudo` to properly walk through `/proc/pid`. Running `dump` creates a `process_name_datetime.zip` file in the directory specified with `-d`. If you haven't specified a directory, it creates one in a directory specified in `~/.cedana/cedana_config.json`.
+Cedana needs `sudo` to properly walk through `/proc/pid`. Running `dump` creates a `process_name_datetime.zip` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint by modifying the config at `~/.cedana/cedana_config.json`: 
+
+```json 
+"shared_storage": {
+    "dump_storage_dir": "/home/johnAdams/cedana_dumps/"
+  }
+```
+
+See the configuration section for more toggles. 
 
 ### Restoring 
 
 ```sh 
-sudo cedana client restore 
+sudo cedana client restore /path/to/zip
 ```
 
+
 ## Gotchas
-- If running locally, you need to wrap your process with `setsid` and redirect the output. So if you're running (and then trying to checkpoint) a jupyter notebook, you would run: 
+If running locally, you need to wrap your process with `setsid` and redirect the output. So if you're running (and then trying to checkpoint) a jupyter notebook, you would run: 
 ```sh
 setsid jupyter notebook --port 8000 < /dev/null &> output.log & 
 ```
 which redirects `stdin` to `/dev/null` and `stdout & stderr` to `output.log`. 
-
-- Container checkpointing is still experimental!
 
 
 ## Contributing

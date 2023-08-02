@@ -1,0 +1,23 @@
+{
+  "cedana_managed": true,
+  "client": {
+    "process_name": "my_process",
+    "leave_running": false,
+    "signal_process_pre_dump": true,
+    "signal_process_timeout": 30
+  },
+  "action_scripts": {
+    "pre_dump": "/path/to/pre_dump_script.sh",
+    "post_dump": "/path/to/post_dump_script.sh",
+    "pre_restore": "/path/to/pre_restore_script.sh"
+  },
+  "connection": {
+    "nats_url": "nats://my-nats-server:4222",
+    "nats_port": 4222,
+    "auth_token": "my_nats_auth_token"
+  },
+  "shared_storage": {
+    "mount_point": "/mnt/shared_storage",
+    "dump_storage_dir": "/mnt/shared_storage/dump"
+  }
+}

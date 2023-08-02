@@ -55,6 +55,13 @@ var dumpCommand = &cobra.Command{
 
 		c.process.PID = pid
 
+		// check that folder exists before proceeding
+		_, err = os.Stat(dir)
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("folder doesn't exist")
+			return err
+		}
+
 		err = c.dump(dir)
 		if err != nil {
 			return err
