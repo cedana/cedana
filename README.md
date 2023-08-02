@@ -22,14 +22,16 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 ## Usage
 
-To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. 
+To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. Configuration gets created at `~/.cedana/cedana_config.json` by calling `cedana bootstrap`.
 
 ### Checkpointing 
 
 ```sh
 sudo cedana client dump -p PID -d DIR 
 ```
-Cedana needs `sudo` to properly walk through `/proc/pid`. Running `dump` creates a `process_name_datetime.zip` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint by modifying the config at `~/.cedana/cedana_config.json`: 
+Cedana needs `sudo` to properly walk through `/proc/pid` and checkpoint the running process. 
+
+A successsful `dump` creates a `process_name_datetime.zip` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint in in the config: 
 
 ```json 
 "shared_storage": {
