@@ -16,7 +16,6 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 ## Architecture
 
-TODO
 
 ## Build
 
@@ -24,11 +23,30 @@ TODO
 
 ## Usage
 
-To use Cedana in a standalone context, you can directly checkpoint and restore processes with:
+To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. 
+
+### Checkpointing 
 
 ```sh
-cedana client dump/restore -p PID
+sudo cedana client dump -p PID -d DIR 
 ```
+Cedana needs `sudo` to properly walk through `/proc/pid`. Running `dump` creates a `process_name_datetime.zip` file in the directory specified with `-d`. If you haven't specified a directory, it creates one in a directory specified in `~/.cedana/cedana_config.json`.
+
+### Restoring 
+
+```sh 
+sudo cedana client restore 
+```
+
+## Gotchas
+- If running locally, you need to wrap your process with `setsid` and redirect the output. So if you're running (and then trying to checkpoint) a jupyter notebook, you would run: 
+```sh
+setsid jupyter notebook --port 8000 < /dev/null &> output.log & 
+```
+which redirects `stdin` to `/dev/null` and `stdout & stderr` to `output.log`. 
+
+- Container checkpointing is still experimental!
+
 
 ## Contributing
 See CONTRIBUTING.md for guidelines. 
