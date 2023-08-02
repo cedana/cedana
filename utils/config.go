@@ -75,9 +75,8 @@ func InitConfig() (*Config, error) {
 		if err != nil {
 			panic(fmt.Errorf("error creating config file: %v", err))
 		}
-		// Set some dummy defaults, that are only loaded if the file doesn't exist.
-		// If it does exist, this isn't called, so the dummy isn't an override.
-		viper.Set("client.process_name", "cedana")
+		// Set some dummy defaults, that are only loaded if the file doesn't exist
+		viper.Set("client.process_name", "someProcess")
 		viper.Set("client.leave_running", true)
 		viper.WriteConfig()
 	}

@@ -180,6 +180,8 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
+		// cleanup along the way
+		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
 	}
@@ -195,10 +197,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 
 func (c *Client) pyTorchRestore() error {
 	return nil
-}
-
-func (c *Client) CUDARestore() {
-
 }
 
 func (c *Client) restore(cmd *ServerCommand, path *string) error {
@@ -235,7 +233,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 				return err
 			}
 		}
-	} else if path != nil {
+	} else {
 		dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
 			return err
