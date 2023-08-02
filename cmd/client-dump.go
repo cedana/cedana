@@ -330,7 +330,12 @@ func (c *Client) dump(dir string) error {
 	if !c.process.AttachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)
 		if err != nil {
-			// TODO - better error handling
+			// check for sudo error
+			if strings.Contains(err.Error(), "errno 0") {
+				c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+				return err
+			}
+
 			c.logger.Warn().Msgf("error dumping process: %v", err)
 			return err
 		}
