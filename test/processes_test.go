@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/nravic/cedana/utils"
@@ -12,6 +13,7 @@ func TestGetProcessSimilarity(t *testing.T) {
 	// wondering how useful it might be to use afero here instead, TODO NR
 	t.Setenv("HOST_PROC", "testdata/proc")
 	processes, err := ps.Processes()
+	fmt.Printf("Processes: %v\n", processes)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
