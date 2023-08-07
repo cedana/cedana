@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
@@ -39,12 +38,7 @@ func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, e
 	**/
 	lv := metrics.NewLevenshtein()
 
-	// if the process has anything to do with docker, chances are it's using tini. give the search a fighting chance
-	// by appending tini & docker to the string
-
-	if strings.Contains(processName, "docker") {
-		processName = "tini docker " + processName
-	}
+	// we don't do process discovery for containers - instead we checkpoint using the created container ID
 
 	for _, p := range processes {
 		exec, err := p.Cmdline()

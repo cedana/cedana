@@ -155,6 +155,7 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 	return c
 }
 
+// Gotta figure out containerID discovery - TODO NR
 func Dump(dir string, containerID string) error {
 	// create a CriuOpts and pass into RuncCheckpoint
 	opts := &CriuOpts{

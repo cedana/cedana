@@ -16,11 +16,10 @@ func TestGetProcessSimilarity(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	
-	t.Run("docker match", func(t *testing.T) {
+	t.Run("python process", func(t *testing.T) {
 		var expectedPid int32
-		processName := "docker run --detach jupyter/scipy-notebook"
-		expectedPid = 1222666
+		processName := "jupyter notebook &"
+		expectedPid = 1266999
 
 		pid, err := utils.GetProcessSimilarity(processName, processes)
 		if err != nil {
