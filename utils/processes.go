@@ -8,11 +8,22 @@ import (
 	ps "github.com/shirou/gopsutil/v3/process"
 )
 
-func GetPid(process_name string) (int32, error) {
+func GetPid(processName string) (int32, error) {
 	processList, err := ps.Processes()
 	if err != nil {
 		return 0, err
 	}
+
+	pid, err := GetProcessSimilarity(processName, processList)
+	if err != nil {
+		return 0, err
+	}
+
+	return pid, nil
+
+}
+
+func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, error) {
 	similarity := 0.0
 	var proc *ps.Process
 
@@ -27,14 +38,16 @@ func GetPid(process_name string) (int32, error) {
 	**/
 	lv := metrics.NewLevenshtein()
 
-	for _, p := range processList {
+	// we don't do process discovery for containers - instead we checkpoint using the created container ID
+
+	for _, p := range processes {
 		exec, err := p.Cmdline()
 		if err != nil {
 			continue
 		}
 
 		// compute similarity score
-		sim := strutil.Similarity(exec, process_name, lv)
+		sim := strutil.Similarity(exec, processName, lv)
 		if sim > similarity {
 			similarity = sim
 			proc = p
@@ -43,7 +56,7 @@ func GetPid(process_name string) (int32, error) {
 
 	if proc != nil {
 		exec, _ := proc.Cmdline()
-		fmt.Printf("found process PID %d and exe %s associated with name %s\n", proc.Pid, exec, process_name)
+		fmt.Printf("found process PID %d and exe %s associated with name %s\n", proc.Pid, exec, processName)
 		return proc.Pid, nil
 	}
 

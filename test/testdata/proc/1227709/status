@@ -1,0 +1,57 @@
+Name:	server
+Umask:	0022
+State:	S (sleeping)
+Tgid:	1227709
+Ngid:	0
+Pid:	1227709
+PPid:	1218922
+TracerPid:	0
+Uid:	502	502	502	502
+Gid:	502	502	502	502
+FDSize:	256
+Groups:	4 27 44 50 502 
+NStgid:	1227709
+NSpid:	1227709
+NSpgid:	1227709
+NSsid:	1218922
+VmPeak:	 5328916 kB
+VmSize:	 5328916 kB
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmHWM:	 3745536 kB
+VmRSS:	 3745536 kB
+RssAnon:	    4864 kB
+RssFile:	 3740672 kB
+RssShmem:	       0 kB
+VmData:	 1586196 kB
+VmStk:	     132 kB
+VmExe:	     824 kB
+VmLib:	    3476 kB
+VmPTE:	    7448 kB
+VmSwap:	       0 kB
+HugetlbPages:	       0 kB
+CoreDumping:	0
+THP_enabled:	1
+Threads:	16
+SigQ:	0/59938
+SigPnd:	0000000000000000
+ShdPnd:	0000000000000000
+SigBlk:	0000000000000000
+SigIgn:	0000000200001000
+SigCgt:	0000000100000000
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	2
+Seccomp_filters:	1
+Speculation_Store_Bypass:	vulnerable
+SpeculationIndirectBranch:	always enabled
+Cpus_allowed:	ffff
+Cpus_allowed_list:	0-15
+Mems_allowed:	1
+Mems_allowed_list:	0
+voluntary_ctxt_switches:	6
+nonvoluntary_ctxt_switches:	0
