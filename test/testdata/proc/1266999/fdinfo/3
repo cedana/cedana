@@ -1,7 +1,0 @@
-pos:	0
-flags:	02000002
-mnt_id:	14
-ino:	1040
-tfd:        4 events:       19 data:                4  pos:0 ino:137b1f7 sdev:8
-tfd:        7 events:       19 data:                7  pos:0 ino:1379b2a sdev:8
-tfd:        8 events:       19 data:     7f4100000008  pos:0 ino:13793a8 sdev:8
