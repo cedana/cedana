@@ -44,7 +44,7 @@ func BenchmarkDump(b *testing.B) {
 
 	c, err := instantiateClient()
 
-	c.logger.Log().Msgf("proto data: %+v", profile)
+	c.logger.Log().Msgf("proto data: %+v", profile.DurationNanos)
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -59,7 +59,7 @@ func BenchmarkDump(b *testing.B) {
 		b.Errorf("Error in os.WriteFile(): %v", err)
 	}
 
-	c.process.PID = 595666
+	c.process.PID = 602376
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 

@@ -4,6 +4,7 @@ cedana-daemon.log
 cedana.pid 
 cmd.test
 
+benchmarking/results
 dist/
 open_fds.json
 *.vhs

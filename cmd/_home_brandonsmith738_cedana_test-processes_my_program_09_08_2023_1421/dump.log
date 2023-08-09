@@ -1,0 +1,51 @@
+(00.000054) Version: 3.16.1 (gitid 0)
+(00.000142) Running on DESKTOP-P5VIFHP Linux 5.15.90.1-microsoft-standard-WSL2 #1 SMP Fri Jan 27 02:56:13 UTC 2023 x86_64
+(00.000424) Warn  (criu/kerndat.c:831): Can't load /run/criu.kdat
+(00.001240) sockets: Probing sock diag modules
+(00.005024) sockets: Done probing
+(00.038382) Error (criu/util.c:635): exited, status=4
+(00.056353) Error (criu/util.c:635): exited, status=4
+(00.056627) Pagemap provides flags only
+(00.058354) Found anon-shmem device at 1
+(00.059097) Reset 602791's dirty tracking
+(00.059125) Dirty tracking support is OFF
+(00.059129) Zero page detection failed, optimization turns off.
+(00.060320) Found task size of 7ffffffff000
+(00.133909) Warn  (criu/net.c:3442): Unable to get tun network namespace
+(00.135295) Warn  (criu/sk-unix.c:224): unix: Unable to open a socket file: Operation not permitted
+(00.154306) Error (criu/net.c:3726): Unable create a network namespace: Operation not permitted
+(00.155052) Warn  (criu/net.c:3782): NSID isn't reported for network links
+(00.155755) uffd: Lazy pages are not available: Operation not permitted
+(00.155819) Lazy pages are not permited
+(00.159186) vdso: Parsing at 7ffd701dc000 7ffd701de000
+(00.159200) vdso: PT_LOAD p_vaddr: 0
+(00.159558) vdso: DT_HASH: 120
+(00.159567) vdso: DT_STRTAB: 2d8
+(00.159571) vdso: DT_SYMTAB: 1b8
+(00.159574) vdso: DT_STRSZ: 72
+(00.159577) vdso: DT_SYMENT: 18
+(00.159580) vdso: nbucket 3 nchain c bucket 7ffd701dc128 chain 7ffd701dc134
+(00.159890) vdso: rt [vdso] 7ffd701dc000-7ffd701de000 [vvar] 7ffd701d8000-7ffd701dc000
+(00.185196) vdso: Parsing at 7fcd1b373000 7fcd1b375000
+(00.185216) vdso: PT_LOAD p_vaddr: 0
+(00.185220) vdso: DT_HASH: b4
+(00.185224) vdso: DT_STRTAB: 1f0
+(00.185227) vdso: DT_SYMTAB: 140
+(00.185230) vdso: DT_STRSZ: c0
+(00.185233) vdso: DT_SYMENT: 10
+(00.185236) vdso: nbucket 3 nchain b bucket 7fcd1b3730bc chain 7fcd1b3730c8
+(00.185241) vdso: compat [vdso] 7ffd701e0000-7ffd701e2000 [vvar] 7ffd701dc000-7ffd701e0000
+(00.195233) Warn  (criu/net.c:3442): Unable to get socket network namespace
+(00.195373) cpu: x86_family 6 x86_vendor_id GenuineIntel x86_model_id 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+(00.195394) cpu: fpu: xfeatures_mask 0xe5 xsave_size 2688 xsave_size_max 2688 xsaves_size 2432
+(00.195409) cpu: fpu: x87 floating point registers     xstate_offsets      0 / 0      xstate_sizes    160 / 160   
+(00.195415) cpu: fpu: AVX registers                    xstate_offsets    576 / 576    xstate_sizes    256 / 256   
+(00.195418) cpu: fpu: AVX-512 opmask                   xstate_offsets   1088 / 832    xstate_sizes     64 / 64    
+(00.195422) cpu: fpu: AVX-512 Hi256                    xstate_offsets   1152 / 896    xstate_sizes    512 / 512   
+(00.195426) cpu: fpu: AVX-512 ZMM_Hi256                xstate_offsets   1664 / 1408   xstate_sizes   1024 / 1024  
+(00.213611) Error (criu/net.c:1246): Unexpected error: -1(Operation not permitted)
+(00.223993) Error (criu/kerndat.c:1166): Unable create a network namespace: Operation not permitted
+(00.224237) Error (criu/util.c:1339): Can't wait or bad status: errno=0, status=256
+(00.224254) Error (criu/kerndat.c:1359): kerndat_has_nftables_concat failed when initializing kerndat.
+(00.224706) Found mmap_min_addr 0x10000
+(00.224793) files stat: fs/nr_open 1048576
