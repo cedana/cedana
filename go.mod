@@ -74,6 +74,7 @@ require (
 require (
 	github.com/adrg/strutil v0.3.0
 	github.com/golang-jwt/jwt/v4 v4.4.3
+	github.com/google/uuid v1.3.0
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/rs/zerolog v1.28.0
 	github.com/shirou/gopsutil/v3 v3.23.7

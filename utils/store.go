@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -13,6 +16,15 @@ import (
 type Store interface {
 	GetCheckpoint(string) (*string, error) // returns filepath to downloaded chekcpoint
 	PushCheckpoint(filepath string) error
+	ListCheckpoints() (*[]CheckpointMeta, error) // fix
+}
+
+type CheckpointMeta struct {
+	ID      string
+	Name    string
+	Bucket  string
+	ModTime time.Time
+	Size    uint64
 }
 
 // NATS stores are tied to a job id
@@ -64,6 +76,30 @@ func (ns *NATSStore) PushCheckpoint(filepath string) error {
 	return nil
 }
 
+func (ns *NATSStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+	store, err := ns.jsc.ObjectStore(strings.Join([]string{"CEDANA", ns.jobID, "checkpoints"}, "_"))
+	if err != nil {
+		return nil, err
+	}
+
+	var checkpoints []CheckpointMeta
+	l, err := store.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, metadata := range l {
+		checkpoints = append(checkpoints, CheckpointMeta{
+			ID:      metadata.NUID,
+			Name:    metadata.Name,
+			Bucket:  metadata.Bucket,
+			ModTime: metadata.ModTime,
+			Size:    metadata.Size,
+		})
+	}
+
+	return &checkpoints, nil
+}
+
 type S3Store struct {
 	logger *zerolog.Logger
 }
@@ -74,6 +110,59 @@ func (s *S3Store) GetCheckpoint() (*string, error) {
 
 func (s *S3Store) PushCheckpoint(filepath string) error {
 	return nil
+}
+
+// For pushing and pulling from a cedana managed endpoint
+type CedanaStore struct {
+	logger *zerolog.Logger
+	cfg    *Config
+}
+
+// ID to GetCheckpoint gets populated from the data sent over as part of a
+// ServerCommand
+func (cs *CedanaStore) GetCheckpoint(id string) (*string, error) {
+	return nil, nil
+}
+
+func (cs *CedanaStore) PushCheckpoint(filepath string) error {
+	cid := uuid.New().String()
+
+	file, err := os.Open(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	url := cs.cfg.Connection.CedanaUrl + "/" + "checkpoint" + "/" + cid
+
+	req, err := http.NewRequest("PUT", url, file)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Transfer-Encoding", "chunked")
+	req.Header.Set("Authorization", "Bearer "+cs.cfg.Connection.CedanaAuthToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+
+	return nil, nil
+}
+
+// split file into chunks and send
+func (cs *CedanaStore) multipartUpload() {
+
 }
 
 type MockStore struct {
@@ -89,4 +178,8 @@ func (ms *MockStore) GetCheckpoint() (*string, error) {
 func (ms *MockStore) PushCheckpoint(filepath string) error {
 	// pushes a mock checkpoint to the local filesystem
 	return nil
+}
+
+func (ms *MockStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+	return nil, nil
 }

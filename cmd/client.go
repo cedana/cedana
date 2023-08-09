@@ -180,11 +180,6 @@ func instantiateClient() (*Client, error) {
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
 
-	// how do we create a store? what information are we looking at?
-	// if self-serve = true?
-	// I think we need to switch cedanaManaged to self serve and then populate it
-	// accordingly from cedana-cli
-
 	return &Client{
 		CRIU:     c,
 		logger:   &logger,
