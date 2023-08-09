@@ -1,0 +1,95 @@
+File: cmd.test
+Type: cpu
+Time: Aug 8, 2023 at 3:40pm (CDT)
+Duration: 2s, Total samples = 130ms ( 6.51%)
+Showing nodes accounting for 130ms, 100% of 130ms total
+      flat  flat%   sum%        cum   cum%
+      50ms 38.46% 38.46%       50ms 38.46%  runtime/internal/syscall.Syscall6
+      20ms 15.38% 53.85%       20ms 15.38%  runtime.procyield
+      10ms  7.69% 61.54%       10ms  7.69%  regexp/syntax.(*Regexp).Simplify
+      10ms  7.69% 69.23%       10ms  7.69%  runtime.casgstatus
+      10ms  7.69% 76.92%       10ms  7.69%  runtime.freeSomeWbufs
+      10ms  7.69% 84.62%       30ms 23.08%  runtime.mcall
+      10ms  7.69% 92.31%       10ms  7.69%  runtime.rtsigprocmask
+      10ms  7.69%   100%       10ms  7.69%  runtime.unlock2
+         0     0%   100%       20ms 15.38%  bufio.(*Reader).ReadSlice
+         0     0%   100%       20ms 15.38%  bufio.(*Reader).ReadString
+         0     0%   100%       20ms 15.38%  bufio.(*Reader).collectFragments
+         0     0%   100%       20ms 15.38%  bufio.(*Reader).fill
+         0     0%   100%       10ms  7.69%  github.com/checkpoint-restore/go-criu/v5.(*Criu).Dump (inline)
+         0     0%   100%       10ms  7.69%  github.com/checkpoint-restore/go-criu/v5.(*Criu).Prepare
+         0     0%   100%       10ms  7.69%  github.com/checkpoint-restore/go-criu/v5.(*Criu).doSwrk
+         0     0%   100%       10ms  7.69%  github.com/checkpoint-restore/go-criu/v5.(*Criu).doSwrkWithResp
+         0     0%   100%       60ms 46.15%  github.com/nravic/cedana/cmd.(*Client).dump
+         0     0%   100%       20ms 15.38%  github.com/nravic/cedana/cmd.(*Client).postDump
+         0     0%   100%       30ms 23.08%  github.com/nravic/cedana/cmd.(*Client).prepareDump
+         0     0%   100%       70ms 53.85%  github.com/nravic/cedana/cmd.BenchmarkDump
+         0     0%   100%       10ms  7.69%  github.com/nravic/cedana/cmd.instantiateClient
+         0     0%   100%       20ms 15.38%  github.com/nravic/cedana/utils.GetProcessName
+         0     0%   100%       10ms  7.69%  github.com/nravic/cedana/utils.InitConfig
+         0     0%   100%       10ms  7.69%  github.com/nravic/cedana/utils.LoadOverrides
+         0     0%   100%       20ms 15.38%  github.com/nravic/cedana/utils.ZipFolder
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/internal/common.BootTimeWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/internal/common.ReadLines (inline)
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/internal/common.ReadLinesOffsetN
+         0     0%   100%       10ms  7.69%  github.com/shirou/gopsutil/v3/internal/common.VirtualizationWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.(*Process).CreateTimeWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.(*Process).createTimeWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.(*Process).fillFromStatWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.(*Process).fillFromTIDStatWithContext
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.NewProcess (inline)
+         0     0%   100%       20ms 15.38%  github.com/shirou/gopsutil/v3/process.NewProcessWithContext
+         0     0%   100%       20ms 15.38%  internal/poll.(*FD).Read
+         0     0%   100%       20ms 15.38%  internal/poll.ignoringEINTRIO (inline)
+         0     0%   100%       20ms 15.38%  os.(*File).Read
+         0     0%   100%       20ms 15.38%  os.(*File).read (inline)
+         0     0%   100%       10ms  7.69%  os.OpenFile
+         0     0%   100%       10ms  7.69%  os.StartProcess
+         0     0%   100%       10ms  7.69%  os.Stat
+         0     0%   100%       10ms  7.69%  os.ignoringEINTR (inline)
+         0     0%   100%       10ms  7.69%  os.openFileNolog
+         0     0%   100%       10ms  7.69%  os.startProcess
+         0     0%   100%       10ms  7.69%  os.statNolog
+         0     0%   100%       10ms  7.69%  os.statNolog.func1 (inline)
+         0     0%   100%       10ms  7.69%  os/exec.(*Cmd).Run
+         0     0%   100%       10ms  7.69%  os/exec.(*Cmd).Start
+         0     0%   100%       10ms  7.69%  os/exec.Command
+         0     0%   100%       10ms  7.69%  os/exec.LookPath
+         0     0%   100%       10ms  7.69%  os/exec.findExecutable
+         0     0%   100%       10ms  7.69%  regexp.Compile (inline)
+         0     0%   100%       10ms  7.69%  regexp.MustCompile
+         0     0%   100%       10ms  7.69%  regexp.compile
+         0     0%   100%       10ms  7.69%  runtime.bgsweep
+         0     0%   100%       10ms  7.69%  runtime.findRunnable
+         0     0%   100%       20ms 15.38%  runtime.gcBgMarkWorker
+         0     0%   100%       20ms 15.38%  runtime.gcBgMarkWorker.func2
+         0     0%   100%       20ms 15.38%  runtime.gcDrain
+         0     0%   100%       20ms 15.38%  runtime.goschedImpl
+         0     0%   100%       20ms 15.38%  runtime.gosched_m
+         0     0%   100%       20ms 15.38%  runtime.markroot
+         0     0%   100%       20ms 15.38%  runtime.markroot.func1
+         0     0%   100%       10ms  7.69%  runtime.msigrestore (inline)
+         0     0%   100%       10ms  7.69%  runtime.schedule
+         0     0%   100%       10ms  7.69%  runtime.sigprocmask (inline)
+         0     0%   100%       20ms 15.38%  runtime.suspendG
+         0     0%   100%       20ms 15.38%  runtime.systemstack
+         0     0%   100%       10ms  7.69%  runtime.unlock (inline)
+         0     0%   100%       10ms  7.69%  runtime.unlockWithRank (inline)
+         0     0%   100%       10ms  7.69%  syscall.Open (inline)
+         0     0%   100%       50ms 38.46%  syscall.RawSyscall6
+         0     0%   100%       20ms 15.38%  syscall.Read (inline)
+         0     0%   100%       10ms  7.69%  syscall.Socketpair
+         0     0%   100%       10ms  7.69%  syscall.StartProcess (inline)
+         0     0%   100%       10ms  7.69%  syscall.Stat (inline)
+         0     0%   100%       20ms 15.38%  syscall.Syscall
+         0     0%   100%       20ms 15.38%  syscall.Syscall6
+         0     0%   100%       10ms  7.69%  syscall.forkAndExecInChild
+         0     0%   100%       10ms  7.69%  syscall.forkExec
+         0     0%   100%       10ms  7.69%  syscall.fstatat
+         0     0%   100%       10ms  7.69%  syscall.openat
+         0     0%   100%       20ms 15.38%  syscall.read
+         0     0%   100%       10ms  7.69%  syscall.runtime_AfterFork
+         0     0%   100%       10ms  7.69%  syscall.socketpair
+         0     0%   100%       40ms 30.77%  testing.(*B).launch
+         0     0%   100%       30ms 23.08%  testing.(*B).run1.func1
+         0     0%   100%       70ms 53.85%  testing.(*B).runN

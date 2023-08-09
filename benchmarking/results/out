@@ -1,0 +1,18 @@
+testing: open /home/brandonsmith738/cedana/cedana/benchmarking/results/benchmarking/results/cpu.prof.gz: no such file or directory
+No server overrides found..
+[90m1:57PM[0m [1m???[0m proto data: {state:{NoUnkeyedLiterals:{} DoNotCompare:[] DoNotCopy:[] atomicMessageInfo:0xc00017ca80} sizeCache:0 unknownFields:[] SampleType:[] Sample:[] Mapping:[] Location:[] Function:[] StringTable:[] DropFrames:0 KeepFrames:0 TimeNanos:0 DurationNanos:0 PeriodType:<nil> Period:0 Comment:[] DefaultSampleType:0}
+No match found.
+[90m1:57PM[0m [32mINF[0m beginning dump of pid 595666
+[90m1:57PM[0m [33mDBG[0m executing predump script: 
+[90m1:57PM[0m [33mDBG[0m executing postdump script: 
+[90m1:57PM[0m [32mINF[0m compressing checkpoint...
+[90m1:57PM[0m [32mINF[0m compressing checkpoint to _home_brandonsmith738_cedana_test-processes_my_program_09_08_2023_1357.zip
+[90m1:57PM[0m [32mINF[0m cleaning up client
+[90m1:57PM[0m [33mDBG[0m dump took 242.746861ms
+--- FAIL: BenchmarkDump
+    client-dump_test.go:59: Error in os.WriteFile(): open benchmarking/results/out.txt: no such file or directory
+FAIL
+testing: open /home/brandonsmith738/cedana/cedana/benchmarking/results/benchmarking/results/memory.prof.gz: no such file or directory
+exit status 2
+FAIL	github.com/nravic/cedana/cmd	0.538s
+FAIL
