@@ -6,6 +6,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
+	"github.com/spf13/afero"
 )
 
 // Abstraction for storing and retreiving checkpoints
@@ -64,6 +65,7 @@ func (ns *NATSStore) PushCheckpoint(filepath string) error {
 }
 
 type S3Store struct {
+	logger *zerolog.Logger
 }
 
 func (s *S3Store) GetCheckpoint() (*string, error) {
@@ -71,5 +73,20 @@ func (s *S3Store) GetCheckpoint() (*string, error) {
 }
 
 func (s *S3Store) PushCheckpoint(filepath string) error {
+	return nil
+}
+
+type MockStore struct {
+	fs     *afero.Afero // we can use an in-memory store for testing
+	logger *zerolog.Logger
+}
+
+func (ms *MockStore) GetCheckpoint() (*string, error) {
+	// gets a mock checkpoint from the local filesystem - useful for testing
+	return nil, nil
+}
+
+func (ms *MockStore) PushCheckpoint(filepath string) error {
+	// pushes a mock checkpoint to the local filesystem
 	return nil
 }
