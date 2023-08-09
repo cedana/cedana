@@ -6,6 +6,8 @@ cmd.test
 cmd/_home*
 
 benchmarking/results
+benchmarking/pids
+benchmarking/processes
 dist/
 open_fds.json
 *.vhs

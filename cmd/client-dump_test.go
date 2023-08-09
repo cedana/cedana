@@ -22,6 +22,7 @@ func BenchmarkDump(b *testing.B) {
 	}
 
 	for {
+		// TODO BS Need to add time out here
 		filename, err := LookForPid()
 		if err != nil {
 			b.Errorf("Error in LookForPid(): %v", err)
