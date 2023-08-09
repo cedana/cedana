@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -19,7 +21,35 @@ func BenchmarkDump(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	c.process.PID = 659104
+	for {
+		filename, err := LookForPid()
+		if err != nil {
+			b.Errorf("Error in LookForPid(): %v", err)
+		}
+		if filename != "" {
+			// Open the file for reading
+			file, err := os.Open("pid_file.bin")
+			if err != nil {
+				fmt.Println("Error opening file:", err)
+				return
+			}
+			defer file.Close()
+
+			// Read the bytes from the file
+			var pidBytes [8]byte // Assuming int64 is 8 bytes
+			_, err = file.Read(pidBytes[:])
+			if err != nil {
+				fmt.Println("Error reading from file:", err)
+				return
+			}
+
+			// Convert bytes to int64
+			pidInt32 := int32(binary.LittleEndian.Uint64(pidBytes[:]))
+			c.process.PID = pidInt32
+			break
+		}
+	}
+
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
@@ -39,6 +69,34 @@ func TestDump(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error in cmd.Run(): %v", err)
 	}
+}
+
+func LookForPid() (string, error) {
+	dirPath := "/path/to/your/directory"
+
+	// Open the directory
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		fmt.Println("Error opening directory:", err)
+		return "", err
+	}
+	defer dir.Close()
+
+	// Read the directory contents
+	fileInfos, err := dir.Readdir(-1)
+	if err != nil {
+		fmt.Println("Error reading directory contents:", err)
+		return "", err
+	}
+
+	// Iterate over the files
+	for _, fileInfo := range fileInfos {
+		if fileInfo.Mode().IsRegular() {
+			return fileInfo.Name(), err
+		}
+	}
+	err = fmt.Errorf("No files found in directory")
+	return "", err
 }
 
 func PostDumpCleanup() {
