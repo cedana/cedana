@@ -1,0 +1,34 @@
+No server overrides found..
+[90m3:18PM[0m [32mINF[0m beginning dump of pid 614964
+[90m3:18PM[0m [33mDBG[0m executing predump script: 
+[90m3:18PM[0m [33mDBG[0m executing postdump script: 
+[90m3:18PM[0m [32mINF[0m compressing checkpoint...
+[90m3:18PM[0m [32mINF[0m compressing checkpoint to _home_brandonsmith738_cedana_test-processes_my_program_09_08_2023_1518.zip
+[90m3:18PM[0m [32mINF[0m cleaning up client
+[90m3:18PM[0m [33mDBG[0m dump took 1.046123377s
+panic: runtime error: invalid memory address or nil pointer dereference
+	panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x68 pc=0x5c4c74]
+
+goroutine 34 [running]:
+compress/gzip.(*Reader).Close(0x0?)
+	/usr/local/go/src/compress/gzip/gunzip.go:290 +0x14
+panic({0xb8d8e0, 0x11f7630})
+	/usr/local/go/src/runtime/panic.go:884 +0x213
+compress/gzip.(*Reader).Read(0x52cba0?, {0xc000112800?, 0xc0003cddd8?, 0xc0003cde48?})
+	/usr/local/go/src/compress/gzip/gunzip.go:247 +0x2e
+io.ReadAll({0xd672a0, 0x0})
+	/usr/local/go/src/io/io.go:701 +0x103
+io/ioutil.ReadAll(...)
+	/usr/local/go/src/io/ioutil/ioutil.go:27
+github.com/nravic/cedana/cmd.BenchmarkDump(0xc000376000)
+	/home/brandonsmith738/cedana/cedana/cmd/client-dump_test.go:42 +0x269
+testing.(*B).runN(0xc000376000, 0x1)
+	/usr/local/go/src/testing/benchmark.go:193 +0x102
+testing.(*B).run1.func1()
+	/usr/local/go/src/testing/benchmark.go:233 +0x59
+created by testing.(*B).run1
+	/usr/local/go/src/testing/benchmark.go:226 +0x9c
+exit status 2
+FAIL	github.com/nravic/cedana/cmd	2.071s
+FAIL

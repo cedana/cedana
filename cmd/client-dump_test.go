@@ -1,65 +1,25 @@
 package cmd
 
 import (
-	"fmt"
+	"bytes"
+	"compress/gzip"
+	"io"
 	"os"
-	"regexp"
+	"os/exec"
 	"testing"
 
 	"github.com/nravic/cedana/utils"
 	"google.golang.org/protobuf/proto"
 )
 
-func FindTotalMemoryUsage(filepath string) string {
-	content, _ := os.ReadFile(filepath)
-
-	// Convert the content to a string
-	input := string(content)
-
-	// Define a regular expression pattern to match the desired value
-	pattern := `([\d.]+)kB total`
-
-	// Compile the regular expression
-	re := regexp.MustCompile(pattern)
-
-	// Find the first match in the input string
-	match := re.FindStringSubmatch(input)
-
-	// Check if there's a match
-	if len(match) > 1 {
-		value := match[1]
-		fmt.Println("Extracted value:", value)
-		return value
-	} else {
-		fmt.Println("No match found.")
-		return ""
-	}
-}
-
 func BenchmarkDump(b *testing.B) {
-	data, _ := os.ReadFile("/home/brandonsmith738/cedana/cedana/benchmarking/results/cpu.prof")
-	profile := utils.Profile{}
-
-	proto.Unmarshal(data, &profile)
-
 	c, err := instantiateClient()
-
-	c.logger.Log().Msgf("proto data: %+v", profile.DurationNanos)
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	value := FindTotalMemoryUsage("benchmarking/results/mem_profile.txt")
-
-	fmt.Print(value)
-	err = os.WriteFile("benchmarking/results/out.txt", []byte(value), 0644)
-
-	if err != nil {
-		b.Errorf("Error in os.WriteFile(): %v", err)
-	}
-
-	c.process.PID = 602376
+	c.process.PID = 659104
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
@@ -69,4 +29,56 @@ func BenchmarkDump(b *testing.B) {
 			b.Errorf("Error in dump(): %v", err)
 		}
 	}
+
+}
+
+func TestDump(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "/home/brandonsmith738/cedana/cedana/cmd/run_benchmarks.sh")
+	err := cmd.Run()
+
+	if err != nil {
+		t.Errorf("Error in cmd.Run(): %v", err)
+	}
+}
+
+func PostDumpCleanup() {
+	c, _ := instantiateClient()
+	// Code to run after the benchmark
+	data, err := os.ReadFile("/home/brandonsmith738/cedana/cedana/benchmarking/results/cpu.prof.gz")
+	// len of data is 0 for some reason
+
+	c.logger.Log().Msgf("data: %+v", string(data))
+
+	if err != nil {
+		c.logger.Error().Msgf("Error in os.ReadFile(): %v", err)
+	}
+
+	gzipReader, err := gzip.NewReader(bytes.NewReader(data))
+
+	if err != nil {
+		c.logger.Error().Msgf("Error in gzip.NewReader(): %v", err)
+	}
+
+	defer gzipReader.Close()
+
+	decompressedData, err := io.ReadAll(gzipReader)
+
+	if err != nil {
+		c.logger.Error().Msgf("Error in ioutil.ReadAll(): %v", err)
+	}
+
+	c.logger.Log().Msgf("decompressed data: %+v", string(decompressedData))
+
+	profile := utils.Profile{}
+
+	proto.Unmarshal(decompressedData, &profile)
+
+	c.logger.Log().Msgf("proto data duration: %+v", profile.DurationNanos)
+}
+
+func TestMain(m *testing.M) {
+	// Code to run before the tests
+	m.Run()
+	// Code to run after the tests
+	PostDumpCleanup()
 }
