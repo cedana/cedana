@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -28,6 +29,7 @@ type Benchmarks struct {
 	ID                 string `gorm:"primaryKey"`
 	ProcessName        string
 	TimeToCompleteInNS int64
+	TotalMemoryUsed    int64
 }
 
 func BenchmarkDump(b *testing.B) {
@@ -37,34 +39,12 @@ func BenchmarkDump(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	for {
-		// TODO BS Need to add time out here
-		filename, err := LookForPid()
-		if err != nil {
-			b.Errorf("Error in LookForPid(): %v", err)
-		}
-		if filename != "" {
-			// Open the file for reading
-			file, err := os.Open("../benchmarking/pids/loop.pid")
-			if err != nil {
-				fmt.Println("Error opening file:", err)
-				return
-			}
-			defer file.Close()
+	pid, err := LookForPid(c)
 
-			// Read the bytes from the file
-			var pidBytes [8]byte // Assuming int64 is 8 bytes
-			_, err = file.Read(pidBytes[:])
-			if err != nil {
-				fmt.Println("Error reading from file:", err)
-				return
-			}
+	c.process.PID = pid
 
-			// Convert bytes to int32
-			pidInt32 := int32(binary.LittleEndian.Uint64(pidBytes[:]))
-			c.process.PID = pidInt32
-			break
-		}
+	if err != nil {
+		b.Errorf("Error in LookForPid(): %v", err)
 	}
 
 	// We want a list of all binaries that are to be ran and benchmarked,
@@ -88,7 +68,40 @@ func TestDump(t *testing.T) {
 	}
 }
 
-func LookForPid() (string, error) {
+func LookForPid(c *Client) (int32, error) {
+	for {
+		// TODO BS Need to add time out here
+		filename, err := LookForPidFile()
+		c.logger.Log().Msgf("filename: %v", filename)
+		if err != nil {
+			return 0, err
+		}
+		if filename != "" {
+			// Open the file for reading
+			dir := fmt.Sprintf("../benchmarking/pids/%v", filename)
+			file, err := os.Open(dir)
+			if err != nil {
+				fmt.Println("Error opening file:", err)
+				return 0, err
+			}
+			defer file.Close()
+
+			// Read the bytes from the file
+			var pidBytes [8]byte // Assuming int64 is 8 bytes
+			_, err = file.Read(pidBytes[:])
+			if err != nil {
+				fmt.Println("Error reading from file:", err)
+				return 0, err
+			}
+
+			// Convert bytes to int32
+			pidInt32 := int32(binary.LittleEndian.Uint64(pidBytes[:]))
+			return pidInt32, err
+		}
+	}
+}
+
+func LookForPidFile() (string, error) {
 	dirPath := "../benchmarking/pids/"
 
 	// Open the directory
@@ -116,20 +129,18 @@ func LookForPid() (string, error) {
 	return "", err
 }
 
-func PostDumpCleanup() *utils.Profile {
-	c, _ := instantiateClient()
-	// Code to run after the benchmark
-	data, err := os.ReadFile("../benchmarking/results/cpu.prof.gz")
-	// len of data is 0 for some reason
+func GetDecompressedData(filename string) ([]byte, error) {
+	dir := fmt.Sprintf("../benchmarking/results/%v", filename)
 
+	data, err := os.ReadFile(dir)
 	if err != nil {
-		c.logger.Error().Msgf("Error in os.ReadFile(): %v", err)
+		return nil, err
 	}
 
 	gzipReader, err := gzip.NewReader(bytes.NewReader(data))
 
 	if err != nil {
-		c.logger.Error().Msgf("Error in gzip.NewReader(): %v", err)
+		return nil, err
 	}
 
 	defer gzipReader.Close()
@@ -137,32 +148,55 @@ func PostDumpCleanup() *utils.Profile {
 	decompressedData, err := io.ReadAll(gzipReader)
 
 	if err != nil {
-		c.logger.Error().Msgf("Error in ioutil.ReadAll(): %v", err)
+		return nil, err
 	}
 
-	profile := utils.Profile{}
-
-	proto.Unmarshal(decompressedData, &profile)
-
-	c.logger.Log().Msgf("proto data duration: %+v", profile.DurationNanos)
-	// Here we need to add to db the profile data
-	// we also need to delete pid files and end kill processes
-	return &profile
+	return decompressedData, nil
 }
 
-func (db *DB) CreateBenchmark(profile *utils.Profile) *Benchmarks {
+func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
+	c, _ := instantiateClient()
+	// Code to run after the benchmark
+	cpuData, err := GetDecompressedData("cpu.prof.gz")
+	if err != nil {
+		c.logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
+	}
+
+	memData, err := GetDecompressedData("memory.prof.gz")
+	if err != nil {
+		c.logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
+	}
+
+	cpuProfile := utils.Profile{}
+	memProfile := utils.Profile{}
+
+	proto.Unmarshal(cpuData, &cpuProfile)
+	proto.Unmarshal(memData, &memProfile)
+
+	c.logger.Log().Msgf("proto data duration: %+v", cpuProfile.DurationNanos)
+	// Here we need to add to db the profile data
+	// we also need to delete pid files and end kill processes
+	return &cpuProfile, &memProfile
+}
+
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
+	var totalMemoryUsed int64
 
 	// aggregate total time for cpu to run the code
-	for _, sample := range profile.Sample {
+	for _, sample := range cpuProfile.Sample {
 		timeToComplete += sample.Value[1]
+	}
+	for _, sample := range memProfile.Sample {
+		totalMemoryUsed += sample.Value[1]
 	}
 
 	cj := Benchmarks{
 		ID:                 id.String(),
 		ProcessName:        "loop",
 		TimeToCompleteInNS: timeToComplete,
+		TotalMemoryUsed:    totalMemoryUsed,
 	}
 	db.orm.Delete(&Benchmarks{}, "process_name = ?", "loop")
 	db.orm.Create(&cj)
@@ -172,13 +206,27 @@ func (db *DB) CreateBenchmark(profile *utils.Profile) *Benchmarks {
 
 func TestMain(m *testing.M) {
 	// Code to run before the tests
+	c, _ := instantiateClient()
 
 	m.Run()
 	// Code to run after the tests
-	profile := PostDumpCleanup()
+	cpuProfile, memProfile := PostDumpCleanup()
 
 	db := NewDB()
-	db.CreateBenchmark(profile)
+	db.CreateBenchmark(cpuProfile, memProfile)
+	pid, _ := LookForPid(c)
+	process, err := os.FindProcess(int(pid))
+	if err != nil {
+		fmt.Println("Error finding process:", err)
+		return
+	}
+
+	// Send an interrupt signal (SIGINT) to the process
+	err = process.Signal(syscall.SIGINT)
+	if err != nil {
+		fmt.Println("Error sending signal:", err)
+		return
+	}
 }
 
 func NewDB() *DB {
@@ -189,12 +237,14 @@ func NewDB() *DB {
 
 	originalUser := os.Getenv("SUDO_USER")
 	homeDir := ""
+
 	if originalUser != "" {
 		user, err := user.Lookup(originalUser)
 		if err == nil {
 			homeDir = user.HomeDir
 		}
 	}
+
 	if homeDir == "" {
 		homeDir = os.Getenv("HOME")
 	}
