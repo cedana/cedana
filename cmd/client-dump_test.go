@@ -106,8 +106,6 @@ func PostDumpCleanup() {
 	data, err := os.ReadFile("../benchmarking/results/cpu.prof.gz")
 	// len of data is 0 for some reason
 
-	c.logger.Log().Msgf("data: %+v", string(data))
-
 	if err != nil {
 		c.logger.Error().Msgf("Error in os.ReadFile(): %v", err)
 	}
@@ -125,8 +123,6 @@ func PostDumpCleanup() {
 	if err != nil {
 		c.logger.Error().Msgf("Error in ioutil.ReadAll(): %v", err)
 	}
-
-	c.logger.Log().Msgf("decompressed data: %+v", string(decompressedData))
 
 	profile := utils.Profile{}
 
