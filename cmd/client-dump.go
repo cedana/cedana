@@ -286,7 +286,7 @@ func (c *Client) postDump(dumpdir string) {
 	// if client is being orchestrated, push to NATS storage
 	if c.config.CedanaManaged {
 		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
-		err := c.publishCheckpointFile(compressedCheckpointPath)
+		err := c.store.PushCheckpoint(compressedCheckpointPath)
 		if err != nil {
 			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
 		}

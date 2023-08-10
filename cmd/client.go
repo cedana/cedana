@@ -47,6 +47,9 @@ type Client struct {
 
 	// need to dependency inject a filesystem
 	fs *afero.Afero
+
+	// checkpoint store
+	store utils.Store
 }
 
 // CedanaState encapsulates a CRIU checkpoint and includes
@@ -255,6 +258,10 @@ func (c *Client) AddDaemonLayer() error {
 	}
 	c.jsc = jsc
 
+	// until market server is deployed, use NATS as a store
+	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)
+	c.store = natsStore
+
 	return nil
 }
 
@@ -345,50 +352,6 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 			}
 		}
 	}
-}
-
-// need to find a way to attach metadata here for checkpoint type?
-func (c *Client) publishCheckpointFile(filepath string) error {
-	// TODO: Bucket & KV needs to be set up as part of instantiation
-	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
-	if err != nil {
-		return err
-	}
-
-	info, err := store.PutFile(filepath)
-	if err != nil {
-		return err
-	}
-
-	c.logger.Info().Msgf("uploaded checkpoint file: %v", *info)
-
-	return nil
-}
-
-func (c *Client) getCheckpointFile(bucketFilePath string) (*string, error) {
-	store, err := c.jsc.ObjectStore(strings.Join([]string{"CEDANA", c.jobId, "checkpoints"}, "_"))
-	if err != nil {
-		return nil, err
-	}
-
-	downloadedFileName := "cedana_checkpoint.zip"
-
-	err = store.GetFile(bucketFilePath, downloadedFileName)
-	if err != nil {
-		return nil, err
-	}
-
-	c.logger.Info().Msgf("downloaded checkpoint file: %s to %s", bucketFilePath, downloadedFileName)
-
-	// verify file exists
-	// TODO NR: checksum
-	_, err = os.Stat(downloadedFileName)
-	if err != nil {
-		c.logger.Fatal().Msg("error downloading checkpoint file")
-		return nil, err
-	}
-
-	return &downloadedFileName, nil
 }
 
 // sets up subscribers for dump and restore commands
