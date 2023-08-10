@@ -38,6 +38,14 @@ type NATSStore struct {
 	jobID  string
 }
 
+func NewNATSStore(logger *zerolog.Logger, jsc nats.JetStreamContext, jobID string) *NATSStore {
+	return &NATSStore{
+		logger: logger,
+		jsc:    jsc,
+		jobID:  jobID,
+	}
+}
+
 func (ns *NATSStore) GetCheckpoint(checkpointFilePath string) (*string, error) {
 	store, err := ns.jsc.ObjectStore(strings.Join([]string{"CEDANA", ns.jobID, "checkpoints"}, "_"))
 	if err != nil {

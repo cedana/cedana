@@ -258,6 +258,10 @@ func (c *Client) AddDaemonLayer() error {
 	}
 	c.jsc = jsc
 
+	// until market server is deployed, use NATS as a store
+	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)
+	c.store = natsStore
+
 	return nil
 }
 
