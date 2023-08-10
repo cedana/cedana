@@ -222,7 +222,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Send an interrupt signal (SIGINT) to the process
-	err = process.Signal(syscall.SIGINT)
+	err = process.Signal(syscall.SIGKILL)
 	if err != nil {
 		fmt.Println("Error sending signal:", err)
 		return
