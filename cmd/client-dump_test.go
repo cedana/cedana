@@ -46,7 +46,7 @@ func BenchmarkDump(b *testing.B) {
 		}
 		if filename != "" {
 			// Open the file for reading
-			file, err := os.Open("../benchmarking/pids/pid-loop.txt")
+			file, err := os.Open("../benchmarking/pids/loop.pid")
 			if err != nil {
 				fmt.Println("Error opening file:", err)
 				return
