@@ -11,6 +11,9 @@ func BenchmarkRestore(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
+	// TODO BS
+	// Here need to loop through all the files in the directory and find first zip dir.
+	// There really should only be two directories at all times
 	checkpoint := "../benchmarking/temp/"
 
 	if err != nil {

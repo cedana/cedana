@@ -27,7 +27,6 @@ type Benchmarks struct {
 	gorm.Model
 	ID                 string `gorm:"primaryKey"`
 	ProcessName        string
-	ProcessID          int32
 	TimeToCompleteInNS int64
 }
 
@@ -117,7 +116,7 @@ func LookForPid() (string, error) {
 	return "", err
 }
 
-func PostDumpCleanup() {
+func PostDumpCleanup() *utils.Profile {
 	c, _ := instantiateClient()
 	// Code to run after the benchmark
 	data, err := os.ReadFile("../benchmarking/results/cpu.prof.gz")
@@ -148,6 +147,27 @@ func PostDumpCleanup() {
 	c.logger.Log().Msgf("proto data duration: %+v", profile.DurationNanos)
 	// Here we need to add to db the profile data
 	// we also need to delete pid files and end kill processes
+	return &profile
+}
+
+func (db *DB) CreateBenchmark(profile *utils.Profile) *Benchmarks {
+	id := xid.New()
+	var timeToComplete int64
+
+	// aggregate total time for cpu to run the code
+	for _, sample := range profile.Sample {
+		timeToComplete += sample.Value[1]
+	}
+
+	cj := Benchmarks{
+		ID:                 id.String(),
+		ProcessName:        "loop",
+		TimeToCompleteInNS: timeToComplete,
+	}
+	db.orm.Delete(&Benchmarks{}, "process_name = ?", "loop")
+	db.orm.Create(&cj)
+
+	return &cj
 }
 
 func TestMain(m *testing.M) {
@@ -155,8 +175,10 @@ func TestMain(m *testing.M) {
 
 	m.Run()
 	// Code to run after the tests
-	PostDumpCleanup()
-	NewDB()
+	profile := PostDumpCleanup()
+
+	db := NewDB()
+	db.CreateBenchmark(profile)
 }
 
 func NewDB() *DB {
@@ -165,11 +187,6 @@ func NewDB() *DB {
 		c.logger.Error().Msgf("Error in instantiateClient(): %v", err)
 	}
 
-	// this is the same code that's sitting in bootstrap right now
-	// safe to assume that bootstrap has been run (but also safe to assume it hasn't?)
-
-	// See if this works around the issue of the db not being created
-	// sudo env is different.
 	originalUser := os.Getenv("SUDO_USER")
 	homeDir := ""
 	if originalUser != "" {
@@ -204,17 +221,4 @@ func NewDB() *DB {
 	return &DB{
 		orm: db,
 	}
-}
-
-func (db *DB) CreateJob(profile *utils.Profile, pid int32) *Benchmarks {
-	id := xid.New()
-	cj := Benchmarks{
-		ID:                 id.String(),
-		ProcessName:        "loop",
-		ProcessID:          pid,
-		TimeToCompleteInNS: profile.DurationNanos,
-	}
-	db.orm.Create(&cj)
-
-	return &cj
 }
