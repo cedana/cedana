@@ -8,6 +8,7 @@ cmd/_home*
 benchmarking/results
 benchmarking/pids
 benchmarking/processes
+benchmarking/temp
 dist/
 open_fds.json
 *.vhs

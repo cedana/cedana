@@ -29,7 +29,7 @@ func BenchmarkDump(b *testing.B) {
 		}
 		if filename != "" {
 			// Open the file for reading
-			file, err := os.Open("pid_file.bin")
+			file, err := os.Open("../benchmarking/pids/pid-loop.txt")
 			if err != nil {
 				fmt.Println("Error opening file:", err)
 				return
@@ -55,7 +55,7 @@ func BenchmarkDump(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(c.config.SharedStorage.DumpStorageDir)
+		err := c.dump("../benchmarking/temp/")
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -64,7 +64,7 @@ func BenchmarkDump(b *testing.B) {
 }
 
 func TestDump(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "/home/brandonsmith738/cedana/cedana/cmd/run_benchmarks.sh")
+	cmd := exec.Command("/bin/sh", "../cmd/run_benchmarks.sh")
 	err := cmd.Run()
 
 	if err != nil {
@@ -73,7 +73,7 @@ func TestDump(t *testing.T) {
 }
 
 func LookForPid() (string, error) {
-	dirPath := "/path/to/your/directory"
+	dirPath := "../benchmarking/pids/"
 
 	// Open the directory
 	dir, err := os.Open(dirPath)
@@ -103,7 +103,7 @@ func LookForPid() (string, error) {
 func PostDumpCleanup() {
 	c, _ := instantiateClient()
 	// Code to run after the benchmark
-	data, err := os.ReadFile("/home/brandonsmith738/cedana/cedana/benchmarking/results/cpu.prof.gz")
+	data, err := os.ReadFile("../benchmarking/results/cpu.prof.gz")
 	// len of data is 0 for some reason
 
 	c.logger.Log().Msgf("data: %+v", string(data))
