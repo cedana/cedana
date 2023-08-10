@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"encoding/json"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -20,11 +23,12 @@ type Store interface {
 }
 
 type CheckpointMeta struct {
-	ID      string
-	Name    string
-	Bucket  string
-	ModTime time.Time
-	Size    uint64
+	ID       string
+	Name     string
+	Bucket   string
+	ModTime  time.Time
+	Size     uint64
+	Checksum string
 }
 
 // NATS stores are tied to a job id
@@ -121,9 +125,39 @@ type CedanaStore struct {
 // ID to GetCheckpoint gets populated from the data sent over as part of a
 // ServerCommand
 func (cs *CedanaStore) GetCheckpoint(id string) (*string, error) {
-	return nil, nil
+	url := cs.cfg.Connection.CedanaUrl + "/" + "checkpoint" + "/" + id
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+cs.cfg.Connection.CedanaAuthToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	filename := "cedana_checkpoint.zip"
+	outFile, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer outFile.Close()
+
+	// stream download to file
+	// this can be parallelized if we use the server chunks - TODO NR
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	return &filename, nil
 }
 
+// TODO NR - multipart uploads & downloads
 func (cs *CedanaStore) PushCheckpoint(filepath string) error {
 	cid := uuid.New().String()
 
@@ -156,13 +190,35 @@ func (cs *CedanaStore) PushCheckpoint(filepath string) error {
 }
 
 func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+	url := "http://localhost:1324/checkpoint"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
-}
+	req.Header.Add("Authorization", "Bearer random-user-1234-uuid-think")
 
-// split file into chunks and send
-func (cs *CedanaStore) multipartUpload() {
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var checkpointMetadata []CheckpointMeta
+
+	// TODO NR - verify that server uses this same struct
+	err = json.Unmarshal(body, &checkpointMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &checkpointMetadata, nil
 }
 
 type MockStore struct {
