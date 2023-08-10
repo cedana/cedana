@@ -54,7 +54,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 
 	var zipFile string
 	if cmd != nil {
-		file, err := c.getCheckpointFile(cmd.CedanaState.CheckpointPath)
+		file, err := c.store.GetCheckpoint(cmd.CedanaState.CheckpointPath)
 		if err != nil {
 			return nil, err
 		}

@@ -33,9 +33,13 @@ type ActionScripts struct {
 }
 
 type Connection struct {
-	NATSUrl   string `json:"nats_url" mapstructure:"nats_url"`
-	NATSPort  int    `json:"nats_port" mapstructure:"nats_port"`
-	AuthToken string `json:"auth_token" mapstructure:"auth_token"`
+	NATSUrl       string `json:"nats_url" mapstructure:"nats_url"`
+	NATSPort      int    `json:"nats_port" mapstructure:"nats_port"`
+	NATSAuthToken string `json:"nats_auth_token" mapstructure:"nats_auth_token"`
+	// for cedana managed systems
+	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
+	CedanaPort      int    `json:"cedana_port" mapstructure:"cedana_port"`
+	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 }
 
 type Docker struct {
@@ -102,7 +106,7 @@ func InitConfig() (*Config, error) {
 		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
 		viper.Set("connection.nats_url", so.Connection.NATSUrl)
 		viper.Set("connection.nats_port", so.Connection.NATSPort)
-		viper.Set("connection.auth_token", so.Connection.AuthToken)
+		viper.Set("connection.auth_token", so.Connection.NATSAuthToken)
 		viper.Set("client.process_name", so.Client.ProcessName)
 	}
 
