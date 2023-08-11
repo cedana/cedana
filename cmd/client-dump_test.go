@@ -198,7 +198,6 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
 	}
-	db.orm.Delete(&Benchmarks{}, "process_name = ?", "loop")
 	db.orm.Create(&cj)
 
 	return &cj
