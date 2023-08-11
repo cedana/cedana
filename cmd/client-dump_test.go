@@ -32,26 +32,53 @@ type Benchmarks struct {
 	TotalMemoryUsed    int64
 }
 
-func BenchmarkDump(b *testing.B) {
+func BenchmarkDumpLoop(b *testing.B) {
 	c, err := instantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	pid, err := LookForPid(c)
-
-	c.process.PID = pid
-
+	pid, err := LookForPid(c, []string{"loop.pid"})
 	if err != nil {
 		b.Errorf("Error in LookForPid(): %v", err)
 	}
+
+	c.process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		err := c.dump("../benchmarking/temp/")
+		if err != nil {
+			b.Errorf("Error in dump(): %v", err)
+		}
+	}
+
+}
+
+func BenchmarkDumpServer(b *testing.B) {
+	c, err := instantiateClient()
+
+	if err != nil {
+		b.Errorf("Error in instantiateClient(): %v", err)
+	}
+
+	pid, err := LookForPid(c, []string{"server.pid"})
+
+	if err != nil {
+		b.Errorf("Error in LookForPid(): %v", err)
+	}
+	// this will always be one pid
+	// never no pids since the error above accounts for that
+	c.process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+	for i := 0; i < b.N; i++ {
+		err := c.dump("../benchmarking/temp/server")
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -68,22 +95,23 @@ func TestDump(t *testing.T) {
 	}
 }
 
-func LookForPid(c *Client) (int32, error) {
-	for {
-		// TODO BS Need to add time out here
-		filename, err := LookForPidFile()
-		c.logger.Log().Msgf("filename: %v", filename)
+func LookForPid(c *Client, filename []string) ([]int32, error) {
+
+	// Convert bytes to int32
+	// LittleEndian since we are on a little endian machine,
+	// x86 architecture is little endian
+
+	// Yes we need to append because we do not know how many files there will be
+	var pidInt32s []int32
+
+	for _, file := range filename {
+
+		// Open the file for reading
+		dir := fmt.Sprintf("../benchmarking/pids/%v", file)
+		file, err := os.Open(dir)
 		if err != nil {
-			return 0, err
-		}
-		if filename != "" {
-			// Open the file for reading
-			dir := fmt.Sprintf("../benchmarking/pids/%v", filename)
-			file, err := os.Open(dir)
-			if err != nil {
-				fmt.Println("Error opening file:", err)
-				return 0, err
-			}
+			fmt.Println("Error opening file:", err)
+		} else {
 			defer file.Close()
 
 			// Read the bytes from the file
@@ -91,42 +119,20 @@ func LookForPid(c *Client) (int32, error) {
 			_, err = file.Read(pidBytes[:])
 			if err != nil {
 				fmt.Println("Error reading from file:", err)
-				return 0, err
+				return nil, err
 			}
 
-			// Convert bytes to int32
 			pidInt32 := int32(binary.LittleEndian.Uint64(pidBytes[:]))
-			return pidInt32, err
+			pidInt32s = append(pidInt32s, pidInt32)
 		}
-	}
-}
 
-func LookForPidFile() (string, error) {
-	dirPath := "../benchmarking/pids/"
-
-	// Open the directory
-	dir, err := os.Open(dirPath)
-	if err != nil {
-		fmt.Println("Error opening directory:", err)
-		return "", err
-	}
-	defer dir.Close()
-
-	// Read the directory contents
-	fileInfos, err := dir.Readdir(-1)
-	if err != nil {
-		fmt.Println("Error reading directory contents:", err)
-		return "", err
 	}
 
-	// Iterate over the files
-	for _, fileInfo := range fileInfos {
-		if fileInfo.Mode().IsRegular() {
-			return fileInfo.Name(), err
-		}
+	if len(pidInt32s) == 0 {
+		return nil, fmt.Errorf("no pids found")
 	}
-	err = fmt.Errorf("No files found in directory")
-	return "", err
+
+	return pidInt32s, nil
 }
 
 func GetDecompressedData(filename string) ([]byte, error) {
@@ -179,7 +185,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -194,7 +200,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 
 	cj := Benchmarks{
 		ID:                 id.String(),
-		ProcessName:        "loop",
+		ProcessName:        programName,
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
 	}
@@ -206,26 +212,30 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 func TestMain(m *testing.M) {
 	// Code to run before the tests
 	c, _ := instantiateClient()
-
+	pids := []string{"loop.pid", "server.pid"}
 	m.Run()
 	// Code to run after the tests
 	cpuProfile, memProfile := PostDumpCleanup()
 
 	db := NewDB()
-	db.CreateBenchmark(cpuProfile, memProfile)
-	pid, _ := LookForPid(c)
-	process, err := os.FindProcess(int(pid))
-	if err != nil {
-		fmt.Println("Error finding process:", err)
-		return
+	db.CreateBenchmark(cpuProfile, memProfile, "loop")
+
+	pid, _ := LookForPid(c, pids)
+
+	// Kill the processes
+	for _, pid := range pid {
+		process, err := os.FindProcess(int(pid))
+		if err != nil {
+			fmt.Println("Error finding process:", err)
+		}
+
+		// Send an interrupt signal (SIGINT) to the process
+		err = process.Signal(syscall.SIGKILL)
+		if err != nil {
+			fmt.Println("Error sending signal:", err)
+		}
 	}
 
-	// Send an interrupt signal (SIGINT) to the process
-	err = process.Signal(syscall.SIGKILL)
-	if err != nil {
-		fmt.Println("Error sending signal:", err)
-		return
-	}
 }
 
 func NewDB() *DB {
