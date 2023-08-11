@@ -39,7 +39,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	pid, err := LookForPid(c, []string{"loop.pid"})
+	_, pid, err := LookForPid(c, []string{"loop.pid"})
 	if err != nil {
 		b.Errorf("Error in LookForPid(): %v", err)
 	}
@@ -65,7 +65,7 @@ func BenchmarkDumpServer(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	pid, err := LookForPid(c, []string{"server.pid"})
+	_, pid, err := LookForPid(c, []string{"server.pid"})
 
 	if err != nil {
 		b.Errorf("Error in LookForPid(): %v", err)
@@ -95,14 +95,10 @@ func TestDump(t *testing.T) {
 	}
 }
 
-func LookForPid(c *Client, filename []string) ([]int32, error) {
+func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
 
-	// Convert bytes to int32
-	// LittleEndian since we are on a little endian machine,
-	// x86 architecture is little endian
-
-	// Yes we need to append because we do not know how many files there will be
 	var pidInt32s []int32
+	var fileNames []string
 
 	for _, file := range filename {
 
@@ -119,20 +115,27 @@ func LookForPid(c *Client, filename []string) ([]int32, error) {
 			_, err = file.Read(pidBytes[:])
 			if err != nil {
 				fmt.Println("Error reading from file:", err)
-				return nil, err
+				return nil, nil, err
 			}
 
+			// Convert bytes to int32
+			// LittleEndian since we are on a little endian machine,
+			// x86 architecture is little endian
 			pidInt32 := int32(binary.LittleEndian.Uint64(pidBytes[:]))
+
+			// Yes we need to append because we do not know how many files there will be
+			// Lots of allocations :(
 			pidInt32s = append(pidInt32s, pidInt32)
+			fileNames = append(fileNames, file.Name())
 		}
 
 	}
 
 	if len(pidInt32s) == 0 {
-		return nil, fmt.Errorf("no pids found")
+		return nil, nil, fmt.Errorf("no pids found")
 	}
 
-	return pidInt32s, nil
+	return fileNames, pidInt32s, nil
 }
 
 func GetDecompressedData(filename string) ([]byte, error) {
@@ -194,6 +197,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 	for _, sample := range cpuProfile.Sample {
 		timeToComplete += sample.Value[1]
 	}
+	// aggregate total memory used
 	for _, sample := range memProfile.Sample {
 		totalMemoryUsed += sample.Value[1]
 	}
@@ -218,9 +222,10 @@ func TestMain(m *testing.M) {
 	cpuProfile, memProfile := PostDumpCleanup()
 
 	db := NewDB()
-	db.CreateBenchmark(cpuProfile, memProfile, "loop")
 
-	pid, _ := LookForPid(c, pids)
+	fileNames, pid, _ := LookForPid(c, pids)
+	// TODO BS Figure out how to get the name of the process
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0])
 
 	// Kill the processes
 	for _, pid := range pid {
