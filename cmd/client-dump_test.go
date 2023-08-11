@@ -86,6 +86,62 @@ func BenchmarkDumpServer(b *testing.B) {
 
 }
 
+// func BenchmarkDumpPing(b *testing.B) {
+// 	c, err := instantiateClient()
+
+// 	if err != nil {
+// 		b.Errorf("Error in instantiateClient(): %v", err)
+// 	}
+
+// 	_, pid, err := LookForPid(c, []string{"ping.pid"})
+
+// 	if err != nil {
+// 		b.Errorf("Error in LookForPid(): %v", err)
+// 	}
+// 	// this will always be one pid
+// 	// never no pids since the error above accounts for that
+// 	c.process.PID = pid[0]
+
+// 	// We want a list of all binaries that are to be ran and benchmarked,
+// 	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+// 	for i := 0; i < b.N; i++ {
+// 		err := c.dump("../benchmarking/temp/ping")
+// 		if err != nil {
+// 			b.Errorf("Error in dump(): %v", err)
+// 		}
+// 	}
+
+// }
+
+func BenchmarkDumpPing(b *testing.B) {
+	c, err := instantiateClient()
+
+	if err != nil {
+		b.Errorf("Error in instantiateClient(): %v", err)
+	}
+
+	_, pid, err := LookForPid(c, []string{"pytorch.pid"})
+
+	if err != nil {
+		b.Errorf("Error in LookForPid(): %v", err)
+	}
+	// this will always be one pid
+	// never no pids since the error above accounts for that
+	c.process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+	for i := 0; i < b.N; i++ {
+		err := c.dump("../benchmarking/temp/pytorch")
+		if err != nil {
+			b.Errorf("Error in dump(): %v", err)
+		}
+	}
+
+}
+
 func TestDump(t *testing.T) {
 	cmd := exec.Command("/bin/sh", "../cmd/run_benchmarks.sh")
 	err := cmd.Run()
@@ -216,7 +272,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 func TestMain(m *testing.M) {
 	// Code to run before the tests
 	c, _ := instantiateClient()
-	pids := []string{"loop.pid", "server.pid"}
+	pids := []string{"loop.pid", "server.pid", "pytorch.pid"}
 	m.Run()
 	// Code to run after the tests
 	cpuProfile, memProfile := PostDumpCleanup()
