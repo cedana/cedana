@@ -2,7 +2,7 @@
   "cedana_managed": true,
   "client": {
     "process_name": "my_process",
-    "leave_running": false,
+    "leave_running": true,
     "signal_process_pre_dump": true,
     "signal_process_timeout": 30
   },

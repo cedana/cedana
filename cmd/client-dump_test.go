@@ -30,6 +30,7 @@ type Benchmarks struct {
 	ProcessName        string
 	TimeToCompleteInNS int64
 	TotalMemoryUsed    int64
+	ElapsedTimeMs      int64
 }
 
 func BenchmarkDumpLoop(b *testing.B) {
@@ -50,11 +51,26 @@ func BenchmarkDumpLoop(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/")
+		err := c.dump("../benchmarking/temp/loop")
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
 	}
+
+	b.Cleanup(
+		func() {
+			// Code to run after the benchmark
+			// Convert the int64 value to bytes
+			valueBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+
+		},
+	)
 
 }
 
@@ -83,6 +99,21 @@ func BenchmarkDumpServer(b *testing.B) {
 			b.Errorf("Error in dump(): %v", err)
 		}
 	}
+
+	b.Cleanup(
+		func() {
+			// Code to run after the benchmark
+			// Convert the int64 value to bytes
+			valueBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+
+		},
+	)
 
 }
 
@@ -114,7 +145,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 // }
 
-func BenchmarkDumpPing(b *testing.B) {
+func BenchmarkDumpPytorch(b *testing.B) {
 	c, err := instantiateClient()
 
 	if err != nil {
@@ -128,6 +159,7 @@ func BenchmarkDumpPing(b *testing.B) {
 	}
 	// this will always be one pid
 	// never no pids since the error above accounts for that
+	c.logger.Log().Msgf("pid: %v", pid)
 	c.process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
@@ -140,6 +172,20 @@ func BenchmarkDumpPing(b *testing.B) {
 		}
 	}
 
+	b.Cleanup(
+		func() {
+			// Code to run after the benchmark
+			// Convert the int64 value to bytes
+			valueBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+
+		},
+	)
 }
 
 func TestDump(t *testing.T) {
@@ -222,6 +268,9 @@ func GetDecompressedData(filename string) ([]byte, error) {
 func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	c, _ := instantiateClient()
 	// Code to run after the benchmark
+	// cpuProfileName := fmt.Sprintf("%v_cpu.prof.gz", programName)
+	// memoryProfileName := fmt.Sprintf("%v_memory.prof.gz", programName)
+
 	cpuData, err := GetDecompressedData("cpu.prof.gz")
 	if err != nil {
 		c.logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
@@ -244,7 +293,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -263,6 +312,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		ProcessName:        programName,
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
+		ElapsedTimeMs:      elapsedTime,
 	}
 	db.orm.Create(&cj)
 
@@ -271,17 +321,19 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 
 func TestMain(m *testing.M) {
 	// Code to run before the tests
-	c, _ := instantiateClient()
-	pids := []string{"loop.pid", "server.pid", "pytorch.pid"}
 	m.Run()
+	c, _ := instantiateClient()
+
+	pids := []string{"loop.pid", "server.pid", "pytorch.pid"}
 	// Code to run after the tests
+	// Profiles := Profiles{}
 	cpuProfile, memProfile := PostDumpCleanup()
 
 	db := NewDB()
 
 	fileNames, pid, _ := LookForPid(c, pids)
-	// TODO BS Figure out how to get the name of the process
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0])
+
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadElapsedTime("../benchmarking/temp/time", c))
 
 	// Kill the processes
 	for _, pid := range pid {
@@ -297,6 +349,28 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+}
+
+// This reads the elapsed time from a file written by benchmarking cleanup function
+func ReadElapsedTime(filePath string, c *Client) int64 {
+	// Open the file for reading
+	file, err := os.Open(filePath)
+	if err != nil {
+		c.logger.Error().Msgf("Error opening file: %v", err)
+	}
+	defer file.Close()
+
+	// Read the bytes from the file
+	valueBytes := make([]byte, 8)
+	_, err = file.Read(valueBytes)
+	if err != nil {
+		c.logger.Error().Msgf("Error reading file: %v", err)
+	}
+
+	// Convert the bytes back to int64
+	value := int64(binary.LittleEndian.Uint64(valueBytes))
+
+	return value
 }
 
 func NewDB() *DB {
