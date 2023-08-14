@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"

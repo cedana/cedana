@@ -1,4 +1,4 @@
-module github.com/nravic/cedana
+module github.com/cedana/cedana
 
 go 1.18
 

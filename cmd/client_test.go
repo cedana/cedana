@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/nravic/cedana/utils"
+	"github.com/cedana/cedana/utils"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 )
