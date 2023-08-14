@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/nravic/cedana/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
 func init() {
@@ -44,7 +46,7 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -85,7 +87,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *ServerCommand, checkpoi
 		return nil, err
 	}
 
-	var checkpointState CedanaState
+	var checkpointState cedana.CedanaState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
@@ -125,7 +127,7 @@ func (c *Client) postRestore() {
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(cc *CedanaState, dir string) {
+func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return
@@ -199,7 +201,7 @@ func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
-func (c *Client) restore(cmd *ServerCommand, path *string) error {
+func (c *Client) restore(cmd *cedana.ServerCommand, path *string) error {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
 
@@ -215,7 +217,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 	// if we have a server command, otherwise default to base CRIU wrapper mode
 	if cmd != nil {
 		switch cmd.CedanaState.CheckpointType {
-		case CheckpointTypeCRIU:
+		case cedana.CheckpointTypeCRIU:
 			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {
 				return err
@@ -227,7 +229,7 @@ func (c *Client) restore(cmd *ServerCommand, path *string) error {
 				return err
 			}
 
-		case CheckpointTypePytorch:
+		case cedana.CheckpointTypePytorch:
 			err := c.pyTorchRestore()
 			if err != nil {
 				return err

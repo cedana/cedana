@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/nravic/cedana/cmd"
+	"github.com/cedana/cedana/cmd"
 )
 
 var (

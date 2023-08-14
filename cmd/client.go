@@ -5,15 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/nravic/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -21,6 +20,8 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -38,12 +39,12 @@ type Client struct {
 
 	channels *CommandChannels
 	context  context.Context
-	process  ProcessInfo
+	process  cedana.ProcessInfo
 
 	jobId  string
 	selfId string
 
-	state CedanaState // only ever modified at checkpoint/restore time
+	state cedana.CedanaState // only ever modified at checkpoint/restore time
 
 	// need to dependency inject a filesystem
 	fs *afero.Afero
@@ -52,94 +53,10 @@ type Client struct {
 	store utils.Store
 }
 
-// CedanaState encapsulates a CRIU checkpoint and includes
-// filesystem state for a full restore. Typically serialized and shot around
-// over the wire.
-type CedanaState struct {
-	ClientInfo     ClientInfo     `json:"client_info" mapstructure:"client_info"`
-	ProcessInfo    ProcessInfo    `json:"process_info" mapstructure:"process_info"`
-	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
-	// either local or remote checkpoint path (url vs filesystem path)
-	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
-	// process state at time of checkpoint
-	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
-}
-
-func (cs *CedanaState) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(cs, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "checkpoint_state.json")
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-	_, err = file.Write(serialized)
-	return err
-}
-
-type Logs struct {
-	Stdout string `mapstructure:"stdout"`
-	Stderr string `mapstructure:"stderr"`
-}
-
 type CommandChannels struct {
 	dump_command    chan int
-	restore_command chan ServerCommand
+	restore_command chan cedana.ServerCommand
 }
-
-// TODO: Until there's a shared library, we'll have to duplicate this struct
-
-type ProcessInfo struct {
-	PID                     int32                   `json:"pid" mapstructure:"pid"`
-	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
-	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // list of open FDs
-	OpenWriteOnlyFilePaths  []string                `json:"open_write_only" mapstructure:"open_write_only"`
-	OpenConnections         []net.ConnectionStat    `json:"open_connections" mapstructure:"open_connections"` // open network connections
-	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
-	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
-	Status                  string                  `json:"status" mapstructure:"status"`
-}
-
-type ClientInfo struct {
-	Id              string `json:"id" mapstructure:"id"`
-	Hostname        string `json:"hostname" mapstructure:"hostname"`
-	Platform        string `json:"platform" mapstructure:"platform"`
-	OS              string `json:"os" mapstructure:"os"`
-	Uptime          uint64 `json:"uptime" mapstructure:"uptime"`
-	RemainingMemory uint64 `json:"remaining_memory" mapstructure:"remaining_memory"`
-}
-
-type GPUInfo struct {
-	Count            int       `json:"count" mapstructure:"count"`
-	UtilizationRates []float64 `json:"utilization_rates" mapstructure:"utilization_rates"`
-	PowerUsage       uint64    `json:"power_usage" mapstructure:"power_usage"`
-}
-
-type ServerCommand struct {
-	Command     string      `json:"command" mapstructure:"command"`
-	Heartbeat   bool        `json:"heartbeat" mapstructure:"heartbeat"`
-	CedanaState CedanaState `json:"cedana_state" mapstructure:"cedana_state"`
-}
-
-type CheckpointType string
-type CheckpointState string
-
-const (
-	CheckpointTypeNone    CheckpointType = "none"
-	CheckpointTypeCRIU    CheckpointType = "criu"
-	CheckpointTypePytorch CheckpointType = "pytorch"
-)
-
-const (
-	CheckpointSuccess CheckpointState = "CHECKPOINTED"
-	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
-	RestoreSuccess    CheckpointState = "RESTORED"
-	RestoreFailed     CheckpointState = "RESTORE_FAILED"
-)
 
 var clientCommand = &cobra.Command{
 	Use:   "client",
@@ -175,7 +92,7 @@ func instantiateClient() (*Client, error) {
 
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
-	restore_command := make(chan ServerCommand)
+	restore_command := make(chan cedana.ServerCommand)
 	channels := &CommandChannels{dump_command, restore_command}
 
 	// set up filesystem wrapper
@@ -331,7 +248,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 		for msg := range msg.Messages() {
 			c.logger.Debug().Msgf("received raw command: %v", msg)
 			if msg != nil {
-				var cmd ServerCommand
+				var cmd cedana.ServerCommand
 				err := json.Unmarshal(msg.Data(), &cmd)
 				if err != nil {
 					c.logger.Info().Msgf("could not unmarshal command: %v", err)
@@ -361,7 +278,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *CedanaState {
+func (c *Client) getState(pid int32) *cedana.CedanaState {
 	// inefficient - but unsure about race condition issues
 	p, err := process.NewProcess(pid)
 	if err != nil {
@@ -397,8 +314,8 @@ func (c *Client) getState(pid int32) *CedanaState {
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
-	return &CedanaState{
-		ProcessInfo: ProcessInfo{
+	return &cedana.CedanaState{
+		ProcessInfo: cedana.ProcessInfo{
 			PID:                    pid,
 			OpenFds:                openFiles,
 			OpenWriteOnlyFilePaths: writeOnlyFiles,
@@ -407,7 +324,7 @@ func (c *Client) getState(pid int32) *CedanaState {
 			OpenConnections:        openConnections,
 			Status:                 strings.Join(status, ""),
 		},
-		ClientInfo: ClientInfo{
+		ClientInfo: cedana.ClientInfo{
 			Id:              c.selfId,
 			Hostname:        h.Hostname,
 			Platform:        h.Platform,
