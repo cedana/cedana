@@ -13,6 +13,8 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
 var dir string
@@ -222,12 +224,12 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 				return "", err
 			}
 		}
-		c.state.CheckpointType = CheckpointTypePytorch
+		c.state.CheckpointType = cedana.CheckpointTypePytorch
 		return checkpointFolderPath, nil
 	}
 
 	c.copyOpenFiles(checkpointFolderPath)
-	c.state.CheckpointType = CheckpointTypeCRIU
+	c.state.CheckpointType = cedana.CheckpointTypeCRIU
 
 	return checkpointFolderPath, nil
 }
@@ -350,7 +352,7 @@ func (c *Client) dump(dir string) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	c.state.CheckpointState = CheckpointSuccess
+	c.state.CheckpointState = cedana.CheckpointSuccess
 	c.postDump(dumpdir)
 	c.cleanupClient()
 

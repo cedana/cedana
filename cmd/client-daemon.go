@@ -11,6 +11,8 @@ import (
 	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
 func init() {
@@ -111,10 +113,10 @@ LOOP:
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
-				c.state.CheckpointState = CheckpointFailed
+				c.state.CheckpointState = cedana.CheckpointFailed
 				c.publishStateOnce()
 			}
-			c.state.CheckpointState = CheckpointSuccess
+			c.state.CheckpointState = cedana.CheckpointSuccess
 			c.publishStateOnce()
 
 		case cmd := <-c.channels.restore_command:
@@ -123,10 +125,10 @@ LOOP:
 			err := c.restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
-				c.state.CheckpointState = RestoreFailed
+				c.state.CheckpointState = cedana.RestoreFailed
 				c.publishStateOnce()
 			}
-			c.state.CheckpointState = RestoreSuccess
+			c.state.CheckpointState = cedana.RestoreSuccess
 			c.publishStateOnce()
 
 		case <-stop:
