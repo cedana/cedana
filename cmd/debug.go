@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/nravic/cedana/container"
-	"github.com/nravic/cedana/utils"
+	"github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/nravic/cedana/utils"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"

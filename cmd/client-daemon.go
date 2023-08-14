@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nravic/cedana/utils"
+	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
 )

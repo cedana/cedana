@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nravic/cedana/utils"
+	"github.com/cedana/cedana/utils"
 	ps "github.com/shirou/gopsutil/v3/process"
 )
 
