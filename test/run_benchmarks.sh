@@ -61,6 +61,8 @@ sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.pro
 sudo rm -rf "$dirTempLoop"/_home*
 sudo rm -rf "$dirTempServer"/_home*
 sudo rm -rf "$dirTempPytorch"/_home*
+sudo rm -rf "$dirTempPytorch"/_usr*
+
 
 # Dump fails on this program for some reason
 # # Check if the execServer exists
