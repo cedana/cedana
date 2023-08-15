@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0
 	github.com/docker/docker v24.0.4+incompatible
-	github.com/nats-io/nats.go v1.26.0
+	github.com/nats-io/nats.go v1.28.0
 	github.com/opencontainers/runc v1.1.7
 	github.com/sevlyar/go-daemon v0.1.6
 	github.com/sirupsen/logrus v1.9.0
