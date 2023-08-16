@@ -18,3 +18,4 @@ dataset/
 dist/
 open_fds.json
 *.vhs
+.gitconfig
