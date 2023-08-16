@@ -102,8 +102,10 @@ handles, _ = scatter.legend_elements(prop="colors")
 legend = plt.legend(handles, unique_categories,
                     title="Process Name", loc="upper right")
 
-plt.xlabel('Total Memory Allocation (%)')
-plt.ylabel('Total CPU Time Allocation (s)')
+plt.ylabel('Total Memory Allocation (%)')
+plt.xlabel('Total CPU Time Allocation (s)')
+ax.set_zlabel('Total Disk Allocation (MB)')
+
 plt.title('Checkpointing Benchmark Analysis')
 plt.show()
 plt.savefig('benchmark_analysis.png')

@@ -6,6 +6,31 @@ num_iterations=20
 # Get the start time
 start_time=$(date +%s)
 
+benchmarking_dir="benchmarking/processes"
+repo_url="https://github.com/cedana/cedana-benchmarks"
+
+# Get the current directory
+current_dir=$(pwd)
+
+# Check if the directory exists
+if [ ! -d "$benchmarking_dir" ]; then
+    echo "Creating directory: $benchmarking_dir"
+    mkdir -p "$benchmarking_dir"
+fi
+
+# Change directory to the benchmarking/processes directory
+cd "$benchmarking_dir" || exit
+
+# Perform git pull if the directory is a git repository
+if [ -d ".git" ]; then
+    git pull "$repo_url"
+else
+    git clone "$repo_url" .
+fi
+
+# Change back to the original directory
+cd "$current_dir"
+
 # List of benchmarking subdirectories
 subdirectories=("results" "pids" "processes" "temp")
 
