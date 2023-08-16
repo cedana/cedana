@@ -6,6 +6,25 @@ num_iterations=20
 # Get the start time
 start_time=$(date +%s)
 
+# List of benchmarking subdirectories
+subdirectories=("results" "pids" "processes" "temp")
+
+# Function to create a directory if it doesn't exist
+create_directory_if_not_exists() {
+    if [ ! -d "$1" ]; then
+        echo "Creating directory: $1"
+        mkdir -p "$1"
+    fi
+}
+
+# Check if benchmarking directory exists and create it if needed
+create_directory_if_not_exists "benchmarking"
+
+# Loop through the subdirectories and create them if needed
+for subdir in "${subdirectories[@]}"; do
+    create_directory_if_not_exists "benchmarking/$subdir"
+done
+
 # Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
     # Run your script in the background
