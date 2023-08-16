@@ -78,12 +78,19 @@ for df in listOfDfs:
 # Convert process names to numeric values for coloring
 mainDf['process_color'] = mainDf['process_name'].map(process_name_mapping)
 
+# Create a figure and a 3D Axes
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+
 # Create a plot using pandas and matplotlib
-scatter = plt.scatter(
-    (mainDf['total_memory_used'] * 1e-6 / 4000) * 100,
-    mainDf['elapsed_time_ms']/1000,
-    c=mainDf['process_color'],
-    cmap=plt.cm.tab10
+scatter = ax.scatter(
+    (mainDf['elapsed_time_ms'] / 1000),  # X-axis
+    (mainDf['total_memory_used'] * 1e-6 / 4000) * 100,  # Y-axis
+    mainDf['file_size']*1e-6,  # Z-axis (color)
+    c=mainDf['process_color'],  # Use process_color for coloring
+    cmap=plt.cm.tab10,
+    marker='o',
 )
 
 # Get the legend labels using the process_name_mapping
@@ -98,4 +105,5 @@ legend = plt.legend(handles, unique_categories,
 plt.xlabel('Total Memory Allocation (%)')
 plt.ylabel('Total CPU Time Allocation (s)')
 plt.title('Checkpointing Benchmark Analysis')
+plt.show()
 plt.savefig('benchmark_analysis.png')

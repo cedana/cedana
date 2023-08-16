@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -35,16 +36,14 @@ type Benchmarks struct {
 }
 
 func BenchmarkDumpLoop(b *testing.B) {
+	dumpDir := "../benchmarking/temp/loop"
 	c, err := instantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, err := LookForPid(c, []string{"loop.pid"})
-	if err != nil {
-		b.Errorf("Error in LookForPid(): %v", err)
-	}
+	_, pid, _ := LookForPid(c, []string{"loop.pid"})
 
 	c.process.PID = pid[0]
 
@@ -52,7 +51,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/loop")
+		err := c.dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -65,7 +64,23 @@ func BenchmarkDumpLoop(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			zipFile, err := FindZipFiles(dumpDir)
+			if err != nil {
+				b.Errorf("Error in finding zipfile: %v", err)
+			}
+			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
+			if err != nil {
+				b.Errorf("Error in ZipFileSize(): %v", err)
+			}
+
+			filesizeBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+
+			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -82,11 +97,8 @@ func BenchmarkDumpServer(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, err := LookForPid(c, []string{"server.pid"})
+	_, pid, _ := LookForPid(c, []string{"server.pid"})
 
-	if err != nil {
-		b.Errorf("Error in LookForPid(): %v", err)
-	}
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	c.process.PID = pid[0]
@@ -108,12 +120,11 @@ func BenchmarkDumpServer(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			opts := c.prepareCheckpointOpts()
-			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			zipFile, err := FindZipFiles(dumpDir)
 			if err != nil {
-				b.Errorf("Error in prepareDump(): %v", err)
+				b.Errorf("Error in finding zipfile: %v", err)
 			}
-			filesize, err := ZipFileSize(dumpdir + ".zip")
+			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
 			if err != nil {
 				b.Errorf("Error in ZipFileSize(): %v", err)
 			}
@@ -142,11 +153,8 @@ func BenchmarkDumpPytorch(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, err := LookForPid(c, []string{"pytorch.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch.pid"})
 
-	if err != nil {
-		b.Errorf("Error in LookForPid(): %v", err)
-	}
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	c.logger.Log().Msgf("pid: %v", pid)
@@ -169,13 +177,12 @@ func BenchmarkDumpPytorch(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			opts := c.prepareCheckpointOpts()
-			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			zipFile, err := FindZipFiles(dumpDir)
 			if err != nil {
-				b.Errorf("Error in prepareDump(): %v", err)
+				b.Errorf("Error in finding zipfile: %v", err)
 			}
 
-			filesize, err := ZipFileSize(dumpdir + ".zip")
+			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
 			if err != nil {
 				b.Errorf("Error in ZipFileSize(): %v", err)
 			}
@@ -204,11 +211,8 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, err := LookForPid(c, []string{"pytorch-vision.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch-vision.pid"})
 
-	if err != nil {
-		b.Errorf("Error in LookForPid(): %v", err)
-	}
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	c.logger.Log().Msgf("pid: %v", pid)
@@ -231,13 +235,12 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			opts := c.prepareCheckpointOpts()
-			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			zipFile, err := FindZipFiles(dumpDir)
 			if err != nil {
-				b.Errorf("Error in prepareDump(): %v", err)
+				b.Errorf("Error in finding zipfile: %v", err)
 			}
 
-			filesize, err := ZipFileSize(dumpdir + ".zip")
+			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
 			if err != nil {
 				b.Errorf("Error in ZipFileSize(): %v", err)
 			}
@@ -267,11 +270,8 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, err := LookForPid(c, []string{"pytorch-regression.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch-regression.pid"})
 
-	if err != nil {
-		b.Errorf("Error in LookForPid(): %v", err)
-	}
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	c.logger.Log().Msgf("pid: %v", pid)
@@ -294,13 +294,12 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			opts := c.prepareCheckpointOpts()
-			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			zipFile, err := FindZipFiles(dumpDir)
 			if err != nil {
-				b.Errorf("Error in prepareDump(): %v", err)
+				b.Errorf("Error in finding zipfile: %v", err)
 			}
 
-			filesize, err := ZipFileSize(dumpdir + ".zip")
+			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 			if err != nil {
@@ -358,9 +357,7 @@ func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
 		// Open the file for reading
 		dir := fmt.Sprintf("../benchmarking/pids/%v", file)
 		file, err := os.Open(dir)
-		if err != nil {
-			fmt.Println("Error opening file:", err)
-		} else {
+		if err == nil {
 			defer file.Close()
 
 			// Read the bytes from the file
@@ -414,6 +411,28 @@ func GetDecompressedData(filename string) ([]byte, error) {
 	}
 
 	return decompressedData, nil
+}
+
+func FindZipFiles(directoryPath string) (string, error) {
+	var zipFiles []string
+
+	// Read the directory
+	files, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Loop through the files and check for zip files
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".zip") {
+			zipFiles = append(zipFiles, file.Name())
+		}
+	}
+	if len(zipFiles) > 1 {
+		return "", fmt.Errorf("more than one zip file found")
+	}
+
+	return zipFiles[0], nil
 }
 
 func PostDumpCleanup() (*utils.Profile, *utils.Profile) {

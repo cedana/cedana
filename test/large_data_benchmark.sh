@@ -9,7 +9,7 @@ start_time=$(date +%s)
 # Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
     # Run your script in the background
-    ./test/pytorch_benchmark.sh &
+    ./test/run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!
@@ -28,3 +28,5 @@ elapsed_time=$((end_time - start_time))
 
 echo "All iterations completed"
 echo "Elapsed time: $elapsed_time seconds"
+
+python3 test/benchmark_analysis.py
