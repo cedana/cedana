@@ -108,4 +108,4 @@ ax.set_zlabel('Total Disk Allocation (MB)')
 
 plt.title('Checkpointing Benchmark Analysis')
 plt.show()
-plt.savefig('benchmark_analysis.png')
+plt.savefig('../benchmarking/temp/benchmark_analysis.png')

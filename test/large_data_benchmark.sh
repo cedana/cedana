@@ -89,4 +89,5 @@ echo "Elapsed time: $elapsed_time seconds"
 
 pip3 install -r test/requirements && \
 
-python3 test/benchmark_analysis.py
+python3 test/benchmark_analysis.py && \
+rm benchmarking/temp/*.png
