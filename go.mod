@@ -7,7 +7,7 @@ require (
 	github.com/docker/docker v24.0.4+incompatible
 	github.com/glebarez/sqlite v1.9.0
 	github.com/google/uuid v1.3.0
-	github.com/nats-io/nats.go v1.26.0
+	github.com/nats-io/nats.go v1.28.0
 	github.com/opencontainers/runc v1.1.7
 	github.com/rs/xid v1.5.0
 	github.com/sevlyar/go-daemon v0.1.6

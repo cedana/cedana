@@ -221,7 +221,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	cons, err := c.js.AddConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
+	cons, err := c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
 		AckPolicy: jetstream.AckExplicitPolicy,
 		// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
 		// we get a message even if the consumer hasn't been created yet.
