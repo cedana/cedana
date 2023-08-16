@@ -7,6 +7,7 @@ import (
 )
 
 func BenchmarkRestore(b *testing.B) {
+	skipCI(b)
 	c, err := instantiateClient()
 
 	if err != nil {
