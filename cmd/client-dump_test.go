@@ -35,7 +35,14 @@ type Benchmarks struct {
 	FileSize           int64
 }
 
+func skipCI(b *testing.) {
+	if os.Getenv("CI") != "" {
+		b.Skip("Skipping testing in CI environment")
+	}
+}
+
 func BenchmarkDumpLoop(b *testing.B) {
+	skipCI(b)
 	dumpDir := "../benchmarking/temp/loop"
 	c, err := instantiateClient()
 
@@ -90,6 +97,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 }
 
 func BenchmarkDumpServer(b *testing.B) {
+	skipCI(b)
 	dumpDir := "../benchmarking/temp/server"
 	c, err := instantiateClient()
 
@@ -146,6 +154,7 @@ func BenchmarkDumpServer(b *testing.B) {
 }
 
 func BenchmarkDumpPytorch(b *testing.B) {
+	skipCI(b)
 	dumpDir := "../benchmarking/temp/pytorch"
 	c, err := instantiateClient()
 
@@ -204,6 +213,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchVision(b *testing.B) {
+	skipCI(b)
 	dumpDir := "../benchmarking/temp/pytorch-vision"
 	c, err := instantiateClient()
 
@@ -262,6 +272,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchRegression(b *testing.B) {
+	skipCI(b)
 	dumpDir := "../benchmarking/temp/pytorch-regression"
 
 	c, err := instantiateClient()
