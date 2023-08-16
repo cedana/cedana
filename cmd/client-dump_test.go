@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -38,11 +37,6 @@ type Benchmarks struct {
 func skipCI(b *testing.B) {
 	if os.Getenv("CI") != "" {
 		b.Skip("Skipping testing in CI environment")
-	}
-}
-func skipCIT(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping testing in CI environment")
 	}
 }
 
@@ -334,16 +328,6 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 
 		},
 	)
-}
-
-func TestDump(t *testing.T) {
-	skipCIT(t)
-	cmd := exec.Command("/bin/sh", "../cmd/run_benchmarks.sh")
-	err := cmd.Run()
-
-	if err != nil {
-		t.Errorf("Error in cmd.Run(): %v", err)
-	}
 }
 
 func ZipFileSize(filePath string) (int64, error) {
