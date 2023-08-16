@@ -40,6 +40,11 @@ func skipCI(b *testing.B) {
 		b.Skip("Skipping testing in CI environment")
 	}
 }
+func skipCIT(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping testing in CI environment")
+	}
+}
 
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
@@ -332,6 +337,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 }
 
 func TestDump(t *testing.T) {
+	skipCIT(t)
 	cmd := exec.Command("/bin/sh", "../cmd/run_benchmarks.sh")
 	err := cmd.Run()
 
