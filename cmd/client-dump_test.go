@@ -35,7 +35,7 @@ type Benchmarks struct {
 	FileSize           int64
 }
 
-func skipCI(b *testing.) {
+func skipCI(b *testing.B) {
 	if os.Getenv("CI") != "" {
 		b.Skip("Skipping testing in CI environment")
 	}
@@ -273,6 +273,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 
 func BenchmarkDumpPytorchRegression(b *testing.B) {
 	skipCI(b)
+
 	dumpDir := "../benchmarking/temp/pytorch-regression"
 
 	c, err := instantiateClient()
