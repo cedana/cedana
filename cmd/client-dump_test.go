@@ -71,7 +71,6 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 		},
 	)
-
 }
 
 func BenchmarkDumpServer(b *testing.B) {
@@ -114,36 +113,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 		},
 	)
-
 }
-
-// func BenchmarkDumpPing(b *testing.B) {
-// 	c, err := instantiateClient()
-
-// 	if err != nil {
-// 		b.Errorf("Error in instantiateClient(): %v", err)
-// 	}
-
-// 	_, pid, err := LookForPid(c, []string{"ping.pid"})
-
-// 	if err != nil {
-// 		b.Errorf("Error in LookForPid(): %v", err)
-// 	}
-// 	// this will always be one pid
-// 	// never no pids since the error above accounts for that
-// 	c.process.PID = pid[0]
-
-// 	// We want a list of all binaries that are to be ran and benchmarked,
-// 	// have them write their pid to temp files on disk and then have the testing suite read from them
-
-// 	for i := 0; i < b.N; i++ {
-// 		err := c.dump("../benchmarking/temp/ping")
-// 		if err != nil {
-// 			b.Errorf("Error in dump(): %v", err)
-// 		}
-// 	}
-
-// }
 
 func BenchmarkDumpPytorch(b *testing.B) {
 	c, err := instantiateClient()
@@ -167,6 +137,92 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		err := c.dump("../benchmarking/temp/pytorch")
+		if err != nil {
+			b.Errorf("Error in dump(): %v", err)
+		}
+	}
+
+	b.Cleanup(
+		func() {
+			// Code to run after the benchmark
+			// Convert the int64 value to bytes
+			valueBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+
+		},
+	)
+}
+
+func BenchmarkDumpPytorchVision(b *testing.B) {
+	c, err := instantiateClient()
+
+	if err != nil {
+		b.Errorf("Error in instantiateClient(): %v", err)
+	}
+
+	_, pid, err := LookForPid(c, []string{"pytorch-vision.pid"})
+
+	if err != nil {
+		b.Errorf("Error in LookForPid(): %v", err)
+	}
+	// this will always be one pid
+	// never no pids since the error above accounts for that
+	c.logger.Log().Msgf("pid: %v", pid)
+	c.process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+	for i := 0; i < b.N; i++ {
+		err := c.dump("../benchmarking/temp/pytorch-vision")
+		if err != nil {
+			b.Errorf("Error in dump(): %v", err)
+		}
+	}
+
+	b.Cleanup(
+		func() {
+			// Code to run after the benchmark
+			// Convert the int64 value to bytes
+			valueBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+
+		},
+	)
+}
+
+func BenchmarkDumpPytorchRegression(b *testing.B) {
+	c, err := instantiateClient()
+
+	if err != nil {
+		b.Errorf("Error in instantiateClient(): %v", err)
+	}
+
+	_, pid, err := LookForPid(c, []string{"pytorch-regression.pid"})
+
+	if err != nil {
+		b.Errorf("Error in LookForPid(): %v", err)
+	}
+	// this will always be one pid
+	// never no pids since the error above accounts for that
+	c.logger.Log().Msgf("pid: %v", pid)
+	c.process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+	for i := 0; i < b.N; i++ {
+		err := c.dump("../benchmarking/temp/pytorch-regression")
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -324,7 +380,7 @@ func TestMain(m *testing.M) {
 	m.Run()
 	c, _ := instantiateClient()
 
-	pids := []string{"loop.pid", "server.pid", "pytorch.pid"}
+	pids := []string{"loop.pid", "server.pid", "pytorch.pid", "pytorch-vision.pid", "pytorch-regression.pid"}
 	// Code to run after the tests
 	// Profiles := Profiles{}
 	cpuProfile, memProfile := PostDumpCleanup()

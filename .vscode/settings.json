@@ -1,4 +1,8 @@
 {
-    "go.formatTool": "gofumpt", 
-    "go.lintOnSave": "package"
+    "go.formatTool": "gofumpt",
+    "go.lintOnSave": "package",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.autopep8"
+    },
+    "python.formatting.provider": "none"
 }

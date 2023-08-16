@@ -3,7 +3,6 @@
 # Set the path to your execLoop and dirPids
 execLoop="benchmarking/processes/loop"
 execServer="benchmarking/processes/server"
-execPing="benchmarking/processes/ping"
 
 dirPids="benchmarking/pids"
 dirResults="benchmarking/results"
