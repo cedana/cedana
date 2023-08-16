@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Number of iterations
-num_iterations=100
+num_iterations=20
 
 # Get the start time
 start_time=$(date +%s)
@@ -9,7 +9,7 @@ start_time=$(date +%s)
 # Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
     # Run your script in the background
-    ./test/run_benchmarks.sh &
+    ./test/pytorch_benchmark.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!

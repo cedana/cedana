@@ -9,6 +9,7 @@ benchmarking/results/*
 benchmarking/pids/*
 benchmarking/processes/*
 benchmarking/temp/*
+dataset/
 dist/
 open_fds.json
 *.vhs

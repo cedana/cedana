@@ -31,6 +31,7 @@ type Benchmarks struct {
 	TimeToCompleteInNS int64
 	TotalMemoryUsed    int64
 	ElapsedTimeMs      int64
+	FileSize           int64
 }
 
 func BenchmarkDumpLoop(b *testing.B) {
@@ -74,6 +75,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 }
 
 func BenchmarkDumpServer(b *testing.B) {
+	dumpDir := "../benchmarking/temp/server"
 	c, err := instantiateClient()
 
 	if err != nil {
@@ -93,7 +95,7 @@ func BenchmarkDumpServer(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/server")
+		err := c.dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -106,7 +108,24 @@ func BenchmarkDumpServer(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			opts := c.prepareCheckpointOpts()
+			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			if err != nil {
+				b.Errorf("Error in prepareDump(): %v", err)
+			}
+			filesize, err := ZipFileSize(dumpdir + ".zip")
+			if err != nil {
+				b.Errorf("Error in ZipFileSize(): %v", err)
+			}
+
+			filesizeBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+
+			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -116,6 +135,7 @@ func BenchmarkDumpServer(b *testing.B) {
 }
 
 func BenchmarkDumpPytorch(b *testing.B) {
+	dumpDir := "../benchmarking/temp/pytorch"
 	c, err := instantiateClient()
 
 	if err != nil {
@@ -136,7 +156,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/pytorch")
+		err := c.dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -149,7 +169,25 @@ func BenchmarkDumpPytorch(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			opts := c.prepareCheckpointOpts()
+			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			if err != nil {
+				b.Errorf("Error in prepareDump(): %v", err)
+			}
+
+			filesize, err := ZipFileSize(dumpdir + ".zip")
+			if err != nil {
+				b.Errorf("Error in ZipFileSize(): %v", err)
+			}
+
+			filesizeBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+
+			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -159,6 +197,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchVision(b *testing.B) {
+	dumpDir := "../benchmarking/temp/pytorch-vision"
 	c, err := instantiateClient()
 
 	if err != nil {
@@ -179,7 +218,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/pytorch-vision")
+		err := c.dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -192,7 +231,25 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			opts := c.prepareCheckpointOpts()
+			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			if err != nil {
+				b.Errorf("Error in prepareDump(): %v", err)
+			}
+
+			filesize, err := ZipFileSize(dumpdir + ".zip")
+			if err != nil {
+				b.Errorf("Error in ZipFileSize(): %v", err)
+			}
+
+			filesizeBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+
+			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -202,6 +259,8 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchRegression(b *testing.B) {
+	dumpDir := "../benchmarking/temp/pytorch-regression"
+
 	c, err := instantiateClient()
 
 	if err != nil {
@@ -222,7 +281,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump("../benchmarking/temp/pytorch-regression")
+		err := c.dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -235,7 +294,24 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 			valueBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			err := os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			opts := c.prepareCheckpointOpts()
+			dumpdir, err := c.prepareDump(c.process.PID, dumpDir, opts)
+			if err != nil {
+				b.Errorf("Error in prepareDump(): %v", err)
+			}
+
+			filesize, err := ZipFileSize(dumpdir + ".zip")
+			filesizeBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+			if err != nil {
+				b.Errorf("Error in ZipFileSize(): %v", err)
+			}
+
+			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			if err != nil {
+				b.Errorf("Error in os.WriteFile(): %v", err)
+			}
+			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -251,6 +327,25 @@ func TestDump(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error in cmd.Run(): %v", err)
 	}
+}
+
+func ZipFileSize(filePath string) (int64, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	// Get the file size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return 0, err
+	}
+
+	// Get the size
+	size := fileInfo.Size()
+
+	return size, nil
 }
 
 func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
@@ -349,7 +444,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -369,6 +464,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
 		ElapsedTimeMs:      elapsedTime,
+		FileSize:           fileSize,
 	}
 	db.orm.Create(&cj)
 
@@ -389,7 +485,7 @@ func TestMain(m *testing.M) {
 
 	fileNames, pid, _ := LookForPid(c, pids)
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadElapsedTime("../benchmarking/temp/time", c))
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../benchmarking/temp/time", c), ReadInt64File("../benchmarking/temp/size", c))
 
 	// Kill the processes
 	for _, pid := range pid {
@@ -408,7 +504,7 @@ func TestMain(m *testing.M) {
 }
 
 // This reads the elapsed time from a file written by benchmarking cleanup function
-func ReadElapsedTime(filePath string, c *Client) int64 {
+func ReadInt64File(filePath string, c *Client) int64 {
 	// Open the file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
