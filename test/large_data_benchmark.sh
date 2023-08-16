@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Number of iterations
 num_iterations=20
 
