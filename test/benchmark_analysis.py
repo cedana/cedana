@@ -9,10 +9,11 @@ import math
 homeDir = os.getenv("HOME")
 
 db_file = f'{homeDir}/.cedana/benchmarking.db'
+
+# Create connection to the benchmarking database
 conn = sqlite3.connect(db_file)
 cursor = conn.cursor()
 
-# Replace 'your_table_name' with the actual table name
 benchmarkTable = 'benchmarks'
 
 # Fetch all rows from the table
@@ -33,9 +34,6 @@ process_name_mapping = {name: i for i, name in enumerate(unique_categories)}
 listOfDfs = []
 for category in unique_categories:
     listOfDfs.append(mainDf[mainDf['process_name'] == category])
-# loopDf = df[df['process_name'] == unique_categories[0]]
-# serverDf = df[df['process_name'] == unique_categories[1]]
-# pytorchDf = df[df['process_name'] == unique_categories[2]]
 
 for df in listOfDfs:
     df['elapsed_time_ms'] = df['elapsed_time_ms']/1000
@@ -50,29 +48,6 @@ for df in listOfDfs:
     print(
         f"Std of memory allocation of {df['process_name'].iloc[0]}: {df['total_memory_used'].std()} mb")
     print("")
-
-
-# pytorchStd = (pytorchDf['elapsed_time_ms']/1000).std()
-# pytorchMemoryStd = ((pytorchDf['total_memory_used'] * 1e-6 / 4000)*100).std()
-# print(f'pytorch std: {pytorchStd} seconds')
-# print(f'pytorch memory std: {pytorchMemoryStd}%')
-# print("")
-# serverStd = (serverDf['elapsed_time_ms']/1000).std()
-# serverMemoryStd = ((serverDf['total_memory_used'] * 1e-6 / 4000)*100).std()
-# serverMemoryMean = ((serverDf['total_memory_used'] * 1e-6 / 4000)*100).mean()
-# print(f'server std: {serverStd} seconds')
-# print(f'server memory std: {serverMemoryStd}%')
-# print(f'server memory mean: {serverMemoryMean}%')
-# print("")
-# loopStd = (loopDf['elapsed_time_ms']/1000).std()
-# loopMemoryStd = ((loopDf['total_memory_used'] * 1e-6 / 4000)*100).std()
-# loopMemoryMean = ((loopDf['total_memory_used'] * 1e-6 / 4000)*100).mean()
-# print(f'server std: {loopStd} seconds')
-# print(f'server memory std: {loopMemoryStd}%')
-# print(f'loop memory mean: {loopMemoryMean}%')
-
-# changeInStdOverMean = (serverMemoryStd - loopMemoryStd) / (serverMemoryMean - loopMemoryMean)
-# print(f'change in std over mean: {changeInStdOverMean}')
 
 
 # Convert process names to numeric values for coloring
