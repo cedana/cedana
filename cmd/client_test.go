@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/cedana/cedana/utils"
@@ -8,7 +9,15 @@ import (
 	"github.com/spf13/afero"
 )
 
+// we are skipping ci for now as we are using dump which requires criu, need to build criu on gh action
+func skipCIT(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping testing in CI environment")
+	}
+}
+
 func TestClient_WriteOnlyFds(t *testing.T) {
+	skipCIT(t)
 	openFds := []process.OpenFilesStat{
 		{Fd: 1, Path: "/path/to/file1"},
 		{Fd: 2, Path: "/path/to/file2 (deleted)"},

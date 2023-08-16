@@ -34,6 +34,7 @@ type Benchmarks struct {
 	FileSize           int64
 }
 
+// we are skipping ci for now as we are using dump which requires criu, need to build criu on gh action
 func skipCI(b *testing.B) {
 	if os.Getenv("CI") != "" {
 		b.Skip("Skipping testing in CI environment")
