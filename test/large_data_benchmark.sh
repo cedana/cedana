@@ -8,6 +8,7 @@ start_time=$(date +%s)
 
 benchmarking_dir="benchmarking/processes"
 repo_url="https://github.com/cedana/cedana-benchmarks"
+temp_dir="benchmarking/temp"
 
 # Get the current directory
 current_dir=$(pwd)
@@ -49,6 +50,21 @@ create_directory_if_not_exists "benchmarking"
 for subdir in "${subdirectories[@]}"; do
     create_directory_if_not_exists "benchmarking/$subdir"
 done
+
+# List of subdirectories to create within benchmarking/temp
+subdirectories=("loop" "server" "pytorch" "pytorch-regression" "pytorch-vision")
+
+# Change to the benchmarking/temp directory
+cd "$temp_dir" || exit
+
+# Loop through the subdirectories and create them if needed
+for subdir in "${subdirectories[@]}"; do
+    create_directory_if_not_exists "$subdir"
+done
+
+# Change back to the original directory
+cd "$current_dir" || exit
+
 
 # Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
