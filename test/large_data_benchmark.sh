@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Number of iterations
 num_iterations=20
 
@@ -88,5 +86,7 @@ elapsed_time=$((end_time - start_time))
 
 echo "All iterations completed"
 echo "Elapsed time: $elapsed_time seconds"
+
+pip3 install -r test/requirements
 
 python3 test/benchmark_analysis.py
