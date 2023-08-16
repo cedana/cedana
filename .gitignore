@@ -1,14 +1,19 @@
 cedana
 client_config.yaml
 cedana-daemon.log
-cedana.pid 
+cedana.pid
 cmd.test
 cmd/_home*
 
 benchmarking/results/*
+!benchmarking/results/.gitkeep  # Include the placeholder file
 benchmarking/pids/*
+!benchmarking/pids/.gitkeep
 benchmarking/processes/*
+!benchmarking/processes/.gitkeep
 benchmarking/temp/*
+!benchmarking/temp/.gitkeep
+
 dataset/
 dist/
 open_fds.json
