@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import pandas as pd
-import math
+import psutil
 
 # Connect to the SQLite database file
 homeDir = os.getenv("HOME")
@@ -57,22 +57,21 @@ mainDf['process_color'] = mainDf['process_name'].map(process_name_mapping)
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
+memory = psutil.virtual_memory().total
 
 # Create a plot using pandas and matplotlib
 scatter = ax.scatter(
-    (mainDf['elapsed_time_ms'] / 1000),  # X-axis
-    (mainDf['total_memory_used'] * 1e-6 / 4000) * 100,  # Y-axis
-    mainDf['file_size']*1e-6,  # Z-axis (color)
+    (mainDf['elapsed_time_ms'] / 1000),
+    (mainDf['total_memory_used'] / memory) * 100,
+    mainDf['file_size']*1e-6,
     c=mainDf['process_color'],  # Use process_color for coloring
     cmap=plt.cm.tab10,
     marker='o',
 )
 
-# Get the legend labels using the process_name_mapping
 legend_labels = [name for i, name in sorted(
     process_name_mapping.items(), key=lambda x: x[1])]
 
-# Create a legend with the specified labels and colors
 handles, _ = scatter.legend_elements(prop="colors")
 legend = plt.legend(handles, unique_categories,
                     title="Process Name", loc="upper right")
