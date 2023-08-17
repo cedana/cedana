@@ -14,6 +14,7 @@ func ZipFolder(folderPath, zipFilePath string) error {
 	// TODO BS zip needs to be installed on the system
 	// Add err handling for zip not being installed
 	cmd := exec.Command("zip", "-r", zipFilePath, folderPath)
+
 	err := cmd.Run()
 	if err != nil {
 		return err
