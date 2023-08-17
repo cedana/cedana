@@ -72,6 +72,7 @@ func instantiateClient() (*Client, error) {
 
 	c := criu.MakeCriu()
 	_, err := c.GetCriuVersion()
+	// TODO BS may err out if criu binaries aren't installed
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error checking CRIU version")
 		return nil, err
