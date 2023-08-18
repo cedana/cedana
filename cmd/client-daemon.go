@@ -37,16 +37,6 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
 		}
 
-		if pid == 0 {
-			// we're running as a cedana-managed daemon, so run the task
-			pid, err = c.startJob()
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("Could not start job!")
-				// TODO NR - integrate this with NATS and messaging so we can retry if needed
-			}
-			c.logger.Info().Msgf("managing process with pid %d", pid)
-		}
-
 		c.process.PID = pid
 
 		if dir == "" {
@@ -88,6 +78,16 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
+		if pid == 0 {
+			// we're running as a cedana-managed daemon, so run the task
+			pid, err = c.startJob()
+			if err != nil {
+				c.logger.Fatal().Err(err).Msg("could not start job")
+				// TODO NR - integrate this with NATS and messaging so we can retry if needed
+			}
+			c.logger.Info().Msgf("managing process with pid %d", pid)
+		}
+
 		go c.subscribeToCommands(300)
 		go c.publishStateContinuous(30)
 
@@ -108,11 +108,11 @@ func (c *Client) startJob() (int32, error) {
 
 	task := c.config.Client.Task
 	if task == "" {
-		return 0, fmt.Errorf("Could not find task in config, something went wrong during setup!")
+		return 0, fmt.Errorf("could not find task in config")
 	}
 
-	// validation of the task happens at the server level, so there's no real concerns here about
-	// executing the task without proper validation
+	// validation of the task happens at the server level,
+	// so there's no real concerns here about executing the task without proper validation
 
 	// we want the task to run detached so we can checkpoint it
 	cmd := exec.Command("/bin/sh", "-c", task)
