@@ -48,7 +48,7 @@ var dumpCommand = &cobra.Command{
 		}
 
 		if pid == 0 {
-			pid, err = utils.GetPid(c.config.Client.ProcessName)
+			pid, err = utils.GetPid(c.config.Client.Task)
 			if err != nil {
 				c.logger.Err(err).Msg("Could not parse process name from config")
 				return err

@@ -3,12 +3,11 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
 
@@ -17,7 +16,7 @@ import (
 
 func init() {
 	clientCommand.AddCommand(clientDaemonCmd)
-	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
+	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to manage")
 }
 
 var stop = make(chan struct{})
@@ -39,9 +38,11 @@ var clientDaemonCmd = &cobra.Command{
 		}
 
 		if pid == 0 {
-			pid, err = utils.GetPid(c.config.Client.ProcessName)
+			// we're running as a cedana-managed daemon, so run the task
+			pid, err = c.startJob()
 			if err != nil {
-				c.logger.Err(err).Msg("Could not parse process name from config")
+				c.logger.Fatal().Err(err).Msg("Could not start job!")
+				// TODO NR - integrate this with NATS and messaging so we can retry if needed
 			}
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
@@ -89,7 +90,6 @@ var clientDaemonCmd = &cobra.Command{
 
 		go c.subscribeToCommands(300)
 		go c.publishStateContinuous(30)
-		go c.forwardSocatLogs()
 
 		// start daemon worker
 		go c.startDaemon(pid)
@@ -101,6 +101,35 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msg("daemon terminated")
 	},
+}
+
+func (c *Client) startJob() (int32, error) {
+	var pid int32
+
+	task := c.config.Client.Task
+	if task == "" {
+		return 0, fmt.Errorf("Could not find task in config, something went wrong during setup!")
+	}
+
+	// validation of the task happens at the server level, so there's no real concerns here about
+	// executing the task without proper validation
+
+	// we want the task to run detached so we can checkpoint it
+	cmd := exec.Command("/bin/sh", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+
+	pid = int32(cmd.Process.Pid)
+
+	return pid, nil
 }
 
 func (c *Client) startDaemon(pid int32) {
@@ -147,36 +176,4 @@ func termHandler(sig os.Signal) error {
 		<-done
 	}
 	return gd.ErrStop
-}
-
-// This is slightly insane lol.
-// When a job is set up via the orchestrator, we expect that it's logging is redirected
-// using socat (e.g `program | socat - TCP:localhost:3376`). This way we can avoid any pesky
-// logging issues (managing open fds) on CRIU restores + also pipe from the machine the daemon is run on to
-// the user's CLI.
-func (c *Client) forwardSocatLogs() error {
-	listener, err := net.Listen("tcp", "localhost:3376")
-	if err != nil {
-		return err
-	}
-
-	defer listener.Close()
-
-	// accept incoming socat connection
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			c.logger.Info().Msgf("could not accept socat connection: %v", err)
-			return err
-		}
-
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			c.logger.Info().Msgf("could not read from socat connection: %v", err)
-			return err
-		}
-
-		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
-	}
 }

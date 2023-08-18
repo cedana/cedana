@@ -12,8 +12,7 @@ var logCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
 
-		// assume for now that a job is running that's piped to socat
-		c.forwardSocatLogs()
+		// just pipe and read from fd1 lol
 
 		return nil
 	},

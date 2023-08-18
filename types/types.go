@@ -11,6 +11,10 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
+type Job struct {
+	Command string `json:"command"`
+}
+
 // CedanaState encapsulates a CRIU checkpoint and includes
 // filesystem state for a full restore. Typically serialized and shot around
 // over the wire.
