@@ -26,9 +26,8 @@ type CedanaState struct {
 	// either local or remote checkpoint path (url vs filesystem path)
 	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
 
-	// Flags should be flicked on and stay consistent across
-	// state updates
-	Flags []Flag `json:"checkpoint_state" mapstructure:"checkpoint_state"`
+	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
+	Flag            Flag            `json:"flag" mapstructure:"flag"`
 }
 
 func (cs *CedanaState) SerializeToFolder(dir string) error {
@@ -85,6 +84,9 @@ type ServerCommand struct {
 	// the source prior to execution.
 	// TODO NR - implement verification
 	CedanaState CedanaState `json:"cedana_state" mapstructure:"cedana_state"`
+
+	// new job command to be executed
+	UpdatedTask string `json:"updated_task" mapstructure:"updated_task"`
 }
 
 type CheckpointType string
@@ -93,23 +95,25 @@ type CheckpointType string
 // These should only encapsulate flags that an external service (like an orchestrator)
 // can use for deciding what to do - especially in the case that the daemon reaches a point
 // after which further actions are not possible (or shouldn't be possible).
+// Ideally, Flag should also never be empty.
 type Flag string
 type FlagReason string
+
+type CheckpointState string
 
 const (
 	CheckpointTypeNone    CheckpointType = "none"
 	CheckpointTypeCRIU    CheckpointType = "criu"
 	CheckpointTypePytorch CheckpointType = "pytorch"
-)
 
-const (
-	CheckpointSuccess Flag = "CHECKPOINTED"
-	CheckpointFailed  Flag = "CHECKPOINT_FAILED"
-	RestoreSuccess    Flag = "RESTORED"
-	RestoreFailed     Flag = "RESTORE_FAILED"
+	CheckpointSuccess CheckpointState = "CHECKPOINTED"
+	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
+	RestoreSuccess    CheckpointState = "RESTORED"
+	RestoreFailed     CheckpointState = "RESTORE_FAILED"
 
 	// Job here refers to a process or container started and managed (C/R) by the daemon.
 	JobStartupFailed Flag = "JOB_STARTUP_FAILED"
 	JobKilled        Flag = "JOB_KILLED"
 	JobIdle          Flag = "JOB_IDLE"
+	JobRunning       Flag = "JOB_RUNNING"
 )

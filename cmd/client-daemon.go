@@ -82,15 +82,22 @@ var clientDaemonCmd = &cobra.Command{
 		go c.subscribeToCommands(300)
 
 		if pid == 0 {
-			// we're running as a cedana-managed daemon, so run the task
-			pid, err = c.startJob()
-			if err != nil {
-				// enter a failure state, where we wait for a command from NATS instead of
-				// continuing
-				c.logger.Fatal().Err(err).Msg("could not start job")
-				// TODO NR - integrate this with NATS and messaging so we can retry if needed
+			// we retry startJob until it succeeds everytime we get a new serverCommand
+			var task string = c.config.Client.Task
+			for {
+				pid, err = c.startJob(task)
+				if err == nil {
+					c.logger.Info().Msgf("managing process with pid %d", pid)
+					break
+				} else {
+					// enter a failure state, where we wait for a command from NATS instead of
+					// continuing
+					c.logger.Fatal().Err(err).Msg("could not start job")
+					c.state.Flag = cedana.JobStartupFailed
+					recoveryCmd := c.enterDoomLoop()
+					task = recoveryCmd.UpdatedTask
+				}
 			}
-			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
 
 		go c.publishStateContinuous(30)
@@ -107,10 +114,9 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startJob() (int32, error) {
+func (c *Client) startJob(task string) (int32, error) {
 	var pid int32
 
-	task := c.config.Client.Task
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
 	}

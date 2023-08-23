@@ -57,6 +57,7 @@ type Client struct {
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan cedana.ServerCommand
+	recover_command chan cedana.ServerCommand
 }
 
 var clientCommand = &cobra.Command{
@@ -94,7 +95,12 @@ func instantiateClient() (*Client, error) {
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
 	restore_command := make(chan cedana.ServerCommand)
-	channels := &CommandChannels{dump_command, restore_command}
+	recover_command := make(chan cedana.ServerCommand)
+	channels := &CommandChannels{
+		dump_command,
+		restore_command,
+		recover_command,
+	}
 
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
@@ -269,6 +275,9 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 
 					state := c.getState(c.process.PID)
 					c.publishStateOnce(state)
+				} else if cmd.Command == "retry" {
+					msg.Ack()
+					c.channels.recover_command <- cmd
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
@@ -282,9 +291,16 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 // to wait for a command from the orchestrator to continue/unstuck the system.
 // Ideally we can use this across the board whenever a case props up that requires
 // orchestrator/external intervention.
-func (c *Client) failState() {
+// Takes a flag as input, which is used to craft a state to pass to NATS and waits
+// for a signal to exit. Since go blocks until a signal is received, we use a channel.
+func (c *Client) enterDoomLoop() *cedana.ServerCommand {
+	c.publishStateOnce(&c.state)
 	for {
-
+		select {
+		case cmd := <-c.channels.recover_command:
+			c.logger.Info().Msgf("received recover command")
+			return &cmd
+		}
 	}
 }
 
@@ -304,6 +320,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	var openFiles []process.OpenFilesStat
 	var writeOnlyFiles []string
 	var openConnections []net.ConnectionStat
+	var flag cedana.Flag
 
 	if p != nil {
 		openFiles, err = p.OpenFiles()
@@ -321,6 +338,13 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 
 	memoryUsed, _ := p.MemoryPercent()
 	isRunning, _ := p.IsRunning()
+
+	// if the process is actually running, we don't care that
+	// we're potentially overriding a failed flag here.
+	// In the case of a restored/resuscitated process this is a good thing
+	if isRunning {
+		flag = cedana.JobRunning
+	}
 
 	// this is the status as returned by gopsutil.
 	// ideally we want more than this, or some parsing to happen from this end
@@ -348,6 +372,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
+		Flag:            flag,
 		CheckpointState: c.state.CheckpointState,
 	}
 }
