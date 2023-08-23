@@ -82,9 +82,9 @@ var clientDaemonCmd = &cobra.Command{
 		go c.subscribeToCommands(300)
 
 		if pid == 0 {
-			// we retry startJob until it succeeds everytime we get a new serverCommand
+			// we retry startJob up to 5 times until it succeeds everytime we get a new serverCommand
 			var task string = c.config.Client.Task
-			for {
+			for i := 0; i < 5; i++ {
 				pid, err = c.startJob(task)
 				if err == nil {
 					c.logger.Info().Msgf("managing process with pid %d", pid)

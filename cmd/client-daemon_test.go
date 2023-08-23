@@ -53,4 +53,8 @@ func TestClient_StartJob(t *testing.T) {
 			t.Error("Expected process to be detached")
 		}
 	})
+
+	t.Run("TaskFailsOnce", func(t *testing.T) {
+		
+	})
 }
