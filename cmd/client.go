@@ -44,9 +44,10 @@ type Client struct {
 	jobId  string
 	selfId string
 
-	state cedana.CedanaState // only ever modified at checkpoint/restore time
+	// a single big state glob
+	state cedana.CedanaState
 
-	// need to dependency inject a filesystem
+	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
 	// checkpoint store
@@ -194,19 +195,20 @@ func (c *Client) publishStateContinuous(rate int) {
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	// publish state continuously
 	for range ticker.C {
-		c.publishStateOnce()
+		state := c.getState(c.process.PID)
+		c.publishStateOnce(state)
 	}
 }
 
-func (c *Client) publishStateOnce() {
+func (c *Client) publishStateOnce(state *cedana.CedanaState) {
+	if state == nil {
+		// we got no state, not necessarily an error condition - skip
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	state := c.getState(c.process.PID)
-	if state == nil {
-		// we got no state, not necessarily an error condition - skip this iteration
-		return
-	}
 	data, err := json.Marshal(state)
 	if err != nil {
 		c.logger.Info().Msgf("could not marshal state: %v", err)
@@ -258,17 +260,31 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
 					c.channels.dump_command <- 1
-					c.publishStateOnce()
+
+					state := c.getState(c.process.PID)
+					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
 					c.channels.restore_command <- cmd
-					c.publishStateOnce()
+
+					state := c.getState(c.process.PID)
+					c.publishStateOnce(state)
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
 				}
 			}
 		}
+	}
+}
+
+// Function called whenever we enter a failed state and need
+// to wait for a command from the orchestrator to continue/unstuck the system.
+// Ideally we can use this across the board whenever a case props up that requires
+// orchestrator/external intervention.
+func (c *Client) failState() {
+	for {
+
 	}
 }
 

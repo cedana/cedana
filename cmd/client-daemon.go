@@ -78,17 +78,21 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
+		// create a subscription to NATS commands from the orchestrator first
+		go c.subscribeToCommands(300)
+
 		if pid == 0 {
 			// we're running as a cedana-managed daemon, so run the task
 			pid, err = c.startJob()
 			if err != nil {
+				// enter a failure state, where we wait for a command from NATS instead of
+				// continuing
 				c.logger.Fatal().Err(err).Msg("could not start job")
 				// TODO NR - integrate this with NATS and messaging so we can retry if needed
 			}
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 		}
 
-		go c.subscribeToCommands(300)
 		go c.publishStateContinuous(30)
 
 		// start daemon worker
@@ -143,10 +147,10 @@ LOOP:
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
 				c.state.CheckpointState = cedana.CheckpointFailed
-				c.publishStateOnce()
+				c.publishStateOnce(c.getState(c.process.PID))
 			}
 			c.state.CheckpointState = cedana.CheckpointSuccess
-			c.publishStateOnce()
+			c.publishStateOnce(c.getState(c.process.PID))
 
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
@@ -155,10 +159,10 @@ LOOP:
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
-				c.publishStateOnce()
+				c.publishStateOnce(c.getState(c.process.PID))
 			}
 			c.state.CheckpointState = cedana.RestoreSuccess
-			c.publishStateOnce()
+			c.publishStateOnce(c.getState(c.process.PID))
 
 		case <-stop:
 			c.logger.Info().Msg("stop hit")

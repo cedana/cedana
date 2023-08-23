@@ -22,10 +22,13 @@ type CedanaState struct {
 	ClientInfo     ClientInfo     `json:"client_info" mapstructure:"client_info"`
 	ProcessInfo    ProcessInfo    `json:"process_info" mapstructure:"process_info"`
 	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
+
 	// either local or remote checkpoint path (url vs filesystem path)
 	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
-	// process state at time of checkpoint
-	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
+
+	// Flags should be flicked on and stay consistent across
+	// state updates
+	Flags []Flag `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 }
 
 func (cs *CedanaState) SerializeToFolder(dir string) error {
@@ -76,13 +79,22 @@ type GPUInfo struct {
 }
 
 type ServerCommand struct {
-	Command     string      `json:"command" mapstructure:"command"`
-	Heartbeat   bool        `json:"heartbeat" mapstructure:"heartbeat"`
+	Command   string `json:"command" mapstructure:"command"`
+	Heartbeat bool   `json:"heartbeat" mapstructure:"heartbeat"`
+	// orchestrator passes back the latest cedanaState to the client which can be used to verify
+	// the source prior to execution.
+	// TODO NR - implement verification
 	CedanaState CedanaState `json:"cedana_state" mapstructure:"cedana_state"`
 }
 
 type CheckpointType string
-type CheckpointState string
+
+// Flag and FlagReason are used together when pushing up state.
+// These should only encapsulate flags that an external service (like an orchestrator)
+// can use for deciding what to do - especially in the case that the daemon reaches a point
+// after which further actions are not possible (or shouldn't be possible).
+type Flag string
+type FlagReason string
 
 const (
 	CheckpointTypeNone    CheckpointType = "none"
@@ -91,8 +103,13 @@ const (
 )
 
 const (
-	CheckpointSuccess CheckpointState = "CHECKPOINTED"
-	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
-	RestoreSuccess    CheckpointState = "RESTORED"
-	RestoreFailed     CheckpointState = "RESTORE_FAILED"
+	CheckpointSuccess Flag = "CHECKPOINTED"
+	CheckpointFailed  Flag = "CHECKPOINT_FAILED"
+	RestoreSuccess    Flag = "RESTORED"
+	RestoreFailed     Flag = "RESTORE_FAILED"
+
+	// Job here refers to a process or container started and managed (C/R) by the daemon.
+	JobStartupFailed Flag = "JOB_STARTUP_FAILED"
+	JobKilled        Flag = "JOB_KILLED"
+	JobIdle          Flag = "JOB_IDLE"
 )
