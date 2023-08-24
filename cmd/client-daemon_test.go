@@ -3,7 +3,9 @@ package cmd
 import (
 	"syscall"
 	"testing"
+	"time"
 
+	cedana "github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 )
 
@@ -18,7 +20,7 @@ func TestClient_StartJob(t *testing.T) {
 			},
 		}
 
-		_, err := c.startJob()
+		_, err := c.runTask(c.config.Client.Task)
 
 		// Verify that the error is returned
 		if err == nil {
@@ -36,7 +38,7 @@ func TestClient_StartJob(t *testing.T) {
 			},
 		}
 
-		pid, err := c.startJob()
+		pid, err := c.runTask(c.config.Client.Task)
 
 		// Verify that no error is returned
 		if err != nil {
@@ -55,6 +57,30 @@ func TestClient_StartJob(t *testing.T) {
 	})
 
 	t.Run("TaskFailsOnce", func(t *testing.T) {
-		
+		c := &Client{
+			config: &utils.Config{
+				Client: utils.Client{
+					Task: "",
+				},
+			},
+			channels: &CommandChannels{
+				recover_command: make(chan cedana.ServerCommand),
+			},
+		}
+
+		go mockServerRetryCmd(c)
+		err := c.tryStartJob()
+		if err != nil {
+			t.Errorf("Expected no error, but got %v", err)
+		}
 	})
+}
+
+func mockServerRetryCmd(c *Client) {
+	// wait 30 seconds and fire a message on the recover channel
+	// that breaks enterDoomLoop(), to update the runTask() for loop
+	time.Sleep(30 * time.Second)
+	c.channels.recover_command <- cedana.ServerCommand{
+		UpdatedTask: "echo 'Hello, World!'; sleep 5",
+	}
 }

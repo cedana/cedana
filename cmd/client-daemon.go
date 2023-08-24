@@ -82,21 +82,10 @@ var clientDaemonCmd = &cobra.Command{
 		go c.subscribeToCommands(300)
 
 		if pid == 0 {
-			// we retry startJob up to 5 times until it succeeds everytime we get a new serverCommand
-			var task string = c.config.Client.Task
-			for i := 0; i < 5; i++ {
-				pid, err = c.startJob(task)
-				if err == nil {
-					c.logger.Info().Msgf("managing process with pid %d", pid)
-					break
-				} else {
-					// enter a failure state, where we wait for a command from NATS instead of
-					// continuing
-					c.logger.Fatal().Err(err).Msg("could not start job")
-					c.state.Flag = cedana.JobStartupFailed
-					recoveryCmd := c.enterDoomLoop()
-					task = recoveryCmd.UpdatedTask
-				}
+			err := c.tryStartJob()
+			// if we hit an error here, unrecoverable
+			if err != nil {
+				c.logger.Fatal().Err(err).Msg("could not start job")
 			}
 		}
 
@@ -114,7 +103,32 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
-func (c *Client) startJob(task string) (int32, error) {
+func (c *Client) tryStartJob() error {
+	var task string = c.config.Client.Task
+	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
+	for i := 0; i < 5; i++ {
+		pid, err := c.runTask(task)
+		if err == nil {
+			c.logger.Info().Msgf("managing process with pid %d", pid)
+			break
+		} else {
+			// enter a failure state, where we wait indefinitely for a command from NATS instead of
+			// continuing
+			c.logger.Fatal().Err(err).Msg("could not start job")
+			c.state.Flag = cedana.JobStartupFailed
+			recoveryCmd := c.enterDoomLoop()
+			task = recoveryCmd.UpdatedTask
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+	// only returns for testability
+	return nil
+}
+
+func (c *Client) runTask(task string) (int32, error) {
 	var pid int32
 
 	if task == "" {
