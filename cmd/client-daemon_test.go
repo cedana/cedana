@@ -57,6 +57,7 @@ func TestClient_StartJob(t *testing.T) {
 	})
 
 	t.Run("TaskFailsOnce", func(t *testing.T) {
+		logger := utils.GetLogger()
 		c := &Client{
 			config: &utils.Config{
 				Client: utils.Client{
@@ -66,13 +67,17 @@ func TestClient_StartJob(t *testing.T) {
 			channels: &CommandChannels{
 				recover_command: make(chan cedana.ServerCommand),
 			},
+			logger: &logger,
 		}
 
 		go mockServerRetryCmd(c)
+		t.Log("startup fails once")
 		err := c.tryStartJob()
 		if err != nil {
 			t.Errorf("Expected no error, but got %v", err)
 		}
+
+		t.Log("startup succeeds")
 	})
 }
 
@@ -81,6 +86,6 @@ func mockServerRetryCmd(c *Client) {
 	// that breaks enterDoomLoop(), to update the runTask() for loop
 	time.Sleep(30 * time.Second)
 	c.channels.recover_command <- cedana.ServerCommand{
-		UpdatedTask: "echo 'Hello, World!'; sleep 5",
+		UpdatedTask: "echo 'Hello, World!'",
 	}
 }

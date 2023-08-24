@@ -181,7 +181,6 @@ func (c *Client) AddDaemonLayer() error {
 		c.logger.Fatal().Err(err).Msg("Could not set up JetStream context")
 		return err
 	}
-	c.jsc = jsc
 
 	// until market server is deployed, use NATS as a store
 	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)

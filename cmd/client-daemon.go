@@ -114,7 +114,7 @@ func (c *Client) tryStartJob() error {
 		} else {
 			// enter a failure state, where we wait indefinitely for a command from NATS instead of
 			// continuing
-			c.logger.Fatal().Err(err).Msg("could not start job")
+			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
 			c.state.Flag = cedana.JobStartupFailed
 			recoveryCmd := c.enterDoomLoop()
 			task = recoveryCmd.UpdatedTask
