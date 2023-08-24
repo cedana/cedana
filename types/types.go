@@ -116,4 +116,8 @@ const (
 	JobKilled        Flag = "JOB_KILLED"
 	JobIdle          Flag = "JOB_IDLE"
 	JobRunning       Flag = "JOB_RUNNING"
+	JobPending       Flag = "JOB_PENDING"
+	// setup is used by the orchestrator
+	JobSetupFailed Flag = "JOB_SETUP_FAILED"
+	JobDone        Flag = "JOB_DONE"
 )
