@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set the path to your execLoop and dirPids
-execLoop="benchmarking/processes/loop"
-execServer="benchmarking/processes/server"
+execLoop="benchmarking/processes/loop2"
+execServer="benchmarking/processes/server2"
 
 dirPids="benchmarking/pids"
 dirResults="benchmarking/results"

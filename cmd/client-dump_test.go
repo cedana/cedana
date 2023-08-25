@@ -41,6 +41,25 @@ func skipCI(b *testing.B) {
 	}
 }
 
+func getFilenames(directoryPath string, prefix string) ([]string, error) {
+	// Read the directory contents
+	files, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	loopFilenames := []string{}
+
+	// Iterate through the files and append filenames that match the prefix "loop-"
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), prefix) {
+			loopFilenames = append(loopFilenames, file.Name())
+		}
+	}
+
+	return loopFilenames, nil
+}
+
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
 	dumpDir := "../benchmarking/temp/loop"
@@ -50,7 +69,13 @@ func BenchmarkDumpLoop(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"loop.pid"})
+	fileNames, err := getFilenames("../benchmarking/pids/", "loop-")
+
+	if err != nil {
+		b.Errorf("Error in getFilenames(): %v", err)
+	}
+
+	_, pid, _ := LookForPid(c, fileNames)
 
 	c.process.PID = pid[0]
 
@@ -501,7 +526,12 @@ func TestMain(m *testing.M) {
 	m.Run()
 	c, _ := instantiateClient()
 
-	pids := []string{"loop.pid", "server.pid", "pytorch.pid", "pytorch-vision.pid", "pytorch-regression.pid"}
+	pids, err := getFilenames("../benchmarking/pids/", "")
+
+	if err != nil {
+		c.logger.Error().Msgf("Error in getFilenames(): %v", err)
+	}
+
 	// Code to run after the tests
 	// Profiles := Profiles{}
 	cpuProfile, memProfile := PostDumpCleanup()
