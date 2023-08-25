@@ -384,7 +384,7 @@ func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
 
 		// Open the file for reading
 		dir := fmt.Sprintf("../benchmarking/pids/%v", file)
-		file, err := os.Open(dir)
+		file, err := os.OpenFile(dir, os.O_RDONLY, 0o664)
 		if err == nil {
 			defer file.Close()
 
@@ -524,6 +524,12 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	m.Run()
+
+	finalCleanup()
+
+}
+
+func finalCleanup() {
 	c, _ := instantiateClient()
 
 	pids, err := getFilenames("../benchmarking/pids/", "")

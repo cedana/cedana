@@ -112,7 +112,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	// TODO: network restore logic
 	// TODO: checksum val
 
-	err = os.Remove(zipFile)
+	// Remove for now for testing
+	// err = os.Remove(zipFile)
 	if err != nil {
 		return nil, err
 	}
@@ -185,16 +186,16 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		// cleanup along the way
-		// os.RemoveAll(dir)
+		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
 	}
 
 	// clean up
-	// err = os.RemoveAll(dir)
-	// if err != nil {
-	// 	c.logger.Fatal().Err(err).Msg("error removing directory")
-	// }
+	err = os.RemoveAll(dir)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error removing directory")
+	}
 	c.cleanupClient()
 	return nil
 }

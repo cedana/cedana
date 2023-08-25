@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -56,10 +57,33 @@ func BenchmarkRestore(b *testing.B) {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
 	}
-	// b.Cleanup(func() {
-	// 	_, err := os.Stat("cedana-restore")
-	// 	if err == nil {
-	// 		os.RemoveAll("cedana-restore")
-	// 	}
-	// })
+	b.Cleanup(func() {
+		_, err := os.Stat("cedana_restore")
+		if err == nil {
+			os.RemoveAll("cedana_restore")
+		}
+		_, err = os.Stat("../output.log")
+		if err == nil {
+			os.Remove("../output.log")
+		}
+
+		// List all pids
+		files, err := os.ReadDir("../benchmarking/pids/")
+		if err != nil {
+			b.Error("Error reading directory:", err)
+			return
+		}
+
+		// Loop through the pids and remove them
+		for _, file := range files {
+			filePath := filepath.Join("../benchmarking/pids/", file.Name())
+			err := os.Remove(filePath)
+			if err != nil {
+				b.Errorf("Error removing file %s: %v\n", filePath, err)
+			} else {
+				b.Errorf("Removed file: %s\n", filePath)
+			}
+		}
+	})
+
 }
