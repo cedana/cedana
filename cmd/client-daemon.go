@@ -106,6 +106,7 @@ var clientDaemonCmd = &cobra.Command{
 func (c *Client) tryStartJob() error {
 	var task string = c.config.Client.Task
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
+	var err error
 	for i := 0; i < 5; i++ {
 		pid, err := c.runTask(task)
 		if err == nil {
@@ -119,12 +120,12 @@ func (c *Client) tryStartJob() error {
 			recoveryCmd := c.enterDoomLoop()
 			task = recoveryCmd.UpdatedTask
 		}
-
-		if err != nil {
-			return err
-		}
 	}
-	// only returns for testability
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

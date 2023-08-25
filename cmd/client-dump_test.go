@@ -498,6 +498,12 @@ func TestMain(m *testing.M) {
 	if os.Getenv("CI") != "" {
 		os.Exit(0)
 	}
+
+	// Only run this if we're explicitly benchmarking
+	if os.Getenv("BENCHMARKING") != "" {
+		os.Exit(0)
+	}
+
 	m.Run()
 	c, _ := instantiateClient()
 

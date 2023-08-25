@@ -58,6 +58,12 @@ func TestClient_StartJob(t *testing.T) {
 
 	t.Run("TaskFailsOnce", func(t *testing.T) {
 		logger := utils.GetLogger()
+
+		// start a server
+		utils.RunDefaultServer(t)
+
+		js := utils.CreateTestJetstream(t)
+
 		c := &Client{
 			config: &utils.Config{
 				Client: utils.Client{
@@ -68,23 +74,23 @@ func TestClient_StartJob(t *testing.T) {
 				recover_command: make(chan cedana.ServerCommand),
 			},
 			logger: &logger,
+			// enterDoomLoop() makes a JetStream call
+			js: js,
 		}
 
 		go mockServerRetryCmd(c)
-		t.Log("startup fails once")
 		err := c.tryStartJob()
 		if err != nil {
 			t.Errorf("Expected no error, but got %v", err)
 		}
 
-		t.Log("startup succeeds")
 	})
 }
 
 func mockServerRetryCmd(c *Client) {
 	// wait 30 seconds and fire a message on the recover channel
 	// that breaks enterDoomLoop(), to update the runTask() for loop
-	time.Sleep(30 * time.Second)
+	time.Sleep(10 * time.Second)
 	c.channels.recover_command <- cedana.ServerCommand{
 		UpdatedTask: "echo 'Hello, World!'",
 	}
