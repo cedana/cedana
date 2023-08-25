@@ -189,16 +189,16 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 	err = c.CRIU.Restore(opts, nfy)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		// os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
 	}
 
 	// clean up
-	err = os.RemoveAll(dir)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error removing directory")
-	}
+	// err = os.RemoveAll(dir)
+	// if err != nil {
+	// 	c.logger.Fatal().Err(err).Msg("error removing directory")
+	// }
 	c.cleanupClient()
 	return nil
 }

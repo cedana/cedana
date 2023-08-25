@@ -1,0 +1,2180 @@
+(00.000042) Version: 3.17.1 (gitid 0)
+(00.000121) Running on pop-os Linux 6.4.6-76060406-generic #202307241739~1690928105~22.04~d567a38 SMP PREEMPT_DYNAMIC Tue A x86_64
+(00.000142) Loaded kdat cache from /run/criu.kdat
+(00.000157) Hugetlb size 2 Mb is supported but cannot get dev's number
+(00.000168) Hugetlb size 1024 Mb is supported but cannot get dev's number
+(00.000192) ========================================
+(00.000195) Dumping processes (pid: 29418)
+(00.000197) ========================================
+(00.000200) rlimit: RLIMIT_NOFILE unlimited for self
+(00.000206) Running pre-dump scripts
+(00.000208) 	RPC
+(00.000742) irmap: Searching irmap cache in work dir
+(00.000752) No irmap-cache image
+(00.000755) irmap: Searching irmap cache in parent
+(00.000758) No parent images directory provided
+(00.000760) irmap: No irmap cache
+(00.000768) cpu: x86_family 6 x86_vendor_id GenuineIntel x86_model_id 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+(00.000771) cpu: fpu: xfeatures_mask 0x2e5 xsave_size 2696 xsave_size_max 2696 xsaves_size 2440
+(00.000774) cpu: fpu: x87 floating point registers     xstate_offsets      0 / 0      xstate_sizes    160 / 160   
+(00.000776) cpu: fpu: AVX registers                    xstate_offsets    576 / 576    xstate_sizes    256 / 256   
+(00.000778) cpu: fpu: AVX-512 opmask                   xstate_offsets   1088 / 832    xstate_sizes     64 / 64    
+(00.000780) cpu: fpu: AVX-512 Hi256                    xstate_offsets   1152 / 896    xstate_sizes    512 / 512   
+(00.000782) cpu: fpu: AVX-512 ZMM_Hi256                xstate_offsets   1664 / 1408   xstate_sizes   1024 / 1024  
+(00.000785) cpu: fpu: Protection Keys User registers   xstate_offsets   2688 / 2432   xstate_sizes      8 / 8     
+(00.000787) cpu: fpu:1 fxsr:1 xsave:1 xsaveopt:1 xsavec:1 xgetbv1:1 xsaves:1
+(00.000845) cg-prop: Parsing controller "cpu"
+(00.000848) cg-prop: 	Strategy "replace"
+(00.000849) cg-prop: 	Property "cpu.shares"
+(00.000851) cg-prop: 	Property "cpu.cfs_period_us"
+(00.000852) cg-prop: 	Property "cpu.cfs_quota_us"
+(00.000853) cg-prop: 	Property "cpu.rt_period_us"
+(00.000854) cg-prop: 	Property "cpu.rt_runtime_us"
+(00.000856) cg-prop: Parsing controller "memory"
+(00.000857) cg-prop: 	Strategy "replace"
+(00.000858) cg-prop: 	Property "memory.limit_in_bytes"
+(00.000859) cg-prop: 	Property "memory.memsw.limit_in_bytes"
+(00.000861) cg-prop: 	Property "memory.swappiness"
+(00.000862) cg-prop: 	Property "memory.soft_limit_in_bytes"
+(00.000863) cg-prop: 	Property "memory.move_charge_at_immigrate"
+(00.000864) cg-prop: 	Property "memory.oom_control"
+(00.000866) cg-prop: 	Property "memory.use_hierarchy"
+(00.000867) cg-prop: 	Property "memory.kmem.limit_in_bytes"
+(00.000868) cg-prop: 	Property "memory.kmem.tcp.limit_in_bytes"
+(00.000869) cg-prop: Parsing controller "cpuset"
+(00.000871) cg-prop: 	Strategy "replace"
+(00.000872) cg-prop: 	Property "cpuset.cpus"
+(00.000873) cg-prop: 	Property "cpuset.mems"
+(00.000874) cg-prop: 	Property "cpuset.memory_migrate"
+(00.000875) cg-prop: 	Property "cpuset.cpu_exclusive"
+(00.000877) cg-prop: 	Property "cpuset.mem_exclusive"
+(00.000878) cg-prop: 	Property "cpuset.mem_hardwall"
+(00.000879) cg-prop: 	Property "cpuset.memory_spread_page"
+(00.000881) cg-prop: 	Property "cpuset.memory_spread_slab"
+(00.000883) cg-prop: 	Property "cpuset.sched_load_balance"
+(00.000884) cg-prop: 	Property "cpuset.sched_relax_domain_level"
+(00.000885) cg-prop: Parsing controller "blkio"
+(00.000886) cg-prop: 	Strategy "replace"
+(00.000888) cg-prop: 	Property "blkio.weight"
+(00.000890) cg-prop: Parsing controller "freezer"
+(00.000892) cg-prop: 	Strategy "replace"
+(00.000894) cg-prop: Parsing controller "perf_event"
+(00.000896) cg-prop: 	Strategy "replace"
+(00.000897) cg-prop: Parsing controller "net_cls"
+(00.000898) cg-prop: 	Strategy "replace"
+(00.000899) cg-prop: 	Property "net_cls.classid"
+(00.000901) cg-prop: Parsing controller "net_prio"
+(00.000902) cg-prop: 	Strategy "replace"
+(00.000903) cg-prop: 	Property "net_prio.ifpriomap"
+(00.000905) cg-prop: Parsing controller "pids"
+(00.000906) cg-prop: 	Strategy "replace"
+(00.000907) cg-prop: 	Property "pids.max"
+(00.000912) cg-prop: Parsing controller "devices"
+(00.000913) cg-prop: 	Strategy "replace"
+(00.000915) cg-prop: 	Property "devices.list"
+(00.000927) Preparing image inventory (version 1)
+(00.000943) Add pid ns 1 pid 29971
+(00.000947) Add net ns 2 pid 29971
+(00.000951) Add ipc ns 3 pid 29971
+(00.000955) Add uts ns 4 pid 29971
+(00.000959) Add time ns 5 pid 29971
+(00.000967) Add mnt ns 6 pid 29971
+(00.000972) Add user ns 7 pid 29971
+(00.000976) Add cgroup ns 8 pid 29971
+(00.000978) cg: Dumping cgroups for 29971
+(00.000984) cg:  `- New css ID 1
+(00.000985) cg:     `- [] -> [/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice/vte-spawn-266ce6b4-9f85-44a0-b360-b39958de5c80.scope] [0]
+(00.000987) cg: Set 1 is criu one
+(00.000991) Detected cgroup V1 freezer
+(00.001023) Seized task 29418, state 1
+(00.001025) seccomp: Collected tid_real 29418 mode 0
+(00.001035) 	Seizing 29418's 29419 thread
+(00.001056) seccomp: Collected tid_real 29419 mode 0
+(00.001065) Collected (3 attempts, 0 in_progress)
+(00.001074) Collected (4 attempts, 0 in_progress)
+(00.001079) Collected 29418 in 1 state
+(00.001098) Lock network
+(00.001133) 	type sysfs source sysfs mnt_id 23 s_dev 0x15 / @ ./sys flags 0x30000e options 
+(00.001140) 	type proc source proc mnt_id 24 s_dev 0x16 / @ ./proc flags 0x30000e options 
+(00.001144) 	type devtmpfs source udev mnt_id 25 s_dev 0x5 / @ ./dev flags 0x300002 options size=3876096k,nr_inodes=969024,mode=755,inode64
+(00.001148) 	type devpts source devpts mnt_id 26 s_dev 0x17 / @ ./dev/pts flags 0x30000a options gid=5,mode=620,ptmxmode=000
+(00.001154) 	type tmpfs source tmpfs mnt_id 27 s_dev 0x18 / @ ./run flags 0x30000e options size=787892k,mode=755,inode64
+(00.001157) 	type efivarfs source efivarfs mnt_id 28 s_dev 0x19 / @ ./sys/firmware/efi/efivars flags 0x30000e options 
+(00.001161) 	type ext4 source /dev/mapper/data-root mnt_id 31 s_dev 0xfd00001 / @ ./ flags 0x100400 options errors=remount-ro
+(00.001164) 	type securityfs source securityfs mnt_id 32 s_dev 0x6 / @ ./sys/kernel/security flags 0x30000e options 
+(00.001167) 	type tmpfs source tmpfs mnt_id 33 s_dev 0x1c / @ ./dev/shm flags 0x1100006 options inode64
+(00.001170) 	type tmpfs source tmpfs mnt_id 34 s_dev 0x1d / @ ./run/lock flags 0x30000e options size=5120k,inode64
+(00.001190) 	type cgroup2 source cgroup2 mnt_id 35 s_dev 0x1e / @ ./sys/fs/cgroup flags 0x30000e options nsdelegate,memory_recursiveprot
+(00.001194) 	type pstore source pstore mnt_id 36 s_dev 0x1f / @ ./sys/fs/pstore flags 0x30000e options 
+(00.001197) 	type bpf source bpf mnt_id 37 s_dev 0x20 / @ ./sys/fs/bpf flags 0x30000e options mode=700
+(00.001201) 	type autofs source systemd-1 mnt_id 38 s_dev 0x21 / @ ./proc/sys/fs/binfmt_misc flags 0x300000 options fd=29,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=24374
+(00.001205) 	type hugetlbfs source hugetlbfs mnt_id 39 s_dev 0x22 / @ ./dev/hugepages flags 0x300000 options pagesize=2M
+(00.001209) 	type mqueue source mqueue mnt_id 40 s_dev 0x13 / @ ./dev/mqueue flags 0x30000e options 
+(00.001212) 	type debugfs source debugfs mnt_id 41 s_dev 0x7 / @ ./sys/kernel/debug flags 0x30000e options 
+(00.001215) 	type tracefs source tracefs mnt_id 42 s_dev 0xc / @ ./sys/kernel/tracing flags 0x30000e options 
+(00.001216) 	skipping fs mounted at /sys/kernel/tracing
+(00.001219) 	type fusectl source fusectl mnt_id 43 s_dev 0x23 / @ ./sys/fs/fuse/connections flags 0x30000e options 
+(00.001222) 	type configfs source configfs mnt_id 64 s_dev 0x14 / @ ./sys/kernel/config flags 0x30000e options 
+(00.001236) 	type ramfs source ramfs mnt_id 67 s_dev 0x24 / @ ./run/credentials/systemd-sysusers.service flags 0x30000f options mode=700
+(00.001241) 	type vfat source /dev/nvme0n1p1 mnt_id 92 s_dev 0x10300001 / @ ./boot/efi flags 0x300000 options fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro
+(00.001244) 	type vfat source /dev/nvme0n1p2 mnt_id 95 s_dev 0x10300002 / @ ./recovery flags 0x300000 options fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro
+(00.001251) 	type binfmt_misc source binfmt_misc mnt_id 98 s_dev 0x25 / @ ./proc/sys/fs/binfmt_misc flags 0x30000e options 
+(00.001255) 	type tmpfs source tmpfs mnt_id 1146 s_dev 0x39 / @ ./run/user/1000 flags 0x300006 options size=787888k,nr_inodes=196972,mode=700,uid=1000,gid=1000,inode64
+(00.001260) 	type fuse source gvfsd-fuse mnt_id 1248 s_dev 0x3b / @ ./run/user/1000/gvfs flags 0x300006 options user_id=1000,group_id=1000
+(00.001264) 	type fuse source portal mnt_id 1286 s_dev 0x3c / @ ./run/user/1000/doc flags 0x300006 options user_id=1000,group_id=1000
+(00.001267) mnt: Building mountpoints tree
+(00.001269) mnt: 	Building plain mount tree
+(00.001270) mnt: 		Working on 1286->1146
+(00.001272) mnt: 		Working on 1248->1146
+(00.001273) mnt: 		Working on 1146->27
+(00.001274) mnt: 		Working on 98->38
+(00.001275) mnt: 		Working on 95->31
+(00.001276) mnt: 		Working on 92->31
+(00.001278) mnt: 		Working on 67->27
+(00.001279) mnt: 		Working on 64->23
+(00.001280) mnt: 		Working on 43->23
+(00.001281) mnt: 		Working on 41->23
+(00.001282) mnt: 		Working on 40->25
+(00.001284) mnt: 		Working on 39->25
+(00.001285) mnt: 		Working on 38->24
+(00.001286) mnt: 		Working on 37->23
+(00.001287) mnt: 		Working on 36->23
+(00.001289) mnt: 		Working on 35->23
+(00.001290) mnt: 		Working on 34->27
+(00.001291) mnt: 		Working on 33->25
+(00.001292) mnt: 		Working on 32->23
+(00.001293) mnt: 		Working on 31->1
+(00.001295) mnt: 		Working on 28->23
+(00.001296) mnt: 		Working on 27->31
+(00.001297) mnt: 		Working on 26->25
+(00.001298) mnt: 		Working on 25->31
+(00.001299) mnt: 		Working on 24->31
+(00.001301) mnt: 		Working on 23->31
+(00.001302) mnt: 	Resorting children of 31 in mount order
+(00.001303) mnt: 	Resorting children of 92 in mount order
+(00.001304) mnt: 	Resorting children of 95 in mount order
+(00.001306) mnt: 	Resorting children of 27 in mount order
+(00.001307) mnt: 	Resorting children of 1146 in mount order
+(00.001308) mnt: 	Resorting children of 1286 in mount order
+(00.001309) mnt: 	Resorting children of 1248 in mount order
+(00.001311) mnt: 	Resorting children of 67 in mount order
+(00.001312) mnt: 	Resorting children of 34 in mount order
+(00.001313) mnt: 	Resorting children of 25 in mount order
+(00.001314) mnt: 	Resorting children of 40 in mount order
+(00.001315) mnt: 	Resorting children of 39 in mount order
+(00.001316) mnt: 	Resorting children of 33 in mount order
+(00.001318) mnt: 	Resorting children of 26 in mount order
+(00.001319) mnt: 	Resorting children of 24 in mount order
+(00.001320) mnt: 	Resorting children of 38 in mount order
+(00.001321) mnt: 	Resorting children of 98 in mount order
+(00.001322) mnt: 	Resorting children of 23 in mount order
+(00.001324) mnt: 	Resorting children of 43 in mount order
+(00.001325) mnt: 	Resorting children of 28 in mount order
+(00.001326) mnt: 	Resorting children of 64 in mount order
+(00.001328) mnt: 	Resorting children of 41 in mount order
+(00.001329) mnt: 	Resorting children of 37 in mount order
+(00.001330) mnt: 	Resorting children of 36 in mount order
+(00.001332) mnt: 	Resorting children of 35 in mount order
+(00.001334) mnt: 	Resorting children of 32 in mount order
+(00.001336) mnt: Done:
+(00.001337) mnt: [./](31->1)
+(00.001338) mnt:  [./boot/efi](92->31)
+(00.001340) mnt:  <--
+(00.001341) mnt:  [./recovery](95->31)
+(00.001342) mnt:  <--
+(00.001343) mnt:  [./run](27->31)
+(00.001345) mnt:   [./run/user/1000](1146->27)
+(00.001346) mnt:    [./run/user/1000/doc](1286->1146)
+(00.001347) mnt:    <--
+(00.001348) mnt:    [./run/user/1000/gvfs](1248->1146)
+(00.001350) mnt:    <--
+(00.001351) mnt:   <--
+(00.001352) mnt:   [./run/credentials/systemd-sysusers.service](67->27)
+(00.001353) mnt:   <--
+(00.001354) mnt:   [./run/lock](34->27)
+(00.001356) mnt:   <--
+(00.001357) mnt:  <--
+(00.001358) mnt:  [./dev](25->31)
+(00.001359) mnt:   [./dev/mqueue](40->25)
+(00.001361) mnt:   <--
+(00.001362) mnt:   [./dev/hugepages](39->25)
+(00.001363) mnt:   <--
+(00.001364) mnt:   [./dev/shm](33->25)
+(00.001365) mnt:   <--
+(00.001366) mnt:   [./dev/pts](26->25)
+(00.001368) mnt:   <--
+(00.001369) mnt:  <--
+(00.001370) mnt:  [./proc](24->31)
+(00.001373) mnt:   [./proc/sys/fs/binfmt_misc](38->24)
+(00.001374) mnt:    [./proc/sys/fs/binfmt_misc](98->38)
+(00.001375) mnt:    <--
+(00.001377) mnt:   <--
+(00.001378) mnt:  <--
+(00.001379) mnt:  [./sys](23->31)
+(00.001380) mnt:   [./sys/fs/fuse/connections](43->23)
+(00.001381) mnt:   <--
+(00.001383) mnt:   [./sys/firmware/efi/efivars](28->23)
+(00.001384) mnt:   <--
+(00.001385) mnt:   [./sys/kernel/config](64->23)
+(00.001386) mnt:   <--
+(00.001387) mnt:   [./sys/kernel/debug](41->23)
+(00.001389) mnt:   <--
+(00.001390) mnt:   [./sys/fs/bpf](37->23)
+(00.001391) mnt:   <--
+(00.001392) mnt:   [./sys/fs/pstore](36->23)
+(00.001393) mnt:   <--
+(00.001394) mnt:   [./sys/fs/cgroup](35->23)
+(00.001396) mnt:   <--
+(00.001397) mnt:   [./sys/kernel/security](32->23)
+(00.001398) mnt:   <--
+(00.001399) mnt:  <--
+(00.001400) mnt: <--
+(00.001408) Collecting netns 2/29971
+(00.001562) unix: 	Collected: ino 44074 peer_ino 42157 family    1 type    1 state  1 name 
+(00.001565) unix: 	Collected: ino 33383 peer_ino 33382 family    1 type    1 state  1 name 
+(00.001567) unix: 	Collected: ino 36166 peer_ino 36165 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001568) unix: 	Collected: ino 33367 peer_ino 36155 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001570) unix: 	Collected: ino 26057 peer_ino 30729 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001571) unix: 	Collected: ino 122458 peer_ino 122459 family    1 type    1 state  1 name null
+(00.001573) unix: 	Collected: ino 122455 peer_ino 122456 family    1 type    1 state  1 name null
+(00.001574) unix: 	Collected: ino 68440 peer_ino 75230 family    1 type    1 state  1 name 
+(00.001576) unix: 	Collected: ino 48280 peer_ino 49455 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001577) unix: 	Collected: ino 43697 peer_ino 43696 family    1 type    1 state  1 name null
+(00.001579) unix: 	Collected: ino 36189 peer_ino 33395 family    1 type    1 state  1 name null
+(00.001580) unix: 	Collected: ino 71379 peer_ino 71380 family    1 type    1 state  1 name null
+(00.001582) unix: 	Collected: ino 44990 peer_ino 44991 family    1 type    1 state  1 name null
+(00.001583) unix: 	Collected: ino 34469 peer_ino 37193 family    1 type    1 state  1 name null
+(00.001584) unix: 	Collected: ino 32314 peer_ino 2931 family    1 type    1 state  1 name null
+(00.001586) unix: 	Collected: ino 46047 peer_ino 46046 family    1 type    1 state  1 name null
+(00.001587) unix: 	Collected: ino 37983 peer_ino 39036 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001589) unix: 	Collected: ino 30358 peer_ino 35136 family    1 type    1 state  1 name null
+(00.001590) unix: 	Collected: ino 28119 peer_ino 28120 family    1 type    1 state  1 name null
+(00.001592) unix: 	Collected: ino 24362 peer_ino 0 family    1 type    2 state  1 name /run/systemd/notify
+(00.001593) unix: 	Collected: ino 134453 peer_ino 134452 family    1 type    1 state  1 name null
+(00.001595) unix: 	Collected: ino 77790 peer_ino 80836 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001596) unix: 	Collected: ino 74242 peer_ino 74241 family    1 type    1 state  1 name null
+(00.001598) unix: 	Collected: ino 75324 peer_ino 71509 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.001599) unix: 	Collected: ino 46902 peer_ino 50372 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001601) unix: 	Collected: ino 27607 peer_ino 29790 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001602) unix: 	Collected: ino 24365 peer_ino 0 family    1 type    1 state 10 name /run/systemd/private
+(00.001604) unix: 	Collected: ino 37477 peer_ino 35520 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001605) unix: 	Collected: ino 34587 peer_ino 37324 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001607) unix: 	Collected: ino 39167 peer_ino 37305 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001608) unix: 	Collected: ino 33932 peer_ino 28646 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001612) unix: 	Collected: ino 36627 peer_ino 44077 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001613) unix: 	Collected: ino 37244 peer_ino 37245 family    1 type    1 state  1 name null
+(00.001615) unix: 	Collected: ino 35080 peer_ino 36057 family    1 type    1 state  1 name null
+(00.001616) unix: 	Collected: ino 26064 peer_ino 24388 family    1 type    2 state  1 name null
+(00.001617) unix: 	Collected: ino 24367 peer_ino 0 family    1 type    1 state 10 name /run/systemd/userdb/io.systemd.DynamicUser
+(00.001619) unix: 	Collected: ino 131982 peer_ino 131983 family    1 type    1 state  1 name null
+(00.001620) unix: 	Collected: ino 48089 peer_ino 48090 family    1 type    5 state  1 name null
+(00.001623) unix: 	Collected: ino 2792 peer_ino 24390 family    1 type    2 state  1 name null
+(00.001625) unix: 	Collected: ino 24368 peer_ino 0 family    1 type    1 state 10 name /run/systemd/io.system.ManagedOOM
+(00.001628) unix: 	Collected: ino 75855 peer_ino 75605 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.001630) unix: 	Collected: ino 49451 peer_ino 49450 family    1 type    1 state  1 name null
+(00.001631) unix: 	Collected: ino 47491 peer_ino 47492 family    1 type    1 state  1 name null
+(00.001632) unix: 	Collected: ino 129084 peer_ino 129085 family    1 type    1 state  1 name null
+(00.001634) unix: 	Collected: ino 129082 peer_ino 129083 family    1 type    1 state  1 name null
+(00.001635) unix: 	Collected: ino 54793 peer_ino 54794 family    1 type    1 state  1 name null
+(00.001637) unix: 	Collected: ino 51252 peer_ino 51251 family    1 type    1 state  1 name null
+(00.001729) unix: 	Collected: ino 35327 peer_ino 39143 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001732) unix: 	Collected: ino 34559 peer_ino 39125 family    1 type    1 state  1 name 
+(00.001733) unix: 	Collected: ino 39120 peer_ino 37239 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001735) unix: 	Collected: ino 26346 peer_ino 34130 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001736) unix: 	Collected: ino 24758 peer_ino 24759 family    1 type    1 state  1 name null
+(00.001738) unix: 	Collected: ino 47963 peer_ino 47962 family    1 type    1 state  1 name null
+(00.001739) unix: 	Collected: ino 48148 peer_ino 48149 family    1 type    1 state  1 name null
+(00.001741) unix: 	Collected: ino 39282 peer_ino 34770 family    1 type    1 state  1 name null
+(00.001742) unix: 	Collected: ino 39169 peer_ino 35370 family    1 type    1 state  1 name null
+(00.001743) unix: 	Collected: ino 30476 peer_ino 30477 family    1 type    1 state  1 name null
+(00.001745) unix: 	Collected: ino 38021 peer_ino 34463 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001746) unix: 	Collected: ino 39004 peer_ino 35204 family    1 type    1 state  1 name null
+(00.001748) unix: 	Collected: ino 37167 peer_ino 38983 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001749) unix: 	Collected: ino 26003 peer_ino 27634 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001751) unix: 	Collected: ino 24377 peer_ino 0 family    1 type    1 state 10 name /run/lvm/lvmpolld.socket
+(00.001752) unix: 	Collected: ino 125383 peer_ino 125384 family    1 type    1 state  1 name null
+(00.001755) unix: 	Collected: ino 73950 peer_ino 73949 family    1 type    1 state  1 name null
+(00.001756) unix: 	Collected: ino 33336 peer_ino 36128 family    1 type    1 state  1 name null
+(00.001758) unix: 	Collected: ino 79097 peer_ino 81053 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001759) unix: 	Collected: ino 46764 peer_ino 46763 family    1 type    1 state  1 name null
+(00.001761) unix: 	Collected: ino 37507 peer_ino 37506 family    1 type    1 state  1 name null
+(00.001762) unix: 	Collected: ino 43318 peer_ino 43317 family    1 type    1 state  1 name null
+(00.001764) unix: 	Collected: ino 37349 peer_ino 38533 family    1 type    1 state  1 name null
+(00.001765) unix: 	Collected: ino 34591 peer_ino 35392 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001769) unix: 	Collected: ino 34402 peer_ino 32747 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001772) unix: 	Collected: ino 32530 peer_ino 35903 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001773) unix: 	Collected: ino 2745 peer_ino 2744 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001775) unix: 	Collected: ino 24379 peer_ino 0 family    1 type    2 state  7 name /run/systemd/journal/syslog
+(00.001776) unix: 	Collected: ino 71498 peer_ino 71916 family    1 type    1 state  1 name 
+(00.001778) unix: 	Collected: ino 48671 peer_ino 48670 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.001779) unix: 	Collected: ino 38061 peer_ino 37228 family    1 type    1 state  1 name null
+(00.001781) unix: 	Collected: ino 37031 peer_ino 36032 family    1 type    1 state  1 name null
+(00.001782) unix: 	Collected: ino 34183 peer_ino 0 family    1 type    1 state  1 name 
+(00.001784) unix: 	Collected: ino 24381 peer_ino 0 family    1 type    1 state 10 name /run/systemd/fsck.progress
+(00.001785) unix: 	Collected: ino 71808 peer_ino 71809 family    1 type    1 state  1 name null
+(00.001787) unix: 	Collected: ino 38885 peer_ino 38884 family    1 type    1 state  1 name null
+(00.001788) unix: 	Collected: ino 26531 peer_ino 35076 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001790) unix: 	Collected: ino 26523 peer_ino 30317 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001791) unix: 	Collected: ino 140485 peer_ino 140486 family    1 type    1 state  1 name null
+(00.001793) unix: 	Collected: ino 71389 peer_ino 71390 family    1 type    1 state  1 name null
+(00.001795) unix: 	Collected: ino 36620 peer_ino 44070 family    1 type    1 state  1 name null
+(00.001796) unix: 	Collected: ino 24388 peer_ino 0 family    1 type    2 state  1 name /run/systemd/journal/dev-log
+(00.001798) unix: 	Collected: ino 68437 peer_ino 70535 family    1 type    1 state  1 name 
+(00.001799) unix: 	Collected: ino 37754 peer_ino 37755 family    1 type    1 state  1 name null
+(00.001801) unix: 	Collected: ino 34619 peer_ino 36206 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001802) unix: 	Collected: ino 33352 peer_ino 36135 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001804) unix: 	Collected: ino 33351 peer_ino 36134 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001805) unix: 	Collected: ino 28114 peer_ino 24388 family    1 type    2 state  1 name null
+(00.001807) unix: 	Collected: ino 24390 peer_ino 0 family    1 type    2 state  1 name /run/systemd/journal/socket
+(00.001808) unix: 	Collected: ino 45588 peer_ino 45587 family    1 type    1 state  1 name null
+(00.001810) unix: 	Collected: ino 2729 peer_ino 27637 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001811) unix: 	Collected: ino 24392 peer_ino 0 family    1 type    1 state 10 name /run/systemd/journal/stdout
+(00.001813) unix: 	Collected: ino 51223 peer_ino 51224 family    1 type    1 state  1 name null
+(00.001814) unix: 	Collected: ino 44985 peer_ino 44984 family    1 type    1 state  1 name null
+(00.001816) unix: 	Collected: ino 33480 peer_ino 0 family    1 type    2 state  7 name null
+(00.001817) unix: 	Collected: ino 34596 peer_ino 37337 family    1 type    1 state  1 name null
+(00.001819) unix: 	Collected: ino 26513 peer_ino 24390 family    1 type    2 state  1 name null
+(00.001820) unix: 	Collected: ino 24394 peer_ino 0 family    1 type    5 state 10 name /run/udev/control
+(00.001822) unix: 	Collected: ino 124450 peer_ino 124449 family    1 type    1 state  1 name null
+(00.001823) unix: 	Collected: ino 36136 peer_ino 37287 family    1 type    1 state  1 name 
+(00.001825) unix: 	Collected: ino 35335 peer_ino 35334 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001826) unix: 	Collected: ino 134729 peer_ino 134730 family    1 type    1 state  1 name null
+(00.001828) unix: 	Collected: ino 74241 peer_ino 74242 family    1 type    1 state  1 name null
+(00.001832) unix: 	Collected: ino 49565 peer_ino 49566 family    1 type    1 state  1 name null
+(00.001834) unix: 	Collected: ino 131980 peer_ino 131981 family    1 type    1 state  1 name null
+(00.001835) unix: 	Collected: ino 66262 peer_ino 66263 family    1 type    1 state  1 name null
+(00.001837) unix: 	Collected: ino 48572 peer_ino 48571 family    1 type    1 state  1 name null
+(00.001838) unix: 	Collected: ino 48115 peer_ino 48116 family    1 type    1 state  1 name null
+(00.001840) unix: 	Collected: ino 48095 peer_ino 48094 family    1 type    5 state  1 name null
+(00.001842) unix: 	Collected: ino 42323 peer_ino 42324 family    1 type    1 state  1 name null
+(00.001845) unix: 	Collected: ino 37051 peer_ino 35070 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001846) unix: 	Collected: ino 43065 peer_ino 0 family    1 type    2 state  7 name /run/wpa_supplicant/wlo1
+(00.001848) unix: 	Collected: ino 37061 peer_ino 26534 family    1 type    1 state  1 name null
+(00.001849) unix: 	Collected: ino 26133 peer_ino 24388 family    1 type    2 state  1 name null
+(00.001851) unix: 	Collected: ino 29815 peer_ino 0 family    1 type    2 state  7 name null
+(00.001852) unix: 	Collected: ino 132025 peer_ino 132024 family    1 type    1 state  1 name null
+(00.001854) unix: 	Collected: ino 129093 peer_ino 126386 family    1 type    1 state  1 name null
+(00.001855) unix: 	Collected: ino 75847 peer_ino 75327 family    1 type    1 state  1 name null
+(00.001857) unix: 	Collected: ino 43093 peer_ino 0 family    1 type    2 state  7 name /run/wpa_supplicant/p2p-dev-wlo1
+(00.001858) unix: 	Collected: ino 47868 peer_ino 47867 family    1 type    1 state  1 name null
+(00.001859) unix: 	Collected: ino 47866 peer_ino 47865 family    1 type    1 state  1 name null
+(00.001861) unix: 	Collected: ino 37848 peer_ino 37847 family    1 type    1 state  1 name null
+(00.001862) unix: 	Collected: ino 35833 peer_ino 35832 family    1 type    1 state  1 name null
+(00.001864) unix: 	Collected: ino 39164 peer_ino 35359 family    1 type    1 state  1 name null
+(00.001865) unix: 	Collected: ino 26510 peer_ino 35016 family    1 type    1 state  1 name null
+(00.001867) unix: 	Collected: ino 141088 peer_ino 0 family    1 type    5 state  7 name null
+(00.001869) unix: 	Collected: ino 48202 peer_ino 48203 family    1 type    1 state  1 name null
+(00.001870) unix: 	Collected: ino 45473 peer_ino 45472 family    1 type    1 state  1 name null
+(00.001872) unix: 	Collected: ino 39458 peer_ino 39457 family    1 type    1 state  1 name null
+(00.001873) unix: 	Collected: ino 30472 peer_ino 34475 family    1 type    1 state  1 name null
+(00.001875) unix: 	Collected: ino 50341 peer_ino 52232 family    1 type    1 state  1 name null
+(00.001876) unix: 	Collected: ino 34586 peer_ino 33415 family    1 type    1 state  1 name null
+(00.001877) unix: 	Collected: ino 38023 peer_ino 39082 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001879) unix: 	Collected: ino 27629 peer_ino 27628 family    1 type    1 state  1 name null
+(00.001880) unix: 	Collected: ino 24717 peer_ino 24718 family    1 type    1 state  1 name null
+(00.001882) unix: 	Collected: ino 24650 peer_ino 28045 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001883) unix: 	Collected: ino 127019 peer_ino 127018 family    1 type    1 state  1 name null
+(00.001885) unix: 	Collected: ino 75225 peer_ino 74204 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001886) unix: 	Collected: ino 47962 peer_ino 47963 family    1 type    1 state  1 name null
+(00.001887) unix: 	Collected: ino 41997 peer_ino 41998 family    1 type    1 state  1 name null
+(00.001889) unix: 	Collected: ino 41898 peer_ino 41897 family    1 type    1 state  1 name null
+(00.001890) unix: 	Collected: ino 37194 peer_ino 33303 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001892) unix: 	Collected: ino 81053 peer_ino 79097 family    1 type    1 state  1 name null
+(00.001893) unix: 	Collected: ino 46890 peer_ino 52240 family    1 type    1 state  1 name null
+(00.001896) unix: 	Collected: ino 44722 peer_ino 44721 family    1 type    1 state  1 name null
+(00.001898) unix: 	Collected: ino 38533 peer_ino 37349 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001899) unix: 	Collected: ino 35321 peer_ino 35322 family    1 type    1 state  1 name null
+(00.001900) unix: 	Collected: ino 35036 peer_ino 0 family    1 type    2 state  7 name null
+(00.001902) unix: 	Collected: ino 2735 peer_ino 29807 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001903) unix: 	Collected: ino 85152 peer_ino 77801 family    1 type    1 state  1 name null
+(00.001905) unix: 	Collected: ino 62216 peer_ino 62215 family    1 type    1 state  1 name null
+(00.001906) unix: 	Collected: ino 48116 peer_ino 48115 family    1 type    1 state  1 name null
+(00.001908) unix: 	Collected: ino 36125 peer_ino 38423 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001909) unix: 	Collected: ino 34931 peer_ino 26414 family    1 type    1 state  1 name null
+(00.001910) unix: 	Collected: ino 34645 peer_ino 33487 family    1 type    1 state  1 name null
+(00.001912) unix: 	Collected: ino 38020 peer_ino 33297 family    1 type    1 state  1 name null
+(00.001914) unix: 	Collected: ino 35069 peer_ino 34404 family    1 type    1 state  1 name null
+(00.001916) unix: 	Collected: ino 37033 peer_ino 32732 family    1 type    1 state  1 name null
+(00.001919) unix: 	Collected: ino 123749 peer_ino 123748 family    1 type    1 state  1 name null
+(00.001920) unix: 	Collected: ino 123622 peer_ino 123623 family    1 type    1 state  1 name null
+(00.001921) unix: 	Collected: ino 48316 peer_ino 48315 family    1 type    1 state  1 name null
+(00.001923) unix: 	Collected: ino 35276 peer_ino 41858 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001924) unix: 	Collected: ino 39064 peer_ino 36093 family    1 type    1 state  1 name null
+(00.001926) unix: 	Collected: ino 26489 peer_ino 24390 family    1 type    2 state  1 name null
+(00.001927) unix: 	Collected: ino 36841 peer_ino 36842 family    1 type    1 state  1 name null
+(00.001929) unix: 	Collected: ino 44123 peer_ino 36764 family    1 type    1 state  1 name 
+(00.001930) unix: 	Collected: ino 39490 peer_ino 43315 family    1 type    1 state  1 name null
+(00.001931) unix: 	Collected: ino 35315 peer_ino 35318 family    1 type    1 state  1 name null
+(00.001933) unix: 	Collected: ino 37192 peer_ino 34466 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001934) unix: 	Collected: ino 52801 peer_ino 55773 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001936) unix: 	Collected: ino 49455 peer_ino 48280 family    1 type    1 state  1 name null
+(00.001937) unix: 	Collected: ino 38531 peer_ino 36213 family    1 type    1 state  1 name 
+(00.001939) unix: 	Collected: ino 34576 peer_ino 36194 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001941) unix: 	Collected: ino 30461 peer_ino 36099 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.001943) unix: 	Collected: ino 122459 peer_ino 122458 family    1 type    1 state  1 name null
+(00.001944) unix: 	Collected: ino 70546 peer_ino 71401 family    1 type    1 state  1 name null
+(00.001946) unix: 	Collected: ino 68442 peer_ino 75231 family    1 type    1 state  1 name 
+(00.001947) unix: 	Collected: ino 33382 peer_ino 33383 family    1 type    1 state  1 name null
+(00.001948) unix: 	Collected: ino 36096 peer_ino 38028 family    1 type    1 state  1 name null
+(00.001950) unix: 	Collected: ino 32526 peer_ino 24388 family    1 type    2 state  1 name null
+(00.001951) unix: 	Collected: ino 30729 peer_ino 26057 family    1 type    1 state  1 name null
+(00.001953) unix: 	Collected: ino 25996 peer_ino 25997 family    1 type    1 state  1 name null
+(00.001954) unix: 	Collected: ino 75314 peer_ino 74232 family    1 type    1 state  1 name 
+(00.001956) unix: 	Collected: ino 71372 peer_ino 71373 family    1 type    5 state  1 name null
+(00.001957) unix: 	Collected: ino 36912 peer_ino 34115 family    1 type    1 state  1 name null
+(00.001960) unix: 	Collected: ino 131589 peer_ino 131588 family    1 type    1 state  1 name null
+(00.001961) unix: 	Collected: ino 71383 peer_ino 0 family    1 type    1 state 10 name /tmp/scoped_dirCe2n9r/SingletonSocket
+(00.001963) unix: 	Collected: ino 38785 peer_ino 38784 family    1 type    1 state  1 name null
+(00.001964) unix: 	Collected: ino 37967 peer_ino 35200 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001966) unix: 	Collected: ino 26099 peer_ino 29452 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.001967) unix: 	Collected: ino 134713 peer_ino 134714 family    1 type    1 state  1 name null
+(00.001969) unix: 	Collected: ino 118755 peer_ino 118754 family    1 type    1 state  1 name null
+(00.001970) unix: 	Collected: ino 44848 peer_ino 44849 family    1 type    1 state  1 name null
+(00.001972) unix: 	Collected: ino 24778 peer_ino 26110 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001973) unix: 	Collected: ino 73197 peer_ino 73198 family    1 type    1 state  1 name null
+(00.001975) unix: 	Collected: ino 71500 peer_ino 71499 family    1 type    1 state  1 name null
+(00.001977) unix: 	Collected: ino 66263 peer_ino 66262 family    1 type    1 state  1 name null
+(00.001978) unix: 	Collected: ino 52242 peer_ino 46892 family    1 type    1 state  1 name 
+(00.001980) unix: 	Collected: ino 37335 peer_ino 37334 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001981) unix: 	Collected: ino 36132 peer_ino 37281 family    1 type    1 state  1 name 
+(00.001983) unix: 	Collected: ino 39181 peer_ino 39180 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.001984) unix: 	Collected: ino 33326 peer_ino 39110 family    1 type    1 state  1 name /run/user/1000/bus
+(00.001986) unix: 	Collected: ino 36112 peer_ino 30475 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.001989) unix: 	Collected: ino 30328 peer_ino 0 family    1 type    1 state 10 name /tmp/.X11-unix/X1
+(00.001991) unix: 	Collected: ino 24726 peer_ino 25977 family    1 type    1 state  1 name null
+(00.001993) unix: 	Collected: ino 24363 peer_ino 24364 family    1 type    2 state  1 name null
+(00.001994) unix: 	Collected: ino 136742 peer_ino 136743 family    1 type    1 state  1 name null
+(00.001996) unix: 	Collected: ino 52265 peer_ino 48468 family    1 type    1 state  1 name 
+(00.001997) unix: 	Collected: ino 45594 peer_ino 45593 family    1 type    1 state  1 name null
+(00.002005) unix: 	Collected: ino 48228 peer_ino 42960 family    1 type    1 state  1 name null
+(00.002006) unix: 	Collected: ino 39453 peer_ino 43291 family    1 type    1 state  1 name null
+(00.002008) unix: 	Collected: ino 35301 peer_ino 34566 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002009) unix: 	Collected: ino 78525 peer_ino 77791 family    1 type    1 state  1 name null
+(00.002011) unix: 	Collected: ino 68588 peer_ino 68587 family    1 type    1 state  1 name null
+(00.002012) unix: 	Collected: ino 47492 peer_ino 47491 family    1 type    1 state  1 name null
+(00.002014) unix: 	Collected: ino 47396 peer_ino 47397 family    1 type    1 state  1 name null
+(00.002015) unix: 	Collected: ino 37757 peer_ino 37756 family    1 type    1 state  1 name null
+(00.002017) unix: 	Collected: ino 35372 peer_ino 33384 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002018) unix: 	Collected: ino 39157 peer_ino 33361 family    1 type    1 state  1 name null
+(00.002020) unix: 	Collected: ino 39136 peer_ino 39137 family    1 type    1 state  1 name null
+(00.002022) unix: 	Collected: ino 16842 peer_ino 24390 family    1 type    2 state  1 name null
+(00.002023) unix: 	Collected: ino 138475 peer_ino 138474 family    1 type    1 state  1 name null
+(00.002025) unix: 	Collected: ino 129083 peer_ino 129082 family    1 type    1 state  1 name null
+(00.002026) unix: 	Collected: ino 75858 peer_ino 75857 family    1 type    1 state  1 name null
+(00.002028) unix: 	Collected: ino 75236 peer_ino 73174 family    1 type    1 state  1 name null
+(00.002031) unix: 	Collected: ino 54794 peer_ino 54793 family    1 type    1 state  1 name null
+(00.002032) unix: 	Collected: ino 35208 peer_ino 0 family    1 type    1 state 10 name /tmp/.ICE-unix/1733
+(00.002034) unix: 	Collected: ino 4022 peer_ino 24362 family    1 type    2 state  1 name null
+(00.002035) unix: 	Collected: ino 140512 peer_ino 0 family    1 type    1 state 10 name /tmp/vscode-c52538576e60a2d97f403a34adf22716f08c636e.sock
+(00.002037) unix: 	Collected: ino 128171 peer_ino 128170 family    1 type    1 state  1 name null
+(00.002038) unix: 	Collected: ino 42240 peer_ino 42241 family    1 type    1 state  1 name null
+(00.002040) unix: 	Collected: ino 38047 peer_ino 37209 family    1 type    1 state  1 name null
+(00.002041) unix: 	Collected: ino 35076 peer_ino 26531 family    1 type    1 state  1 name null
+(00.002043) unix: 	Collected: ino 30220 peer_ino 36004 family    1 type    1 state  1 name null
+(00.002044) unix: 	Collected: ino 71928 peer_ino 71929 family    1 type    1 state  1 name null
+(00.002045) unix: 	Collected: ino 61884 peer_ino 61883 family    1 type    1 state  1 name null
+(00.002047) unix: 	Collected: ino 48670 peer_ino 48671 family    1 type    1 state  1 name null
+(00.002048) unix: 	Collected: ino 48090 peer_ino 48089 family    1 type    5 state  1 name null
+(00.002050) unix: 	Collected: ino 38708 peer_ino 38707 family    1 type    1 state  1 name null
+(00.002051) unix: 	Collected: ino 46892 peer_ino 52242 family    1 type    1 state  1 name null
+(00.002053) unix: 	Collected: ino 39262 peer_ino 37405 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.002054) unix: 	Collected: ino 35393 peer_ino 41879 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.002057) unix: 	Collected: ino 34281 peer_ino 0 family    1 type    2 state  7 name /run/user/1000/systemd/notify
+(00.002058) unix: 	Collected: ino 27576 peer_ino 21480 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002061) unix: 	Collected: ino 143418 peer_ino 143419 family    1 type    1 state  1 name null
+(00.002063) unix: 	Collected: ino 138043 peer_ino 139666 family    1 type    1 state  1 name /tmp/vscode-807a565c50f43cc4b2ba3255d2dbb40d9e9a96d8.sock
+(00.002065) unix: 	Collected: ino 37485 peer_ino 37486 family    1 type    1 state  1 name null
+(00.002067) unix: 	Collected: ino 41878 peer_ino 35386 family    1 type    1 state  1 name null
+(00.002068) unix: 	Collected: ino 33187 peer_ino 32760 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002070) unix: 	Collected: ino 34284 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/systemd/private
+(00.002071) unix: 	Collected: ino 29435 peer_ino 2743 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002073) unix: 	Collected: ino 4020 peer_ino 0 family    1 type    1 state 10 name /run/systemd/journal/io.systemd.journal
+(00.002074) unix: 	Collected: ino 38497 peer_ino 34578 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002076) unix: 	Collected: ino 30326 peer_ino 0 family    1 type    1 state  7 name null
+(00.002077) unix: 	Collected: ino 33120 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/bus
+(00.002079) unix: 	Collected: ino 26000 peer_ino 27633 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002080) unix: 	Collected: ino 123710 peer_ino 123711 family    1 type    1 state  1 name null
+(00.002082) unix: 	Collected: ino 36232 peer_ino 0 family    1 type    2 state  7 name null
+(00.002083) unix: 	Collected: ino 32355 peer_ino 29975 family    1 type    1 state  1 name null
+(00.002085) unix: 	Collected: ino 140520 peer_ino 140519 family    1 type    1 state  1 name null
+(00.002086) unix: 	Collected: ino 36182 peer_ino 35374 family    1 type    1 state  1 name null
+(00.002171) unix: 	Collected: ino 36134 peer_ino 33351 family    1 type    1 state  1 name null
+(00.002173) unix: 	Collected: ino 38055 peer_ino 39103 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002174) unix: 	Collected: ino 35017 peer_ino 36015 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002215) unix: 	Collected: ino 128173 peer_ino 128172 family    1 type    1 state  1 name null
+(00.002217) unix: 	Collected: ino 68438 peer_ino 70536 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002219) unix: 	Collected: ino 35410 peer_ino 33479 family    1 type    1 state  1 name /run/acpid.socket
+(00.002221) unix: 	Collected: ino 36157 peer_ino 36156 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.002223) unix: 	Collected: ino 38028 peer_ino 36096 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002224) unix: 	Collected: ino 26526 peer_ino 34399 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002226) unix: 	Collected: ino 33122 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/gnupg/S.dirmngr
+(00.002227) unix: 	Collected: ino 28113 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002229) unix: 	Collected: ino 34774 peer_ino 34775 family    1 type    1 state  1 name null
+(00.002230) unix: 	Collected: ino 33124 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/gnupg/S.gpg-agent.browser
+(00.002232) unix: 	Collected: ino 32920 peer_ino 32919 family    1 type    2 state  1 name null
+(00.002233) unix: 	Collected: ino 35062 peer_ino 37049 family    1 type    1 state  1 name null
+(00.002235) unix: 	Collected: ino 37029 peer_ino 37030 family    1 type    1 state  1 name null
+(00.002236) unix: 	Collected: ino 33126 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/gnupg/S.gpg-agent.extra
+(00.002237) unix: 	Collected: ino 124447 peer_ino 124448 family    1 type    1 state  1 name null
+(00.002239) unix: 	Collected: ino 71503 peer_ino 71502 family    1 type    1 state  1 name null
+(00.002240) unix: 	Collected: ino 71499 peer_ino 71500 family    1 type    1 state  1 name null
+(00.002242) unix: 	Collected: ino 46907 peer_ino 46908 family    1 type    1 state  1 name null
+(00.002243) unix: 	Collected: ino 39096 peer_ino 33315 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002245) unix: 	Collected: ino 33128 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/gnupg/S.gpg-agent.ssh
+(00.002246) unix: 	Collected: ino 26111 peer_ino 24782 family    1 type    1 state  1 name null
+(00.002248) unix: 	Collected: ino 127031 peer_ino 127032 family    1 type    1 state  1 name null
+(00.002249) unix: 	Collected: ino 53305 peer_ino 53306 family    1 type    1 state  1 name null
+(00.002250) unix: 	Collected: ino 37312 peer_ino 38478 family    1 type    1 state  1 name null
+(00.002252) unix: 	Collected: ino 37293 peer_ino 36148 family    1 type    1 state  1 name null
+(00.002254) unix: 	Collected: ino 35334 peer_ino 35335 family    1 type    1 state  1 name null
+(00.002256) unix: 	Collected: ino 33130 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/gnupg/S.gpg-agent
+(00.002257) unix: 	Collected: ino 75326 peer_ino 75844 family    1 type    1 state  1 name null
+(00.002259) unix: 	Collected: ino 48000 peer_ino 48001 family    1 type    1 state  1 name null
+(00.002260) unix: 	Collected: ino 45480 peer_ino 45481 family    1 type    1 state  1 name null
+(00.002261) unix: 	Collected: ino 39183 peer_ino 33396 family    1 type    1 state  1 name null
+(00.002263) unix: 	Collected: ino 39166 peer_ino 38476 family    1 type    1 state  1 name null
+(00.002264) unix: 	Collected: ino 26345 peer_ino 35909 family    1 type    1 state  1 name null
+(00.002266) unix: 	Collected: ino 24722 peer_ino 27590 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002267) unix: 	Collected: ino 50353 peer_ino 50354 family    1 type    1 state  1 name null
+(00.002269) unix: 	Collected: ino 49456 peer_ino 48282 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002270) unix: 	Collected: ino 44043 peer_ino 44044 family    1 type    5 state  1 name null
+(00.002272) unix: 	Collected: ino 34560 peer_ino 38405 family    1 type    1 state  1 name null
+(00.002273) unix: 	Collected: ino 34475 peer_ino 30472 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002275) unix: 	Collected: ino 38030 peer_ino 39083 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002278) unix: 	Collected: ino 33132 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/pulse/native
+(00.002280) unix: 	Collected: ino 25960 peer_ino 24390 family    1 type    2 state  1 name null
+(00.002283) unix: 	Collected: ino 24721 peer_ino 28075 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002284) unix: 	Collected: ino 129086 peer_ino 129087 family    1 type    1 state  1 name null
+(00.002286) unix: 	Collected: ino 129085 peer_ino 129084 family    1 type    1 state  1 name null
+(00.002287) unix: 	Collected: ino 95463 peer_ino 92639 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.002289) unix: 	Collected: ino 54389 peer_ino 53672 family    1 type    1 state  1 name null
+(00.002290) unix: 	Collected: ino 39137 peer_ino 39136 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002293) unix: 	Collected: ino 35277 peer_ino 39122 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002294) unix: 	Collected: ino 30235 peer_ino 34323 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002296) unix: 	Collected: ino 33134 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/pipewire-0
+(00.002297) unix: 	Collected: ino 58472 peer_ino 58473 family    1 type    1 state  1 name null
+(00.002299) unix: 	Collected: ino 47864 peer_ino 47863 family    1 type    1 state  1 name null
+(00.002300) unix: 	Collected: ino 47538 peer_ino 47537 family    1 type    1 state  1 name null
+(00.002302) unix: 	Collected: ino 33476 peer_ino 33475 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002303) unix: 	Collected: ino 36165 peer_ino 36166 family    1 type    1 state  1 name null
+(00.002305) unix: 	Collected: ino 33136 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/pk-debconf-socket
+(00.002306) unix: 	Collected: ino 71926 peer_ino 71925 family    1 type    1 state  1 name null
+(00.002308) unix: 	Collected: ino 71809 peer_ino 71808 family    1 type    1 state  1 name null
+(00.002309) unix: 	Collected: ino 36625 peer_ino 42159 family    1 type    1 state  1 name 
+(00.002311) unix: 	Collected: ino 34404 peer_ino 35069 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002312) unix: 	Collected: ino 32732 peer_ino 37033 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.002314) unix: 	Collected: ino 29550 peer_ino 29551 family    1 type    1 state  1 name null
+(00.002315) unix: 	Collected: ino 42962 peer_ino 48229 family    1 type    1 state  1 name null
+(00.002317) unix: 	Collected: ino 38407 peer_ino 38408 family    1 type    1 state  1 name null
+(00.002318) unix: 	Collected: ino 33138 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/speech-dispatcher/speechd.sock
+(00.002320) unix: 	Collected: ino 30196 peer_ino 34950 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002321) unix: 	Collected: ino 46720 peer_ino 46721 family    1 type    1 state  1 name null
+(00.002323) unix: 	Collected: ino 37506 peer_ino 37507 family    1 type    1 state  1 name null
+(00.002324) unix: 	Collected: ino 41897 peer_ino 41898 family    1 type    1 state  1 name null
+(00.002325) unix: 	Collected: ino 127032 peer_ino 127031 family    1 type    1 state  1 name null
+(00.002329) unix: 	Collected: ino 74201 peer_ino 74202 family    1 type    1 state  1 name null
+(00.002330) unix: 	Collected: ino 35574 peer_ino 35573 family    1 type    1 state  1 name null
+(00.002332) unix: 	Collected: ino 33467 peer_ino 37367 family    1 type    1 state  1 name /tmp/.X11-unix/X1
+(00.002333) unix: 	Collected: ino 35386 peer_ino 41878 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.002335) unix: 	Collected: ino 134732 peer_ino 134731 family    1 type    1 state  1 name null
+(00.002336) unix: 	Collected: ino 36535 peer_ino 42041 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002338) unix: 	Collected: ino 39259 peer_ino 37403 family    1 type    1 state  1 name 
+(00.002339) unix: 	Collected: ino 37324 peer_ino 34587 family    1 type    1 state  1 name null
+(00.002343) unix: 	Collected: ino 81058 peer_ino 74428 family    1 type    1 state  1 name null
+(00.002344) unix: 	Collected: ino 71509 peer_ino 75324 family    1 type    1 state  1 name null
+(00.002345) unix: 	Collected: ino 75803 peer_ino 75802 family    1 type    5 state  1 name null
+(00.002347) unix: 	Collected: ino 46628 peer_ino 46629 family    1 type    1 state  1 name null
+(00.002348) unix: 	Collected: ino 35197 peer_ino 24390 family    1 type    2 state  1 name null
+(00.002350) unix: 	Collected: ino 84218 peer_ino 85141 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002352) unix: 	Collected: ino 38408 peer_ino 38407 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002354) unix: 	Collected: ino 35254 peer_ino 36116 family    1 type    1 state  1 name null
+(00.002357) unix: 	Collected: ino 37032 peer_ino 32730 family    1 type    1 state  1 name null
+(00.002358) unix: 	Collected: ino 34950 peer_ino 30196 family    1 type    1 state  1 name null
+(00.002359) unix: 	Collected: ino 71991 peer_ino 76892 family    1 type    1 state  1 name null
+(00.002361) unix: 	Collected: ino 48535 peer_ino 48534 family    1 type    1 state  1 name null
+(00.002362) unix: 	Collected: ino 36032 peer_ino 37031 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002364) unix: 	Collected: ino 75328 peer_ino 75848 family    1 type    1 state  1 name null
+(00.002365) unix: 	Collected: ino 64804 peer_ino 64805 family    1 type    1 state  1 name null
+(00.002368) unix: 	Collected: ino 39285 peer_ino 34776 family    1 type    1 state  1 name null
+(00.002369) unix: 	Collected: ino 35379 peer_ino 36184 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002371) unix: 	Collected: ino 140483 peer_ino 140482 family    1 type    1 state  1 name null
+(00.002372) unix: 	Collected: ino 54683 peer_ino 54682 family    1 type    1 state  1 name null
+(00.002373) unix: 	Collected: ino 54392 peer_ino 51455 family    1 type    1 state  1 name null
+(00.002375) unix: 	Collected: ino 47946 peer_ino 47945 family    1 type    1 state  1 name null
+(00.002376) unix: 	Collected: ino 42158 peer_ino 44076 family    1 type    1 state  1 name null
+(00.002378) unix: 	Collected: ino 36174 peer_ino 36175 family    1 type    1 state  1 name null
+(00.002379) unix: 	Collected: ino 25976 peer_ino 24724 family    1 type    1 state  1 name null
+(00.002380) unix: 	Collected: ino 136744 peer_ino 136745 family    1 type    1 state  1 name null
+(00.002382) unix: 	Collected: ino 36123 peer_ino 39148 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002383) unix: 	Collected: ino 26529 peer_ino 30320 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002385) unix: 	Collected: ino 29492 peer_ino 0 family    1 type    2 state  1 name /run/chrony/chronyd.sock
+(00.002386) unix: 	Collected: ino 50229 peer_ino 50228 family    1 type    1 state  1 name null
+(00.002388) unix: 	Collected: ino 45586 peer_ino 45585 family    1 type    1 state  1 name null
+(00.002389) unix: 	Collected: ino 45483 peer_ino 45482 family    1 type    1 state  1 name null
+(00.002391) unix: 	Collected: ino 30318 peer_ino 33179 family    1 type    1 state  1 name null
+(00.002392) unix: 	Collected: ino 36014 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/keyring/control
+(00.002393) unix: 	Collected: ino 139666 peer_ino 138043 family    1 type    1 state  1 name null
+(00.002395) unix: 	Collected: ino 46885 peer_ino 46886 family    1 type    1 state  1 name null
+(00.002397) unix: 	Collected: ino 44750 peer_ino 44751 family    1 type    1 state  1 name null
+(00.002398) unix: 	Collected: ino 35392 peer_ino 34591 family    1 type    1 state  1 name null
+(00.002400) unix: 	Collected: ino 35385 peer_ino 37318 family    1 type    1 state  1 name null
+(00.002402) unix: 	Collected: ino 32747 peer_ino 34402 family    1 type    1 state  1 name null
+(00.002403) unix: 	Collected: ino 28182 peer_ino 32353 family    1 type    1 state  1 name null
+(00.002404) unix: 	Collected: ino 37406 peer_ino 39272 family    1 type    1 state  1 name null
+(00.002407) unix: 	Collected: ino 37221 peer_ino 33330 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002409) unix: 	Collected: ino 29804 peer_ino 29805 family    1 type    1 state  1 name null
+(00.002410) unix: 	Collected: ino 29790 peer_ino 27607 family    1 type    1 state  1 name null
+(00.002412) unix: 	Collected: ino 43345 peer_ino 0 family    1 type    2 state  7 name null
+(00.002413) unix: 	Collected: ino 39492 peer_ino 38713 family    1 type    1 state  1 name 
+(00.002415) unix: 	Collected: ino 71914 peer_ino 71913 family    1 type    1 state  1 name null
+(00.002416) unix: 	Collected: ino 38449 peer_ino 36180 family    1 type    1 state  1 name null
+(00.002417) unix: 	Collected: ino 37267 peer_ino 37270 family    1 type    1 state  1 name null
+(00.002419) unix: 	Collected: ino 37228 peer_ino 38061 family    1 type    1 state  1 name 
+(00.002420) unix: 	Collected: ino 33295 peer_ino 0 family    1 type    2 state  7 name null
+(00.002422) unix: 	Collected: ino 47424 peer_ino 47423 family    1 type    1 state  1 name null
+(00.002423) unix: 	Collected: ino 37756 peer_ino 37757 family    1 type    1 state  1 name null
+(00.002425) unix: 	Collected: ino 39144 peer_ino 35328 family    1 type    1 state  1 name null
+(00.002427) unix: 	Collected: ino 28111 peer_ino 24362 family    1 type    2 state  1 name null
+(00.002430) unix: 	Collected: ino 75845 peer_ino 74233 family    1 type    1 state  1 name null
+(00.002431) unix: 	Collected: ino 34698 peer_ino 36381 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002433) unix: 	Collected: ino 33384 peer_ino 35372 family    1 type    1 state  1 name null
+(00.002434) unix: 	Collected: ino 33377 peer_ino 37295 family    1 type    1 state  1 name null
+(00.002436) unix: 	Collected: ino 36168 peer_ino 37294 family    1 type    1 state  1 name null
+(00.002438) unix: 	Collected: ino 38438 peer_ino 33370 family    1 type    1 state  1 name null
+(00.002440) unix: 	Collected: ino 35053 peer_ino 34398 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002441) unix: 	Collected: ino 35031 peer_ino 34326 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002443) unix: 	Collected: ino 36632 peer_ino 36633 family    1 type    1 state  1 name null
+(00.002444) unix: 	Collected: ino 34770 peer_ino 39282 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002446) unix: 	Collected: ino 30199 peer_ino 33111 family    1 type    1 state  1 name 
+(00.002447) unix: 	Collected: ino 135424 peer_ino 135423 family    1 type    1 state  1 name null
+(00.002449) unix: 	Collected: ino 68443 peer_ino 74220 family    1 type    1 state  1 name 
+(00.002450) unix: 	Collected: ino 37193 peer_ino 34469 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002452) unix: 	Collected: ino 37191 peer_ino 34464 family    1 type    1 state  1 name 
+(00.002453) unix: 	Collected: ino 39036 peer_ino 37983 family    1 type    1 state  1 name null
+(00.002455) unix: 	Collected: ino 24759 peer_ino 24758 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002456) unix: 	Collected: ino 29797 peer_ino 27625 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002458) unix: 	Collected: ino 73198 peer_ino 73197 family    1 type    1 state  1 name null
+(00.002459) unix: 	Collected: ino 37481 peer_ino 37480 family    1 type    1 state  1 name null
+(00.002460) unix: 	Collected: ino 41872 peer_ino 37272 family    1 type    1 state  1 name null
+(00.002462) unix: 	Collected: ino 134731 peer_ino 134732 family    1 type    1 state  1 name null
+(00.002463) unix: 	Collected: ino 33357 peer_ino 38425 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002465) unix: 	Collected: ino 37287 peer_ino 36136 family    1 type    1 state  1 name null
+(00.002466) unix: 	Collected: ino 34948 peer_ino 34949 family    1 type    1 state  1 name null
+(00.002468) unix: 	Collected: ino 31767 peer_ino 26118 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002470) unix: 	Collected: ino 44084 peer_ino 36631 family    1 type    1 state  1 name null
+(00.002473) unix: 	Collected: ino 26534 peer_ino 37061 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002474) unix: 	Collected: ino 35198 peer_ino 35199 family    1 type    1 state  1 name null
+(00.002476) unix: 	Collected: ino 37168 peer_ino 34438 family    1 type    1 state  1 name null
+(00.002477) unix: 	Collected: ino 35180 peer_ino 30410 family    1 type    1 state  1 name null
+(00.002479) unix: 	Collected: ino 140518 peer_ino 140517 family    1 type    1 state  1 name null
+(00.002480) unix: 	Collected: ino 132026 peer_ino 132027 family    1 type    1 state  1 name null
+(00.002482) unix: 	Collected: ino 73174 peer_ino 75236 family    1 type    1 state  1 name 
+(00.002483) unix: 	Collected: ino 70540 peer_ino 70541 family    1 type    1 state  1 name null
+(00.002485) unix: 	Collected: ino 36831 peer_ino 36832 family    1 type    1 state  1 name null
+(00.002486) unix: 	Collected: ino 36209 peer_ino 36210 family    1 type    1 state  1 name null
+(00.002488) unix: 	Collected: ino 26461 peer_ino 26462 family    1 type    1 state  1 name null
+(00.002489) unix: 	Collected: ino 25973 peer_ino 2698 family    1 type    1 state  1 name null
+(00.002490) unix: 	Collected: ino 75237 peer_ino 75238 family    1 type    1 state  1 name null
+(00.002492) unix: 	Collected: ino 39155 peer_ino 39150 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002494) unix: 	Collected: ino 26002 peer_ino 22523 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002495) unix: 	Collected: ino 45587 peer_ino 45588 family    1 type    1 state  1 name null
+(00.002496) unix: 	Collected: ino 47397 peer_ino 47396 family    1 type    1 state  1 name null
+(00.002498) unix: 	Collected: ino 43291 peer_ino 39453 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002500) unix: 	Collected: ino 29975 peer_ino 32355 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002503) unix: 	Collected: ino 26537 peer_ino 30330 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002506) unix: 	Collected: ino 33179 peer_ino 30318 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002507) unix: 	Collected: ino 137298 peer_ino 137299 family    1 type    1 state  1 name null
+(00.002509) unix: 	Collected: ino 79986 peer_ino 81056 family    1 type    1 state  1 name null
+(00.002510) unix: 	Collected: ino 53554 peer_ino 53555 family    1 type    1 state  1 name null
+(00.002512) unix: 	Collected: ino 52241 peer_ino 46891 family    1 type    1 state  1 name 
+(00.002513) unix: 	Collected: ino 46789 peer_ino 46790 family    1 type    1 state  1 name null
+(00.002515) unix: 	Collected: ino 37281 peer_ino 36132 family    1 type    1 state  1 name null
+(00.002516) unix: 	Collected: ino 29807 peer_ino 2735 family    1 type    1 state  1 name null
+(00.002517) unix: 	Collected: ino 51256 peer_ino 51257 family    1 type    1 state  1 name null
+(00.002519) unix: 	Collected: ino 50354 peer_ino 50353 family    1 type    1 state  1 name null
+(00.002520) unix: 	Collected: ino 44856 peer_ino 44855 family    1 type    1 state  1 name null
+(00.002522) unix: 	Collected: ino 44849 peer_ino 44848 family    1 type    1 state  1 name null
+(00.002523) unix: 	Collected: ino 36775 peer_ino 37508 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002525) unix: 	Collected: ino 35325 peer_ino 38410 family    1 type    1 state  1 name null
+(00.002526) unix: 	Collected: ino 29410 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002527) unix: 	Collected: ino 134346 peer_ino 134345 family    1 type    1 state  1 name null
+(00.002529) unix: 	Collected: ino 71925 peer_ino 71926 family    1 type    1 state  1 name null
+(00.002530) unix: 	Collected: ino 73940 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002532) unix: 	Collected: ino 38718 peer_ino 38719 family    1 type    1 state  1 name null
+(00.002533) unix: 	Collected: ino 33297 peer_ino 38020 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002536) unix: 	Collected: ino 26414 peer_ino 34931 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002538) unix: 	Collected: ino 122456 peer_ino 122455 family    1 type    1 state  1 name null
+(00.002539) unix: 	Collected: ino 75850 peer_ino 75851 family    1 type    1 state  1 name null
+(00.002541) unix: 	Collected: ino 35358 peer_ino 39163 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002543) unix: 	Collected: ino 36145 peer_ino 36146 family    1 type    1 state  1 name null
+(00.002544) unix: 	Collected: ino 34459 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002546) unix: 	Collected: ino 27597 peer_ino 27596 family    1 type    2 state  1 name null
+(00.002547) unix: 	Collected: ino 35835 peer_ino 35834 family    1 type    1 state  1 name null
+(00.002549) unix: 	Collected: ino 39488 peer_ino 43314 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.002550) unix: 	Collected: ino 37984 peer_ino 30450 family    1 type    1 state  1 name null
+(00.002551) unix: 	Collected: ino 36006 peer_ino 33155 family    1 type    1 state  1 name null
+(00.002553) unix: 	Collected: ino 51254 peer_ino 50343 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002555) unix: 	Collected: ino 37488 peer_ino 0 family    1 type    1 state 10 name /tmp/.com.google.Chrome.kuRT4T/SingletonSocket
+(00.002556) unix: 	Collected: ino 39457 peer_ino 39458 family    1 type    1 state  1 name null
+(00.002558) unix: 	Collected: ino 33380 peer_ino 36178 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002559) unix: 	Collected: ino 39088 peer_ino 37206 family    1 type    1 state  1 name null
+(00.002561) unix: 	Collected: ino 36065 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/at-spi/bus_1
+(00.002562) unix: 	Collected: ino 30314 peer_ino 37045 family    1 type    1 state  1 name null
+(00.002649) unix: 	Collected: ino 33109 peer_ino 34958 family    1 type    1 state  1 name null
+(00.002653) unix: 	Collected: ino 29493 peer_ino 29494 family    1 type    5 state  1 name null
+(00.002654) unix: 	Collected: ino 28045 peer_ino 24650 family    1 type    1 state  1 name null
+(00.002656) unix: 	Collected: ino 33279 peer_ino 39047 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002657) unix: 	Collected: ino 34444 peer_ino 36071 family    1 type    1 state  1 name null
+(00.002659) unix: 	Collected: ino 32342 peer_ino 32343 family    1 type    1 state  1 name null
+(00.002661) unix: 	Collected: ino 27625 peer_ino 29797 family    1 type    1 state  1 name null
+(00.002663) unix: 	Collected: ino 75313 peer_ino 74231 family    1 type    1 state  1 name 
+(00.002664) unix: 	Collected: ino 39189 peer_ino 34648 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002666) unix: 	Collected: ino 35337 peer_ino 38420 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002667) unix: 	Collected: ino 37218 peer_ino 38051 family    1 type    1 state  1 name null
+(00.002669) unix: 	Collected: ino 71916 peer_ino 71498 family    1 type    1 state  1 name null
+(00.002670) unix: 	Collected: ino 74228 peer_ino 74229 family    1 type    1 state  1 name null
+(00.002672) unix: 	Collected: ino 34617 peer_ino 34616 family    1 type    1 state  1 name null
+(00.002673) unix: 	Collected: ino 35313 peer_ino 35310 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002675) unix: 	Collected: ino 36116 peer_ino 35254 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002676) unix: 	Collected: ino 38051 peer_ino 37218 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002678) unix: 	Collected: ino 118753 peer_ino 118752 family    1 type    1 state  1 name null
+(00.002679) unix: 	Collected: ino 37334 peer_ino 37335 family    1 type    1 state  1 name null
+(00.002681) unix: 	Collected: ino 71407 peer_ino 71408 family    1 type    1 state  1 name null
+(00.002682) unix: 	Collected: ino 42041 peer_ino 36535 family    1 type    1 state  1 name null
+(00.002683) unix: 	Collected: ino 37405 peer_ino 39262 family    1 type    1 state  1 name null
+(00.002687) unix: 	Collected: ino 62636 peer_ino 62635 family    1 type    1 state  1 name null
+(00.002688) unix: 	Collected: ino 51225 peer_ino 51226 family    1 type    1 state  1 name null
+(00.002690) unix: 	Collected: ino 48203 peer_ino 48202 family    1 type    1 state  1 name null
+(00.002691) unix: 	Collected: ino 35136 peer_ino 30358 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002693) unix: 	Collected: ino 26473 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002694) unix: 	Collected: ino 24364 peer_ino 24363 family    1 type    2 state  1 name null
+(00.002701) unix: 	Collected: ino 46044 peer_ino 46045 family    1 type    1 state  1 name null
+(00.002703) unix: 	Collected: ino 50342 peer_ino 52233 family    1 type    1 state  1 name null
+(00.002704) unix: 	Collected: ino 41851 peer_ino 38396 family    1 type    1 state  1 name null
+(00.002706) unix: 	Collected: ino 34445 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/keyring/pkcs11
+(00.002708) unix: 	Collected: ino 75231 peer_ino 68442 family    1 type    1 state  1 name null
+(00.002709) unix: 	Collected: ino 44076 peer_ino 42158 family    1 type    1 state  1 name 
+(00.002711) unix: 	Collected: ino 36193 peer_ino 36192 family    1 type    1 state  1 name 
+(00.002713) unix: 	Collected: ino 34447 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/keyring/ssh
+(00.002714) unix: 	Collected: ino 132028 peer_ino 132029 family    1 type    1 state  1 name null
+(00.002715) unix: 	Collected: ino 140486 peer_ino 140485 family    1 type    1 state  1 name null
+(00.002717) unix: 	Collected: ino 138474 peer_ino 138475 family    1 type    1 state  1 name null
+(00.002718) unix: 	Collected: ino 47943 peer_ino 47944 family    1 type    1 state  1 name null
+(00.002721) unix: 	Collected: ino 25969 peer_ino 2697 family    1 type    1 state  1 name null
+(00.002723) unix: 	Collected: ino 36180 peer_ino 38449 family    1 type    1 state  1 name 
+(00.002725) unix: 	Collected: ino 36170 peer_ino 33375 family    1 type    1 state  1 name 
+(00.002727) unix: 	Collected: ino 38059 peer_ino 37227 family    1 type    1 state  1 name null
+(00.002729) unix: 	Collected: ino 118754 peer_ino 118755 family    1 type    1 state  1 name null
+(00.002730) unix: 	Collected: ino 62215 peer_ino 62216 family    1 type    1 state  1 name null
+(00.002732) unix: 	Collected: ino 48229 peer_ino 42962 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.002733) unix: 	Collected: ino 38709 peer_ino 38710 family    1 type    1 state  1 name null
+(00.002734) unix: 	Collected: ino 74134 peer_ino 68413 family    1 type    1 state  1 name null
+(00.002736) unix: 	Collected: ino 48366 peer_ino 49568 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002739) unix: 	Collected: ino 35411 peer_ino 36305 family    1 type    1 state  1 name null
+(00.002740) unix: 	Collected: ino 33342 peer_ino 35333 family    1 type    1 state  1 name null
+(00.002742) unix: 	Collected: ino 35903 peer_ino 32530 family    1 type    1 state  1 name null
+(00.002743) unix: 	Collected: ino 2908 peer_ino 29917 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002745) unix: 	Collected: ino 2739 peer_ino 2738 family    1 type    1 state  1 name null
+(00.002746) unix: 	Collected: ino 76810 peer_ino 76809 family    1 type    1 state  1 name null
+(00.002748) unix: 	Collected: ino 46722 peer_ino 46723 family    1 type    1 state  1 name null
+(00.002749) unix: 	Collected: ino 46686 peer_ino 46687 family    1 type    1 state  1 name null
+(00.002751) unix: 	Collected: ino 43317 peer_ino 43318 family    1 type    1 state  1 name null
+(00.002752) unix: 	Collected: ino 37182 peer_ino 33292 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002754) unix: 	Collected: ino 33159 peer_ino 33158 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002755) unix: 	Collected: ino 30943 peer_ino 28174 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002757) unix: 	Collected: ino 29422 peer_ino 2705 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002761) unix: 	Collected: ino 48317 peer_ino 48318 family    1 type    1 state  1 name null
+(00.002762) unix: 	Collected: ino 42960 peer_ino 48228 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.002764) unix: 	Collected: ino 36633 peer_ino 36632 family    1 type    1 state  1 name null
+(00.002765) unix: 	Collected: ino 38491 peer_ino 39187 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002767) unix: 	Collected: ino 123700 peer_ino 123699 family    1 type    1 state  1 name null
+(00.002768) unix: 	Collected: ino 35394 peer_ino 34614 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002770) unix: 	Collected: ino 33415 peer_ino 34586 family    1 type    1 state  1 name 
+(00.002771) unix: 	Collected: ino 39111 peer_ino 38056 family    1 type    1 state  1 name null
+(00.002774) unix: 	Collected: ino 33111 peer_ino 30199 family    1 type    1 state  1 name null
+(00.002775) unix: 	Collected: ino 146583 peer_ino 146584 family    1 type    5 state  1 name null
+(00.002777) unix: 	Collected: ino 68587 peer_ino 68588 family    1 type    1 state  1 name null
+(00.002778) unix: 	Collected: ino 47863 peer_ino 47864 family    1 type    1 state  1 name null
+(00.002780) unix: 	Collected: ino 36213 peer_ino 38531 family    1 type    1 state  1 name null
+(00.002781) unix: 	Collected: ino 33369 peer_ino 38437 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002783) unix: 	Collected: ino 39145 peer_ino 39146 family    1 type    1 state  1 name null
+(00.002784) unix: 	Collected: ino 36015 peer_ino 35017 family    1 type    1 state  1 name null
+(00.002786) unix: 	Collected: ino 34286 peer_ino 30215 family    1 type    1 state  1 name null
+(00.002787) unix: 	Collected: ino 35942 peer_ino 30185 family    1 type    1 state  1 name null
+(00.002789) unix: 	Collected: ino 16847 peer_ino 16846 family    1 type    2 state  1 name null
+(00.002790) unix: 	Collected: ino 129089 peer_ino 129088 family    1 type    1 state  1 name null
+(00.002791) unix: 	Collected: ino 43308 peer_ino 43307 family    1 type    1 state  1 name null
+(00.002793) unix: 	Collected: ino 33399 peer_ino 41876 family    1 type    1 state  1 name null
+(00.002795) unix: 	Collected: ino 36156 peer_ino 36157 family    1 type    1 state  1 name null
+(00.002798) unix: 	Collected: ino 24729 peer_ino 24388 family    1 type    2 state  1 name null
+(00.002800) unix: 	Collected: ino 71913 peer_ino 71914 family    1 type    1 state  1 name null
+(00.002801) unix: 	Collected: ino 48571 peer_ino 48572 family    1 type    1 state  1 name null
+(00.002803) unix: 	Collected: ino 34775 peer_ino 34774 family    1 type    1 state  1 name null
+(00.002804) unix: 	Collected: ino 38050 peer_ino 37215 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002806) unix: 	Collected: ino 34438 peer_ino 37168 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002807) unix: 	Collected: ino 35070 peer_ino 37051 family    1 type    1 state  1 name null
+(00.002810) unix: 	Collected: ino 35066 peer_ino 37050 family    1 type    1 state  1 name null
+(00.002812) unix: 	Collected: ino 73201 peer_ino 75603 family    1 type    1 state  1 name null
+(00.002813) unix: 	Collected: ino 37480 peer_ino 37481 family    1 type    1 state  1 name null
+(00.002815) unix: 	Collected: ino 38478 peer_ino 37312 family    1 type    1 state  1 name 
+(00.002816) unix: 	Collected: ino 118752 peer_ino 118753 family    1 type    1 state  1 name null
+(00.002818) unix: 	Collected: ino 37272 peer_ino 41872 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002819) unix: 	Collected: ino 29846 peer_ino 26105 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002821) unix: 	Collected: ino 118294 peer_ino 118295 family    1 type    5 state  1 name null
+(00.002822) unix: 	Collected: ino 45585 peer_ino 45586 family    1 type    1 state  1 name null
+(00.002823) unix: 	Collected: ino 33396 peer_ino 39183 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002825) unix: 	Collected: ino 41857 peer_ino 39123 family    1 type    1 state  1 name null
+(00.002828) unix: 	Collected: ino 71387 peer_ino 71388 family    1 type    1 state  1 name null
+(00.002829) unix: 	Collected: ino 62635 peer_ino 62636 family    1 type    1 state  1 name null
+(00.002831) unix: 	Collected: ino 51226 peer_ino 51225 family    1 type    1 state  1 name null
+(00.002832) unix: 	Collected: ino 24466 peer_ino 24390 family    1 type    2 state  1 name null
+(00.002834) unix: 	Collected: ino 140519 peer_ino 140520 family    1 type    1 state  1 name null
+(00.002835) unix: 	Collected: ino 132029 peer_ino 132028 family    1 type    1 state  1 name null
+(00.002837) unix: 	Collected: ino 70541 peer_ino 70540 family    1 type    1 state  1 name null
+(00.002838) unix: 	Collected: ino 46065 peer_ino 46066 family    1 type    1 state  1 name null
+(00.002839) unix: 	Collected: ino 36177 peer_ino 33378 family    1 type    1 state  1 name null
+(00.002841) unix: 	Collected: ino 39142 peer_ino 36130 family    1 type    1 state  1 name null
+(00.002842) unix: 	Collected: ino 30728 peer_ino 26048 family    1 type    1 state  1 name null
+(00.002844) unix: 	Collected: ino 128175 peer_ino 128174 family    1 type    1 state  1 name null
+(00.002846) unix: 	Collected: ino 64805 peer_ino 64804 family    1 type    1 state  1 name null
+(00.002847) unix: 	Collected: ino 48201 peer_ino 48200 family    1 type    1 state  1 name null
+(00.002849) unix: 	Collected: ino 36163 peer_ino 36162 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.002851) unix: 	Collected: ino 34340 peer_ino 36042 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002852) unix: 	Collected: ino 29436 peer_ino 26035 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002853) unix: 	Collected: ino 61881 peer_ino 61882 family    1 type    1 state  1 name null
+(00.002855) unix: 	Collected: ino 48119 peer_ino 46042 family    1 type    1 state  1 name null
+(00.002856) unix: 	Collected: ino 42956 peer_ino 42957 family    1 type    1 state  1 name null
+(00.002858) unix: 	Collected: ino 42869 peer_ino 42870 family    1 type    1 state  1 name null
+(00.002859) unix: 	Collected: ino 38436 peer_ino 39159 family    1 type    1 state  1 name null
+(00.002861) unix: 	Collected: ino 29551 peer_ino 29550 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002862) unix: 	Collected: ino 137299 peer_ino 137298 family    1 type    1 state  1 name null
+(00.002864) unix: 	Collected: ino 124449 peer_ino 124450 family    1 type    1 state  1 name null
+(00.002865) unix: 	Collected: ino 46723 peer_ino 46722 family    1 type    1 state  1 name null
+(00.002867) unix: 	Collected: ino 46719 peer_ino 46718 family    1 type    1 state  1 name null
+(00.002869) unix: 	Collected: ino 35413 peer_ino 35412 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.002871) unix: 	Collected: ino 37367 peer_ino 33467 family    1 type    1 state  1 name null
+(00.002873) unix: 	Collected: ino 37320 peer_ino 37321 family    1 type    1 state  1 name null
+(00.002875) unix: 	Collected: ino 41875 peer_ino 39178 family    1 type    1 state  1 name null
+(00.002876) unix: 	Collected: ino 38412 peer_ino 33340 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002878) unix: 	Collected: ino 74204 peer_ino 75225 family    1 type    1 state  1 name null
+(00.002880) unix: 	Collected: ino 50382 peer_ino 50383 family    1 type    1 state  1 name null
+(00.002882) unix: 	Collected: ino 46891 peer_ino 52241 family    1 type    1 state  1 name null
+(00.002883) unix: 	Collected: ino 46840 peer_ino 46839 family    1 type    1 state  1 name null
+(00.002885) unix: 	Collected: ino 32759 peer_ino 33186 family    1 type    1 state  1 name null
+(00.002886) unix: 	Collected: ino 33158 peer_ino 33159 family    1 type    1 state  1 name null
+(00.002887) unix: 	Collected: ino 32919 peer_ino 32920 family    1 type    2 state  1 name null
+(00.002889) unix: 	Collected: ino 2705 peer_ino 29422 family    1 type    1 state  1 name null
+(00.002890) unix: 	Collected: ino 46058 peer_ino 48466 family    1 type    1 state  1 name 
+(00.002893) unix: 	Collected: ino 39463 peer_ino 39464 family    1 type    1 state  1 name null
+(00.002895) unix: 	Collected: ino 34589 peer_ino 37327 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.002896) unix: 	Collected: ino 35307 peer_ino 34569 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002898) unix: 	Collected: ino 39097 peer_ino 30473 family    1 type    1 state  1 name null
+(00.002899) unix: 	Collected: ino 39084 peer_ino 34472 family    1 type    1 state  1 name null
+(00.002901) unix: 	Collected: ino 28075 peer_ino 24721 family    1 type    1 state  1 name null
+(00.002902) unix: 	Collected: ino 16806 peer_ino 22858 family    1 type    1 state  1 name null
+(00.002904) unix: 	Collected: ino 34959 peer_ino 33110 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002905) unix: 	Collected: ino 35909 peer_ino 26345 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002907) unix: 	Collected: ino 32343 peer_ino 32342 family    1 type    1 state  1 name null
+(00.002908) unix: 	Collected: ino 137982 peer_ino 137981 family    1 type    1 state  1 name null
+(00.002909) unix: 	Collected: ino 43696 peer_ino 43697 family    1 type    1 state  1 name null
+(00.002911) unix: 	Collected: ino 43302 peer_ino 43301 family    1 type    1 state  1 name null
+(00.002912) unix: 	Collected: ino 30479 peer_ino 39118 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002915) unix: 	Collected: ino 37046 peer_ino 34395 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002916) unix: 	Collected: ino 36039 peer_ino 35033 family    1 type    1 state  1 name null
+(00.002918) unix: 	Collected: ino 33155 peer_ino 36006 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002919) unix: 	Collected: ino 30215 peer_ino 34286 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002921) unix: 	Collected: ino 62214 peer_ino 62213 family    1 type    1 state  1 name null
+(00.002922) unix: 	Collected: ino 59275 peer_ino 59276 family    1 type    1 state  1 name null
+(00.002924) unix: 	Collected: ino 47865 peer_ino 47866 family    1 type    1 state  1 name null
+(00.002925) unix: 	Collected: ino 146584 peer_ino 146583 family    1 type    5 state  1 name null
+(00.002926) unix: 	Collected: ino 126386 peer_ino 129093 family    1 type    1 state  1 name /tmp/vscode-2dbf3bfb1fec53612600053aa20b666a9f8bb0ef.sock
+(00.002928) unix: 	Collected: ino 75310 peer_ino 75311 family    1 type    1 state  1 name null
+(00.002929) unix: 	Collected: ino 46050 peer_ino 46049 family    1 type    1 state  1 name null
+(00.002931) unix: 	Collected: ino 47429 peer_ino 47428 family    1 type    1 state  1 name null
+(00.002932) unix: 	Collected: ino 36308 peer_ino 33482 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002934) unix: 	Collected: ino 39150 peer_ino 39155 family    1 type    1 state  1 name null
+(00.002935) unix: 	Collected: ino 30320 peer_ino 26529 family    1 type    1 state  1 name null
+(00.002937) unix: 	Collected: ino 28059 peer_ino 24390 family    1 type    2 state  1 name null
+(00.002938) unix: 	Collected: ino 137981 peer_ino 137982 family    1 type    1 state  1 name null
+(00.002939) unix: 	Collected: ino 47945 peer_ino 47946 family    1 type    1 state  1 name null
+(00.002941) unix: 	Collected: ino 39146 peer_ino 39145 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002943) unix: 	Collected: ino 32718 peer_ino 36023 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002946) unix: 	Collected: ino 71380 peer_ino 71379 family    1 type    1 state  1 name null
+(00.002948) unix: 	Collected: ino 50228 peer_ino 50229 family    1 type    1 state  1 name null
+(00.002950) unix: 	Collected: ino 34776 peer_ino 39285 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002951) unix: 	Collected: ino 27633 peer_ino 26000 family    1 type    1 state  1 name null
+(00.002953) unix: 	Collected: ino 48001 peer_ino 48000 family    1 type    1 state  1 name null
+(00.002956) unix: 	Collected: ino 48225 peer_ino 48226 family    1 type    1 state  1 name null
+(00.002957) unix: 	Collected: ino 39188 peer_ino 34581 family    1 type    1 state  1 name null
+(00.002959) unix: 	Collected: ino 38405 peer_ino 34560 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002960) unix: 	Collected: ino 39047 peer_ino 33279 family    1 type    1 state  1 name null
+(00.002962) unix: 	Collected: ino 26084 peer_ino 24754 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002963) unix: 	Collected: ino 2698 peer_ino 25973 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002965) unix: 	Collected: ino 33303 peer_ino 37194 family    1 type    1 state  1 name null
+(00.002966) unix: 	Collected: ino 2738 peer_ino 2739 family    1 type    1 state  1 name null
+(00.002968) unix: 	Collected: ino 127018 peer_ino 127019 family    1 type    1 state  1 name null
+(00.002969) unix: 	Collected: ino 46718 peer_ino 46719 family    1 type    1 state  1 name null
+(00.002970) unix: 	Collected: ino 43346 peer_ino 43347 family    1 type    1 state  1 name null
+(00.002972) unix: 	Collected: ino 37482 peer_ino 43294 family    1 type    1 state  1 name null
+(00.002973) unix: 	Collected: ino 41998 peer_ino 41997 family    1 type    1 state  1 name null
+(00.002975) unix: 	Collected: ino 37403 peer_ino 39259 family    1 type    1 state  1 name null
+(00.002976) unix: 	Collected: ino 35318 peer_ino 35315 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002978) unix: 	Collected: ino 32353 peer_ino 28182 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.002979) unix: 	Collected: ino 74229 peer_ino 74228 family    1 type    1 state  1 name null
+(00.002981) unix: 	Collected: ino 42241 peer_ino 42240 family    1 type    1 state  1 name null
+(00.002983) unix: 	Collected: ino 38536 peer_ino 34629 family    1 type    1 state  1 name /run/user/1000/bus
+(00.002985) unix: 	Collected: ino 38425 peer_ino 33357 family    1 type    1 state  1 name null
+(00.002986) unix: 	Collected: ino 25962 peer_ino 29393 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.002988) unix: 	Collected: ino 129081 peer_ino 0 family    1 type    1 state 10 name /tmp/vscode-6be8d6230f762ede74be5ff436886f0d16228798.sock
+(00.002989) unix: 	Collected: ino 61883 peer_ino 61884 family    1 type    1 state  1 name null
+(00.002991) unix: 	Collected: ino 61879 peer_ino 61880 family    1 type    1 state  1 name null
+(00.002992) unix: 	Collected: ino 38710 peer_ino 38709 family    1 type    1 state  1 name null
+(00.002993) unix: 	Collected: ino 35199 peer_ino 35198 family    1 type    1 state  1 name null
+(00.002995) unix: 	Collected: ino 35019 peer_ino 35023 family    1 type    1 state  1 name null
+(00.002996) unix: 	Collected: ino 128172 peer_ino 128173 family    1 type    1 state  1 name null
+(00.002998) unix: 	Collected: ino 33395 peer_ino 36189 family    1 type    1 state  1 name 
+(00.002999) unix: 	Collected: ino 36146 peer_ino 36145 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003001) unix: 	Collected: ino 122460 peer_ino 122461 family    1 type    1 state  1 name null
+(00.003002) unix: 	Collected: ino 48468 peer_ino 52265 family    1 type    1 state  1 name null
+(00.003004) unix: 	Collected: ino 36832 peer_ino 36831 family    1 type    1 state  1 name null
+(00.003005) unix: 	Collected: ino 42159 peer_ino 36625 family    1 type    1 state  1 name null
+(00.003006) unix: 	Collected: ino 36178 peer_ino 33380 family    1 type    1 state  1 name null
+(00.003008) unix: 	Collected: ino 30787 peer_ino 29462 family    1 type    1 state  1 name null
+(00.003009) unix: 	Collected: ino 123748 peer_ino 123749 family    1 type    1 state  1 name null
+(00.003011) unix: 	Collected: ino 51227 peer_ino 51228 family    1 type    1 state  1 name null
+(00.003012) unix: 	Collected: ino 45481 peer_ino 45480 family    1 type    1 state  1 name null
+(00.003013) unix: 	Collected: ino 35801 peer_ino 35800 family    1 type    1 state  1 name null
+(00.003015) unix: 	Collected: ino 39114 peer_ino 33328 family    1 type    1 state  1 name null
+(00.003021) unix: 	Collected: ino 28100 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003023) unix: 	Collected: ino 118705 peer_ino 118706 family    1 type    1 state  1 name null
+(00.003024) unix: 	Collected: ino 75603 peer_ino 73201 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.003026) unix: 	Collected: ino 74220 peer_ino 68443 family    1 type    1 state  1 name null
+(00.003104) unix: 	Collected: ino 74215 peer_ino 74214 family    1 type    1 state  1 name null
+(00.003107) unix: 	Collected: ino 37260 peer_ino 35314 family    1 type    1 state  1 name null
+(00.003108) unix: 	Collected: ino 126143 peer_ino 126142 family    1 type    1 state  1 name null
+(00.003109) unix: 	Collected: ino 52245 peer_ino 52246 family    1 type    1 state  1 name null
+(00.003111) unix: 	Collected: ino 37270 peer_ino 37267 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003112) unix: 	Collected: ino 28646 peer_ino 33932 family    1 type    1 state  1 name null
+(00.003114) unix: 	Collected: ino 26118 peer_ino 31767 family    1 type    1 state  1 name null
+(00.003115) unix: 	Collected: ino 2743 peer_ino 29435 family    1 type    1 state  1 name null
+(00.003117) unix: 	Collected: ino 71373 peer_ino 71372 family    1 type    5 state  1 name null
+(00.003118) unix: 	Collected: ino 42870 peer_ino 42869 family    1 type    1 state  1 name null
+(00.003119) unix: 	Collected: ino 36631 peer_ino 44084 family    1 type    1 state  1 name 
+(00.003121) unix: 	Collected: ino 35310 peer_ino 35313 family    1 type    1 state  1 name null
+(00.003122) unix: 	Collected: ino 74232 peer_ino 75314 family    1 type    1 state  1 name null
+(00.003124) unix: 	Collected: ino 46042 peer_ino 48119 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003125) unix: 	Collected: ino 32733 peer_ino 37034 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.003127) unix: 	Collected: ino 29569 peer_ino 29570 family    1 type    1 state  1 name null
+(00.003128) unix: 	Collected: ino 77791 peer_ino 78525 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003132) unix: 	Collected: ino 51455 peer_ino 54392 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003133) unix: 	Collected: ino 43314 peer_ino 39488 family    1 type    1 state  1 name null
+(00.003134) unix: 	Collected: ino 35359 peer_ino 39164 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003136) unix: 	Collected: ino 36162 peer_ino 36163 family    1 type    1 state  1 name null
+(00.003137) unix: 	Collected: ino 24724 peer_ino 25976 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003139) unix: 	Collected: ino 75663 peer_ino 75664 family    1 type    1 state  1 name null
+(00.003140) unix: 	Collected: ino 74234 peer_ino 75849 family    1 type    1 state  1 name 
+(00.003142) unix: 	Collected: ino 74233 peer_ino 75845 family    1 type    1 state  1 name 
+(00.003143) unix: 	Collected: ino 47537 peer_ino 47538 family    1 type    1 state  1 name null
+(00.003145) unix: 	Collected: ino 47423 peer_ino 47424 family    1 type    1 state  1 name null
+(00.003146) unix: 	Collected: ino 39148 peer_ino 36123 family    1 type    1 state  1 name null
+(00.003148) unix: 	Collected: ino 37239 peer_ino 39120 family    1 type    1 state  1 name null
+(00.003149) unix: 	Collected: ino 48147 peer_ino 48146 family    1 type    1 state  1 name null
+(00.003150) unix: 	Collected: ino 39461 peer_ino 39462 family    1 type    1 state  1 name null
+(00.003152) unix: 	Collected: ino 39123 peer_ino 41857 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.003153) unix: 	Collected: ino 30313 peer_ino 35047 family    1 type    1 state  1 name null
+(00.003155) unix: 	Collected: ino 48318 peer_ino 48317 family    1 type    1 state  1 name null
+(00.003156) unix: 	Collected: ino 37327 peer_ino 34589 family    1 type    1 state  1 name null
+(00.003158) unix: 	Collected: ino 34581 peer_ino 39188 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003161) unix: 	Collected: ino 34463 peer_ino 38021 family    1 type    1 state  1 name null
+(00.003164) unix: 	Collected: ino 35204 peer_ino 39004 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003166) unix: 	Collected: ino 126980 peer_ino 126981 family    1 type    1 state  1 name null
+(00.003170) unix: 	Collected: ino 46790 peer_ino 46789 family    1 type    1 state  1 name null
+(00.003171) unix: 	Collected: ino 41871 peer_ino 37271 family    1 type    1 state  1 name null
+(00.003173) unix: 	Collected: ino 30233 peer_ino 32727 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003174) unix: 	Collected: ino 46841 peer_ino 46842 family    1 type    1 state  1 name null
+(00.003176) unix: 	Collected: ino 33337 peer_ino 35326 family    1 type    1 state  1 name null
+(00.003177) unix: 	Collected: ino 30410 peer_ino 35180 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003178) unix: 	Collected: ino 128140 peer_ino 128139 family    1 type    1 state  1 name null
+(00.003180) unix: 	Collected: ino 61882 peer_ino 61881 family    1 type    1 state  1 name null
+(00.003181) unix: 	Collected: ino 38884 peer_ino 38885 family    1 type    1 state  1 name null
+(00.003183) unix: 	Collected: ino 39159 peer_ino 38436 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003184) unix: 	Collected: ino 36004 peer_ino 30220 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003186) unix: 	Collected: ino 34949 peer_ino 34948 family    1 type    1 state  1 name null
+(00.003187) unix: 	Collected: ino 131588 peer_ino 131589 family    1 type    1 state  1 name null
+(00.003189) unix: 	Collected: ino 33487 peer_ino 34645 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003190) unix: 	Collected: ino 140516 peer_ino 140515 family    1 type    1 state  1 name null
+(00.003192) unix: 	Collected: ino 140482 peer_ino 140483 family    1 type    1 state  1 name null
+(00.003193) unix: 	Collected: ino 71388 peer_ino 71387 family    1 type    1 state  1 name null
+(00.003194) unix: 	Collected: ino 70535 peer_ino 68437 family    1 type    1 state  1 name null
+(00.003196) unix: 	Collected: ino 43689 peer_ino 43690 family    1 type    1 state  1 name null
+(00.003197) unix: 	Collected: ino 37755 peer_ino 37754 family    1 type    1 state  1 name null
+(00.003199) unix: 	Collected: ino 36381 peer_ino 34698 family    1 type    1 state  1 name null
+(00.003200) unix: 	Collected: ino 36144 peer_ino 39153 family    1 type    1 state  1 name null
+(00.003203) unix: 	Collected: ino 23101 peer_ino 0 family    1 type    1 state 10 name /run/systemd/resolve/io.systemd.Resolve
+(00.003204) unix: 	Collected: ino 75230 peer_ino 68440 family    1 type    1 state  1 name null
+(00.003206) unix: 	Collected: ino 33482 peer_ino 36308 family    1 type    1 state  1 name null
+(00.003207) unix: 	Collected: ino 33378 peer_ino 36177 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003209) unix: 	Collected: ino 37294 peer_ino 36168 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003210) unix: 	Collected: ino 34326 peer_ino 35031 family    1 type    1 state  1 name null
+(00.003211) unix: 	Collected: ino 25997 peer_ino 25996 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003213) unix: 	Collected: ino 46046 peer_ino 46047 family    1 type    1 state  1 name null
+(00.003214) unix: 	Collected: ino 37478 peer_ino 36622 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003216) unix: 	Collected: ino 34563 peer_ino 35296 family    1 type    1 state  1 name null
+(00.003217) unix: 	Collected: ino 39092 peer_ino 38044 family    1 type    1 state  1 name null
+(00.003219) unix: 	Collected: ino 36786 peer_ino 36787 family    1 type    1 state  1 name null
+(00.003220) unix: 	Collected: ino 126981 peer_ino 126980 family    1 type    1 state  1 name null
+(00.003221) unix: 	Collected: ino 71506 peer_ino 71505 family    1 type    1 state  1 name null
+(00.003223) unix: 	Collected: ino 35314 peer_ino 37260 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003226) unix: 	Collected: ino 37048 peer_ino 35059 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003227) unix: 	Collected: ino 134730 peer_ino 134729 family    1 type    1 state  1 name null
+(00.003229) unix: 	Collected: ino 134714 peer_ino 134713 family    1 type    1 state  1 name null
+(00.003230) unix: 	Collected: ino 134338 peer_ino 134337 family    1 type    1 state  1 name null
+(00.003232) unix: 	Collected: ino 71385 peer_ino 73171 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003233) unix: 	Collected: ino 38713 peer_ino 39492 family    1 type    1 state  1 name null
+(00.003236) unix: 	Collected: ino 37288 peer_ino 33353 family    1 type    1 state  1 name null
+(00.003239) unix: 	Collected: ino 32715 peer_ino 32716 family    1 type    1 state  1 name null
+(00.003240) unix: 	Collected: ino 48573 peer_ino 48574 family    1 type    1 state  1 name null
+(00.003242) unix: 	Collected: ino 44855 peer_ino 44856 family    1 type    1 state  1 name null
+(00.003243) unix: 	Collected: ino 36114 peer_ino 37223 family    1 type    1 state  1 name 
+(00.003245) unix: 	Collected: ino 26532 peer_ino 35079 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003246) unix: 	Collected: ino 37045 peer_ino 30314 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003248) unix: 	Collected: ino 136743 peer_ino 136742 family    1 type    1 state  1 name null
+(00.003249) unix: 	Collected: ino 46066 peer_ino 46065 family    1 type    1 state  1 name null
+(00.003251) unix: 	Collected: ino 38476 peer_ino 39166 family    1 type    1 state  1 name 
+(00.003252) unix: 	Collected: ino 24756 peer_ino 28103 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003254) unix: 	Collected: ino 24754 peer_ino 26084 family    1 type    1 state  1 name null
+(00.003255) unix: 	Collected: ino 27628 peer_ino 27629 family    1 type    1 state  1 name null
+(00.003256) unix: 	Collected: ino 48198 peer_ino 48199 family    1 type    1 state  1 name null
+(00.003258) unix: 	Collected: ino 39279 peer_ino 42001 family    1 type    1 state  1 name null
+(00.003259) unix: 	Collected: ino 37337 peer_ino 34596 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003261) unix: 	Collected: ino 39083 peer_ino 38030 family    1 type    1 state  1 name null
+(00.003262) unix: 	Collected: ino 75327 peer_ino 75847 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.003264) unix: 	Collected: ino 75311 peer_ino 75310 family    1 type    1 state  1 name null
+(00.003265) unix: 	Collected: ino 51228 peer_ino 51227 family    1 type    1 state  1 name null
+(00.003266) unix: 	Collected: ino 47428 peer_ino 47429 family    1 type    1 state  1 name null
+(00.003268) unix: 	Collected: ino 39129 peer_ino 39130 family    1 type    1 state  1 name null
+(00.003270) unix: 	Collected: ino 39125 peer_ino 34559 family    1 type    1 state  1 name null
+(00.003272) unix: 	Collected: ino 34395 peer_ino 37046 family    1 type    1 state  1 name null
+(00.003273) unix: 	Collected: ino 42157 peer_ino 44074 family    1 type    1 state  1 name null
+(00.003274) unix: 	Collected: ino 33475 peer_ino 33476 family    1 type    1 state  1 name null
+(00.003276) unix: 	Collected: ino 24762 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003277) unix: 	Collected: ino 74231 peer_ino 75313 family    1 type    1 state  1 name null
+(00.003279) unix: 	Collected: ino 38398 peer_ino 38399 family    1 type    1 state  1 name null
+(00.003280) unix: 	Collected: ino 33184 peer_ino 35075 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003282) unix: 	Collected: ino 35023 peer_ino 35019 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003283) unix: 	Collected: ino 137994 peer_ino 137993 family    1 type    1 state  1 name null
+(00.003284) unix: 	Collected: ino 34629 peer_ino 38536 family    1 type    1 state  1 name null
+(00.003286) unix: 	Collected: ino 37227 peer_ino 38059 family    1 type    1 state  1 name 
+(00.003287) unix: 	Collected: ino 2703 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003291) unix: 	Collected: ino 81586 peer_ino 77786 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003292) unix: 	Collected: ino 50357 peer_ino 50356 family    1 type    1 state  1 name null
+(00.003294) unix: 	Collected: ino 52244 peer_ino 46896 family    1 type    1 state  1 name 
+(00.003295) unix: 	Collected: ino 46889 peer_ino 52238 family    1 type    1 state  1 name null
+(00.003297) unix: 	Collected: ino 39272 peer_ino 37406 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003298) unix: 	Collected: ino 38538 peer_ino 37351 family    1 type    1 state  1 name 
+(00.003299) unix: 	Collected: ino 33330 peer_ino 37221 family    1 type    1 state  1 name null
+(00.003301) unix: 	Collected: ino 37318 peer_ino 35385 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003303) unix: 	Collected: ino 41874 peer_ino 35329 family    1 type    1 state  1 name null
+(00.003305) unix: 	Collected: ino 37215 peer_ino 38050 family    1 type    1 state  1 name null
+(00.003306) unix: 	Collected: ino 23113 peer_ino 0 family    1 type    1 state 10 name /run/acpid.socket
+(00.003308) unix: 	Collected: ino 123623 peer_ino 123622 family    1 type    1 state  1 name null
+(00.003311) unix: 	Collected: ino 71384 peer_ino 68436 family    1 type    1 state  1 name null
+(00.003313) unix: 	Collected: ino 44991 peer_ino 44990 family    1 type    1 state  1 name null
+(00.003314) unix: 	Collected: ino 34472 peer_ino 39084 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003316) unix: 	Collected: ino 62213 peer_ino 62214 family    1 type    1 state  1 name null
+(00.003317) unix: 	Collected: ino 45589 peer_ino 45590 family    1 type    1 state  1 name null
+(00.003319) unix: 	Collected: ino 35800 peer_ino 35801 family    1 type    1 state  1 name null
+(00.003320) unix: 	Collected: ino 44071 peer_ino 36621 family    1 type    1 state  1 name 
+(00.003322) unix: 	Collected: ino 34282 peer_ino 34283 family    1 type    2 state  1 name null
+(00.003323) unix: 	Collected: ino 23115 peer_ino 0 family    1 type    1 state 10 name /run/avahi-daemon/socket
+(00.003324) unix: 	Collected: ino 35033 peer_ino 36039 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003326) unix: 	Collected: ino 24719 peer_ino 22498 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003327) unix: 	Collected: ino 138477 peer_ino 138478 family    1 type    1 state  1 name null
+(00.003329) unix: 	Collected: ino 122334 peer_ino 122333 family    1 type    1 state  1 name null
+(00.003330) unix: 	Collected: ino 122333 peer_ino 122334 family    1 type    1 state  1 name null
+(00.003332) unix: 	Collected: ino 54391 peer_ino 48664 family    1 type    1 state  1 name null
+(00.003333) unix: 	Collected: ino 36192 peer_ino 36193 family    1 type    1 state  1 name null
+(00.003334) unix: 	Collected: ino 36184 peer_ino 35379 family    1 type    1 state  1 name null
+(00.003336) unix: 	Collected: ino 36155 peer_ino 33367 family    1 type    1 state  1 name null
+(00.003338) unix: 	Collected: ino 34569 peer_ino 35307 family    1 type    1 state  1 name null
+(00.003340) unix: 	Collected: ino 120119 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003341) unix: 	Collected: ino 42958 peer_ino 42959 family    1 type    1 state  1 name null
+(00.003343) unix: 	Collected: ino 38539 peer_ino 34639 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003344) unix: 	Collected: ino 37030 peer_ino 37029 family    1 type    1 state  1 name null
+(00.003345) unix: 	Collected: ino 29917 peer_ino 2908 family    1 type    1 state  1 name null
+(00.003347) unix: 	Collected: ino 85141 peer_ino 84218 family    1 type    1 state  1 name null
+(00.003348) unix: 	Collected: ino 66261 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003350) unix: 	Collected: ino 29570 peer_ino 29569 family    1 type    1 state  1 name null
+(00.003351) unix: 	Collected: ino 23119 peer_ino 0 family    1 type    1 state 10 name /run/dbus/system_bus_socket
+(00.003353) unix: 	Collected: ino 134767 peer_ino 134766 family    1 type    1 state  1 name null
+(00.003356) unix: 	Collected: ino 50359 peer_ino 50358 family    1 type    1 state  1 name null
+(00.003357) unix: 	Collected: ino 46886 peer_ino 46885 family    1 type    1 state  1 name null
+(00.003359) unix: 	Collected: ino 46687 peer_ino 46686 family    1 type    1 state  1 name null
+(00.003360) unix: 	Collected: ino 35573 peer_ino 35574 family    1 type    1 state  1 name null
+(00.003362) unix: 	Collected: ino 42119 peer_ino 42118 family    1 type    5 state  1 name null
+(00.003363) unix: 	Collected: ino 38548 peer_ino 0 family    1 type    2 state  7 name null
+(00.003365) unix: 	Collected: ino 36148 peer_ino 37293 family    1 type    1 state  1 name 
+(00.003366) unix: 	Collected: ino 33340 peer_ino 38412 family    1 type    1 state  1 name null
+(00.003368) unix: 	Collected: ino 23121 peer_ino 0 family    1 type    1 state 10 name /run/uuidd/request
+(00.003369) unix: 	Collected: ino 52232 peer_ino 50341 family    1 type    1 state  1 name 
+(00.003372) unix: 	Collected: ino 48200 peer_ino 48201 family    1 type    1 state  1 name null
+(00.003373) unix: 	Collected: ino 48199 peer_ino 48198 family    1 type    1 state  1 name null
+(00.003374) unix: 	Collected: ino 39462 peer_ino 39461 family    1 type    1 state  1 name null
+(00.003376) unix: 	Collected: ino 36071 peer_ino 34444 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003377) unix: 	Collected: ino 33110 peer_ino 34959 family    1 type    1 state  1 name null
+(00.003379) unix: 	Collected: ino 29494 peer_ino 29493 family    1 type    5 state  1 name null
+(00.003380) unix: 	Collected: ino 48466 peer_ino 46058 family    1 type    1 state  1 name null
+(00.003383) unix: 	Collected: ino 35523 peer_ino 39454 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003385) unix: 	Collected: ino 33549 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003387) unix: 	Collected: ino 33328 peer_ino 39114 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003388) unix: 	Collected: ino 30475 peer_ino 36112 family    1 type    1 state  1 name null
+(00.003390) unix: 	Collected: ino 24718 peer_ino 24717 family    1 type    1 state  1 name null
+(00.003391) unix: 	Collected: ino 22858 peer_ino 16806 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003393) unix: 	Collected: ino 35025 peer_ino 36022 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003394) unix: 	Collected: ino 75605 peer_ino 75855 family    1 type    1 state  1 name null
+(00.003396) unix: 	Collected: ino 73191 peer_ino 75837 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003397) unix: 	Collected: ino 70543 peer_ino 70542 family    1 type    1 state  1 name null
+(00.003398) unix: 	Collected: ino 47867 peer_ino 47868 family    1 type    1 state  1 name null
+(00.003400) unix: 	Collected: ino 44934 peer_ino 44935 family    1 type    1 state  1 name null
+(00.003401) unix: 	Collected: ino 39163 peer_ino 35358 family    1 type    1 state  1 name null
+(00.003403) unix: 	Collected: ino 36160 peer_ino 36159 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003404) unix: 	Collected: ino 39118 peer_ino 30479 family    1 type    1 state  1 name null
+(00.003406) unix: 	Collected: ino 38719 peer_ino 38718 family    1 type    1 state  1 name null
+(00.003408) unix: 	Collected: ino 34648 peer_ino 39189 family    1 type    1 state  1 name null
+(00.003409) unix: 	Collected: ino 35055 peer_ino 37047 family    1 type    1 state  1 name null
+(00.003411) unix: 	Collected: ino 36962 peer_ino 33112 family    1 type    1 state  1 name null
+(00.003412) unix: 	Collected: ino 2747 peer_ino 0 family    1 type    2 state  7 name null
+(00.003414) unix: 	Collected: ino 131981 peer_ino 131980 family    1 type    1 state  1 name null
+(00.003415) unix: 	Collected: ino 76892 peer_ino 71991 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003417) unix: 	Collected: ino 42324 peer_ino 42323 family    1 type    1 state  1 name null
+(00.003418) unix: 	Collected: ino 38423 peer_ino 36125 family    1 type    1 state  1 name null
+(00.003421) unix: 	Collected: ino 120121 peer_ino 120120 family    1 type    1 state  1 name null
+(00.003422) unix: 	Collected: ino 37486 peer_ino 37485 family    1 type    1 state  1 name null
+(00.003424) unix: 	Collected: ino 35333 peer_ino 33342 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003425) unix: 	Collected: ino 38008 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003427) unix: 	Collected: ino 46839 peer_ino 46840 family    1 type    1 state  1 name null
+(00.003428) unix: 	Collected: ino 44072 peer_ino 37484 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003430) unix: 	Collected: ino 33471 peer_ino 41892 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.003431) unix: 	Collected: ino 25999 peer_ino 29803 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003433) unix: 	Collected: ino 43315 peer_ino 39490 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003434) unix: 	Collected: ino 34578 peer_ino 38497 family    1 type    1 state  1 name null
+(00.003436) unix: 	Collected: ino 41858 peer_ino 35276 family    1 type    1 state  1 name null
+(00.003437) unix: 	Collected: ino 27640 peer_ino 2732 family    1 type    1 state  1 name null
+(00.003438) unix: 	Collected: ino 135423 peer_ino 135424 family    1 type    1 state  1 name null
+(00.003441) unix: 	Collected: ino 123701 peer_ino 123702 family    1 type    1 state  1 name null
+(00.003442) unix: 	Collected: ino 51224 peer_ino 51223 family    1 type    1 state  1 name null
+(00.003444) unix: 	Collected: ino 36842 peer_ino 36841 family    1 type    1 state  1 name null
+(00.003445) unix: 	Collected: ino 36622 peer_ino 37478 family    1 type    1 state  1 name null
+(00.003446) unix: 	Collected: ino 140514 peer_ino 140513 family    1 type    1 state  1 name null
+(00.003448) unix: 	Collected: ino 70542 peer_ino 70543 family    1 type    1 state  1 name null
+(00.003449) unix: 	Collected: ino 55773 peer_ino 52801 family    1 type    1 state  1 name null
+(00.003451) unix: 	Collected: ino 43690 peer_ino 43689 family    1 type    1 state  1 name null
+(00.003452) unix: 	Collected: ino 41876 peer_ino 33399 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.003454) unix: 	Collected: ino 22523 peer_ino 26002 family    1 type    1 state  1 name null
+(00.003457) unix: 	Collected: ino 75238 peer_ino 75237 family    1 type    1 state  1 name null
+(00.003459) unix: 	Collected: ino 44070 peer_ino 36620 family    1 type    1 state  1 name 
+(00.003460) unix: 	Collected: ino 36242 peer_ino 36233 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003462) unix: 	Collected: ino 33349 peer_ino 36127 family    1 type    1 state  1 name 
+(00.003463) unix: 	Collected: ino 34399 peer_ino 26526 family    1 type    1 state  1 name null
+(00.003465) unix: 	Collected: ino 35016 peer_ino 26510 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003507) unix: 	Collected: ino 30185 peer_ino 35942 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003509) unix: 	Collected: ino 22506 peer_ino 25989 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003511) unix: 	Collected: ino 36057 peer_ino 35080 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003512) unix: 	Collected: ino 35326 peer_ino 33337 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003514) unix: 	Collected: ino 30317 peer_ino 26523 family    1 type    1 state  1 name null
+(00.003516) unix: 	Collected: ino 26140 peer_ino 29491 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003518) unix: 	Collected: ino 124448 peer_ino 124447 family    1 type    1 state  1 name null
+(00.003519) unix: 	Collected: ino 95465 peer_ino 92640 family    1 type    1 state  1 name null
+(00.003520) unix: 	Collected: ino 77786 peer_ino 81586 family    1 type    1 state  1 name null
+(00.003522) unix: 	Collected: ino 68413 peer_ino 74134 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003523) unix: 	Collected: ino 33353 peer_ino 37288 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003527) unix: 	Collected: ino 33350 peer_ino 37283 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003530) unix: 	Collected: ino 32716 peer_ino 32715 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003532) unix: 	Collected: ino 36972 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003533) unix: 	Collected: ino 134345 peer_ino 134346 family    1 type    1 state  1 name null
+(00.003535) unix: 	Collected: ino 81587 peer_ino 83785 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003536) unix: 	Collected: ino 53306 peer_ino 53305 family    1 type    1 state  1 name null
+(00.003538) unix: 	Collected: ino 35901 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003539) unix: 	Collected: ino 126142 peer_ino 126143 family    1 type    1 state  1 name null
+(00.003540) unix: 	Collected: ino 118706 peer_ino 118705 family    1 type    1 state  1 name null
+(00.003542) unix: 	Collected: ino 83797 peer_ino 0 family    1 type    1 state  1 name null
+(00.003543) unix: 	Collected: ino 74202 peer_ino 74201 family    1 type    1 state  1 name null
+(00.003545) unix: 	Collected: ino 51257 peer_ino 51256 family    1 type    1 state  1 name null
+(00.003546) unix: 	Collected: ino 52246 peer_ino 52245 family    1 type    1 state  1 name null
+(00.003548) unix: 	Collected: ino 49566 peer_ino 49565 family    1 type    1 state  1 name null
+(00.003549) unix: 	Collected: ino 44751 peer_ino 44750 family    1 type    1 state  1 name null
+(00.003551) unix: 	Collected: ino 43294 peer_ino 37482 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003554) unix: 	Collected: ino 39178 peer_ino 41875 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003556) unix: 	Collected: ino 37305 peer_ino 39167 family    1 type    1 state  1 name null
+(00.003557) unix: 	Collected: ino 76809 peer_ino 76810 family    1 type    1 state  1 name null
+(00.003558) unix: 	Collected: ino 52238 peer_ino 46889 family    1 type    1 state  1 name 
+(00.003560) unix: 	Collected: ino 46763 peer_ino 46764 family    1 type    1 state  1 name null
+(00.003561) unix: 	Collected: ino 35322 peer_ino 35321 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003563) unix: 	Collected: ino 33186 peer_ino 32759 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003564) unix: 	Collected: ino 34116 peer_ino 35898 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003566) unix: 	Collected: ino 21480 peer_ino 27576 family    1 type    1 state  1 name null
+(00.003567) unix: 	Collected: ino 73171 peer_ino 71385 family    1 type    1 state  1 name null
+(00.003569) unix: 	Collected: ino 42867 peer_ino 42868 family    1 type    1 state  1 name null
+(00.003570) unix: 	Collected: ino 33370 peer_ino 38438 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003571) unix: 	Collected: ino 38419 peer_ino 35336 family    1 type    1 state  1 name null
+(00.003573) unix: 	Collected: ino 48093 peer_ino 48092 family    1 type    5 state  1 name null
+(00.003574) unix: 	Collected: ino 29393 peer_ino 25962 family    1 type    1 state  1 name null
+(00.003576) unix: 	Collected: ino 140487 peer_ino 140488 family    1 type    1 state  1 name null
+(00.003577) unix: 	Collected: ino 92639 peer_ino 95463 family    1 type    1 state  1 name null
+(00.003579) unix: 	Collected: ino 49569 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/vscode-67120a09-1.81-main.sock
+(00.003580) unix: 	Collected: ino 37847 peer_ino 37848 family    1 type    1 state  1 name null
+(00.003582) unix: 	Collected: ino 37846 peer_ino 37845 family    1 type    1 state  1 name null
+(00.003583) unix: 	Collected: ino 75837 peer_ino 73191 family    1 type    1 state  1 name null
+(00.003585) unix: 	Collected: ino 43307 peer_ino 43308 family    1 type    1 state  1 name null
+(00.003587) unix: 	Collected: ino 36206 peer_ino 34619 family    1 type    1 state  1 name null
+(00.003588) unix: 	Collected: ino 33385 peer_ino 35378 family    1 type    1 state  1 name null
+(00.003591) unix: 	Collected: ino 39130 peer_ino 39129 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003593) unix: 	Collected: ino 30450 peer_ino 37984 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003594) unix: 	Collected: ino 34614 peer_ino 35394 family    1 type    1 state  1 name null
+(00.003596) unix: 	Collected: ino 34566 peer_ino 35301 family    1 type    1 state  1 name null
+(00.003597) unix: 	Collected: ino 30473 peer_ino 39097 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003598) unix: 	Collected: ino 27637 peer_ino 2729 family    1 type    1 state  1 name null
+(00.003601) unix: 	Collected: ino 44984 peer_ino 44985 family    1 type    1 state  1 name null
+(00.003603) unix: 	Collected: ino 48226 peer_ino 48225 family    1 type    1 state  1 name null
+(00.003605) unix: 	Collected: ino 39180 peer_ino 39181 family    1 type    1 state  1 name null
+(00.003607) unix: 	Collected: ino 39110 peer_ino 33326 family    1 type    1 state  1 name null
+(00.003608) unix: 	Collected: ino 2931 peer_ino 32314 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003609) unix: 	Collected: ino 28103 peer_ino 24756 family    1 type    1 state  1 name null
+(00.003611) unix: 	Collected: ino 92640 peer_ino 95465 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.003612) unix: 	Collected: ino 81056 peer_ino 79986 family    1 type    1 state  1 name /run/user/1000/pulse/native
+(00.003614) unix: 	Collected: ino 46794 peer_ino 47914 family    1 type    1 state  1 name null
+(00.003615) unix: 	Collected: ino 74428 peer_ino 81058 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.003617) unix: 	Collected: ino 74279 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/discord-ipc-0
+(00.003618) unix: 	Collected: ino 26110 peer_ino 24778 family    1 type    1 state  1 name null
+(00.003621) unix: 	Collected: ino 126387 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/vscode-git-4d6dafa5da.sock
+(00.003622) unix: 	Collected: ino 61880 peer_ino 61879 family    1 type    1 state  1 name null
+(00.003624) unix: 	Collected: ino 37508 peer_ino 36775 family    1 type    1 state  1 name null
+(00.003625) unix: 	Collected: ino 137014 peer_ino 0 family    1 type    1 state 10 name /run/user/1000/vscode-git-399e1b077a.sock
+(00.003627) unix: 	Collected: ino 85149 peer_ino 0 family    1 type    1 state  1 name null
+(00.003628) unix: 	Collected: ino 48534 peer_ino 48535 family    1 type    1 state  1 name null
+(00.003629) unix: 	Collected: ino 34639 peer_ino 38539 family    1 type    1 state  1 name null
+(00.003631) unix: 	Collected: ino 34616 peer_ino 34617 family    1 type    1 state  1 name null
+(00.003632) unix: 	Collected: ino 35336 peer_ino 38419 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003634) unix: 	Collected: ino 33112 peer_ino 36962 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003635) unix: 	Collected: ino 34115 peer_ino 36912 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003637) unix: 	Collected: ino 128174 peer_ino 128175 family    1 type    1 state  1 name null
+(00.003638) unix: 	Collected: ino 71401 peer_ino 70546 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.003640) unix: 	Collected: ino 75232 peer_ino 74219 family    1 type    1 state  1 name null
+(00.003641) unix: 	Collected: ino 36175 peer_ino 36174 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.003643) unix: 	Collected: ino 39153 peer_ino 36144 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.003644) unix: 	Collected: ino 39126 peer_ino 35291 family    1 type    1 state  1 name null
+(00.003646) unix: 	Collected: ino 29462 peer_ino 30787 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003647) unix: 	Collected: ino 132024 peer_ino 132025 family    1 type    1 state  1 name null
+(00.003648) unix: 	Collected: ino 122461 peer_ino 122460 family    1 type    1 state  1 name null
+(00.003651) unix: 	Collected: ino 46798 peer_ino 47915 family    1 type    1 state  1 name 
+(00.003654) unix: 	Collected: ino 44935 peer_ino 44934 family    1 type    1 state  1 name null
+(00.003655) unix: 	Collected: ino 38983 peer_ino 37167 family    1 type    1 state  1 name null
+(00.003657) unix: 	Collected: ino 26503 peer_ino 30218 family    1 type    1 state  1 name null
+(00.003658) unix: 	Collected: ino 136745 peer_ino 136744 family    1 type    1 state  1 name null
+(00.003660) unix: 	Collected: ino 36764 peer_ino 44123 family    1 type    1 state  1 name null
+(00.003661) unix: 	Collected: ino 35370 peer_ino 39169 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003663) unix: 	Collected: ino 39134 peer_ino 41862 family    1 type    1 state  1 name 
+(00.003664) unix: 	Collected: ino 118295 peer_ino 118294 family    1 type    5 state  1 name null
+(00.003665) unix: 	Collected: ino 45482 peer_ino 45483 family    1 type    1 state  1 name null
+(00.003667) unix: 	Collected: ino 30477 peer_ino 30476 family    1 type    1 state  1 name null
+(00.003668) unix: 	Collected: ino 34130 peer_ino 26346 family    1 type    1 state  1 name null
+(00.003670) unix: 	Collected: ino 143419 peer_ino 143418 family    1 type    1 state  1 name null
+(00.003671) unix: 	Collected: ino 70549 peer_ino 70548 family    1 type    1 state  1 name null
+(00.003673) unix: 	Collected: ino 52240 peer_ino 46890 family    1 type    1 state  1 name 
+(00.003675) unix: 	Collected: ino 47960 peer_ino 47961 family    1 type    1 state  1 name null
+(00.003678) unix: 	Collected: ino 45472 peer_ino 45473 family    1 type    1 state  1 name null
+(00.003679) unix: 	Collected: ino 46721 peer_ino 46720 family    1 type    1 state  1 name null
+(00.003681) unix: 	Collected: ino 36128 peer_ino 33336 family    1 type    1 state  1 name 
+(00.003682) unix: 	Collected: ino 34561 peer_ino 37253 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003684) unix: 	Collected: ino 29805 peer_ino 29804 family    1 type    1 state  1 name null
+(00.003685) unix: 	Collected: ino 73949 peer_ino 73950 family    1 type    1 state  1 name null
+(00.003688) unix: 	Collected: ino 53555 peer_ino 53554 family    1 type    1 state  1 name null
+(00.003689) unix: 	Collected: ino 50383 peer_ino 50382 family    1 type    1 state  1 name null
+(00.003691) unix: 	Collected: ino 50372 peer_ino 46902 family    1 type    1 state  1 name null
+(00.003692) unix: 	Collected: ino 35520 peer_ino 37477 family    1 type    1 state  1 name null
+(00.003693) unix: 	Collected: ino 35412 peer_ino 35413 family    1 type    1 state  1 name null
+(00.003695) unix: 	Collected: ino 38455 peer_ino 0 family    1 type    2 state  7 name null
+(00.003696) unix: 	Collected: ino 35898 peer_ino 34116 family    1 type    1 state  1 name null
+(00.003698) unix: 	Collected: ino 29468 peer_ino 0 family    1 type    2 state  7 name null
+(00.003699) unix: 	Collected: ino 71929 peer_ino 71928 family    1 type    1 state  1 name null
+(00.003701) unix: 	Collected: ino 38784 peer_ino 38785 family    1 type    1 state  1 name null
+(00.003702) unix: 	Collected: ino 29491 peer_ino 26140 family    1 type    1 state  1 name null
+(00.003703) unix: 	Collected: ino 42868 peer_ino 42867 family    1 type    1 state  1 name null
+(00.003705) unix: 	Collected: ino 44721 peer_ino 44722 family    1 type    1 state  1 name null
+(00.003706) unix: 	Collected: ino 30229 peer_ino 32717 family    1 type    1 state  1 name null
+(00.003708) unix: 	Collected: ino 129088 peer_ino 129089 family    1 type    1 state  1 name null
+(00.003709) unix: 	Collected: ino 51251 peer_ino 51252 family    1 type    1 state  1 name null
+(00.003711) unix: 	Collected: ino 33359 peer_ino 36143 family    1 type    1 state  1 name 
+(00.003712) unix: 	Collected: ino 35328 peer_ino 39144 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003713) unix: 	Collected: ino 27596 peer_ino 27597 family    1 type    2 state  1 name null
+(00.003715) unix: 	Collected: ino 49450 peer_ino 49451 family    1 type    1 state  1 name null
+(00.003716) unix: 	Collected: ino 47532 peer_ino 47531 family    1 type    1 state  1 name null
+(00.003719) unix: 	Collected: ino 37845 peer_ino 37846 family    1 type    1 state  1 name null
+(00.003721) unix: 	Collected: ino 35834 peer_ino 35835 family    1 type    1 state  1 name null
+(00.003723) unix: 	Collected: ino 41887 peer_ino 36244 family    1 type    1 state  1 name 
+(00.003724) unix: 	Collected: ino 35378 peer_ino 33385 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003726) unix: 	Collected: ino 48149 peer_ino 48148 family    1 type    1 state  1 name null
+(00.003727) unix: 	Collected: ino 39187 peer_ino 38491 family    1 type    1 state  1 name null
+(00.003729) unix: 	Collected: ino 35296 peer_ino 34563 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003730) unix: 	Collected: ino 123711 peer_ino 123710 family    1 type    1 state  1 name null
+(00.003732) unix: 	Collected: ino 38044 peer_ino 39092 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003733) unix: 	Collected: ino 37206 peer_ino 39088 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003735) unix: 	Collected: ino 34464 peer_ino 37191 family    1 type    1 state  1 name null
+(00.003736) unix: 	Collected: ino 35047 peer_ino 30313 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003738) unix: 	Collected: ino 71408 peer_ino 71407 family    1 type    1 state  1 name null
+(00.003739) unix: 	Collected: ino 46629 peer_ino 46628 family    1 type    1 state  1 name null
+(00.003740) unix: 	Collected: ino 37271 peer_ino 41871 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003742) unix: 	Collected: ino 134452 peer_ino 134453 family    1 type    1 state  1 name null
+(00.003743) unix: 	Collected: ino 134337 peer_ino 134338 family    1 type    1 state  1 name null
+(00.003745) unix: 	Collected: ino 81591 peer_ino 77793 family    1 type    1 state  1 name null
+(00.003747) unix: 	Collected: ino 37351 peer_ino 38538 family    1 type    1 state  1 name null
+(00.003749) unix: 	Collected: ino 85150 peer_ino 78528 family    1 type    1 state  1 name null
+(00.003751) unix: 	Collected: ino 37050 peer_ino 35066 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003753) unix: 	Collected: ino 35059 peer_ino 37048 family    1 type    1 state  1 name null
+(00.003754) unix: 	Collected: ino 32730 peer_ino 37032 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.003757) unix: 	Collected: ino 71376 peer_ino 71375 family    1 type    5 state  1 name null
+(00.003758) unix: 	Collected: ino 38424 peer_ino 36140 family    1 type    1 state  1 name null
+(00.003759) unix: 	Collected: ino 35079 peer_ino 26532 family    1 type    1 state  1 name null
+(00.003761) unix: 	Collected: ino 140513 peer_ino 140514 family    1 type    1 state  1 name null
+(00.003762) unix: 	Collected: ino 75848 peer_ino 75328 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.003764) unix: 	Collected: ino 71390 peer_ino 71389 family    1 type    1 state  1 name null
+(00.003765) unix: 	Collected: ino 59276 peer_ino 59275 family    1 type    1 state  1 name null
+(00.003767) unix: 	Collected: ino 54682 peer_ino 54683 family    1 type    1 state  1 name null
+(00.003768) unix: 	Collected: ino 36233 peer_ino 36242 family    1 type    1 state  1 name null
+(00.003770) unix: 	Collected: ino 36135 peer_ino 33352 family    1 type    1 state  1 name null
+(00.003771) unix: 	Collected: ino 26528 peer_ino 34400 family    1 type    1 state  1 name null
+(00.003772) unix: 	Collected: ino 75664 peer_ino 75663 family    1 type    1 state  1 name null
+(00.003774) unix: 	Collected: ino 47531 peer_ino 47532 family    1 type    1 state  1 name null
+(00.003775) unix: 	Collected: ino 39143 peer_ino 35327 family    1 type    1 state  1 name null
+(00.003777) unix: 	Collected: ino 30218 peer_ino 26503 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003778) unix: 	Collected: ino 2697 peer_ino 25969 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003780) unix: 	Collected: ino 45593 peer_ino 45594 family    1 type    1 state  1 name null
+(00.003783) unix: 	Collected: ino 39276 peer_ino 34766 family    1 type    1 state  1 name null
+(00.003784) unix: 	Collected: ino 30330 peer_ino 26537 family    1 type    1 state  1 name null
+(00.003785) unix: 	Collected: ino 137012 peer_ino 135783 family    1 type    1 state  1 name null
+(00.003787) unix: 	Collected: ino 50343 peer_ino 51254 family    1 type    1 state  1 name null
+(00.003788) unix: 	Collected: ino 44972 peer_ino 48279 family    1 type    1 state  1 name 
+(00.003791) unix: 	Collected: ino 143417 peer_ino 24388 family    1 type    2 state  1 name null
+(00.003792) unix: 	Collected: ino 42959 peer_ino 42958 family    1 type    1 state  1 name null
+(00.003793) unix: 	Collected: ino 42957 peer_ino 42956 family    1 type    1 state  1 name null
+(00.003795) unix: 	Collected: ino 137984 peer_ino 137983 family    1 type    1 state  1 name null
+(00.003796) unix: 	Collected: ino 38810 peer_ino 38809 family    1 type    1 state  1 name null
+(00.003798) unix: 	Collected: ino 38399 peer_ino 38398 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003799) unix: 	Collected: ino 24782 peer_ino 26111 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003801) unix: 	Collected: ino 71505 peer_ino 71506 family    1 type    1 state  1 name null
+(00.003802) unix: 	Collected: ino 74214 peer_ino 74215 family    1 type    1 state  1 name null
+(00.003803) unix: 	Collected: ino 50358 peer_ino 50359 family    1 type    1 state  1 name null
+(00.003805) unix: 	Collected: ino 49568 peer_ino 48366 family    1 type    1 state  1 name null
+(00.003806) unix: 	Collected: ino 50196 peer_ino 50195 family    1 type    1 state  1 name null
+(00.003808) unix: 	Collected: ino 37308 peer_ino 0 family    1 type    1 state  1 name null
+(00.003809) unix: 	Collected: ino 35329 peer_ino 41874 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003811) unix: 	Collected: ino 33292 peer_ino 37182 family    1 type    1 state  1 name null
+(00.003812) unix: 	Collected: ino 32760 peer_ino 33187 family    1 type    1 state  1 name null
+(00.003813) unix: 	Collected: ino 28174 peer_ino 30943 family    1 type    1 state  1 name null
+(00.003815) unix: 	Collected: ino 46908 peer_ino 46907 family    1 type    1 state  1 name null
+(00.003816) unix: 	Collected: ino 46896 peer_ino 52244 family    1 type    1 state  1 name null
+(00.003818) unix: 	Collected: ino 47961 peer_ino 47960 family    1 type    1 state  1 name null
+(00.003820) unix: 	Collected: ino 36305 peer_ino 35411 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003822) unix: 	Collected: ino 38056 peer_ino 39111 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003825) unix: 	Collected: ino 36099 peer_ino 30461 family    1 type    1 state  1 name null
+(00.003827) unix: 	Collected: ino 34466 peer_ino 37192 family    1 type    1 state  1 name null
+(00.003828) unix: 	Collected: ino 27634 peer_ino 26003 family    1 type    1 state  1 name null
+(00.003829) unix: 	Collected: ino 27590 peer_ino 24722 family    1 type    1 state  1 name null
+(00.003831) unix: 	Collected: ino 39504 peer_ino 39503 family    1 type    1 state  1 name null
+(00.003832) unix: 	Collected: ino 39464 peer_ino 39463 family    1 type    1 state  1 name null
+(00.003834) unix: 	Collected: ino 36621 peer_ino 44071 family    1 type    1 state  1 name null
+(00.003835) unix: 	Collected: ino 38437 peer_ino 33369 family    1 type    1 state  1 name null
+(00.003837) unix: 	Collected: ino 37245 peer_ino 37244 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003838) unix: 	Collected: ino 39103 peer_ino 38055 family    1 type    1 state  1 name null
+(00.003839) unix: 	Collected: ino 34283 peer_ino 34282 family    1 type    2 state  1 name null
+(00.003841) unix: 	Collected: ino 140488 peer_ino 140487 family    1 type    1 state  1 name null
+(00.003842) unix: 	Collected: ino 126384 peer_ino 129091 family    1 type    1 state  1 name null
+(00.003844) unix: 	Collected: ino 78520 peer_ino 0 family    1 type    1 state 10 name /run/cups/cups.sock
+(00.003847) unix: 	Collected: ino 36210 peer_ino 36209 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003848) unix: 	Collected: ino 37295 peer_ino 33377 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003850) unix: 	Collected: ino 39122 peer_ino 35277 family    1 type    1 state  1 name null
+(00.003851) unix: 	Collected: ino 34398 peer_ino 35053 family    1 type    1 state  1 name null
+(00.003852) unix: 	Collected: ino 36023 peer_ino 32718 family    1 type    1 state  1 name null
+(00.003854) unix: 	Collected: ino 22498 peer_ino 24719 family    1 type    1 state  1 name null
+(00.003855) unix: 	Collected: ino 75849 peer_ino 74234 family    1 type    1 state  1 name null
+(00.003857) unix: 	Collected: ino 33479 peer_ino 35410 family    1 type    1 state  1 name null
+(00.003859) unix: 	Collected: ino 137983 peer_ino 137984 family    1 type    1 state  1 name null
+(00.003860) unix: 	Collected: ino 128170 peer_ino 128171 family    1 type    1 state  1 name null
+(00.003862) unix: 	Collected: ino 41879 peer_ino 35393 family    1 type    1 state  1 name null
+(00.003863) unix: 	Collected: ino 38420 peer_ino 35337 family    1 type    1 state  1 name null
+(00.003865) unix: 	Collected: ino 35075 peer_ino 33184 family    1 type    1 state  1 name null
+(00.003866) unix: 	Collected: ino 37034 peer_ino 32733 family    1 type    1 state  1 name null
+(00.003868) unix: 	Collected: ino 131983 peer_ino 131982 family    1 type    1 state  1 name null
+(00.003871) unix: 	Collected: ino 44077 peer_ino 36627 family    1 type    1 state  1 name null
+(00.003873) unix: 	Collected: ino 37049 peer_ino 35062 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003874) unix: 	Collected: ino 134766 peer_ino 134767 family    1 type    1 state  1 name null
+(00.003876) unix: 	Collected: ino 125384 peer_ino 125383 family    1 type    1 state  1 name null
+(00.003877) unix: 	Collected: ino 83785 peer_ino 81587 family    1 type    1 state  1 name null
+(00.003878) unix: 	Collected: ino 37321 peer_ino 37320 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003880) unix: 	Collected: ino 26105 peer_ino 29846 family    1 type    1 state  1 name null
+(00.003881) unix: 	Collected: ino 123699 peer_ino 123700 family    1 type    1 state  1 name null
+(00.003883) unix: 	Collected: ino 36787 peer_ino 36786 family    1 type    1 state  1 name null
+(00.003884) unix: 	Collected: ino 42001 peer_ino 39279 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003886) unix: 	Collected: ino 33245 peer_ino 30357 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003887) unix: 	Collected: ino 135783 peer_ino 137012 family    1 type    1 state  1 name /tmp/vscode-c52538576e60a2d97f403a34adf22716f08c636e.sock
+(00.003889) unix: 	Collected: ino 68436 peer_ino 71384 family    1 type    1 state  1 name 
+(00.003890) unix: 	Collected: ino 58473 peer_ino 58472 family    1 type    1 state  1 name null
+(00.003892) unix: 	Collected: ino 46049 peer_ino 46050 family    1 type    1 state  1 name null
+(00.003897) unix: 	Collected: ino 45590 peer_ino 45589 family    1 type    1 state  1 name null
+(00.003898) unix: 	Collected: ino 48279 peer_ino 44972 family    1 type    1 state  1 name null
+(00.003900) unix: 	Collected: ino 44044 peer_ino 44043 family    1 type    5 state  1 name null
+(00.003901) unix: 	Collected: ino 41862 peer_ino 39134 family    1 type    1 state  1 name null
+(00.003903) unix: 	Collected: ino 75851 peer_ino 75850 family    1 type    1 state  1 name null
+(00.003904) unix: 	Collected: ino 75233 peer_ino 75234 family    1 type    1 state  1 name null
+(00.003906) unix: 	Collected: ino 53672 peer_ino 54389 family    1 type    1 state  1 name 
+(00.003907) unix: 	Collected: ino 47944 peer_ino 47943 family    1 type    1 state  1 name null
+(00.003908) unix: 	Collected: ino 35374 peer_ino 36182 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003910) unix: 	Collected: ino 26048 peer_ino 30728 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003911) unix: 	Collected: ino 140517 peer_ino 140518 family    1 type    1 state  1 name null
+(00.003914) unix: 	Collected: ino 132027 peer_ino 132026 family    1 type    1 state  1 name null
+(00.003916) unix: 	Collected: ino 138478 peer_ino 138477 family    1 type    1 state  1 name null
+(00.003918) unix: 	Collected: ino 74219 peer_ino 75232 family    1 type    1 state  1 name 
+(00.003919) unix: 	Collected: ino 70536 peer_ino 68438 family    1 type    1 state  1 name null
+(00.003921) unix: 	Collected: ino 36159 peer_ino 36160 family    1 type    1 state  1 name null
+(00.003922) unix: 	Collected: ino 35291 peer_ino 39126 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003924) unix: 	Collected: ino 36042 peer_ino 34340 family    1 type    1 state  1 name null
+(00.003925) unix: 	Collected: ino 25989 peer_ino 22506 family    1 type    1 state  1 name null
+(00.003927) unix: 	Collected: ino 128139 peer_ino 128140 family    1 type    1 state  1 name null
+(00.003928) unix: 	Collected: ino 38809 peer_ino 38810 family    1 type    1 state  1 name null
+(00.003930) unix: 	Collected: ino 38707 peer_ino 38708 family    1 type    1 state  1 name null
+(00.003932) unix: 	Collected: ino 33375 peer_ino 36170 family    1 type    1 state  1 name null
+(00.003933) unix: 	Collected: ino 37209 peer_ino 38047 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003935) unix: 	Collected: ino 32717 peer_ino 30229 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003936) unix: 	Collected: ino 29452 peer_ino 26099 family    1 type    1 state  1 name null
+(00.003938) unix: 	Collected: ino 71502 peer_ino 71503 family    1 type    1 state  1 name null
+(00.003939) unix: 	Collected: ino 50195 peer_ino 50196 family    1 type    1 state  1 name null
+(00.003940) unix: 	Collected: ino 120120 peer_ino 120121 family    1 type    1 state  1 name null
+(00.003942) unix: 	Collected: ino 70548 peer_ino 70549 family    1 type    1 state  1 name null
+(00.003943) unix: 	Collected: ino 47914 peer_ino 46794 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003945) unix: 	Collected: ino 41892 peer_ino 33471 family    1 type    1 state  1 name null
+(00.003946) unix: 	Collected: ino 38410 peer_ino 35325 family    1 type    1 state  1 name /run/user/1000/bus
+(00.003948) unix: 	Collected: ino 29803 peer_ino 25999 family    1 type    1 state  1 name null
+(00.003949) unix: 	Collected: ino 50356 peer_ino 50357 family    1 type    1 state  1 name null
+(00.003951) unix: 	Collected: ino 48315 peer_ino 48316 family    1 type    1 state  1 name null
+(00.003952) unix: 	Collected: ino 46842 peer_ino 46841 family    1 type    1 state  1 name null
+(00.003953) unix: 	Collected: ino 37253 peer_ino 34561 family    1 type    1 state  1 name null
+(00.003955) unix: 	Collected: ino 33315 peer_ino 39096 family    1 type    1 state  1 name null
+(00.003956) unix: 	Collected: ino 32727 peer_ino 30233 family    1 type    1 state  1 name null
+(00.003958) unix: 	Collected: ino 2744 peer_ino 2745 family    1 type    1 state  1 name null
+(00.003959) unix: 	Collected: ino 48146 peer_ino 48147 family    1 type    1 state  1 name null
+(00.003960) unix: 	Collected: ino 39503 peer_ino 39504 family    1 type    1 state  1 name null
+(00.003962) unix: 	Collected: ino 39454 peer_ino 35523 family    1 type    1 state  1 name null
+(00.003963) unix: 	Collected: ino 39082 peer_ino 38023 family    1 type    1 state  1 name null
+(00.003968) unix: 	Collected: ino 2732 peer_ino 27640 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003969) unix: 	Collected: ino 25977 peer_ino 24726 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003971) unix: 	Collected: ino 123702 peer_ino 123701 family    1 type    1 state  1 name null
+(00.003972) unix: 	Collected: ino 36093 peer_ino 39064 family    1 type    1 state  1 name 
+(00.003974) unix: 	Collected: ino 34958 peer_ino 33109 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.003975) unix: 	Collected: ino 28120 peer_ino 28119 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003978) unix: 	Collected: ino 129091 peer_ino 126384 family    1 type    1 state  1 name /tmp/vscode-6be8d6230f762ede74be5ff436886f0d16228798.sock
+(00.003980) unix: 	Collected: ino 129087 peer_ino 129086 family    1 type    1 state  1 name null
+(00.003981) unix: 	Collected: ino 43301 peer_ino 43302 family    1 type    1 state  1 name null
+(00.003983) unix: 	Collected: ino 36244 peer_ino 41887 family    1 type    1 state  1 name null
+(00.003984) unix: 	Collected: ino 33361 peer_ino 39157 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.003986) unix: 	Collected: ino 47915 peer_ino 46798 family    1 type    1 state  1 name null
+(00.003989) unix: 	Collected: ino 35832 peer_ino 35833 family    1 type    1 state  1 name null
+(00.003991) unix: 	Collected: ino 36143 peer_ino 33359 family    1 type    1 state  1 name null
+(00.003992) unix: 	Collected: ino 34323 peer_ino 30235 family    1 type    1 state  1 name null
+(00.003993) unix: 	Collected: ino 36022 peer_ino 35025 family    1 type    1 state  1 name null
+(00.003995) unix: 	Collected: ino 16846 peer_ino 16847 family    1 type    2 state  1 name null
+(00.003996) unix: 	Collected: ino 48574 peer_ino 48573 family    1 type    1 state  1 name null
+(00.003998) unix: 	Collected: ino 36140 peer_ino 38424 family    1 type    1 state  1 name 
+(00.003999) unix: 	Collected: ino 77801 peer_ino 85152 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.004001) unix: 	Collected: ino 78528 peer_ino 85150 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.004003) unix: 	Collected: ino 37223 peer_ino 36114 family    1 type    1 state  1 name null
+(00.004005) unix: 	Collected: ino 35200 peer_ino 37967 family    1 type    1 state  1 name null
+(00.004006) unix: 	Collected: ino 37047 peer_ino 35055 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.004008) unix: 	Collected: ino 77793 peer_ino 81591 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.004009) unix: 	Collected: ino 80836 peer_ino 77790 family    1 type    1 state  1 name null
+(00.004010) unix: 	Collected: ino 35073 peer_ino 0 family    1 type    2 state  7 name null
+(00.004012) unix: 	Collected: ino 137993 peer_ino 137994 family    1 type    1 state  1 name null
+(00.004013) unix: 	Collected: ino 43347 peer_ino 43346 family    1 type    1 state  1 name null
+(00.004015) unix: 	Collected: ino 37484 peer_ino 44072 family    1 type    1 state  1 name null
+(00.004016) unix: 	Collected: ino 37283 peer_ino 33350 family    1 type    1 state  1 name null
+(00.004017) unix: 	Collected: ino 46045 peer_ino 46044 family    1 type    1 state  1 name null
+(00.004019) unix: 	Collected: ino 52233 peer_ino 50342 family    1 type    1 state  1 name 
+(00.004020) unix: 	Collected: ino 48282 peer_ino 49456 family    1 type    1 state  1 name null
+(00.004022) unix: 	Collected: ino 44047 peer_ino 44046 family    1 type    5 state  1 name null
+(00.004023) unix: 	Collected: ino 30357 peer_ino 33245 family    1 type    1 state  1 name null
+(00.004025) unix: 	Collected: ino 75857 peer_ino 75858 family    1 type    1 state  1 name null
+(00.004026) unix: 	Collected: ino 34766 peer_ino 39276 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.004027) unix: 	Collected: ino 38396 peer_ino 41851 family    1 type    1 state  1 name /run/systemd/journal/stdout
+(00.004029) unix: 	Collected: ino 140515 peer_ino 140516 family    1 type    1 state  1 name null
+(00.004030) unix: 	Collected: ino 75844 peer_ino 75326 family    1 type    1 state  1 name /run/user/1000/pipewire-0
+(00.004032) unix: 	Collected: ino 36194 peer_ino 34576 family    1 type    1 state  1 name null
+(00.004034) unix: 	Collected: ino 36127 peer_ino 33349 family    1 type    1 state  1 name null
+(00.004036) unix: 	Collected: ino 36130 peer_ino 39142 family    1 type    1 state  1 name 
+(00.004037) unix: 	Collected: ino 26035 peer_ino 29436 family    1 type    1 state  1 name null
+(00.004038) unix: 	Collected: ino 75234 peer_ino 75233 family    1 type    1 state  1 name null
+(00.004040) unix: 	Collected: ino 48664 peer_ino 54391 family    1 type    1 state  1 name /run/user/1000/at-spi/bus_1
+(00.004043) unix: 	Collected: ino 34400 peer_ino 26528 family    1 type    1 state  1 name /run/user/1000/bus
+(00.004044) unix: 	Collected: ino 26462 peer_ino 26461 family    1 type    1 state  1 name /run/dbus/system_bus_socket
+(00.004046) unix: 	Collected: ino 26190 peer_ino 0 family    1 type    1 state 10 name 
+(00.004047) unix: 	Collected: ino 28122 peer_ino 0 family    1 type    1 state 10 name 
+(00.004049) unix: 	Collected: ino 38414 peer_ino 0 family    1 type    1 state 10 name 
+(00.004050) unix: 	Collected: ino 35207 peer_ino 0 family    1 type    1 state 10 name 
+(00.004052) unix: 	Collected: ino 30327 peer_ino 0 family    1 type    1 state 10 name 
+(00.004053) unix: 	Collected: ino 70526 peer_ino 70525 family    1 type    5 state  1 name 
+(00.004055) unix: 	Collected: ino 70525 peer_ino 70526 family    1 type    5 state  1 name 
+(00.004056) unix: 	Collected: ino 48092 peer_ino 48093 family    1 type    5 state  1 name 
+(00.004058) unix: 	Collected: ino 71375 peer_ino 71376 family    1 type    5 state  1 name 
+(00.004059) unix: 	Collected: ino 44046 peer_ino 44047 family    1 type    5 state  1 name 
+(00.004061) unix: 	Collected: ino 44041 peer_ino 44040 family    1 type    5 state  1 name 
+(00.004062) unix: 	Collected: ino 43266 peer_ino 43265 family    1 type    5 state  1 name 
+(00.004064) unix: 	Collected: ino 75802 peer_ino 75803 family    1 type    5 state  1 name 
+(00.004066) unix: 	Collected: ino 43265 peer_ino 43266 family    1 type    5 state  1 name 
+(00.004067) unix: 	Collected: ino 48094 peer_ino 48095 family    1 type    5 state  1 name 
+(00.004069) unix: 	Collected: ino 44040 peer_ino 44041 family    1 type    5 state  1 name 
+(00.004070) unix: 	Collected: ino 50340 peer_ino 50339 family    1 type    5 state  1 name 
+(00.004072) unix: 	Collected: ino 50339 peer_ino 50340 family    1 type    5 state  1 name 
+(00.004073) unix: 	Collected: ino 26189 peer_ino 0 family    1 type    1 state 10 name 
+(00.004075) unix: 	Collected: ino 42118 peer_ino 42119 family    1 type    5 state  1 name 
+(00.005133) inet: 	Collected: ino  0x1474b family AF_INET    type SOCK_STREAM    port      631 state TCP_LISTEN       src_addr 127.0.0.1
+(00.005140) inet: 	Collected: ino  0x1dc24 family AF_INET    type SOCK_STREAM    port     7891 state TCP_LISTEN       src_addr 127.0.0.1
+(00.005142) inet: 	Collected: ino   0x5a3c family AF_INET    type SOCK_STREAM    port       53 state TCP_LISTEN       src_addr 127.0.0.53
+(00.005144) inet: 	Collected: ino  0x12226 family AF_INET    type SOCK_STREAM    port     6463 state TCP_LISTEN       src_addr 127.0.0.1
+(00.005146) inet: 	Collected: ino  0x2253d family AF_INET    type SOCK_STREAM    port    45594 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005149) inet: 	Collected: ino  0x22275 family AF_INET    type SOCK_STREAM    port    58888 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005151) inet: 	Collected: ino   0xf310 family AF_INET    type SOCK_STREAM    port    50660 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005153) inet: 	Collected: ino  0x21cae family AF_INET    type SOCK_STREAM    port    46892 state TCP_CLOSE_WAIT   src_addr 192.168.0.119
+(00.005154) inet: 	Collected: ino   0x8afb family AF_INET    type SOCK_STREAM    port    43894 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005156) inet: 	Collected: ino  0x2012e family AF_INET    type SOCK_STREAM    port    59728 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005158) inet: 	Collected: ino  0x1300a family AF_INET    type SOCK_STREAM    port    40176 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005161) inet: 	Collected: ino  0x1f396 family AF_INET    type SOCK_STREAM    port    58428 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005163) inet: 	Collected: ino  0x1cf46 family AF_INET    type SOCK_STREAM    port    55244 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005183) inet: 	Collected: ino   0x5a3b family AF_INET    type SOCK_DGRAM     port       53 state TCP_CLOSE        src_addr 127.0.0.53
+(00.005187) inet: 	Collected: ino   0x99e3 family AF_INET    type SOCK_DGRAM     port       68 state TCP_ESTABLISHED  src_addr 192.168.0.119
+(00.005189) inet: 	Collected: ino   0x74c9 family AF_INET    type SOCK_DGRAM     port      323 state TCP_CLOSE        src_addr 127.0.0.1
+(00.005191) inet: 	Collected: ino  0x14c9f family AF_INET    type SOCK_DGRAM     port      631 state TCP_CLOSE        src_addr 0.0.0.0
+(00.005194) inet: 	Collected: ino  0x1197d family AF_INET    type SOCK_DGRAM     port     5353 state TCP_CLOSE        src_addr 224.0.0.251
+(00.005195) inet: 	Collected: ino   0xb60c family AF_INET    type SOCK_DGRAM     port     5353 state TCP_CLOSE        src_addr 224.0.0.251
+(00.005197) inet: 	Collected: ino   0x7478 family AF_INET    type SOCK_DGRAM     port     5353 state TCP_CLOSE        src_addr 0.0.0.0
+(00.005199) inet: 	Collected: ino   0x747a family AF_INET    type SOCK_DGRAM     port    47013 state TCP_CLOSE        src_addr 0.0.0.0
+(00.006262) inet: 	Collected: ino  0x1474a family AF_INET6   type SOCK_STREAM    port      631 state TCP_LISTEN       src_addr ::1
+(00.006267) inet: 	Collected: ino   0x97f8 family AF_INET6   type SOCK_STREAM    port    55334 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006270) inet: 	Collected: ino  0x21460 family AF_INET6   type SOCK_STREAM    port    38174 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006273) inet: 	Collected: ino  0x20207 family AF_INET6   type SOCK_STREAM    port    50140 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006275) inet: 	Collected: ino  0x22263 family AF_INET6   type SOCK_STREAM    port    59078 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006278) inet: 	Collected: ino  0x1fb73 family AF_INET6   type SOCK_STREAM    port    47178 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006293) inet: 	Collected: ino  0x1f9e4 family AF_INET6   type SOCK_DGRAM     port    41009 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006295) inet: 	Collected: ino  0x1f9fe family AF_INET6   type SOCK_DGRAM     port    53408 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006296) inet: 	Collected: ino   0x74ca family AF_INET6   type SOCK_DGRAM     port      323 state TCP_CLOSE        src_addr ::1
+(00.006298) inet: 	Collected: ino   0xa484 family AF_INET6   type SOCK_DGRAM     port      546 state TCP_CLOSE        src_addr fe80::b1d3:a9c3:21a5:7db4
+(00.006300) inet: 	Collected: ino   0x7479 family AF_INET6   type SOCK_DGRAM     port     5353 state TCP_CLOSE        src_addr ::
+(00.006302) inet: 	Collected: ino  0x21dee family AF_INET6   type SOCK_DGRAM     port    35034 state TCP_ESTABLISHED  src_addr 2600:8803:779e:4c00:79ce:a1c5:4aeb:a968
+(00.006303) inet: 	Collected: ino   0x747b family AF_INET6   type SOCK_DGRAM     port    60054 state TCP_CLOSE        src_addr ::
+(00.006317) inet: 	Collected: ino   0xa481 family AF_INET6   type SOCK_RAW       port       58 state TCP_CLOSE        src_addr ::
+(00.006325) packet: Collect packet sock 43057 34958
+(00.006327) packet: 	Got 0 mreqs
+(00.006329) packet: Collect packet sock 43064 35085
+(00.006330) packet: 	Got 0 mreqs
+(00.006331) packet: Collect packet sock 38652 2048
+(00.006332) packet: 	Got 0 mreqs
+(00.006334) packet: Collect packet sock 125833 2054
+(00.006335) packet: 	Got 0 mreqs
+(00.006373) netlink: Collect netlink sock 0x747c
+(00.006375) netlink: Collect netlink sock 0x121dd
+(00.006376) netlink: Collect netlink sock 0xc4b9
+(00.006378) netlink: Collect netlink sock 0x82c9
+(00.006379) netlink: Collect netlink sock 0x98be
+(00.006380) netlink: Collect netlink sock 0x949e
+(00.006381) netlink: Collect netlink sock 0x730b
+(00.006383) netlink: Collect netlink sock 0x8551
+(00.006384) netlink: Collect netlink sock 0x5a38
+(00.006385) netlink: Collect netlink sock 0x926b
+(00.006386) netlink: Collect netlink sock 0xc4a8
+(00.006389) netlink: Collect netlink sock 0x8c3e
+(00.006391) netlink: Collect netlink sock 0xd
+(00.006394) netlink: Collect netlink sock 0x8902
+(00.006396) netlink: Collect netlink sock 0x116df
+(00.006397) netlink: Collect netlink sock 0x8260
+(00.006398) netlink: Collect netlink sock 0x74f3
+(00.006399) netlink: Collect netlink sock 0x116df
+(00.006401) netlink: Collect netlink sock 0x121dd
+(00.006402) netlink: Collect netlink sock 0xc4b9
+(00.006403) netlink: Collect netlink sock 0xc4a8
+(00.006404) netlink: Collect netlink sock 0x926b
+(00.006406) netlink: Collect netlink sock 0x82c9
+(00.006407) netlink: Collect netlink sock 0x8260
+(00.006408) netlink: Collect netlink sock 0x98be
+(00.006409) netlink: Collect netlink sock 0x949e
+(00.006410) netlink: Collect netlink sock 0x8902
+(00.006412) netlink: Collect netlink sock 0x8551
+(00.006413) netlink: Collect netlink sock 0x8c3e
+(00.006414) netlink: Collect netlink sock 0x74f3
+(00.006415) netlink: Collect netlink sock 0x730b
+(00.006416) netlink: Collect netlink sock 0x747c
+(00.006418) netlink: Collect netlink sock 0x5a38
+(00.006419) netlink: Collect netlink sock 0x2271f
+(00.006420) netlink: Collect netlink sock 0xeaa
+(00.006421) netlink: Collect netlink sock 0xc87
+(00.006423) netlink: Collect netlink sock 0x1d534
+(00.006424) netlink: Collect netlink sock 0x13
+(00.006425) netlink: Collect netlink sock 0x5f43
+(00.006426) netlink: Collect netlink sock 0x998b
+(00.006427) netlink: Collect netlink sock 0x102d2
+(00.006429) netlink: Collect netlink sock 0x120d1
+(00.006430) netlink: Collect netlink sock 0x23036
+(00.006431) netlink: Collect netlink sock 0x5f52
+(00.006432) netlink: Collect netlink sock 0x5f43
+(00.006433) netlink: Collect netlink sock 0xc5c
+(00.006435) netlink: Collect netlink sock 0x1f
+(00.006436) netlink: Collect netlink sock 0xebf8
+(00.006437) netlink: Collect netlink sock 0x785a
+(00.006439) netlink: Collect netlink sock 0x60e4
+(00.006440) netlink: Collect netlink sock 0x5f4c
+(00.006442) netlink: Collect netlink sock 0x8c6d
+(00.006443) netlink: Collect netlink sock 0x7366
+(00.006444) netlink: Collect netlink sock 0x60c9
+(00.006446) netlink: Collect netlink sock 0x88e6
+(00.006447) netlink: Collect netlink sock 0x9318
+(00.006448) netlink: Collect netlink sock 0x7679
+(00.006449) netlink: Collect netlink sock 0x964b
+(00.006451) netlink: Collect netlink sock 0xbcf1
+(00.006452) netlink: Collect netlink sock 0x98a7
+(00.006453) netlink: Collect netlink sock 0x88f9
+(00.006454) netlink: Collect netlink sock 0x8ac5
+(00.006455) netlink: Collect netlink sock 0xb7a
+(00.006457) netlink: Collect netlink sock 0x60dd
+(00.006458) netlink: Collect netlink sock 0x7309
+(00.006459) netlink: Collect netlink sock 0x6dd6
+(00.006460) netlink: Collect netlink sock 0x17
+(00.006462) netlink: Collect netlink sock 0x7e36
+(00.006463) netlink: Collect netlink sock 0x679d
+(00.006464) netlink: Collect netlink sock 0x90e1
+(00.006465) netlink: Collect netlink sock 0x121ea
+(00.006466) netlink: Collect netlink sock 0x88f2
+(00.006468) netlink: Collect netlink sock 0xfa3
+(00.006469) netlink: Collect netlink sock 0x8c6c
+(00.006470) netlink: Collect netlink sock 0x8d67
+(00.006471) netlink: Collect netlink sock 0x88de
+(00.006473) netlink: Collect netlink sock 0x60b1
+(00.006474) netlink: Collect netlink sock 0x731f
+(00.006475) netlink: Collect netlink sock 0x6bfc
+(00.006476) netlink: Collect netlink sock 0x6dd5
+(00.006477) netlink: Collect netlink sock 0x6dd3
+(00.006479) netlink: Collect netlink sock 0x6785
+(00.006480) netlink: Collect netlink sock 0x6dd4
+(00.006481) netlink: Collect netlink sock 0x8c6e
+(00.006482) netlink: Collect netlink sock 0x8c6f
+(00.006484) netlink: Collect netlink sock 0x88dd
+(00.006485) netlink: Collect netlink sock 0x98a8
+(00.006486) netlink: Collect netlink sock 0x786c
+(00.006488) netlink: Collect netlink sock 0x121ea
+(00.006490) netlink: Collect netlink sock 0xbcf1
+(00.006491) netlink: Collect netlink sock 0x9318
+(00.006492) netlink: Collect netlink sock 0x8ac5
+(00.006493) netlink: Collect netlink sock 0x8d67
+(00.006494) netlink: Collect netlink sock 0x964b
+(00.006496) netlink: Collect netlink sock 0x98a8
+(00.006497) netlink: Collect netlink sock 0x98a7
+(00.006498) netlink: Collect netlink sock 0x90e1
+(00.006502) netlink: Collect netlink sock 0x7679
+(00.006504) netlink: Collect netlink sock 0x88f9
+(00.006505) netlink: Collect netlink sock 0x88f2
+(00.006506) netlink: Collect netlink sock 0x679d
+(00.006507) netlink: Collect netlink sock 0x88e6
+(00.006508) netlink: Collect netlink sock 0x88de
+(00.006510) netlink: Collect netlink sock 0x88dd
+(00.006511) netlink: Collect netlink sock 0x6785
+(00.006512) netlink: Collect netlink sock 0x8c6f
+(00.006513) netlink: Collect netlink sock 0x8c6e
+(00.006515) netlink: Collect netlink sock 0x8c6d
+(00.006516) netlink: Collect netlink sock 0x8c6c
+(00.006517) netlink: Collect netlink sock 0x786c
+(00.006518) netlink: Collect netlink sock 0xb7a
+(00.006520) netlink: Collect netlink sock 0x7e36
+(00.006521) netlink: Collect netlink sock 0x7366
+(00.006522) netlink: Collect netlink sock 0x785a
+(00.006523) netlink: Collect netlink sock 0x60e4
+(00.006524) netlink: Collect netlink sock 0x60dd
+(00.006526) netlink: Collect netlink sock 0x6dd6
+(00.006527) netlink: Collect netlink sock 0x6dd5
+(00.006528) netlink: Collect netlink sock 0x6dd4
+(00.006529) netlink: Collect netlink sock 0x6dd3
+(00.006531) netlink: Collect netlink sock 0x731f
+(00.006532) netlink: Collect netlink sock 0x60c9
+(00.006533) netlink: Collect netlink sock 0x7309
+(00.006534) netlink: Collect netlink sock 0x60b1
+(00.006535) netlink: Collect netlink sock 0x6bfc
+(00.006538) netlink: Collect netlink sock 0x5f4c
+(00.006539) netlink: Collect netlink sock 0xfa3
+(00.006540) netlink: Collect netlink sock 0xe
+(00.006541) netlink: Collect netlink sock 0x74f4
+(00.006542) netlink: Collect netlink sock 0x730a
+(00.006544) netlink: Collect netlink sock 0xa822
+(00.006545) netlink: Collect netlink sock 0xa848
+(00.006546) netlink: Collect netlink sock 0xa824
+(00.006547) netlink: Collect netlink sock 0xa84a
+(00.006548) netlink: Collect netlink sock 0x74f5
+(00.006550) netlink: Collect netlink sock 0x786b
+(00.006551) netlink: Collect netlink sock 0x74f5
+(00.006552) netlink: Collect netlink sock 0x786b
+(00.006553) netlink: Collect netlink sock 0x22
+(00.006561) Collecting pidns 1/29971
+(00.006596) No parent images directory provided
+(00.006644) rmrf: removing .criu.temp-aa-policy.I9HTcQ
+(00.006668) ========================================
+(00.006670) Dumping task (pid: 29418)
+(00.006671) ========================================
+(00.006673) Obtaining task stat ... 
+(00.006688) 
+(00.006689) Collecting mappings (pid: 29418)
+(00.006691) ----------------------------------------
+(00.006721) Found regular file mapping, OK
+(00.006748) Dumping path for -3 fd via self 14 [/home/brandonsmith/cedana/cedana/benchmarking/processes/loop2]
+(00.006788) vma 55abcc8f2000 borrows vfi from previous 55abcc8f1000
+(00.006793) vma 55abcc8f3000 borrows vfi from previous 55abcc8f2000
+(00.006797) vma 55abcc8f4000 borrows vfi from previous 55abcc8f3000
+(00.006801) vma 55abcc8f5000 borrows vfi from previous 55abcc8f4000
+(00.006835) Found regular file mapping, OK
+(00.006845) Dumping path for -3 fd via self 14 [/usr/lib/x86_64-linux-gnu/libc.so.6]
+(00.006886) vma 7f44ad028000 borrows vfi from previous 7f44ad000000
+(00.006890) vma 7f44ad1bd000 borrows vfi from previous 7f44ad028000
+(00.006894) vma 7f44ad215000 borrows vfi from previous 7f44ad1bd000
+(00.006897) vma 7f44ad219000 borrows vfi from previous 7f44ad215000
+(00.006922) Found regular file mapping, OK
+(00.006929) Dumping path for -3 fd via self 14 [/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2]
+(00.006945) vma 7f44ad412000 borrows vfi from previous 7f44ad410000
+(00.006949) vma 7f44ad43c000 borrows vfi from previous 7f44ad412000
+(00.006953) vma 7f44ad448000 borrows vfi from previous 7f44ad43c000
+(00.006965) vma 7f44ad44a000 borrows vfi from previous 7f44ad448000
+(00.006981) Collected, longest area occupies 16351 pages
+(00.006983) 0x55abcc8f1000-0x55abcc8f2000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x1
+(00.006985) 0x55abcc8f2000-0x55abcc8f3000 (4K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x1000 reg fp  shmid: 0x1
+(00.006987) 0x55abcc8f3000-0x55abcc8f4000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x1
+(00.006991) 0x55abcc8f4000-0x55abcc8f5000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x1
+(00.006992) 0x55abcc8f5000-0x55abcc8f6000 (4K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x3000 reg fp  shmid: 0x1
+(00.006994) 0x55abcdfaa000-0x55abcdfcb000 (132K) prot 0x3 flags 0x22 fdflags 0 st 0x221 off 0 reg heap ap  shmid: 0
+(00.006996) 0x7f44a8000000-0x7f44a8021000 (132K) prot 0x3 flags 0x4022 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.006997) 0x7f44a8021000-0x7f44ac000000 (65404K) prot 0 flags 0x4022 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.006999) 0x7f44ac7ff000-0x7f44ac800000 (4K) prot 0 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007000) 0x7f44ac800000-0x7f44ad000000 (8192K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007002) 0x7f44ad000000-0x7f44ad028000 (160K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x2
+(00.007003) 0x7f44ad028000-0x7f44ad1bd000 (1620K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x28000 reg fp  shmid: 0x2
+(00.007005) 0x7f44ad1bd000-0x7f44ad215000 (352K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x1bd000 reg fp  shmid: 0x2
+(00.007006) 0x7f44ad215000-0x7f44ad219000 (16K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x214000 reg fp  shmid: 0x2
+(00.007008) 0x7f44ad219000-0x7f44ad21b000 (8K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x218000 reg fp  shmid: 0x2
+(00.007009) 0x7f44ad21b000-0x7f44ad228000 (52K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007011) 0x7f44ad3f9000-0x7f44ad3fc000 (12K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007012) 0x7f44ad40e000-0x7f44ad410000 (8K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007014) 0x7f44ad410000-0x7f44ad412000 (8K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x3
+(00.007015) 0x7f44ad412000-0x7f44ad43c000 (168K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x3
+(00.007017) 0x7f44ad43c000-0x7f44ad447000 (44K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2c000 reg fp  shmid: 0x3
+(00.007018) 0x7f44ad448000-0x7f44ad44a000 (8K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x37000 reg fp  shmid: 0x3
+(00.007020) 0x7f44ad44a000-0x7f44ad44c000 (8K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x39000 reg fp  shmid: 0x3
+(00.007021) 0x7ffd5368d000-0x7ffd536ae000 (132K) prot 0x3 flags 0x122 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.007023) 0x7ffd536ae000-0x7ffd536b2000 (16K) prot 0x1 flags 0x22 fdflags 0 st 0x1201 off 0 reg vvar ap  shmid: 0
+(00.007024) 0x7ffd536b2000-0x7ffd536b4000 (8K) prot 0x5 flags 0x22 fdflags 0 st 0x209 off 0 reg vdso ap  shmid: 0
+(00.007026) 0xffffffffff600000-0xffffffffff601000 (4K) prot 0x4 flags 0x22 fdflags 0 st 0x204 off 0 vsys ap  shmid: 0
+(00.007027) ----------------------------------------
+(00.007029) 
+(00.007030) Collecting fds (pid: 29418)
+(00.007031) ----------------------------------------
+(00.007039) Found 4 file descriptors
+(00.007041) ----------------------------------------
+(00.007045) Dump private signals of 29418
+(00.007048) Dump private signals of 29419
+(00.007051) Dump shared signals of 29418
+(00.007053) Dump rseq of 29418: ptr = 0x7f44ad3fa0e0 sign = 0x53053053
+(00.007058) Dump rseq of 29419: ptr = 0x7f44acffffe0 sign = 0x53053053
+(00.007067) Parasite syscall_ip at 0x55abcc8f2000
+(00.007140) Set up parasite blob using memfd
+(00.007157) Putting parasite blob into 0x7f6ed733b000->0x7f44ad39e000
+(00.007186) Dumping general registers for 29418 in native mode
+(00.007188) Dumping GP/FPU registers for 29418
+(00.007196) x86: xsave runtime structure
+(00.007198) x86: -----------------------
+(00.007199) x86: cwd:0x37f swd:0 twd:0 fop:0 mxcsr:0x1f80 mxcsr_mask:0xffff
+(00.007201) x86: magic1:0x46505853 extended_size:2700 xstate_bv:0x2e7 xstate_size:2696
+(00.007202) x86: xstate_bv: 0x2e7
+(00.007203) x86: -----------------------
+(00.007205) Putting tsock into pid 29418
+(00.007235) Wait for parasite being daemonized...
+(00.007237) Wait for ack 2 on daemon socket
+pie: 29418: Running daemon thread leader
+pie: 29418: __sent ack msg: 2 2 0
+pie: 29418: Daemon waits for command
+(00.007247) Fetched ack: 2 2 0
+(00.007253) Parasite 29418 has been switched to daemon mode
+(00.007254) vdso: vDSO hint is reliable - omit checking
+(00.007257) Sent msg to daemon 74 0 0
+(00.007258) Wait for ack 74 on daemon socket
+pie: 29418: __fetched msg: 74 0 0
+pie: 29418: __sent ack msg: 74 74 0
+pie: 29418: Daemon waits for command
+(00.007264) Fetched ack: 74 74 0
+(00.007267) Sent msg to daemon 70 0 0
+(00.007268) Wait for ack 70 on daemon socket
+pie: 29418: __fetched msg: 70 0 0
+pie: 29418: __sent ack msg: 70 70 0
+pie: 29418: Daemon waits for command
+(00.007276) Fetched ack: 70 70 0
+(00.007278) sid=29418 pgid=29418 pid=29418
+(00.007305) 
+(00.007306) Dumping opened files (pid: 29418)
+(00.007307) ----------------------------------------
+(00.007310) Sent msg to daemon 71 0 0
+pie: 29418: __fetched msg: 71 0 0
+pie: 29418: __sent ack msg: 71 71 0
+pie: 29418: Daemon waits for command
+(00.007322) Wait for ack 71 on daemon socket
+(00.007324) Fetched ack: 71 71 0
+(00.007333) 29418 fdinfo 0: pos:                0 flags:           100000/0
+(00.007340) Dumping path for 0 fd via self 14 [/dev/null]
+(00.007360) 29418 fdinfo 1: pos:                0 flags:           100001/0
+(00.007366) Dumping path for 1 fd via self 17 [/home/brandonsmith/cedana/cedana/output.log]
+(00.007368) Only file size could be stored for validation for file /home/brandonsmith/cedana/cedana/output.log
+(00.007375) 29418 fdinfo 2: pos:                0 flags:           100001/0
+(00.007384) 29418 fdinfo 3: pos:                0 flags:           100001/0
+(00.007388) Dumping path for 3 fd via self 19 [/home/brandonsmith/cedana/cedana/benchmarking/pids/loop-29418.pid]
+(00.007394) Only file size could be stored for validation for file /home/brandonsmith/cedana/cedana/benchmarking/pids/loop-29418.pid
+(00.007397) ----------------------------------------
+(00.007425) Sent msg to daemon 65 0 0
+(00.007427) Wait for ack 65 on daemon socket
+pie: 29418: __fetched msg: 65 0 0
+pie: 29418: __sent ack msg: 65 65 0
+pie: 29418: Daemon waits for command
+(00.007436) Fetched ack: 65 65 0
+(00.007438) 
+(00.007439) Dumping pages (type: 59 pid: 29418)
+(00.007440) ----------------------------------------
+(00.007442)    Private vmas 16351/19126 pages
+(00.007450) pagemap-cache: created for pid 29418 (takes 130808 bytes)
+(00.007452) page-pipe: Create page pipe for 19126 segs
+(00.007454) page-pipe: Will grow page pipe (iov off is 0)
+(00.007505) No parent images directory provided
+(00.007507) pagemap-cache: 29418: filling VMA 55abcc8f1000-55abcc8f2000 (4K) [l:55abcc800000 h:55abcca00000]
+(00.007512) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007513) pagemap-cache: 29418: filling VMA 55abcc8f2000-55abcc8f3000 (4K) [l:55abcc800000 h:55abcca00000]
+(00.007516) page-pipe: Add iov to page pipe (0 iovs, 0/19126 total)
+(00.007517) Pagemap generated: 1 pages (0 lazy) 0 holes
+(00.007519) pagemap-cache: 29418: filling VMA 55abcc8f3000-55abcc8f4000 (4K) [l:55abcc800000 h:55abcca00000]
+(00.007521) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007523) pagemap-cache: 29418: filling VMA 55abcc8f4000-55abcc8f5000 (4K) [l:55abcc800000 h:55abcca00000]
+(00.007525) page-pipe: Add iov to page pipe (1 iovs, 1/19126 total)
+(00.007526) Pagemap generated: 1 pages (0 lazy) 0 holes
+(00.007528) pagemap-cache: 29418: filling VMA 55abcc8f5000-55abcc8f6000 (4K) [l:55abcc800000 h:55abcca00000]
+(00.007530) Pagemap generated: 1 pages (0 lazy) 0 holes
+(00.007531) pagemap-cache: 29418: filling VMA 55abcdfaa000-55abcdfcb000 (132K) [l:55abcde00000 h:55abce000000]
+(00.007534) page-pipe: Will grow page pipe (iov off is 2)
+(00.007538) page-pipe: Add iov to page pipe (0 iovs, 2/19126 total)
+(00.007539) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007540) pagemap-cache: 29418: filling VMA 7f44a8000000-7f44a8021000 (132K) [l:7f44a8000000 h:7f44a8200000]
+(00.007542) pagemap-cache: 	29418:     7f44a8000000-7f44a8021000     nr:1     cov:135168
+(00.007543) pagemap-cache: 	29418: simple mode [l:7f44a8000000 h:7f44a8021000]
+(00.007547) page-pipe: Add iov to page pipe (1 iovs, 3/19126 total)
+(00.007549) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007552) pagemap-cache: 29418: filling VMA 7f44a8021000-7f44ac000000 (65404K) [l:7f44a8000000 h:7f44a8200000]
+(00.007649) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007650) pagemap-cache: 29418: filling VMA 7f44ac7ff000-7f44ac800000 (4K) [l:7f44ac600000 h:7f44ac800000]
+(00.007652) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007654) pagemap-cache: 29418: filling VMA 7f44ac800000-7f44ad000000 (8192K) [l:7f44ac800000 h:7f44aca00000]
+(00.007664) page-pipe: Add iov to page pipe (2 iovs, 4/19126 total)
+(00.007665) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007666) pagemap-cache: 29418: filling VMA 7f44ad000000-7f44ad028000 (160K) [l:7f44ad000000 h:7f44ad200000]
+(00.007668) pagemap-cache: 	29418:     7f44ad000000-7f44ad028000     nr:1     cov:163840
+(00.007669) pagemap-cache: 	29418:     7f44ad028000-7f44ad1bd000     nr:2     cov:1822720
+(00.007671) pagemap-cache: 	29418: cache  mode [l:7f44ad000000 h:7f44ad200000]
+(00.007678) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007680) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007681) pagemap-cache: 29418: filling VMA 7f44ad1bd000-7f44ad215000 (352K) [l:7f44ad000000 h:7f44ad200000]
+(00.007687) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007688) pagemap-cache: 29418: filling VMA 7f44ad215000-7f44ad219000 (16K) [l:7f44ad200000 h:7f44ad400000]
+(00.007690) pagemap-cache: 	29418:     7f44ad215000-7f44ad219000     nr:1     cov:16384
+(00.007691) pagemap-cache: 	29418:     7f44ad219000-7f44ad21b000     nr:2     cov:24576
+(00.007693) pagemap-cache: 	29418:     7f44ad21b000-7f44ad228000     nr:3     cov:77824
+(00.007694) pagemap-cache: 	29418:     7f44ad3f9000-7f44ad3fc000     nr:4     cov:90112
+(00.007695) pagemap-cache: 	29418: cache  mode [l:7f44ad215000 h:7f44ad400000]
+(00.007699) page-pipe: Will grow page pipe (iov off is 5)
+(00.007702) page-pipe: Add iov to page pipe (0 iovs, 5/19126 total)
+(00.007703) Pagemap generated: 4 pages (0 lazy) 0 holes
+(00.007705) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007706) page-pipe: Will grow page pipe (iov off is 6)
+(00.007709) page-pipe: Add iov to page pipe (0 iovs, 6/19126 total)
+(00.007710) page-pipe: Add iov to page pipe (1 iovs, 7/19126 total)
+(00.007711) page-pipe: Add iov to page pipe (2 iovs, 8/19126 total)
+(00.007712) Pagemap generated: 5 pages (0 lazy) 0 holes
+(00.007714) page-pipe: Add iov to page pipe (3 iovs, 9/19126 total)
+(00.007715) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007716) pagemap-cache: 29418: filling VMA 7f44ad40e000-7f44ad410000 (8K) [l:7f44ad400000 h:7f44ad600000]
+(00.007717) pagemap-cache: 	29418:     7f44ad40e000-7f44ad410000     nr:1     cov:8192
+(00.007719) pagemap-cache: 	29418:     7f44ad410000-7f44ad412000     nr:2     cov:16384
+(00.007720) pagemap-cache: 	29418:     7f44ad412000-7f44ad43c000     nr:3     cov:188416
+(00.007721) pagemap-cache: 	29418:     7f44ad43c000-7f44ad447000     nr:4     cov:233472
+(00.007723) pagemap-cache: 	29418:     7f44ad448000-7f44ad44a000     nr:5     cov:241664
+(00.007724) pagemap-cache: 	29418:     7f44ad44a000-7f44ad44c000     nr:6     cov:249856
+(00.007725) pagemap-cache: 	29418: cache  mode [l:7f44ad40e000 h:7f44ad600000]
+(00.007730) page-pipe: Add iov to page pipe (4 iovs, 10/19126 total)
+(00.007731) Pagemap generated: 1 pages (0 lazy) 0 holes
+(00.007732) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007734) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007735) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007736) page-pipe: Will grow page pipe (iov off is 11)
+(00.007740) page-pipe: Add iov to page pipe (0 iovs, 11/19126 total)
+(00.007741) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007742) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007743) pagemap-cache: 29418: filling VMA 7ffd5368d000-7ffd536ae000 (132K) [l:7ffd53600000 h:7ffd53800000]
+(00.007747) page-pipe: Will grow page pipe (iov off is 12)
+(00.007750) page-pipe: Add iov to page pipe (0 iovs, 12/19126 total)
+(00.007751) page-pipe: Add iov to page pipe (1 iovs, 13/19126 total)
+(00.007753) Pagemap generated: 4 pages (0 lazy) 0 holes
+(00.007754) pagemap-cache: 29418: filling VMA 7ffd536ae000-7ffd536b2000 (16K) [l:7ffd53600000 h:7ffd53800000]
+(00.007758) Pagemap generated: 0 pages (0 lazy) 0 holes
+(00.007760) pagemap-cache: 29418: filling VMA 7ffd536b2000-7ffd536b4000 (8K) [l:7ffd53600000 h:7ffd53800000]
+(00.007762) page-pipe: Will grow page pipe (iov off is 14)
+(00.007764) page-pipe: Add iov to page pipe (0 iovs, 14/19126 total)
+(00.007766) Pagemap generated: 2 pages (0 lazy) 0 holes
+(00.007767) page-pipe: Page pipe:
+(00.007769) page-pipe: * 7 pipes 15/19126 iovs:
+(00.007770) page-pipe: 	buf 3 pages, 2 iovs, flags: 0 pipe_off: 0 :
+(00.007771) page-pipe: 		0x55abcc8f2000 1
+(00.007773) page-pipe: 		0x55abcc8f4000 2
+(00.007774) page-pipe: 	buf 6 pages, 3 iovs, flags: 1 pipe_off: 0 :
+(00.007775) page-pipe: 		0x55abcdfaa000 2
+(00.007776) page-pipe: 		0x7f44a8000000 2
+(00.007778) page-pipe: 		0x7f44acffe000 2
+(00.007779) page-pipe: 	buf 6 pages, 1 iovs, flags: 0 pipe_off: 0 :
+(00.007780) page-pipe: 		0x7f44ad215000 6
+(00.007781) page-pipe: 	buf 8 pages, 5 iovs, flags: 1 pipe_off: 0 :
+(00.007782) page-pipe: 		0x7f44ad21b000 1
+(00.007783) page-pipe: 		0x7f44ad21f000 3
+(00.007785) page-pipe: 		0x7f44ad227000 1
+(00.007786) page-pipe: 		0x7f44ad3f9000 2
+(00.007787) page-pipe: 		0x7f44ad40e000 1
+(00.007788) page-pipe: 	buf 4 pages, 1 iovs, flags: 0 pipe_off: 0 :
+(00.007789) page-pipe: 		0x7f44ad448000 4
+(00.007791) page-pipe: 	buf 4 pages, 2 iovs, flags: 1 pipe_off: 0 :
+(00.007792) page-pipe: 		0x7ffd536a9000 3
+(00.007793) page-pipe: 		0x7ffd536ad000 1
+(00.007794) page-pipe: 	buf 2 pages, 1 iovs, flags: 0 pipe_off: 0 :
+(00.007795) page-pipe: 		0x7ffd536b2000 2
+(00.007797) page-pipe: * 0 holes:
+(00.007798) PPB: 3 pages 2 segs 16 pipe 0 off
+(00.007803) Sent msg to daemon 66 0 0
+(00.007806) Wait for ack 66 on daemon socket
+pie: 29418: __fetched msg: 66 0 0
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007837) Fetched ack: 66 66 0
+(00.007839) PPB: 6 pages 3 segs 16 pipe 2 off
+(00.007841) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007843) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007849) Fetched ack: 66 66 0
+(00.007851) PPB: 6 pages 1 segs 16 pipe 5 off
+(00.007854) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007858) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007863) Fetched ack: 66 66 0
+(00.007865) PPB: 8 pages 5 segs 16 pipe 6 off
+(00.007867) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007869) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007875) Fetched ack: 66 66 0
+(00.007877) PPB: 4 pages 1 segs 16 pipe 11 off
+(00.007880) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007882) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007887) Fetched ack: 66 66 0
+(00.007889) PPB: 4 pages 2 segs 16 pipe 12 off
+(00.007892) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007894) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007900) Fetched ack: 66 66 0
+(00.007902) PPB: 2 pages 1 segs 16 pipe 14 off
+(00.007904) Sent msg to daemon 66 0 0
+pie: 29418: __fetched msg: 66 0 0
+(00.007906) Wait for ack 66 on daemon socket
+pie: 29418: __sent ack msg: 66 66 0
+pie: 29418: Daemon waits for command
+(00.007912) Fetched ack: 66 66 0
+(00.007914) page-xfer: Transferring pages:
+(00.007915) page-xfer: 	buf 3/2
+(00.007917) page-xfer: 	p 0x55abcc8f2000 [1]
+(00.007924) page-xfer: 	p 0x55abcc8f4000 [2]
+(00.007931) page-xfer: 	buf 6/3
+(00.007932) page-xfer: 	p 0x55abcdfaa000 [2]
+(00.007938) page-xfer: 	p 0x7f44a8000000 [2]
+(00.007943) page-xfer: 	p 0x7f44acffe000 [2]
+(00.007948) page-xfer: 	buf 6/1
+(00.007950) page-xfer: 	p 0x7f44ad215000 [6]
+(00.007963) page-xfer: 	buf 8/5
+(00.007964) page-xfer: 	p 0x7f44ad21b000 [1]
+(00.007968) page-xfer: 	p 0x7f44ad21f000 [3]
+(00.007976) page-xfer: 	p 0x7f44ad227000 [1]
+(00.007980) page-xfer: 	p 0x7f44ad3f9000 [2]
+(00.007985) page-xfer: 	p 0x7f44ad40e000 [1]
+(00.007989) page-xfer: 	buf 4/1
+(00.007990) page-xfer: 	p 0x7f44ad448000 [4]
+(00.007999) page-xfer: 	buf 4/2
+(00.008001) page-xfer: 	p 0x7ffd536a9000 [3]
+(00.008007) page-xfer: 	p 0x7ffd536ad000 [1]
+(00.008011) page-xfer: 	buf 2/1
+(00.008013) page-xfer: 	p 0x7ffd536b2000 [2]
+(00.008049) page-pipe: Killing page pipe
+(00.008069) ----------------------------------------
+(00.008072) Sent msg to daemon 65 0 0
+(00.008074) Wait for ack 65 on daemon socket
+pie: 29418: __fetched msg: 65 0 0
+pie: 29418: __sent ack msg: 65 65 0
+pie: 29418: Daemon waits for command
+(00.008083) Fetched ack: 65 65 0
+(00.008087) Sent msg to daemon 67 0 0
+pie: 29418: __fetched msg: 67 0 0
+(00.008090) Wait for ack 67 on daemon socket
+pie: 29418: __sent ack msg: 67 67 0
+pie: 29418: Daemon waits for command
+(00.008100) Fetched ack: 67 67 0
+(00.008107) Sent msg to daemon 68 0 0
+(00.008108) Wait for ack 68 on daemon socket
+pie: 29418: __fetched msg: 68 0 0
+pie: 29418: __sent ack msg: 68 68 0
+pie: 29418: Daemon waits for command
+(00.008159) Fetched ack: 68 68 0
+(00.008162) Sent msg to daemon 69 0 0
+(00.008164) Wait for ack 69 on daemon socket
+pie: 29418: __fetched msg: 69 0 0
+pie: 29418: __sent ack msg: 69 69 0
+(00.008171) Fetched ack: 69 69 0
+pie: 29418: Daemon waits for command
+(00.008173) 
+(00.008176) Dumping core (pid: 29418)
+(00.008177) ----------------------------------------
+(00.008178) Obtaining personality ... 
+(00.008188) Sent msg to daemon 64 0 0
+(00.008189) Wait for ack 64 on daemon socket
+pie: 29418: __fetched msg: 64 0 0
+pie: 29418: __sent ack msg: 64 64 0
+pie: 29418: Daemon waits for command
+(00.008200) Fetched ack: 64 64 0
+(00.008203) 29418 has 0 sched policy
+(00.008205) 	dumping 6 nice for 29418
+(00.008207) dumping /proc/29418/loginuid
+(00.008211) dumping /proc/29418/oom_score_adj
+(00.008218) Sent msg to daemon 76 0 0
+(00.008219) Wait for ack 76 on daemon socket
+pie: 29418: __fetched msg: 76 0 0
+pie: 29418: __sent ack msg: 76 76 0
+pie: 29418: Daemon waits for command
+(00.008238) Fetched ack: 76 76 0
+(00.008244) cg: Dumping cgroups for 29418
+(00.008258) cg:  `- Existing css 1 found
+(00.008260) cg: Set 1 is root one
+(00.008289) ----------------------------------------
+(00.008292) Waiting for 29418 to trap
+(00.008296) Daemon 29418 exited trapping
+(00.008300) Sent msg to daemon 3 0 0
+(00.008303) Force no-breakpoints restore
+(00.008308) 29418 was trapped
+(00.008310) 29418 (native) is going to execute the syscall 45, required is 15
+(00.008316) 29418 was trapped
+(00.008318) `- Expecting exit
+(00.008323) 29418 was trapped
+(00.008325) 29418 (native) is going to execute the syscall 186, required is 15
+(00.008329) 29418 was trapped
+(00.008331) `- Expecting exit
+(00.008336) 29418 was trapped
+(00.008337) 29418 (native) is going to execute the syscall 1, required is 15
+pie: 29418: __fetched msg: 3 0 0
+(00.008343) 29418 was trapped
+(00.008345) `- Expecting exit
+(00.008352) 29418 was trapped
+(00.008354) 29418 (native) is going to execute the syscall 186, required is 15
+(00.008359) 29418 was trapped
+(00.008360) `- Expecting exit
+(00.008365) 29418 was trapped
+(00.008366) 29418 (native) is going to execute the syscall 186, required is 15
+(00.008371) 29418 was trapped
+(00.008372) `- Expecting exit
+(00.008377) 29418 was trapped
+(00.008379) 29418 (native) is going to execute the syscall 1, required is 15
+pie: 29418: 29418: new_sp=0x7f44ad3eef08 ip 0x55abcc8f24e1
+(00.008384) 29418 was trapped
+(00.008386) `- Expecting exit
+(00.008390) 29418 was trapped
+(00.008392) 29418 (native) is going to execute the syscall 3, required is 15
+(00.008400) 29418 was trapped
+(00.008401) `- Expecting exit
+(00.008406) 29418 was trapped
+(00.008408) 29418 (native) is going to execute the syscall 3, required is 15
+(00.008412) 29418 was trapped
+(00.008414) `- Expecting exit
+(00.008418) 29418 was trapped
+(00.008420) 29418 (native) is going to execute the syscall 15, required is 15
+(00.008427) 29418 was stopped
+(00.008429) 
+(00.008430) Dumping core for thread (pid: 29419)
+(00.008434) ----------------------------------------
+(00.008435) Dumping general registers for 29419 in native mode
+(00.008436) Warn  (compel/arch/x86/src/lib/infect.c:352): Will restore 29419 with interrupted system call
+(00.008438) Dumping GP/FPU registers for 29419
+(00.008479) Restoring GP/FPU registers for 29419
+(00.008492) 29419 has 0 sched policy
+(00.008493) 	dumping 6 nice for 29419
+(00.008520) ----------------------------------------
+(00.008551) 
+(00.008553) Dumping mm (pid: 29418)
+(00.008555) ----------------------------------------
+(00.008556) 0x55abcc8f1000-0x55abcc8f2000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x1
+(00.008559) 0x55abcc8f2000-0x55abcc8f3000 (4K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x1000 reg fp  shmid: 0x1
+(00.008560) 0x55abcc8f3000-0x55abcc8f4000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x1
+(00.008562) 0x55abcc8f4000-0x55abcc8f5000 (4K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x1
+(00.008563) 0x55abcc8f5000-0x55abcc8f6000 (4K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x3000 reg fp  shmid: 0x1
+(00.008564) 0x55abcdfaa000-0x55abcdfcb000 (132K) prot 0x3 flags 0x22 fdflags 0 st 0x221 off 0 reg heap ap  shmid: 0
+(00.008566) 0x7f44a8000000-0x7f44a8021000 (132K) prot 0x3 flags 0x4022 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008567) 0x7f44a8021000-0x7f44ac000000 (65404K) prot 0 flags 0x4022 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008569) 0x7f44ac7ff000-0x7f44ac800000 (4K) prot 0 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008570) 0x7f44ac800000-0x7f44ad000000 (8192K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008572) 0x7f44ad000000-0x7f44ad028000 (160K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x2
+(00.008573) 0x7f44ad028000-0x7f44ad1bd000 (1620K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x28000 reg fp  shmid: 0x2
+(00.008575) 0x7f44ad1bd000-0x7f44ad215000 (352K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x1bd000 reg fp  shmid: 0x2
+(00.008576) 0x7f44ad215000-0x7f44ad219000 (16K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x214000 reg fp  shmid: 0x2
+(00.008578) 0x7f44ad219000-0x7f44ad21b000 (8K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x218000 reg fp  shmid: 0x2
+(00.008579) 0x7f44ad21b000-0x7f44ad228000 (52K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008581) 0x7f44ad3f9000-0x7f44ad3fc000 (12K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008582) 0x7f44ad40e000-0x7f44ad410000 (8K) prot 0x3 flags 0x22 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008583) 0x7f44ad410000-0x7f44ad412000 (8K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0 reg fp  shmid: 0x3
+(00.008585) 0x7f44ad412000-0x7f44ad43c000 (168K) prot 0x5 flags 0x2 fdflags 0 st 0x41 off 0x2000 reg fp  shmid: 0x3
+(00.008586) 0x7f44ad43c000-0x7f44ad447000 (44K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x2c000 reg fp  shmid: 0x3
+(00.008588) 0x7f44ad448000-0x7f44ad44a000 (8K) prot 0x1 flags 0x2 fdflags 0 st 0x41 off 0x37000 reg fp  shmid: 0x3
+(00.008589) 0x7f44ad44a000-0x7f44ad44c000 (8K) prot 0x3 flags 0x2 fdflags 0 st 0x41 off 0x39000 reg fp  shmid: 0x3
+(00.008591) 0x7ffd5368d000-0x7ffd536ae000 (132K) prot 0x3 flags 0x122 fdflags 0 st 0x201 off 0 reg ap  shmid: 0
+(00.008592) 0x7ffd536ae000-0x7ffd536b2000 (16K) prot 0x1 flags 0x22 fdflags 0 st 0x1201 off 0 reg vvar ap  shmid: 0
+(00.008593) 0x7ffd536b2000-0x7ffd536b4000 (8K) prot 0x5 flags 0x22 fdflags 0 st 0x209 off 0 reg vdso ap  shmid: 0
+(00.008595) 0xffffffffff600000-0xffffffffff601000 (4K) prot 0x4 flags 0x22 fdflags 0 st 0x204 off 0 vsys ap  shmid: 0
+(00.008597) Obtaining task auvx ...
+(00.008639) Dumping path for -3 fd via self 17 [/home/brandonsmith/cedana/cedana]
+(00.008651) Dumping path for -3 fd via self 17 [/]
+(00.008654) Dumping task cwd id 0x7 root id 0x8
+(00.008707) Dumping file-locks
+(00.008709) 
+(00.008710) Dumping pstree (pid: 29418)
+(00.008711) ----------------------------------------
+(00.008713) Process: 29418(29418)
+(00.008723) ----------------------------------------
+(00.008749) cg: All tasks in criu's cgroups. Nothing to dump.
+(00.008755) unix: Dumping external sockets
+(00.008795) Writing image inventory (version 1)
+(00.008850) Running post-dump scripts
+(00.008852) 	RPC
+(00.009369) Unlock network
+(00.009375) Unfreezing tasks into 1
+(00.009376) 	Unseizing 29418 into 1
+(00.009382) Writing stats
+(00.009424) Dumping finished successfully

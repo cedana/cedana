@@ -48,6 +48,8 @@ func BenchmarkRestore(b *testing.B) {
 		b.Errorf("Error in os.Stat(): %v", err)
 	}
 
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		err := c.restore(nil, &checkpoint)
 		if err != nil {
