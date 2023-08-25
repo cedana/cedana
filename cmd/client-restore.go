@@ -151,10 +151,6 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 					return err
 				}
 
-				// Set chmod 664 permissions on the copied file
-				if err := os.Chmod(filepath.Dir(f), 0664); err != nil {
-					return err
-				}
 			}
 		}
 		return nil
