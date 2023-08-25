@@ -28,62 +28,64 @@ if [ ! -d "$dirPids" ]; then
     exit 1
 fi
 
-# # Remove all files in the dirPids
-# rm -f "$dirResults"/*
-# rm -f "$dirPids"/*
-# echo "All files in the benchmarking/pids directory have been removed."
+# Remove all files in the dirPids
+rm -f "$dirResults"/*
+rm -f "$dirPids"/*
+echo "All files in the benchmarking/pids directory have been removed."
 
-# # Run the execLoop in the background
-# "$execLoop" &
+# Run the execLoop in the background
+setsid --fork benchmarking/processes/loop2 < /dev/null &> output.log &
 
-# # Run tests
-# sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpLoop$ github.com/cedana/cedana/cmd && \
-
-# # Remove all files in the dirPids
-# rm -f "$dirPids"/*
-# rm -f "$dirResults"/*
-# echo "All files in the benchmarking/pids directory have been removed."
-
-# # Check if the execServer exists
-# if [ ! -f "$execServer" ]; then
-#     echo "Server program not found: $execServer"
-#     exit 1
-# fi
-# # Run the execServer in the background
-# "$execServer" &
-# sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpServer$ github.com/cedana/cedana/cmd && \
+# Run tests
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpLoop$ github.com/cedana/cedana/cmd && \
 
 # Remove all files in the dirPids
 rm -f "$dirPids"/*
 rm -f "$dirResults"/*
 echo "All files in the benchmarking/pids directory have been removed."
 
-python3 benchmarking/processes/time_sequence_prediction/generate_sine_wave.py && \
-python3 benchmarking/processes/time_sequence_prediction/train.py & \
+# Check if the execServer exists
+if [ ! -f "$execServer" ]; then
+    echo "Server program not found: $execServer"
+    exit 1
+fi
+# Run the execServer in the background
+setsid --fork benchmarking/processes/server2 < /dev/null &> output.log &
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpServer$ github.com/cedana/cedana/cmd && \
+
+Remove all files in the dirPids
+rm -f "$dirPids"/*
+rm -f "$dirResults"/*
+echo "All files in the benchmarking/pids directory have been removed."
+
+python3 benchmarking/processes/time_sequence_prediction2/generate_sine_wave.py && \
+setsid --fork python3 benchmarking/processes/time_sequence_prediction2/train.py < /dev/null &> output.log & \
 
 sleep 15 && \
 
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorch$ github.com/cedana/cedana/cmd && \
 
-# rm -f "$dirPids"/*
-# rm -f "$dirResults"/*
-# echo "All files in the benchmarking/pids directory have been removed."
+# the forbidden perms change
+# chmod 664 $dirPids/loop.pid
 
-# python3 benchmarking/processes/super_resolution/main.py --upscale_factor 3 --batchSize 4 --testBatchSize 100 --nEpochs 60 --lr 0.001 & \
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkRestore$ github.com/cedana/cedana/cmd && \
+rm -f "$dirResults"/*
 
-# sleep 5 && \
+setsid --fork python3 benchmarking/processes/super_resolution2/main.py --upscale_factor 3 --batchSize 4 --testBatchSize 100 --nEpochs 60 --lr 0.001 < /dev/null &> output.log & \
 
-# sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorchVision$ github.com/cedana/cedana/cmd && \
+sleep 5 && \
 
-# rm -f "$dirPids"/*
-# rm -f "$dirResults"/*
-# echo "All files in the benchmarking/pids directory have been removed."
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorchVision$ github.com/cedana/cedana/cmd && \
 
-# python3 benchmarking/processes/regression/main.py &
+rm -f "$dirPids"/*
+rm -f "$dirResults"/*
+echo "All files in the benchmarking/pids directory have been removed."
 
-# sleep 5 && \
+setsid --fork python3 benchmarking/processes/regression2/main.py < /dev/null &> output.log &
 
-# sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorchRegression$ github.com/cedana/cedana/cmd && \
+sleep 5 && \
+
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorchRegression$ github.com/cedana/cedana/cmd && \
 
 sudo rm -rf benchmarking/temp/loop/*
 sudo rm -rf benchmarking/temp/server/*

@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -17,7 +19,7 @@ func BenchmarkRestore(b *testing.B) {
 	// TODO BS
 	// Here need to loop through all the files in the directory and find first zip dir.
 	// There really should only be two directories at all times
-	dir := "../benchmarking/temp/"
+	dir := "../benchmarking/temp/loop/"
 
 	// List all files in the directory
 	files, err := os.ReadDir(dir)
@@ -48,8 +50,24 @@ func BenchmarkRestore(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		err := c.restore(nil, &checkpoint)
+
+		pids := []string{"loop.pid", "server.pid", "pytorch.pid", "pytorch-vision.pid", "pytorch-regression.pid"}
+		_, pid, _ := LookForPid(c, pids)
+
+		for _, pid := range pid {
+			process, err := os.FindProcess(int(pid))
+			if err != nil {
+				fmt.Println("Error finding process:", err)
+			}
+
+			// Send an interrupt signal (SIGINT) to the process
+			err = process.Signal(syscall.SIGKILL)
+			if err != nil {
+				fmt.Println("Error sending signal:", err)
+			}
+		}
 		if err != nil {
-			b.Errorf("Error in dump(): %v", err)
+			b.Errorf("Error in restore(): %v", err)
 		}
 	}
 }

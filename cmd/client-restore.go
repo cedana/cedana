@@ -150,6 +150,11 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 				if err != nil {
 					return err
 				}
+
+				// Set chmod 664 permissions on the copied file
+				if err := os.Chmod(filepath.Dir(f), 0664); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -172,6 +177,7 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 }
 
 func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
+
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not open directory")
