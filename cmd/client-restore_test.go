@@ -36,11 +36,13 @@ func BenchmarkRestore(b *testing.B) {
 		}
 	}
 	if filename == "" {
-		c.logger.Error().Msgf("No .zip files found in directory: %v", dir)
+		b.Errorf("No .zip files found in directory: %v", dir)
 		return
 	}
 
 	checkpoint := dir + filename
+
+	_, err = os.Stat(checkpoint)
 
 	if err != nil {
 		b.Errorf("Error in os.Stat(): %v", err)
