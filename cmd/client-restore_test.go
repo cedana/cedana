@@ -56,4 +56,10 @@ func BenchmarkRestore(b *testing.B) {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
 	}
+	b.Cleanup(func() {
+		_, err := os.Stat("cedana-restore")
+		if err == nil {
+			os.RemoveAll("cedana-restore")
+		}
+	})
 }
