@@ -26,7 +26,7 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Short: "Initialize client and restore from dumped image",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := instantiateClient()
+		c, err := InstantiateClient()
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		err = c.restore(nil, &checkpointPath)
+		err = c.Restore(nil, &checkpointPath)
 		if err != nil {
 			return err
 		}
@@ -201,7 +201,7 @@ func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
-func (c *Client) restore(cmd *cedana.ServerCommand, path *string) error {
+func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) error {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
 

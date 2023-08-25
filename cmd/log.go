@@ -7,7 +7,7 @@ var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Grab logs from a running job",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := instantiateClient()
+		c, err := InstantiateClient()
 		if err != nil {
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}

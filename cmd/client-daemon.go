@@ -27,7 +27,7 @@ var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon, and dump checkpoints to disk as commanded by an orchestrator",
 	Run: func(cmd *cobra.Command, args []string) {
-		c, err := instantiateClient()
+		c, err := InstantiateClient()
 		if err != nil {
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
@@ -37,7 +37,7 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
 		}
 
-		c.process.PID = pid
+		c.Process.PID = pid
 
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
@@ -163,27 +163,27 @@ LOOP:
 		select {
 		case <-c.channels.dump_command:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
-			err := c.dump(dir)
+			err := c.Dump(dir)
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
 				c.state.CheckpointState = cedana.CheckpointFailed
-				c.publishStateOnce(c.getState(c.process.PID))
+				c.publishStateOnce(c.getState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.CheckpointSuccess
-			c.publishStateOnce(c.getState(c.process.PID))
+			c.publishStateOnce(c.getState(c.Process.PID))
 
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
-			err := c.restore(&cmd, nil)
+			err := c.Restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
-				c.publishStateOnce(c.getState(c.process.PID))
+				c.publishStateOnce(c.getState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.RestoreSuccess
-			c.publishStateOnce(c.getState(c.process.PID))
+			c.publishStateOnce(c.getState(c.Process.PID))
 
 		case <-stop:
 			c.logger.Info().Msg("stop hit")

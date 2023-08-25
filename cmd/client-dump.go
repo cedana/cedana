@@ -38,7 +38,7 @@ var dumpCommand = &cobra.Command{
 	Use:   "dump",
 	Short: "Directly dump a process",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := instantiateClient()
+		c, err := InstantiateClient()
 		if err != nil {
 			return err
 		}
@@ -55,7 +55,7 @@ var dumpCommand = &cobra.Command{
 			}
 		}
 
-		c.process.PID = pid
+		c.Process.PID = pid
 
 		// check that folder exists before proceeding
 		_, err = os.Stat(dir)
@@ -64,7 +64,7 @@ var dumpCommand = &cobra.Command{
 			return err
 		}
 
-		err = c.dump(dir)
+		err = c.Dump(dir)
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	// it'll just pause the spawned dump goroutine
 
 	// while we wait, try and get the fd of the checkpoint as its being written
-	state := c.getState(c.process.PID)
+	state := c.getState(c.Process.PID)
 	for _, f := range state.ProcessInfo.OpenFds {
 		// TODO NR: add more checkpoint options
 		if strings.Contains(f.Path, "pt") {
@@ -115,7 +115,7 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 // pause the process writing the file.
 // An alternative here could be to use file locks, TODO NR: investigate
 func (c *Client) signalPause() error {
-	process, err := os.FindProcess(int(c.process.PID))
+	process, err := os.FindProcess(int(c.Process.PID))
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func (c *Client) signalPause() error {
 }
 
 func (c *Client) signalContinue() error {
-	process, err := os.FindProcess(int(c.process.PID))
+	process, err := os.FindProcess(int(c.Process.PID))
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
-	c.process = state.ProcessInfo
+	c.Process = state.ProcessInfo
 
 	// save state for serialization at this point
 	c.state = *state
@@ -216,7 +216,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
 		// for now, don't set any opts and skip using CRIU. Future work to intercept CUDA calls
 
-		c.process.AttachedToHardwareAccel = attachedToHardwareAccel
+		c.Process.AttachedToHardwareAccel = attachedToHardwareAccel
 		checkpointPath := c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
 		if checkpointPath != nil {
 			// copy checkpoint into checkpointFolderPath
@@ -239,10 +239,10 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 // This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
 // written to on network storage or something.
 func (c *Client) copyOpenFiles(dir string) error {
-	if len(c.process.OpenWriteOnlyFilePaths) == 0 {
+	if len(c.Process.OpenWriteOnlyFilePaths) == 0 {
 		return nil
 	}
-	for _, f := range c.process.OpenWriteOnlyFilePaths {
+	for _, f := range c.Process.OpenWriteOnlyFilePaths {
 		if err := utils.CopyFile(f, dir); err != nil {
 			return err
 		}
@@ -309,11 +309,11 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) dump(dir string) error {
+func (c *Client) Dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(c.process.PID, dir, opts)
+	dumpdir, err := c.prepareDump(c.Process.PID, dir, opts)
 	if err != nil {
 		return err
 	}
@@ -326,7 +326,7 @@ func (c *Client) dump(dir string) error {
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(c.process.PID))
+	opts.Pid = proto.Int32(int32(c.Process.PID))
 
 	nfy := utils.Notify{
 		Config:          c.config,
@@ -336,9 +336,9 @@ func (c *Client) dump(dir string) error {
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, c.process.PID)
+	c.logger.Info().Msgf(`beginning dump of pid %d`, c.Process.PID)
 
-	if !c.process.AttachedToHardwareAccel {
+	if !c.Process.AttachedToHardwareAccel {
 		err = c.CRIU.Dump(opts, nfy)
 		if err != nil {
 			// check for sudo error

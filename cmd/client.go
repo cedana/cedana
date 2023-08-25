@@ -39,7 +39,7 @@ type Client struct {
 
 	channels *CommandChannels
 	context  context.Context
-	process  cedana.ProcessInfo
+	Process  cedana.ProcessInfo
 
 	jobId  string
 	selfId string
@@ -68,7 +68,7 @@ var clientCommand = &cobra.Command{
 	},
 }
 
-func instantiateClient() (*Client, error) {
+func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
 
@@ -200,7 +200,7 @@ func (c *Client) publishStateContinuous(rate int) {
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	// publish state continuously
 	for range ticker.C {
-		state := c.getState(c.process.PID)
+		state := c.getState(c.Process.PID)
 		c.publishStateOnce(state)
 	}
 }
@@ -266,13 +266,13 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 					msg.Ack()
 					c.channels.dump_command <- 1
 
-					state := c.getState(c.process.PID)
+					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
 					c.channels.restore_command <- cmd
 
-					state := c.getState(c.process.PID)
+					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "retry" {
 					msg.Ack()

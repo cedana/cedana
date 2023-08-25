@@ -1,14 +1,16 @@
-package cmd
+package test
 
 import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/cedana/cedana/cmd"
 )
 
 func BenchmarkRestore(b *testing.B) {
 	skipCI(b)
-	c, err := instantiateClient()
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -24,7 +26,7 @@ func BenchmarkRestore(b *testing.B) {
 	var filename string
 
 	if err != nil {
-		c.logger.Error().Msgf("Error reading directory: %v", err)
+		b.Errorf("Error in os.ReadDir(): %v", err)
 		return
 	}
 
@@ -36,7 +38,7 @@ func BenchmarkRestore(b *testing.B) {
 		}
 	}
 	if filename == "" {
-		c.logger.Error().Msgf("No .zip files found in directory: %v", dir)
+		b.Errorf("No .zip files found in directory: %v", dir)
 		return
 	}
 
@@ -47,7 +49,7 @@ func BenchmarkRestore(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		err := c.restore(nil, &checkpoint)
+		err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}

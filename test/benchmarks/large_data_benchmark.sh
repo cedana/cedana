@@ -69,7 +69,7 @@ cd "$current_dir" || exit
 # Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
     # Run your script in the background
-    ./test/run_benchmarks.sh &
+    ./run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!
