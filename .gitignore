@@ -19,3 +19,5 @@ dist/
 open_fds.json
 *.vhs
 .gitconfig
+
+*.test
