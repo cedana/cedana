@@ -66,10 +66,8 @@ done
 cd "$current_dir" || exit
 
 
-# Loop through iterations
 for ((i = 1; i <= num_iterations; i++)); do
-    # Run your script in the background
-    ./run_benchmarks.sh &
+    ./test/benchmarks/run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!
@@ -89,7 +87,7 @@ elapsed_time=$((end_time - start_time))
 echo "All iterations completed"
 echo "Elapsed time: $elapsed_time seconds"
 
-pip3 install -r test/requirements && \
+pip3 install -r test/benchmarks/requirements && \
 
-python3 test/benchmark_analysis.py && \
-rm benchmarking/temp/*.png
+python3 test/benchmarks/benchmark_analysis.py && \
+rm benchmarks/benchmarking/temp/*.png

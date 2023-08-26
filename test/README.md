@@ -9,7 +9,9 @@ Wrangled some live proc data to test against. Should consider using filesystem m
 
 ### `large_data_benchmark.sh`
 
-- chmod +x the script before running
+Run the large_data_benchmark.sh script for a mass benchmark on all processes. Run run_benchmarks.sh script for a single run on all programs.
+
+- To change the number data points: Modify num_iterations variable in the large_data_benchmark.sh script
 
 run_benchmarks.sh runs the benchmark and testing suite for testing the dump and recovery of checkpoints in cedana. Memory and CPU profiles are measured with pprof and stored to a db for further analysis. Currently only one process exists, a C loop that involves high CPU utilization.
 

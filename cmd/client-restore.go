@@ -112,7 +112,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	// TODO: network restore logic
 	// TODO: checksum val
 
-	err = os.Remove(zipFile)
+	// Remove for now for testing
+	// err = os.Remove(zipFile)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +151,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 				if err != nil {
 					return err
 				}
+
 			}
 		}
 		return nil
@@ -172,6 +174,7 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 }
 
 func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
+
 	img, err := os.Open(dir)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("could not open directory")

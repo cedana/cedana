@@ -42,16 +42,41 @@ func skipCI(b *testing.B) {
 	}
 }
 
+func getFilenames(directoryPath string, prefix string) ([]string, error) {
+	// Read the directory contents
+	files, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	loopFilenames := []string{}
+
+	// Iterate through the files and append filenames that match the prefix "loop-"
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), prefix) {
+			loopFilenames = append(loopFilenames, file.Name())
+		}
+	}
+
+	return loopFilenames, nil
+}
+
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/loop"
+	dumpDir := "../../benchmarking/temp/loop"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"loop.pid"})
+	fileNames, err := getFilenames("../../benchmarking/pids/", "loop-")
+
+	if err != nil {
+		b.Errorf("Error in getFilenames(): %v", err)
+	}
+
+	_, pid, _ := LookForPid(c, fileNames)
 
 	c.Process.PID = pid[0]
 
@@ -84,11 +109,11 @@ func BenchmarkDumpLoop(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -99,7 +124,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 func BenchmarkDumpServer(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/server"
+	dumpDir := "../../benchmarking/temp/server"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -141,11 +166,11 @@ func BenchmarkDumpServer(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -156,7 +181,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 func BenchmarkDumpPytorch(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/pytorch"
+	dumpDir := "../../benchmarking/temp/pytorch"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -200,11 +225,11 @@ func BenchmarkDumpPytorch(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -215,7 +240,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 func BenchmarkDumpPytorchVision(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/pytorch-vision"
+	dumpDir := "../../benchmarking/temp/pytorch-vision"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -259,11 +284,11 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -275,7 +300,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 func BenchmarkDumpPytorchRegression(b *testing.B) {
 	skipCI(b)
 
-	dumpDir := "../benchmarking/temp/pytorch-regression"
+	dumpDir := "../../benchmarking/temp/pytorch-regression"
 
 	c, err := cmd.InstantiateClient()
 
@@ -319,11 +344,11 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 				b.Errorf("Error in ZipFileSize(): %v", err)
 			}
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -359,8 +384,8 @@ func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
 	for _, file := range filename {
 
 		// Open the file for reading
-		dir := fmt.Sprintf("../benchmarking/pids/%v", file)
-		file, err := os.Open(dir)
+		dir := fmt.Sprintf("../../benchmarking/pids/%v", file)
+		file, err := os.OpenFile(dir, os.O_RDONLY, 0o664)
 		if err == nil {
 			defer file.Close()
 
@@ -393,7 +418,7 @@ func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
 }
 
 func GetDecompressedData(filename string) ([]byte, error) {
-	dir := fmt.Sprintf("../benchmarking/results/%v", filename)
+	dir := fmt.Sprintf("../../benchmarking/results/%v", filename)
 
 	data, err := os.ReadFile(dir)
 	if err != nil {
@@ -506,9 +531,20 @@ func TestMain(m *testing.M) {
 	}
 
 	m.Run()
+
+	finalCleanup()
+
+}
+
+func finalCleanup() {
 	c, _ := cmd.InstantiateClient()
 
-	pids := []string{"loop.pid", "server.pid", "pytorch.pid", "pytorch-vision.pid", "pytorch-regression.pid"}
+	pids, err := getFilenames("../../benchmarking/pids/", "")
+
+	if err != nil {
+		fmt.Printf("Error in getFilenames(): %v", err)
+	}
+
 	// Code to run after the tests
 	// Profiles := Profiles{}
 	cpuProfile, memProfile := PostDumpCleanup()
@@ -517,7 +553,7 @@ func TestMain(m *testing.M) {
 
 	fileNames, pid, _ := LookForPid(c, pids)
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../benchmarking/temp/time"), ReadInt64File("../benchmarking/temp/size"))
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
 
 	// Kill the processes
 	for _, pid := range pid {
