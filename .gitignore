@@ -3,6 +3,7 @@ client_config.yaml
 cedana-daemon.log
 cedana.pid
 cmd.test
+*.test
 cmd/_home*
 
 benchmarking/results/*
