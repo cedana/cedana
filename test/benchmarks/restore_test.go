@@ -61,6 +61,7 @@ func BenchmarkRestore(b *testing.B) {
 		}
 		b.StopTimer()
 		destroyPid(b, c)
+		b.StartTimer()
 	}
 	b.Cleanup(func() {
 		_, err := os.Stat("cedana_restore")
@@ -73,24 +74,6 @@ func BenchmarkRestore(b *testing.B) {
 		}
 
 		destroyPid(b, c)
-
-		// List all pids
-		// files, err := os.ReadDir("../../benchmarking/pids/")
-		// if err != nil {
-		// 	b.Error("Error reading directory:", err)
-		// 	return
-		// }
-
-		// // Loop through the pids and remove them
-		// for _, file := range files {
-		// 	filePath := filepath.Join("../../benchmarking/pids/", file.Name())
-		// 	err := os.Remove(filePath)
-		// 	if err != nil {
-		// 		b.Errorf("Error removing file %s: %v\n", filePath, err)
-		// 	} else {
-		// 		b.Errorf("Removed file: %s\n", filePath)
-		// 	}
-		// }
 	})
 
 }
