@@ -59,6 +59,8 @@ func BenchmarkRestore(b *testing.B) {
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
+		b.StopTimer()
+		destroyPid(b, c)
 	}
 	b.Cleanup(func() {
 		_, err := os.Stat("cedana_restore")
@@ -69,25 +71,8 @@ func BenchmarkRestore(b *testing.B) {
 		if err == nil {
 			os.Remove("../../output.log")
 		}
-		pids, err := getFilenames("../../benchmarking/pids/", "")
 
-		if err != nil {
-			b.Errorf("Error in getFilenames(): %v", err)
-		}
-
-		_, pid, _ := LookForPid(c, pids)
-
-		for _, pid := range pid {
-			process, err := os.FindProcess(int(pid))
-			if err != nil {
-				fmt.Println("Error finding process:", err)
-			}
-
-			err = process.Signal(syscall.SIGKILL)
-			if err != nil {
-				fmt.Println("Error sending signal:", err)
-			}
-		}
+		destroyPid(b, c)
 
 		// List all pids
 		// files, err := os.ReadDir("../../benchmarking/pids/")
@@ -108,4 +93,26 @@ func BenchmarkRestore(b *testing.B) {
 		// }
 	})
 
+}
+
+func destroyPid(b *testing.B, c *cmd.Client) {
+	pids, err := getFilenames("../../benchmarking/pids/", "")
+
+	if err != nil {
+		b.Errorf("Error in getFilenames(): %v", err)
+	}
+
+	_, pid, _ := LookForPid(c, pids)
+
+	for _, pid := range pid {
+		process, err := os.FindProcess(int(pid))
+		if err != nil {
+			fmt.Println("Error finding process:", err)
+		}
+
+		err = process.Signal(syscall.SIGKILL)
+		if err != nil {
+			fmt.Println("Error sending signal:", err)
+		}
+	}
 }
