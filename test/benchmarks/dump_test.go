@@ -553,6 +553,10 @@ func finalCleanup() {
 
 	fileNames, pid, _ := LookForPid(c, pids)
 
+	if len(fileNames) == 0 {
+		return
+	}
+
 	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
 
 	// Kill the processes

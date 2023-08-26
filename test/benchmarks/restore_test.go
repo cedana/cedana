@@ -1,9 +1,10 @@
 package test
 
 import (
+	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/cedana/cedana/cmd"
@@ -20,7 +21,7 @@ func BenchmarkRestore(b *testing.B) {
 	// TODO BS
 	// Here need to loop through all the files in the directory and find first zip dir.
 	// There really should only be two directories at all times
-	dir := "../benchmarking/temp/loop/"
+	dir := "../../benchmarking/temp/loop/"
 
 	// List all files in the directory
 	files, err := os.ReadDir(dir)
@@ -64,28 +65,47 @@ func BenchmarkRestore(b *testing.B) {
 		if err == nil {
 			os.RemoveAll("cedana_restore")
 		}
-		_, err = os.Stat("../output.log")
+		_, err = os.Stat("../../output.log")
 		if err == nil {
-			os.Remove("../output.log")
+			os.Remove("../../output.log")
+		}
+		pids, err := getFilenames("../../benchmarking/pids/", "")
+
+		if err != nil {
+			b.Errorf("Error in getFilenames(): %v", err)
+		}
+
+		_, pid, _ := LookForPid(c, pids)
+
+		for _, pid := range pid {
+			process, err := os.FindProcess(int(pid))
+			if err != nil {
+				fmt.Println("Error finding process:", err)
+			}
+
+			err = process.Signal(syscall.SIGKILL)
+			if err != nil {
+				fmt.Println("Error sending signal:", err)
+			}
 		}
 
 		// List all pids
-		files, err := os.ReadDir("../benchmarking/pids/")
-		if err != nil {
-			b.Error("Error reading directory:", err)
-			return
-		}
+		// files, err := os.ReadDir("../../benchmarking/pids/")
+		// if err != nil {
+		// 	b.Error("Error reading directory:", err)
+		// 	return
+		// }
 
-		// Loop through the pids and remove them
-		for _, file := range files {
-			filePath := filepath.Join("../benchmarking/pids/", file.Name())
-			err := os.Remove(filePath)
-			if err != nil {
-				b.Errorf("Error removing file %s: %v\n", filePath, err)
-			} else {
-				b.Errorf("Removed file: %s\n", filePath)
-			}
-		}
+		// // Loop through the pids and remove them
+		// for _, file := range files {
+		// 	filePath := filepath.Join("../../benchmarking/pids/", file.Name())
+		// 	err := os.Remove(filePath)
+		// 	if err != nil {
+		// 		b.Errorf("Error removing file %s: %v\n", filePath, err)
+		// 	} else {
+		// 		b.Errorf("Removed file: %s\n", filePath)
+		// 	}
+		// }
 	})
 
 }
