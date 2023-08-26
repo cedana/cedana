@@ -78,6 +78,13 @@ func TestClient_RunTask(t *testing.T) {
 
 	// Test case: Task is not empty
 	t.Run("TaskIsNotEmpty", func(t *testing.T) {
+		// skip this test for CI - the check for detached process fails
+		// inside a docker container
+
+		if os.Getenv("CI") != "" {
+			t.Skip("Skipping test in CI environment")
+		}
+
 		c := &Client{
 			config: &utils.Config{
 				Client: utils.Client{
@@ -98,12 +105,9 @@ func TestClient_RunTask(t *testing.T) {
 			t.Errorf("Expected pid > 0, but got %d", pid)
 		}
 
-		// skip this check for CI
-		if os.Getenv("CI") != "" {
-			// Verify that the process is actually detached
-			if syscall.Getppid() != syscall.Getpgrp() {
-				t.Error("Expected process to be detached")
-			}
+		// Verify that the process is actually detached
+		if syscall.Getppid() != syscall.Getpgrp() {
+			t.Error("Expected process to be detached")
 		}
 	})
 
