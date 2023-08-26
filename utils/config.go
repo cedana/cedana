@@ -20,7 +20,8 @@ type Config struct {
 }
 
 type Client struct {
-	ProcessName          string `json:"process_name" mapstructure:"process_name"`
+	// job to run
+	Task                 string `json:"task" mapstructure:"task"`
 	LeaveRunning         bool   `json:"leave_running" mapstructure:"leave_running"`
 	SignalProcessPreDump bool   `json:"signal_process_pre_dump" mapstructure:"signal_process_pre_dump"`
 	SignalProcessTimeout int    `json:"signal_process_timeout" mapstructure:"signal_process_timeout"`
@@ -107,7 +108,7 @@ func InitConfig() (*Config, error) {
 		viper.Set("connection.nats_url", so.Connection.NATSUrl)
 		viper.Set("connection.nats_port", so.Connection.NATSPort)
 		viper.Set("connection.auth_token", so.Connection.NATSAuthToken)
-		viper.Set("client.process_name", so.Client.ProcessName)
+		viper.Set("client.process_name", so.Client.Task)
 	}
 
 	viper.WriteConfig()

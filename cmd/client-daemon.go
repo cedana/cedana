@@ -3,12 +3,11 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
 
@@ -17,7 +16,7 @@ import (
 
 func init() {
 	clientCommand.AddCommand(clientDaemonCmd)
-	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
+	clientDaemonCmd.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to manage")
 }
 
 var stop = make(chan struct{})
@@ -28,7 +27,7 @@ var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon, and dump checkpoints to disk as commanded by an orchestrator",
 	Run: func(cmd *cobra.Command, args []string) {
-		c, err := instantiateClient()
+		c, err := InstantiateClient()
 		if err != nil {
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
@@ -38,15 +37,7 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
 		}
 
-		if pid == 0 {
-			pid, err = utils.GetPid(c.config.Client.ProcessName)
-			if err != nil {
-				c.logger.Err(err).Msg("Could not parse process name from config")
-			}
-			c.logger.Info().Msgf("managing process with pid %d", pid)
-		}
-
-		c.process.PID = pid
+		c.Process.PID = pid
 
 		if dir == "" {
 			dir = c.config.SharedStorage.DumpStorageDir
@@ -87,9 +78,18 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
+		// create a subscription to NATS commands from the orchestrator first
 		go c.subscribeToCommands(300)
+
+		if pid == 0 {
+			err := c.tryStartJob()
+			// if we hit an error here, unrecoverable
+			if err != nil {
+				c.logger.Fatal().Err(err).Msg("could not start job")
+			}
+		}
+
 		go c.publishStateContinuous(30)
-		go c.forwardSocatLogs()
 
 		// start daemon worker
 		go c.startDaemon(pid)
@@ -103,33 +103,87 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
+func (c *Client) tryStartJob() error {
+	var task string = c.config.Client.Task
+	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
+	var err error
+	for i := 0; i < 5; i++ {
+		pid, err := c.runTask(task)
+		if err == nil {
+			c.logger.Info().Msgf("managing process with pid %d", pid)
+			break
+		} else {
+			// enter a failure state, where we wait indefinitely for a command from NATS instead of
+			// continuing
+			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
+			c.state.Flag = cedana.JobStartupFailed
+			recoveryCmd := c.enterDoomLoop()
+			task = recoveryCmd.UpdatedTask
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) runTask(task string) (int32, error) {
+	var pid int32
+
+	if task == "" {
+		return 0, fmt.Errorf("could not find task in config")
+	}
+
+	// validation of the task happens at the server level,
+	// so there's no real concerns here about executing the task without proper validation
+
+	// we want the task to run detached so we can checkpoint it
+	cmd := exec.Command("/bin/sh", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+
+	pid = int32(cmd.Process.Pid)
+
+	return pid, nil
+}
+
 func (c *Client) startDaemon(pid int32) {
 LOOP:
 	for {
 		select {
 		case <-c.channels.dump_command:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
-			err := c.dump(dir)
+			err := c.Dump(dir)
 			if err != nil {
 				// we don't want the daemon blowing up, so don't pass the error up
 				c.logger.Warn().Msgf("could not checkpoint with error: %v", err)
 				c.state.CheckpointState = cedana.CheckpointFailed
-				c.publishStateOnce()
+				c.publishStateOnce(c.getState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.CheckpointSuccess
-			c.publishStateOnce()
+			c.publishStateOnce(c.getState(c.Process.PID))
 
 		case cmd := <-c.channels.restore_command:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
-			err := c.restore(&cmd, nil)
+			err := c.Restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore with error: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
-				c.publishStateOnce()
+				c.publishStateOnce(c.getState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.RestoreSuccess
-			c.publishStateOnce()
+			c.publishStateOnce(c.getState(c.Process.PID))
 
 		case <-stop:
 			c.logger.Info().Msg("stop hit")
@@ -147,36 +201,4 @@ func termHandler(sig os.Signal) error {
 		<-done
 	}
 	return gd.ErrStop
-}
-
-// This is slightly insane lol.
-// When a job is set up via the orchestrator, we expect that it's logging is redirected
-// using socat (e.g `program | socat - TCP:localhost:3376`). This way we can avoid any pesky
-// logging issues (managing open fds) on CRIU restores + also pipe from the machine the daemon is run on to
-// the user's CLI.
-func (c *Client) forwardSocatLogs() error {
-	listener, err := net.Listen("tcp", "localhost:3376")
-	if err != nil {
-		return err
-	}
-
-	defer listener.Close()
-
-	// accept incoming socat connection
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			c.logger.Info().Msgf("could not accept socat connection: %v", err)
-			return err
-		}
-
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			c.logger.Info().Msgf("could not read from socat connection: %v", err)
-			return err
-		}
-
-		c.logger.Info().Msgf("cedana logging server input: %s", string(buf[:n]))
-	}
 }
