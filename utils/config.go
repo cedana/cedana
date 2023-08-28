@@ -15,7 +15,6 @@ type Config struct {
 	Client        Client        `json:"client" mapstructure:"client"`
 	ActionScripts ActionScripts `json:"action_scripts" mapstructure:"action_scripts"`
 	Connection    Connection    `json:"connection" mapstructure:"connection"`
-	Docker        Docker        `json:"docker" mapstructure:"docker"`
 	SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
 }
 
@@ -41,12 +40,6 @@ type Connection struct {
 	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
 	CedanaPort      int    `json:"cedana_port" mapstructure:"cedana_port"`
 	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
-}
-
-type Docker struct {
-	LeaveRunning  bool   `json:"leave_running" mapstructure:"leave_running"`
-	ContainerName string `json:"container_name" mapstructure:"container_name"`
-	CheckpointID  string `json:"checkpoint_id" mapstructure:"checkpoint_id"`
 }
 
 type SharedStorage struct {
@@ -108,7 +101,7 @@ func InitConfig() (*Config, error) {
 		viper.Set("connection.nats_url", so.Connection.NATSUrl)
 		viper.Set("connection.nats_port", so.Connection.NATSPort)
 		viper.Set("connection.auth_token", so.Connection.NATSAuthToken)
-		viper.Set("client.process_name", so.Client.Task)
+		viper.Set("client.task", so.Client.Task)
 	}
 
 	viper.WriteConfig()
