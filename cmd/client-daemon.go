@@ -57,7 +57,7 @@ var clientDaemonCmd = &cobra.Command{
 			PidFileName: "cedana.pid",
 			PidFilePerm: 0o644,
 			LogFileName: "cedana-daemon.log",
-			LogFilePerm: 0o640,
+			LogFilePerm: 0o664,
 			WorkDir:     "./",
 			Umask:       027,
 			Args:        []string{executable, "client", "daemon", "-p", fmt.Sprint(pid)},
@@ -111,6 +111,8 @@ func (c *Client) tryStartJob() error {
 		pid, err := c.runTask(task)
 		if err == nil {
 			c.logger.Info().Msgf("managing process with pid %d", pid)
+			c.state.Flag = cedana.JobRunning
+			c.Process.PID = pid
 			break
 		} else {
 			// enter a failure state, where we wait indefinitely for a command from NATS instead of
@@ -144,9 +146,6 @@ func (c *Client) runTask(task string) (int32, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
 
 	if err := cmd.Start(); err != nil {
 		return 0, err

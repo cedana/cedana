@@ -87,7 +87,7 @@ elapsed_time=$((end_time - start_time))
 echo "All iterations completed"
 echo "Elapsed time: $elapsed_time seconds"
 
-pip3 install -r test/benchmarks/requirements && \
+pip3 install -r requirements && \
 
 python3 test/benchmarks/benchmark_analysis.py && \
 rm benchmarks/benchmarking/temp/*.png
