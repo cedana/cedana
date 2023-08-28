@@ -137,7 +137,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/vision/")
+	checkpoint, isError := setup(b, "../../benchmarking/temp/pytorch-vision/")
 	if isError {
 		return
 	}

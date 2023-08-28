@@ -6,7 +6,6 @@ execServer="benchmarking/processes/server2"
 dirPids="benchmarking/pids"
 dirResults="benchmarking/results"
 
-dirResults="benchmarking/results"
 dirTempPytorchVision="benchmarking/temp/pytorch-vision"
 
 sudo rm -rf benchmarking/temp/loop/*
@@ -42,7 +41,7 @@ rm -f "$dirResults"/*
 rm -f "$dirPids"/*
 
 setsid --fork benchmarking/processes/server2 < /dev/null &> /dev/null &
-sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpServer$ github.com/cedana/cedana/cmd && \
+sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpServer$ github.com/cedana/cedana/test/benchmarks && \
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkServerRestore$ github.com/cedana/cedana/test/benchmarks && \
 
 rm -f "$dirPids"/*
@@ -56,7 +55,8 @@ sleep 15 && \
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpPytorch$ github.com/cedana/cedana/test/benchmarks && \
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkPytorchRestore$ github.com/cedana/cedana/test/benchmarks && \
 
-
+rm -f "$dirPids"/*
+rm -f "$dirResults"/*
 
 setsid --fork python3 benchmarking/processes/super_resolution2/main.py --upscale_factor 3 --batchSize 4 --testBatchSize 100 --nEpochs 60 --lr 0.001 < /dev/null &> /dev/null & \
 
