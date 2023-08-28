@@ -513,9 +513,16 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		totalMemoryUsed += sample.Value[1]
 	}
 
+	parts := strings.FieldsFunc(programName, func(r rune) bool {
+		return r == '-'
+	})
+
+	// Take the first part from the split result
+	prefix := parts[0]
+
 	cj := Benchmarks{
 		ID:                 id.String(),
-		ProcessName:        programName,
+		ProcessName:        prefix,
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
 		ElapsedTimeMs:      elapsedTime,
