@@ -23,6 +23,7 @@ restoreQuery = f"SELECT * FROM {benchmarkTable} WHERE cmd_type = 'restore'"
 
 def AnalyzeBenchmarks(query, title):
     mainDf = pd.read_sql_query(query, conn)
+    print(mainDf.head())
 
     # Create a dictionary to map unique categories to colors
     unique_categories = mainDf['process_name'].unique()

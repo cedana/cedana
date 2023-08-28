@@ -36,6 +36,7 @@ func BenchmarkLoopRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
+		FileIPCCleanup(b, "../../benchmarking/temp/loop/", "restore")
 	})
 
 }
@@ -66,6 +67,7 @@ func BenchmarkServerRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
+		FileIPCCleanup(b, "../../benchmarking/temp/server/", "restore")
 	})
 
 }
@@ -96,6 +98,8 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
+		FileIPCCleanup(b, "../../benchmarking/temp/pytorch/", "restore")
+
 	})
 
 }
@@ -126,6 +130,7 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
+		FileIPCCleanup(b, "../../benchmarking/temp/pytorch-regression/", "restore")
 	})
 
 }
@@ -155,6 +160,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
+		FileIPCCleanup(b, "../../benchmarking/temp/pytorch-vision/", "restore")
 	})
 
 }
