@@ -172,7 +172,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch-vision.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch_vision.pid"})
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
@@ -207,7 +207,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch-regression.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch_regression.pid"})
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
@@ -420,6 +420,12 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 
 	// Take the first part from the split result
 	prefix := parts[0]
+
+	parts = strings.FieldsFunc(prefix, func(r rune) bool {
+		return r == '/'
+	})
+
+	prefix = parts[len(parts)-1]
 
 	cj := Benchmarks{
 		ID:                 id.String(),
