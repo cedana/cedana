@@ -158,6 +158,7 @@ func BenchmarkDumpServer(b *testing.B) {
 			if err != nil {
 				b.Errorf("Error in finding zipfile: %v", err)
 			}
+
 			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
 			if err != nil {
 				b.Errorf("Error in ZipFileSize(): %v", err)
@@ -558,6 +559,10 @@ func finalCleanup() {
 	}
 
 	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
+
+	if len(pid) == 0 {
+		return
+	}
 
 	// Kill the processes
 	for _, pid := range pid {
