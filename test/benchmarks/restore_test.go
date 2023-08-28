@@ -137,7 +137,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/pytorch-vision/")
+	checkpoint, isError := setup(b, "../../benchmarking/temp/vision/")
 	if isError {
 		return
 	}
@@ -170,6 +170,12 @@ func finishBenchmark(b *testing.B, c *cmd.Client) {
 	}
 
 	destroyPid(b, c)
+
+	err = os.WriteFile("../../benchmarking/temp/type", []byte("restore"), 0o644)
+
+	if err != nil {
+		b.Errorf("Error in os.WriteFile(): %v", err)
+	}
 }
 
 func setup(b *testing.B, dir string) (string, bool) {

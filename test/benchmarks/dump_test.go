@@ -33,6 +33,7 @@ type Benchmarks struct {
 	TotalMemoryUsed    int64
 	ElapsedTimeMs      int64
 	FileSize           int64
+	CmdType            string
 }
 
 // we are skipping ci for now as we are using dump which requires criu, need to build criu on gh action
@@ -92,6 +93,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+			os.WriteFile("../../benchmarking/temp/type", []byte("dump"), 0o644)
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 			valueBytes := make([]byte, 8)
@@ -149,6 +151,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+			os.WriteFile("../../benchmarking/temp/type", []byte("dump"), 0o644)
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 			valueBytes := make([]byte, 8)
@@ -208,6 +211,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+			os.WriteFile("../../benchmarking/temp/type", []byte("dump"), 0o644)
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 			valueBytes := make([]byte, 8)
@@ -267,6 +271,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+			os.WriteFile("../../benchmarking/temp/type", []byte("dump"), 0o644)
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 			valueBytes := make([]byte, 8)
@@ -328,6 +333,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+			os.WriteFile("../../benchmarking/temp/type", []byte("dump"), 0o644)
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 			valueBytes := make([]byte, 8)
@@ -493,7 +499,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -514,6 +520,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		TotalMemoryUsed:    totalMemoryUsed,
 		ElapsedTimeMs:      elapsedTime,
 		FileSize:           fileSize,
+		CmdType:            cmdType,
 	}
 	db.orm.Create(&cj)
 
@@ -558,7 +565,9 @@ func finalCleanup() {
 		return
 	}
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
+	cmdType, _ := os.ReadFile("../../benchmarking/temp/type")
+
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"), string(cmdType))
 
 	if len(pid) == 0 {
 		return
