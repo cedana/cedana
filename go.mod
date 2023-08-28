@@ -7,6 +7,7 @@ require (
 	github.com/docker/docker v24.0.4+incompatible
 	github.com/glebarez/sqlite v1.9.0
 	github.com/google/uuid v1.3.0
+	github.com/nats-io/nats-server/v2 v2.9.21
 	github.com/nats-io/nats.go v1.28.0
 	github.com/opencontainers/runc v1.1.7
 	github.com/rs/xid v1.5.0
@@ -39,17 +40,19 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/klauspost/compress v1.16.5 // indirect
+	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/sys/mountinfo v0.5.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/mrunalp/fileutils v0.5.0 // indirect
-	github.com/nats-io/nats-server/v2 v2.9.15 // indirect
+	github.com/nats-io/gnatsd v1.4.1 // indirect
+	github.com/nats-io/jwt/v2 v2.4.1 // indirect
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -71,10 +74,11 @@ require (
 	github.com/vishvananda/netlink v1.1.0 // indirect
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	golang.org/x/crypto v0.6.0 // indirect
+	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -89,6 +93,7 @@ require (
 	github.com/adrg/strutil v0.3.0
 	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
+	github.com/nats-io/nats-server v1.4.1
 	github.com/rs/zerolog v1.28.0
 	github.com/shirou/gopsutil/v3 v3.23.7
 	github.com/spf13/pflag v1.0.5 // indirect

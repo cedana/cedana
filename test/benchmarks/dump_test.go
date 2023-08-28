@@ -1,4 +1,4 @@
-package cmd
+package test
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/cedana/cedana/cmd"
 	"github.com/cedana/cedana/utils"
 	"github.com/glebarez/sqlite"
 	"github.com/rs/xid"
@@ -41,24 +42,49 @@ func skipCI(b *testing.B) {
 	}
 }
 
+func getFilenames(directoryPath string, prefix string) ([]string, error) {
+	// Read the directory contents
+	files, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	loopFilenames := []string{}
+
+	// Iterate through the files and append filenames that match the prefix "loop-"
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), prefix) {
+			loopFilenames = append(loopFilenames, file.Name())
+		}
+	}
+
+	return loopFilenames, nil
+}
+
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/loop"
-	c, err := instantiateClient()
+	dumpDir := "../../benchmarking/temp/loop"
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"loop.pid"})
+	fileNames, err := getFilenames("../../benchmarking/pids/", "loop-")
 
-	c.process.PID = pid[0]
+	if err != nil {
+		b.Errorf("Error in getFilenames(): %v", err)
+	}
+
+	_, pid, _ := LookForPid(c, fileNames)
+
+	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(dumpDir)
+		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -83,11 +109,11 @@ func BenchmarkDumpLoop(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -98,8 +124,8 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 func BenchmarkDumpServer(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/server"
-	c, err := instantiateClient()
+	dumpDir := "../../benchmarking/temp/server"
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -109,13 +135,13 @@ func BenchmarkDumpServer(b *testing.B) {
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
-	c.process.PID = pid[0]
+	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(dumpDir)
+		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -140,11 +166,11 @@ func BenchmarkDumpServer(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -155,8 +181,8 @@ func BenchmarkDumpServer(b *testing.B) {
 
 func BenchmarkDumpPytorch(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/pytorch"
-	c, err := instantiateClient()
+	dumpDir := "../../benchmarking/temp/pytorch"
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -166,14 +192,14 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
-	c.logger.Log().Msgf("pid: %v", pid)
-	c.process.PID = pid[0]
+	b.Logf("pid: %v", pid)
+	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(dumpDir)
+		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -199,11 +225,11 @@ func BenchmarkDumpPytorch(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -214,8 +240,8 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 func BenchmarkDumpPytorchVision(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../benchmarking/temp/pytorch-vision"
-	c, err := instantiateClient()
+	dumpDir := "../../benchmarking/temp/pytorch-vision"
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -225,14 +251,14 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
-	c.logger.Log().Msgf("pid: %v", pid)
-	c.process.PID = pid[0]
+	b.Logf("pid: %v", pid)
+	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(dumpDir)
+		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -258,11 +284,11 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 			filesizeBytes := make([]byte, 8)
 			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -274,9 +300,9 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 func BenchmarkDumpPytorchRegression(b *testing.B) {
 	skipCI(b)
 
-	dumpDir := "../benchmarking/temp/pytorch-regression"
+	dumpDir := "../../benchmarking/temp/pytorch-regression"
 
-	c, err := instantiateClient()
+	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -286,14 +312,14 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
-	c.logger.Log().Msgf("pid: %v", pid)
-	c.process.PID = pid[0]
+	b.Logf("pid: %v", pid)
+	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.dump(dumpDir)
+		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -318,11 +344,11 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 				b.Errorf("Error in ZipFileSize(): %v", err)
 			}
 
-			err = os.WriteFile("../benchmarking/temp/time", valueBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
-			err = os.WriteFile("../benchmarking/temp/size", filesizeBytes, 0o644)
+			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
 			if err != nil {
 				b.Errorf("Error in os.WriteFile(): %v", err)
 			}
@@ -350,7 +376,7 @@ func ZipFileSize(filePath string) (int64, error) {
 	return size, nil
 }
 
-func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
+func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
 
 	var pidInt32s []int32
 	var fileNames []string
@@ -358,8 +384,8 @@ func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
 	for _, file := range filename {
 
 		// Open the file for reading
-		dir := fmt.Sprintf("../benchmarking/pids/%v", file)
-		file, err := os.Open(dir)
+		dir := fmt.Sprintf("../../benchmarking/pids/%v", file)
+		file, err := os.OpenFile(dir, os.O_RDONLY, 0o664)
 		if err == nil {
 			defer file.Close()
 
@@ -392,7 +418,7 @@ func LookForPid(c *Client, filename []string) ([]string, []int32, error) {
 }
 
 func GetDecompressedData(filename string) ([]byte, error) {
-	dir := fmt.Sprintf("../benchmarking/results/%v", filename)
+	dir := fmt.Sprintf("../../benchmarking/results/%v", filename)
 
 	data, err := os.ReadFile(dir)
 	if err != nil {
@@ -439,19 +465,19 @@ func FindZipFiles(directoryPath string) (string, error) {
 }
 
 func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
-	c, _ := instantiateClient()
+	logger := utils.GetLogger()
 	// Code to run after the benchmark
 	// cpuProfileName := fmt.Sprintf("%v_cpu.prof.gz", programName)
 	// memoryProfileName := fmt.Sprintf("%v_memory.prof.gz", programName)
 
 	cpuData, err := GetDecompressedData("cpu.prof.gz")
 	if err != nil {
-		c.logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
+		logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
 	}
 
 	memData, err := GetDecompressedData("memory.prof.gz")
 	if err != nil {
-		c.logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
+		logger.Error().Msgf("Error in GetDecompressedData(): %v", err)
 	}
 
 	cpuProfile := utils.Profile{}
@@ -460,7 +486,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	proto.Unmarshal(cpuData, &cpuProfile)
 	proto.Unmarshal(memData, &memProfile)
 
-	c.logger.Log().Msgf("proto data duration: %+v", cpuProfile.DurationNanos)
+	logger.Log().Msgf("proto data duration: %+v", cpuProfile.DurationNanos)
 	// Here we need to add to db the profile data
 	// we also need to delete pid files and end kill processes
 	return &cpuProfile, &memProfile
@@ -498,10 +524,27 @@ func TestMain(m *testing.M) {
 	if os.Getenv("CI") != "" {
 		os.Exit(0)
 	}
-	m.Run()
-	c, _ := instantiateClient()
 
-	pids := []string{"loop.pid", "server.pid", "pytorch.pid", "pytorch-vision.pid", "pytorch-regression.pid"}
+	// Only run this if we're explicitly benchmarking
+	if os.Getenv("BENCHMARKING") != "" {
+		os.Exit(0)
+	}
+
+	m.Run()
+
+	finalCleanup()
+
+}
+
+func finalCleanup() {
+	c, _ := cmd.InstantiateClient()
+
+	pids, err := getFilenames("../../benchmarking/pids/", "")
+
+	if err != nil {
+		fmt.Printf("Error in getFilenames(): %v", err)
+	}
+
 	// Code to run after the tests
 	// Profiles := Profiles{}
 	cpuProfile, memProfile := PostDumpCleanup()
@@ -510,7 +553,7 @@ func TestMain(m *testing.M) {
 
 	fileNames, pid, _ := LookForPid(c, pids)
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../benchmarking/temp/time", c), ReadInt64File("../benchmarking/temp/size", c))
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
 
 	// Kill the processes
 	for _, pid := range pid {
@@ -529,11 +572,12 @@ func TestMain(m *testing.M) {
 }
 
 // This reads the elapsed time from a file written by benchmarking cleanup function
-func ReadInt64File(filePath string, c *Client) int64 {
+func ReadInt64File(filePath string) int64 {
+	logger := utils.GetLogger()
 	// Open the file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
-		c.logger.Error().Msgf("Error opening file: %v", err)
+		logger.Error().Msgf("Error opening file: %v", err)
 	}
 	defer file.Close()
 
@@ -541,7 +585,7 @@ func ReadInt64File(filePath string, c *Client) int64 {
 	valueBytes := make([]byte, 8)
 	_, err = file.Read(valueBytes)
 	if err != nil {
-		c.logger.Error().Msgf("Error reading file: %v", err)
+		logger.Error().Msgf("Error reading file: %v", err)
 	}
 
 	// Convert the bytes back to int64
@@ -551,10 +595,7 @@ func ReadInt64File(filePath string, c *Client) int64 {
 }
 
 func NewDB() *DB {
-	c, err := instantiateClient()
-	if err != nil {
-		c.logger.Error().Msgf("Error in instantiateClient(): %v", err)
-	}
+	logger := utils.GetLogger()
 
 	originalUser := os.Getenv("SUDO_USER")
 	homeDir := ""
@@ -572,12 +613,12 @@ func NewDB() *DB {
 
 	configFolderPath := filepath.Join(homeDir, ".cedana")
 	// check that $HOME/.cedana folder exists - create if it doesn't
-	_, err = os.Stat(configFolderPath)
+	_, err := os.Stat(configFolderPath)
 	if err != nil {
-		c.logger.Log().Msg("config folder doesn't exist, creating...")
+		logger.Log().Msg("config folder doesn't exist, creating...")
 		err = os.Mkdir(configFolderPath, 0o755)
 		if err != nil {
-			c.logger.Error().Msgf("could not create config folder: %v", err)
+			logger.Error().Msgf("could not create config folder: %v", err)
 		}
 	}
 
@@ -586,7 +627,7 @@ func NewDB() *DB {
 		FullSaveAssociations: true,
 	})
 	if err != nil {
-		c.logger.Error().Msgf("failed to open database: %v", err)
+		logger.Error().Msgf("failed to open database: %v", err)
 	}
 	db.AutoMigrate(&Benchmarks{})
 	return &DB{

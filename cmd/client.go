@@ -39,14 +39,15 @@ type Client struct {
 
 	channels *CommandChannels
 	context  context.Context
-	process  cedana.ProcessInfo
+	Process  cedana.ProcessInfo
 
 	jobId  string
 	selfId string
 
-	state cedana.CedanaState // only ever modified at checkpoint/restore time
+	// a single big state glob
+	state cedana.CedanaState
 
-	// need to dependency inject a filesystem
+	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
 	// checkpoint store
@@ -56,6 +57,7 @@ type Client struct {
 type CommandChannels struct {
 	dump_command    chan int
 	restore_command chan cedana.ServerCommand
+	recover_command chan cedana.ServerCommand
 }
 
 var clientCommand = &cobra.Command{
@@ -66,7 +68,7 @@ var clientCommand = &cobra.Command{
 	},
 }
 
-func instantiateClient() (*Client, error) {
+func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
 
@@ -93,7 +95,12 @@ func instantiateClient() (*Client, error) {
 	// set up channels for daemon to listen on
 	dump_command := make(chan int)
 	restore_command := make(chan cedana.ServerCommand)
-	channels := &CommandChannels{dump_command, restore_command}
+	recover_command := make(chan cedana.ServerCommand)
+	channels := &CommandChannels{
+		dump_command,
+		restore_command,
+		recover_command,
+	}
 
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
@@ -174,7 +181,6 @@ func (c *Client) AddDaemonLayer() error {
 		c.logger.Fatal().Err(err).Msg("Could not set up JetStream context")
 		return err
 	}
-	c.jsc = jsc
 
 	// until market server is deployed, use NATS as a store
 	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)
@@ -192,21 +198,23 @@ func (c *Client) cleanupClient() error {
 func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
+	c.logger.Info().Msgf("pid: %d", c.Process.PID)
 	// publish state continuously
 	for range ticker.C {
-		c.publishStateOnce()
+		state := c.getState(c.Process.PID)
+		c.publishStateOnce(state)
 	}
 }
 
-func (c *Client) publishStateOnce() {
+func (c *Client) publishStateOnce(state *cedana.CedanaState) {
+	if state == nil {
+		// we got no state, not necessarily an error condition - skip
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	state := c.getState(c.process.PID)
-	if state == nil {
-		// we got no state, not necessarily an error condition - skip this iteration
-		return
-	}
 	data, err := json.Marshal(state)
 	if err != nil {
 		c.logger.Info().Msgf("could not marshal state: %v", err)
@@ -258,16 +266,40 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
 					c.channels.dump_command <- 1
-					c.publishStateOnce()
+
+					state := c.getState(c.Process.PID)
+					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
 					c.channels.restore_command <- cmd
-					c.publishStateOnce()
+
+					state := c.getState(c.Process.PID)
+					c.publishStateOnce(state)
+				} else if cmd.Command == "retry" {
+					msg.Ack()
+					c.channels.recover_command <- cmd
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
 				}
 			}
+		}
+	}
+}
+
+// Function called whenever we enter a failed state and need
+// to wait for a command from the orchestrator to continue/unstuck the system.
+// Ideally we can use this across the board whenever a case props up that requires
+// orchestrator/external intervention.
+// Takes a flag as input, which is used to craft a state to pass to NATS and waits
+// for a signal to exit. Since go blocks until a signal is received, we use a channel.
+func (c *Client) enterDoomLoop() *cedana.ServerCommand {
+	c.publishStateOnce(&c.state)
+	for {
+		select {
+		case cmd := <-c.channels.recover_command:
+			c.logger.Info().Msgf("received recover command")
+			return &cmd
 		}
 	}
 }
@@ -288,6 +320,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	var openFiles []process.OpenFilesStat
 	var writeOnlyFiles []string
 	var openConnections []net.ConnectionStat
+	var flag cedana.Flag
 
 	if p != nil {
 		openFiles, err = p.OpenFiles()
@@ -305,6 +338,13 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 
 	memoryUsed, _ := p.MemoryPercent()
 	isRunning, _ := p.IsRunning()
+
+	// if the process is actually running, we don't care that
+	// we're potentially overriding a failed flag here.
+	// In the case of a restored/resuscitated process this is a good thing
+	if isRunning {
+		flag = cedana.JobRunning
+	}
 
 	// this is the status as returned by gopsutil.
 	// ideally we want more than this, or some parsing to happen from this end
@@ -332,6 +372,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 			Uptime:          h.Uptime,
 			RemainingMemory: m.Available,
 		},
+		Flag:            flag,
 		CheckpointState: c.state.CheckpointState,
 	}
 }
