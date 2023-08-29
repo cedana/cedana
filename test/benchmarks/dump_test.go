@@ -33,6 +33,7 @@ type Benchmarks struct {
 	TotalMemoryUsed    int64
 	ElapsedTimeMs      int64
 	FileSize           int64
+	CmdType            string
 }
 
 // we are skipping ci for now as we are using dump which requires criu, need to build criu on gh action
@@ -92,32 +93,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 	b.Cleanup(
 		func() {
-			// Code to run after the benchmark
-			// Convert the int64 value to bytes
-			valueBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
-
-			zipFile, err := FindZipFiles(dumpDir)
-			if err != nil {
-				b.Errorf("Error in finding zipfile: %v", err)
-			}
-			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
-			if err != nil {
-				b.Errorf("Error in ZipFileSize(): %v", err)
-			}
-
-			filesizeBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
-
-			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-
+			FileIPCCleanup(b, dumpDir, "dump")
 		},
 	)
 }
@@ -149,32 +125,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 	b.Cleanup(
 		func() {
-			// Code to run after the benchmark
-			// Convert the int64 value to bytes
-			valueBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
-
-			zipFile, err := FindZipFiles(dumpDir)
-			if err != nil {
-				b.Errorf("Error in finding zipfile: %v", err)
-			}
-			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
-			if err != nil {
-				b.Errorf("Error in ZipFileSize(): %v", err)
-			}
-
-			filesizeBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
-
-			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-
+			FileIPCCleanup(b, dumpDir, "dump")
 		},
 	)
 }
@@ -207,33 +158,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 	b.Cleanup(
 		func() {
-			// Code to run after the benchmark
-			// Convert the int64 value to bytes
-			valueBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
-
-			zipFile, err := FindZipFiles(dumpDir)
-			if err != nil {
-				b.Errorf("Error in finding zipfile: %v", err)
-			}
-
-			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
-			if err != nil {
-				b.Errorf("Error in ZipFileSize(): %v", err)
-			}
-
-			filesizeBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
-
-			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-
+			FileIPCCleanup(b, dumpDir, "dump")
 		},
 	)
 }
@@ -247,7 +172,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch-vision.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch_vision.pid"})
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
@@ -266,33 +191,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 
 	b.Cleanup(
 		func() {
-			// Code to run after the benchmark
-			// Convert the int64 value to bytes
-			valueBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
-
-			zipFile, err := FindZipFiles(dumpDir)
-			if err != nil {
-				b.Errorf("Error in finding zipfile: %v", err)
-			}
-
-			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
-			if err != nil {
-				b.Errorf("Error in ZipFileSize(): %v", err)
-			}
-
-			filesizeBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
-
-			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-
+			FileIPCCleanup(b, dumpDir, "dump")
 		},
 	)
 }
@@ -308,7 +207,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch-regression.pid"})
+	_, pid, _ := LookForPid(c, []string{"pytorch_regression.pid"})
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
@@ -327,34 +226,43 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 
 	b.Cleanup(
 		func() {
+
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
-			valueBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
 
-			zipFile, err := FindZipFiles(dumpDir)
-			if err != nil {
-				b.Errorf("Error in finding zipfile: %v", err)
-			}
-
-			filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
-			filesizeBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
-			if err != nil {
-				b.Errorf("Error in ZipFileSize(): %v", err)
-			}
-
-			err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
-			err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
-			if err != nil {
-				b.Errorf("Error in os.WriteFile(): %v", err)
-			}
+			// TODO BS Make this dump variable just an enum...
+			FileIPCCleanup(b, dumpDir, "dump")
 
 		},
 	)
+}
+
+func FileIPCCleanup(b *testing.B, dumpDir string, cmdType string) {
+	os.WriteFile("../../benchmarking/temp/type", []byte(cmdType), 0o644)
+
+	valueBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
+
+	zipFile, err := FindZipFiles(dumpDir)
+	if err != nil {
+		b.Errorf("Error in finding zipfile: %v", err)
+	}
+
+	filesize, err := ZipFileSize(fmt.Sprintf("%v/%v", dumpDir, zipFile))
+	filesizeBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(filesizeBytes, uint64(filesize))
+	if err != nil {
+		b.Errorf("Error in ZipFileSize(): %v", err)
+	}
+
+	err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
+	if err != nil {
+		b.Errorf("Error in os.WriteFile(): %v", err)
+	}
+	err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
+	if err != nil {
+		b.Errorf("Error in os.WriteFile(): %v", err)
+	}
 }
 
 func ZipFileSize(filePath string) (int64, error) {
@@ -492,7 +400,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -506,13 +414,27 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 		totalMemoryUsed += sample.Value[1]
 	}
 
+	parts := strings.FieldsFunc(programName, func(r rune) bool {
+		return r == '-'
+	})
+
+	// Take the first part from the split result
+	prefix := parts[0]
+
+	parts = strings.FieldsFunc(prefix, func(r rune) bool {
+		return r == '/'
+	})
+
+	prefix = parts[len(parts)-1]
+
 	cj := Benchmarks{
 		ID:                 id.String(),
-		ProcessName:        programName,
+		ProcessName:        prefix,
 		TimeToCompleteInNS: timeToComplete,
 		TotalMemoryUsed:    totalMemoryUsed,
 		ElapsedTimeMs:      elapsedTime,
 		FileSize:           fileSize,
+		CmdType:            cmdType,
 	}
 	db.orm.Create(&cj)
 
@@ -553,7 +475,17 @@ func finalCleanup() {
 
 	fileNames, pid, _ := LookForPid(c, pids)
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"))
+	if len(fileNames) == 0 {
+		return
+	}
+
+	cmdType, _ := os.ReadFile("../../benchmarking/temp/type")
+
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"), string(cmdType))
+
+	if len(pid) == 0 {
+		return
+	}
 
 	// Kill the processes
 	for _, pid := range pid {

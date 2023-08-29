@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Number of iterations
-num_iterations=20
+read -p "Enter # of iterations: " num_iterations
 
 # Get the start time
 start_time=$(date +%s)
@@ -65,6 +65,8 @@ done
 # Change back to the original directory
 cd "$current_dir" || exit
 
+# Get the CPU model name
+# grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f 2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > benchmarking/temp/cpu.txt
 
 for ((i = 1; i <= num_iterations; i++)); do
     ./test/benchmarks/run_benchmarks.sh &
