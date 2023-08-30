@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -171,6 +173,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	opts.TcpEstablished = proto.Bool(hasTCP)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 
+	opts.FileLocks = proto.Bool(true)
+
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
 	var isShellJob bool
@@ -249,6 +253,26 @@ func (c *Client) copyOpenFiles(dir string) error {
 	}
 
 	return nil
+}
+
+func (c *Client) checkFileLocks(pid int32) bool {
+	for _, fd := range c.Process.OpenFds {
+		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
+		if err != nil {
+			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+			continue
+		}
+		if strings.Contains(string(info), "fl:") {
+			flIndex := strings.Index(string(info), "fl:")
+
+			flValue := strings.TrimSpace(string(info)[flIndex+3 : flIndex+11])
+			if flValue != "0" {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (c *Client) postDump(dumpdir string) {

@@ -138,8 +138,10 @@ func (c *Client) runTask(task string) (int32, error) {
 		return 0, fmt.Errorf("could not find task in config")
 	}
 
-	// validation of the task happens at the server level,
-	// so there's no real concerns here about executing the task without proper validation
+	r, w, err := os.Pipe()
+	if err != nil {
+		return 0, err
+	}
 
 	// we want the task to run detached so we can checkpoint it
 	cmd := exec.Command("/bin/sh", "-c", task)
@@ -147,11 +149,16 @@ func (c *Client) runTask(task string) (int32, error) {
 		Setsid: true,
 	}
 
+	cmd.Stdout = w
+	cmd.Stderr = w
+
 	if err := cmd.Start(); err != nil {
 		return 0, err
 	}
 
 	pid = int32(cmd.Process.Pid)
+
+	go c.publishLogs(r)
 
 	return pid, nil
 }

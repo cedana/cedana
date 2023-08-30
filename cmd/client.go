@@ -60,6 +60,13 @@ type CommandChannels struct {
 	recover_command chan cedana.ServerCommand
 }
 
+type ClientLogs struct {
+	Timestamp string `json:"timestamp"`
+	Source    string `json:"source"`
+	Level     string `json:"level"`
+	Msg       string `json:"msg"`
+}
+
 var clientCommand = &cobra.Command{
 	Use:   "client",
 	Short: "Directly dump/restore a process or start a daemon",
@@ -203,6 +210,38 @@ func (c *Client) publishStateContinuous(rate int) {
 	for range ticker.C {
 		state := c.getState(c.Process.PID)
 		c.publishStateOnce(state)
+	}
+}
+
+func (c *Client) publishLogs(r *os.File) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*60*time.Second)
+	defer cancel()
+
+	buf := make([]byte, 4096)
+	for {
+		// add rate limiter
+		n, err := r.Read(buf)
+		if err != nil {
+			break
+		}
+		logEntry := &ClientLogs{
+			Timestamp: time.Now().Local().Format(time.RFC3339),
+			Source:    c.selfId,
+			Level:     "INFO",
+			Msg:       string(buf[:n]),
+		}
+
+		data, err := json.Marshal(logEntry)
+		if err != nil {
+			c.logger.Info().Msgf("could not marshal log entry: %v", err)
+			continue
+		}
+
+		_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
+		if err != nil {
+			c.logger.Info().Msgf("could not publish log entry: %v", err)
+		}
+
 	}
 }
 
