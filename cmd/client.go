@@ -20,6 +20,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
 )
@@ -217,31 +218,34 @@ func (c *Client) publishLogs(r *os.File) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*60*time.Second)
 	defer cancel()
 
+	// Limiting to 5 every 10 seconds
+	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
+
 	buf := make([]byte, 4096)
 	for {
-		// add rate limiter
 		n, err := r.Read(buf)
 		if err != nil {
 			break
 		}
-		logEntry := &ClientLogs{
-			Timestamp: time.Now().Local().Format(time.RFC3339),
-			Source:    c.selfId,
-			Level:     "INFO",
-			Msg:       string(buf[:n]),
-		}
+		if limiter.Allow() {
+			logEntry := &ClientLogs{
+				Timestamp: time.Now().Local().Format(time.RFC3339),
+				Source:    c.selfId,
+				Level:     "INFO",
+				Msg:       string(buf[:n]),
+			}
 
-		data, err := json.Marshal(logEntry)
-		if err != nil {
-			c.logger.Info().Msgf("could not marshal log entry: %v", err)
-			continue
-		}
+			data, err := json.Marshal(logEntry)
+			if err != nil {
+				c.logger.Info().Msgf("could not marshal log entry: %v", err)
+				continue
+			}
 
-		_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
-		if err != nil {
-			c.logger.Info().Msgf("could not publish log entry: %v", err)
+			_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
+			if err != nil {
+				c.logger.Info().Msgf("could not publish log entry: %v", err)
+			}
 		}
-
 	}
 }
 
