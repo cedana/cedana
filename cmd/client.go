@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/utils"
@@ -456,6 +457,47 @@ func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []stri
 		}
 	}
 	return paths
+}
+
+// In the case where a program is execed from the daemon, we need to close FDs in common
+// because without some complicated mechanics (like forking a shell process and then execing the task inside it)
+// it's super difficult to fully detach a new process from Go.
+// With ForkExec (see client-daemon.go) we get 90% of the way there, the last 10% is in finding the
+// common FDs with the parent process and closing them.
+func (c *Client) closeCommonFds(parentPID, childPID int32) error {
+	parent, err := process.NewProcess(parentPID)
+	if err != nil {
+		return err
+	}
+
+	child, err := process.NewProcess(childPID)
+	if err != nil {
+		return err
+	}
+
+	parentFds, err := parent.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	childFds, err := child.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, pfd := range parentFds {
+		for _, cfd := range childFds {
+			if pfd.Path == cfd.Path {
+				// we have a match, close the FD
+				c.logger.Info().Msgf("closing common FD parent: %s, child: %s", pfd.Path, cfd.Path)
+				err := syscall.Close(int(cfd.Fd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option {

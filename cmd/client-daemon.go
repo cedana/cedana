@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
 
@@ -138,25 +137,32 @@ func (c *Client) runTask(task string) (int32, error) {
 		return 0, fmt.Errorf("could not find task in config")
 	}
 
+	// need a more resilient/retriable way of doing this
 	r, w, err := os.Pipe()
 	if err != nil {
 		return 0, err
 	}
 
-	// we want the task to run detached so we can checkpoint it
-	cmd := exec.Command("/bin/sh", "-c", task)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
+	// An ampersand at the end of the task backgrounds it, making the shell
+	// spawned by go to exit immediately and leave us with a defunct process.
+	// Go then captures that defunct PID which is no good.
+	// TODO NR - catch for ampersands? Or think of a better way of doing this.
+
+	attr := &syscall.ProcAttr{
+		Files: []uintptr{os.Stdin.Fd(), w.Fd(), w.Fd()}, // Stdin, Stdout, Stderr
+		Sys:   &syscall.SysProcAttr{Setsid: true},
 	}
 
-	cmd.Stdout = w
-	cmd.Stderr = w
-
-	if err := cmd.Start(); err != nil {
+	argv := []string{"-c", task}
+	p, err := syscall.ForkExec("/bin/sh", argv, attr)
+	if err != nil {
 		return 0, err
 	}
 
-	pid = int32(cmd.Process.Pid)
+	pid = int32(p)
+	ppid := int32(os.Getpid())
+
+	c.closeCommonFds(ppid, pid)
 
 	go c.publishLogs(r)
 
