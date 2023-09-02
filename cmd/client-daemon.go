@@ -138,7 +138,7 @@ func (c *Client) runTask(task string) (int32, error) {
 	}
 
 	// need a more resilient/retriable way of doing this
-	r, w, err := os.Pipe()
+	r, _, err := os.Pipe()
 	if err != nil {
 		return 0, err
 	}
@@ -149,7 +149,7 @@ func (c *Client) runTask(task string) (int32, error) {
 	// TODO NR - catch for ampersands? Or think of a better way of doing this.
 
 	attr := &syscall.ProcAttr{
-		Files: []uintptr{os.Stdin.Fd(), w.Fd(), w.Fd()}, // Stdin, Stdout, Stderr
+		Files: nil,
 		Sys:   &syscall.SysProcAttr{Setsid: true},
 	}
 

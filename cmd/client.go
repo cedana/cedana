@@ -464,6 +464,7 @@ func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []stri
 // it's super difficult to fully detach a new process from Go.
 // With ForkExec (see client-daemon.go) we get 90% of the way there, the last 10% is in finding the
 // common FDs with the parent process and closing them.
+// For an MVP/hack for now, just close the .pid file created by the daemon, which seems to be the problem child
 func (c *Client) closeCommonFds(parentPID, childPID int32) error {
 	parent, err := process.NewProcess(parentPID)
 	if err != nil {
@@ -487,7 +488,7 @@ func (c *Client) closeCommonFds(parentPID, childPID int32) error {
 
 	for _, pfd := range parentFds {
 		for _, cfd := range childFds {
-			if pfd.Path == cfd.Path {
+			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
 				// we have a match, close the FD
 				c.logger.Info().Msgf("closing common FD parent: %s, child: %s", pfd.Path, cfd.Path)
 				err := syscall.Close(int(cfd.Fd))
