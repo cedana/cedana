@@ -164,7 +164,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 
 func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(4),
+		LogLevel:       proto.Int32(2),
 		LogFile:        proto.String("restore.log"),
 		TcpEstablished: proto.Bool(true),
 	}

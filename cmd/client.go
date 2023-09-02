@@ -12,6 +12,7 @@ import (
 
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
+	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
@@ -273,17 +274,25 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	cons, err := c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
-		AckPolicy: jetstream.AckExplicitPolicy,
-		// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
-		// we get a message even if the consumer hasn't been created yet.
+	r := retrier.New(retrier.ExponentialBackoff(10, 5*time.Second), nil)
 
-		// this is especially useful for cases where we restore onto a fresh instance and there's some
-		// lag or delay in instantiation. Since it's tied to the self-id there's no chance a new instance
-		// gets the command of a destroyed/revoked one.
-		DeliverPolicy: jetstream.DeliverLastPerSubjectPolicy,
-		FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
-	})
+	var cons jetstream.Consumer
+	var err error
+	err = r.Run(func() error {
+		cons, err = c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
+			AckPolicy: jetstream.AckExplicitPolicy,
+			// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
+			// we get a message even if the consumer hasn't been created yet.
+
+			// this is especially useful for cases where we restore onto a fresh instance and there's some
+			// lag or delay in instantiation. Since it's tied to the self-id there's no chance a new instance
+			// gets the command of a destroyed/revoked one.
+			DeliverPolicy: jetstream.DeliverLastPerSubjectPolicy,
+			FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
+		})
+		return err
+	},
+	)
 
 	if err != nil {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
