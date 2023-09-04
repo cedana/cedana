@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -57,10 +58,32 @@ type Client struct {
 	store utils.Store
 }
 
+type Broadcaster[T any] struct {
+	subscribers []chan T
+	mu          sync.Mutex
+}
+
+func (b *Broadcaster[T]) Subscribe() chan T {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	ch := make(chan T)
+	b.subscribers = append(b.subscribers, ch)
+	return ch
+}
+
+func (b *Broadcaster[T]) Broadcast(data T) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, ch := range b.subscribers {
+		ch <- data
+	}
+}
+
 type CommandChannels struct {
-	dump_command    chan int
-	restore_command chan cedana.ServerCommand
-	recover_command chan cedana.ServerCommand
+	dumpServerCmd    Broadcaster[int]
+	restoreServerCmd Broadcaster[cedana.ServerCommand]
+	retryServerCmd   Broadcaster[cedana.ServerCommand]
+	preDumpChan      Broadcaster[int]
 }
 
 type ClientLogs struct {
@@ -103,13 +126,11 @@ func InstantiateClient() (*Client, error) {
 	}
 
 	// set up channels for daemon to listen on
-	dump_command := make(chan int)
-	restore_command := make(chan cedana.ServerCommand)
-	recover_command := make(chan cedana.ServerCommand)
 	channels := &CommandChannels{
-		dump_command,
-		restore_command,
-		recover_command,
+		dumpServerCmd:    Broadcaster[int]{},
+		restoreServerCmd: Broadcaster[cedana.ServerCommand]{},
+		retryServerCmd:   Broadcaster[cedana.ServerCommand]{},
+		preDumpChan:      Broadcaster[int]{},
 	}
 
 	// set up filesystem wrapper
@@ -280,14 +301,8 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	var err error
 	err = r.Run(func() error {
 		cons, err = c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
-			AckPolicy: jetstream.AckExplicitPolicy,
-			// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
-			// we get a message even if the consumer hasn't been created yet.
-
-			// this is especially useful for cases where we restore onto a fresh instance and there's some
-			// lag or delay in instantiation. Since it's tied to the self-id there's no chance a new instance
-			// gets the command of a destroyed/revoked one.
-			DeliverPolicy: jetstream.DeliverLastPerSubjectPolicy,
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			DeliverPolicy: jetstream.DeliverNewPolicy,
 			FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
 		})
 		return err
@@ -318,19 +333,17 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				c.logger.Info().Msgf("received command: %v", cmd)
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
-					c.channels.dump_command <- 1
-
+					c.channels.dumpServerCmd.Broadcast(1)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
-					c.channels.restore_command <- cmd
-
+					c.channels.restoreServerCmd.Broadcast(cmd)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "retry" {
 					msg.Ack()
-					c.channels.recover_command <- cmd
+					c.channels.retryServerCmd.Broadcast(cmd)
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
@@ -347,10 +360,11 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 // Takes a flag as input, which is used to craft a state to pass to NATS and waits
 // for a signal to exit. Since go blocks until a signal is received, we use a channel.
 func (c *Client) enterDoomLoop() *cedana.ServerCommand {
+	retryChn := c.channels.retryServerCmd.Subscribe()
 	c.publishStateOnce(&c.state)
 	for {
 		select {
-		case cmd := <-c.channels.recover_command:
+		case cmd := <-retryChn:
 			c.logger.Info().Msgf("received recover command")
 			return &cmd
 		}

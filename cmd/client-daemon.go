@@ -90,8 +90,10 @@ var clientDaemonCmd = &cobra.Command{
 
 		go c.publishStateContinuous(30)
 
-		// start daemon worker
-		go c.startDaemon(pid)
+		// start daemon worker with state subscribers
+		dumpChn := c.channels.dumpServerCmd.Subscribe()
+		restoreChn := c.channels.restoreServerCmd.Subscribe()
+		go c.startDaemon(pid, dumpChn, restoreChn)
 
 		err = gd.ServeSignals()
 		if err != nil {
@@ -138,7 +140,7 @@ func (c *Client) runTask(task string) (int32, error) {
 	}
 
 	// need a more resilient/retriable way of doing this
-	r, _, err := os.Pipe()
+	r, w, err := os.Pipe()
 	if err != nil {
 		return 0, err
 	}
@@ -149,7 +151,10 @@ func (c *Client) runTask(task string) (int32, error) {
 	// TODO NR - catch for ampersands? Or think of a better way of doing this.
 
 	attr := &syscall.ProcAttr{
-		Files: nil,
+		// with pipes defined, CRIU thinks that it's inheriting from a tty.
+		// what's a good workaround?
+		// What if we close them right before CRIU is run?
+		Files: []uintptr{os.Stdin.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
 		Sys:   &syscall.SysProcAttr{Setsid: true},
 	}
 
@@ -169,11 +174,11 @@ func (c *Client) runTask(task string) (int32, error) {
 	return pid, nil
 }
 
-func (c *Client) startDaemon(pid int32) {
+func (c *Client) startDaemon(pid int32, dumpChn chan int, restoreChn chan cedana.ServerCommand) {
 LOOP:
 	for {
 		select {
-		case <-c.channels.dump_command:
+		case <-dumpChn:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
 			err := c.Dump(dir)
 			if err != nil {
@@ -185,7 +190,7 @@ LOOP:
 			c.state.CheckpointState = cedana.CheckpointSuccess
 			c.publishStateOnce(c.getState(c.Process.PID))
 
-		case cmd := <-c.channels.restore_command:
+		case cmd := <-restoreChn:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.Restore(&cmd, nil)
