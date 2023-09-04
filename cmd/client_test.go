@@ -129,7 +129,7 @@ func TestClient_TryStartJob(t *testing.T) {
 				},
 			},
 			channels: &CommandChannels{
-				recover_command: make(chan cedana.ServerCommand),
+				retryServerCmd: Broadcaster[cedana.ServerCommand]{},
 			},
 			logger: &logger,
 			// enterDoomLoop() makes a JetStream call
@@ -149,9 +149,9 @@ func mockServerRetryCmd(c *Client) {
 	// wait 30 seconds and fire a message on the recover channel
 	// that breaks enterDoomLoop(), to update the runTask() for loop
 	time.Sleep(10 * time.Second)
-	c.channels.recover_command <- cedana.ServerCommand{
+	c.channels.retryServerCmd.Broadcast(cedana.ServerCommand{
 		UpdatedTask: "echo 'Hello, World!'",
-	}
+	})
 }
 
 func contains(paths []string, path string) bool {
