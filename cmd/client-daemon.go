@@ -145,16 +145,13 @@ func (c *Client) runTask(task string) (int32, error) {
 		return 0, err
 	}
 
-	// An ampersand at the end of the task backgrounds it, making the shell
-	// spawned by go to exit immediately and leave us with a defunct process.
-	// Go then captures that defunct PID which is no good.
-	// TODO NR - catch for ampersands? Or think of a better way of doing this.
+	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
 
 	attr := &syscall.ProcAttr{
-		// with pipes defined, CRIU thinks that it's inheriting from a tty.
-		// what's a good workaround?
-		// What if we close them right before CRIU is run?
-		Files: []uintptr{os.Stdin.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
+		Files: []uintptr{nullFile.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
 		Sys:   &syscall.SysProcAttr{Setsid: true},
 	}
 
@@ -169,7 +166,7 @@ func (c *Client) runTask(task string) (int32, error) {
 
 	c.closeCommonFds(ppid, pid)
 
-	go c.publishLogs(r)
+	go c.publishLogs(r, w)
 
 	return pid, nil
 }

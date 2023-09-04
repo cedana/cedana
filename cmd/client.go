@@ -237,36 +237,45 @@ func (c *Client) publishStateContinuous(rate int) {
 	}
 }
 
-func (c *Client) publishLogs(r *os.File) {
+func (c *Client) publishLogs(r, w *os.File) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*60*time.Second)
 	defer cancel()
+
+	// we want to close this pipe prior to a checkpoint
+	preDumpChn := c.channels.preDumpChan.Subscribe()
 
 	// Limiting to 5 every 10 seconds
 	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
 
 	buf := make([]byte, 4096)
 	for {
-		n, err := r.Read(buf)
-		if err != nil {
-			break
-		}
-		if limiter.Allow() {
-			logEntry := &ClientLogs{
-				Timestamp: time.Now().Local().Format(time.RFC3339),
-				Source:    c.selfId,
-				Level:     "INFO",
-				Msg:       string(buf[:n]),
-			}
-
-			data, err := json.Marshal(logEntry)
+		select {
+		case <-preDumpChn:
+			w.Close()
+			r.Close()
+		default:
+			n, err := r.Read(buf)
 			if err != nil {
-				c.logger.Info().Msgf("could not marshal log entry: %v", err)
-				continue
+				break
 			}
+			if limiter.Allow() {
+				logEntry := &ClientLogs{
+					Timestamp: time.Now().Local().Format(time.RFC3339),
+					Source:    c.selfId,
+					Level:     "INFO",
+					Msg:       string(buf[:n]),
+				}
 
-			_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
-			if err != nil {
-				c.logger.Info().Msgf("could not publish log entry: %v", err)
+				data, err := json.Marshal(logEntry)
+				if err != nil {
+					c.logger.Info().Msgf("could not marshal log entry: %v", err)
+					continue
+				}
+
+				_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
+				if err != nil {
+					c.logger.Info().Msgf("could not publish log entry: %v", err)
+				}
 			}
 		}
 	}
