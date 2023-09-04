@@ -238,9 +238,6 @@ func (c *Client) publishStateContinuous(rate int) {
 }
 
 func (c *Client) publishLogs(r, w *os.File) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*60*time.Second)
-	defer cancel()
-
 	// we want to close this pipe prior to a checkpoint
 	preDumpChn := c.channels.preDumpChan.Subscribe()
 
@@ -272,7 +269,8 @@ func (c *Client) publishLogs(r, w *os.File) {
 					continue
 				}
 
-				_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
+				// we don't care about acks for logs right now
+				_, err = c.js.PublishAsync(strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
 				if err != nil {
 					c.logger.Info().Msgf("could not publish log entry: %v", err)
 				}
