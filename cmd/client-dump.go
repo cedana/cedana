@@ -232,7 +232,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	c.copyOpenFiles(checkpointFolderPath)
 	c.state.CheckpointType = cedana.CheckpointTypeCRIU
 
-	c.channels.preDumpChan.Broadcast(1)
+	c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }
