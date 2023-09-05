@@ -1,5 +1,5 @@
 #!/bin/bash 
-TASK="./test.sh"
+TASK="./test/test.sh"
 CEDANA_CONFIG="{\"client\":{\"task\":\"$TASK\",\"leave_running\":false,\"signal_process_pre_dump\":false,\"signal_process_timeout\":0}}" 
 
 # move existing config to backup 

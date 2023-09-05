@@ -7,10 +7,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
+	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
@@ -20,6 +23,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
 )
@@ -54,10 +58,39 @@ type Client struct {
 	store utils.Store
 }
 
+type Broadcaster[T any] struct {
+	subscribers []chan T
+	mu          sync.Mutex
+}
+
+func (b *Broadcaster[T]) Subscribe() chan T {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	ch := make(chan T)
+	b.subscribers = append(b.subscribers, ch)
+	return ch
+}
+
+func (b *Broadcaster[T]) Broadcast(data T) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, ch := range b.subscribers {
+		ch <- data
+	}
+}
+
 type CommandChannels struct {
-	dump_command    chan int
-	restore_command chan cedana.ServerCommand
-	recover_command chan cedana.ServerCommand
+	dumpCmdBroadcaster    Broadcaster[int]
+	restoreCmdBroadcaster Broadcaster[cedana.ServerCommand]
+	retryCmdBroadcaster   Broadcaster[cedana.ServerCommand]
+	preDumpBroadcaster    Broadcaster[int]
+}
+
+type ClientLogs struct {
+	Timestamp string `json:"timestamp"`
+	Source    string `json:"source"`
+	Level     string `json:"level"`
+	Msg       string `json:"msg"`
 }
 
 var clientCommand = &cobra.Command{
@@ -93,13 +126,11 @@ func InstantiateClient() (*Client, error) {
 	}
 
 	// set up channels for daemon to listen on
-	dump_command := make(chan int)
-	restore_command := make(chan cedana.ServerCommand)
-	recover_command := make(chan cedana.ServerCommand)
 	channels := &CommandChannels{
-		dump_command,
-		restore_command,
-		recover_command,
+		dumpCmdBroadcaster:    Broadcaster[int]{},
+		restoreCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
+		retryCmdBroadcaster:   Broadcaster[cedana.ServerCommand]{},
+		preDumpBroadcaster:    Broadcaster[int]{},
 	}
 
 	// set up filesystem wrapper
@@ -206,6 +237,48 @@ func (c *Client) publishStateContinuous(rate int) {
 	}
 }
 
+func (c *Client) publishLogs(r, w *os.File) {
+	// we want to close this pipe prior to a checkpoint
+	preDumpChn := c.channels.preDumpBroadcaster.Subscribe()
+
+	// Limiting to 5 every 10 seconds
+	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
+
+	buf := make([]byte, 4096)
+	for {
+		select {
+		case <-preDumpChn:
+			w.Close()
+			r.Close()
+		default:
+			n, err := r.Read(buf)
+			if err != nil {
+				break
+			}
+			if limiter.Allow() {
+				logEntry := &ClientLogs{
+					Timestamp: time.Now().Local().Format(time.RFC3339),
+					Source:    c.selfId,
+					Level:     "INFO",
+					Msg:       string(buf[:n]),
+				}
+
+				data, err := json.Marshal(logEntry)
+				if err != nil {
+					c.logger.Info().Msgf("could not marshal log entry: %v", err)
+					continue
+				}
+
+				// we don't care about acks for logs right now
+				_, err = c.js.PublishAsync(strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
+				if err != nil {
+					c.logger.Info().Msgf("could not publish log entry: %v", err)
+				}
+			}
+		}
+	}
+}
+
 func (c *Client) publishStateOnce(state *cedana.CedanaState) {
 	if state == nil {
 		// we got no state, not necessarily an error condition - skip
@@ -229,17 +302,19 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	cons, err := c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
-		AckPolicy: jetstream.AckExplicitPolicy,
-		// lastPerSubjectPolicy ensures that if there's a race between the publisher and the client,
-		// we get a message even if the consumer hasn't been created yet.
+	r := retrier.New(retrier.ExponentialBackoff(10, 5*time.Second), nil)
 
-		// this is especially useful for cases where we restore onto a fresh instance and there's some
-		// lag or delay in instantiation. Since it's tied to the self-id there's no chance a new instance
-		// gets the command of a destroyed/revoked one.
-		DeliverPolicy: jetstream.DeliverLastPerSubjectPolicy,
-		FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
-	})
+	var cons jetstream.Consumer
+	var err error
+	err = r.Run(func() error {
+		cons, err = c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			DeliverPolicy: jetstream.DeliverNewPolicy,
+			FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
+		})
+		return err
+	},
+	)
 
 	if err != nil {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
@@ -265,19 +340,17 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				c.logger.Info().Msgf("received command: %v", cmd)
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
-					c.channels.dump_command <- 1
-
+					c.channels.dumpCmdBroadcaster.Broadcast(1)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
-					c.channels.restore_command <- cmd
-
+					c.channels.restoreCmdBroadcaster.Broadcast(cmd)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "retry" {
 					msg.Ack()
-					c.channels.recover_command <- cmd
+					c.channels.retryCmdBroadcaster.Broadcast(cmd)
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
@@ -294,10 +367,11 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 // Takes a flag as input, which is used to craft a state to pass to NATS and waits
 // for a signal to exit. Since go blocks until a signal is received, we use a channel.
 func (c *Client) enterDoomLoop() *cedana.ServerCommand {
+	retryChn := c.channels.retryCmdBroadcaster.Subscribe()
 	c.publishStateOnce(&c.state)
 	for {
 		select {
-		case cmd := <-c.channels.recover_command:
+		case cmd := <-retryChn:
 			c.logger.Info().Msgf("received recover command")
 			return &cmd
 		}
@@ -413,6 +487,48 @@ func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []stri
 		}
 	}
 	return paths
+}
+
+// In the case where a program is execed from the daemon, we need to close FDs in common
+// because without some complicated mechanics (like forking a shell process and then execing the task inside it)
+// it's super difficult to fully detach a new process from Go.
+// With ForkExec (see client-daemon.go) we get 90% of the way there, the last 10% is in finding the
+// common FDs with the parent process and closing them.
+// For an MVP/hack for now, just close the .pid file created by the daemon, which seems to be the problem child
+func (c *Client) closeCommonFds(parentPID, childPID int32) error {
+	parent, err := process.NewProcess(parentPID)
+	if err != nil {
+		return err
+	}
+
+	child, err := process.NewProcess(childPID)
+	if err != nil {
+		return err
+	}
+
+	parentFds, err := parent.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	childFds, err := child.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, pfd := range parentFds {
+		for _, cfd := range childFds {
+			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
+				// we have a match, close the FD
+				c.logger.Info().Msgf("closing common FD parent: %s, child: %s", pfd.Path, cfd.Path)
+				err := syscall.Close(int(cfd.Fd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option {

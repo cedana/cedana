@@ -20,7 +20,6 @@ import (
 var dir string
 var pid int32
 
-// used for pid comms
 const (
 	sys_pidfd_send_signal = 424
 	sys_pidfd_open        = 434
@@ -171,6 +170,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	opts.TcpEstablished = proto.Bool(hasTCP)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 
+	opts.FileLocks = proto.Bool(true)
+
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
 	var isShellJob bool
@@ -230,6 +231,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 
 	c.copyOpenFiles(checkpointFolderPath)
 	c.state.CheckpointType = cedana.CheckpointTypeCRIU
+
+	c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }

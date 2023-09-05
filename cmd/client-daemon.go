@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
 
@@ -91,8 +90,10 @@ var clientDaemonCmd = &cobra.Command{
 
 		go c.publishStateContinuous(30)
 
-		// start daemon worker
-		go c.startDaemon(pid)
+		// start daemon worker with state subscribers
+		dumpChn := c.channels.dumpCmdBroadcaster.Subscribe()
+		restoreChn := c.channels.restoreCmdBroadcaster.Subscribe()
+		go c.startDaemon(pid, dumpChn, restoreChn)
 
 		err = gd.ServeSignals()
 		if err != nil {
@@ -138,29 +139,43 @@ func (c *Client) runTask(task string) (int32, error) {
 		return 0, fmt.Errorf("could not find task in config")
 	}
 
-	// validation of the task happens at the server level,
-	// so there's no real concerns here about executing the task without proper validation
-
-	// we want the task to run detached so we can checkpoint it
-	cmd := exec.Command("/bin/sh", "-c", task)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
-
-	if err := cmd.Start(); err != nil {
+	// need a more resilient/retriable way of doing this
+	r, w, err := os.Pipe()
+	if err != nil {
 		return 0, err
 	}
 
-	pid = int32(cmd.Process.Pid)
+	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	attr := &syscall.ProcAttr{
+		Files: []uintptr{nullFile.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
+		Sys:   &syscall.SysProcAttr{Setsid: true},
+	}
+
+	argv := []string{"-c", task}
+	p, err := syscall.ForkExec("/bin/sh", argv, attr)
+	if err != nil {
+		return 0, err
+	}
+
+	pid = int32(p)
+	ppid := int32(os.Getpid())
+
+	c.closeCommonFds(ppid, pid)
+
+	go c.publishLogs(r, w)
 
 	return pid, nil
 }
 
-func (c *Client) startDaemon(pid int32) {
+func (c *Client) startDaemon(pid int32, dumpChn chan int, restoreChn chan cedana.ServerCommand) {
 LOOP:
 	for {
 		select {
-		case <-c.channels.dump_command:
+		case <-dumpChn:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
 			err := c.Dump(dir)
 			if err != nil {
@@ -172,7 +187,7 @@ LOOP:
 			c.state.CheckpointState = cedana.CheckpointSuccess
 			c.publishStateOnce(c.getState(c.Process.PID))
 
-		case cmd := <-c.channels.restore_command:
+		case cmd := <-restoreChn:
 			// same here - want the restore to be retriable in the future, so makes sense not to blow it up
 			c.logger.Info().Msg("received restore command from the NATS server")
 			err := c.Restore(&cmd, nil)
