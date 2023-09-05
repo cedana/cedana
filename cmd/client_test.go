@@ -129,7 +129,7 @@ func TestClient_TryStartJob(t *testing.T) {
 				},
 			},
 			channels: &CommandChannels{
-				retryServerCmd: Broadcaster[cedana.ServerCommand]{},
+				retryCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
 			},
 			logger: &logger,
 			// enterDoomLoop() makes a JetStream call
@@ -149,7 +149,7 @@ func mockServerRetryCmd(c *Client) {
 	// wait 30 seconds and fire a message on the recover channel
 	// that breaks enterDoomLoop(), to update the runTask() for loop
 	time.Sleep(10 * time.Second)
-	c.channels.retryServerCmd.Broadcast(cedana.ServerCommand{
+	c.channels.retryCmdBroadcaster.Broadcast(cedana.ServerCommand{
 		UpdatedTask: "echo 'Hello, World!'",
 	})
 }

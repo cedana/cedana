@@ -91,8 +91,8 @@ var clientDaemonCmd = &cobra.Command{
 		go c.publishStateContinuous(30)
 
 		// start daemon worker with state subscribers
-		dumpChn := c.channels.dumpServerCmd.Subscribe()
-		restoreChn := c.channels.restoreServerCmd.Subscribe()
+		dumpChn := c.channels.dumpCmdBroadcaster.Subscribe()
+		restoreChn := c.channels.restoreCmdBroadcaster.Subscribe()
 		go c.startDaemon(pid, dumpChn, restoreChn)
 
 		err = gd.ServeSignals()

@@ -80,10 +80,10 @@ func (b *Broadcaster[T]) Broadcast(data T) {
 }
 
 type CommandChannels struct {
-	dumpServerCmd    Broadcaster[int]
-	restoreServerCmd Broadcaster[cedana.ServerCommand]
-	retryServerCmd   Broadcaster[cedana.ServerCommand]
-	preDumpChan      Broadcaster[int]
+	dumpCmdBroadcaster    Broadcaster[int]
+	restoreCmdBroadcaster Broadcaster[cedana.ServerCommand]
+	retryCmdBroadcaster   Broadcaster[cedana.ServerCommand]
+	preDumpBroadcaster    Broadcaster[int]
 }
 
 type ClientLogs struct {
@@ -127,10 +127,10 @@ func InstantiateClient() (*Client, error) {
 
 	// set up channels for daemon to listen on
 	channels := &CommandChannels{
-		dumpServerCmd:    Broadcaster[int]{},
-		restoreServerCmd: Broadcaster[cedana.ServerCommand]{},
-		retryServerCmd:   Broadcaster[cedana.ServerCommand]{},
-		preDumpChan:      Broadcaster[int]{},
+		dumpCmdBroadcaster:    Broadcaster[int]{},
+		restoreCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
+		retryCmdBroadcaster:   Broadcaster[cedana.ServerCommand]{},
+		preDumpBroadcaster:    Broadcaster[int]{},
 	}
 
 	// set up filesystem wrapper
@@ -239,7 +239,7 @@ func (c *Client) publishStateContinuous(rate int) {
 
 func (c *Client) publishLogs(r, w *os.File) {
 	// we want to close this pipe prior to a checkpoint
-	preDumpChn := c.channels.preDumpChan.Subscribe()
+	preDumpChn := c.channels.preDumpBroadcaster.Subscribe()
 
 	// Limiting to 5 every 10 seconds
 	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
@@ -340,17 +340,17 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				c.logger.Info().Msgf("received command: %v", cmd)
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
-					c.channels.dumpServerCmd.Broadcast(1)
+					c.channels.dumpCmdBroadcaster.Broadcast(1)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
-					c.channels.restoreServerCmd.Broadcast(cmd)
+					c.channels.restoreCmdBroadcaster.Broadcast(cmd)
 					state := c.getState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "retry" {
 					msg.Ack()
-					c.channels.retryServerCmd.Broadcast(cmd)
+					c.channels.retryCmdBroadcaster.Broadcast(cmd)
 				} else {
 					c.logger.Info().Msgf("received unknown command: %v", cmd)
 					msg.Ack()
@@ -367,7 +367,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 // Takes a flag as input, which is used to craft a state to pass to NATS and waits
 // for a signal to exit. Since go blocks until a signal is received, we use a channel.
 func (c *Client) enterDoomLoop() *cedana.ServerCommand {
-	retryChn := c.channels.retryServerCmd.Subscribe()
+	retryChn := c.channels.retryCmdBroadcaster.Subscribe()
 	c.publishStateOnce(&c.state)
 	for {
 		select {
