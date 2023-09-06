@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package cedanarpc;
+
+option go_package = "github.com/cedana/cedana/cedanarpc";
+
+enum CheckpointType {
+    CHECKPOINT_TYPE_NONE = 0;
+    CHECKPOINT_TYPE_CRIU = 1;
+    CHECKPOINT_TYPE_PYTORCH = 2;
+}
+
+enum CheckpointState {
+    CHECKPOINT_STATE_CHECKPOINT_SUCCESS = 0;
+    CHECKPOINT_STATE_CHECKPOINT_FAILED = 1;
+    CHECKPOINT_STATE_RESTORE_SUCCESS = 2;
+    CHECKPOINT_STATE_RESTORE_FAILED = 3;
+}
+
+enum Flag {
+    FLAG_JOB_STARTUP_FAILED = 0;
+    FLAG_JOB_KILLED = 1;
+    FLAG_JOB_IDLE = 2;
+    FLAG_JOB_RUNNING = 3;
+    FLAG_JOB_PENDING = 4;
+    FLAG_SETUP_FAILED = 5;
+    FLAG_DONE = 6;
+}
+
+message CheckpointRequest {
+    int32 jobID = 1;
+    int32 workerID = 2;
+}
+
+message RestoreRequest {
+    int32 jobID = 1;
+    int32 workerID = 2;
+    string path = 3;
+    CheckpointType checkpointType = 4;
+}
+
+message OpenFilesStat {
+    string path = 1;
+    string fd = 2;
+}
+
+message Addr {
+    string ip = 1;
+    uint32 port = 2;
+}
+
+message ConnectionStat {
+    uint32 fd = 1;
+    uint32 family = 2;
+    uint32 type = 3;
+    Addr localAddr = 4;
+    Addr remoteAddr = 5;
+    string status = 6;
+    repeated int32 uids = 7;
+    int32 pid = 8;
+}
+
+message ClientInfo {
+    string iD = 1;
+    string hostname = 2;
+    string platform = 3;
+    string os = 4;
+    string uptime = 5;
+    string remainingMemory = 6;
+}
+
+message ProcessInfo {
+    int32 pid = 1;
+    bool attachedToHardwareAccel = 2;
+    repeated OpenFilesStat openFds = 3;
+    repeated string openWriteOnlyFilePaths = 4;
+    repeated ConnectionStat openConnections = 5;
+    float memoryPercent = 6;
+    bool isRunning = 7;
+    string status = 8;
+}
+
+message StateResponse {
+    int32 jobID = 1;
+    int32 workerID = 2;
+    ClientInfo clientInfo = 3;
+    ProcessInfo processInfo = 4;
+    CheckpointType checkpointType = 5;
+    string checkpointPath = 6;
+    CheckpointState checkpointState = 7;
+    Flag flag = 8;
+}
+
+service CheckpointService {
+    rpc Checkpoint (CheckpointRequest) returns (StateResponse) {}
+}
+
+service RestoreService {
+    rpc Restore (RestoreRequest) returns (StateResponse) {}
+}
