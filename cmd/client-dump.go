@@ -342,7 +342,7 @@ func (c *Client) Dump(dir string) error {
 	c.logger.Info().Msgf(`beginning dump of pid %d`, c.Process.PID)
 
 	if !c.Process.AttachedToHardwareAccel {
-		err = c.CRIU.Dump(opts, nfy)
+		_, err = c.CRIU.Dump(opts, &nfy)
 		if err != nil {
 			// check for sudo error
 			if strings.Contains(err.Error(), "errno 0") {
