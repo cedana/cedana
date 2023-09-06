@@ -121,11 +121,6 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	return &tmpdir, nil
 }
 
-func (c *Client) postRestore() {
-	// get PID of freshly restored process
-
-}
-
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
 func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
@@ -183,13 +178,15 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	err = c.CRIU.Restore(opts, nfy)
+	resp, err := c.CRIU.Restore(opts, &nfy)
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return err
 	}
+
+	c.logger.Info().Msgf("process restored: %v", resp)
 
 	// clean up
 	err = os.RemoveAll(dir)

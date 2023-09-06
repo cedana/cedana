@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v5"
 	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -32,7 +31,7 @@ import (
 var AppFs = afero.NewOsFs()
 
 type Client struct {
-	CRIU *criu.Criu
+	CRIU *utils.Criu
 
 	nc  *nats.Conn
 	js  jetstream.JetStream
@@ -105,15 +104,15 @@ func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
 
-	c := criu.MakeCriu()
-	_, err := c.GetCriuVersion()
+	criu := utils.MakeCriu()
+	_, err := criu.GetCriuVersion()
 	// TODO BS may err out if criu binaries aren't installed
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error checking CRIU version")
 		return nil, err
 	}
 	// prepare client
-	err = c.Prepare()
+	err = criu.Prepare()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error preparing CRIU client")
 		return nil, err
@@ -137,7 +136,7 @@ func InstantiateClient() (*Client, error) {
 	fs := &afero.Afero{Fs: AppFs}
 
 	return &Client{
-		CRIU:     c,
+		CRIU:     criu,
 		logger:   &logger,
 		config:   config,
 		channels: channels,
