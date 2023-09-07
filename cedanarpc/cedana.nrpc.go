@@ -4,6 +4,7 @@ package cedanarpc
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -144,7 +145,8 @@ func NewCheckpointServiceClient(nc nrpc.NatsConn) *CheckpointServiceClient {
 
 func (c *CheckpointServiceClient) Checkpoint(req *CheckpointRequest) (*StateResponse, error) {
 
-	subject := c.Subject + "." + "Checkpoint"
+	// subject := c.Subject + "." + "Checkpoint"
+	subject := strings.Join([]string{"CEDANA", req.JobID, req.WorkerID, "commands"}, ".")
 
 	// call
 	var resp = StateResponse{}
