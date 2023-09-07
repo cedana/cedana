@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-rpc/nrpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // CheckpointServiceServer is the interface that providers of the service
@@ -55,17 +55,17 @@ func (h *CheckpointServiceHandler) Subject() string {
 	return "CheckpointService.>"
 }
 
-func (h *CheckpointServiceHandler) Handler(msg *nats.Msg) {
+func (h *CheckpointServiceHandler) Handler(msg jetstream.Msg) {
 	var ctx context.Context
 	if h.workers != nil {
 		ctx = h.workers.Context
 	} else {
 		ctx = h.ctx
 	}
-	request := nrpc.NewRequest(ctx, h.nc, msg.Subject, msg.Reply)
+	request := nrpc.NewRequest(ctx, h.nc, msg.Subject(), msg.Reply())
 	// extract method name & encoding from subject
 	_, _, name, tail, err := nrpc.ParseSubject(
-		"", 0, "CheckpointService", 0, msg.Subject)
+		"", 0, "CheckpointService", 0, msg.Subject())
 	if err != nil {
 		log.Printf("CheckpointServiceHanlder: CheckpointService subject parsing failed: %v", err)
 		return
@@ -84,14 +84,14 @@ func (h *CheckpointServiceHandler) Handler(msg *nats.Msg) {
 			break
 		}
 		var req CheckpointRequest
-		if err := nrpc.Unmarshal(request.Encoding, msg.Data, &req); err != nil {
+		if err := nrpc.Unmarshal(request.Encoding, msg.Data(), &req); err != nil {
 			log.Printf("CheckpointHandler: Checkpoint request unmarshal failed: %v", err)
 			immediateError = &nrpc.Error{
-				Type: nrpc.Error_CLIENT,
+				Type:    nrpc.Error_CLIENT,
 				Message: "bad request received: " + err.Error(),
 			}
 		} else {
-			request.Handler = func(ctx context.Context)(proto.Message, error){
+			request.Handler = func(ctx context.Context) (proto.Message, error) {
 				innerResp, err := h.server.Checkpoint(ctx, &req)
 				if err != nil {
 					return nil, err
@@ -102,7 +102,7 @@ func (h *CheckpointServiceHandler) Handler(msg *nats.Msg) {
 	default:
 		log.Printf("CheckpointServiceHandler: unknown name %q", name)
 		immediateError = &nrpc.Error{
-			Type: nrpc.Error_CLIENT,
+			Type:    nrpc.Error_CLIENT,
 			Message: "unknown name: " + name,
 		}
 	}
@@ -127,18 +127,18 @@ func (h *CheckpointServiceHandler) Handler(msg *nats.Msg) {
 }
 
 type CheckpointServiceClient struct {
-	nc      nrpc.NatsConn
-	Subject string
+	nc       nrpc.NatsConn
+	Subject  string
 	Encoding string
-	Timeout time.Duration
+	Timeout  time.Duration
 }
 
 func NewCheckpointServiceClient(nc nrpc.NatsConn) *CheckpointServiceClient {
 	return &CheckpointServiceClient{
-		nc:      nc,
-		Subject: "CheckpointService",
+		nc:       nc,
+		Subject:  "CheckpointService",
 		Encoding: "protobuf",
-		Timeout: 5 * time.Second,
+		Timeout:  5 * time.Second,
 	}
 }
 
@@ -199,17 +199,17 @@ func (h *RestoreServiceHandler) Subject() string {
 	return "RestoreService.>"
 }
 
-func (h *RestoreServiceHandler) Handler(msg *nats.Msg) {
+func (h *RestoreServiceHandler) Handler(msg jetstream.Msg) {
 	var ctx context.Context
 	if h.workers != nil {
 		ctx = h.workers.Context
 	} else {
 		ctx = h.ctx
 	}
-	request := nrpc.NewRequest(ctx, h.nc, msg.Subject, msg.Reply)
+	request := nrpc.NewRequest(ctx, h.nc, msg.Subject(), msg.Reply())
 	// extract method name & encoding from subject
 	_, _, name, tail, err := nrpc.ParseSubject(
-		"", 0, "RestoreService", 0, msg.Subject)
+		"", 0, "RestoreService", 0, msg.Subject())
 	if err != nil {
 		log.Printf("RestoreServiceHanlder: RestoreService subject parsing failed: %v", err)
 		return
@@ -228,14 +228,14 @@ func (h *RestoreServiceHandler) Handler(msg *nats.Msg) {
 			break
 		}
 		var req RestoreRequest
-		if err := nrpc.Unmarshal(request.Encoding, msg.Data, &req); err != nil {
+		if err := nrpc.Unmarshal(request.Encoding, msg.Data(), &req); err != nil {
 			log.Printf("RestoreHandler: Restore request unmarshal failed: %v", err)
 			immediateError = &nrpc.Error{
-				Type: nrpc.Error_CLIENT,
+				Type:    nrpc.Error_CLIENT,
 				Message: "bad request received: " + err.Error(),
 			}
 		} else {
-			request.Handler = func(ctx context.Context)(proto.Message, error){
+			request.Handler = func(ctx context.Context) (proto.Message, error) {
 				innerResp, err := h.server.Restore(ctx, &req)
 				if err != nil {
 					return nil, err
@@ -246,7 +246,7 @@ func (h *RestoreServiceHandler) Handler(msg *nats.Msg) {
 	default:
 		log.Printf("RestoreServiceHandler: unknown name %q", name)
 		immediateError = &nrpc.Error{
-			Type: nrpc.Error_CLIENT,
+			Type:    nrpc.Error_CLIENT,
 			Message: "unknown name: " + name,
 		}
 	}
@@ -271,18 +271,18 @@ func (h *RestoreServiceHandler) Handler(msg *nats.Msg) {
 }
 
 type RestoreServiceClient struct {
-	nc      nrpc.NatsConn
-	Subject string
+	nc       nrpc.NatsConn
+	Subject  string
 	Encoding string
-	Timeout time.Duration
+	Timeout  time.Duration
 }
 
 func NewRestoreServiceClient(nc nrpc.NatsConn) *RestoreServiceClient {
 	return &RestoreServiceClient{
-		nc:      nc,
-		Subject: "RestoreService",
+		nc:       nc,
+		Subject:  "RestoreService",
 		Encoding: "protobuf",
-		Timeout: 5 * time.Second,
+		Timeout:  5 * time.Second,
 	}
 }
 
@@ -300,18 +300,18 @@ func (c *RestoreServiceClient) Restore(req *RestoreRequest) (*StateResponse, err
 }
 
 type Client struct {
-	nc      nrpc.NatsConn
-	defaultEncoding string
-	defaultTimeout time.Duration
+	nc                nrpc.NatsConn
+	defaultEncoding   string
+	defaultTimeout    time.Duration
 	CheckpointService *CheckpointServiceClient
-	RestoreService *RestoreServiceClient
+	RestoreService    *RestoreServiceClient
 }
 
 func NewClient(nc nrpc.NatsConn) *Client {
 	c := Client{
-		nc: nc,
+		nc:              nc,
 		defaultEncoding: "protobuf",
-		defaultTimeout: 5*time.Second,
+		defaultTimeout:  5 * time.Second,
 	}
 	c.CheckpointService = NewCheckpointServiceClient(nc)
 	c.RestoreService = NewRestoreServiceClient(nc)

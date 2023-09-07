@@ -41,7 +41,7 @@ message RestoreRequest {
 
 message OpenFilesStat {
     string path = 1;
-    string fd = 2;
+    uint64 fd = 2;
 }
 
 message Addr {
@@ -65,8 +65,8 @@ message ClientInfo {
     string hostname = 2;
     string platform = 3;
     string os = 4;
-    string uptime = 5;
-    string remainingMemory = 6;
+    uint64 uptime = 5;
+    uint64 remainingMemory = 6;
 }
 
 message ProcessInfo {
@@ -81,8 +81,8 @@ message ProcessInfo {
 }
 
 message StateResponse {
-    int32 jobID = 1;
-    int32 workerID = 2;
+    string jobID = 1;
+    string workerID = 2;
     ClientInfo clientInfo = 3;
     ProcessInfo processInfo = 4;
     CheckpointType checkpointType = 5;

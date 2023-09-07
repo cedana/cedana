@@ -102,22 +102,22 @@ type FlagReason string
 type CheckpointState string
 
 const (
-	CheckpointTypeNone    CheckpointType = "none"
-	CheckpointTypeCRIU    CheckpointType = "criu"
-	CheckpointTypePytorch CheckpointType = "pytorch"
+	CheckpointTypeNone    CheckpointType = "CHECKPOINT_TYPE_NONE"
+	CheckpointTypeCRIU    CheckpointType = "CHECKPOINT_TYPE_CRIU"
+	CheckpointTypePytorch CheckpointType = "CHECKPOINT_TYPE_PYTORCH"
 
-	CheckpointSuccess CheckpointState = "CHECKPOINTED"
-	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
-	RestoreSuccess    CheckpointState = "RESTORED"
-	RestoreFailed     CheckpointState = "RESTORE_FAILED"
+	CheckpointSuccess CheckpointState = "CHECKPOINT_STATE_CHECKPOINT_SUCCESS"
+	CheckpointFailed  CheckpointState = "CHECKPOINT_STATE_CHECKPOINT_FAILED"
+	RestoreSuccess    CheckpointState = "CHECKPOINT_STATE_RESTORE_SUCCESS"
+	RestoreFailed     CheckpointState = "CHECKPOINT_STATE_RESTORE_FAILED"
 
 	// Job here refers to a process or container started and managed (C/R) by the daemon.
-	JobStartupFailed Flag = "JOB_STARTUP_FAILED"
-	JobKilled        Flag = "JOB_KILLED"
-	JobIdle          Flag = "JOB_IDLE"
-	JobRunning       Flag = "JOB_RUNNING"
-	JobPending       Flag = "JOB_PENDING"
+	JobStartupFailed Flag = "FLAG_JOB_STARTUP_FAILED"
+	JobKilled        Flag = "FLAG_JOB_KILLED"
+	JobIdle          Flag = "FLAG_JOB_IDLE"
+	JobRunning       Flag = "FLAG_JOB_RUNNING"
+	JobPending       Flag = "FLAG_JOB_PENDING"
 	// setup is used by the orchestrator
-	JobSetupFailed Flag = "JOB_SETUP_FAILED"
-	JobDone        Flag = "JOB_DONE"
+	JobSetupFailed Flag = "FLAG_SETUP_FAILED"
+	JobDone        Flag = "FLAG_DONE"
 )

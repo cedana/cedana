@@ -321,6 +321,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	)
 
 	conctx, err := cons.Consume(c.handler.Handler)
+	defer conctx.Stop()
 
 	if err != nil {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
@@ -367,7 +368,50 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 }
 
 func (c *Client) Checkpoint(ctx context.Context, req *cedanarpc.CheckpointRequest) (*cedanarpc.StateResponse, error) {
-	return &cedanarpc.StateResponse{}, nil
+	state := c.getState(c.Process.PID)
+	res := &cedanarpc.StateResponse{
+		JobID:    c.jobId,
+		WorkerID: c.selfId,
+		ClientInfo: &cedanarpc.ClientInfo{
+			ID:              state.ClientInfo.Id,
+			Hostname:        state.ClientInfo.Hostname,
+			Platform:        state.ClientInfo.Platform,
+			Os:              state.ClientInfo.OS,
+			Uptime:          state.ClientInfo.Uptime,
+			RemainingMemory: state.ClientInfo.RemainingMemory,
+		},
+		ProcessInfo: &cedanarpc.ProcessInfo{
+			Pid:                     state.ProcessInfo.PID,
+			AttachedToHardwareAccel: state.ProcessInfo.AttachedToHardwareAccel,
+			OpenFds:                 make([]*cedanarpc.OpenFilesStat, len(state.ProcessInfo.OpenFds)),
+			OpenWriteOnlyFilePaths:  make([]string, len(state.ProcessInfo.OpenWriteOnlyFilePaths)),
+			OpenConnections:         make([]*cedanarpc.ConnectionStat, len(state.ProcessInfo.OpenConnections)),
+			MemoryPercent:           state.ProcessInfo.MemoryPercent,
+			IsRunning:               state.ProcessInfo.IsRunning,
+			Status:                  state.ProcessInfo.Status,
+		},
+		CheckpointType:  cedanarpc.CheckpointType(cedanarpc.CheckpointType_value[string(state.CheckpointType)]),
+		CheckpointState: cedanarpc.CheckpointState(cedanarpc.CheckpointState_value[string(state.CheckpointState)]),
+		Flag:            cedanarpc.Flag(cedanarpc.Flag_value[string(state.Flag)]),
+	}
+	for i := 0; i < len(state.ProcessInfo.OpenFds); i++ {
+		res.ProcessInfo.OpenFds[i].Path = state.ProcessInfo.OpenFds[i].Path
+		res.ProcessInfo.OpenFds[i].Fd = state.ProcessInfo.OpenFds[i].Fd
+	}
+	copy(res.ProcessInfo.OpenWriteOnlyFilePaths, state.ProcessInfo.OpenWriteOnlyFilePaths)
+	for i := 0; i < len(state.ProcessInfo.OpenConnections); i++ {
+		res.ProcessInfo.OpenConnections[i].Fd = state.ProcessInfo.OpenConnections[i].Fd
+		res.ProcessInfo.OpenConnections[i].Family = state.ProcessInfo.OpenConnections[i].Family
+		res.ProcessInfo.OpenConnections[i].Type = state.ProcessInfo.OpenConnections[i].Type
+		res.ProcessInfo.OpenConnections[i].LocalAddr = &cedanarpc.Addr{Ip: state.ProcessInfo.OpenConnections[i].Laddr.IP, Port: state.ProcessInfo.OpenConnections[i].Laddr.Port}
+		res.ProcessInfo.OpenConnections[i].RemoteAddr = &cedanarpc.Addr{Ip: state.ProcessInfo.OpenConnections[i].Raddr.IP, Port: state.ProcessInfo.OpenConnections[i].Raddr.Port}
+		res.ProcessInfo.OpenConnections[i].Status = state.ProcessInfo.OpenConnections[i].Status
+		res.ProcessInfo.OpenConnections[i].Uids = make([]int32, len(state.ProcessInfo.OpenConnections[i].Uids))
+		copy(res.ProcessInfo.OpenConnections[i].Uids, state.ProcessInfo.OpenConnections[i].Uids)
+		res.ProcessInfo.OpenConnections[i].Pid = state.ProcessInfo.OpenConnections[i].Pid
+	}
+
+	return res, nil
 }
 
 // Function called whenever we enter a failed state and need
