@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/cedanarpc"
 	"github.com/cedana/cedana/utils"
 	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
@@ -55,6 +56,8 @@ type Client struct {
 
 	// checkpoint store
 	store utils.Store
+
+	handler *cedanarpc.CheckpointServiceHandler
 }
 
 type Broadcaster[T any] struct {
@@ -198,6 +201,8 @@ func (c *Client) AddDaemonLayer() error {
 	}
 	c.nc = nc
 
+	c.handler = cedanarpc.NewCheckpointServiceHandler(context.Background(), nc, c)
+
 	// set up JetStream
 	js, err := jetstream.New(nc)
 	if err != nil {
@@ -315,6 +320,8 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 	},
 	)
 
+	conctx, err := cons.Consume(c.handler.Handler)
+
 	if err != nil {
 		c.logger.Info().Msgf("could not subscribe to commands: %v", err)
 	}
@@ -357,6 +364,10 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 			}
 		}
 	}
+}
+
+func (c *Client) Checkpoint(ctx context.Context, req *cedanarpc.CheckpointRequest) (*cedanarpc.StateResponse, error) {
+	return &cedanarpc.StateResponse{}, nil
 }
 
 // Function called whenever we enter a failed state and need

@@ -28,13 +28,13 @@ enum Flag {
 }
 
 message CheckpointRequest {
-    int32 jobID = 1;
-    int32 workerID = 2;
+    string jobID = 1;
+    string workerID = 2;
 }
 
 message RestoreRequest {
-    int32 jobID = 1;
-    int32 workerID = 2;
+    string jobID = 1;
+    string workerID = 2;
     string path = 3;
     CheckpointType checkpointType = 4;
 }
