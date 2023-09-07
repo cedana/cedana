@@ -10,6 +10,7 @@ import (
 
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
@@ -26,10 +27,57 @@ const (
 	sys_pidfd_getfd       = 438
 )
 
+// Here are states pulled from runc
+type BaseState struct {
+	// ID is the container ID.
+	ID string `json:"id"`
+
+	// InitProcessPid is the init process id in the parent namespace.
+	InitProcessPid int `json:"init_process_pid"`
+
+	// InitProcessStartTime is the init process start time in clock cycles since boot time.
+	InitProcessStartTime uint64 `json:"init_process_start"`
+
+	// Created is the unix timestamp for the creation time of the container in UTC
+	Created time.Time `json:"created"`
+
+	// Config is the container's configuration.
+	Config configs.Config `json:"config"`
+}
+
+type State struct {
+	BaseState
+
+	// Platform specific fields below here
+
+	// Specified if the container was started under the rootless mode.
+	// Set to true if BaseState.Config.RootlessEUID && BaseState.Config.RootlessCgroups
+	Rootless bool `json:"rootless"`
+
+	// Paths to all the container's cgroups, as returned by (*cgroups.Manager).GetPaths
+	//
+	// For cgroup v1, a key is cgroup subsystem name, and the value is the path
+	// to the cgroup for this subsystem.
+	//
+	// For cgroup v2 unified hierarchy, a key is "", and the value is the unified path.
+	CgroupPaths map[string]string `json:"cgroup_paths"`
+
+	// NamespacePaths are filepaths to the container's namespaces. Key is the namespace type
+	// with the value as the path.
+	NamespacePaths map[configs.NamespaceType]string `json:"namespace_paths"`
+
+	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
+	ExternalDescriptors []string `json:"external_descriptors,omitempty"`
+
+	// Intel RDT "resource control" filesystem path
+	IntelRdtPath string `json:"intel_rdt_path"`
+}
+
 func init() {
 	clientCommand.AddCommand(dumpCommand)
 	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
 	dumpCommand.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
+	dumpCommand.Flags().BoolP("container", "c", false, "dump a container")
 }
 
 // This is a direct dump command. Won't be used in practice, we want to start a daemon
@@ -311,6 +359,59 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 	return &opts
 
 }
+
+// type Container struct {
+// 	id                   string
+// 	root                 string
+// 	config               *configs.Config
+// 	cgroupManager        cgroups.Manager
+// 	intelRdtManager      *intelrdt.Manager
+// 	initProcess          parentProcess
+// 	initProcessStartTime uint64
+// 	m                    sync.Mutex
+// 	criuVersion          int
+// 	state                containerState
+// 	created              time.Time
+// 	fifo                 *os.File
+// }
+
+// func getContainer(context *cli.Context) (*libcontainer.Container, error) {
+// 	id := context.Args().First()
+// 	if id == "" {
+// 		return nil, errEmptyID
+// 	}
+// 	root := context.GlobalString("root")
+// 	return libcontainer.Load(root, id)
+// }
+
+// Need to rely on libcontainer ("github.com/opencontainers/runc/libcontainer")
+
+// func (c *Client) DumpContainer(dir string) error {
+// 	// This is pulled from runc's checkpoint.go
+
+// 	container, err := getContainer(context)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	status, err := container.Status()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if status == libcontainer.Created || status == libcontainer.Stopped {
+// 		return fmt.Errorf("Container cannot be checkpointed in %s state", status.String())
+// 	}
+// 	options, err := criuOptions(context)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	err = container.Checkpoint(options)
+// 	if err == nil && !(options.LeaveRunning || options.PreDump) {
+// 		// Destroy the container unless we tell CRIU to keep it.
+// 		destroy(container)
+// 	}
+// 	return err
+// }
 
 func (c *Client) Dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
