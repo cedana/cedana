@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -20,6 +21,7 @@ import (
 
 var dir string
 var pid int32
+var containerId string
 
 const (
 	sys_pidfd_send_signal = 424
@@ -77,7 +79,7 @@ func init() {
 	clientCommand.AddCommand(dumpCommand)
 	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
 	dumpCommand.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
-	dumpCommand.Flags().BoolP("container", "c", false, "dump a container")
+	dumpCommand.Flags().StringVarP(&containerId, "container", "c", "", "dump a container id")
 }
 
 // This is a direct dump command. Won't be used in practice, we want to start a daemon
@@ -111,7 +113,12 @@ var dumpCommand = &cobra.Command{
 			return err
 		}
 
-		err = c.Dump(dir)
+		if containerId != "" {
+			err = container.Dump(dir, containerId)
+		} else {
+			err = c.Dump(dir)
+		}
+
 		if err != nil {
 			return err
 		}
