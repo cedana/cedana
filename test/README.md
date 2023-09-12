@@ -1,13 +1,6 @@
 ## Tests
 
-### `testdir/proc`
-
-Wrangled some live proc data to test against. Should consider using filesystem mock in the future, but this is a quick and dirty way to run some tests. Should also consider pruning these for the future. For reference:
-
-- `1266999` -> is a process spawned by running `jupyter notebook &` (useful for testing interactive programs & python restores)
-- `1227709` -> is a process spawned by running `./server -m models/7B/ggml-model-q4_0.bin -c 2048 &` (useful for testing servers & network restores)
-
-### `large_data_benchmark.sh`
+### Benchmarking
 
 Run the large_data_benchmark.sh script for a mass benchmark on all processes. Run run_benchmarks.sh script for a single run on all programs.
 
@@ -21,3 +14,18 @@ In the benchmarking directory, there are 4 sub directories: pids, processes, res
 - `processes` -> this directory is where docker pull pulls images of test processes.
 - `results` -> this directory contains profiling results, these are overwritten each time benchmarks are ran.
 - `temp` -> this is a temp directory containing dumped checkpoints. These files are used for recovery and after recovery benchmark resolves, these files are destroyed.
+
+
+#### Dockerized Benchmarking
+
+For simplicity's sake, you can run all of this in a docker container by building the Dockerfile. To actually run it however, you need to pass the `--privileged` and mount a `tmpfs` so criu can store its intermediary files. You can do this with: 
+
+```
+docker run --privileged --tmpfs /run -it benchmark 
+```
+
+Assuming you've built the container with: 
+
+```
+docker build -t benchmark .
+```

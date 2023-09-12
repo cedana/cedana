@@ -15,12 +15,13 @@ RUN apt update && apt install -y criu python3 pip sudo
 
 
 
-RUN git clone https://github.com/cedana/cedana && mkdir .cedana 
+RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
 WORKDIR /cedana
 RUN git checkout feat/ced-112
+ENV USER="root"
+
 RUN go build && ./cedana bootstrap 
 RUN pip install -r test/benchmarks/requirements
 
-ENV USER="root"
 
 ENTRYPOINT /bin/bash
