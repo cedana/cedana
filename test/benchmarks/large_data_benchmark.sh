@@ -1,7 +1,22 @@
 #!/bin/bash
 
-# Number of iterations
-read -p "Enter # of iterations: " num_iterations
+# parse command line opts 
+while getopts ":n:" opt; do 
+    case $opt in 
+        n) 
+            num_iterations=$OPTARG 
+            ;;
+        \?) 
+            echo "Invalid option -$OPTARG" 
+            exit 1 
+            ;;
+    esac
+done
+
+if [ -z "$num_iterations" ]; then
+    echo "Error: Number of iterations not specified. Use -n to specify."
+    exit 1
+fi
 
 
 # Get the start time

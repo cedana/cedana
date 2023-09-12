@@ -5,7 +5,6 @@ FROM ubuntu:22.04
 COPY --from=golang:1.21.1-bookworm /usr/local/go/ /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-
 # Install everything else 
 RUN apt-get update && \
     apt-get install -y software-properties-common git && \
@@ -16,14 +15,12 @@ RUN apt update && apt install -y criu python3 pip sudo
 
 
 
-RUN git clone https://github.com/cedana/cedana
+RUN git clone https://github.com/cedana/cedana && mkdir .cedana 
 WORKDIR /cedana
-RUN go build 
+RUN git checkout feat/ced-112
+RUN go build && ./cedana bootstrap 
 RUN pip install -r test/benchmarks/requirements
 
-
-ARG DOCKER_USER=default_user
-RUN addgroup -S $DOCKER_USER && adduser -S $DOCKER_USER -G $DOCKER_USER
-USER $DOCKER_USER
+ENV USER="root"
 
 ENTRYPOINT /bin/bash
