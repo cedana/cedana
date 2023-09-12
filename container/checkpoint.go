@@ -179,7 +179,7 @@ func getContainerFromRunc(containerID string) *RuncContainer {
 	if err != nil {
 		l.Fatal().Err(err).Msg("could not get criu version")
 	}
-
+	root = root + "/" + containerID
 	state, err := loadState(root)
 	if err != nil {
 		l.Fatal().Err(err).Msg("could not load state")

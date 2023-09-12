@@ -144,7 +144,7 @@ import (
  * }
  */
 
-type IntelManager struct {
+type Manager struct {
 	mu     sync.Mutex
 	config *configs.Config
 	id     string
