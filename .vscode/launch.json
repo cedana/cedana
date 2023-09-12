@@ -47,13 +47,9 @@
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["client", "dump", "-c", "${input:promptForContainer}"],
+            "args": ["client", "dump", "-d", "/home/brandonsmith/.cedana/dumpdir", "-c", "${input:promptForContainer}"],
             "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
         },
         {

@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
 	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	dockercli "github.com/docker/docker/client"
@@ -28,6 +30,75 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type parentProcess interface {
+	// pid returns the pid for the running process.
+	pid() int
+
+	// start starts the process execution.
+	start() error
+
+	// send a SIGKILL to the process and wait for the exit.
+	terminate() error
+
+	// wait waits on the process returning the process state.
+	wait() (*os.ProcessState, error)
+
+	// startTime returns the process start time.
+	startTime() (uint64, error)
+	signal(os.Signal) error
+	externalDescriptors() []string
+	setExternalDescriptors(fds []string)
+	forwardChildLogs() chan error
+}
+
+func (p *nonChildProcess) start() error {
+	return errors.New("restored process cannot be started")
+}
+
+func (p *nonChildProcess) pid() int {
+	return p.processPid
+}
+
+func (p *nonChildProcess) terminate() error {
+	return errors.New("restored process cannot be terminated")
+}
+
+func (p *nonChildProcess) wait() (*os.ProcessState, error) {
+	return nil, errors.New("restored process cannot be waited on")
+}
+
+func (p *nonChildProcess) startTime() (uint64, error) {
+	return p.processStartTime, nil
+}
+
+func (p *nonChildProcess) signal(s os.Signal) error {
+	proc, err := os.FindProcess(p.processPid)
+	if err != nil {
+		return err
+	}
+	return proc.Signal(s)
+}
+
+func (p *nonChildProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *nonChildProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
+func (p *nonChildProcess) forwardChildLogs() chan error {
+	return nil
+}
+
+type Status int
+
+type containerState interface {
+	transition(containerState) error
+	destroy() error
+	status() Status
+}
+
 type RuncContainer struct {
 	id                   string
 	root                 string
@@ -35,10 +106,13 @@ type RuncContainer struct {
 	config               *configs.Config // standin for configs.Config from runc
 	cgroupManager        cgroups.Manager
 	initProcessStartTime uint64
+	initProcess          parentProcess
 	m                    sync.Mutex
 	criuVersion          int
 	created              time.Time
 	dockerConfig         *types.ContainerJSON
+	intelRdtManager      *Manager
+	state                containerState
 }
 
 // this comes from runc, see github.com/opencontainers/runc
@@ -67,6 +141,157 @@ type CriuOpts struct {
 	StatusFd                int                // fd for feedback when lazy server is ready
 	LsmProfile              string             // LSM profile used to restore the container
 	LsmMountContext         string             // LSM mount context value to use during restore
+}
+
+type loadedState struct {
+	c *RuncContainer
+	s Status
+}
+
+func (n *loadedState) status() Status {
+	return n.s
+}
+
+func (n *loadedState) transition(s containerState) error {
+	n.c.state = s
+	return nil
+}
+
+// func (n *loadedState) destroy() error {
+// 	if err := n.c.refreshState(); err != nil {
+// 		return err
+// 	}
+// 	return n.c.state.destroy()
+// }
+
+type nonChildProcess struct {
+	processPid       int
+	processStartTime uint64
+	fds              []string
+}
+
+func getContainerFromRunc(containerID string) *RuncContainer {
+	root := "/var/run/runc"
+	l := utils.GetLogger()
+
+	criu := criu.MakeCriu()
+	criuVersion, err := criu.GetCriuVersion()
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not get criu version")
+	}
+
+	state, err := loadState(root)
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not load state")
+	}
+
+	r := &nonChildProcess{
+		processPid:       state.InitProcessPid,
+		processStartTime: state.InitProcessStartTime,
+		fds:              state.ExternalDescriptors,
+	}
+
+	cgroupManager, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not create cgroup manager")
+	}
+
+	// c := &Container{
+	// 	initProcess:          r,
+	// 	initProcessStartTime: state.InitProcessStartTime,
+	// 	id:                   id,
+	// 	config:               &state.Config,
+	// 	cgroupManager:        cm,
+	// 	intelRdtManager:      intelrdt.NewManager(&state.Config, id, state.IntelRdtPath),
+	// 	root:                 containerRoot,
+	// 	created:              state.Created,
+	// }
+
+	c := &RuncContainer{
+		initProcess:          r,
+		initProcessStartTime: state.InitProcessStartTime,
+		id:                   containerID,
+		root:                 root,
+		criuVersion:          criuVersion,
+		cgroupManager:        cgroupManager,
+		// dockerConfig:  &container,
+		config:          &state.Config,
+		intelRdtManager: NewManager(&state.Config, containerID, state.IntelRdtPath),
+		pid:             state.InitProcessPid,
+		// state:           containerState,
+		created: state.Created,
+	}
+
+	// c.state = &loadedState{c: c}
+	// if err := c.refreshState(); err != nil {
+	// 	return nil, err
+	// }
+	return c
+}
+
+type BaseState struct {
+	// ID is the container ID.
+	ID string `json:"id"`
+
+	// InitProcessPid is the init process id in the parent namespace.
+	InitProcessPid int `json:"init_process_pid"`
+
+	// InitProcessStartTime is the init process start time in clock cycles since boot time.
+	InitProcessStartTime uint64 `json:"init_process_start"`
+
+	// Created is the unix timestamp for the creation time of the container in UTC
+	Created time.Time `json:"created"`
+
+	// Config is the container's configuration.
+	Config configs.Config `json:"config"`
+}
+
+type State struct {
+	BaseState
+
+	// Platform specific fields below here
+
+	// Specified if the container was started under the rootless mode.
+	// Set to true if BaseState.Config.RootlessEUID && BaseState.Config.RootlessCgroups
+	Rootless bool `json:"rootless"`
+
+	// Paths to all the container's cgroups, as returned by (*cgroups.Manager).GetPaths
+	//
+	// For cgroup v1, a key is cgroup subsystem name, and the value is the path
+	// to the cgroup for this subsystem.
+	//
+	// For cgroup v2 unified hierarchy, a key is "", and the value is the unified path.
+	CgroupPaths map[string]string `json:"cgroup_paths"`
+
+	// NamespacePaths are filepaths to the container's namespaces. Key is the namespace type
+	// with the value as the path.
+	NamespacePaths map[configs.NamespaceType]string `json:"namespace_paths"`
+
+	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
+	ExternalDescriptors []string `json:"external_descriptors,omitempty"`
+
+	// Intel RDT "resource control" filesystem path
+	IntelRdtPath string `json:"intel_rdt_path"`
+}
+
+func loadState(root string) (*State, error) {
+	stateFilePath, err := securejoin.SecureJoin(root, "state.json")
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(stateFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, err
+	}
+	defer f.Close()
+	var state *State
+	if err := json.NewDecoder(f).Decode(&state); err != nil {
+		return nil, err
+	}
+	return state, nil
 }
 
 // Pretty wacky function. "creates" a runc container from a docker container,
@@ -162,8 +387,10 @@ func Dump(dir string, containerID string) error {
 		ImagesDirectory: dir,
 		LeaveRunning:    false,
 	}
+	// Come back to this later. First runc restore
+	// c := getContainerFromDocker(containerID)
 
-	c := getContainerFromDocker(containerID)
+	c := getContainerFromRunc(containerID)
 
 	err := c.RuncCheckpoint(opts, c.pid)
 	if err != nil {
