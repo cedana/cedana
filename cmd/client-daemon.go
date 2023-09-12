@@ -109,7 +109,7 @@ func (c *Client) tryStartJob() error {
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
 	var err error
 	for i := 0; i < 5; i++ {
-		pid, err := c.runTask(task)
+		pid, err := c.RunTask(task)
 		if err == nil {
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 			c.state.Flag = cedana.JobRunning
@@ -132,7 +132,7 @@ func (c *Client) tryStartJob() error {
 	return nil
 }
 
-func (c *Client) runTask(task string) (int32, error) {
+func (c *Client) RunTask(task string) (int32, error) {
 	var pid int32
 
 	if task == "" {

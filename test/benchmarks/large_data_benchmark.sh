@@ -3,6 +3,7 @@
 # Number of iterations
 read -p "Enter # of iterations: " num_iterations
 
+
 # Get the start time
 start_time=$(date +%s)
 

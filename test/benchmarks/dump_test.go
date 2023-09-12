@@ -25,7 +25,9 @@ type DB struct {
 	orm *gorm.DB
 }
 
-type Benchmarks struct {
+type Benchmarks []*Benchmark
+
+type Benchmark struct {
 	gorm.Model
 	ID                 string `gorm:"primaryKey"`
 	ProcessName        string
@@ -400,7 +402,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmarks {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmark {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -427,7 +429,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 
 	prefix = parts[len(parts)-1]
 
-	cj := Benchmarks{
+	cj := Benchmark{
 		ID:                 id.String(),
 		ProcessName:        prefix,
 		TimeToCompleteInNS: timeToComplete,
@@ -561,7 +563,7 @@ func NewDB() *DB {
 	if err != nil {
 		logger.Error().Msgf("failed to open database: %v", err)
 	}
-	db.AutoMigrate(&Benchmarks{})
+	db.AutoMigrate(&Benchmark{})
 	return &DB{
 		orm: db,
 	}
