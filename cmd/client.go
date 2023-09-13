@@ -33,9 +33,8 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	nc  *nats.Conn
-	js  jetstream.JetStream
-	jsc nats.JetStreamContext
+	nc *nats.Conn
+	js jetstream.JetStream
 
 	logger *zerolog.Logger
 	config *utils.Config
@@ -147,9 +146,27 @@ func InstantiateClient() (*Client, error) {
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
 func (c *Client) AddDaemonLayer() error {
+	if os.Getenv("TEST") != "" {
+		// replace connections w/ mocks
+		nc, err := utils.CreateTestConn()
+		if err != nil {
+			return err
+		}
+
+		js, err := utils.CreateTestJetstream(nc)
+		if err != nil {
+			return err
+		}
+
+		c.js = *js
+
+		return nil
+	}
+
 	// get ids. TODO NR: uuid verification
 	// these should also be added to the config just in case
 	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
+
 	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
 	if !exists {
 		c.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")

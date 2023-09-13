@@ -118,9 +118,16 @@ func TestClient_TryStartJob(t *testing.T) {
 		logger := utils.GetLogger()
 
 		// start a server
-		utils.RunDefaultServer(t)
+		s := utils.RunDefaultServer()
+		nc, err := utils.CreateTestConn()
+		if err != nil {
+			t.Errorf("Expected no error, but got %v", err)
+		}
 
-		js := utils.CreateTestJetstream(t)
+		js, err := utils.CreateTestJetstream(nc)
+		if err != nil {
+			t.Errorf("Expected no error, but got %v", err)
+		}
 
 		c := &Client{
 			config: &utils.Config{
@@ -133,14 +140,19 @@ func TestClient_TryStartJob(t *testing.T) {
 			},
 			logger: &logger,
 			// enterDoomLoop() makes a JetStream call
-			js: js,
+			js: *js,
 		}
 
 		go mockServerRetryCmd(c)
-		err := c.tryStartJob()
+		err = c.tryStartJob()
 		if err != nil {
 			t.Errorf("Expected no error, but got %v", err)
 		}
+
+		t.Cleanup(func() {
+			nc.Close()
+			s.Shutdown()
+		})
 
 	})
 }
