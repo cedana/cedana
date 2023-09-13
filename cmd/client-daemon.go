@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
@@ -150,18 +151,21 @@ func (c *Client) RunTask(task string) (int32, error) {
 		return 0, err
 	}
 
-	attr := &syscall.ProcAttr{
-		Files: []uintptr{nullFile.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
-		Sys:   &syscall.SysProcAttr{Setsid: true},
+	cmd := exec.Command(task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
 	}
 
-	argv := []string{"-c", task}
-	p, err := syscall.ForkExec("/bin/sh", argv, attr)
+	cmd.Stdin = nullFile
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	err = cmd.Start()
 	if err != nil {
 		return 0, err
 	}
 
-	pid = int32(p)
+	pid = int32(cmd.Process.Pid)
 	ppid := int32(os.Getpid())
 
 	c.closeCommonFds(ppid, pid)
