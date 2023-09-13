@@ -171,7 +171,8 @@ type nonChildProcess struct {
 }
 
 func getContainerFromRunc(containerID string) *RuncContainer {
-	root := "/var/run/runc"
+	// root := "/var/run/runc"
+	root := "/run/docker/runtime-runc/moby"
 	l := utils.GetLogger()
 
 	criu := criu.MakeCriu()
@@ -195,17 +196,6 @@ func getContainerFromRunc(containerID string) *RuncContainer {
 	if err != nil {
 		l.Fatal().Err(err).Msg("could not create cgroup manager")
 	}
-
-	// c := &Container{
-	// 	initProcess:          r,
-	// 	initProcessStartTime: state.InitProcessStartTime,
-	// 	id:                   id,
-	// 	config:               &state.Config,
-	// 	cgroupManager:        cm,
-	// 	intelRdtManager:      intelrdt.NewManager(&state.Config, id, state.IntelRdtPath),
-	// 	root:                 containerRoot,
-	// 	created:              state.Created,
-	// }
 
 	c := &RuncContainer{
 		initProcess:          r,
@@ -385,7 +375,7 @@ func Dump(dir string, containerID string) error {
 	// create a CriuOpts and pass into RuncCheckpoint
 	opts := &CriuOpts{
 		ImagesDirectory: dir,
-		LeaveRunning:    false,
+		LeaveRunning:    true,
 	}
 	// Come back to this later. First runc restore
 	// c := getContainerFromDocker(containerID)
@@ -399,6 +389,36 @@ func Dump(dir string, containerID string) error {
 
 	return nil
 }
+
+//  CheckpointOpts holds the options for performing a criu checkpoint using runc
+// type CheckpointOpts struct {
+// 	// ImagePath is the path for saving the criu image file
+// 	ImagePath string
+// 	// WorkDir is the working directory for criu
+// 	WorkDir string
+// 	// ParentPath is the path for previous image files from a pre-dump
+// 	ParentPath string
+// 	// AllowOpenTCP allows open tcp connections to be checkpointed
+// 	AllowOpenTCP bool
+// 	// AllowExternalUnixSockets allows external unix sockets to be checkpointed
+// 	AllowExternalUnixSockets bool
+// 	// AllowTerminal allows the terminal(pty) to be checkpointed with a container
+// 	AllowTerminal bool
+// 	// CriuPageServer is the address:port for the criu page server
+// 	CriuPageServer string
+// 	// FileLocks handle file locks held by the container
+// 	FileLocks bool
+// 	// Cgroups is the cgroup mode for how to handle the checkpoint of a container's cgroups
+// 	Cgroups CgroupMode
+// 	// EmptyNamespaces creates a namespace for the container but does not save its properties
+// 	// Provide the namespaces you wish to be checkpointed without their settings on restore
+// 	EmptyNamespaces []string
+// 	// LazyPages uses userfaultfd to lazily restore memory pages
+// 	LazyPages bool
+// 	// StatusFile is the file criu writes \0 to once lazy-pages is ready
+// 	StatusFile *os.File
+// 	ExtraArgs  []string
+// }
 
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	c.m.Lock()
