@@ -1,23 +1,13 @@
 package test
 
-// We use Input to input variance into the program/process being run.
-// Therefore, we expect that the executed script takes flag input and can correctly
-// process it.
-type ProcessIOExpectedOutput struct {
-	Output []interface{}
-}
+//  Tests defined here are different from benchmarking in that we aren't looking for
+// data on performance, and are instead looking for correctness in the checkpoints and restores.
 
-type Benchmark struct {
-	name         string // name of the process
-	exec         string // path to exec
-	ProcessIOMap map[interface{}]ProcessIOExpectedOutput
-}
+// for this, we create a server and client, connect them to each other and
+// checkpoint/restore each of them - validating behavior along the way
 
-func createBenchmarks() []Benchmark {
-	return []Benchmark{
-		{
-			name: "loop",
-			exec: "./benchmarking/processes/loop",
-		},
-	}
-}
+// function to validate connections pre checkpoint and post restore
+// how to validate "correctness"? should we compare the queues?
+
+// streaming data example
+// database connection example
