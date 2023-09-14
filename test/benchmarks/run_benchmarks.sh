@@ -32,6 +32,7 @@ fi
 
 rm -f "$dirResults"/*
 rm -f "$dirPids"/*
+setsid --fork benchmarking/processes/loop < /dev/null &> /dev/null &
 
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpLoop$ github.com/cedana/cedana/test/benchmarks && \
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkLoopRestore$ github.com/cedana/cedana/test/benchmarks && \
@@ -39,6 +40,7 @@ sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.pro
 rm -f "$dirResults"/*
 rm -f "$dirPids"/*
 
+setsid --fork benchmarking/processes/server < /dev/null &> /dev/null &
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkDumpServer$ github.com/cedana/cedana/test/benchmarks && \
 sudo /usr/local/go/bin/go test -count=1 -cpuprofile benchmarking/results/cpu.prof.gz -memprofile benchmarking/results/memory.prof.gz -run=^$ -bench ^BenchmarkServerRestore$ github.com/cedana/cedana/test/benchmarks && \
 

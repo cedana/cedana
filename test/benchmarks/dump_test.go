@@ -25,7 +25,7 @@ type DB struct {
 	orm *gorm.DB
 }
 
-type BenchmarkResult struct {
+type Benchmarks struct {
 	gorm.Model
 	ID                 string `gorm:"primaryKey"`
 	ProcessName        string
@@ -34,18 +34,6 @@ type BenchmarkResult struct {
 	ElapsedTimeMs      int64
 	FileSize           int64
 	CmdType            string
-}
-
-type BenchmarkParams struct {
-	exec    string
-	dumpdir string
-}
-
-// map of name -> exec
-var Benchmarks = map[string]*BenchmarkParams{
-	"loop":    {"./benchmarking/processes/loop", "../../benchmarking/temp/loop"},
-	"server":  {"./benchmarking/processes/server", "../../benchmarking/temp/server"},
-	"pytorch": {"python3 benchmarking/processes/time_sequence_prediction/train.py", "../../benchmarking/temp/pytorch"},
 }
 
 // we are skipping ci for now as we are using dump which requires criu, need to build criu on gh action
@@ -74,31 +62,27 @@ func getFilenames(directoryPath string, prefix string) ([]string, error) {
 	return loopFilenames, nil
 }
 
-func runBenchmark(b *testing.B, name string) {
+func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
-	benchmark := Benchmarks[name]
-	if benchmark == nil {
-		b.Errorf("could not find benchmark: %v", name)
-		return
-	}
-
-	utils.RunDefaultServerBenchmark(b)
-
-	dumpDir := benchmark.dumpdir
-	os.Setenv("TEST", "true") // forces a mock js to be created
+	dumpDir := "../../benchmarking/temp/loop"
 	c, err := cmd.InstantiateClient()
-	c.AddDaemonLayer()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	pid, err := c.RunTask(benchmark.exec)
+	fileNames, err := getFilenames("../../benchmarking/pids/", "loop-")
+
 	if err != nil {
-		b.Errorf("could not start benchmark: %v", err)
+		b.Errorf("Error in getFilenames(): %v", err)
 	}
 
-	c.Process.PID = pid
+	_, pid, _ := LookForPid(c, fileNames)
+
+	c.Process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		err := c.Dump(dumpDir)
@@ -114,12 +98,36 @@ func runBenchmark(b *testing.B, name string) {
 	)
 }
 
-func BenchmarkDumpLoop(b *testing.B) {
-	runBenchmark(b, "loop")
-}
-
 func BenchmarkDumpServer(b *testing.B) {
-	runBenchmark(b, "server")
+	skipCI(b)
+	dumpDir := "../../benchmarking/temp/server"
+	c, err := cmd.InstantiateClient()
+
+	if err != nil {
+		b.Errorf("Error in instantiateClient(): %v", err)
+	}
+
+	_, pid, _ := LookForPid(c, []string{"server.pid"})
+
+	// this will always be one pid
+	// never no pids since the error above accounts for that
+	c.Process.PID = pid[0]
+
+	// We want a list of all binaries that are to be ran and benchmarked,
+	// have them write their pid to temp files on disk and then have the testing suite read from them
+
+	for i := 0; i < b.N; i++ {
+		err := c.Dump(dumpDir)
+		if err != nil {
+			b.Errorf("Error in dump(): %v", err)
+		}
+	}
+
+	b.Cleanup(
+		func() {
+			FileIPCCleanup(b, dumpDir, "dump")
+		},
+	)
 }
 
 func BenchmarkDumpPytorch(b *testing.B) {
@@ -392,14 +400,7 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmarkResult(
-	cpuProfile *utils.Profile,
-	memProfile *utils.Profile,
-	programName string,
-	elapsedTime int64,
-	fileSize int64,
-	cmdType string,
-) *BenchmarkResult {
+func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmarks {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -426,7 +427,7 @@ func (db *DB) CreateBenchmarkResult(
 
 	prefix = parts[len(parts)-1]
 
-	cj := BenchmarkResult{
+	cj := Benchmarks{
 		ID:                 id.String(),
 		ProcessName:        prefix,
 		TimeToCompleteInNS: timeToComplete,
@@ -480,7 +481,7 @@ func finalCleanup() {
 
 	cmdType, _ := os.ReadFile("../../benchmarking/temp/type")
 
-	db.CreateBenchmarkResult(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"), string(cmdType))
+	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"), string(cmdType))
 
 	if len(pid) == 0 {
 		return
@@ -560,7 +561,7 @@ func NewDB() *DB {
 	if err != nil {
 		logger.Error().Msgf("failed to open database: %v", err)
 	}
-	db.AutoMigrate(&BenchmarkResult{})
+	db.AutoMigrate(&Benchmarks{})
 	return &DB{
 		orm: db,
 	}

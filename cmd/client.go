@@ -146,22 +146,6 @@ func InstantiateClient() (*Client, error) {
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
 func (c *Client) AddDaemonLayer() error {
-	if os.Getenv("TEST") != "" {
-		// replace connections w/ mocks
-		nc, err := utils.CreateTestConn()
-		if err != nil {
-			return err
-		}
-
-		js, err := utils.CreateTestJetstream(nc)
-		if err != nil {
-			return err
-		}
-
-		c.js = *js
-
-		return nil
-	}
 
 	// get ids. TODO NR: uuid verification
 	// these should also be added to the config just in case
