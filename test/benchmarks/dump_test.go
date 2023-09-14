@@ -85,6 +85,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpLoop iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -117,6 +118,7 @@ func BenchmarkDumpServer(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpServer iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -150,6 +152,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpPytorch iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -183,6 +186,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpPytorchVision iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -197,6 +201,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchRegression(b *testing.B) {
+	b.Log("----RUNNING BENCHMARK OF DUMP PYTORCH REGRESSION----")
 	skipCI(b)
 
 	dumpDir := "./benchmarking/temp/pytorch-regression"
