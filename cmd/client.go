@@ -210,7 +210,7 @@ func (c *Client) cleanupClient() error {
 func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
-	c.logger.Info().Msgf("pid: %d", c.Process.PID)
+	c.logger.Info().Msgf("pid: %d, task: %s", c.Process.PID, c.config.Client.Task)
 	// publish state continuously
 	for range ticker.C {
 		state := c.getState(c.Process.PID)

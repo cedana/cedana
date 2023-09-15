@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
@@ -107,7 +108,7 @@ func (c *Client) tryStartJob() error {
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
 	var err error
 	for i := 0; i < 5; i++ {
-		pid, err := c.runTask(task)
+		pid, err := c.RunTask(task)
 		if err == nil {
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 			c.state.Flag = cedana.JobRunning
@@ -130,7 +131,7 @@ func (c *Client) tryStartJob() error {
 	return nil
 }
 
-func (c *Client) runTask(task string) (int32, error) {
+func (c *Client) RunTask(task string) (int32, error) {
 	var pid int32
 
 	if task == "" {
@@ -148,23 +149,28 @@ func (c *Client) runTask(task string) (int32, error) {
 		return 0, err
 	}
 
-	attr := &syscall.ProcAttr{
-		Files: []uintptr{nullFile.Fd(), w.Fd(), w.Fd()}, // stdin, stdout, stderr
-		Sys:   &syscall.SysProcAttr{Setsid: true},
+	cmd := exec.Command("bash", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
 	}
 
-	argv := []string{"-c", task}
-	p, err := syscall.ForkExec("/bin/sh", argv, attr)
+	cmd.Stdin = nullFile
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	err = cmd.Start()
 	if err != nil {
 		return 0, err
 	}
 
-	pid = int32(p)
+	pid = int32(cmd.Process.Pid)
 	ppid := int32(os.Getpid())
 
 	c.closeCommonFds(ppid, pid)
 
-	go c.publishLogs(r, w)
+	if c.config.Client.ForwardLogs {
+		go c.publishLogs(r, w)
+	}
 
 	return pid, nil
 }
