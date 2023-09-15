@@ -374,6 +374,10 @@ func FindZipFiles(directoryPath string) (string, error) {
 		return "", fmt.Errorf("more than one zip file found")
 	}
 
+	if len(zipFiles) == 0 {
+		return "", fmt.Errorf("no zip files found")
+	}
+
 	return zipFiles[0], nil
 }
 

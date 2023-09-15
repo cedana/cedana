@@ -7,7 +7,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install everything else 
 RUN apt-get update && \
-    apt-get install -y software-properties-common git && \
+    apt-get install -y software-properties-common git zip && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository ppa:criu/ppa
@@ -23,5 +23,6 @@ RUN pip install -r test/benchmarks/requirements
 RUN git checkout feat/ced-112
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
+
 
 ENTRYPOINT /bin/bash
