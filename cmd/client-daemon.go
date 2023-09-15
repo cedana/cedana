@@ -24,7 +24,7 @@ var daemonSignal = flag.String("s", "", "")
 
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Start daemon, and dump checkpoints to disk as commanded by an orchestrator",
+	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 	Run: func(cmd *cobra.Command, args []string) {
 		c, err := InstantiateClient()
 		if err != nil {
