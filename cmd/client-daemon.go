@@ -151,7 +151,7 @@ func (c *Client) RunTask(task string) (int32, error) {
 		return 0, err
 	}
 
-	cmd := exec.Command(task)
+	cmd := exec.Command("bash", "-c", task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
