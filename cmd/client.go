@@ -33,9 +33,8 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	nc  *nats.Conn
-	js  jetstream.JetStream
-	jsc nats.JetStreamContext
+	nc *nats.Conn
+	js jetstream.JetStream
 
 	logger *zerolog.Logger
 	config *utils.Config
@@ -147,9 +146,11 @@ func InstantiateClient() (*Client, error) {
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
 func (c *Client) AddDaemonLayer() error {
+
 	// get ids. TODO NR: uuid verification
 	// these should also be added to the config just in case
 	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
+
 	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
 	if !exists {
 		c.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
@@ -228,7 +229,7 @@ func (c *Client) cleanupClient() error {
 func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
-	c.logger.Info().Msgf("pid: %d", c.Process.PID)
+	c.logger.Info().Msgf("pid: %d, task: %s", c.Process.PID, c.config.Client.Task)
 	// publish state continuously
 	for range ticker.C {
 		state := c.getState(c.Process.PID)

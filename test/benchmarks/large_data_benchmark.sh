@@ -1,7 +1,23 @@
 #!/bin/bash
 
-# Number of iterations
-read -p "Enter # of iterations: " num_iterations
+# parse command line opts 
+while getopts ":n:" opt; do 
+    case $opt in 
+        n) 
+            num_iterations=$OPTARG 
+            ;;
+        \?) 
+            echo "Invalid option -$OPTARG" 
+            exit 1 
+            ;;
+    esac
+done
+
+if [ -z "$num_iterations" ]; then
+    echo "Error: Number of iterations not specified. Use -n to specify."
+    exit 1
+fi
+
 
 # Get the start time
 start_time=$(date +%s)
@@ -69,7 +85,7 @@ cd "$current_dir" || exit
 # grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f 2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > benchmarking/temp/cpu.txt
 
 for ((i = 1; i <= num_iterations; i++)); do
-    ./test/benchmarks/run_benchmarks.sh &
+    ./run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!

@@ -256,17 +256,7 @@ func (c *Client) copyOpenFiles(dir string) error {
 
 func (c *Client) postDump(dumpdir string) {
 	c.logger.Info().Msg("compressing checkpoint...")
-	// if Cedana is configured for a mountpoint, compress and move CRIU/pytorch checkpoint dir to folder/point
-	var compressedCheckpointPath string
-	if c.config.SharedStorage.MountPoint != "" {
-		// checkpoint path gets appended with the mountpoint
-		compressedCheckpointPath = filepath.Join(
-			c.config.SharedStorage.MountPoint,
-			strings.Join([]string{filepath.Base(dumpdir), ".zip"}, ""),
-		)
-	} else {
-		compressedCheckpointPath = strings.Join([]string{dumpdir, ".zip"}, "")
-	}
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written

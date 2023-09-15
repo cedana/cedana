@@ -25,7 +25,7 @@ type DB struct {
 	orm *gorm.DB
 }
 
-type Benchmarks struct {
+type BenchmarkResults struct {
 	gorm.Model
 	ID                 string `gorm:"primaryKey"`
 	ProcessName        string
@@ -64,14 +64,14 @@ func getFilenames(directoryPath string, prefix string) ([]string, error) {
 
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../../benchmarking/temp/loop"
+	dumpDir := "./benchmarking/temp/loop"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	fileNames, err := getFilenames("../../benchmarking/pids/", "loop-")
+	fileNames, err := getFilenames("./benchmarking/pids/", "loop-")
 
 	if err != nil {
 		b.Errorf("Error in getFilenames(): %v", err)
@@ -85,6 +85,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpLoop iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -100,7 +101,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 
 func BenchmarkDumpServer(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../../benchmarking/temp/server"
+	dumpDir := "./benchmarking/temp/server"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -117,6 +118,7 @@ func BenchmarkDumpServer(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpServer iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -132,7 +134,7 @@ func BenchmarkDumpServer(b *testing.B) {
 
 func BenchmarkDumpPytorch(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../../benchmarking/temp/pytorch"
+	dumpDir := "./benchmarking/temp/pytorch"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -150,6 +152,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpPytorch iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -165,7 +168,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 
 func BenchmarkDumpPytorchVision(b *testing.B) {
 	skipCI(b)
-	dumpDir := "../../benchmarking/temp/pytorch-vision"
+	dumpDir := "./benchmarking/temp/pytorch-vision"
 	c, err := cmd.InstantiateClient()
 
 	if err != nil {
@@ -183,6 +186,7 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
+		fmt.Printf("--- Running benchmarkDumpPytorchVision iteration %d ---\n", i+1)
 		err := c.Dump(dumpDir)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
@@ -197,9 +201,10 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 }
 
 func BenchmarkDumpPytorchRegression(b *testing.B) {
+	b.Log("----RUNNING BENCHMARK OF DUMP PYTORCH REGRESSION----")
 	skipCI(b)
 
-	dumpDir := "../../benchmarking/temp/pytorch-regression"
+	dumpDir := "./benchmarking/temp/pytorch-regression"
 
 	c, err := cmd.InstantiateClient()
 
@@ -238,7 +243,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 }
 
 func FileIPCCleanup(b *testing.B, dumpDir string, cmdType string) {
-	os.WriteFile("../../benchmarking/temp/type", []byte(cmdType), 0o644)
+	os.WriteFile("./benchmarking/temp/type", []byte(cmdType), 0o644)
 
 	valueBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(valueBytes, uint64(b.Elapsed().Milliseconds()/int64(b.N)))
@@ -255,11 +260,11 @@ func FileIPCCleanup(b *testing.B, dumpDir string, cmdType string) {
 		b.Errorf("Error in ZipFileSize(): %v", err)
 	}
 
-	err = os.WriteFile("../../benchmarking/temp/time", valueBytes, 0o644)
+	err = os.WriteFile("./benchmarking/temp/time", valueBytes, 0o644)
 	if err != nil {
 		b.Errorf("Error in os.WriteFile(): %v", err)
 	}
-	err = os.WriteFile("../../benchmarking/temp/size", filesizeBytes, 0o644)
+	err = os.WriteFile("./benchmarking/temp/size", filesizeBytes, 0o644)
 	if err != nil {
 		b.Errorf("Error in os.WriteFile(): %v", err)
 	}
@@ -292,7 +297,7 @@ func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
 	for _, file := range filename {
 
 		// Open the file for reading
-		dir := fmt.Sprintf("../../benchmarking/pids/%v", file)
+		dir := fmt.Sprintf("./benchmarking/pids/%v", file)
 		file, err := os.OpenFile(dir, os.O_RDONLY, 0o664)
 		if err == nil {
 			defer file.Close()
@@ -326,7 +331,7 @@ func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
 }
 
 func GetDecompressedData(filename string) ([]byte, error) {
-	dir := fmt.Sprintf("../../benchmarking/results/%v", filename)
+	dir := fmt.Sprintf("./benchmarking/results/%v", filename)
 
 	data, err := os.ReadFile(dir)
 	if err != nil {
@@ -369,6 +374,10 @@ func FindZipFiles(directoryPath string) (string, error) {
 		return "", fmt.Errorf("more than one zip file found")
 	}
 
+	if len(zipFiles) == 0 {
+		return "", fmt.Errorf("no zip files found")
+	}
+
 	return zipFiles[0], nil
 }
 
@@ -400,7 +409,14 @@ func PostDumpCleanup() (*utils.Profile, *utils.Profile) {
 	return &cpuProfile, &memProfile
 }
 
-func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profile, programName string, elapsedTime int64, fileSize int64, cmdType string) *Benchmarks {
+func (db *DB) CreateBenchmarkResults(
+	cpuProfile *utils.Profile,
+	memProfile *utils.Profile,
+	programName string,
+	elapsedTime int64,
+	fileSize int64,
+	cmdType string,
+) *BenchmarkResults {
 	id := xid.New()
 	var timeToComplete int64
 	var totalMemoryUsed int64
@@ -427,7 +443,7 @@ func (db *DB) CreateBenchmark(cpuProfile *utils.Profile, memProfile *utils.Profi
 
 	prefix = parts[len(parts)-1]
 
-	cj := Benchmarks{
+	cj := BenchmarkResults{
 		ID:                 id.String(),
 		ProcessName:        prefix,
 		TimeToCompleteInNS: timeToComplete,
@@ -461,7 +477,7 @@ func TestMain(m *testing.M) {
 func finalCleanup() {
 	c, _ := cmd.InstantiateClient()
 
-	pids, err := getFilenames("../../benchmarking/pids/", "")
+	pids, err := getFilenames("./benchmarking/pids/", "")
 
 	if err != nil {
 		fmt.Printf("Error in getFilenames(): %v", err)
@@ -479,9 +495,9 @@ func finalCleanup() {
 		return
 	}
 
-	cmdType, _ := os.ReadFile("../../benchmarking/temp/type")
+	cmdType, _ := os.ReadFile("./benchmarking/temp/type")
 
-	db.CreateBenchmark(cpuProfile, memProfile, fileNames[0], ReadInt64File("../../benchmarking/temp/time"), ReadInt64File("../../benchmarking/temp/size"), string(cmdType))
+	db.CreateBenchmarkResults(cpuProfile, memProfile, fileNames[0], ReadInt64File("./benchmarking/temp/time"), ReadInt64File("./benchmarking/temp/size"), string(cmdType))
 
 	if len(pid) == 0 {
 		return
@@ -561,7 +577,7 @@ func NewDB() *DB {
 	if err != nil {
 		logger.Error().Msgf("failed to open database: %v", err)
 	}
-	db.AutoMigrate(&Benchmarks{})
+	db.AutoMigrate(&BenchmarkResults{})
 	return &DB{
 		orm: db,
 	}

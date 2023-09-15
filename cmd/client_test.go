@@ -68,7 +68,7 @@ func TestClient_RunTask(t *testing.T) {
 			},
 		}
 
-		_, err := c.runTask(c.config.Client.Task)
+		_, err := c.RunTask(c.config.Client.Task)
 
 		// Verify that the error is returned
 		if err == nil {
@@ -93,7 +93,7 @@ func TestClient_RunTask(t *testing.T) {
 			},
 		}
 
-		pid, err := c.runTask(c.config.Client.Task)
+		pid, err := c.RunTask(c.config.Client.Task)
 
 		// Verify that no error is returned
 		if err != nil {
