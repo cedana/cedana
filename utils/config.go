@@ -44,7 +44,6 @@ type Connection struct {
 }
 
 type SharedStorage struct {
-	MountPoint     string `json:"mount_point" mapstructure:"mount_point"` // for multi-machine checkpoint/restore
 	DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 }
 
@@ -97,7 +96,6 @@ func InitConfig() (*Config, error) {
 	// override setting is ugly, need to abstract this away somehow
 	if err == nil && so != nil {
 		viper.Set("cedana_managed", so.CedanaManaged)
-		viper.Set("shared_storage.mount_point", so.SharedStorage.MountPoint)
 		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
 		viper.Set("connection.nats_url", so.Connection.NATSUrl)
 		viper.Set("connection.nats_port", so.Connection.NATSPort)

@@ -3,6 +3,8 @@ package cmd
 import (
 	"syscall"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 //  Tests defined here are different from benchmarking in that we aren't looking for
@@ -41,6 +43,12 @@ func Test_MultiConn(t *testing.T) {
 		t.Error(err)
 	}
 
+	fs := afero.NewMemMapFs()
+	err = fs.MkdirAll("dumpdir", 0755)
+	if err != nil {
+		t.Error(err)
+	}
+
 	exec := tcpTests["multiconn"].exec
 
 	pid, err := c.RunTask(exec)
@@ -51,10 +59,17 @@ func Test_MultiConn(t *testing.T) {
 	c.Process.PID = pid
 	t.Cleanup(func() {
 		syscall.Kill(int(pid), syscall.SIGKILL)
+		fs.RemoveAll("dumpdir")
 	})
 
 	oldState := c.getState(c.Process.PID)
-	c.Dump()
+	t.Logf("old state: %+v", oldState)
+
+	// create in-memory dir for dump/restore
+	err = c.Dump("dumpdir")
+	if err != nil {
+		t.Error(err)
+	}
 
 	// we have a running process, get network data before
 	// then get network data after
