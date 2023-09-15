@@ -31,11 +31,6 @@ var clientDaemonCmd = &cobra.Command{
 			c.logger.Fatal().Err(err).Msg("Could not instantiate client")
 		}
 
-		err = c.AddDaemonLayer()
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("Could not add daemon layer")
-		}
-
 		c.Process.PID = pid
 
 		if dir == "" {
@@ -77,19 +72,6 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		// create a subscription to NATS commands from the orchestrator first
-		go c.subscribeToCommands(300)
-
-		if pid == 0 {
-			err := c.tryStartJob()
-			// if we hit an error here, unrecoverable
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("could not start job")
-			}
-		}
-
-		go c.publishStateContinuous(30)
-
 		// start daemon worker with state subscribers
 		dumpChn := c.channels.dumpCmdBroadcaster.Subscribe()
 		restoreChn := c.channels.restoreCmdBroadcaster.Subscribe()
@@ -102,6 +84,22 @@ var clientDaemonCmd = &cobra.Command{
 
 		c.logger.Info().Msg("daemon terminated")
 	},
+}
+
+func (c *Client) startNATSService() {
+	// create a subscription to NATS commands from the orchestrator first
+	go c.subscribeToCommands(300)
+
+	if pid == 0 {
+		err := c.tryStartJob()
+		// if we hit an error here, unrecoverable
+		if err != nil {
+			c.logger.Fatal().Err(err).Msg("could not start job")
+		}
+	}
+
+	go c.publishStateContinuous(30)
+
 }
 
 func (c *Client) tryStartJob() error {

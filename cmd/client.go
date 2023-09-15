@@ -33,9 +33,8 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	nc  *nats.Conn
-	js  jetstream.JetStream
-	jsc nats.JetStreamContext
+	nc *nats.Conn
+	js jetstream.JetStream
 
 	logger *zerolog.Logger
 	config *utils.Config
@@ -146,29 +145,12 @@ func InstantiateClient() (*Client, error) {
 }
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
-func (c *Client) AddDaemonLayer() error {
-	// get ids. TODO NR: uuid verification
-	// these should also be added to the config just in case
-	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
-	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
-	}
-	c.selfId = selfId
 
-	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
-	}
-	c.jobId = jobId
+func (c *Client) AddNATS(selfID, jobID, authToken string) error {
+	c.selfId = selfID
+	c.jobId = jobID
 
-	authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
-	}
-
-	// connect to NATS
-	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
+	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfID))}
 	opts = setupConnOptions(opts, c.logger)
 	opts = append(opts, nats.Token(authToken))
 
