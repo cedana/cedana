@@ -1,10 +1,9 @@
 package cmd
 
 import (
+	"os"
 	"syscall"
 	"testing"
-
-	"github.com/spf13/afero"
 )
 
 //  Tests defined here are different from benchmarking in that we aren't looking for
@@ -35,16 +34,23 @@ var tcpTests = map[string]TCPTest{
 	"multidatabase": {},
 }
 
+// can't do any C/R in CI. Need to figure this out though
+func skipCI(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping testing in CI environment")
+	}
+}
+
 // Tests the correctness of TCP checkpoint/restore on a process with
 // multiple connections
 func Test_MultiConn(t *testing.T) {
+	skipCI(t)
 	c, err := InstantiateClient()
 	if err != nil {
 		t.Error(err)
 	}
 
-	fs := afero.NewMemMapFs()
-	err = fs.MkdirAll("dumpdir", 0755)
+	err = os.MkdirAll("dumpdir", 0755)
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,13 +65,13 @@ func Test_MultiConn(t *testing.T) {
 	c.Process.PID = pid
 	t.Cleanup(func() {
 		syscall.Kill(int(pid), syscall.SIGKILL)
-		fs.RemoveAll("dumpdir")
+		os.RemoveAll("dumpdir")
+		c.cleanupClient()
 	})
 
 	oldState := c.getState(c.Process.PID)
 	t.Logf("old state: %+v", oldState)
 
-	// create in-memory dir for dump/restore
 	err = c.Dump("dumpdir")
 	if err != nil {
 		t.Error(err)
