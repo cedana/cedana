@@ -22,6 +22,7 @@ type Client struct {
 	// job to run
 	Task                 string `json:"task" mapstructure:"task"`
 	LeaveRunning         bool   `json:"leave_running" mapstructure:"leave_running"`
+	ForwardLogs          bool   `json:"forward_logs" mapstructure:"forward_logs"`
 	SignalProcessPreDump bool   `json:"signal_process_pre_dump" mapstructure:"signal_process_pre_dump"`
 	SignalProcessTimeout int    `json:"signal_process_timeout" mapstructure:"signal_process_timeout"`
 }

@@ -170,7 +170,9 @@ func (c *Client) RunTask(task string) (int32, error) {
 
 	c.closeCommonFds(ppid, pid)
 
-	go c.publishLogs(r, w)
+	if c.config.Client.ForwardLogs {
+		go c.publishLogs(r, w)
+	}
 
 	return pid, nil
 }
