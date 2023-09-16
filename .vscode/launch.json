@@ -53,6 +53,20 @@
             },
         },
         {
+            "name": "debug cedana restore container",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["client", "dump", "-d", "/home/brandonsmith/.cedana/dumpdir", "-c", "${input:promptForContainer}"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
             "name": "debug cedana restore",
             "type": "go",
             "asRoot": true,
