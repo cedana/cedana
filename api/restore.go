@@ -1,4 +1,4 @@
-package cmd
+package api
 
 import (
 	"encoding/json"
@@ -9,42 +9,10 @@ import (
 
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
 )
-
-func init() {
-	clientCommand.AddCommand(restoreCmd)
-}
-
-// Restore command is only called when run manually.
-// Otherwise, daemon command is used and a network/cedana-managed restore occurs.
-var restoreCmd = &cobra.Command{
-	Use:   "restore",
-	Args:  cobra.ExactArgs(1),
-	Short: "Initialize client and restore from dumped image",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := InstantiateClient()
-		if err != nil {
-			return err
-		}
-
-		checkpointPath := args[0]
-		// check if it exists before passing to restore
-		_, err = os.Stat(checkpointPath)
-		if err != nil {
-			return err
-		}
-
-		err = c.Restore(nil, &checkpointPath)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-}
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"

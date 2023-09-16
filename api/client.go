@@ -1,10 +1,11 @@
-package cmd
+package api
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +22,6 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
-	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
@@ -89,14 +89,6 @@ type ClientLogs struct {
 	Source    string `json:"source"`
 	Level     string `json:"level"`
 	Msg       string `json:"msg"`
-}
-
-var clientCommand = &cobra.Command{
-	Use:   "client",
-	Short: "Directly dump/restore a process or start a daemon",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("error: must also specify dump, restore or daemon")
-	},
 }
 
 func InstantiateClient() (*Client, error) {
@@ -530,6 +522,88 @@ func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option 
 	return opts
 }
 
-func init() {
-	rootCmd.AddCommand(clientCommand)
+func (c *Client) startNATSService() {
+	// create a subscription to NATS commands from the orchestrator first
+	go c.subscribeToCommands(300)
+
+	err := c.tryStartJob()
+	// if we hit an error here, unrecoverable
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("could not start job")
+	}
+
+	go c.publishStateContinuous(30)
+
+}
+
+func (c *Client) tryStartJob() error {
+	var task string = c.config.Client.Task
+	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
+	var err error
+	for i := 0; i < 5; i++ {
+		pid, err := c.RunTask(task)
+		if err == nil {
+			c.logger.Info().Msgf("managing process with pid %d", pid)
+			c.state.Flag = cedana.JobRunning
+			c.Process.PID = pid
+			break
+		} else {
+			// enter a failure state, where we wait indefinitely for a command from NATS instead of
+			// continuing
+			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
+			c.state.Flag = cedana.JobStartupFailed
+			recoveryCmd := c.enterDoomLoop()
+			task = recoveryCmd.UpdatedTask
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) RunTask(task string) (int32, error) {
+	var pid int32
+
+	if task == "" {
+		return 0, fmt.Errorf("could not find task in config")
+	}
+
+	// need a more resilient/retriable way of doing this
+	r, w, err := os.Pipe()
+	if err != nil {
+		return 0, err
+	}
+
+	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd := exec.Command("bash", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stdin = nullFile
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	err = cmd.Start()
+	if err != nil {
+		return 0, err
+	}
+
+	pid = int32(cmd.Process.Pid)
+	ppid := int32(os.Getpid())
+
+	c.closeCommonFds(ppid, pid)
+
+	if c.config.Client.ForwardLogs {
+		go c.publishLogs(r, w)
+	}
+
+	return pid, nil
 }
