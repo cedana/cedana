@@ -87,6 +87,8 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
+func (c *Client) 
+
 func (c *Client) startNATSService() {
 	// create a subscription to NATS commands from the orchestrator first
 	go c.subscribeToCommands(300)

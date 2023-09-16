@@ -51,6 +51,10 @@ func (b *Bootstrap) bootstrap() {
 	}
 }
 
+func (b *Bootstrap) createSystemdService() {
+
+}
+
 func init() {
 	rootCmd.AddCommand(bootstrapCmd)
 }
