@@ -32,19 +32,14 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/pkg/blockio"
 	"github.com/containerd/containerd/pkg/epoch"
-	"github.com/containerd/containerd/pkg/rdt"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/protobuf"
 	ptypes "github.com/containerd/containerd/protobuf/types"
 	"github.com/containerd/containerd/rootfs"
-	"github.com/containerd/containerd/runtime"
 	"github.com/containerd/containerd/runtime/linux/runctypes"
 	"github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl/v2"
@@ -690,23 +685,6 @@ func containerdCheckpoint(id string, ref string) error {
 	return nil
 }
 
-type object interface {
-	ID() string
-}
-
-// NSMap extends Map type with a notion of namespaces passed via Context.
-type NSMap[T object] struct {
-	mu      sync.RWMutex
-	objects map[string]map[string]T
-}
-
-// NewNSMap returns a new NSMap
-func NewNSMap[T object]() *NSMap[T] {
-	return &NSMap[T]{
-		objects: make(map[string]map[string]T),
-	}
-}
-
 // getCheckpointPath only suitable for runc runtime now
 func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
 	if option == nil {
@@ -725,69 +703,6 @@ func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
 	checkpointPath = opts.ImagePath
 
 	return checkpointPath, nil
-}
-
-func initLocal(ic *plugin.InitContext) (*local, error) {
-	config := ic.Config.(*Config)
-
-	v2r, err := ic.GetByID(plugin.RuntimePluginV2, "task")
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := ic.Get(plugin.MetadataPlugin)
-	if err != nil {
-		return nil, err
-	}
-
-	ep, err := ic.Get(plugin.EventPlugin)
-	if err != nil {
-		return nil, err
-	}
-
-	monitor, err := ic.Get(plugin.TaskMonitorPlugin)
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return nil, err
-		}
-		monitor = runtime.NewNoopMonitor()
-	}
-
-	db := m.(*metadata.DB)
-	l := &local{
-		containers: metadata.NewContainerStore(db),
-		store:      db.ContentStore(),
-		publisher:  ep.(events.Publisher),
-		monitor:    monitor.(runtime.TaskMonitor),
-		v2Runtime:  v2r.(runtime.PlatformRuntime),
-	}
-
-	v2Tasks, err := l.v2Runtime.Tasks(ic.Context, true)
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range v2Tasks {
-		l.monitor.Monitor(t, nil)
-	}
-
-	if err := blockio.SetConfig(config.BlockIOConfigFile); err != nil {
-		log.G(ic.Context).WithError(err).Errorf("blockio initialization failed")
-	}
-	if err := rdt.SetConfig(config.RdtConfigFile); err != nil {
-		log.G(ic.Context).WithError(err).Errorf("RDT initialization failed")
-	}
-
-	return l, nil
-}
-
-func getContainer(ctx gocontext.Context, id string) (*containers.Container, error) {
-	db := &metadata.DB{}
-	containers := metadata.NewContainerStore(db)
-	container, err := containers.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return &container, nil
 }
 
 func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
@@ -945,33 +860,6 @@ func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaTy
 // 	}
 // 	return nil
 // }
-
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		// setting to 4096 to align with PIPE_BUF
-		// http://man7.org/linux/man-pages/man7/pipe.7.html
-		buffer := make([]byte, 4096)
-		return &buffer
-	},
-}
-
-func copyFile(to, from string) error {
-	ff, err := os.Open(from)
-	if err != nil {
-		return err
-	}
-	defer ff.Close()
-	tt, err := os.Create(to)
-	if err != nil {
-		return err
-	}
-	defer tt.Close()
-
-	p := bufPool.Get().(*[]byte)
-	defer bufPool.Put(p)
-	_, err = io.CopyBuffer(tt, ff, *p)
-	return err
-}
 
 // func actualCriuCheckpoint(context context.Context, id string, opts *runc.CheckpointOpts, actions ...runc.CheckpointAction) error {
 // 	args := []string{"checkpoint"}
@@ -1153,7 +1041,7 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		Name:   i.Name,
 		Target: desc,
 		Labels: map[string]string{
-			"containerd.io/checkpoint": "true",
+			"/checkpoint": "true",
 		},
 	}
 	if im, err = client.ImageService().Create(ctx, im); err != nil {
@@ -1247,31 +1135,6 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	}
 
 	return false
-}
-
-// withCheckpointOpts only suitable for runc runtime now
-func withCheckpointOpts(rt string, context gocontext.Context) containerd.CheckpointTaskOpts {
-	return func(r *containerd.CheckpointTaskInfo) error {
-		imagePath := "$HOME/.cedana/dumpdir"
-		workPath := ""
-
-		if r.Options == nil {
-			r.Options = &options.CheckpointOptions{}
-		}
-		opts, _ := r.Options.(*options.CheckpointOptions)
-
-		// if context.Bool("exit") {
-		opts.Exit = false
-		// }
-		if imagePath != "" {
-			opts.ImagePath = imagePath
-		}
-		if workPath != "" {
-			opts.WorkPath = workPath
-		}
-
-		return nil
-	}
 }
 
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
