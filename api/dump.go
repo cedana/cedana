@@ -59,37 +59,6 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	return &checkpointPath
 }
 
-// consistency for the file is important, so we need to
-// pause the process writing the file.
-// An alternative here could be to use file locks, TODO NR: investigate
-func (c *Client) signalPause() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGSTOP)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Client) signalContinue() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGCONT)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {

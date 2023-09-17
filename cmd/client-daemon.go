@@ -39,7 +39,7 @@ var clientDaemonCmd = &cobra.Command{
 			LogFilePerm: 0o664,
 			WorkDir:     "./",
 			Umask:       027,
-			Args:        []string{executable, "client", "daemon"},
+			Args:        []string{executable, "daemon"},
 		}
 
 		gd.AddCommand(gd.StringFlag(daemonSignal, "stop"), syscall.SIGTERM, termHandler)
@@ -57,12 +57,12 @@ var clientDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
+		go cd.StartDaemon()
+
 		err = gd.ServeSignals()
 		if err != nil {
 			logger.Fatal().Err(err)
 		}
-
-		go cd.StartDaemon()
 
 		logger.Info().Msg("daemon terminated")
 	},

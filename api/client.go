@@ -137,7 +137,6 @@ func InstantiateClient() (*Client, error) {
 }
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
-
 func (c *Client) AddNATS(selfID, jobID, authToken string) error {
 	c.selfId = selfID
 	c.jobId = jobID

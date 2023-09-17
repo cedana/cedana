@@ -29,7 +29,6 @@ func LoadOverrides(cdir string) (*ConfigClient, error) {
 	_, err := os.OpenFile(overridePath, 0, 0o644)
 	if errors.Is(err, os.ErrNotExist) {
 		// do nothing, drop and leave
-		fmt.Printf("No server overrides found..\n")
 		return nil, err
 	} else {
 		f, err := os.ReadFile(overridePath)

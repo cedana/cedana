@@ -26,7 +26,7 @@ var cfgCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Sprintf("config file used: %s", viper.GetViper().ConfigFileUsed())
+		fmt.Printf("config file used: %s", viper.GetViper().ConfigFileUsed())
 		// pretty print config for debugging to make sure it's been loaded correctly
 		prettyCfg, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
