@@ -28,17 +28,22 @@ import (
 	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
+	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
+	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/pkg/blockio"
 	"github.com/containerd/containerd/pkg/epoch"
+	"github.com/containerd/containerd/pkg/rdt"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/protobuf"
 	ptypes "github.com/containerd/containerd/protobuf/types"
 	"github.com/containerd/containerd/rootfs"
+	"github.com/containerd/containerd/runtime"
 	"github.com/containerd/containerd/runtime/linux/runctypes"
 	"github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl/v2"
@@ -438,12 +443,6 @@ func Dump(dir string, containerID string) error {
 	// Come back to this later. First runc restore
 	// c := getContainerFromDocker(containerID)
 
-	// c := getContainerFromRunc(containerID)
-
-	// err := c.RuncCheckpoint(opts, c.pid)
-	// if err != nil {
-	// 	return err
-	// }
 	dir = "docker.io/library/hello-world:checkpoint6"
 
 	containerdCheckpoint(containerID, dir)
@@ -674,9 +673,9 @@ func containerdCheckpoint(id string, ref string) error {
 	// create image path store criu image files
 	imagePath := "$HOME/.cedana/dumpdir"
 	// checkpoint task
-	if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
-		return err
-	}
+	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
+	// 	return err
+	// }
 	checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(imagePath))
 
 	if err != nil {
@@ -727,21 +726,74 @@ func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
 	return checkpointPath, nil
 }
 
-func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest) (*apiTasks.CheckpointTaskResponse, error) {
+func initLocal(ic *plugin.InitContext) (*local, error) {
+	config := ic.Config.(*Config)
+
+	v2r, err := ic.GetByID(plugin.RuntimePluginV2, "task")
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := ic.Get(plugin.MetadataPlugin)
+	if err != nil {
+		return nil, err
+	}
+
+	ep, err := ic.Get(plugin.EventPlugin)
+	if err != nil {
+		return nil, err
+	}
+
+	monitor, err := ic.Get(plugin.TaskMonitorPlugin)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return nil, err
+		}
+		monitor = runtime.NewNoopMonitor()
+	}
+
+	db := m.(*metadata.DB)
+	l := &local{
+		containers: metadata.NewContainerStore(db),
+		store:      db.ContentStore(),
+		publisher:  ep.(events.Publisher),
+		monitor:    monitor.(runtime.TaskMonitor),
+		v2Runtime:  v2r.(runtime.PlatformRuntime),
+	}
+
+	v2Tasks, err := l.v2Runtime.Tasks(ic.Context, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range v2Tasks {
+		l.monitor.Monitor(t, nil)
+	}
+
+	if err := blockio.SetConfig(config.BlockIOConfigFile); err != nil {
+		log.G(ic.Context).WithError(err).Errorf("blockio initialization failed")
+	}
+	if err := rdt.SetConfig(config.RdtConfigFile); err != nil {
+		log.G(ic.Context).WithError(err).Errorf("RDT initialization failed")
+	}
+
+	return l, nil
+}
+
+func getContainer(ctx gocontext.Context, id string) (*containers.Container, error) {
+	db := &metadata.DB{}
+	containers := metadata.NewContainerStore(db)
+	container, err := containers.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &container, nil
+}
+
+func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
 	db := &metadata.DB{}
 	l := &local{
 		containers: metadata.NewContainerStore(db),
 		store:      db.ContentStore(),
-	}
-
-	container, err := l.containers.Get(ctx, request.ContainerID)
-	if err != nil {
-		return &apiTasks.CheckpointTaskResponse{}, err
-	}
-
-	runtimeTask, err := l.GetTaskFromContainer(ctx, &container)
-	if err != nil {
-		return &apiTasks.CheckpointTaskResponse{}, err
 	}
 
 	v, err := typeurl.UnmarshalAny(request.Options)
@@ -751,6 +803,17 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	opts, ok := v.(*options.CheckpointOptions)
 	if !ok {
 		return &apiTasks.CheckpointTaskResponse{}, fmt.Errorf("invalid task checkpoint option for %s", container.Runtime.Name)
+	}
+
+	criuOpts := &CriuOpts{
+		ImagesDirectory:         opts.ImagePath,
+		WorkDirectory:           opts.WorkPath,
+		LeaveRunning:            !opts.Exit,
+		TcpEstablished:          opts.OpenTcp,
+		ExternalUnixConnections: opts.ExternalUnixSockets,
+		ShellJob:                opts.Terminal,
+		FileLocks:               opts.FileLocks,
+		StatusFd:                int(3),
 	}
 
 	image := opts.ImagePath
@@ -766,8 +829,16 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		defer os.RemoveAll(image)
 	}
 
-	if err := runtimeTask.Checkpoint(ctx, image, request.Options); err != nil {
-		return &apiTasks.CheckpointTaskResponse{}, err
+	// Replace with our criu checkpoint
+	// if err := runtimeTask.Checkpoint(ctx, image, request.Options); err != nil {
+	// 	return &apiTasks.CheckpointTaskResponse{}, err
+	// }
+
+	c := getContainerFromRunc(container.ID)
+
+	err = c.RuncCheckpoint(criuOpts, c.pid)
+	if err != nil {
+		return nil, err
 	}
 
 	// do not commit checkpoint image if checkpoint ImagePath is passed,
@@ -805,7 +876,26 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 }
 
-// func criuCheckpoint(ctx context.Context, r *CheckpointConfig) error {
+// func criuCheckpoint(ctx context.Context, containerId string, ctr *apiTasksV2.CheckpointTaskRequest) error {
+
+// 	var opts options.CheckpointOptions
+// 	if ctr.Options != nil {
+// 		if err := typeurl.UnmarshalTo(ctr.Options, &opts); err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	r := &process.CheckpointConfig{
+// 		Path:                     ctr.Path,
+// 		Exit:                     opts.Exit,
+// 		AllowOpenTCP:             opts.OpenTcp,
+// 		AllowExternalUnixSockets: opts.ExternalUnixSockets,
+// 		AllowTerminal:            opts.Terminal,
+// 		FileLocks:                opts.FileLocks,
+// 		EmptyNamespaces:          opts.EmptyNamespaces,
+// 		WorkDir:                  opts.WorkPath,
+// 	}
+
 // 	var actions []runc.CheckpointAction
 // 	if !r.Exit {
 // 		actions = append(actions, runc.LeaveRunning)
@@ -813,10 +903,10 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 // 	// keep criu work directory if criu work dir is set
 // 	work := r.WorkDir
 // 	if work == "" {
-// 		work = filepath.Join(p.WorkDir, "criu-work")
+// 		work = filepath.Join("", "criu-work")
 // 		defer os.RemoveAll(work)
 // 	}
-// 	if err := init.runtime.Checkpoint(ctx, p.id, &runc.CheckpointOpts{
+// 	if err := actualCriuCheckpoint(ctx, containerId, &runc.CheckpointOpts{
 // 		WorkDir:                  work,
 // 		ImagePath:                r.Path,
 // 		AllowOpenTCP:             r.AllowOpenTCP,
@@ -825,13 +915,62 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 // 		FileLocks:                r.FileLocks,
 // 		EmptyNamespaces:          r.EmptyNamespaces,
 // 	}, actions...); err != nil {
-// 		dumpLog := filepath.Join(p.Bundle, "criu-dump.log")
+// 		Bundle := ""
+// 		dumpLog := filepath.Join(Bundle, "criu-dump.log")
 // 		if cerr := copyFile(dumpLog, filepath.Join(work, "dump.log")); cerr != nil {
 // 			log.G(ctx).WithError(cerr).Error("failed to copy dump.log to criu-dump.log")
 // 		}
-// 		return fmt.Errorf("%s path= %s", criuError(err), dumpLog)
+// 		return fmt.Errorf("%s path= %s", err, dumpLog)
 // 	}
 // 	return nil
+// }
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		// setting to 4096 to align with PIPE_BUF
+		// http://man7.org/linux/man-pages/man7/pipe.7.html
+		buffer := make([]byte, 4096)
+		return &buffer
+	},
+}
+
+func copyFile(to, from string) error {
+	ff, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer ff.Close()
+	tt, err := os.Create(to)
+	if err != nil {
+		return err
+	}
+	defer tt.Close()
+
+	p := bufPool.Get().(*[]byte)
+	defer bufPool.Put(p)
+	_, err = io.CopyBuffer(tt, ff, *p)
+	return err
+}
+
+// func actualCriuCheckpoint(context context.Context, id string, opts *runc.CheckpointOpts, actions ...runc.CheckpointAction) error {
+// 	args := []string{"checkpoint"}
+// 	extraFiles := []*os.File{}
+// 	if opts != nil {
+// 		args = append(args, opts.args()...)
+// 		if opts.StatusFile != nil {
+// 			// pass the status file to the child process
+// 			extraFiles = []*os.File{opts.StatusFile}
+// 			// set status-fd to 3 as this will be the file descriptor
+// 			// of the first file passed with cmd.ExtraFiles
+// 			args = append(args, "--status-fd", "3")
+// 		}
+// 	}
+// 	for _, a := range actions {
+// 		args = a(args)
+// 	}
+// 	cmd := r.command(context, append(args, id)...)
+// 	cmd.ExtraFiles = extraFiles
+// 	return r.runOrError(cmd)
 // }
 
 // WithCheckpointImagePath sets image path for checkpoint option
@@ -951,7 +1090,7 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		Annotations: make(map[string]string),
 	}
 	// TODO: this is where we do custom criu checkpoint
-	response, err := localCheckpointTask(ctx, client, &index, request)
+	response, err := localCheckpointTask(ctx, client, &index, request, cr)
 	if err != nil {
 		return nil, err
 	}

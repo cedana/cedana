@@ -81,7 +81,7 @@ var tasksServiceRequires = []plugin.Type{
 	plugin.TaskMonitorPlugin,
 }
 
-func init() {
+func Init() {
 	plugin.Register(&plugin.Registration{
 		Type:     plugin.ServicePlugin,
 		ID:       services.TasksService,
@@ -156,7 +156,7 @@ type local struct {
 }
 
 func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.CallOption) (*api.CreateTaskResponse, error) {
-	container, err := l.getContainer(ctx, r.ContainerID)
+	container, err := l.GetContainer(ctx, r.ContainerID)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -265,7 +265,7 @@ func (l *local) Start(ctx context.Context, r *api.StartRequest, _ ...grpc.CallOp
 }
 
 func (l *local) Delete(ctx context.Context, r *api.DeleteTaskRequest, _ ...grpc.CallOption) (*api.DeleteResponse, error) {
-	container, err := l.getContainer(ctx, r.ContainerID)
+	container, err := l.GetContainer(ctx, r.ContainerID)
 	if err != nil {
 		return nil, err
 	}
@@ -526,7 +526,7 @@ func (l *local) CloseIO(ctx context.Context, r *api.CloseIORequest, _ ...grpc.Ca
 }
 
 func (l *local) Checkpoint(ctx context.Context, r *api.CheckpointTaskRequest, _ ...grpc.CallOption) (*api.CheckpointTaskResponse, error) {
-	container, err := l.getContainer(ctx, r.ContainerID)
+	container, err := l.GetContainer(ctx, r.ContainerID)
 	if err != nil {
 		return nil, err
 	}
@@ -683,7 +683,7 @@ func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Re
 	}, nil
 }
 
-func (l *local) getContainer(ctx context.Context, id string) (*containers.Container, error) {
+func (l *local) GetContainer(ctx context.Context, id string) (*containers.Container, error) {
 	var container containers.Container
 	container, err := l.containers.Get(ctx, id)
 	if err != nil {
@@ -693,7 +693,7 @@ func (l *local) getContainer(ctx context.Context, id string) (*containers.Contai
 }
 
 func (l *local) getTask(ctx context.Context, id string) (runtime.Task, error) {
-	container, err := l.getContainer(ctx, id)
+	container, err := l.GetContainer(ctx, id)
 	if err != nil {
 		return nil, err
 	}
