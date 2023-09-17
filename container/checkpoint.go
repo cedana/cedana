@@ -24,6 +24,7 @@ import (
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	apiTasks "github.com/containerd/containerd/api/services/tasks/v1"
+	"github.com/containerd/containerd/api/types"
 	containerdTypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/cio"
@@ -54,6 +55,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/opencontainers/go-digest"
 	is "github.com/opencontainers/image-spec/specs-go"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -511,7 +513,6 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 func containerdRestore(id string, ref string) error {
 	ctx := gocontext.Background()
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -671,7 +672,7 @@ func containerdCheckpoint(id string, ref string) error {
 	// }
 
 	// create image path store criu image files
-	imagePath := "$HOME/.cedana/dumpdir"
+	imagePath := ""
 	// checkpoint task
 	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
 	// 	return err
@@ -790,11 +791,6 @@ func getContainer(ctx gocontext.Context, id string) (*containers.Container, erro
 }
 
 func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
-	db := &metadata.DB{}
-	l := &local{
-		containers: metadata.NewContainerStore(db),
-		store:      db.ContentStore(),
-	}
 
 	v, err := typeurl.UnmarshalAny(request.Options)
 	if err != nil {
@@ -826,6 +822,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		if err != nil {
 			return &apiTasks.CheckpointTaskResponse{}, err
 		}
+		criuOpts.ImagesDirectory = image
 		defer os.RemoveAll(image)
 	}
 
@@ -848,7 +845,10 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	}
 	// write checkpoint to the content store
 	tar := archive.Diff(ctx, "", image)
-	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1Checkpoint, image, tar)
+	cp, err := localWriteContent(ctx, client, images.MediaTypeContainerd1Checkpoint, image, tar)
+	if err != nil {
+		return nil, err
+	}
 	// close tar first after write
 	if err := tar.Close(); err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
@@ -863,7 +863,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
 	spec := bytes.NewReader(data)
-	specD, err := l.writeContent(ctx, images.MediaTypeContainerd1CheckpointConfig, filepath.Join(image, "spec"), spec)
+	specD, err := localWriteContent(ctx, client, images.MediaTypeContainerd1CheckpointConfig, filepath.Join(image, "spec"), spec)
 	if err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
@@ -874,6 +874,27 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		},
 	}, nil
 
+}
+
+func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
+	writer, err := client.ContentStore().Writer(ctx, content.WithRef(ref), content.WithDescriptor(ocispec.Descriptor{MediaType: mediaType}))
+	if err != nil {
+		return nil, err
+	}
+	defer writer.Close()
+	size, err := io.Copy(writer, r)
+	if err != nil {
+		return nil, err
+	}
+	if err := writer.Commit(ctx, 0, ""); err != nil {
+		return nil, err
+	}
+	return &types.Descriptor{
+		MediaType:   mediaType,
+		Digest:      writer.Digest().String(),
+		Size:        size,
+		Annotations: make(map[string]string),
+	}, nil
 }
 
 // func criuCheckpoint(ctx context.Context, containerId string, ctr *apiTasksV2.CheckpointTaskRequest) error {
