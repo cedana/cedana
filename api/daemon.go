@@ -67,6 +67,8 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 	}
 	go cd.client.startNATSService()
 
+ // set up broadcasters, listen and c/r, same way we do with the old daemon
+
 	return nil
 }
 
