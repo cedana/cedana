@@ -71,6 +71,12 @@ var (
 	ErrNotImplemented     = errors.New("not implemented") // represents not supported and unimplemented
 )
 
+const (
+	checkpointImageNameLabel       = "org.opencontainers.image.ref.name"
+	checkpointRuntimeNameLabel     = "io.containerd.checkpoint.runtime"
+	checkpointSnapshotterNameLabel = "io.containerd.checkpoint.snapshotter"
+)
+
 type parentProcess interface {
 	// pid returns the pid for the running process.
 	pid() int
@@ -440,10 +446,10 @@ func Dump(dir string, containerID string) error {
 	// Come back to this later. First runc restore
 	// c := getContainerFromDocker(containerID)
 
-	dir = "docker.io/library/hello-world:checkpoint6"
+	dir = "containerd.io/checkpoint/test11:09-16-2023-22:11:37"
 
-	containerdCheckpoint(containerID, dir)
-	// containerdRestore(containerID, dir)
+	// containerdCheckpoint(containerID, dir)
+	containerdRestore(containerID, dir)
 
 	return nil
 }
@@ -638,6 +644,7 @@ func containerdCheckpoint(id string, ref string) error {
 			}
 		}()
 	}
+
 	// opts := []containerd.CheckpointTaskOpts{withCheckpointOpts(info.Runtime.Name, ctx)}
 
 	// Original task checkpoint
@@ -1022,11 +1029,17 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		return containerd.NewImage(client, images.Image{}), nil
 	}
 
+	// add runtime info to index
+	index.Annotations[checkpointRuntimeNameLabel] = cr.Runtime.Name
+	// add snapshotter info to index
+	index.Annotations[checkpointSnapshotterNameLabel] = cr.Snapshotter
+
 	if cr.Image != "" {
 		if err := checkpointImage(ctx, client, &index, cr.Image); err != nil {
 			return nil, err
 		}
-		index.Annotations["image.name"] = cr.Image
+		// Changed this from image.name
+		index.Annotations[checkpointImageNameLabel] = cr.Image
 	}
 	if cr.SnapshotKey != "" {
 		if err := checkpointRWSnapshot(ctx, client, &index, cr.Snapshotter, cr.SnapshotKey); err != nil {
@@ -1041,7 +1054,7 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		Name:   i.Name,
 		Target: desc,
 		Labels: map[string]string{
-			"/checkpoint": "true",
+			"containerd.io/checkpoint": "true",
 		},
 	}
 	if im, err = client.ImageService().Create(ctx, im); err != nil {
