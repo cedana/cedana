@@ -136,7 +136,7 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -151,7 +151,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 		// cleanup along the way
 		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
-		return err
+		return nil, err
 	}
 
 	c.logger.Info().Msgf("process restored: %v", resp)
@@ -162,16 +162,17 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
 	c.cleanupClient()
-	return nil
+	return resp.Restore.Pid, nil
 }
 
 func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
-func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) error {
+func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
+	var pid *int32
 
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
@@ -188,31 +189,31 @@ func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) error {
 		case cedana.CheckpointTypeCRIU:
 			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {
-				return err
+				return nil, err
 			}
 			dir = *tmpdir
 
-			err = c.criuRestore(&opts, nfy, dir)
+			pid, err = c.criuRestore(&opts, nfy, dir)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 		case cedana.CheckpointTypePytorch:
 			err := c.pyTorchRestore()
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	} else {
 		dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = c.criuRestore(&opts, nfy, *dir)
+		pid, err = c.criuRestore(&opts, nfy, *dir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return pid, nil
 }

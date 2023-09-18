@@ -40,7 +40,7 @@ func NewCLI() (*CLI, error) {
 
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "Directly checkpoint a running process to a directory",
+	Short: "Manually checkpoint a running process to a directory",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
@@ -58,6 +58,7 @@ var dumpCmd = &cobra.Command{
 				return fmt.Errorf("no dump directory specified")
 			}
 			dir = cli.cfg.SharedStorage.DumpStorageDir
+			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
 
 		a := api.DumpArgs{
@@ -71,11 +72,34 @@ var dumpCmd = &cobra.Command{
 			return err
 		}
 
+		cli.logger.Info().Msgf("checkpoint of process %d written successfully to %s", pid, dir)
 		return nil
 	},
 }
 
-var restoreCmd = &cobra.Command{}
+var restoreCmd = &cobra.Command{
+	Use:   "restore",
+	Short: "Manually restore a process from a checkpoint located at input path",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		a := api.RestoreArgs{
+			Path: args[0],
+		}
+
+		var resp api.RestoreResp
+		err = cli.conn.Call("CedanaDaemon.Restore", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
 
 var natsCmd = &cobra.Command{
 	Use:   "nats",
@@ -123,6 +147,5 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	clientDaemonCmd.AddCommand(natsCmd)
-	clientDaemonCmd.AddCommand()
 	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 }

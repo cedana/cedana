@@ -550,13 +550,15 @@ func (c *Client) startNATSService() {
 
 		case cmd := <-restoreCmdChn:
 			c.logger.Info().Msg("received restore command from NATS server")
-			err := c.Restore(&cmd, nil)
+			pid, err := c.Restore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore process: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
 				c.publishStateOnce(c.getState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.RestoreSuccess
+			c.Process.PID = *pid
+			c.publishStateOnce(c.getState(c.Process.PID))
 
 		default:
 			time.Sleep(1 * time.Second)

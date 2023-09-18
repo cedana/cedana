@@ -28,7 +28,8 @@ type RestoreArgs struct {
 }
 
 type RestoreResp struct {
-	Error error
+	Error  error
+	NewPID int32
 }
 
 type ListCheckpointsArgs struct {
@@ -68,10 +69,11 @@ func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
-	err := cd.client.Restore(nil, &args.Path)
+	pid, err := cd.client.Restore(nil, &args.Path)
 	if err != nil {
 		resp.Error = err
 	}
+	resp.NewPID = *pid
 	return err
 }
 
