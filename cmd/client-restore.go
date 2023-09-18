@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 
 func init() {
 	clientCommand.AddCommand(restoreCmd)
+	dumpCommand.Flags().StringVarP(&containerId, "container", "c", "", "restore from a container id")
 }
 
 // Restore command is only called when run manually.
@@ -36,6 +38,12 @@ var restoreCmd = &cobra.Command{
 		_, err = os.Stat(checkpointPath)
 		if err != nil {
 			return err
+		}
+
+		if containerId != "" {
+			err = container.Restore(dir, containerId)
+		} else {
+			err = c.Restore(nil, &checkpointPath)
 		}
 
 		err = c.Restore(nil, &checkpointPath)

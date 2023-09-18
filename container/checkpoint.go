@@ -448,10 +448,27 @@ func Dump(dir string, containerID string) error {
 
 	dir = "containerd.io/checkpoint/test11:09-16-2023-22:11:37"
 
-	// containerdCheckpoint(containerID, dir)
-	containerdRestore(containerID, dir)
+	err := containerdCheckpoint(containerID, dir)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func Restore(dir string, containerID string) error {
+
+	dir = "containerd.io/checkpoint/test11:09-16-2023-22:11:37"
+
+	err := containerdRestore(containerID, dir)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 //  CheckpointOpts holds the options for performing a criu checkpoint using runc
