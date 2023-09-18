@@ -570,6 +570,7 @@ func (c *Client) TryStartJob(task *string) error {
 	if task == nil {
 		// try config
 		task = &c.config.Client.Task
+		c.logger.Info().Msgf("no task provided, using task in config: %s", *task)
 	}
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
 	var err error

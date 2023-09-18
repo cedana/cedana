@@ -101,6 +101,30 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
+var startTaskCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Start and register a new process with Cedana",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		a := api.StartTaskArgs{
+			Task: args[0],
+		}
+
+		var resp api.StartTaskResp
+		err = cli.conn.Call("CedanaDaemon.StartTask", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 var natsCmd = &cobra.Command{
 	Use:   "nats",
 	Short: "Start NATS server for cedana client",
@@ -146,6 +170,7 @@ var natsCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
+	rootCmd.AddCommand(startTaskCmd)
 	clientDaemonCmd.AddCommand(natsCmd)
 	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 }
