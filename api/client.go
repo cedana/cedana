@@ -533,6 +533,22 @@ func (c *Client) startNATSService() {
 
 	go c.publishStateContinuous(30)
 
+	// listen for broadcast commands
+	// subscribe to our broadcasters
+	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
+	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
+
+	for {
+		select {
+		case <-dumpCmdChn:
+			c.logger.Info().Msg("received checkpoint command from NATS server")
+		case <-restoreCmdChn:
+			c.logger.Info().Msg("received restore command from NATS server")
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
+
 }
 
 func (c *Client) tryStartJob() error {

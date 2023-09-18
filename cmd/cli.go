@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/rpc"
+	"os"
 	"strconv"
 
 	"github.com/cedana/cedana/api"
@@ -74,7 +75,50 @@ var dumpCmd = &cobra.Command{
 	},
 }
 
+var natsCmd = &cobra.Command{
+	Use:   "nats",
+	Short: "Start NATS server for cedana client",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
+		}
+
+		jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
+		}
+
+		authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
+		}
+
+		a := api.StartNATSArgs{
+			SelfID:    selfId,
+			JobID:     jobId,
+			AuthToken: authToken,
+		}
+
+		var resp api.StartNATSResp
+		err = cli.conn.Call("CedanaDaemon.StartNATS", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		cli.logger.Info().Msgf("NATS client started, waiting for commands sent to job %s", jobId)
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(dumpCmd)
+	rootCmd.AddCommand(natsCmd)
 	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 }
