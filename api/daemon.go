@@ -47,6 +47,21 @@ type StartNATSResp struct {
 	Error error
 }
 
+type StartTaskArgs struct {
+	Task string
+}
+
+type StartTaskResp struct {
+	Error error
+}
+
+type RegisterProcessArgs struct {
+	PID int32
+}
+
+type RegisterProcessResp struct {
+}
+
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 	cd.client.Process.PID = args.PID
 	return cd.client.Dump(args.Dir)
@@ -69,6 +84,14 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 	go cd.client.startNATSService()
 
 	return nil
+}
+
+func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
+	err := cd.client.TryStartJob(&args.Task)
+	if err != nil {
+		resp.Error = err
+	}
+	return err
 }
 
 func NewDaemon(stop chan struct{}) *CedanaDaemon {
@@ -94,6 +117,7 @@ func (cd *CedanaDaemon) Cleanup(listener net.Listener) {
 func (cd *CedanaDaemon) StartDaemon() {
 	_, err := os.Stat("/tmp/cedana.sock")
 	if err == nil {
+		cd.logger.Info().Msg("cleaning old socket file...")
 		os.Remove("/tmp/cedana.sock")
 	}
 
@@ -104,10 +128,14 @@ func (cd *CedanaDaemon) StartDaemon() {
 
 	defer cd.Cleanup(listener)
 
+L:
 	for {
 		select {
 		case <-cd.stop:
-			return
+			// this isn't working - fix NR
+			// have to kill w/ kill -9 for now
+			cd.logger.Info().Msg("stop hit, terminating daemon...")
+			break L
 		default:
 			conn, err := listener.Accept()
 			if err != nil {
@@ -116,4 +144,9 @@ func (cd *CedanaDaemon) StartDaemon() {
 			rpc.ServeConn(conn)
 		}
 	}
+}
+
+func isDaemonRunning() bool {
+	_, err := os.Stat("/tmp/cedana.sock")
+	return err == nil
 }

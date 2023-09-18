@@ -203,8 +203,10 @@ func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("pid: %d, task: %s", c.Process.PID, c.config.Client.Task)
 	// publish state continuously
 	for range ticker.C {
-		state := c.getState(c.Process.PID)
-		c.publishStateOnce(state)
+		if c.Process.PID != 0 {
+			state := c.getState(c.Process.PID)
+			c.publishStateOnce(state)
+		}
 	}
 }
 
@@ -531,25 +533,46 @@ func (c *Client) startNATSService() {
 	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
 	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
 
+	dir := c.config.SharedStorage.DumpStorageDir
+
 	for {
 		select {
 		case <-dumpCmdChn:
 			c.logger.Info().Msg("received checkpoint command from NATS server")
-		case <-restoreCmdChn:
+			err := c.Dump(dir)
+			if err != nil {
+				c.logger.Warn().Msgf("could not checkpoint process: %v", err)
+				c.state.CheckpointState = cedana.CheckpointFailed
+				c.publishStateOnce(c.getState(c.Process.PID))
+			}
+			c.state.CheckpointState = cedana.CheckpointSuccess
+			c.publishStateOnce(c.getState(c.Process.PID))
+
+		case cmd := <-restoreCmdChn:
 			c.logger.Info().Msg("received restore command from NATS server")
+			err := c.Restore(&cmd, nil)
+			if err != nil {
+				c.logger.Warn().Msgf("could not restore process: %v", err)
+				c.state.CheckpointState = cedana.RestoreFailed
+				c.publishStateOnce(c.getState(c.Process.PID))
+			}
+			c.state.CheckpointState = cedana.RestoreSuccess
+
 		default:
 			time.Sleep(1 * time.Second)
 		}
 	}
-
 }
 
-func (c *Client) tryStartJob() error {
-	var task string = c.config.Client.Task
+func (c *Client) TryStartJob(task *string) error {
+	if task == nil {
+		// try config
+		task = &c.config.Client.Task
+	}
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
 	var err error
 	for i := 0; i < 5; i++ {
-		pid, err := c.RunTask(task)
+		pid, err := c.RunTask(*task)
 		if err == nil {
 			c.logger.Info().Msgf("managing process with pid %d", pid)
 			c.state.Flag = cedana.JobRunning
@@ -561,7 +584,7 @@ func (c *Client) tryStartJob() error {
 			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
 			c.state.Flag = cedana.JobStartupFailed
 			recoveryCmd := c.enterDoomLoop()
-			task = recoveryCmd.UpdatedTask
+			task = &recoveryCmd.UpdatedTask
 		}
 	}
 

@@ -75,6 +75,8 @@ var dumpCmd = &cobra.Command{
 	},
 }
 
+var restoreCmd = &cobra.Command{}
+
 var natsCmd = &cobra.Command{
 	Use:   "nats",
 	Short: "Start NATS server for cedana client",
@@ -119,6 +121,8 @@ var natsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(dumpCmd)
-	rootCmd.AddCommand(natsCmd)
+	rootCmd.AddCommand(restoreCmd)
+	clientDaemonCmd.AddCommand(natsCmd)
+	clientDaemonCmd.AddCommand()
 	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 }
