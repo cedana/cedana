@@ -24,7 +24,7 @@ var clientDaemonCmd = &cobra.Command{
 
 		logger := utils.GetLogger()
 
-		cd := api.NewDaemon()
+		cd := api.NewDaemon(stop)
 		rpc.Register(cd)
 
 		executable, err := os.Executable()

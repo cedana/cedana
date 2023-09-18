@@ -7,12 +7,12 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cedana/cedana/cmd"
+	"github.com/cedana/cedana/api"
 )
 
 func BenchmarkLoopRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -43,7 +43,7 @@ func BenchmarkLoopRestore(b *testing.B) {
 
 func BenchmarkServerRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -74,7 +74,7 @@ func BenchmarkServerRestore(b *testing.B) {
 
 func BenchmarkPytorchRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -106,7 +106,7 @@ func BenchmarkPytorchRestore(b *testing.B) {
 
 func BenchmarkRegressionRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -136,7 +136,7 @@ func BenchmarkRegressionRestore(b *testing.B) {
 }
 func BenchmarkVisionRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -165,7 +165,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 
 }
 
-func finishBenchmark(b *testing.B, c *cmd.Client) {
+func finishBenchmark(b *testing.B, c *api.Client) {
 	_, err := os.Stat("cedana_restore")
 	if err == nil {
 		os.RemoveAll("cedana_restore")
@@ -214,7 +214,7 @@ func setup(b *testing.B, dir string) (string, bool) {
 	return checkpoint, false
 }
 
-func destroyPid(b *testing.B, c *cmd.Client) {
+func destroyPid(b *testing.B, c *api.Client) {
 	pids, err := getFilenames("./benchmarking/pids/", "")
 
 	if err != nil {

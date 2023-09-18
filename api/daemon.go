@@ -11,6 +11,7 @@ import (
 type CedanaDaemon struct {
 	client *Client
 	logger *zerolog.Logger
+	stop   chan struct{}
 }
 
 type DumpArgs struct {
@@ -70,7 +71,7 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 	return nil
 }
 
-func NewDaemon() *CedanaDaemon {
+func NewDaemon(stop chan struct{}) *CedanaDaemon {
 	c, err := InstantiateClient()
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Could not instantiate client")
@@ -79,6 +80,7 @@ func NewDaemon() *CedanaDaemon {
 	return &CedanaDaemon{
 		client: c,
 		logger: c.logger,
+		stop:   stop,
 	}
 }
 
@@ -103,10 +105,15 @@ func (cd *CedanaDaemon) StartDaemon() {
 	defer cd.Cleanup(listener)
 
 	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			cd.logger.Fatal().Err(err).Msg("could not start daemon")
+		select {
+		case <-cd.stop:
+			return
+		default:
+			conn, err := listener.Accept()
+			if err != nil {
+				cd.logger.Fatal().Err(err).Msg("could not start daemon")
+			}
+			rpc.ServeConn(conn)
 		}
-		rpc.ServeConn(conn)
 	}
 }

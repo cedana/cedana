@@ -185,7 +185,6 @@ func (c *Client) AddNATS(selfID, jobID, authToken string) error {
 		return err
 	}
 
-	// until market server is deployed, use NATS as a store
 	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)
 	c.store = natsStore
 
@@ -524,12 +523,6 @@ func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option 
 func (c *Client) startNATSService() {
 	// create a subscription to NATS commands from the orchestrator first
 	go c.subscribeToCommands(300)
-
-	err := c.tryStartJob()
-	// if we hit an error here, unrecoverable
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not start job")
-	}
 
 	go c.publishStateContinuous(30)
 

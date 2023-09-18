@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cedana/cedana/cmd"
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/utils"
 	"github.com/glebarez/sqlite"
 	"github.com/rs/xid"
@@ -65,7 +65,7 @@ func getFilenames(directoryPath string, prefix string) ([]string, error) {
 func BenchmarkDumpLoop(b *testing.B) {
 	skipCI(b)
 	dumpDir := "./benchmarking/temp/loop"
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -102,7 +102,7 @@ func BenchmarkDumpLoop(b *testing.B) {
 func BenchmarkDumpServer(b *testing.B) {
 	skipCI(b)
 	dumpDir := "./benchmarking/temp/server"
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -135,7 +135,7 @@ func BenchmarkDumpServer(b *testing.B) {
 func BenchmarkDumpPytorch(b *testing.B) {
 	skipCI(b)
 	dumpDir := "./benchmarking/temp/pytorch"
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -169,7 +169,7 @@ func BenchmarkDumpPytorch(b *testing.B) {
 func BenchmarkDumpPytorchVision(b *testing.B) {
 	skipCI(b)
 	dumpDir := "./benchmarking/temp/pytorch-vision"
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -206,7 +206,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 
 	dumpDir := "./benchmarking/temp/pytorch-regression"
 
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
@@ -289,7 +289,7 @@ func ZipFileSize(filePath string) (int64, error) {
 	return size, nil
 }
 
-func LookForPid(c *cmd.Client, filename []string) ([]string, []int32, error) {
+func LookForPid(c *api.Client, filename []string) ([]string, []int32, error) {
 
 	var pidInt32s []int32
 	var fileNames []string
@@ -475,7 +475,7 @@ func TestMain(m *testing.M) {
 }
 
 func finalCleanup() {
-	c, _ := cmd.InstantiateClient()
+	c, _ := api.InstantiateClient()
 
 	pids, err := getFilenames("./benchmarking/pids/", "")
 
