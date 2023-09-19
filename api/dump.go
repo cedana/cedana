@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -67,6 +68,9 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
+	if state == nil {
+		return "", fmt.Errorf("could not get state")
+	}
 	c.Process = state.ProcessInfo
 
 	// save state for serialization at this point

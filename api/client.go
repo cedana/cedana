@@ -358,7 +358,11 @@ func (c *Client) timeTrack(start time.Time, name string) {
 }
 
 func (c *Client) getState(pid int32) *cedana.CedanaState {
-	// inefficient - but unsure about race condition issues
+
+	if pid == 0 {
+		return nil
+	}
+
 	p, err := process.NewProcess(pid)
 	if err != nil {
 		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
