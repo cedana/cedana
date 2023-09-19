@@ -16,9 +16,12 @@ import (
 	cedana "github.com/cedana/cedana/types"
 )
 
+var imgPath string
+
 func init() {
 	clientCommand.AddCommand(restoreCmd)
 	restoreCmd.Flags().StringVarP(&containerId, "container", "c", "", "dump a container id")
+	restoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "path to checkpoint image")
 
 }
 
@@ -26,7 +29,7 @@ func init() {
 // Otherwise, daemon command is used and a network/cedana-managed restore occurs.
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ArbitraryArgs,
 	Short: "Initialize client and restore from dumped image",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := InstantiateClient()
@@ -35,7 +38,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		if containerId != "" {
-			err = container.Restore("containerd.io/checkpoint/countup:09-18-2023-19:12:56", containerId)
+			err = container.Restore(imgPath, containerId)
 		} else {
 			checkpointPath := args[0]
 			// check if it exists before passing to restore

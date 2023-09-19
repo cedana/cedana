@@ -12,11 +12,9 @@ import (
 	"github.com/docker/docker/errdefs"
 )
 
-func Restore(dir string, containerID string) error {
+func Restore(imgPath string, containerID string) error {
 
-	dir = "containerd.io/checkpoint/testbox12345:09-19-2023-10:38:18"
-
-	err := containerdRestore(containerID, dir)
+	err := containerdRestore(containerID, imgPath)
 
 	if err != nil {
 		return err

@@ -91,31 +91,30 @@ var dumpCommand = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		// load from config if flags aren't set
-		if dir == "" {
-			dir = c.config.SharedStorage.DumpStorageDir
-		}
-
-		if pid == 0 {
-			pid, err = utils.GetPid(c.config.Client.Task)
-			if err != nil {
-				c.logger.Err(err).Msg("Could not parse process name from config")
-				return err
-			}
-		}
 
 		c.Process.PID = pid
-
-		// check that folder exists before proceeding
-		_, err = os.Stat(dir)
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("folder doesn't exist")
-			return err
-		}
 
 		if containerId != "" {
 			err = container.Dump(dir, containerId)
 		} else {
+			// check that folder exists before proceeding
+			_, err = os.Stat(dir)
+			if err != nil {
+				c.logger.Fatal().Err(err).Msg("folder doesn't exist")
+				return err
+			}
+			// load from config if flags aren't set
+			if dir == "" {
+				dir = c.config.SharedStorage.DumpStorageDir
+			}
+
+			if pid == 0 {
+				pid, err = utils.GetPid(c.config.Client.Task)
+				if err != nil {
+					c.logger.Err(err).Msg("Could not parse process name from config")
+					return err
+				}
+			}
 			err = c.Dump(dir)
 		}
 

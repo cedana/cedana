@@ -47,7 +47,7 @@
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["client", "dump", "-d", "/home/brandonsmith/.cedana/dumpdir", "-c", "${input:promptForContainer}"],
+            "args": ["client", "dump", "-c", "${input:promptForContainer}"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
@@ -61,7 +61,7 @@
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["client", "restore", "containerd.io/checkpoint/testbox12345:09-19-2023-10:38:18", "-c", "${input:promptForContainer}"],
+            "args": ["client", "restore", "-i", "containerd.io/checkpoint/test123456:09-19-2023-16:56:21", "-c", "${input:promptForContainer}"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },

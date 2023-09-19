@@ -527,6 +527,7 @@ func containerdCheckpoint(id string, ref string) error {
 		if err := task.Pause(ctx); err != nil {
 			return err
 		}
+		// TODO BS base this off of -leaverunning flag
 		defer func() {
 			if err := task.Resume(ctx); err != nil {
 				fmt.Println(fmt.Errorf("error resuming task: %w", err))
@@ -546,7 +547,8 @@ func containerdCheckpoint(id string, ref string) error {
 		return err
 	}
 
-	fmt.Println(checkpoint.Name())
+	fmt.Printf("Checkpoint name: %s\n", checkpoint.Name())
+
 	// if _, err := container.Checkpoint(ctx, ref, containerdOpts...); err != nil {
 	// 	return err
 	// }
@@ -606,6 +608,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 			return &apiTasks.CheckpointTaskResponse{}, err
 		}
 		criuOpts.ImagesDirectory = image
+		fmt.Printf("Checkpointing to %s\n", image)
 		defer os.RemoveAll(image)
 	}
 
@@ -798,9 +801,9 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 	}
 	// if checkpoint image path passed, jump checkpoint image,
 	// return an empty image
-	// if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
-	// 	return containerd.NewImage(client, images.Image{}), nil
-	// }
+	if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
+		return containerd.NewImage(client, images.Image{}), nil
+	}
 
 	// add runtime info to index
 	index.Annotations[checkpointRuntimeNameLabel] = cr.Runtime.Name
