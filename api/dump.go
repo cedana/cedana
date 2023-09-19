@@ -1,6 +1,7 @@
-package cmd
+package api
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,67 +12,16 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
 )
-
-var dir string
-var pid int32
 
 const (
 	sys_pidfd_send_signal = 424
 	sys_pidfd_open        = 434
 	sys_pidfd_getfd       = 438
 )
-
-func init() {
-	clientCommand.AddCommand(dumpCommand)
-	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
-	dumpCommand.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
-}
-
-// This is a direct dump command. Won't be used in practice, we want to start a daemon
-var dumpCommand = &cobra.Command{
-	Use:   "dump",
-	Short: "Directly dump a process",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := InstantiateClient()
-		if err != nil {
-			return err
-		}
-		// load from config if flags aren't set
-		if dir == "" {
-			dir = c.config.SharedStorage.DumpStorageDir
-		}
-
-		if pid == 0 {
-			pid, err = utils.GetPid(c.config.Client.Task)
-			if err != nil {
-				c.logger.Err(err).Msg("Could not parse process name from config")
-				return err
-			}
-		}
-
-		c.Process.PID = pid
-
-		// check that folder exists before proceeding
-		_, err = os.Stat(dir)
-		if err != nil {
-			c.logger.Fatal().Err(err).Msg("folder doesn't exist")
-			return err
-		}
-
-		err = c.Dump(dir)
-		if err != nil {
-			return err
-		}
-
-		defer c.cleanupClient()
-		return nil
-	},
-}
 
 // Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
 func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
@@ -110,37 +60,6 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	return &checkpointPath
 }
 
-// consistency for the file is important, so we need to
-// pause the process writing the file.
-// An alternative here could be to use file locks, TODO NR: investigate
-func (c *Client) signalPause() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGSTOP)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Client) signalContinue() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGCONT)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
@@ -149,6 +68,9 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
+	if state == nil {
+		return "", fmt.Errorf("could not get state")
+	}
 	c.Process = state.ProcessInfo
 
 	// save state for serialization at this point

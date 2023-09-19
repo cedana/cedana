@@ -20,7 +20,6 @@ WORKDIR /cedana
 RUN pip install -r test/benchmarks/requirements
 
 
-RUN git checkout feat/ced-112
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 

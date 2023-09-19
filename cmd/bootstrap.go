@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -49,6 +50,43 @@ func (b *Bootstrap) bootstrap() {
 	if err != nil {
 		b.l.Fatal().Err(err).Msg("could not initiate generated config")
 	}
+
+	err = b.createSystemdService()
+	if err != nil {
+		b.l.Fatal().Err(err).Msg("could not create systemd service")
+	}
+}
+
+func (b *Bootstrap) createSystemdService() error {
+	unitFilePath := "/etc/systemd/system/cedana.service"
+
+	// Open the unit file for writing
+	unitFile, err := os.Create(unitFilePath)
+	if err != nil {
+		return err
+	}
+	defer unitFile.Close()
+
+	// Write the unit file content
+	unitFileContents := `[Unit]
+Description=Cedana Worker Daemon
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/cedana daemon
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+`
+	_, err = unitFile.WriteString(unitFileContents)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Systemd service file created at %s\n", unitFilePath)
+	return nil
 }
 
 func init() {
