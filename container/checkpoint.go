@@ -21,14 +21,11 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5"
 	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	apiTasks "github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
 	containerdTypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/archive"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
@@ -77,6 +74,31 @@ const (
 	checkpointSnapshotterNameLabel = "io.containerd.checkpoint.snapshotter"
 )
 
+const descriptorsFilename = "descriptors.json"
+
+const (
+	checkpointDateFormat = "01-02-2006-15:04:05"
+	checkpointNameFormat = "containerd.io/checkpoint/%s:%s"
+)
+
+type CheckpointTaskOpts func(*CheckpointTaskInfo) error
+
+// CheckpointTaskInfo allows specific checkpoint information to be set for the task
+type CheckpointTaskInfo struct {
+	Name string
+	// ParentCheckpoint is the digest of a parent checkpoint
+	ParentCheckpoint digest.Digest
+	// Options hold runtime specific settings for checkpointing a task
+	Options interface{}
+
+	runtime string
+}
+
+// Runtime name for the container
+func (i *CheckpointTaskInfo) Runtime() string {
+	return i.runtime
+}
+
 type parentProcess interface {
 	// pid returns the pid for the running process.
 	pid() int
@@ -96,6 +118,12 @@ type parentProcess interface {
 	externalDescriptors() []string
 	setExternalDescriptors(fds []string)
 	forwardChildLogs() chan error
+}
+
+type nonChildProcess struct {
+	processPid       int
+	processStartTime uint64
+	fds              []string
 }
 
 func (p *nonChildProcess) start() error {
@@ -145,11 +173,6 @@ type containerState interface {
 	destroy() error
 	status() Status
 }
-
-const (
-	checkpointDateFormat = "01-02-2006-15:04:05"
-	checkpointNameFormat = "containerd.io/checkpoint/%s:%s"
-)
 
 type RuncContainer struct {
 	id                   string
@@ -215,12 +238,6 @@ func (n *loadedState) transition(s containerState) error {
 // 	}
 // 	return n.c.state.destroy()
 // }
-
-type nonChildProcess struct {
-	processPid       int
-	processStartTime uint64
-	fds              []string
-}
 
 func getContainerFromRunc(containerID string) *RuncContainer {
 	// Runc root
@@ -438,68 +455,14 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 
 // Gotta figure out containerID discovery - TODO NR
 func Dump(dir string, containerID string) error {
-	// create a CriuOpts and pass into RuncCheckpoint
-	// opts := &CriuOpts{
-	// 	ImagesDirectory: dir,
-	// 	LeaveRunning:    true,
-	// }
-	// Come back to this later. First runc restore
-	// c := getContainerFromDocker(containerID)
-
-	dir = "containerd.io/checkpoint/test11:09-16-2023-22:11:37"
-
+	dir = "containerd.io/checkpoint/countup:09-18-2023-19:12:56"
 	err := containerdCheckpoint(containerID, dir)
-
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-
-func Restore(dir string, containerID string) error {
-
-	dir = "containerd.io/checkpoint/test11:09-16-2023-22:11:37"
-
-	err := containerdRestore(containerID, dir)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-
-}
-
-//  CheckpointOpts holds the options for performing a criu checkpoint using runc
-// type CheckpointOpts struct {
-// 	// ImagePath is the path for saving the criu image file
-// 	ImagePath string
-// 	// WorkDir is the working directory for criu
-// 	WorkDir string
-// 	// ParentPath is the path for previous image files from a pre-dump
-// 	ParentPath string
-// 	// AllowOpenTCP allows open tcp connections to be checkpointed
-// 	AllowOpenTCP bool
-// 	// AllowExternalUnixSockets allows external unix sockets to be checkpointed
-// 	AllowExternalUnixSockets bool
-// 	// AllowTerminal allows the terminal(pty) to be checkpointed with a container
-// 	AllowTerminal bool
-// 	// CriuPageServer is the address:port for the criu page server
-// 	CriuPageServer string
-// 	// FileLocks handle file locks held by the container
-// 	FileLocks bool
-// 	// Cgroups is the cgroup mode for how to handle the checkpoint of a container's cgroups
-// 	Cgroups CgroupMode
-// 	// EmptyNamespaces creates a namespace for the container but does not save its properties
-// 	// Provide the namespaces you wish to be checkpointed without their settings on restore
-// 	EmptyNamespaces []string
-// 	// LazyPages uses userfaultfd to lazily restore memory pages
-// 	LazyPages bool
-// 	// StatusFile is the file criu writes \0 to once lazy-pages is ready
-// 	StatusFile *os.File
-// 	ExtraArgs  []string
-// }
 
 // AppContext returns the context for a command. Should only be called once per
 // command, near the start.
@@ -526,97 +489,6 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 		ctx = epoch.WithSourceDateEpoch(ctx, tm)
 	}
 	return ctx, cancel
-}
-
-func containerdRestore(id string, ref string) error {
-	ctx := gocontext.Background()
-	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
-	if err != nil {
-		return err
-	}
-	defer cancel()
-
-	checkpoint, err := containerdClient.GetImage(ctx, ref)
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return err
-		}
-		// TODO (ehazlett): consider other options (always/never fetch)
-		ck, err := containerdClient.Fetch(ctx, ref)
-		if err != nil {
-			return err
-		}
-		checkpoint = containerd.NewImage(containerdClient, ck)
-	}
-
-	opts := []containerd.RestoreOpts{
-		containerd.WithRestoreImage,
-		containerd.WithRestoreSpec,
-		containerd.WithRestoreRuntime,
-	}
-	// if context.Bool("rw") {
-	// 	opts = append(opts, containerd.WithRestoreRW)
-	// }
-
-	ctr, err := containerdClient.Restore(ctx, id, checkpoint, opts...)
-	if err != nil {
-		return err
-	}
-	topts := []containerd.NewTaskOpts{}
-	// if context.Bool("live") {
-	// 	topts = append(topts, containerd.WithTaskCheckpoint(checkpoint))
-	// }
-	spec, err := ctr.Spec(ctx)
-	if err != nil {
-		return err
-	}
-
-	useTTY := spec.Process.Terminal
-
-	var con console.Console
-	if useTTY {
-		con = console.Current()
-		defer con.Reset()
-		if err := con.SetRaw(); err != nil {
-			return err
-		}
-	}
-
-	task, err := tasks.NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
-	if err != nil {
-		return err
-	}
-
-	var statusC <-chan containerd.ExitStatus
-	if useTTY {
-		if statusC, err = task.Wait(ctx); err != nil {
-			return err
-		}
-	}
-
-	if err := task.Start(ctx); err != nil {
-		return err
-	}
-	if !useTTY {
-		return nil
-	}
-
-	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
-		log.G(ctx).WithError(err).Error("console resize")
-	}
-
-	status := <-statusC
-	code, _, err := status.Result()
-	if err != nil {
-		return err
-	}
-	if _, err := task.Delete(ctx); err != nil {
-		return err
-	}
-	if code != 0 {
-		return errors.New("exit code not 0")
-	}
-	return nil
 }
 
 func containerdCheckpoint(id string, ref string) error {
@@ -662,34 +534,6 @@ func containerdCheckpoint(id string, ref string) error {
 		}()
 	}
 
-	// opts := []containerd.CheckpointTaskOpts{withCheckpointOpts(info.Runtime.Name, ctx)}
-
-	// Original task checkpoint
-
-	// newOpts := []CheckpointTaskOpts{
-	// 	func(r *CheckpointTaskInfo) error {
-	// 		imagePath := "$HOME/.cedana/dumpdir"
-	// 		workPath := ""
-
-	// 		if r.Options == nil {
-	// 			r.Options = &options.CheckpointOptions{}
-	// 		}
-	// 		opts, _ := r.Options.(*options.CheckpointOptions)
-
-	// 		// if context.Bool("exit") {
-	// 		opts.Exit = false
-	// 		// }
-	// 		if imagePath != "" {
-	// 			opts.ImagePath = imagePath
-	// 		}
-	// 		if workPath != "" {
-	// 			opts.WorkPath = workPath
-	// 		}
-
-	// 		return nil
-	// 	},
-	// }
-
 	// create image path store criu image files
 	imagePath := ""
 	// checkpoint task
@@ -730,7 +574,7 @@ func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
 }
 
 func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
-
+	// TODO BS get rid of marshal/unmarshal & CTR
 	v, err := typeurl.UnmarshalAny(request.Options)
 	if err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
@@ -836,76 +680,6 @@ func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaTy
 	}, nil
 }
 
-// func criuCheckpoint(ctx context.Context, containerId string, ctr *apiTasksV2.CheckpointTaskRequest) error {
-
-// 	var opts options.CheckpointOptions
-// 	if ctr.Options != nil {
-// 		if err := typeurl.UnmarshalTo(ctr.Options, &opts); err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	r := &process.CheckpointConfig{
-// 		Path:                     ctr.Path,
-// 		Exit:                     opts.Exit,
-// 		AllowOpenTCP:             opts.OpenTcp,
-// 		AllowExternalUnixSockets: opts.ExternalUnixSockets,
-// 		AllowTerminal:            opts.Terminal,
-// 		FileLocks:                opts.FileLocks,
-// 		EmptyNamespaces:          opts.EmptyNamespaces,
-// 		WorkDir:                  opts.WorkPath,
-// 	}
-
-// 	var actions []runc.CheckpointAction
-// 	if !r.Exit {
-// 		actions = append(actions, runc.LeaveRunning)
-// 	}
-// 	// keep criu work directory if criu work dir is set
-// 	work := r.WorkDir
-// 	if work == "" {
-// 		work = filepath.Join("", "criu-work")
-// 		defer os.RemoveAll(work)
-// 	}
-// 	if err := actualCriuCheckpoint(ctx, containerId, &runc.CheckpointOpts{
-// 		WorkDir:                  work,
-// 		ImagePath:                r.Path,
-// 		AllowOpenTCP:             r.AllowOpenTCP,
-// 		AllowExternalUnixSockets: r.AllowExternalUnixSockets,
-// 		AllowTerminal:            r.AllowTerminal,
-// 		FileLocks:                r.FileLocks,
-// 		EmptyNamespaces:          r.EmptyNamespaces,
-// 	}, actions...); err != nil {
-// 		Bundle := ""
-// 		dumpLog := filepath.Join(Bundle, "criu-dump.log")
-// 		if cerr := copyFile(dumpLog, filepath.Join(work, "dump.log")); cerr != nil {
-// 			log.G(ctx).WithError(cerr).Error("failed to copy dump.log to criu-dump.log")
-// 		}
-// 		return fmt.Errorf("%s path= %s", err, dumpLog)
-// 	}
-// 	return nil
-// }
-
-// func actualCriuCheckpoint(context context.Context, id string, opts *runc.CheckpointOpts, actions ...runc.CheckpointAction) error {
-// 	args := []string{"checkpoint"}
-// 	extraFiles := []*os.File{}
-// 	if opts != nil {
-// 		args = append(args, opts.args()...)
-// 		if opts.StatusFile != nil {
-// 			// pass the status file to the child process
-// 			extraFiles = []*os.File{opts.StatusFile}
-// 			// set status-fd to 3 as this will be the file descriptor
-// 			// of the first file passed with cmd.ExtraFiles
-// 			args = append(args, "--status-fd", "3")
-// 		}
-// 	}
-// 	for _, a := range actions {
-// 		args = a(args)
-// 	}
-// 	cmd := r.command(context, append(args, id)...)
-// 	cmd.ExtraFiles = extraFiles
-// 	return r.runOrError(cmd)
-// }
-
 // WithCheckpointImagePath sets image path for checkpoint option
 func WithCheckpointImagePath(path string) CheckpointTaskOpts {
 	return func(r *CheckpointTaskInfo) error {
@@ -932,11 +706,6 @@ func WithCheckpointImagePath(path string) CheckpointTaskOpts {
 	}
 }
 
-// Runtime name for the container
-func (i *CheckpointTaskInfo) Runtime() string {
-	return i.runtime
-}
-
 // CheckRuntime returns true if the current runtime matches the expected
 // runtime. Providing various parts of the runtime schema will match those
 // parts of the expected runtime
@@ -952,19 +721,6 @@ func CheckRuntime(current, expected string) bool {
 		}
 	}
 	return true
-}
-
-type CheckpointTaskOpts func(*CheckpointTaskInfo) error
-
-// CheckpointTaskInfo allows specific checkpoint information to be set for the task
-type CheckpointTaskInfo struct {
-	Name string
-	// ParentCheckpoint is the digest of a parent checkpoint
-	ParentCheckpoint digest.Digest
-	// Options hold runtime specific settings for checkpointing a task
-	Options interface{}
-
-	runtime string
 }
 
 func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
@@ -1042,9 +798,9 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 	}
 	// if checkpoint image path passed, jump checkpoint image,
 	// return an empty image
-	if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
-		return containerd.NewImage(client, images.Image{}), nil
-	}
+	// if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
+	// 	return containerd.NewImage(client, images.Image{}), nil
+	// }
 
 	// add runtime info to index
 	index.Annotations[checkpointRuntimeNameLabel] = cr.Runtime.Name
@@ -1251,6 +1007,12 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		rpcOpts.ManageCgroupsMode = &mode
 	}
 
+	// pre-dump may need parentImage param to complete iterative migration
+	if criuOpts.ParentImage != "" {
+		rpcOpts.ParentImg = proto.String(criuOpts.ParentImage)
+		rpcOpts.TrackMem = proto.Bool(true)
+	}
+
 	var t criurpc.CriuReqType
 	if criuOpts.PreDump {
 		feat := criurpc.CriuFeatures{
@@ -1265,10 +1027,81 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	} else {
 		t = criurpc.CriuReqType_DUMP
 	}
+	if criuOpts.LazyPages {
+		// lazy migration requested; check if criu supports it
+		feat := criurpc.CriuFeatures{
+			LazyPages: proto.Bool(true),
+		}
+		if err := c.checkCriuFeatures(criuOpts, &rpcOpts, &feat); err != nil {
+			return err
+		}
+
+		if fd := criuOpts.StatusFd; fd != -1 {
+			// check that the FD is valid
+			flags, err := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
+			if err != nil {
+				return fmt.Errorf("invalid --status-fd argument %d: %w", fd, err)
+			}
+			// and writable
+			if flags&unix.O_WRONLY == 0 {
+				return fmt.Errorf("invalid --status-fd argument %d: not writable", fd)
+			}
+
+			if c.checkCriuVersion(31500) != nil {
+				// For criu 3.15+, use notifications (see case "status-ready"
+				// in criuNotifications). Otherwise, rely on criu status fd.
+				rpcOpts.StatusFd = proto.Int32(int32(fd))
+			}
+		}
+	}
 
 	req := &criurpc.CriuReq{
 		Type: &t,
 		Opts: &rpcOpts,
+	}
+
+	// no need to dump all this in pre-dump
+	if !criuOpts.PreDump {
+		hasCgroupns := c.config.Namespaces.Contains(configs.NEWCGROUP)
+		for _, m := range c.config.Mounts {
+			switch m.Device {
+			case "bind":
+				c.addCriuDumpMount(req, m)
+			case "cgroup":
+				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
+					// real mount(s)
+					continue
+				}
+				// a set of "external" bind mounts
+				binds, err := GetCgroupMounts(m)
+				if err != nil {
+					return err
+				}
+				for _, b := range binds {
+					c.addCriuDumpMount(req, b)
+				}
+			}
+		}
+
+		if err := c.addMaskPaths(req); err != nil {
+			return err
+		}
+
+		for _, node := range c.config.Devices {
+			m := &configs.Mount{Destination: node.Path, Source: node.Path}
+			c.addCriuDumpMount(req, m)
+		}
+
+		// Write the FD info to a file in the image directory
+		fdsJSON, err := json.Marshal(c.initProcess.externalDescriptors())
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o600)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = c.criuSwrk(nil, req, criuOpts, nil)
@@ -1364,6 +1197,8 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 			}
 		}
 	}
+	// TODO BS Replace with zerolog
+
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return err

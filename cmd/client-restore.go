@@ -18,7 +18,8 @@ import (
 
 func init() {
 	clientCommand.AddCommand(restoreCmd)
-	dumpCommand.Flags().StringVarP(&containerId, "container", "c", "", "restore from a container id")
+	restoreCmd.Flags().StringVarP(&containerId, "container", "c", "", "dump a container id")
+
 }
 
 // Restore command is only called when run manually.
@@ -33,23 +34,21 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		checkpointPath := args[0]
-		// check if it exists before passing to restore
-		_, err = os.Stat(checkpointPath)
-		if err != nil {
-			return err
-		}
-
 		if containerId != "" {
-			err = container.Restore(dir, containerId)
+			err = container.Restore("containerd.io/checkpoint/countup:09-18-2023-19:12:56", containerId)
 		} else {
+			checkpointPath := args[0]
+			// check if it exists before passing to restore
+			_, err = os.Stat(checkpointPath)
+			if err != nil {
+				return err
+			}
 			err = c.Restore(nil, &checkpointPath)
 		}
-
-		err = c.Restore(nil, &checkpointPath)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	},
 }
