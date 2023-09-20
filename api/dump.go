@@ -80,12 +80,14 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
+	// we want to store the network connections to compare against later as well
+
 	for _, conn := range state.ProcessInfo.OpenConnections {
 		if conn.Type == syscall.SOCK_STREAM { // TCP
 			hasTCP = true
 		}
 
-		if conn.Type == syscall.AF_UNIX { // Interprocess
+		if conn.Type == syscall.AF_UNIX { // Interprocess or UNIX
 			hasExtUnixSocket = true
 		}
 	}

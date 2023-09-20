@@ -26,8 +26,9 @@ type TCPTest struct {
 	exec string
 }
 
+// TODO NR - path to these is wonky! use git submodules
 var tcpTests = map[string]TCPTest{
-	"multiconn":     {"threaded_pings", "python3 benchmarking/networking/threaded_pings.py"},
+	"multiconn":     {"threaded_pings", "python3 ../../cedana-benchmarks/networking/threaded_pings.py -n 3 google.com 80"},
 	"databaseconn":  {},
 	"streaming":     {},
 	"multiserver":   {},
@@ -70,6 +71,7 @@ func Test_MultiConn(t *testing.T) {
 	})
 
 	oldState := c.getState(c.Process.PID)
+	// network data prior
 	t.Logf("old state: %+v", oldState)
 
 	err = c.Dump("dumpdir")
@@ -77,10 +79,8 @@ func Test_MultiConn(t *testing.T) {
 		t.Error(err)
 	}
 
-	// we have a running process, get network data before
-	// then get network data after
+	// TODO NR - analyze dump w/ CRIT?
 
-	// and validate/compare
 	// validation is important, because even if we've C/Rd it can C/R incorrectly
 
 }
