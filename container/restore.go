@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"errors"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -26,6 +27,8 @@ func Restore(imgPath string, containerID string) error {
 
 func containerdRestore(id string, ref string) error {
 	ctx := gocontext.Background()
+	logger := utils.GetLogger()
+	logger.Info().Msgf("restoring container %s from %s", id, ref)
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
 		return err

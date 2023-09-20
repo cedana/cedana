@@ -91,6 +91,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 }
 
 func (c *Client) ContainerRestore(imgPath string, containerId string) error {
+	logger := utils.GetLogger()
+	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
 		c.logger.Fatal().Err(err)

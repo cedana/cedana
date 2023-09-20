@@ -230,7 +230,7 @@ func init() {
 
 	restoreCmd.AddCommand(containerRestoreCmd)
 
-	containerRestoreCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerRestoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "image ref")
 	containerRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	rootCmd.AddCommand(restoreCmd)
