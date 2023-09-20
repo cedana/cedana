@@ -12,4 +12,5 @@ echo $CEDANA_CONFIG > ~/.cedana/client_config.json
 
 
 ## start cedana 
-sudo CEDANA_CLIENT_ID=devclient CEDANA_JOB_ID=devjob CEDANA_AUTH_TOKEN=test ./cedana client daemon 
+sudo ./cedana daemon &
+& sudo CEDANA_CLIENT_ID=devclient CEDANA_JOB_ID=devjob CEDANA_AUTH_TOKEN=test ./cedana nats

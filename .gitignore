@@ -6,14 +6,15 @@ cmd.test
 *.test
 cmd/_home*
 
-benchmarking/results/*
-!benchmarking/results/.gitkeep  # Include the placeholder file
-benchmarking/pids/*
-!benchmarking/pids/.gitkeep
-benchmarking/processes/*
-!benchmarking/processes/.gitkeep
-benchmarking/temp/*
-!benchmarking/temp/.gitkeep
+test/benchmarks/benchmarking/results/*
+!test/benchmarks/benchmarking/results/.gitkeep  # Include the placeholder file
+test/benchmarks/benchmarking/pids/*
+!test/benchmarks/benchmarking/pids/.gitkeep
+test/benchmarks/benchmarking/processes/*
+!test/benchmarks/benchmarking/processes/.gitkeep
+test/benchmarks/benchmarking/temp/*
+!test/benchmarks/benchmarking/temp/.gitkeep
+test/benchmarks/cedana_restore
 
 dataset/
 dist/

@@ -1,6 +1,7 @@
-package cmd
+package api
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -8,124 +9,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
 )
-
-var dir string
-var pid int32
-var containerId string
 
 const (
 	sys_pidfd_send_signal = 424
 	sys_pidfd_open        = 434
 	sys_pidfd_getfd       = 438
 )
-
-// Here are states pulled from runc
-type BaseState struct {
-	// ID is the container ID.
-	ID string `json:"id"`
-
-	// InitProcessPid is the init process id in the parent namespace.
-	InitProcessPid int `json:"init_process_pid"`
-
-	// InitProcessStartTime is the init process start time in clock cycles since boot time.
-	InitProcessStartTime uint64 `json:"init_process_start"`
-
-	// Created is the unix timestamp for the creation time of the container in UTC
-	Created time.Time `json:"created"`
-
-	// Config is the container's configuration.
-	Config configs.Config `json:"config"`
-}
-
-type State struct {
-	BaseState
-
-	// Platform specific fields below here
-
-	// Specified if the container was started under the rootless mode.
-	// Set to true if BaseState.Config.RootlessEUID && BaseState.Config.RootlessCgroups
-	Rootless bool `json:"rootless"`
-
-	// Paths to all the container's cgroups, as returned by (*cgroups.Manager).GetPaths
-	//
-	// For cgroup v1, a key is cgroup subsystem name, and the value is the path
-	// to the cgroup for this subsystem.
-	//
-	// For cgroup v2 unified hierarchy, a key is "", and the value is the unified path.
-	CgroupPaths map[string]string `json:"cgroup_paths"`
-
-	// NamespacePaths are filepaths to the container's namespaces. Key is the namespace type
-	// with the value as the path.
-	NamespacePaths map[configs.NamespaceType]string `json:"namespace_paths"`
-
-	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
-	ExternalDescriptors []string `json:"external_descriptors,omitempty"`
-
-	// Intel RDT "resource control" filesystem path
-	IntelRdtPath string `json:"intel_rdt_path"`
-}
-
-func init() {
-	clientCommand.AddCommand(dumpCommand)
-	dumpCommand.Flags().StringVarP(&dir, "dir", "d", "", "folder to dump checkpoint into")
-	dumpCommand.Flags().Int32VarP(&pid, "pid", "p", 0, "pid to dump")
-	dumpCommand.Flags().StringVarP(&containerId, "container", "c", "", "dump a container id")
-}
-
-// This is a direct dump command. Won't be used in practice, we want to start a daemon
-var dumpCommand = &cobra.Command{
-	Use:   "dump",
-	Short: "Directly dump a process",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := InstantiateClient()
-		if err != nil {
-			return err
-		}
-
-		c.Process.PID = pid
-
-		if containerId != "" {
-			err = container.Dump(dir, containerId)
-		} else {
-			// check that folder exists before proceeding
-			_, err = os.Stat(dir)
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("folder doesn't exist")
-				return err
-			}
-			// load from config if flags aren't set
-			if dir == "" {
-				dir = c.config.SharedStorage.DumpStorageDir
-			}
-
-			if pid == 0 {
-				pid, err = utils.GetPid(c.config.Client.Task)
-				if err != nil {
-					c.logger.Err(err).Msg("Could not parse process name from config")
-					return err
-				}
-			}
-			err = c.Dump(dir)
-		}
-
-		if err != nil {
-			return err
-		}
-
-		defer c.cleanupClient()
-		return nil
-	},
-}
 
 // Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
 func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
@@ -164,37 +60,6 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	return &checkpointPath
 }
 
-// consistency for the file is important, so we need to
-// pause the process writing the file.
-// An alternative here could be to use file locks, TODO NR: investigate
-func (c *Client) signalPause() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGSTOP)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Client) signalContinue() error {
-	process, err := os.FindProcess(int(c.Process.PID))
-	if err != nil {
-		return err
-	}
-
-	err = process.Signal(syscall.SIGCONT)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
@@ -203,6 +68,9 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	state := c.getState(pid)
+	if state == nil {
+		return "", fmt.Errorf("could not get state")
+	}
 	c.Process = state.ProcessInfo
 
 	// save state for serialization at this point
@@ -310,17 +178,7 @@ func (c *Client) copyOpenFiles(dir string) error {
 
 func (c *Client) postDump(dumpdir string) {
 	c.logger.Info().Msg("compressing checkpoint...")
-	// if Cedana is configured for a mountpoint, compress and move CRIU/pytorch checkpoint dir to folder/point
-	var compressedCheckpointPath string
-	if c.config.SharedStorage.MountPoint != "" {
-		// checkpoint path gets appended with the mountpoint
-		compressedCheckpointPath = filepath.Join(
-			c.config.SharedStorage.MountPoint,
-			strings.Join([]string{filepath.Base(dumpdir), ".zip"}, ""),
-		)
-	} else {
-		compressedCheckpointPath = strings.Join([]string{dumpdir, ".zip"}, "")
-	}
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written

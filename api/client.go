@@ -1,10 +1,11 @@
-package cmd
+package api
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +22,6 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
-	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
@@ -33,9 +33,8 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	nc  *nats.Conn
-	js  jetstream.JetStream
-	jsc nats.JetStreamContext
+	nc *nats.Conn
+	js jetstream.JetStream
 
 	logger *zerolog.Logger
 	config *utils.Config
@@ -92,14 +91,6 @@ type ClientLogs struct {
 	Msg       string `json:"msg"`
 }
 
-var clientCommand = &cobra.Command{
-	Use:   "client",
-	Short: "Directly dump/restore a process or start a daemon",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("error: must also specify dump, restore or daemon")
-	},
-}
-
 func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
@@ -146,29 +137,11 @@ func InstantiateClient() (*Client, error) {
 }
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
-func (c *Client) AddDaemonLayer() error {
-	// get ids. TODO NR: uuid verification
-	// these should also be added to the config just in case
-	// TODO NR: some code kicking around too to transfer b/ween stuff in config and stuff in env
-	selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
-	}
-	c.selfId = selfId
+func (c *Client) AddNATS(selfID, jobID, authToken string) error {
+	c.selfId = selfID
+	c.jobId = jobID
 
-	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
-	}
-	c.jobId = jobId
-
-	authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
-	if !exists {
-		c.logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
-	}
-
-	// connect to NATS
-	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfId))}
+	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfID))}
 	opts = setupConnOptions(opts, c.logger)
 	opts = append(opts, nats.Token(authToken))
 
@@ -212,7 +185,6 @@ func (c *Client) AddDaemonLayer() error {
 		return err
 	}
 
-	// until market server is deployed, use NATS as a store
 	natsStore := utils.NewNATSStore(c.logger, jsc, c.jobId)
 	c.store = natsStore
 
@@ -228,11 +200,13 @@ func (c *Client) cleanupClient() error {
 func (c *Client) publishStateContinuous(rate int) {
 	c.logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
-	c.logger.Info().Msgf("pid: %d", c.Process.PID)
+	c.logger.Info().Msgf("pid: %d, task: %s", c.Process.PID, c.config.Client.Task)
 	// publish state continuously
 	for range ticker.C {
-		state := c.getState(c.Process.PID)
-		c.publishStateOnce(state)
+		if c.Process.PID != 0 {
+			state := c.getState(c.Process.PID)
+			c.publishStateOnce(state)
+		}
 	}
 }
 
@@ -384,7 +358,11 @@ func (c *Client) timeTrack(start time.Time, name string) {
 }
 
 func (c *Client) getState(pid int32) *cedana.CedanaState {
-	// inefficient - but unsure about race condition issues
+
+	if pid == 0 {
+		return nil
+	}
+
 	p, err := process.NewProcess(pid)
 	if err != nil {
 		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
@@ -548,6 +526,122 @@ func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option 
 	return opts
 }
 
-func init() {
-	rootCmd.AddCommand(clientCommand)
+func (c *Client) startNATSService() {
+	// create a subscription to NATS commands from the orchestrator first
+	go c.subscribeToCommands(300)
+
+	go c.publishStateContinuous(30)
+
+	// listen for broadcast commands
+	// subscribe to our broadcasters
+	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
+	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
+
+	dir := c.config.SharedStorage.DumpStorageDir
+
+	for {
+		select {
+		case <-dumpCmdChn:
+			c.logger.Info().Msg("received checkpoint command from NATS server")
+			err := c.Dump(dir)
+			if err != nil {
+				c.logger.Warn().Msgf("could not checkpoint process: %v", err)
+				c.state.CheckpointState = cedana.CheckpointFailed
+				c.publishStateOnce(c.getState(c.Process.PID))
+			}
+			c.state.CheckpointState = cedana.CheckpointSuccess
+			c.publishStateOnce(c.getState(c.Process.PID))
+
+		case cmd := <-restoreCmdChn:
+			c.logger.Info().Msg("received restore command from NATS server")
+			pid, err := c.Restore(&cmd, nil)
+			if err != nil {
+				c.logger.Warn().Msgf("could not restore process: %v", err)
+				c.state.CheckpointState = cedana.RestoreFailed
+				c.publishStateOnce(c.getState(c.Process.PID))
+			}
+			c.state.CheckpointState = cedana.RestoreSuccess
+			c.Process.PID = *pid
+			c.publishStateOnce(c.getState(c.Process.PID))
+
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+func (c *Client) TryStartJob(task *string) error {
+	if task == nil {
+		// try config
+		task = &c.config.Client.Task
+		c.logger.Info().Msgf("no task provided, using task in config: %s", *task)
+	}
+	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
+	var err error
+	for i := 0; i < 5; i++ {
+		pid, err := c.RunTask(*task)
+		if err == nil {
+			c.logger.Info().Msgf("managing process with pid %d", pid)
+			c.state.Flag = cedana.JobRunning
+			c.Process.PID = pid
+			break
+		} else {
+			// enter a failure state, where we wait indefinitely for a command from NATS instead of
+			// continuing
+			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
+			c.state.Flag = cedana.JobStartupFailed
+			recoveryCmd := c.enterDoomLoop()
+			task = &recoveryCmd.UpdatedTask
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) RunTask(task string) (int32, error) {
+	var pid int32
+
+	if task == "" {
+		return 0, fmt.Errorf("could not find task in config")
+	}
+
+	// need a more resilient/retriable way of doing this
+	r, w, err := os.Pipe()
+	if err != nil {
+		return 0, err
+	}
+
+	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd := exec.Command("bash", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stdin = nullFile
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	err = cmd.Start()
+	if err != nil {
+		return 0, err
+	}
+
+	pid = int32(cmd.Process.Pid)
+	ppid := int32(os.Getpid())
+
+	c.closeCommonFds(ppid, pid)
+
+	if c.config.Client.ForwardLogs {
+		go c.publishLogs(r, w)
+	}
+
+	return pid, nil
 }

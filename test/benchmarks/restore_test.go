@@ -7,18 +7,18 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cedana/cedana/cmd"
+	"github.com/cedana/cedana/api"
 )
 
 func BenchmarkLoopRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/loop/")
+	checkpoint, isError := setup(b, "./benchmarking/temp/loop/")
 	if isError {
 		return
 	}
@@ -26,7 +26,7 @@ func BenchmarkLoopRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -36,20 +36,20 @@ func BenchmarkLoopRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
-		FileIPCCleanup(b, "../../benchmarking/temp/loop/", "restore")
+		FileIPCCleanup(b, "./benchmarking/temp/loop/", "restore")
 	})
 
 }
 
 func BenchmarkServerRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/server/")
+	checkpoint, isError := setup(b, "./benchmarking/temp/server/")
 	if isError {
 		return
 	}
@@ -57,7 +57,7 @@ func BenchmarkServerRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -67,20 +67,20 @@ func BenchmarkServerRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
-		FileIPCCleanup(b, "../../benchmarking/temp/server/", "restore")
+		FileIPCCleanup(b, "./benchmarking/temp/server/", "restore")
 	})
 
 }
 
 func BenchmarkPytorchRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/pytorch/")
+	checkpoint, isError := setup(b, "./benchmarking/temp/pytorch/")
 	if isError {
 		return
 	}
@@ -88,7 +88,7 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -98,7 +98,7 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
-		FileIPCCleanup(b, "../../benchmarking/temp/pytorch/", "restore")
+		FileIPCCleanup(b, "./benchmarking/temp/pytorch/", "restore")
 
 	})
 
@@ -106,13 +106,13 @@ func BenchmarkPytorchRestore(b *testing.B) {
 
 func BenchmarkRegressionRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/pytorch-regression/")
+	checkpoint, isError := setup(b, "./benchmarking/temp/pytorch-regression/")
 	if isError {
 		return
 	}
@@ -120,7 +120,7 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -130,19 +130,19 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
-		FileIPCCleanup(b, "../../benchmarking/temp/pytorch-regression/", "restore")
+		FileIPCCleanup(b, "./benchmarking/temp/pytorch-regression/", "restore")
 	})
 
 }
 func BenchmarkVisionRestore(b *testing.B) {
 	skipCI(b)
-	c, err := cmd.InstantiateClient()
+	c, err := api.InstantiateClient()
 
 	if err != nil {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	checkpoint, isError := setup(b, "../../benchmarking/temp/pytorch-vision/")
+	checkpoint, isError := setup(b, "./benchmarking/temp/pytorch-vision/")
 	if isError {
 		return
 	}
@@ -150,7 +150,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(nil, &checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -160,12 +160,12 @@ func BenchmarkVisionRestore(b *testing.B) {
 	}
 	b.Cleanup(func() {
 		finishBenchmark(b, c)
-		FileIPCCleanup(b, "../../benchmarking/temp/pytorch-vision/", "restore")
+		FileIPCCleanup(b, "./benchmarking/temp/pytorch-vision/", "restore")
 	})
 
 }
 
-func finishBenchmark(b *testing.B, c *cmd.Client) {
+func finishBenchmark(b *testing.B, c *api.Client) {
 	_, err := os.Stat("cedana_restore")
 	if err == nil {
 		os.RemoveAll("cedana_restore")
@@ -177,7 +177,7 @@ func finishBenchmark(b *testing.B, c *cmd.Client) {
 
 	destroyPid(b, c)
 
-	err = os.WriteFile("../../benchmarking/temp/type", []byte("restore"), 0o644)
+	err = os.WriteFile("./benchmarking/temp/type", []byte("restore"), 0o644)
 
 	if err != nil {
 		b.Errorf("Error in os.WriteFile(): %v", err)
@@ -214,8 +214,8 @@ func setup(b *testing.B, dir string) (string, bool) {
 	return checkpoint, false
 }
 
-func destroyPid(b *testing.B, c *cmd.Client) {
-	pids, err := getFilenames("../../benchmarking/pids/", "")
+func destroyPid(b *testing.B, c *api.Client) {
+	pids, err := getFilenames("./benchmarking/pids/", "")
 
 	if err != nil {
 		b.Errorf("Error in getFilenames(): %v", err)

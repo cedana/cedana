@@ -1,4 +1,4 @@
-package cmd
+package api
 
 import (
 	"encoding/json"
@@ -7,54 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
 )
-
-var imgPath string
-
-func init() {
-	clientCommand.AddCommand(restoreCmd)
-	restoreCmd.Flags().StringVarP(&containerId, "container", "c", "", "dump a container id")
-	restoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "path to checkpoint image")
-
-}
-
-// Restore command is only called when run manually.
-// Otherwise, daemon command is used and a network/cedana-managed restore occurs.
-var restoreCmd = &cobra.Command{
-	Use:   "restore",
-	Args:  cobra.ArbitraryArgs,
-	Short: "Initialize client and restore from dumped image",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := InstantiateClient()
-		if err != nil {
-			return err
-		}
-
-		if containerId != "" {
-			err = container.Restore(imgPath, containerId)
-		} else {
-			checkpointPath := args[0]
-			// check if it exists before passing to restore
-			_, err = os.Stat(checkpointPath)
-			if err != nil {
-				return err
-			}
-			err = c.Restore(nil, &checkpointPath)
-		}
-		if err != nil {
-			return err
-		}
-
-		return nil
-	},
-}
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
@@ -178,7 +136,7 @@ func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) error {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -193,7 +151,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 		// cleanup along the way
 		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
-		return err
+		return nil, err
 	}
 
 	c.logger.Info().Msgf("process restored: %v", resp)
@@ -204,16 +162,17 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) e
 		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
 	c.cleanupClient()
-	return nil
+	return resp.Restore.Pid, nil
 }
 
 func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
-func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) error {
+func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
+	var pid *int32
 
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
@@ -230,31 +189,31 @@ func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) error {
 		case cedana.CheckpointTypeCRIU:
 			tmpdir, err := c.prepareRestore(&opts, cmd, "")
 			if err != nil {
-				return err
+				return nil, err
 			}
 			dir = *tmpdir
 
-			err = c.criuRestore(&opts, nfy, dir)
+			pid, err = c.criuRestore(&opts, nfy, dir)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 		case cedana.CheckpointTypePytorch:
 			err := c.pyTorchRestore()
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	} else {
 		dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = c.criuRestore(&opts, nfy, *dir)
+		pid, err = c.criuRestore(&opts, nfy, *dir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return pid, nil
 }
