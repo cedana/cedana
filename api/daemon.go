@@ -27,6 +27,10 @@ type RuncDumpArgs struct {
 	CriuOpts container.CriuOpts
 }
 
+type RuncDumpResp struct {
+	Error error
+}
+
 type ContainerDumpArgs struct {
 	Ref         string
 	ContainerId string
@@ -98,6 +102,10 @@ func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
 	return cd.client.ContainerDump(args.Ref, args.ContainerId)
 }
+
+// func (cd *CedanaDaemon) RuncDump(args *RuncDumpArgs, resp *ContainerDumpResp) error {
+// 	return cd.client.ContainerDump(args., args.ContainerId)
+// }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
 	pid, err := cd.client.Restore(nil, &args.Path)

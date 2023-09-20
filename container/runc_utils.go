@@ -58,8 +58,8 @@ func GetCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 }
 
 func (c *RuncContainer) addMaskPaths(req *criurpc.CriuReq) error {
-	for _, path := range c.config.MaskPaths {
-		fi, err := os.Stat(fmt.Sprintf("/proc/%d/root/%s", c.initProcess.pid(), path))
+	for _, path := range c.Config.MaskPaths {
+		fi, err := os.Stat(fmt.Sprintf("/proc/%d/root/%s", c.InitProcess.pid(), path))
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -80,9 +80,9 @@ func (c *RuncContainer) addMaskPaths(req *criurpc.CriuReq) error {
 }
 
 func (c *RuncContainer) addCriuDumpMount(req *criurpc.CriuReq, m *configs.Mount) {
-	mountDest := strings.TrimPrefix(m.Destination, c.config.Rootfs)
-	if dest, err := securejoin.SecureJoin(c.config.Rootfs, mountDest); err == nil {
-		mountDest = dest[len(c.config.Rootfs):]
+	mountDest := strings.TrimPrefix(m.Destination, c.Config.Rootfs)
+	if dest, err := securejoin.SecureJoin(c.Config.Rootfs, mountDest); err == nil {
+		mountDest = dest[len(c.Config.Rootfs):]
 	}
 	extMnt := &criurpc.ExtMountMap{
 		Key: proto.String(mountDest),
@@ -155,18 +155,18 @@ func compareCriuVersion(criuVersion int, minVersion int) error {
 func (c *RuncContainer) checkCriuVersion(minVersion int) error {
 	// If the version of criu has already been determined there is no need
 	// to ask criu for the version again. Use the value from c.criuVersion.
-	if c.criuVersion != 0 {
-		return compareCriuVersion(c.criuVersion, minVersion)
+	if c.CriuVersion != 0 {
+		return compareCriuVersion(c.CriuVersion, minVersion)
 	}
 
 	criu := criu.MakeCriu()
 	var err error
-	c.criuVersion, err = criu.GetCriuVersion()
+	c.CriuVersion, err = criu.GetCriuVersion()
 	if err != nil {
 		return fmt.Errorf("CRIU version check failed: %w", err)
 	}
 
-	return compareCriuVersion(c.criuVersion, minVersion)
+	return compareCriuVersion(c.CriuVersion, minVersion)
 }
 
 func (c *RuncContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
@@ -176,11 +176,11 @@ func (c *RuncContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	}
 
 	// XXX: Do we need to deal with this case? AFAIK criu still requires root.
-	if err := c.cgroupManager.Apply(pid); err != nil {
+	if err := c.CgroupManager.Apply(pid); err != nil {
 		return err
 	}
 
-	if err := c.cgroupManager.Set(c.config.Cgroups.Resources); err != nil {
+	if err := c.CgroupManager.Set(c.Config.Cgroups.Resources); err != nil {
 		return err
 	}
 

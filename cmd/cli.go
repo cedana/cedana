@@ -134,7 +134,7 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		var resp api.ContainerDumpResp
-		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		err = cli.conn.Call("CedanaDaemon.RuncDump", a, &resp)
 		if err != nil {
 			return err
 		}

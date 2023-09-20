@@ -175,19 +175,19 @@ type containerState interface {
 }
 
 type RuncContainer struct {
-	id                   string
-	root                 string
-	pid                  int
-	config               *configs.Config // standin for configs.Config from runc
-	cgroupManager        cgroups.Manager
-	initProcessStartTime uint64
-	initProcess          parentProcess
-	m                    sync.Mutex
-	criuVersion          int
-	created              time.Time
-	dockerConfig         *dockerTypes.ContainerJSON
-	intelRdtManager      *Manager
-	state                containerState
+	Id                   string
+	Root                 string
+	Pid                  int
+	Config               *configs.Config // standin for configs.Config from runc
+	CgroupManager        cgroups.Manager
+	InitProcessStartTime uint64
+	InitProcess          parentProcess
+	M                    sync.Mutex
+	CriuVersion          int
+	Created              time.Time
+	DockerConfig         *dockerTypes.ContainerJSON
+	IntelRdtManager      *Manager
+	State                containerState
 }
 
 // this comes from runc, see github.com/opencontainers/runc
@@ -228,7 +228,7 @@ func (n *loadedState) status() Status {
 }
 
 func (n *loadedState) transition(s containerState) error {
-	n.c.state = s
+	n.c.State = s
 	return nil
 }
 
@@ -239,13 +239,12 @@ func (n *loadedState) transition(s containerState) error {
 // 	return n.c.state.destroy()
 // }
 
-func getContainerFromRunc(containerID string) *RuncContainer {
+func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 	// Runc root
 	// root := "/var/run/runc"
 	// Docker root
 	// root := "/run/docker/runtime-runc/moby"
 	// Containerd root where "default" is the namespace
-	root := "/run/containerd/runc/default"
 
 	l := utils.GetLogger()
 
@@ -272,18 +271,18 @@ func getContainerFromRunc(containerID string) *RuncContainer {
 	}
 
 	c := &RuncContainer{
-		initProcess:          r,
-		initProcessStartTime: state.InitProcessStartTime,
-		id:                   containerID,
-		root:                 root,
-		criuVersion:          criuVersion,
-		cgroupManager:        cgroupManager,
+		InitProcess:          r,
+		InitProcessStartTime: state.InitProcessStartTime,
+		Id:                   containerID,
+		Root:                 root,
+		CriuVersion:          criuVersion,
+		CgroupManager:        cgroupManager,
 		// dockerConfig:  &container,
-		config:          &state.Config,
-		intelRdtManager: NewManager(&state.Config, containerID, state.IntelRdtPath),
-		pid:             state.InitProcessPid,
+		Config:          &state.Config,
+		IntelRdtManager: NewManager(&state.Config, containerID, state.IntelRdtPath),
+		Pid:             state.InitProcessPid,
 		// state:           containerState,
-		created: state.Created,
+		Created: state.Created,
 	}
 
 	// c.state = &loadedState{c: c}
@@ -441,13 +440,13 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 
 	// this is so stupid hahahaha
 	c := &RuncContainer{
-		id:            containerID,
-		root:          fmt.Sprintf("%s", container.Config.WorkingDir),
-		criuVersion:   criuVersion,
-		cgroupManager: cgroupManager,
-		dockerConfig:  &container,
-		config:        runcConf,
-		pid:           container.State.Pid,
+		Id:            containerID,
+		Root:          fmt.Sprintf("%s", container.Config.WorkingDir),
+		CriuVersion:   criuVersion,
+		CgroupManager: cgroupManager,
+		DockerConfig:  &container,
+		Config:        runcConf,
+		Pid:           container.State.Pid,
 	}
 
 	return c
@@ -618,9 +617,11 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	// 	return &apiTasks.CheckpointTaskResponse{}, err
 	// }
 
-	c := getContainerFromRunc(container.ID)
+	root := "/run/containerd/runc/default"
 
-	err = c.RuncCheckpoint(criuOpts, c.pid)
+	c := GetContainerFromRunc(container.ID, root)
+
+	err = c.RuncCheckpoint(criuOpts, c.Pid)
 	if err != nil {
 		return nil, err
 	}
@@ -928,8 +929,8 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 }
 
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.M.Lock()
+	defer c.M.Unlock()
 
 	// Checkpoint is unlikely to work if os.Geteuid() != 0 || system.RunningInUserNS().
 	// (CLI prints a warning)
@@ -962,7 +963,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		ImagesDirFd:     proto.Int32(int32(imageDir.Fd())),
 		LogLevel:        proto.Int32(4),
 		LogFile:         proto.String("dump.log"),
-		Root:            proto.String(c.config.Rootfs), // TODO NR:not sure if workingDir is analogous here
+		Root:            proto.String(c.Config.Rootfs), // TODO NR:not sure if workingDir is analogous here
 		ManageCgroups:   proto.Bool(true),
 		NotifyScripts:   proto.Bool(false),
 		Pid:             proto.Int32(int32(pid)),
@@ -994,7 +995,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	// is not set, CRIU uses ptrace() to pause the processes.
 	// Note cgroup v2 freezer is only supported since CRIU release 3.14.
 	if !cgroups.IsCgroup2UnifiedMode() || c.checkCriuVersion(31400) == nil {
-		if fcg := c.cgroupManager.Path("freezer"); fcg != "" {
+		if fcg := c.CgroupManager.Path("freezer"); fcg != "" {
 			rpcOpts.FreezeCgroup = proto.String(fcg)
 		}
 	}
@@ -1066,8 +1067,8 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 
 	// no need to dump all this in pre-dump
 	if !criuOpts.PreDump {
-		hasCgroupns := c.config.Namespaces.Contains(configs.NEWCGROUP)
-		for _, m := range c.config.Mounts {
+		hasCgroupns := c.Config.Namespaces.Contains(configs.NEWCGROUP)
+		for _, m := range c.Config.Mounts {
 			switch m.Device {
 			case "bind":
 				c.addCriuDumpMount(req, m)
@@ -1091,13 +1092,13 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 			return err
 		}
 
-		for _, node := range c.config.Devices {
+		for _, node := range c.Config.Devices {
 			m := &configs.Mount{Destination: node.Path, Source: node.Path}
 			c.addCriuDumpMount(req, m)
 		}
 
 		// Write the FD info to a file in the image directory
-		fdsJSON, err := json.Marshal(c.initProcess.externalDescriptors())
+		fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
 		if err != nil {
 			return err
 		}
@@ -1142,10 +1143,10 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 	criuServer := os.NewFile(uintptr(fds[1]), "criu-transport-server")
 	defer criuServer.Close()
 
-	if c.criuVersion != 0 {
+	if c.CriuVersion != 0 {
 		// If the CRIU Version is still '0' then this is probably
 		// the initial CRIU run to detect the version. Skip it.
-		logrus.Debugf("Using CRIU %d", c.criuVersion)
+		logrus.Debugf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3")
 	if process != nil {

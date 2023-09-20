@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/container"
+	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/shirou/gopsutil/v3/process"
@@ -223,6 +223,16 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 	}
 	return &opts
 
+}
+
+func (c *Client) RuncDump(dir string, containerId string, opts *container.CriuOpts) error {
+	runcContainer := container.GetContainerFromRunc(containerId, dir)
+
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	return nil
 }
 
 func (c *Client) ContainerDump(dir string, containerId string) error {
