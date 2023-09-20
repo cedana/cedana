@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -16,6 +17,9 @@ var dir string
 var ref string
 var containerId string
 var imgPath string
+var runcPath string
+var runcPid int32
+var workPath string
 
 type CLI struct {
 	cfg    *utils.Config
@@ -80,8 +84,8 @@ var dumpCmd = &cobra.Command{
 	},
 }
 
-var containerDumpCmd = &cobra.Command{
-	Use:   "container",
+var containerdDumpCmd = &cobra.Command{
+	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,6 +97,40 @@ var containerDumpCmd = &cobra.Command{
 		a := api.ContainerDumpArgs{
 			Ref:         ref,
 			ContainerId: containerId,
+		}
+
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		if err != nil {
+			return err
+		}
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
+var runcDumpCmd = &cobra.Command{
+	Use:   "runc",
+	Short: "Manually checkpoint a running container to a directory",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		criuOpts := &container.CriuOpts{
+			ImagesDirectory: runcPath,
+			WorkDirectory:   workPath,
+			LeaveRunning:    true,
+			TcpEstablished:  false,
+		}
+
+		a := api.RuncDumpArgs{
+			PID:      runcPid,
+			WorkPath: workPath,
+			RuncPath: runcPath,
+			CriuOpts: *criuOpts,
 		}
 
 		var resp api.ContainerDumpResp
@@ -129,8 +167,8 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-var containerRestoreCmd = &cobra.Command{
-	Use:   "container",
+var containerdRestoreCmd = &cobra.Command{
+	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -223,15 +261,15 @@ var natsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(dumpCmd)
-	dumpCmd.AddCommand(containerDumpCmd)
+	dumpCmd.AddCommand(containerdDumpCmd)
 
-	containerDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
-	containerDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
-	restoreCmd.AddCommand(containerRestoreCmd)
+	restoreCmd.AddCommand(containerdRestoreCmd)
 
-	containerRestoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "image ref")
-	containerRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	containerdRestoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "image ref")
+	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)

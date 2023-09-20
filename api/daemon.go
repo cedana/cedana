@@ -5,6 +5,7 @@ import (
 	"net/rpc"
 	"os"
 
+	"github.com/cedana/cedana/container"
 	"github.com/rs/zerolog"
 )
 
@@ -17,6 +18,13 @@ type CedanaDaemon struct {
 type DumpArgs struct {
 	PID int32
 	Dir string
+}
+
+type RuncDumpArgs struct {
+	PID      int32
+	WorkPath string
+	RuncPath string
+	CriuOpts container.CriuOpts
 }
 
 type ContainerDumpArgs struct {
