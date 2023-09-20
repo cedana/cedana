@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,13 +40,13 @@ var cfgCmd = &cobra.Command{
 var containerCmd = &cobra.Command{
 	Use: "container",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		id := args[0]
-		dir := args[1]
+		// id := args[0]
+		// dir := args[1]
 
-		err := container.Dump(dir, id)
-		if err != nil {
-			return err
-		}
+		// // err := container.Dump(dir, id)
+		// // if err != nil {
+		// // 	return err
+		// // }
 
 		return nil
 	},

@@ -30,12 +30,12 @@ type ContainerRestoreArgs struct {
 }
 
 type ContainerRestoreResp struct {
-	checkpointPath string
-	Error          error
+	Error error
 }
 
 type ContainerDumpResp struct {
-	Error error
+	CheckpointPath string
+	Error          error
 }
 
 type DumpResp struct {

@@ -100,8 +100,7 @@ var containerDumpCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		cli.logger.Info().Msgf("checkpoint of container %s written successfully", containerId)
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }

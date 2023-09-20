@@ -552,6 +552,7 @@ func containerdCheckpoint(id string, ref string) error {
 	// if _, err := container.Checkpoint(ctx, ref, containerdOpts...); err != nil {
 	// 	return err
 	// }
+
 	return nil
 }
 
