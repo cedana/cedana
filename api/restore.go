@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"google.golang.org/protobuf/proto"
@@ -87,6 +88,14 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	}
 
 	return &tmpdir, nil
+}
+
+func (c *Client) ContainerRestore(imgPath string, containerId string) error {
+	err := container.Restore(imgPath, containerId)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	return nil
 }
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the

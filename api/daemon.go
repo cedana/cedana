@@ -24,6 +24,16 @@ type ContainerDumpArgs struct {
 	ContainerId string
 }
 
+type ContainerRestoreArgs struct {
+	ImgPath     string
+	ContainerId string
+}
+
+type ContainerRestoreResp struct {
+	checkpointPath string
+	Error          error
+}
+
 type ContainerDumpResp struct {
 	Error error
 }
@@ -77,7 +87,7 @@ func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 	return cd.client.Dump(args.Dir)
 }
 
-func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *DumpResp) error {
+func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
 	return cd.client.ContainerDump(args.Ref, args.ContainerId)
 }
 
@@ -88,6 +98,10 @@ func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
 	}
 	resp.NewPID = *pid
 	return err
+}
+
+func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *ContainerRestoreResp) error {
+	return cd.client.ContainerRestore(args.ImgPath, args.ContainerId)
 }
 
 func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {

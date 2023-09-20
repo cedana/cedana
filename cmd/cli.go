@@ -139,13 +139,13 @@ var containerRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		a := api.ContainerDumpArgs{
-			Ref:         ref,
+		a := api.ContainerRestoreArgs{
+			ImgPath:     ref,
 			ContainerId: containerId,
 		}
 
-		var resp api.ContainerDumpResp
-		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		var resp api.ContainerRestoreResp
+		err = cli.conn.Call("CedanaDaemon.ContainerRestore", a, &resp)
 		if err != nil {
 			return err
 		}
@@ -224,8 +224,14 @@ var natsCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(dumpCmd)
 	dumpCmd.AddCommand(containerDumpCmd)
+
 	containerDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
-	containerDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "image ref")
+	containerDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+
+	restoreCmd.AddCommand(containerRestoreCmd)
+
+	containerRestoreCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
