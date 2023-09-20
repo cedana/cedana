@@ -15,6 +15,7 @@ import (
 var dir string
 var ref string
 var containerId string
+var imgPath string
 
 type CLI struct {
 	cfg    *utils.Config
@@ -140,7 +141,7 @@ var containerRestoreCmd = &cobra.Command{
 		}
 
 		a := api.ContainerRestoreArgs{
-			ImgPath:     ref,
+			ImgPath:     imgPath,
 			ContainerId: containerId,
 		}
 
@@ -150,7 +151,7 @@ var containerRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		cli.logger.Info().Msgf("checkpoint of container %s written successfully", containerId)
+		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, ref)
 		return nil
 	},
 }
