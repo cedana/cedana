@@ -13,6 +13,8 @@ import (
 )
 
 var dir string
+var ref string
+var containerId string
 
 type CLI struct {
 	cfg    *utils.Config
@@ -77,6 +79,32 @@ var dumpCmd = &cobra.Command{
 	},
 }
 
+var containerDumpCmd = &cobra.Command{
+	Use:   "container",
+	Short: "Manually checkpoint a running container to a directory",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		a := api.ContainerDumpArgs{
+			Ref:         ref,
+			ContainerId: containerId,
+		}
+
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		cli.logger.Info().Msgf("checkpoint of container %s written successfully", containerId)
+		return nil
+	},
+}
+
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Manually restore a process from a checkpoint located at input path",
@@ -97,6 +125,32 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
+		return nil
+	},
+}
+
+var containerRestoreCmd = &cobra.Command{
+	Use:   "container",
+	Short: "Manually checkpoint a running container to a directory",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		a := api.ContainerDumpArgs{
+			Ref:         ref,
+			ContainerId: containerId,
+		}
+
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		cli.logger.Info().Msgf("checkpoint of container %s written successfully", containerId)
 		return nil
 	},
 }
@@ -169,6 +223,10 @@ var natsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(dumpCmd)
+	dumpCmd.AddCommand(containerDumpCmd)
+	containerDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "image ref")
+
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
 	clientDaemonCmd.AddCommand(natsCmd)

@@ -19,6 +19,15 @@ type DumpArgs struct {
 	Dir string
 }
 
+type ContainerDumpArgs struct {
+	Ref         string
+	ContainerId string
+}
+
+type ContainerDumpResp struct {
+	Error error
+}
+
 type DumpResp struct {
 	Error error
 }
@@ -66,6 +75,10 @@ type RegisterProcessResp struct {
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 	cd.client.Process.PID = args.PID
 	return cd.client.Dump(args.Dir)
+}
+
+func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *DumpResp) error {
+	return cd.client.ContainerDump(args.Ref, args.ContainerId)
 }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {

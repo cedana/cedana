@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"github.com/shirou/gopsutil/v3/process"
@@ -224,58 +225,13 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-// type Container struct {
-// 	id                   string
-// 	root                 string
-// 	config               *configs.Config
-// 	cgroupManager        cgroups.Manager
-// 	intelRdtManager      *intelrdt.Manager
-// 	initProcess          parentProcess
-// 	initProcessStartTime uint64
-// 	m                    sync.Mutex
-// 	criuVersion          int
-// 	state                containerState
-// 	created              time.Time
-// 	fifo                 *os.File
-// }
-
-// func getContainer(context *cli.Context) (*libcontainer.Container, error) {
-// 	id := context.Args().First()
-// 	if id == "" {
-// 		return nil, errEmptyID
-// 	}
-// 	root := context.GlobalString("root")
-// 	return libcontainer.Load(root, id)
-// }
-
-// Need to rely on libcontainer ("github.com/opencontainers/runc/libcontainer")
-
-// func (c *Client) DumpContainer(dir string) error {
-// 	// This is pulled from runc's checkpoint.go
-
-// 	container, err := getContainer(context)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	status, err := container.Status()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if status == libcontainer.Created || status == libcontainer.Stopped {
-// 		return fmt.Errorf("Container cannot be checkpointed in %s state", status.String())
-// 	}
-// 	options, err := criuOptions(context)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	err = container.Checkpoint(options)
-// 	if err == nil && !(options.LeaveRunning || options.PreDump) {
-// 		// Destroy the container unless we tell CRIU to keep it.
-// 		destroy(container)
-// 	}
-// 	return err
-// }
+func (c *Client) ContainerDump(dir string, containerId string) error {
+	err := container.Dump(dir, containerId)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	return nil
+}
 
 func (c *Client) Dump(dir string) error {
 	defer c.timeTrack(time.Now(), "dump")
