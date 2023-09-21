@@ -1,9 +1,12 @@
 package container
 
 import (
-	"context"
+	"bytes"
+	gocontext "context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -13,35 +16,181 @@ import (
 	"sync"
 	"time"
 
+	goruntime "runtime"
+
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v5"
-	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/docker/docker/api/types"
+	"github.com/cedana/runc/libcontainer"
+	"github.com/cedana/runc/libcontainer/cgroups"
+	"github.com/cedana/runc/libcontainer/cgroups/manager"
+	"github.com/cedana/runc/libcontainer/configs"
+	"github.com/checkpoint-restore/go-criu/v6"
+	criurpc "github.com/checkpoint-restore/go-criu/v6/rpc"
+	containerd "github.com/containerd/containerd"
+	apiTasks "github.com/containerd/containerd/api/services/tasks/v1"
+	"github.com/containerd/containerd/api/types"
+	containerdTypes "github.com/containerd/containerd/api/types"
+	"github.com/containerd/containerd/archive"
+	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/diff"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/log"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/pkg/epoch"
+	"github.com/containerd/containerd/plugin"
+	"github.com/containerd/containerd/protobuf"
+	ptypes "github.com/containerd/containerd/protobuf/types"
+	"github.com/containerd/containerd/rootfs"
+	"github.com/containerd/containerd/runtime/linux/runctypes"
+	"github.com/containerd/containerd/runtime/v2/runc/options"
+	"github.com/containerd/typeurl/v2"
+	securejoin "github.com/cyphar/filepath-securejoin"
+	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	dockercli "github.com/docker/docker/client"
-	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
-	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/docker/docker/errdefs"
+	"github.com/opencontainers/go-digest"
+	is "github.com/opencontainers/image-spec/specs-go"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
-type RuncContainer struct {
-	id                   string
-	root                 string
-	pid                  int
-	config               *configs.Config // standin for configs.Config from runc
-	cgroupManager        cgroups.Manager
-	initProcessStartTime uint64
-	m                    sync.Mutex
-	criuVersion          int
-	created              time.Time
-	dockerConfig         *types.ContainerJSON
+var (
+	ErrUnknown            = errors.New("unknown") // used internally to represent a missed mapping.
+	ErrInvalidArgument    = errors.New("invalid argument")
+	ErrNotFound           = errors.New("not found")
+	ErrAlreadyExists      = errors.New("already exists")
+	ErrFailedPrecondition = errors.New("failed precondition")
+	ErrUnavailable        = errors.New("unavailable")
+	ErrNotImplemented     = errors.New("not implemented") // represents not supported and unimplemented
+)
+
+const (
+	checkpointImageNameLabel       = "org.opencontainers.image.ref.name"
+	checkpointRuntimeNameLabel     = "io.containerd.checkpoint.runtime"
+	checkpointSnapshotterNameLabel = "io.containerd.checkpoint.snapshotter"
+)
+
+const descriptorsFilename = "descriptors.json"
+
+const (
+	checkpointDateFormat = "01-02-2006-15:04:05"
+	checkpointNameFormat = "containerd.io/checkpoint/%s:%s"
+)
+
+type CheckpointTaskOpts func(*CheckpointTaskInfo) error
+
+// CheckpointTaskInfo allows specific checkpoint information to be set for the task
+type CheckpointTaskInfo struct {
+	Name string
+	// ParentCheckpoint is the digest of a parent checkpoint
+	ParentCheckpoint digest.Digest
+	// Options hold runtime specific settings for checkpointing a task
+	Options interface{}
+
+	runtime string
 }
 
-// this comes from runc, see github.com/opencontainers/runc
+// Runtime name for the container
+func (i *CheckpointTaskInfo) Runtime() string {
+	return i.runtime
+}
+
+type parentProcess interface {
+	// pid returns the pid for the running process.
+	pid() int
+
+	// start starts the process execution.
+	start() error
+
+	// send a SIGKILL to the process and wait for the exit.
+	terminate() error
+
+	// wait waits on the process returning the process state.
+	wait() (*os.ProcessState, error)
+
+	// startTime returns the process start time.
+	startTime() (uint64, error)
+	signal(os.Signal) error
+	externalDescriptors() []string
+	setExternalDescriptors(fds []string)
+	forwardChildLogs() chan error
+}
+
+type nonChildProcess struct {
+	processPid       int
+	processStartTime uint64
+	fds              []string
+}
+
+func (p *nonChildProcess) start() error {
+	return errors.New("restored process cannot be started")
+}
+
+func (p *nonChildProcess) pid() int {
+	return p.processPid
+}
+
+func (p *nonChildProcess) terminate() error {
+	return errors.New("restored process cannot be terminated")
+}
+
+func (p *nonChildProcess) wait() (*os.ProcessState, error) {
+	return nil, errors.New("restored process cannot be waited on")
+}
+
+func (p *nonChildProcess) startTime() (uint64, error) {
+	return p.processStartTime, nil
+}
+
+func (p *nonChildProcess) signal(s os.Signal) error {
+	proc, err := os.FindProcess(p.processPid)
+	if err != nil {
+		return err
+	}
+	return proc.Signal(s)
+}
+
+func (p *nonChildProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *nonChildProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
+func (p *nonChildProcess) forwardChildLogs() chan error {
+	return nil
+}
+
+type Status int
+
+type containerState interface {
+	transition(containerState) error
+	destroy() error
+	status() Status
+}
+
+type RuncContainer struct {
+	Id                   string
+	Root                 string
+	Pid                  int
+	Config               *configs.Config // standin for configs.Config from runc
+	CgroupManager        cgroups.Manager
+	InitProcessStartTime uint64
+	InitProcess          parentProcess
+	M                    sync.Mutex
+	CriuVersion          int
+	Created              time.Time
+	DockerConfig         *dockerTypes.ContainerJSON
+	IntelRdtManager      *Manager
+	State                containerState
+}
+
+// this comes from runc, see github.com/cedana/runc
 // they use an external CriuOpts struct that's populated
 type VethPairName struct {
 	ContainerInterfaceName string
@@ -69,18 +218,166 @@ type CriuOpts struct {
 	LsmMountContext         string             // LSM mount context value to use during restore
 }
 
+type loadedState struct {
+	c *RuncContainer
+	s Status
+}
+
+func (n *loadedState) status() Status {
+	return n.s
+}
+
+func (n *loadedState) transition(s containerState) error {
+	n.c.State = s
+	return nil
+}
+
+// func (n *loadedState) destroy() error {
+// 	if err := n.c.refreshState(); err != nil {
+// 		return err
+// 	}
+// 	return n.c.state.destroy()
+// }
+
+func GetContainerFromRunc(containerID string, root string) *RuncContainer {
+	// Runc root
+	// root := "/var/run/runc"
+	// Docker root
+	// root := "/run/docker/runtime-runc/moby"
+	// Containerd root where "default" is the namespace
+
+	l := utils.GetLogger()
+
+	criu := criu.MakeCriu()
+	criuVersion, err := criu.GetCriuVersion()
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not get criu version")
+	}
+	root = root + "/" + containerID
+	state, err := loadState(root)
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not load state")
+	}
+
+	r := &nonChildProcess{
+		processPid:       state.InitProcessPid,
+		processStartTime: state.InitProcessStartTime,
+		fds:              state.ExternalDescriptors,
+	}
+
+	cgroupManager, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
+	if err != nil {
+		l.Fatal().Err(err).Msg("could not create cgroup manager")
+	}
+
+	c := &RuncContainer{
+		InitProcess:          r,
+		InitProcessStartTime: state.InitProcessStartTime,
+		Id:                   containerID,
+		Root:                 root,
+		CriuVersion:          criuVersion,
+		CgroupManager:        cgroupManager,
+		// dockerConfig:  &container,
+		Config:          &state.Config,
+		IntelRdtManager: NewManager(&state.Config, containerID, state.IntelRdtPath),
+		Pid:             state.InitProcessPid,
+		// state:           containerState,
+		Created: state.Created,
+	}
+
+	// c.state = &loadedState{c: c}
+	// if err := c.refreshState(); err != nil {
+	// 	return nil, err
+	// }
+	return c
+}
+
+type BaseState struct {
+	// ID is the container ID.
+	ID string `json:"id"`
+
+	// InitProcessPid is the init process id in the parent namespace.
+	InitProcessPid int `json:"init_process_pid"`
+
+	// InitProcessStartTime is the init process start time in clock cycles since boot time.
+	InitProcessStartTime uint64 `json:"init_process_start"`
+
+	// Created is the unix timestamp for the creation time of the container in UTC
+	Created time.Time `json:"created"`
+
+	// Config is the container's configuration.
+	Config configs.Config `json:"config"`
+}
+
+type State struct {
+	BaseState
+
+	// Platform specific fields below here
+
+	// Specified if the container was started under the rootless mode.
+	// Set to true if BaseState.Config.RootlessEUID && BaseState.Config.RootlessCgroups
+	Rootless bool `json:"rootless"`
+
+	// Paths to all the container's cgroups, as returned by (*cgroups.Manager).GetPaths
+	//
+	// For cgroup v1, a key is cgroup subsystem name, and the value is the path
+	// to the cgroup for this subsystem.
+	//
+	// For cgroup v2 unified hierarchy, a key is "", and the value is the unified path.
+	CgroupPaths map[string]string `json:"cgroup_paths"`
+
+	// NamespacePaths are filepaths to the container's namespaces. Key is the namespace type
+	// with the value as the path.
+	NamespacePaths map[configs.NamespaceType]string `json:"namespace_paths"`
+
+	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
+	ExternalDescriptors []string `json:"external_descriptors,omitempty"`
+
+	// Intel RDT "resource control" filesystem path
+	IntelRdtPath string `json:"intel_rdt_path"`
+}
+
+func loadState(root string) (*State, error) {
+	stateFilePath, err := securejoin.SecureJoin(root, "state.json")
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(stateFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, err
+	}
+	defer f.Close()
+	var state *State
+	if err := json.NewDecoder(f).Decode(&state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
+	timeoutOpt := containerd.WithTimeout(0)
+	opts = append(opts, timeoutOpt)
+	client, err := containerd.New("/run/containerd/containerd.sock", opts...)
+	ctx, cancel := AppContext(ctx)
+	return client, ctx, cancel, err
+}
+
 // Pretty wacky function. "creates" a runc container from a docker container,
 // basically piecing it together from information we can parse out from the docker go lib
 func getContainerFromDocker(containerID string) *RuncContainer {
 	l := utils.GetLogger()
+
 	cli, err := dockercli.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		l.Fatal().Err(err).Msg("could not create docker client")
 	}
 
-	cli.NegotiateAPIVersion(context.Background())
+	cli.NegotiateAPIVersion(gocontext.Background())
 
-	container, err := cli.ContainerInspect(context.Background(), containerID)
+	container, err := cli.ContainerInspect(gocontext.Background(), containerID)
 	if err != nil {
 		l.Fatal().Err(err).Msg("could not inspect container")
 	}
@@ -143,13 +440,13 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 
 	// this is so stupid hahahaha
 	c := &RuncContainer{
-		id:            containerID,
-		root:          fmt.Sprintf("%s", container.Config.WorkingDir),
-		criuVersion:   criuVersion,
-		cgroupManager: cgroupManager,
-		dockerConfig:  &container,
-		config:        runcConf,
-		pid:           container.State.Pid,
+		Id:            containerID,
+		Root:          fmt.Sprintf("%s", container.Config.WorkingDir),
+		CriuVersion:   criuVersion,
+		CgroupManager: cgroupManager,
+		DockerConfig:  &container,
+		Config:        runcConf,
+		Pid:           container.State.Pid,
 	}
 
 	return c
@@ -157,15 +454,8 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 
 // Gotta figure out containerID discovery - TODO NR
 func Dump(dir string, containerID string) error {
-	// create a CriuOpts and pass into RuncCheckpoint
-	opts := &CriuOpts{
-		ImagesDirectory: dir,
-		LeaveRunning:    false,
-	}
-
-	c := getContainerFromDocker(containerID)
-
-	err := c.RuncCheckpoint(opts, c.pid)
+	dir = "containerd.io/checkpoint/countup:09-18-2023-19:12:56"
+	err := containerdCheckpoint(containerID, dir)
 	if err != nil {
 		return err
 	}
@@ -173,9 +463,474 @@ func Dump(dir string, containerID string) error {
 	return nil
 }
 
+// AppContext returns the context for a command. Should only be called once per
+// command, near the start.
+//
+// This will ensure the namespace is picked up and set the timeout, if one is
+// defined.
+func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelFunc) {
+	var (
+		ctx       = gocontext.Background()
+		timeout   = 0
+		namespace = "default"
+		cancel    gocontext.CancelFunc
+	)
+	ctx = namespaces.WithNamespace(ctx, namespace)
+	if timeout > 0 {
+		ctx, cancel = gocontext.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	} else {
+		ctx, cancel = gocontext.WithCancel(ctx)
+	}
+	if tm, err := epoch.SourceDateEpoch(); err != nil {
+		log.L.WithError(err).Warn("Failed to read SOURCE_DATE_EPOCH")
+	} else if tm != nil {
+		log.L.Debugf("Using SOURCE_DATE_EPOCH: %v", tm)
+		ctx = epoch.WithSourceDateEpoch(ctx, tm)
+	}
+	return ctx, cancel
+}
+
+func containerdCheckpoint(id string, ref string) error {
+
+	ctx := gocontext.Background()
+
+	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	defer cancel()
+
+	// containerdOpts := []containerd.CheckpointOpts{
+	// 	containerd.WithCheckpointRuntime,
+	// }
+
+	container, err := containerdClient.LoadContainer(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	task, err := container.Task(ctx, nil)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+	}
+
+	// info, err := container.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	// pause if running
+	if task != nil {
+		if err := task.Pause(ctx); err != nil {
+			return err
+		}
+		// TODO BS base this off of -leaverunning flag
+		defer func() {
+			if err := task.Resume(ctx); err != nil {
+				fmt.Println(fmt.Errorf("error resuming task: %w", err))
+			}
+		}()
+	}
+
+	// create image path store criu image files
+	imagePath := ""
+	// checkpoint task
+	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
+	// 	return err
+	// }
+	checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(imagePath))
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Checkpoint name: %s\n", checkpoint.Name())
+
+	// if _, err := container.Checkpoint(ctx, ref, containerdOpts...); err != nil {
+	// 	return err
+	// }
+
+	return nil
+}
+
+// getCheckpointPath only suitable for runc runtime now
+func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
+	if option == nil {
+		return "", nil
+	}
+
+	var checkpointPath string
+	v, err := typeurl.UnmarshalAny(option)
+	if err != nil {
+		return "", err
+	}
+	opts, ok := v.(*options.CheckpointOptions)
+	if !ok {
+		return "", fmt.Errorf("invalid task checkpoint option for %s", runtime)
+	}
+	checkpointPath = opts.ImagePath
+
+	return checkpointPath, nil
+}
+
+func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
+	// TODO BS get rid of marshal/unmarshal & CTR
+	v, err := typeurl.UnmarshalAny(request.Options)
+	if err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	opts, ok := v.(*options.CheckpointOptions)
+	if !ok {
+		return &apiTasks.CheckpointTaskResponse{}, fmt.Errorf("invalid task checkpoint option for %s", container.Runtime.Name)
+	}
+
+	criuOpts := &CriuOpts{
+		ImagesDirectory:         opts.ImagePath,
+		WorkDirectory:           opts.WorkPath,
+		LeaveRunning:            !opts.Exit,
+		TcpEstablished:          opts.OpenTcp,
+		ExternalUnixConnections: opts.ExternalUnixSockets,
+		ShellJob:                opts.Terminal,
+		FileLocks:               opts.FileLocks,
+		StatusFd:                int(3),
+	}
+
+	image := opts.ImagePath
+
+	checkpointImageExists := false
+
+	if image == "" {
+		checkpointImageExists = true
+		image, err = os.MkdirTemp(os.Getenv("XDG_RUNTIME_DIR"), "ctrd-checkpoint")
+		if err != nil {
+			return &apiTasks.CheckpointTaskResponse{}, err
+		}
+		criuOpts.ImagesDirectory = image
+		fmt.Printf("Checkpointing to %s\n", image)
+		defer os.RemoveAll(image)
+	}
+
+	// Replace with our criu checkpoint
+	// if err := runtimeTask.Checkpoint(ctx, image, request.Options); err != nil {
+	// 	return &apiTasks.CheckpointTaskResponse{}, err
+	// }
+
+	root := "/run/containerd/runc/default"
+
+	c := GetContainerFromRunc(container.ID, root)
+
+	err = c.RuncCheckpoint(criuOpts, c.Pid)
+	if err != nil {
+		return nil, err
+	}
+
+	// do not commit checkpoint image if checkpoint ImagePath is passed,
+	// return if checkpointImageExists is false
+	if !checkpointImageExists {
+		return &apiTasks.CheckpointTaskResponse{}, nil
+	}
+	// write checkpoint to the content store
+	tar := archive.Diff(ctx, "", image)
+	cp, err := localWriteContent(ctx, client, images.MediaTypeContainerd1Checkpoint, image, tar)
+	if err != nil {
+		return nil, err
+	}
+	// close tar first after write
+	if err := tar.Close(); err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	if err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	// write the config to the content store
+	pbany := protobuf.FromAny(container.Spec)
+	data, err := proto.Marshal(pbany)
+	if err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	spec := bytes.NewReader(data)
+	specD, err := localWriteContent(ctx, client, images.MediaTypeContainerd1CheckpointConfig, filepath.Join(image, "spec"), spec)
+	if err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	return &apiTasks.CheckpointTaskResponse{
+		Descriptors: []*containerdTypes.Descriptor{
+			cp,
+			specD,
+		},
+	}, nil
+
+}
+
+func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
+	writer, err := client.ContentStore().Writer(ctx, content.WithRef(ref), content.WithDescriptor(ocispec.Descriptor{MediaType: mediaType}))
+	if err != nil {
+		return nil, err
+	}
+	defer writer.Close()
+	size, err := io.Copy(writer, r)
+	if err != nil {
+		return nil, err
+	}
+	if err := writer.Commit(ctx, 0, ""); err != nil {
+		return nil, err
+	}
+	return &types.Descriptor{
+		MediaType:   mediaType,
+		Digest:      writer.Digest().String(),
+		Size:        size,
+		Annotations: make(map[string]string),
+	}, nil
+}
+
+// WithCheckpointImagePath sets image path for checkpoint option
+func WithCheckpointImagePath(path string) CheckpointTaskOpts {
+	return func(r *CheckpointTaskInfo) error {
+		if CheckRuntime(r.Runtime(), "io.containerd.runc") {
+			if r.Options == nil {
+				r.Options = &options.CheckpointOptions{}
+			}
+			opts, ok := r.Options.(*options.CheckpointOptions)
+			if !ok {
+				return errors.New("invalid v2 shim checkpoint options format")
+			}
+			opts.ImagePath = path
+		} else {
+			if r.Options == nil {
+				r.Options = &runctypes.CheckpointOptions{}
+			}
+			opts, ok := r.Options.(*runctypes.CheckpointOptions)
+			if !ok {
+				return errors.New("invalid v1 shim checkpoint options format")
+			}
+			opts.ImagePath = path
+		}
+		return nil
+	}
+}
+
+// CheckRuntime returns true if the current runtime matches the expected
+// runtime. Providing various parts of the runtime schema will match those
+// parts of the expected runtime
+func CheckRuntime(current, expected string) bool {
+	cp := strings.Split(current, ".")
+	l := len(cp)
+	for i, p := range strings.Split(expected, ".") {
+		if i > l {
+			return false
+		}
+		if p != cp[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
+	// This is for garbage collection
+	ctx, done, err := client.WithLease(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer done(ctx)
+	cr, err := client.ContainerService().Get(ctx, task.ID())
+	if err != nil {
+		return nil, err
+	}
+
+	request := &apiTasks.CheckpointTaskRequest{
+		ContainerID: task.ID(),
+	}
+	i := CheckpointTaskInfo{
+		runtime: cr.Runtime.Name,
+	}
+	for _, o := range opts {
+		if err := o(&i); err != nil {
+			return nil, err
+		}
+	}
+	// set a default name
+	if i.Name == "" {
+		i.Name = fmt.Sprintf(checkpointNameFormat, task.ID(), time.Now().Format(checkpointDateFormat))
+	}
+	request.ParentCheckpoint = i.ParentCheckpoint.String()
+	if i.Options != nil {
+		any, err := protobuf.MarshalAnyToProto(i.Options)
+		if err != nil {
+			return nil, err
+		}
+		request.Options = any
+	}
+
+	status, err := task.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if status.Status != containerd.Paused {
+		// make sure we pause it and resume after all other filesystem operations are completed
+		if err := task.Pause(ctx); err != nil {
+			return nil, err
+		}
+		defer task.Resume(ctx)
+	}
+
+	index := v1.Index{
+		Versioned: is.Versioned{
+			SchemaVersion: 2,
+		},
+		Annotations: make(map[string]string),
+	}
+	// TODO: this is where we do custom criu checkpoint
+	response, err := localCheckpointTask(ctx, client, &index, request, cr)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, d := range response.Descriptors {
+		index.Manifests = append(index.Manifests, v1.Descriptor{
+			MediaType: d.MediaType,
+			Size:      d.Size,
+			Digest:    digest.Digest(d.Digest),
+			Platform: &v1.Platform{
+				OS:           goruntime.GOOS,
+				Architecture: goruntime.GOARCH,
+			},
+			Annotations: d.Annotations,
+		})
+	}
+	// if checkpoint image path passed, jump checkpoint image,
+	// return an empty image
+	if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
+		return containerd.NewImage(client, images.Image{}), nil
+	}
+
+	// add runtime info to index
+	index.Annotations[checkpointRuntimeNameLabel] = cr.Runtime.Name
+	// add snapshotter info to index
+	index.Annotations[checkpointSnapshotterNameLabel] = cr.Snapshotter
+
+	if cr.Image != "" {
+		if err := checkpointImage(ctx, client, &index, cr.Image); err != nil {
+			return nil, err
+		}
+		// Changed this from image.name
+		index.Annotations[checkpointImageNameLabel] = cr.Image
+	}
+	if cr.SnapshotKey != "" {
+		if err := checkpointRWSnapshot(ctx, client, &index, cr.Snapshotter, cr.SnapshotKey); err != nil {
+			return nil, err
+		}
+	}
+	desc, err := writeIndex(ctx, client, task, &index)
+	if err != nil {
+		return nil, err
+	}
+	im := images.Image{
+		Name:   i.Name,
+		Target: desc,
+		Labels: map[string]string{
+			"containerd.io/checkpoint": "true",
+		},
+	}
+	if im, err = client.ImageService().Create(ctx, im); err != nil {
+		return nil, err
+	}
+	return containerd.NewImage(client, im), nil
+}
+
+func writeIndex(ctx gocontext.Context, client *containerd.Client, task containerd.Task, index *v1.Index) (d v1.Descriptor, err error) {
+	labels := map[string]string{}
+	for i, m := range index.Manifests {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(index); err != nil {
+		return v1.Descriptor{}, err
+	}
+	return writeContent(ctx, client.ContentStore(), v1.MediaTypeImageIndex, task.ID(), buf, content.WithLabels(labels))
+}
+
+func writeContent(ctx gocontext.Context, store content.Ingester, mediaType, ref string, r io.Reader, opts ...content.Opt) (d v1.Descriptor, err error) {
+	writer, err := store.Writer(ctx, content.WithRef(ref))
+	if err != nil {
+		return d, err
+	}
+	defer writer.Close()
+	size, err := io.Copy(writer, r)
+	if err != nil {
+		return d, err
+	}
+
+	if err := writer.Commit(ctx, size, "", opts...); err != nil {
+		if !IsAlreadyExists(err) {
+			return d, err
+		}
+	}
+	return v1.Descriptor{
+		MediaType: mediaType,
+		Digest:    writer.Digest(),
+		Size:      size,
+	}, nil
+}
+
+func IsAlreadyExists(err error) bool {
+	return errors.Is(err, ErrAlreadyExists)
+}
+
+func checkpointImage(ctx gocontext.Context, client *containerd.Client, index *v1.Index, image string) error {
+	if image == "" {
+		return fmt.Errorf("cannot checkpoint image with empty name")
+	}
+	ir, err := client.ImageService().Get(ctx, image)
+	if err != nil {
+		return err
+	}
+	index.Manifests = append(index.Manifests, ir.Target)
+	return nil
+}
+
+func checkpointRWSnapshot(ctx gocontext.Context, client *containerd.Client, index *v1.Index, snapshotterName string, id string) error {
+	opts := []diff.Opt{
+		diff.WithReference(fmt.Sprintf("checkpoint-rw-%s", id)),
+	}
+	rw, err := rootfs.CreateDiff(ctx, id, client.SnapshotService(snapshotterName), client.DiffService(), opts...)
+	if err != nil {
+		return err
+	}
+	rw.Platform = &v1.Platform{
+		OS:           goruntime.GOOS,
+		Architecture: goruntime.GOARCH,
+	}
+	index.Manifests = append(index.Manifests, rw)
+	return nil
+}
+
+func isCheckpointPathExist(runtime string, v interface{}) bool {
+	if v == nil {
+		return false
+	}
+
+	switch runtime {
+	case plugin.RuntimeRuncV1, plugin.RuntimeRuncV2:
+		if opts, ok := v.(*options.CheckpointOptions); ok && opts.ImagePath != "" {
+			return true
+		}
+
+	case plugin.RuntimeLinuxV1:
+		if opts, ok := v.(*runctypes.CheckpointOptions); ok && opts.ImagePath != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.M.Lock()
+	defer c.M.Unlock()
 
 	// Checkpoint is unlikely to work if os.Geteuid() != 0 || system.RunningInUserNS().
 	// (CLI prints a warning)
@@ -208,7 +963,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		ImagesDirFd:     proto.Int32(int32(imageDir.Fd())),
 		LogLevel:        proto.Int32(4),
 		LogFile:         proto.String("dump.log"),
-		Root:            proto.String(c.config.Rootfs), // TODO NR:not sure if workingDir is analogous here
+		Root:            proto.String(c.Config.Rootfs), // TODO NR:not sure if workingDir is analogous here
 		ManageCgroups:   proto.Bool(true),
 		NotifyScripts:   proto.Bool(false),
 		Pid:             proto.Int32(int32(pid)),
@@ -240,7 +995,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	// is not set, CRIU uses ptrace() to pause the processes.
 	// Note cgroup v2 freezer is only supported since CRIU release 3.14.
 	if !cgroups.IsCgroup2UnifiedMode() || c.checkCriuVersion(31400) == nil {
-		if fcg := c.cgroupManager.Path("freezer"); fcg != "" {
+		if fcg := c.CgroupManager.Path("freezer"); fcg != "" {
 			rpcOpts.FreezeCgroup = proto.String(fcg)
 		}
 	}
@@ -257,6 +1012,12 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		rpcOpts.ManageCgroupsMode = &mode
 	}
 
+	// pre-dump may need parentImage param to complete iterative migration
+	if criuOpts.ParentImage != "" {
+		rpcOpts.ParentImg = proto.String(criuOpts.ParentImage)
+		rpcOpts.TrackMem = proto.Bool(true)
+	}
+
 	var t criurpc.CriuReqType
 	if criuOpts.PreDump {
 		feat := criurpc.CriuFeatures{
@@ -271,10 +1032,81 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	} else {
 		t = criurpc.CriuReqType_DUMP
 	}
+	if criuOpts.LazyPages {
+		// lazy migration requested; check if criu supports it
+		feat := criurpc.CriuFeatures{
+			LazyPages: proto.Bool(true),
+		}
+		if err := c.checkCriuFeatures(criuOpts, &rpcOpts, &feat); err != nil {
+			return err
+		}
+
+		if fd := criuOpts.StatusFd; fd != -1 {
+			// check that the FD is valid
+			flags, err := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
+			if err != nil {
+				return fmt.Errorf("invalid --status-fd argument %d: %w", fd, err)
+			}
+			// and writable
+			if flags&unix.O_WRONLY == 0 {
+				return fmt.Errorf("invalid --status-fd argument %d: not writable", fd)
+			}
+
+			if c.checkCriuVersion(31500) != nil {
+				// For criu 3.15+, use notifications (see case "status-ready"
+				// in criuNotifications). Otherwise, rely on criu status fd.
+				rpcOpts.StatusFd = proto.Int32(int32(fd))
+			}
+		}
+	}
 
 	req := &criurpc.CriuReq{
 		Type: &t,
 		Opts: &rpcOpts,
+	}
+
+	// no need to dump all this in pre-dump
+	if !criuOpts.PreDump {
+		hasCgroupns := c.Config.Namespaces.Contains(configs.NEWCGROUP)
+		for _, m := range c.Config.Mounts {
+			switch m.Device {
+			case "bind":
+				c.addCriuDumpMount(req, m)
+			case "cgroup":
+				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
+					// real mount(s)
+					continue
+				}
+				// a set of "external" bind mounts
+				binds, err := GetCgroupMounts(m)
+				if err != nil {
+					return err
+				}
+				for _, b := range binds {
+					c.addCriuDumpMount(req, b)
+				}
+			}
+		}
+
+		if err := c.addMaskPaths(req); err != nil {
+			return err
+		}
+
+		for _, node := range c.Config.Devices {
+			m := &configs.Mount{Destination: node.Path, Source: node.Path}
+			c.addCriuDumpMount(req, m)
+		}
+
+		// Write the FD info to a file in the image directory
+		fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o600)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = c.criuSwrk(nil, req, criuOpts, nil)
@@ -311,10 +1143,10 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 	criuServer := os.NewFile(uintptr(fds[1]), "criu-transport-server")
 	defer criuServer.Close()
 
-	if c.criuVersion != 0 {
+	if c.CriuVersion != 0 {
 		// If the CRIU Version is still '0' then this is probably
 		// the initial CRIU run to detect the version. Skip it.
-		logrus.Debugf("Using CRIU %d", c.criuVersion)
+		logrus.Debugf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3")
 	if process != nil {
@@ -370,6 +1202,8 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 			}
 		}
 	}
+	// TODO BS Replace with zerolog
+
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return err

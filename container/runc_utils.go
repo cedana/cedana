@@ -6,12 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
-	"github.com/checkpoint-restore/go-criu/v5"
-	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
-	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/cedana/runc/libcontainer/cgroups"
+	"github.com/cedana/runc/libcontainer/configs"
+	"github.com/checkpoint-restore/go-criu/v6"
+	criurpc "github.com/checkpoint-restore/go-criu/v6/rpc"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -19,6 +22,74 @@ import (
 // to allow directly using criu for container checkpointing the way runc does it, with some slight modifications.
 
 var criuFeatures *criurpc.CriuFeatures
+
+func GetCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
+	mounts, err := cgroups.GetCgroupMounts(false)
+	if err != nil {
+		return nil, err
+	}
+
+	cgroupPaths, err := cgroups.ParseCgroupFile("/proc/self/cgroup")
+	if err != nil {
+		return nil, err
+	}
+
+	var binds []*configs.Mount
+
+	for _, mm := range mounts {
+		dir, err := mm.GetOwnCgroup(cgroupPaths)
+		if err != nil {
+			return nil, err
+		}
+		relDir, err := filepath.Rel(mm.Root, dir)
+		if err != nil {
+			return nil, err
+		}
+		binds = append(binds, &configs.Mount{
+			Device:           "bind",
+			Source:           filepath.Join(mm.Mountpoint, relDir),
+			Destination:      filepath.Join(m.Destination, filepath.Base(mm.Mountpoint)),
+			Flags:            unix.MS_BIND | unix.MS_REC | m.Flags,
+			PropagationFlags: m.PropagationFlags,
+		})
+	}
+
+	return binds, nil
+}
+
+func (c *RuncContainer) addMaskPaths(req *criurpc.CriuReq) error {
+	for _, path := range c.Config.MaskPaths {
+		fi, err := os.Stat(fmt.Sprintf("/proc/%d/root/%s", c.InitProcess.pid(), path))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if fi.IsDir() {
+			continue
+		}
+
+		extMnt := &criurpc.ExtMountMap{
+			Key: proto.String(path),
+			Val: proto.String("/dev/null"),
+		}
+		req.Opts.ExtMnt = append(req.Opts.ExtMnt, extMnt)
+	}
+	return nil
+}
+
+func (c *RuncContainer) addCriuDumpMount(req *criurpc.CriuReq, m *configs.Mount) {
+	mountDest := strings.TrimPrefix(m.Destination, c.Config.Rootfs)
+	if dest, err := securejoin.SecureJoin(c.Config.Rootfs, mountDest); err == nil {
+		mountDest = dest[len(c.Config.Rootfs):]
+	}
+	extMnt := &criurpc.ExtMountMap{
+		Key: proto.String(mountDest),
+		Val: proto.String(mountDest),
+	}
+	req.Opts.ExtMnt = append(req.Opts.ExtMnt, extMnt)
+}
 
 func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.CriuOpts, criuFeat *criurpc.CriuFeatures) error {
 	t := criurpc.CriuReqType_FEATURE_CHECK
@@ -84,18 +155,18 @@ func compareCriuVersion(criuVersion int, minVersion int) error {
 func (c *RuncContainer) checkCriuVersion(minVersion int) error {
 	// If the version of criu has already been determined there is no need
 	// to ask criu for the version again. Use the value from c.criuVersion.
-	if c.criuVersion != 0 {
-		return compareCriuVersion(c.criuVersion, minVersion)
+	if c.CriuVersion != 0 {
+		return compareCriuVersion(c.CriuVersion, minVersion)
 	}
 
 	criu := criu.MakeCriu()
 	var err error
-	c.criuVersion, err = criu.GetCriuVersion()
+	c.CriuVersion, err = criu.GetCriuVersion()
 	if err != nil {
 		return fmt.Errorf("CRIU version check failed: %w", err)
 	}
 
-	return compareCriuVersion(c.criuVersion, minVersion)
+	return compareCriuVersion(c.CriuVersion, minVersion)
 }
 
 func (c *RuncContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
@@ -105,11 +176,11 @@ func (c *RuncContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	}
 
 	// XXX: Do we need to deal with this case? AFAIK criu still requires root.
-	if err := c.cgroupManager.Apply(pid); err != nil {
+	if err := c.CgroupManager.Apply(pid); err != nil {
 		return err
 	}
 
-	if err := c.cgroupManager.Set(c.config.Cgroups.Resources); err != nil {
+	if err := c.CgroupManager.Set(c.Config.Cgroups.Resources); err != nil {
 		return err
 	}
 

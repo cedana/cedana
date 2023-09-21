@@ -26,7 +26,8 @@
             "asRoot": true,
             "request": "launch",
             "mode": "debug",
-            "program": "${fileDirname}",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": ["client", "dump", "-p", "${input:promptForPID}"],
             "env": {
@@ -35,6 +36,64 @@
                 "CEDANA_CLIENT_ID": "client123",
                 "CEDANA_AUTH_TOKEN": "test",
                 "CEDANA_LOG_LEVEL": "0",
+            },
+        },
+        {
+            "name": "debug cedana dump container",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["dump", "container", "-i","", "-p", "${input:promptForContainer}"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
+            "name": "debug cedana restore container",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["client", "restore", "-i", "containerd.io/checkpoint/test123456:09-19-2023-16:56:21", "-c", "${input:promptForContainer}"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
+            "name": "debug cedana restore runc",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "buildFlags": "-buildvcs=false",
+            "args": ["debug", "runc", "/tmp/cedana_runc_test/", "container-restore-1"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
+            "name": "debug cedana dump runc",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "buildFlags": "-buildvcs=false",
+            "args": ["debug", "runc-dump", "/tmp/cedana_runc_test/", "container-printer"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
         },
         {
