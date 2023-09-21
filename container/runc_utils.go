@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// This file contains functions lifted from https://github.com/cedana/runc/blob/main/libcontainer/container_linux.go,
+// This file contains functions lifted from https://github.com/opencontainers/runc/blob/main/libcontainer/container_linux.go,
 // to allow directly using criu for container checkpointing the way runc does it, with some slight modifications.
 
 var criuFeatures *criurpc.CriuFeatures

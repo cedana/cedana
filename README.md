@@ -54,7 +54,7 @@ sudo cedana client restore /path/to/zip
 Currently, we also support `runc` and by extension, `containerd` checkpointing, with more container runtime support planned in the future. Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
 
 ```sh 
-sudo cedana dmp containerd -i test -p test 
+sudo cedana dump containerd -i test -p test 
 ```
 
 where `i` is the imageRef and `p` is the containerID. 
