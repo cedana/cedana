@@ -19,6 +19,10 @@ import (
 	goruntime "runtime"
 
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
+	"github.com/cedana/runc/libcontainer/cgroups"
+	"github.com/cedana/runc/libcontainer/cgroups/manager"
+	"github.com/cedana/runc/libcontainer/configs"
 	"github.com/checkpoint-restore/go-criu/v5"
 	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
 	containerd "github.com/containerd/containerd"
@@ -49,10 +53,6 @@ import (
 	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -190,7 +190,7 @@ type RuncContainer struct {
 	State                containerState
 }
 
-// this comes from runc, see github.com/opencontainers/runc
+// this comes from runc, see github.com/cedana/runc
 // they use an external CriuOpts struct that's populated
 type VethPairName struct {
 	ContainerInterfaceName string

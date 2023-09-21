@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -115,6 +116,39 @@ func containerdRestore(id string, ref string) error {
 	}
 
 	return nil
+}
+
+func RuncRestore(root string, imgPath string, containerid string) error {
+
+	criuOpts := libcontainer.CriuOpts{
+		ImagesDirectory: imgPath,
+		WorkDirectory:   "",
+	}
+
+	opts := &RuncOpts{}
+
+	_, err := StartContainer(opts, CT_ACT_RESTORE, &criuOpts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type RuncOpts struct {
+	Root            string
+	ContainerId     string
+	Bundle          string
+	SystemdCgroup   bool
+	NoPivot         bool
+	NoMountFallback bool
+	NoNewKeyring    bool
+	Rootless        string
+	NoSubreaper     bool
+	Keep            bool
+	ConsoleSocket   string
+	Detatch         bool
+	PidFile         string
+	PreserveFds     int
 }
 
 // func taskStart(ctx gocontext.Context, client *containerd.Client, task containerd.Task) error {

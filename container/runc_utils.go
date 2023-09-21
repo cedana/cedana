@@ -8,17 +8,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cedana/runc/libcontainer/cgroups"
+	"github.com/cedana/runc/libcontainer/configs"
 	"github.com/checkpoint-restore/go-criu/v5"
 	criurpc "github.com/checkpoint-restore/go-criu/v5/rpc"
 	securejoin "github.com/cyphar/filepath-securejoin"
-	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
-// This file contains functions lifted from https://github.com/opencontainers/runc/blob/main/libcontainer/container_linux.go,
+// This file contains functions lifted from https://github.com/cedana/runc/blob/main/libcontainer/container_linux.go,
 // to allow directly using criu for container checkpointing the way runc does it, with some slight modifications.
 
 var criuFeatures *criurpc.CriuFeatures
