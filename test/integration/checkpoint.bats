@@ -18,8 +18,10 @@ checkpointName=""
     [[ "$status" -eq 0 ]]
 }
 
+
 @test "checkpoint & restore" {
-    output=$(sudo ../../cedana client dump -c testcheckpoint)
+    sudo ../../cedana daemon &
+    output=$(sudo ../../cedana dump containerd -p testcheckpoint)
     
     checkpoint_line=$(echo "$output" | grep 'Checkpointing to')
     image=$(echo "$checkpoint_line" | awk '{print $NF}')
@@ -31,6 +33,6 @@ checkpointName=""
     echo "$checkpointName"
     grep -B 5 Error $image/dump.log || true
     [[ "$status" -eq 0 ]]
-    output=$(sudo ../../cedana client restore -i $checkpointName -c testrestore)
+    output=$(sudo ../../cedana restore containerd -i $checkpointName -p testrestore)
     [[ "$status" -eq 0 ]]
 }

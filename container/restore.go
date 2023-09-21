@@ -157,20 +157,3 @@ type RuncOpts struct {
 	PidFile         string
 	PreserveFds     int
 }
-
-// func taskStart(ctx gocontext.Context, client *containerd.Client, task containerd.Task) error {
-// 	r, err := client.TaskService().Start(ctx, &apiTasks.StartRequest{
-// 		ContainerID: task.ID(),
-// 		ExecID:      p.id,
-// 	})
-// 	if err != nil {
-// 		if p.io != nil {
-// 			p.io.Cancel()
-// 			p.io.Wait()
-// 			p.io.Close()
-// 		}
-// 		return errdefs.FromGRPC(err)
-// 	}
-// 	p.pid = r.Pid
-// 	return nil
-// }
