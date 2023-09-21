@@ -31,10 +31,11 @@ type RuncRestoreResp struct {
 }
 
 type RuncDumpArgs struct {
-	WorkPath    string
-	RuncPath    string
-	ContainerId string
-	CriuOpts    container.CriuOpts
+	WorkPath       string
+	Root           string
+	CheckpointPath string
+	ContainerId    string
+	CriuOpts       container.CriuOpts
 }
 
 type RuncDumpResp struct {
@@ -114,7 +115,7 @@ func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDu
 }
 
 func (cd *CedanaDaemon) RuncDump(args *RuncDumpArgs, resp *ContainerDumpResp) error {
-	return cd.client.RuncDump(args.RuncPath, args.ContainerId, &args.CriuOpts)
+	return cd.client.RuncDump(args.Root, args.ContainerId, &args.CriuOpts)
 }
 
 func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp) error {

@@ -18,7 +18,8 @@ var ref string
 var containerId string
 var imgPath string
 var runcPath string
-var runcPid int32
+var root string
+var checkpointPath string
 var workPath string
 
 type CLI struct {
@@ -119,6 +120,8 @@ var runcDumpCmd = &cobra.Command{
 			return err
 		}
 
+		root = "/var/run/runc"
+
 		criuOpts := &container.CriuOpts{
 			ImagesDirectory: runcPath,
 			WorkDirectory:   workPath,
@@ -127,9 +130,10 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		a := api.RuncDumpArgs{
-			RuncPath:    runcPath,
-			ContainerId: containerId,
-			CriuOpts:    *criuOpts,
+			Root:           root,
+			CheckpointPath: checkpointPath,
+			ContainerId:    containerId,
+			CriuOpts:       *criuOpts,
 		}
 
 		var resp api.ContainerDumpResp

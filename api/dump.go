@@ -225,8 +225,8 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) RuncDump(dir string, containerId string, opts *container.CriuOpts) error {
-	runcContainer := container.GetContainerFromRunc(containerId, dir)
+func (c *Client) RuncDump(root string, containerId string, opts *container.CriuOpts) error {
+	runcContainer := container.GetContainerFromRunc(containerId, root)
 
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
 	if err != nil {
