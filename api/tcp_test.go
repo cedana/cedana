@@ -10,7 +10,10 @@ import (
 // data on performance, and are instead looking for correctness in the checkpoints and restores.
 
 // for this, we create a server and client, connect them to each other and
-// checkpoint/restore each of them - validating behavior along the way
+// checkpoint/restore each of them - validating behavior along the way.
+
+// A gotcha here is that we can't live debug the dumps on these, because the external unix socket used
+// for debugging can't be dumped. So debugging is useful for stepping through, and that's about it.
 
 // function to validate connections pre checkpoint and post restore
 // how to validate "correctness"? should we compare the queues?
@@ -71,7 +74,6 @@ func Test_MultiConn(t *testing.T) {
 	})
 
 	oldState := c.getState(c.Process.PID)
-	// network data prior
 	t.Logf("old state: %+v", oldState)
 
 	err = c.Dump("dumpdir")
