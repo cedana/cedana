@@ -301,13 +301,10 @@ func init() {
 
 	dumpCmd.AddCommand(containerdDumpCmd)
 
-	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
-	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	containerdRestoreCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	restoreCmd.AddCommand(containerdRestoreCmd)
-
-	containerdRestoreCmd.Flags().StringVarP(&imgPath, "image", "i", "", "image ref")
-	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
