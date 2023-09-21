@@ -4,6 +4,8 @@ import (
 	"os"
 	"syscall"
 	"testing"
+
+	"github.com/cedana/cedana/api"
 )
 
 //  Tests defined here are different from benchmarking in that we aren't looking for
@@ -20,9 +22,6 @@ import (
 
 // server over here to listen for connections? and then validate that the connections were
 // restablished?
-
-// run python threaded_pings
-// run server in test
 
 type TCPTest struct {
 	name string
@@ -49,7 +48,7 @@ func skipCI(t *testing.T) {
 // multiple connections
 func Test_MultiConn(t *testing.T) {
 	skipCI(t)
-	c, err := InstantiateClient()
+	c, err := api.InstantiateClient()
 	if err != nil {
 		t.Error(err)
 	}
@@ -70,10 +69,10 @@ func Test_MultiConn(t *testing.T) {
 	t.Cleanup(func() {
 		syscall.Kill(int(pid), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
-		c.cleanupClient()
+		c.CleanupClient()
 	})
 
-	oldState := c.getState(c.Process.PID)
+	oldState := c.GetState(c.Process.PID)
 	t.Logf("old state: %+v", oldState)
 
 	err = c.Dump("dumpdir")
@@ -83,8 +82,27 @@ func Test_MultiConn(t *testing.T) {
 
 	// TODO NR - analyze dump w/ CRIT?
 
-	// validation is important, because even if we've C/Rd it can C/R incorrectly
+	// fairly simple validation - ensure that the sockets are still up and functioning for now
+	restoredPID, err := c.Restore(nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
 
+	c.Process.PID = *restoredPID
+	newState := c.GetState(c.Process.PID)
+	t.Logf("new state: %+v", newState)
+
+	// compare sockets
+	if len(oldState.ProcessInfo.OpenConnections) != len(newState.ProcessInfo.OpenConnections) {
+		t.Error("sockets are different")
+	}
+
+	// compare ports
+	for key, socket := range oldState.ProcessInfo.OpenConnections {
+		if socket.Laddr.Port != newState.ProcessInfo.OpenConnections[key].Laddr.Port {
+			t.Error("sockets are different")
+		}
+	}
 }
 
 func Test_DatabaseConn(t *testing.T) {

@@ -29,3 +29,5 @@ Assuming you've built the container with:
 ```
 docker build -t benchmark .
 ```
+
+### Network testing 

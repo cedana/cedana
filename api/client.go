@@ -191,7 +191,7 @@ func (c *Client) AddNATS(selfID, jobID, authToken string) error {
 	return nil
 }
 
-func (c *Client) cleanupClient() error {
+func (c *Client) CleanupClient() error {
 	c.CRIU.Cleanup()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
@@ -204,7 +204,7 @@ func (c *Client) publishStateContinuous(rate int) {
 	// publish state continuously
 	for range ticker.C {
 		if c.Process.PID != 0 {
-			state := c.getState(c.Process.PID)
+			state := c.GetState(c.Process.PID)
 			c.publishStateOnce(state)
 		}
 	}
@@ -314,12 +314,12 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 				if cmd.Command == "checkpoint" {
 					msg.Ack()
 					c.channels.dumpCmdBroadcaster.Broadcast(1)
-					state := c.getState(c.Process.PID)
+					state := c.GetState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "restore" {
 					msg.Ack()
 					c.channels.restoreCmdBroadcaster.Broadcast(cmd)
-					state := c.getState(c.Process.PID)
+					state := c.GetState(c.Process.PID)
 					c.publishStateOnce(state)
 				} else if cmd.Command == "retry" {
 					msg.Ack()
@@ -357,7 +357,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *cedana.CedanaState {
+func (c *Client) GetState(pid int32) *cedana.CedanaState {
 
 	if pid == 0 {
 		return nil
@@ -547,10 +547,10 @@ func (c *Client) startNATSService() {
 			if err != nil {
 				c.logger.Warn().Msgf("could not checkpoint process: %v", err)
 				c.state.CheckpointState = cedana.CheckpointFailed
-				c.publishStateOnce(c.getState(c.Process.PID))
+				c.publishStateOnce(c.GetState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.CheckpointSuccess
-			c.publishStateOnce(c.getState(c.Process.PID))
+			c.publishStateOnce(c.GetState(c.Process.PID))
 
 		case cmd := <-restoreCmdChn:
 			c.logger.Info().Msg("received restore command from NATS server")
@@ -558,11 +558,11 @@ func (c *Client) startNATSService() {
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore process: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
-				c.publishStateOnce(c.getState(c.Process.PID))
+				c.publishStateOnce(c.GetState(c.Process.PID))
 			}
 			c.state.CheckpointState = cedana.RestoreSuccess
 			c.Process.PID = *pid
-			c.publishStateOnce(c.getState(c.Process.PID))
+			c.publishStateOnce(c.GetState(c.Process.PID))
 
 		default:
 			time.Sleep(1 * time.Second)

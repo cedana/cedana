@@ -14,7 +14,6 @@ RUN add-apt-repository ppa:criu/ppa
 RUN apt update && apt install -y criu python3 pip sudo 
 
 
-
 RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
 WORKDIR /cedana
 RUN pip install -r test/benchmarks/requirements
@@ -23,5 +22,4 @@ RUN pip install -r test/benchmarks/requirements
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
-
-ENTRYPOINT /bin/bash
+CMD ./benchmarks/large_data_benchmark.sh -n 5

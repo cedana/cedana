@@ -41,7 +41,7 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	// it'll just pause the spawned dump goroutine
 
 	// while we wait, try and get the fd of the checkpoint as its being written
-	state := c.getState(c.Process.PID)
+	state := c.GetState(c.Process.PID)
 	for _, f := range state.ProcessInfo.OpenFds {
 		// TODO NR: add more checkpoint options
 		if strings.Contains(f.Path, "pt") {
@@ -67,7 +67,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", err
 	}
 
-	state := c.getState(pid)
+	state := c.GetState(pid)
 	if state == nil {
 		return "", fmt.Errorf("could not get state")
 	}
@@ -273,7 +273,7 @@ func (c *Client) Dump(dir string) error {
 	// so have to ensure that image files aren't tampered with
 	c.state.CheckpointState = cedana.CheckpointSuccess
 	c.postDump(dumpdir)
-	c.cleanupClient()
+	c.CleanupClient()
 
 	return nil
 }
