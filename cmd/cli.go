@@ -111,7 +111,7 @@ var containerdDumpCmd = &cobra.Command{
 
 var runcDumpCmd = &cobra.Command{
 	Use:   "runc",
-	Short: "Manually checkpoint a running container to a directory",
+	Short: "Manually checkpoint a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
@@ -127,14 +127,50 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		a := api.RuncDumpArgs{
-			PID:      runcPid,
-			WorkPath: workPath,
-			RuncPath: runcPath,
-			CriuOpts: *criuOpts,
+			PID:         runcPid,
+			WorkPath:    workPath,
+			RuncPath:    runcPath,
+			ContainerId: containerId,
+			CriuOpts:    *criuOpts,
 		}
 
 		var resp api.ContainerDumpResp
 		err = cli.conn.Call("CedanaDaemon.RuncDump", a, &resp)
+		if err != nil {
+			return err
+		}
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
+var runcRestoreCmd = &cobra.Command{
+	Use:   "runc",
+	Short: "Manually restore a running runc container to a directory",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		criuOpts := &container.CriuOpts{
+			ImagesDirectory: runcPath,
+			WorkDirectory:   workPath,
+			LeaveRunning:    true,
+			TcpEstablished:  false,
+		}
+
+		a := api.RuncDumpArgs{
+			PID:         runcPid,
+			WorkPath:    workPath,
+			RuncPath:    runcPath,
+			ContainerId: containerId,
+			CriuOpts:    *criuOpts,
+		}
+
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.RuncRestore", a, &resp)
 		if err != nil {
 			return err
 		}
@@ -261,6 +297,11 @@ var natsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(dumpCmd)
+
+	dumpCmd.AddCommand(runcDumpCmd)
+	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
+	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+
 	dumpCmd.AddCommand(containerdDumpCmd)
 
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")

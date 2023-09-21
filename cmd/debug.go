@@ -53,7 +53,7 @@ var containerCmd = &cobra.Command{
 	},
 }
 
-var runcRestoreCmd = &cobra.Command{
+var debugRuncRestoreCmd = &cobra.Command{
 	Use: "runc",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root := "/var/run/runc"
@@ -75,5 +75,5 @@ func init() {
 	rootCmd.AddCommand(debugCmd)
 	debugCmd.AddCommand(cfgCmd)
 	debugCmd.AddCommand(containerCmd)
-	debugCmd.AddCommand(runcRestoreCmd)
+	debugCmd.AddCommand(debugRuncRestoreCmd)
 }

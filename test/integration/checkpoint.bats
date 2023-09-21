@@ -19,7 +19,7 @@ checkpointName=""
 }
 
 
-@test "checkpoint & restore" {
+@test "checkpoint & restore containerd" {
     sudo ../../cedana daemon &
     output=$(sudo ../../cedana dump containerd -p testcheckpoint)
     
@@ -35,4 +35,8 @@ checkpointName=""
     [[ "$status" -eq 0 ]]
     output=$(sudo ../../cedana restore containerd -i $checkpointName -p testrestore)
     [[ "$status" -eq 0 ]]
+}
+
+@test "checkpoint & restore runc" {
+    
 }
