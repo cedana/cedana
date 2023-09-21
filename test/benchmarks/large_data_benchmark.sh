@@ -85,7 +85,7 @@ cd "$current_dir" || exit
 # grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f 2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > benchmarking/temp/cpu.txt
 
 for ((i = 1; i <= num_iterations; i++)); do
-    ./tests/benchmarks/run_benchmarks.sh &
+    ./test/benchmarks/run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!
