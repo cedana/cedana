@@ -38,5 +38,9 @@ checkpointName=""
 }
 
 @test "checkpoint & restore runc" {
-    
+    sudo ../../cedana dump runc -i /tmp/test_dump -p testcheckpoint
+    [[ "$status" -eq 0 ]]
+
+    sudo ../../cedana restore runc -i /tmp/test_dump -p testrestore
+    [[ "$status" -eq 0 ]]
 }
