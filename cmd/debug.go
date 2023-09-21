@@ -53,8 +53,27 @@ var containerCmd = &cobra.Command{
 	},
 }
 
+var runcRestoreCmd = &cobra.Command{
+	Use: "runc",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		root := "/var/run/runc"
+		bundle := "/home/brandonsmith/bundle"
+		consoleSocket := "/home/brandonsmith/tty.sock"
+		imgPath := args[0]
+		containerId := args[1]
+
+		err := container.RuncRestore(root, imgPath, containerId, bundle, consoleSocket)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(debugCmd)
 	debugCmd.AddCommand(cfgCmd)
 	debugCmd.AddCommand(containerCmd)
+	debugCmd.AddCommand(runcRestoreCmd)
 }

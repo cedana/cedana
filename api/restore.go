@@ -9,7 +9,7 @@ import (
 
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v5/rpc"
+	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"

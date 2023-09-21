@@ -67,6 +67,21 @@
             },
         },
         {
+            "name": "debug cedana restore runc",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "buildFlags": "-buildvcs=false",
+            "args": ["debug", "runc", "/tmp/cedana_runc_test/", "container-restore-1"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
             "name": "debug cedana restore",
             "type": "go",
             "asRoot": true,

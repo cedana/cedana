@@ -11,7 +11,7 @@ import (
 
 	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v5/rpc"
+	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/protobuf/proto"
 
