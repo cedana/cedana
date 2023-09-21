@@ -54,7 +54,7 @@ var containerCmd = &cobra.Command{
 }
 
 var debugRuncRestoreCmd = &cobra.Command{
-	Use: "runc",
+	Use: "runc-restore",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root := "/var/run/runc"
 		bundle := "/home/brandonsmith/bundle"
@@ -76,9 +76,35 @@ var debugRuncRestoreCmd = &cobra.Command{
 	},
 }
 
+var debugRuncDumpCmd = &cobra.Command{
+	Use: "runc-dump",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		imgPath := args[0]
+		containerId := args[1]
+		root := "/var/run/runc"
+
+		criuOpts := &container.CriuOpts{
+			ImagesDirectory: imgPath,
+			WorkDirectory:   "",
+			LeaveRunning:    true,
+			TcpEstablished:  false,
+		}
+
+		runcContainer := container.GetContainerFromRunc(containerId, root)
+
+		err := runcContainer.RuncCheckpoint(criuOpts, runcContainer.Pid)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(debugCmd)
 	debugCmd.AddCommand(cfgCmd)
 	debugCmd.AddCommand(containerCmd)
 	debugCmd.AddCommand(debugRuncRestoreCmd)
+	debugCmd.AddCommand(debugRuncDumpCmd)
 }
