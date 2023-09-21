@@ -30,7 +30,6 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.5.0
-	github.com/urfave/cli v1.22.14
 	golang.org/x/sys v0.12.0
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.53.0
@@ -112,6 +111,7 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
+	github.com/urfave/cli v1.22.14 // indirect
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect

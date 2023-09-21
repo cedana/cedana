@@ -12,7 +12,6 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 
 	"github.com/cedana/runc/libcontainer"
@@ -22,25 +21,6 @@ import (
 )
 
 var errEmptyID = errors.New("container id cannot be empty")
-
-// getContainer returns the specified container instance by loading it from
-// a state directory (root).
-func getContainer(context *cli.Context) (*libcontainer.Container, error) {
-	id := context.Args().First()
-	if id == "" {
-		return nil, errEmptyID
-	}
-	root := context.GlobalString("root")
-	return libcontainer.Load(root, id)
-}
-
-func getDefaultImagePath() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(cwd, "checkpoint")
-}
 
 // newProcess returns a new libcontainer Process with the arguments from the
 // spec and stdio from the current process.
