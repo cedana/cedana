@@ -127,8 +127,6 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		a := api.RuncDumpArgs{
-			PID:         runcPid,
-			WorkPath:    workPath,
 			RuncPath:    runcPath,
 			ContainerId: containerId,
 			CriuOpts:    *criuOpts,
@@ -139,7 +137,7 @@ var runcDumpCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, runcPath)
 		return nil
 	},
 }
@@ -292,10 +290,16 @@ var natsCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(dumpCmd)
+func initRuncCommands() {
+	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
+	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	restoreCmd.AddCommand(runcRestoreCmd)
 
+	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
+	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	dumpCmd.AddCommand(runcDumpCmd)
+}
+func initContainerdCommands() {
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
 	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
@@ -305,9 +309,17 @@ func init() {
 	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 
 	restoreCmd.AddCommand(containerdRestoreCmd)
+}
 
+func init() {
+	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
+
+	initRuncCommands()
+
+	initContainerdCommands()
+
 	clientDaemonCmd.AddCommand(natsCmd)
-	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 }

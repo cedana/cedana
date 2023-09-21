@@ -31,7 +31,6 @@ type RuncRestoreResp struct {
 }
 
 type RuncDumpArgs struct {
-	PID         int32
 	WorkPath    string
 	RuncPath    string
 	ContainerId string
