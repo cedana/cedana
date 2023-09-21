@@ -22,6 +22,9 @@ var root string
 var checkpointPath string
 var workPath string
 
+var bundle string
+var consoleSocket string
+
 type CLI struct {
 	cfg    *utils.Config
 	conn   *rpc.Client
@@ -296,21 +299,37 @@ var natsCmd = &cobra.Command{
 
 func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
+	runcRestoreCmd.MarkFlagRequired("image")
 	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	runcRestoreCmd.MarkFlagRequired("id")
+	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
+	runcRestoreCmd.MarkFlagRequired("bundle")
+	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
+	// Make this optional in a later update
+	runcRestoreCmd.MarkFlagRequired("console-socket")
+	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
+
 	restoreCmd.AddCommand(runcRestoreCmd)
 
 	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
+	runcDumpCmd.MarkFlagRequired("image")
 	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	runcDumpCmd.MarkFlagRequired("id")
+
 	dumpCmd.AddCommand(runcDumpCmd)
 }
 func initContainerdCommands() {
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
+	containerdDumpCmd.MarkFlagRequired("image")
 	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	containerdDumpCmd.MarkFlagRequired("id")
 
 	dumpCmd.AddCommand(containerdDumpCmd)
 
 	containerdRestoreCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
+	containerdRestoreCmd.MarkFlagRequired("image")
 	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	containerdRestoreCmd.MarkFlagRequired("id")
 
 	restoreCmd.AddCommand(containerdRestoreCmd)
 }
