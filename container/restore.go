@@ -118,23 +118,23 @@ func containerdRestore(id string, ref string) error {
 	return nil
 }
 
-func RuncRestore(root string, imgPath string, containerId string, bundle string, consoleSocket string) error {
+func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 
 	criuOpts := libcontainer.CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
 	}
 
-	opts := &RuncOpts{
-		Root:          root,
+	runcOpts := &RuncOpts{
+		Root:          opts.Root,
 		ContainerId:   containerId,
-		Bundle:        bundle,
-		ConsoleSocket: consoleSocket,
+		Bundle:        opts.Bundle,
+		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
 		Detatch:       true,
 	}
 
-	_, err := StartContainer(opts, CT_ACT_RESTORE, &criuOpts)
+	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
 	if err != nil {
 		return err
 	}

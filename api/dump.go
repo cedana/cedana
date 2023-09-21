@@ -235,18 +235,6 @@ func (c *Client) RuncDump(dir string, containerId string, opts *container.CriuOp
 	return nil
 }
 
-func (c *Client) RuncRestore(imgPath string, containerId string) error {
-	root := "/var/run/runc"
-	bundle := "/home/brandonsmith/bundle"
-	consoleSocket := "/home/brandonsmith/tty.sock"
-
-	err := container.RuncRestore(root, imgPath, containerId, bundle, consoleSocket)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-	}
-	return nil
-}
-
 func (c *Client) ContainerDump(dir string, containerId string) error {
 	err := container.Dump(dir, containerId)
 	if err != nil {

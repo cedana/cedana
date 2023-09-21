@@ -180,6 +180,15 @@ func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
+func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
+
+	err := container.RuncRestore(imgPath, containerId, *opts)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	return nil
+}
+
 func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string

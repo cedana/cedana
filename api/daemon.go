@@ -5,7 +5,7 @@ import (
 	"net/rpc"
 	"os"
 
-	"github.com/cedana/cedana/container"
+	container "github.com/cedana/cedana/container"
 	"github.com/rs/zerolog"
 )
 
@@ -23,6 +23,7 @@ type DumpArgs struct {
 type RuncRestoreArgs struct {
 	ContainerId string
 	ImagePath   string
+	Opts        *container.RuncOpts
 }
 
 type RuncRestoreResp struct {
@@ -118,7 +119,7 @@ func (cd *CedanaDaemon) RuncDump(args *RuncDumpArgs, resp *ContainerDumpResp) er
 }
 
 func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp) error {
-	return cd.client.RuncRestore(args.ImagePath, args.ContainerId)
+	return cd.client.RuncRestore(args.ImagePath, args.ContainerId, args.Opts)
 }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {

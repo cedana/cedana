@@ -154,19 +154,16 @@ var runcRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		criuOpts := &container.CriuOpts{
-			ImagesDirectory: runcPath,
-			WorkDirectory:   workPath,
-			LeaveRunning:    true,
-			TcpEstablished:  false,
+		opts := &container.RuncOpts{
+			Root:          "/var/run/runc",
+			Bundle:        "/home/brandonsmith/bundle",
+			ConsoleSocket: "/home/brandonsmith/tty.sock",
 		}
 
-		a := api.RuncDumpArgs{
-			PID:         runcPid,
-			WorkPath:    workPath,
-			RuncPath:    runcPath,
+		a := api.RuncRestoreArgs{
+			ImagePath:   runcPath,
 			ContainerId: containerId,
-			CriuOpts:    *criuOpts,
+			Opts:        opts,
 		}
 
 		var resp api.ContainerDumpResp
