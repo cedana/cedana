@@ -176,7 +176,7 @@ var runcRestoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		cli.logger.Info().Msgf("container %s successfully restored", containerId)
 		return nil
 	},
 }
