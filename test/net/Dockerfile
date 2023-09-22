@@ -22,5 +22,4 @@ RUN pip install -r test/benchmarks/requirements
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
-RUN git checkout feat/ced-111 && git pull 
 CMD ./test/benchmarks/large_data_benchmark.sh -n 5
