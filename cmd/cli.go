@@ -14,10 +14,7 @@ import (
 )
 
 var dir string
-var ref string
 var containerId string
-var imgPath string
-var runcPath string
 var root string
 var checkpointPath string
 var workPath string
@@ -104,7 +101,7 @@ var containerdDumpCmd = &cobra.Command{
 		}
 
 		a := api.ContainerDumpArgs{
-			Ref:         ref,
+			Ref:         dir,
 			ContainerId: containerId,
 		}
 
@@ -131,7 +128,7 @@ var runcDumpCmd = &cobra.Command{
 		root = "/var/run/runc"
 
 		criuOpts := &container.CriuOpts{
-			ImagesDirectory: runcPath,
+			ImagesDirectory: dir,
 			WorkDirectory:   workPath,
 			LeaveRunning:    true,
 			TcpEstablished:  false,
@@ -139,7 +136,7 @@ var runcDumpCmd = &cobra.Command{
 
 		a := api.RuncDumpArgs{
 			Root:           root,
-			CheckpointPath: checkpointPath,
+			CheckpointPath: dir,
 			ContainerId:    containerId,
 			CriuOpts:       *criuOpts,
 		}
@@ -149,7 +146,7 @@ var runcDumpCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, runcPath)
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }
@@ -172,7 +169,7 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		a := api.RuncRestoreArgs{
-			ImagePath:   runcPath,
+			ImagePath:   dir,
 			ContainerId: containerId,
 			Opts:        opts,
 		}
@@ -227,7 +224,7 @@ var containerdRestoreCmd = &cobra.Command{
 		}
 
 		a := api.ContainerRestoreArgs{
-			ImgPath:     imgPath,
+			ImgPath:     dir,
 			ContainerId: containerId,
 		}
 
@@ -237,7 +234,7 @@ var containerdRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, ref)
+		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, dir)
 		return nil
 	},
 }
@@ -309,21 +306,20 @@ var natsCmd = &cobra.Command{
 }
 
 func initRuncCommands() {
-	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcRestoreCmd.MarkFlagRequired("image")
+	runcRestoreCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to restore from")
+	runcRestoreCmd.MarkFlagRequired("dir")
 	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	runcRestoreCmd.MarkFlagRequired("id")
 	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired("bundle")
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
-	// Make this optional in a later update
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
 	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
 
 	restoreCmd.AddCommand(runcRestoreCmd)
 
-	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcDumpCmd.MarkFlagRequired("image")
+	runcDumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to restore from")
+	runcDumpCmd.MarkFlagRequired("dir")
 	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	runcDumpCmd.MarkFlagRequired("id")
 
@@ -331,15 +327,15 @@ func initRuncCommands() {
 }
 
 func initContainerdCommands() {
-	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
-	containerdDumpCmd.MarkFlagRequired("image")
+	containerdDumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	containerdDumpCmd.MarkFlagRequired("dir")
 	containerdDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	containerdDumpCmd.MarkFlagRequired("id")
 
 	dumpCmd.AddCommand(containerdDumpCmd)
 
-	containerdRestoreCmd.Flags().StringVarP(&ref, "image", "i", "", "image ref")
-	containerdRestoreCmd.MarkFlagRequired("image")
+	containerdRestoreCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to restore from")
+	containerdRestoreCmd.MarkFlagRequired("dir")
 	containerdRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired("id")
 
