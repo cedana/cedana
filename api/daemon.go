@@ -5,6 +5,7 @@ import (
 	"net/rpc"
 	"os"
 
+	container "github.com/cedana/cedana/container"
 	"github.com/rs/zerolog"
 )
 
@@ -17,6 +18,47 @@ type CedanaDaemon struct {
 type DumpArgs struct {
 	PID int32
 	Dir string
+}
+
+type RuncRestoreArgs struct {
+	ContainerId string
+	ImagePath   string
+	Opts        *container.RuncOpts
+}
+
+type RuncRestoreResp struct {
+	Error error
+}
+
+type RuncDumpArgs struct {
+	WorkPath       string
+	Root           string
+	CheckpointPath string
+	ContainerId    string
+	CriuOpts       container.CriuOpts
+}
+
+type RuncDumpResp struct {
+	Error error
+}
+
+type ContainerDumpArgs struct {
+	Ref         string
+	ContainerId string
+}
+
+type ContainerRestoreArgs struct {
+	ImgPath     string
+	ContainerId string
+}
+
+type ContainerRestoreResp struct {
+	Error error
+}
+
+type ContainerDumpResp struct {
+	CheckpointPath string
+	Error          error
 }
 
 type DumpResp struct {
@@ -68,6 +110,18 @@ func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 	return cd.client.Dump(args.Dir)
 }
 
+func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
+	return cd.client.ContainerDump(args.Ref, args.ContainerId)
+}
+
+func (cd *CedanaDaemon) RuncDump(args *RuncDumpArgs, resp *ContainerDumpResp) error {
+	return cd.client.RuncDump(args.Root, args.ContainerId, &args.CriuOpts)
+}
+
+func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp) error {
+	return cd.client.RuncRestore(args.ImagePath, args.ContainerId, args.Opts)
+}
+
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
 	pid, err := cd.client.Restore(nil, &args.Path)
 	if err != nil {
@@ -75,6 +129,10 @@ func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
 	}
 	resp.NewPID = *pid
 	return err
+}
+
+func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *ContainerRestoreResp) error {
+	return cd.client.ContainerRestore(args.ImgPath, args.ContainerId)
 }
 
 func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {

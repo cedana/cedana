@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v5/rpc"
+	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
@@ -89,6 +90,16 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	return &tmpdir, nil
 }
 
+func (c *Client) ContainerRestore(imgPath string, containerId string) error {
+	logger := utils.GetLogger()
+	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
+	err := container.Restore(imgPath, containerId)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	return nil
+}
+
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
 func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
@@ -166,6 +177,15 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 }
 
 func (c *Client) pyTorchRestore() error {
+	return nil
+}
+
+func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
+
+	err := container.RuncRestore(imgPath, containerId, *opts)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

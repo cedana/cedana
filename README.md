@@ -22,12 +22,16 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 ## Usage
 
-To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. Configuration gets created at `~/.cedana/cedana_config.json` by calling `cedana bootstrap`.
+To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. Configuration gets created at `~/.cedana/cedana_config.json` by calling `cedana bootstrap`. To use Cedana, you'll need to spin up the daemon, which listens on a socket created at `/tmp/cedana.sock`: 
+
+```sh
+sudo cedana daemon
+```
 
 ### Checkpointing 
 
 ```sh
-sudo cedana client dump -p PID -d DIR 
+sudo cedana client dump -d DIR PID 
 ```
 Cedana needs `sudo` to properly walk through `/proc/pid` and checkpoint the running process. 
 
@@ -47,6 +51,13 @@ See the configuration section for more toggles.
 sudo cedana client restore /path/to/zip
 ```
 
+Currently, we also support `runc` and by extension, `containerd` checkpointing, with more container runtime support planned in the future. Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
+
+```sh 
+sudo cedana dump containerd -i test -p test 
+```
+
+where `i` is the imageRef and `p` is the containerID. 
 
 ## Gotchas
 If running locally, you need to wrap your process with `setsid` and redirect the output. So if you're running (and then trying to checkpoint) a jupyter notebook, you would run: 
@@ -55,6 +66,11 @@ setsid jupyter notebook --port 8000 < /dev/null &> output.log &
 ```
 which redirects `stdin` to `/dev/null` and `stdout & stderr` to `output.log`. 
 
+Alternatively, you can execute a task from `cedana` itself, using: 
+
+```cedana start jupyter notebook --port 8000```
+
+which handles the redirects and sets the process as a session leader. 
 
 ## Configuration 
 
