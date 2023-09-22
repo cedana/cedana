@@ -24,7 +24,7 @@ var workPath string
 
 var bundle string
 var consoleSocket string
-var detatch bool
+var detach bool
 
 type CLI struct {
 	cfg    *utils.Config
@@ -168,7 +168,7 @@ var runcRestoreCmd = &cobra.Command{
 			Root:          root,
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
-			Detatch:       detatch,
+			Detatch:       detach,
 		}
 
 		a := api.RuncRestoreArgs{
@@ -318,7 +318,7 @@ func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
 	// Make this optional in a later update
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
-	runcRestoreCmd.Flags().BoolVarP(&detatch, "detatch", "d", false, "detatch from container's process")
+	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
 
 	restoreCmd.AddCommand(runcRestoreCmd)
 
