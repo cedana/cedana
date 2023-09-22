@@ -11,9 +11,9 @@ import (
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	cedanaUtils "github.com/cedana/cedana/utils"
 	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/configs"
 	"github.com/cedana/runc/libcontainer/specconv"
@@ -63,8 +63,9 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 }
 
 func destroy(container *libcontainer.Container) {
+	logger := cedanaUtils.GetLogger()
 	if err := container.Destroy(); err != nil {
-		logrus.Error(err)
+		logger.Err(err)
 	}
 }
 
@@ -182,6 +183,7 @@ type Runner struct {
 }
 
 func (r *Runner) Run(config *specs.Process) (int, error) {
+	logger := cedanaUtils.GetLogger()
 	var err error
 	defer func() {
 		if err != nil {
@@ -195,7 +197,7 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	process.LogLevel = strconv.Itoa(int(logrus.GetLevel()))
+	process.LogLevel = strconv.Itoa(int(logger.GetLevel()))
 	// Populate the fields that come from runner.
 	process.Init = r.init
 	process.SubCgroupPaths = r.subCgroupPaths
