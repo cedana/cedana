@@ -187,7 +187,7 @@ var runcRestoreCmd = &cobra.Command{
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
-	Short: "Manually restore a process from a checkpoint located at input path",
+	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
 }
 
 var restoreProcessCmd = &cobra.Command{
