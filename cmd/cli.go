@@ -49,8 +49,8 @@ func NewCLI() (*CLI, error) {
 	}, nil
 }
 
-var dumpCmd = &cobra.Command{
-	Use:   "dump",
+var dumpProcessCmd = &cobra.Command{
+	Use:   "process",
 	Short: "Manually checkpoint a running process to a directory",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -63,7 +63,6 @@ var dumpCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
 		if dir == "" {
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
 				return fmt.Errorf("no dump directory specified")
@@ -71,7 +70,6 @@ var dumpCmd = &cobra.Command{
 			dir = cli.cfg.SharedStorage.DumpStorageDir
 			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
-
 		a := api.DumpArgs{
 			PID: int32(pid),
 			Dir: dir,
@@ -84,8 +82,14 @@ var dumpCmd = &cobra.Command{
 		}
 
 		cli.logger.Info().Msgf("checkpoint of process %d written successfully to %s", pid, dir)
+
 		return nil
 	},
+}
+
+var dumpCmd = &cobra.Command{
+	Use:   "dump",
+	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
 }
 
 var containerdDumpCmd = &cobra.Command{
@@ -160,9 +164,9 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		opts := &container.RuncOpts{
-			Root:          "/var/run/runc",
-			Bundle:        "/home/brandonsmith/bundle",
-			ConsoleSocket: "/home/brandonsmith/tty.sock",
+			Root:          root,
+			Bundle:        bundle,
+			ConsoleSocket: consoleSocket,
 		}
 
 		a := api.RuncRestoreArgs{
@@ -183,6 +187,11 @@ var runcRestoreCmd = &cobra.Command{
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
+	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
+}
+
+var restoreProcessCmd = &cobra.Command{
+	Use:   "process",
 	Short: "Manually restore a process from a checkpoint located at input path",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -318,6 +327,7 @@ func initRuncCommands() {
 
 	dumpCmd.AddCommand(runcDumpCmd)
 }
+
 func initContainerdCommands() {
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
 	containerdDumpCmd.MarkFlagRequired("image")
@@ -335,7 +345,11 @@ func initContainerdCommands() {
 }
 
 func init() {
-	dumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	dumpCmd.AddCommand(dumpProcessCmd)
+	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+
+	restoreCmd.AddCommand(restoreProcessCmd)
+
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
