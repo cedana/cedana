@@ -89,7 +89,7 @@ var dumpProcessCmd = &cobra.Command{
 
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "Manually checkpoint a running process to a directory",
+	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
 }
 
 var containerdDumpCmd = &cobra.Command{
@@ -164,9 +164,9 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		opts := &container.RuncOpts{
-			Root:          "/var/run/runc",
-			Bundle:        "/home/brandonsmith/bundle",
-			ConsoleSocket: "/home/brandonsmith/tty.sock",
+			Root:          root,
+			Bundle:        bundle,
+			ConsoleSocket: consoleSocket,
 		}
 
 		a := api.RuncRestoreArgs{
