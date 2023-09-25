@@ -4,11 +4,11 @@ import (
 	"os"
 	"os/signal"
 
+	cedanaUtils "github.com/cedana/cedana/utils"
 	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/system"
 	"github.com/cedana/runc/libcontainer/utils"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -19,10 +19,11 @@ const signalBufferSize = 2048
 // If notifySocket is present, use it to read systemd notifications from the container and
 // forward them to notifySocketHost.
 func newSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalHandler {
+	logger := cedanaUtils.GetLogger()
 	if enableSubreaper {
 		// set us as the subreaper before registering the signal handler for the container
 		if err := system.SetSubreaper(1); err != nil {
-			logrus.Warn(err)
+			logger.Warn().Err(err)
 		}
 	}
 	// ensure that we have a large buffer size so that we do not miss any signals
@@ -48,9 +49,12 @@ type signalHandler struct {
 	notifySocket *notifySocket
 }
 
+type Fields map[string]interface{}
+
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
 func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach bool) (int, error) {
+	logger := cedanaUtils.GetLogger()
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.
 	if detach && h.notifySocket == nil {
@@ -83,13 +87,13 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 		case unix.SIGCHLD:
 			exits, err := h.reap()
 			if err != nil {
-				logrus.Error(err)
+				logger.Err(err)
 			}
 			for _, e := range exits {
-				logrus.WithFields(logrus.Fields{
+				logger.Debug().Fields(Fields{
 					"pid":    e.pid,
 					"status": e.status,
-				}).Debug("process exited")
+				}).Msg("process exited")
 				if e.pid == pid1 {
 					// call Wait() on the process even though we already have the exit
 					// status because we must ensure that any of the go specific process
@@ -105,9 +109,9 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 			// Do nothing.
 		default:
 			us := s.(unix.Signal)
-			logrus.Debugf("forwarding signal %d (%s) to %d", int(us), unix.SignalName(us), pid1)
+			logger.Debug().Msgf("forwarding signal %d (%s) to %d", int(us), unix.SignalName(us), pid1)
 			if err := unix.Kill(pid1, us); err != nil {
-				logrus.Error(err)
+				logger.Err(err)
 			}
 		}
 	}

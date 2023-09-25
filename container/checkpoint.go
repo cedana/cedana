@@ -53,7 +53,7 @@ import (
 	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
@@ -491,12 +491,13 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 }
 
 func containerdCheckpoint(id string, ref string) error {
+	logger := utils.GetLogger()
 
 	ctx := gocontext.Background()
 
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
-		logrus.Fatal(err)
+		logger.Fatal().Err(err)
 	}
 	defer cancel()
 
@@ -1117,6 +1118,8 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 }
 
 func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
+	logger := utils.GetLogger()
+
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return err
@@ -1146,7 +1149,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 	if c.CriuVersion != 0 {
 		// If the CRIU Version is still '0' then this is probably
 		// the initial CRIU run to detect the version. Skip it.
-		logrus.Debugf("Using CRIU %d", c.CriuVersion)
+		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3")
 	if process != nil {
@@ -1173,7 +1176,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 			criuClientCon.Close()
 			_, err := criuProcess.Wait()
 			if err != nil {
-				logrus.Warnf("wait on criuProcess returned %v", err)
+				logger.Warn().Msgf("wait on criuProcess returned %v", err)
 			}
 		}
 	}()
@@ -1182,12 +1185,12 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 		return err
 	}
 
-	logrus.Debugf("Using CRIU in %s mode", req.GetType().String())
+	logger.Debug().Msgf("Using CRIU in %s mode", req.GetType().String())
 	// In the case of criurpc.CriuReqType_FEATURE_CHECK req.GetOpts()
 	// should be empty. For older CRIU versions it still will be
 	// available but empty. criurpc.CriuReqType_VERSION actually
 	// has no req.GetOpts().
-	if logrus.GetLevel() >= logrus.DebugLevel &&
+	if logger.GetLevel() >= zerolog.DebugLevel &&
 		!(req.GetType() == criurpc.CriuReqType_FEATURE_CHECK ||
 			req.GetType() == criurpc.CriuReqType_VERSION) {
 
@@ -1198,7 +1201,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 			name := st.Field(i).Name
 			if 'A' <= name[0] && name[0] <= 'Z' {
 				value := val.MethodByName("Get" + name).Call([]reflect.Value{})
-				logrus.Debugf("CRIU option %s with value %v", name, value[0])
+				logger.Debug().Msgf("CRIU option %s with value %v", name, value[0])
 			}
 		}
 	}
@@ -1249,7 +1252,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 		t := resp.GetType()
 		switch {
 		case t == criurpc.CriuReqType_FEATURE_CHECK:
-			logrus.Debugf("Feature check says: %s", resp)
+			logger.Debug().Msgf("Feature check says: %s", resp)
 			criuFeatures = resp.GetFeatures()
 		case t == criurpc.CriuReqType_NOTIFY:
 			// removed notify functionality

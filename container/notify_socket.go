@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/cedana/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -174,6 +174,7 @@ var errUnexpectedRead = errors.New("unexpected read from synchronization pipe")
 
 // sdNotifyBarrier performs synchronization with systemd by means of the sd_notify_barrier protocol.
 func sdNotifyBarrier(client *net.UnixConn) error {
+	logger := utils.GetLogger()
 	// Create a pipe for communicating with systemd daemon.
 	pipeR, pipeW, err := os.Pipe()
 	if err != nil {
@@ -212,7 +213,7 @@ func sdNotifyBarrier(client *net.UnixConn) error {
 		return errUnexpectedRead
 	} else if errors.Is(err, os.ErrDeadlineExceeded) {
 		// Probably the other end doesn't support the sd_notify_barrier protocol.
-		logrus.Warn("Timeout after waiting 30s for barrier. Ignored.")
+		logger.Warn().Msgf("Timeout after waiting 30s for barrier. Ignored.")
 		return nil
 	} else if err == io.EOF { //nolint:errorlint // https://github.com/polyfloyd/go-errorlint/issues/49
 		return nil

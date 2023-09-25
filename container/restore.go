@@ -131,7 +131,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		Bundle:        opts.Bundle,
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
-		Detatch:       true,
+		Detatch:       opts.Detatch,
 	}
 
 	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)

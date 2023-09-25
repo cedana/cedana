@@ -56,9 +56,13 @@ var containerCmd = &cobra.Command{
 var debugRuncRestoreCmd = &cobra.Command{
 	Use: "runc-restore",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root := "/var/run/runc"
-		bundle := "/home/brandonsmith/bundle"
-		consoleSocket := "/home/brandonsmith/tty.sock"
+		// Typical routes
+		// root := "/var/run/runc"
+		// bundle := "$HOME/bundle"
+		// consoleSocket := "$HOME/tty.sock"
+		root := args[2]
+		bundle := args[3]
+		consoleSocket := args[4]
 		opts := &container.RuncOpts{
 			Root:          root,
 			Bundle:        bundle,

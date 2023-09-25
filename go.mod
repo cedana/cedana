@@ -27,7 +27,6 @@ require (
 	github.com/opencontainers/selinux v1.11.0
 	github.com/rs/xid v1.5.0
 	github.com/sevlyar/go-daemon v0.1.6
-	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.5.0
 	golang.org/x/sys v0.12.0
@@ -105,6 +104,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.10.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
