@@ -14,7 +14,7 @@ db_file = f'{homeDir}/.cedana/benchmarking.db'
 conn = sqlite3.connect(db_file)
 cursor = conn.cursor()
 
-benchmarkTable = 'benchmarks'
+benchmarkTable = 'benchmark_results'
 
 # Fetch all rows from the table
 dumpQuery = f"SELECT * FROM {benchmarkTable} WHERE cmd_type = 'dump'"
