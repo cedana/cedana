@@ -85,7 +85,7 @@ cd "$current_dir" || exit
 # grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f 2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > benchmarking/temp/cpu.txt
 
 for ((i = 1; i <= num_iterations; i++)); do
-    ./test/benchmarks/run_benchmarks.sh &
+    ./run_benchmarks.sh &
 
     # Store the process ID (PID) of the background process
     bg_pid=$!
@@ -107,5 +107,5 @@ echo "Elapsed time: $elapsed_time seconds"
 
 pip3 install -r requirements && \
 
-python3 test/benchmarks/benchmark_analysis.py && \
-rm benchmarks/benchmarking/temp/*.png
+python3 ./benchmark_analysis.py && \
+rm ./benchmarking/temp/*.png
