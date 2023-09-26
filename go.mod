@@ -7,16 +7,12 @@ require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.6
-	github.com/containerd/go-runc v1.0.0
-	github.com/containerd/typeurl v1.0.2
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/docker v24.0.4+incompatible
 	github.com/eapache/go-resiliency v1.4.0
 	github.com/glebarez/sqlite v1.9.0
-	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.3.0
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/nats-io/nats-server/v2 v2.9.21
@@ -63,6 +59,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect

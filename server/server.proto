@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option go_package = "github.com/cedana/cedana/api/checkpoint";
+
+message DumpArgs {
+  int32 PID = 1;
+  string Dir = 2;
+}
+
+message DumpResp {
+    string Error = 1;
+}
+
+service DumpService {
+    rpc Dump(DumpArgs) returns (DumpResp);
+}
