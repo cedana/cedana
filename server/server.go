@@ -12,7 +12,7 @@ type dumpServer struct {
 	checkpoint.UnimplementedDumpServiceServer
 }
 
-func (s *dumpServer) Create(context.Context, *checkpoint.DumpArgs) (*checkpoint.DumpResp, error) {
+func (s *dumpServer) Dump(context.Context, *checkpoint.DumpArgs) (*checkpoint.DumpResp, error) {
 	return &checkpoint.DumpResp{
 		Error: "not implemented",
 	}, nil
