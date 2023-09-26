@@ -70,7 +70,7 @@ var clientDaemonCmd = &cobra.Command{
 
 // Here I am introducing a new command to run the daemon in the background with a grpc server
 var clientDaemonRPCCmd = &cobra.Command{
-	Use:   "daemon",
+	Use:   "daemon-grpc",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 	Run: func(cmd *cobra.Command, args []string) {
 
@@ -130,4 +130,5 @@ func termHandler(sig os.Signal) error {
 
 func init() {
 	rootCmd.AddCommand(clientDaemonCmd)
+	rootCmd.AddCommand(clientDaemonRPCCmd)
 }
