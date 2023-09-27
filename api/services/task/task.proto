@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package cedana.services.task;
+
+option go_package = "github.com/cedana/cedana/api/services/task";
+
+message DumpArgs {
+  int32 PID = 1;
+  string Dir = 2;
+}
+message DumpResp {
+    string Error = 1;
+}
+
+message RestoreArgs {
+  string Path = 1;
+}
+message RestoreResp {
+    string Error = 1;
+    int32 NewPID = 2;
+}
+
+message StartTaskArgs {
+  string Task = 1;
+}
+message StartTaskResp {
+    string Error = 1;
+}
+
+service TaskService {
+    rpc Dump(DumpArgs) returns (DumpResp);
+    rpc Restore(RestoreArgs) returns (RestoreResp);
+    rpc StartTask(StartTaskArgs) returns (StartTaskResp);
+    rpc StartDaemon(google.protobuf.Empty) returns (google.protobuf.Empty);
+}
