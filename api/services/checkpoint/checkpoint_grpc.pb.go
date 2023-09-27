@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.12.4
-// source: server.proto
+// source: checkpoint.proto
 
 package checkpoint
 
@@ -101,5 +101,5 @@ var DumpService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "server.proto",
+	Metadata: "checkpoint.proto",
 }
