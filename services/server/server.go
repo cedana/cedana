@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
@@ -92,6 +93,8 @@ func addGRPC() (*Server, error) {
 }
 
 func StartGRPCServer() error {
+	var wg sync.WaitGroup
+
 	srv, err := addGRPC()
 	if err != nil {
 		return err
@@ -100,6 +103,10 @@ func StartGRPCServer() error {
 	go srv.start()
 
 	go srv.serveGRPC(srv.Lis)
+
+	wg.Add(2)
+
+	wg.Wait()
 
 	return nil
 }
