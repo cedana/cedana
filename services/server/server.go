@@ -5,12 +5,71 @@ import (
 	"net"
 
 	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/api/services/checkpoint"
+	task "github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/types"
 	"google.golang.org/grpc"
 )
 
+// Unused for now...
+type GrpcService interface {
+	Register(*grpc.Server) error
+}
+
 type service struct {
-	checkpoint.UnimplementedDumpServiceServer
+	Client *api.Client
+	task.UnimplementedTaskServiceServer
+}
+
+func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+	client := s.Client
+	err := client.Dump(args.Dir)
+
+	return &task.DumpResp{
+		Error: err.Error(),
+	}, err
+}
+
+func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
+	client := s.Client
+	cmd := &types.ServerCommand{}
+	pid, err := client.Restore(cmd, &args.Path)
+
+	return &task.RestoreResp{
+		Error:  err.Error(),
+		NewPID: *pid,
+	}, err
+}
+
+type Server struct {
+	grpcServer *grpc.Server
+	Lis        *net.Listener
+}
+
+func (s *Server) New() (*Server, error) {
+
+	var (
+		grpcServer = grpc.NewServer()
+	)
+
+	service := &service{}
+
+	task.RegisterTaskServiceServer(grpcServer, service)
+
+	return &Server{
+		grpcServer: grpcServer,
+	}, nil
+}
+
+func (s *Server) serveGRPC(l net.Listener) error {
+	return s.grpcServer.Serve(l)
+}
+
+func (s *Server) start() {
+	lis, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		panic(err)
+	}
+	s.Lis = &lis
 }
 
 func addGRPC() (*Server, error) {
@@ -30,51 +89,4 @@ func StartGRPCServer() error {
 	go srv.serveGRPC(*srv.Lis)
 
 	return nil
-}
-
-func (s *service) Dump(ctx context.Context, args *checkpoint.DumpArgs) (*checkpoint.DumpResp, error) {
-	client := api.Client{}
-	client.Dump(args.Dir)
-	return &checkpoint.DumpResp{
-		Error: "not implemented",
-	}, nil
-}
-
-type Server struct {
-	client     *api.Client
-	grpcServer *grpc.Server
-	Lis        *net.Listener
-}
-
-type GrpcService interface {
-	Register(*grpc.Server) error
-}
-
-func (s *Server) New() (*Server, error) {
-
-	var (
-		grpcServer = grpc.NewServer()
-	)
-
-	service := &service{}
-
-	checkpoint.RegisterDumpServiceServer(grpcServer, service)
-
-	s.client = &api.Client{}
-
-	return &Server{
-		grpcServer: grpcServer,
-	}, nil
-}
-
-func (s *Server) serveGRPC(l net.Listener) error {
-	return s.grpcServer.Serve(l)
-}
-
-func (s *Server) start() {
-	lis, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		panic(err)
-	}
-	s.Lis = &lis
 }
