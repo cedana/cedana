@@ -40,6 +40,15 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}, err
 }
 
+func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
+	client := s.Client
+	_, err := client.RunTask(args.Task)
+
+	return &task.StartTaskResp{
+		Error: err.Error(),
+	}, err
+}
+
 type Server struct {
 	grpcServer *grpc.Server
 	Lis        *net.Listener
@@ -51,7 +60,11 @@ func (s *Server) New() (*Server, error) {
 		grpcServer = grpc.NewServer()
 	)
 
-	service := &service{}
+	client := &api.Client{}
+
+	service := &service{
+		Client: client,
+	}
 
 	task.RegisterTaskServiceServer(grpcServer, service)
 
