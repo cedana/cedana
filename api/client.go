@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/services/server"
 	"github.com/cedana/cedana/utils"
 	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
@@ -134,6 +135,12 @@ func InstantiateClient() (*Client, error) {
 		context:  context.Background(),
 		fs:       fs,
 	}, nil
+}
+
+func (c *Client) AddGRPC() (*server.Server, error) {
+	server := &server.Server{}
+	server.New()
+	return server, nil
 }
 
 // Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
