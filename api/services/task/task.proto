@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "google/protobuf/empty.proto";
-
 package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
@@ -33,5 +31,4 @@ service TaskService {
     rpc Dump(DumpArgs) returns (DumpResp);
     rpc Restore(RestoreArgs) returns (RestoreResp);
     rpc StartTask(StartTaskArgs) returns (StartTaskResp);
-    rpc StartDaemon(google.protobuf.Empty) returns (google.protobuf.Empty);
 }

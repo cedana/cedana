@@ -8,7 +8,6 @@ package task
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -26,7 +25,6 @@ type TaskServiceClient interface {
 	Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
 	StartTask(ctx context.Context, in *StartTaskArgs, opts ...grpc.CallOption) (*StartTaskResp, error)
-	StartDaemon(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type taskServiceClient struct {
@@ -64,15 +62,6 @@ func (c *taskServiceClient) StartTask(ctx context.Context, in *StartTaskArgs, op
 	return out, nil
 }
 
-func (c *taskServiceClient) StartDaemon(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
-	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/StartDaemon", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -80,7 +69,6 @@ type TaskServiceServer interface {
 	Dump(context.Context, *DumpArgs) (*DumpResp, error)
 	Restore(context.Context, *RestoreArgs) (*RestoreResp, error)
 	StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error)
-	StartDaemon(context.Context, *empty.Empty) (*empty.Empty, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -96,9 +84,6 @@ func (UnimplementedTaskServiceServer) Restore(context.Context, *RestoreArgs) (*R
 }
 func (UnimplementedTaskServiceServer) StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartTask not implemented")
-}
-func (UnimplementedTaskServiceServer) StartDaemon(context.Context, *empty.Empty) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartDaemon not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -167,24 +152,6 @@ func _TaskService_StartTask_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TaskService_StartDaemon_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(empty.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TaskServiceServer).StartDaemon(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/cedana.services.task.TaskService/StartDaemon",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TaskServiceServer).StartDaemon(ctx, req.(*empty.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -203,10 +170,6 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartTask",
 			Handler:    _TaskService_StartTask_Handler,
-		},
-		{
-			MethodName: "StartDaemon",
-			Handler:    _TaskService_StartDaemon_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
