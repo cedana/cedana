@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	checkpoint "github.com/cedana/cedana/api/checkpoint/server"
+	"github.com/cedana/cedana/api/services/checkpoint"
 	"google.golang.org/grpc"
 )
 

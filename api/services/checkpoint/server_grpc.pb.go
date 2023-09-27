@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.12.4
-// source: server/server.proto
+// source: server.proto
 
 package checkpoint
 
@@ -35,7 +35,7 @@ func NewDumpServiceClient(cc grpc.ClientConnInterface) DumpServiceClient {
 
 func (c *dumpServiceClient) Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error) {
 	out := new(DumpResp)
-	err := c.cc.Invoke(ctx, "/DumpService/Dump", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/cedana.services.checkpoint.DumpService/Dump", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func _DumpService_Dump_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/DumpService/Dump",
+		FullMethod: "/cedana.services.checkpoint.DumpService/Dump",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DumpServiceServer).Dump(ctx, req.(*DumpArgs))
@@ -92,7 +92,7 @@ func _DumpService_Dump_Handler(srv interface{}, ctx context.Context, dec func(in
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var DumpService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "DumpService",
+	ServiceName: "cedana.services.checkpoint.DumpService",
 	HandlerType: (*DumpServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -101,5 +101,5 @@ var DumpService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "server/server.proto",
+	Metadata: "server.proto",
 }

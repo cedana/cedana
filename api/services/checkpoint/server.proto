@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-option go_package = "github.com/cedana/cedana/api/checkpoint";
+package cedana.services.checkpoint;
+
+option go_package = "github.com/cedana/cedana/api/services/checkpoint";
 
 message DumpArgs {
   int32 PID = 1;
