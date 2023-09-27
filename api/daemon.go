@@ -135,19 +135,6 @@ func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *Conta
 	return cd.client.ContainerRestore(args.ImgPath, args.ContainerId)
 }
 
-func (cd *CedanaDaemon) StartGRPCServer() error {
-	srv, err := cd.client.AddGRPC()
-	if err != nil {
-		return err
-	}
-
-	go srv.Start()
-
-	go srv.ServeGRPC(*srv.Lis)
-
-	return nil
-}
-
 func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {
 	// scaffold daemon w/ NATS
 	err := cd.client.AddNATS(args.SelfID, args.JobID, args.AuthToken)

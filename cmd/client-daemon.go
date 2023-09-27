@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/services/server"
 	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
@@ -76,47 +77,9 @@ var clientDaemonRPCCmd = &cobra.Command{
 
 		logger := utils.GetLogger()
 
-		cd := api.NewDaemon(stop)
-		rpc.Register(cd)
+		server.StartGRPCServer()
+		logger.Debug().Msgf("grpc server started at %s", time.Now().Local())
 
-		executable, err := os.Executable()
-		if err != nil {
-			logger.Fatal().Msg("Could not find cedana executable")
-		}
-
-		ctx := &gd.Context{
-			PidFileName: "cedana.pid",
-			PidFilePerm: 0o644,
-			LogFileName: "cedana-daemon.log",
-			LogFilePerm: 0o664,
-			WorkDir:     "./",
-			Umask:       027,
-			Args:        []string{executable, "daemon"},
-		}
-
-		gd.AddCommand(gd.StringFlag(daemonSignal, "stop"), syscall.SIGTERM, termHandler)
-
-		d, err := ctx.Reborn()
-		if err != nil {
-			logger.Err(err).Msg("could not start daemon")
-		}
-
-		if d != nil {
-			return
-		}
-
-		defer ctx.Release()
-
-		logger.Info().Msgf("daemon started at %s", time.Now().Local())
-
-		go cd.StartDaemon()
-
-		err = gd.ServeSignals()
-		if err != nil {
-			logger.Fatal().Err(err)
-		}
-
-		logger.Info().Msg("daemon terminated")
 	},
 }
 
