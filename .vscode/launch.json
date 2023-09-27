@@ -21,6 +21,19 @@
             },
         },
         {
+            "name": "debug cedana daemon-grpc",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["daemon-grpc"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
             "name": "debug cedana dump",
             "type": "go",
             "asRoot": true,

@@ -51,14 +51,12 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 
 type Server struct {
 	grpcServer *grpc.Server
-	Lis        *net.Listener
+	Lis        net.Listener
 }
 
-func (s *Server) New() (*Server, error) {
+func (s *Server) New() (*grpc.Server, error) {
 
-	var (
-		grpcServer = grpc.NewServer()
-	)
+	grpcServer := grpc.NewServer()
 
 	client := &api.Client{}
 
@@ -68,9 +66,7 @@ func (s *Server) New() (*Server, error) {
 
 	task.RegisterTaskServiceServer(grpcServer, service)
 
-	return &Server{
-		grpcServer: grpcServer,
-	}, nil
+	return grpcServer, nil
 }
 
 func (s *Server) serveGRPC(l net.Listener) error {
@@ -82,12 +78,16 @@ func (s *Server) start() {
 	if err != nil {
 		panic(err)
 	}
-	s.Lis = &lis
+	s.Lis = lis
 }
 
 func addGRPC() (*Server, error) {
 	server := &Server{}
-	server.New()
+	srv, err := server.New()
+	server.grpcServer = srv
+	if err != nil {
+		return nil, err
+	}
 	return server, nil
 }
 
@@ -99,7 +99,7 @@ func StartGRPCServer() error {
 
 	go srv.start()
 
-	go srv.serveGRPC(*srv.Lis)
+	go srv.serveGRPC(srv.Lis)
 
 	return nil
 }
