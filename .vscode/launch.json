@@ -5,14 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "debug cedana daemon",
+            // Easier to attach than debug the daemon
+            "name": "attach to running cedana daemon",
             "type": "go",
             "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "program": "${fileDirname}",
+            "request": "attach",
+            "mode": "local",
             "console": "integratedTerminal",
-            "args": ["daemon"],
         },
         {
             "name": "debug cedana start",
