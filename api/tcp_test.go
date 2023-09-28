@@ -66,10 +66,10 @@ func Test_MultiConn(t *testing.T) {
 	t.Cleanup(func() {
 		syscall.Kill(int(pid), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
-		c.cleanupClient()
+		c.CleanupClient()
 	})
 
-	oldState := c.getState(c.Process.PID)
+	oldState := c.GetState(c.Process.PID)
 	t.Logf("old state: %+v", oldState)
 
 	err = c.Dump("dumpdir")
