@@ -13,7 +13,18 @@
             "mode": "local",
             "console": "integratedTerminal",
         },
-       {
+        {
+            "name": "debug cedana start",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "program": "${fileDirname}",
+            "console": "integratedTerminal",
+            "args": ["start", "${input:promptForProgram}"],
+        },
+
+        {
             "name": "debug cedana dump",
             "type": "go",
             "asRoot": true,
@@ -22,14 +33,7 @@
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["client", "dump", "-p", "${input:promptForPID}"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
+            "args": ["dump", "${input:promptForPID}"],
         },
         {
             "name": "debug cedana dump container",
@@ -97,14 +101,7 @@
             "mode": "debug",
             "program": "${fileDirname}",
             "console": "integratedTerminal",
-            "args": ["client", "restore", "${input:promptForCheckpoint}"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
+            "args": ["restore", "${input:promptForCheckpoint}"],
         }, 
      {
             "name": "debug cedana container",
@@ -142,6 +139,12 @@
             "id": "promptForCheckpoint",
             "type": "promptString",
             "description": "enter path to checkpoint zipfile",
+            "default": ""
+        },
+        {
+            "id": "promptForProgram",
+            "type": "promptString",
+            "description": "enter program to exec",
             "default": ""
         }
     ]

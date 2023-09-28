@@ -26,6 +26,8 @@ var bundle string
 var consoleSocket string
 var detach bool
 
+var returnPID bool
+
 type CLI struct {
 	cfg    *utils.Config
 	conn   *rpc.Client
@@ -262,6 +264,10 @@ var startTaskCmd = &cobra.Command{
 			return err
 		}
 
+		if returnPID {
+			fmt.Println(resp.PID)
+		}
+
 		return nil
 	},
 }
@@ -351,6 +357,8 @@ func init() {
 	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 
 	restoreCmd.AddCommand(restoreProcessCmd)
+
+	startTaskCmd.Flags().BoolVarP(&returnPID, "pid", "p", false, "return spawned process pid")
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)

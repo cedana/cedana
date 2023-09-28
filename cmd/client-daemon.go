@@ -64,6 +64,8 @@ var clientDaemonCmd = &cobra.Command{
 			logger.Fatal().Err(err)
 		}
 
+		go clientAPI()
+
 		logger.Info().Msg("daemon terminated")
 	},
 }
@@ -74,6 +76,10 @@ func termHandler(sig os.Signal) error {
 		<-done
 	}
 	return gd.ErrStop
+}
+
+func clientAPI() {
+	// listens to
 }
 
 func init() {

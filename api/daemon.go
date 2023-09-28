@@ -95,6 +95,7 @@ type StartTaskArgs struct {
 }
 
 type StartTaskResp struct {
+	PID   int32
 	Error error
 }
 
@@ -147,10 +148,11 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 }
 
 func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
-	err := cd.client.TryStartJob(&args.Task)
+	pid, err := cd.client.RunTask(args.Task)
 	if err != nil {
 		resp.Error = err
 	}
+	resp.PID = pid
 	return err
 }
 
