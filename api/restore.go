@@ -172,7 +172,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
-	c.cleanupClient()
+	c.CleanupClient()
 	return resp.Restore.Pid, nil
 }
 
