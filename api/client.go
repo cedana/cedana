@@ -54,6 +54,8 @@ type Client struct {
 
 	// checkpoint store
 	store utils.Store
+
+	CheckpointDir string
 }
 
 type Broadcaster[T any] struct {

@@ -252,6 +252,8 @@ func (c *Client) Dump(dir string) error {
 		return err
 	}
 
+	c.CheckpointDir = dumpdir
+
 	img, err := os.Open(dumpdir)
 	if err != nil {
 		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)

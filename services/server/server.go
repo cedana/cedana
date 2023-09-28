@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -29,7 +32,42 @@ type service struct {
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	client := s.Client
 	client.Process.PID = args.PID
+
 	err := client.Dump(args.Dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data := struct {
+		Id      string `json:"id"`
+		DumpDir string `json:"dumpDir"`
+	}{
+		Id:      "test",
+		DumpDir: client.CheckpointDir,
+	}
+
+	// Marshal the struct to JSON
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := &http.Client{}
+	url := "http://localhost:1324"
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
 	return &task.DumpResp{
 		Error: err.Error(),
