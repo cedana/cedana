@@ -43,6 +43,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		Id      string `json:"id"`
 		DumpDir string `json:"dumpDir"`
 	}{
+		// TODO BS Need to get TaskID properly...
 		Id:      "test",
 		DumpDir: client.CheckpointDir,
 	}
@@ -54,8 +55,10 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	}
 
 	httpClient := &http.Client{}
+	// TODO BS: env this
 	url := "http://localhost:1324"
 
+	// TODO BS: abstract the request into a function
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, err
