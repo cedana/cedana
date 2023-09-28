@@ -78,15 +78,15 @@ def AnalyzeBenchmarks(query, title):
     legend = plt.legend(handles, unique_categories,
                         title="Process Name", loc="upper right")
 
-    plt.ylabel('Total Memory Allocation (%)')
-    plt.xlabel('Total CPU Time Allocation (s)')
-    ax.set_zlabel('Total Disk Allocation (MB)')
+    plt.ylabel('Total memory allocation (%)')
+    plt.xlabel('Total CPU time (s)')
+    ax.set_zlabel('Total Disk allocation (MB)')
 
     plt.title(f'{title} Benchmark Analysis')
 
 
 AnalyzeBenchmarks(dumpQuery, "dump")
 AnalyzeBenchmarks(restoreQuery, "restore")
-plt.show()
+plt.savefig("output.png")
 # Close the connection
 conn.close()

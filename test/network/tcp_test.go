@@ -1,4 +1,4 @@
-package api
+package test
 
 import (
 	"os"
@@ -9,7 +9,8 @@ import (
 )
 
 //  Tests defined here are different from benchmarking in that we aren't looking for
-// data on performance, and are instead looking for correctness in the checkpoints and restores.
+// data on performance, and are instead looking for correctness in the checkpoints and restores and to validate
+// any TCP-specific logic inside C/R.
 
 // for this, we create a server and client, connect them to each other and
 // checkpoint/restore each of them - validating behavior along the way.
@@ -30,11 +31,7 @@ type TCPTest struct {
 
 // TODO NR - path to these is wonky! use git submodules
 var tcpTests = map[string]TCPTest{
-	"multiconn":     {"threaded_pings", "python3 ../../cedana-benchmarks/networking/threaded_pings.py -n 3 google.com 80"},
-	"databaseconn":  {},
-	"streaming":     {},
-	"multiserver":   {},
-	"multidatabase": {},
+	"multiconn": {"threaded_pings", "python3 ../../cedana-benchmarks/networking/threaded_pings.py -n 3 google.com 80"},
 }
 
 // can't do any C/R in CI. Need to figure this out though
@@ -103,24 +100,4 @@ func Test_MultiConn(t *testing.T) {
 			t.Error("sockets are different")
 		}
 	}
-}
-
-func Test_DatabaseConn(t *testing.T) {
-	// spin up a process w/ a connection to a database
-	// verify correctness on restore
-}
-
-func Test_StreamingConn(t *testing.T) {
-	// spin up a client w/ a streaming connection (maybe gRPC?)
-	// verify correctness on restore
-}
-
-func Test_MultiServer(t *testing.T) {
-	// spin up a server w/ multiple client connections
-	// verify correctness on restore
-}
-
-func Test_MultiDatabase(t *testing.T) {
-	// spin up a db with multiple active connections
-	// verify correctness on restore
 }

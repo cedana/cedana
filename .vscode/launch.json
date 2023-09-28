@@ -7,12 +7,24 @@
         {
             "name": "debug cedana daemon",
             "type": "go",
+            "asRoot": true,
             "request": "launch",
             "mode": "debug",
             "program": "${fileDirname}",
             "console": "integratedTerminal",
-            "args": ["client", "daemon"],
+            "args": ["daemon"],
         },
+        {
+            "name": "debug cedana start",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "program": "${fileDirname}",
+            "console": "integratedTerminal",
+            "args": ["start", "${input:promptForProgram}"],
+        },
+
         {
             "name": "debug cedana dump",
             "type": "go",
@@ -128,6 +140,12 @@
             "id": "promptForCheckpoint",
             "type": "promptString",
             "description": "enter path to checkpoint zipfile",
+            "default": ""
+        },
+        {
+            "id": "promptForProgram",
+            "type": "promptString",
+            "description": "enter program to exec",
             "default": ""
         }
     ]
