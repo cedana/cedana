@@ -77,16 +77,9 @@ var clientDaemonRPCCmd = &cobra.Command{
 
 		logger := utils.GetLogger()
 
-		// Start the gRPC server in a goroutine
-		go func() {
-			if err := server.StartGRPCServer(); err != nil {
-				logger.Error().Err(err).Msg("Failed to start gRPC server")
-			}
-		}()
-
-		// Block the main thread to keep the program running
-		select {}
-		logger.Debug().Msgf("grpc server started at %s", time.Now().Local())
+		if err := server.StartGRPCServer(); err != nil {
+			logger.Error().Err(err).Msg("Failed to start gRPC server")
+		}
 
 	},
 }
