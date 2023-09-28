@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -28,10 +27,9 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-	// client := s.Client
-	// err := client.Dump(args.Dir)
-
-	err := fmt.Errorf("not implemented")
+	client := s.Client
+	client.Process.PID = args.PID
+	err := client.Dump(args.Dir)
 
 	return &task.DumpResp{
 		Error: err.Error(),
@@ -67,7 +65,10 @@ func (s *Server) New() (*grpc.Server, error) {
 
 	grpcServer := grpc.NewServer()
 
-	client := &api.Client{}
+	client, err := api.InstantiateClient()
+	if err != nil {
+		return nil, err
+	}
 
 	service := &service{
 		Client: client,
