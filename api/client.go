@@ -634,6 +634,13 @@ func (c *Client) RunTask(task string) (int32, error) {
 		return 0, err
 	}
 
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			c.logger.Warn().Msgf("task failed: %v", err)
+		}
+	}()
+
 	pid = int32(cmd.Process.Pid)
 	ppid := int32(os.Getpid())
 
