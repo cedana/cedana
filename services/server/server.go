@@ -102,7 +102,7 @@ func startMultiPartUpload(uploadResp *UploadResponse) error {
 	}
 
 	httpClient := &http.Client{}
-	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload"
+	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload/" + uploadResp.UploadID
 
 	req, err := http.NewRequest("POST", url, buffer)
 	if err != nil {
