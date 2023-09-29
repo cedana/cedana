@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +26,69 @@ type GrpcService interface {
 	Register(*grpc.Server) error
 }
 
+type UploadResponse struct {
+	UploadID  string `json:"upload_id"`
+	PartSize  int    `json:"part_size"`
+	PartCount int    `json:"part_count"`
+}
+
+func createMultiPartUpload(fullSize int64) error {
+	data := struct {
+		Name     string `json:"name"`
+		FullSize int64  `json:"full_size"`
+		PartSize int    `json:"part_size"`
+	}{
+		// TODO BS Need to get TaskID properly...
+		Name:     "test",
+		FullSize: fullSize,
+		PartSize: 0,
+	}
+
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	httpClient := &http.Client{}
+	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload"
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	req.Header.Set("Authorization", "Bearer brandonsmith")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	var uploadResp UploadResponse
+
+	// Parse the JSON response into the struct
+	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
+		fmt.Println("Error parsing JSON response:", err)
+		return err
+	}
+
+	return nil
+}
+func startMultiPartUpload() {
+	// TODO BS: implement
+}
+func completeMultiPartUpload() {
+	// TODO BS: implement
+}
+
 type service struct {
 	Client *api.Client
 	task.UnimplementedTaskServiceServer
@@ -39,38 +104,17 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	data := struct {
-		Id      string `json:"id"`
-		DumpDir string `json:"dumpDir"`
-	}{
-		// TODO BS Need to get TaskID properly...
-		Id:      "test",
-		DumpDir: client.CheckpointDir,
-	}
-
-	// Marshal the struct to JSON
-	payload, err := json.Marshal(data)
+	checkpointInfo, err := os.Stat(client.CheckpointDir)
 	if err != nil {
 		return nil, err
 	}
+	checkpointFullSize := checkpointInfo.Size()
 
-	httpClient := &http.Client{}
-	// TODO BS: env this
-	url := "http://localhost:1324"
+	err = createMultiPartUpload(checkpointFullSize)
 
-	// TODO BS: abstract the request into a function
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("Content-Type", "application/octet-stream")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 
 	return &task.DumpResp{
 		Error: err.Error(),

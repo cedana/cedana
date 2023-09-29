@@ -32,7 +32,8 @@
             "buildFlags": "-buildvcs=false",
             "args": ["daemon-grpc"],
             "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
+                "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
             },
         },
         {
