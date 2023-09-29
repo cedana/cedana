@@ -82,8 +82,51 @@ func createMultiPartUpload(fullSize int64) (UploadResponse, error) {
 
 	return uploadResp, nil
 }
-func startMultiPartUpload(uploadResp *UploadResponse) {
+func startMultiPartUpload(uploadResp *UploadResponse) error {
 	// TODO BS: implement
+
+	filePath := "./part2.bin"
+	file, err := os.Open(filePath)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return err
+	}
+	defer file.Close()
+
+	// Create a buffer to read the file data into
+	buffer := new(bytes.Buffer)
+	_, err = buffer.ReadFrom(file)
+	if err != nil {
+		fmt.Println("Error reading file data:", err)
+		return err
+	}
+
+	httpClient := &http.Client{}
+	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload"
+
+	req, err := http.NewRequest("POST", url, buffer)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/octect-stream")
+	req.Header.Set("Transfer-Encoding", "chunked")
+	req.Header.Set("Authorization", "Bearer brandonsmith")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Response: %s\n", respBody)
+
+	return nil
 }
 func completeMultiPartUpload() {
 	// TODO BS: implement
