@@ -32,7 +32,9 @@ type UploadResponse struct {
 	PartCount int    `json:"part_count"`
 }
 
-func createMultiPartUpload(fullSize int64) error {
+func createMultiPartUpload(fullSize int64) (UploadResponse, error) {
+	var uploadResp UploadResponse
+
 	data := struct {
 		Name     string `json:"name"`
 		FullSize int64  `json:"full_size"`
@@ -46,7 +48,7 @@ func createMultiPartUpload(fullSize int64) error {
 
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return uploadResp, err
 	}
 
 	httpClient := &http.Client{}
@@ -54,7 +56,7 @@ func createMultiPartUpload(fullSize int64) error {
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return err
+		return uploadResp, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -63,26 +65,24 @@ func createMultiPartUpload(fullSize int64) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return uploadResp, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return uploadResp, err
 	}
-
-	var uploadResp UploadResponse
 
 	// Parse the JSON response into the struct
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		fmt.Println("Error parsing JSON response:", err)
-		return err
+		return uploadResp, err
 	}
 
-	return nil
+	return uploadResp, nil
 }
-func startMultiPartUpload() {
+func startMultiPartUpload(uploadResp *UploadResponse) {
 	// TODO BS: implement
 }
 func completeMultiPartUpload() {
