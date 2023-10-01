@@ -288,49 +288,65 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, er
 	return uploadResp, nil
 }
 
-func (cs *CedanaStore) StartMultiPartUpload(uploadResp *UploadResponse) error {
+func (cs *CedanaStore) StartMultiPartUpload(uploadResp *UploadResponse, checkpointPath string) error {
 	// TODO BS: implement
+	// Open and read checkpoint file
+	// Divide binary into chunks, uploadResp.PartCount chunks with uploadResp.PartSize bytes each
+	// Loop over chunks and upload each one
 
-	filePath := "./part2.bin"
-	file, err := os.Open(filePath)
+	filePath := checkpointPath
+	binaryOfFile, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		fmt.Println("Error reading zip file:", err)
 		return err
 	}
-	defer file.Close()
+
+	chunkSize := uploadResp.PartSize
+
+	numOfParts := uploadResp.PartCount
+
+	for i := 0; i < numOfParts; i++ {
+		// TODO BS: implement
+		start := i * chunkSize
+		end := (i + 1) * chunkSize
+		if end > len(binaryOfFile) {
+			end = len(binaryOfFile)
+		}
+
+		partData := binaryOfFile[start:end]
+
+		buffer := bytes.NewBuffer(partData)
+
+		httpClient := &http.Client{}
+		url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload/" + uploadResp.UploadID + "/part/" + fmt.Sprintf("%d", i+1)
+
+		req, err := http.NewRequest("PUT", url, buffer)
+		if err != nil {
+			return err
+		}
+
+		req.Header.Set("Content-Type", "application/octect-stream")
+		req.Header.Set("Transfer-Encoding", "chunked")
+		req.Header.Set("Authorization", "Bearer brandonsmith")
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Response: %s\n", respBody)
+
+		// Process or store partData as needed
+		cs.logger.Debug().Msgf("Part %d: Size = %d bytes\n", i+1, len(partData))
+	}
 
 	// Create a buffer to read the file data into
-	buffer := new(bytes.Buffer)
-	_, err = buffer.ReadFrom(file)
-	if err != nil {
-		fmt.Println("Error reading file data:", err)
-		return err
-	}
-
-	httpClient := &http.Client{}
-	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload/" + uploadResp.UploadID
-
-	req, err := http.NewRequest("PUT", url, buffer)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/octect-stream")
-	req.Header.Set("Transfer-Encoding", "chunked")
-	req.Header.Set("Authorization", "Bearer brandonsmith")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Response: %s\n", respBody)
 
 	return nil
 }
