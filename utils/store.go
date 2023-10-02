@@ -299,11 +299,6 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 }
 
 func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
-	// TODO BS: implement
-	// Open and read checkpoint file
-	// Divide binary into chunks, uploadResp.PartCount chunks with uploadResp.PartSize bytes each
-	// Loop over chunks and upload each one
-
 	filePath := checkpointPath + ".zip"
 	binaryOfFile, err := os.ReadFile(filePath)
 	if err != nil {
@@ -316,7 +311,6 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 	numOfParts := uploadResp.PartCount
 
 	for i := 0; i < numOfParts; i++ {
-		// TODO BS: implement
 		start := i * chunkSize
 		end := (i + 1) * chunkSize
 		if end > len(binaryOfFile) {
@@ -352,17 +346,12 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 		fmt.Printf("Response: %s\n", respBody)
 
-		// Process or store partData as needed
 		cs.logger.Debug().Msgf("Part %d: Size = %d bytes\n", i+1, len(partData))
 	}
-
-	// Create a buffer to read the file data into
 
 	return nil
 }
 func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid string) error {
-	// TODO BS: implement
-	//  http://localhost:1324/checkpoint/2c935043-8d75-4ca0-8f3d-0e356f814dbd/upload/#{UPLOAD_UUID}/complete
 	httpClient := &http.Client{}
 	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/complete"
 
