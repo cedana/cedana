@@ -123,7 +123,7 @@ func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp
 }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
-	pid, err := cd.client.Restore(nil, &args.Path)
+	pid, err := cd.client.NatsRestore(nil, &args.Path)
 	if err != nil {
 		resp.Error = err
 	}

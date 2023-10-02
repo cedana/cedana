@@ -82,8 +82,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
-	path := ""
-	pid, err := client.Restore(args, &path)
+	pid, err := client.Restore(args)
 
 	return &task.RestoreResp{
 		Error:  err.Error(),

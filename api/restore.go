@@ -315,7 +315,7 @@ func (c *Client) NatsRestore(cmd *cedana.ServerCommand, path *string) (*int32, e
 	return pid, nil
 }
 
-func (c *Client) Restore(args *task.RestoreArgs, path *string) (*int32, error) {
+func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
 	var pid *int32
@@ -348,7 +348,7 @@ func (c *Client) Restore(args *task.RestoreArgs, path *string) (*int32, error) {
 			return nil, err
 		}
 	default:
-		dir, err := c.prepareRestore(&opts, nil, *path)
+		dir, err := c.prepareRestore(&opts, nil, args.Dir)
 		if err != nil {
 			return nil, err
 		}
