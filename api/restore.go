@@ -138,14 +138,14 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 	}
 }
 
-func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
+func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:       proto.Int32(2),
 		LogFile:        proto.String("restore.log"),
 		TcpEstablished: proto.Bool(true),
 	}
 
-	return opts
+	return &opts
 
 }
 
@@ -179,6 +179,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 }
 
 func (c *Client) pyTorchRestore() error {
+	// TODO Not implemented yet
 	return nil
 }
 
@@ -284,13 +285,13 @@ func (c *Client) NatsRestore(cmd *cedana.ServerCommand, path *string) (*int32, e
 	if cmd != nil {
 		switch cmd.CedanaState.CheckpointType {
 		case cedana.CheckpointTypeCRIU:
-			tmpdir, err := c.prepareNatsRestore(&opts, cmd, "")
+			tmpdir, err := c.prepareNatsRestore(opts, cmd, "")
 			if err != nil {
 				return nil, err
 			}
 			dir = *tmpdir
 
-			pid, err = c.criuRestore(&opts, nfy, dir)
+			pid, err = c.criuRestore(opts, nfy, dir)
 			if err != nil {
 				return nil, err
 			}
@@ -302,11 +303,11 @@ func (c *Client) NatsRestore(cmd *cedana.ServerCommand, path *string) (*int32, e
 			}
 		}
 	} else {
-		dir, err := c.prepareRestore(&opts, nil, *path)
+		dir, err := c.prepareRestore(opts, nil, *path)
 		if err != nil {
 			return nil, err
 		}
-		pid, err = c.criuRestore(&opts, nfy, *dir)
+		pid, err = c.criuRestore(opts, nfy, *dir)
 		if err != nil {
 			return nil, err
 		}
@@ -332,13 +333,13 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	// if we have a server command, otherwise default to base CRIU wrapper mode
 	switch args.Type {
 	case task.RestoreArgs_PROCESS:
-		tmpdir, err := c.prepareRestore(&opts, args, "")
+		tmpdir, err := c.prepareRestore(opts, args, "")
 		if err != nil {
 			return nil, err
 		}
 		dir = *tmpdir
 
-		pid, err = c.criuRestore(&opts, nfy, dir)
+		pid, err = c.criuRestore(opts, nfy, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -348,11 +349,11 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 			return nil, err
 		}
 	default:
-		dir, err := c.prepareRestore(&opts, nil, args.Dir)
+		dir, err := c.prepareRestore(opts, nil, args.Dir)
 		if err != nil {
 			return nil, err
 		}
-		pid, err = c.criuRestore(&opts, nfy, *dir)
+		pid, err = c.criuRestore(opts, nfy, *dir)
 		if err != nil {
 			return nil, err
 		}
