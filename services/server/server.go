@@ -12,7 +12,6 @@ import (
 
 	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -83,8 +82,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
-	cmd := &types.ServerCommand{}
-	pid, err := client.Restore(cmd, &args.Path)
+	path := ""
+	pid, err := client.Restore(args, &path)
 
 	return &task.RestoreResp{
 		Error:  err.Error(),

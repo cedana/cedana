@@ -13,7 +13,13 @@ message DumpResp {
 }
 
 message RestoreArgs {
-  string Path = 1;
+  string Cid = 1;
+  enum ProcessType {
+    PROCESS = 0;
+    PYTORCH = 1;
+  }
+  ProcessType Type = 2;
+  string Dir = 3;
 }
 message RestoreResp {
     string Error = 1;

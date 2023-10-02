@@ -556,7 +556,7 @@ func (c *Client) startNATSService() {
 
 		case cmd := <-restoreCmdChn:
 			c.logger.Info().Msg("received restore command from NATS server")
-			pid, err := c.Restore(&cmd, nil)
+			pid, err := c.NatsRestore(&cmd, nil)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore process: %v", err)
 				c.state.CheckpointState = cedana.RestoreFailed
