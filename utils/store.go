@@ -360,8 +360,25 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 	return nil
 }
-func (cs *CedanaStore) CompleteMultiPartUpload() {
+func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid string) error {
 	// TODO BS: implement
+	//  http://localhost:1324/checkpoint/2c935043-8d75-4ca0-8f3d-0e356f814dbd/upload/#{UPLOAD_UUID}/complete
+	httpClient := &http.Client{}
+	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/complete"
+
+	req, err := http.NewRequest("PUT", url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer brandonsmith")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
 }
 
 // TODO BS: Implement this for testing instead of doing bats for now.

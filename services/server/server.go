@@ -62,9 +62,16 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	checkpointFullSize := int64(zipFileSize)
 
 	multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
+	if err != nil {
+		return nil, err
+	}
 
-	store.StartMultiPartUpload(cid, &multipartCheckpointResp, client.CheckpointDir)
+	err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, client.CheckpointDir)
+	if err != nil {
+		return nil, err
+	}
 
+	err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 	if err != nil {
 		return nil, err
 	}
