@@ -137,6 +137,14 @@ type CedanaStore struct {
 	cfg    *Config
 }
 
+func NewCedanaStore(cfg *Config) *CedanaStore {
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	return &CedanaStore{
+		logger: &logger,
+		cfg:    cfg,
+	}
+}
+
 // ID to GetCheckpoint gets populated from the data sent over as part of a
 // ServerCommand
 func (cs *CedanaStore) GetCheckpoint(id string) (*string, error) {
@@ -237,8 +245,10 @@ func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
 	return &checkpointMetadata, nil
 }
 
-func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, error) {
+func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, string, error) {
 	var uploadResp UploadResponse
+
+	cid := uuid.New().String()
 
 	data := struct {
 		Name     string `json:"name"`
@@ -253,15 +263,15 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, er
 
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return uploadResp, err
+		return uploadResp, "", err
 	}
 
 	httpClient := &http.Client{}
-	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload"
+	url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/" + cid + "/upload"
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return uploadResp, err
+		return uploadResp, "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -270,31 +280,31 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, er
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return uploadResp, err
+		return uploadResp, "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return uploadResp, err
+		return uploadResp, "", err
 	}
 
 	// Parse the JSON response into the struct
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		fmt.Println("Error parsing JSON response:", err)
-		return uploadResp, err
+		return uploadResp, "", err
 	}
 
-	return uploadResp, nil
+	return uploadResp, cid, nil
 }
 
-func (cs *CedanaStore) StartMultiPartUpload(uploadResp *UploadResponse, checkpointPath string) error {
+func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
 	// TODO BS: implement
 	// Open and read checkpoint file
 	// Divide binary into chunks, uploadResp.PartCount chunks with uploadResp.PartSize bytes each
 	// Loop over chunks and upload each one
 
-	filePath := checkpointPath
+	filePath := checkpointPath + ".zip"
 	binaryOfFile, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error reading zip file:", err)
@@ -318,14 +328,14 @@ func (cs *CedanaStore) StartMultiPartUpload(uploadResp *UploadResponse, checkpoi
 		buffer := bytes.NewBuffer(partData)
 
 		httpClient := &http.Client{}
-		url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/6291dc64-289f-4744-9aa6-2a382b0a9a30/upload/" + uploadResp.UploadID + "/part/" + fmt.Sprintf("%d", i+1)
+		url := os.Getenv("CHECKPOINT_SERVICE_URL") + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/part/" + fmt.Sprintf("%d", i+1)
 
 		req, err := http.NewRequest("PUT", url, buffer)
 		if err != nil {
 			return err
 		}
 
-		req.Header.Set("Content-Type", "application/octect-stream")
+		req.Header.Set("Content-Type", "application/octet-stream")
 		req.Header.Set("Transfer-Encoding", "chunked")
 		req.Header.Set("Authorization", "Bearer brandonsmith")
 
