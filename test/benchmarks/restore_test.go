@@ -26,9 +26,9 @@ func BenchmarkLoopRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.NatsRestore(nil, &checkpoint)
 		if err != nil {
-			b.Errorf("Error in c.restore(): %v", err)
+			b.Errorf("Error in c.Natsrestore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -57,9 +57,9 @@ func BenchmarkServerRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.NatsRestore(nil, &checkpoint)
 		if err != nil {
-			b.Errorf("Error in c.restore(): %v", err)
+			b.Errorf("Error in c.Natsrestore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -88,9 +88,9 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.NatsRestore(nil, &checkpoint)
 		if err != nil {
-			b.Errorf("Error in c.restore(): %v", err)
+			b.Errorf("Error in c.Natsrestore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -120,9 +120,9 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.NatsRestore(nil, &checkpoint)
 		if err != nil {
-			b.Errorf("Error in c.restore(): %v", err)
+			b.Errorf("Error in c.Natsrestore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -150,9 +150,9 @@ func BenchmarkVisionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.NatsRestore(nil, &checkpoint)
 		if err != nil {
-			b.Errorf("Error in c.restore(): %v", err)
+			b.Errorf("Error in c.Natsrestore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
