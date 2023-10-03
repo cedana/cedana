@@ -1,7 +1,6 @@
 package server
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"net"
@@ -35,7 +34,7 @@ type service struct {
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 
-	var zipFileSize uint64
+	// var zipFileSize uint64
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
 
@@ -48,17 +47,34 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	r, err := zip.OpenReader(client.CheckpointDir + ".zip")
+	// r, err := zip.OpenReader(client.CheckpointDir + ".zip")
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer r.Close()
+
+	// for _, f := range r.File {
+	// 	zipFileSize += f.FileHeader.CompressedSize64
+	// }
+
+	file, err := os.Open(client.CheckpointDir + ".zip")
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer file.Close()
 
-	for _, f := range r.File {
-		zipFileSize += f.FileHeader.CompressedSize64
+	// Get the file size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
 	}
 
-	checkpointFullSize := int64(zipFileSize)
+	// Get the size
+	size := fileInfo.Size()
+
+	// zipFileSize += 4096
+
+	checkpointFullSize := int64(size)
 
 	multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 	if err != nil {

@@ -39,7 +39,6 @@ type Connection struct {
 	NATSAuthToken string `json:"nats_auth_token" mapstructure:"nats_auth_token"`
 	// for cedana managed systems
 	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
-	CedanaPort      int    `json:"cedana_port" mapstructure:"cedana_port"`
 	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 }
 

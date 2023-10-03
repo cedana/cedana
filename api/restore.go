@@ -20,8 +20,9 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	// Here we just want to call store.GetCheckpoint
 	// setting auth token for now
 	c.config.Connection.CedanaAuthToken = "brandonsmith"
+	c.config.Connection.CedanaUrl = "http://localhost:1324"
 	c.store = utils.NewCedanaStore(c.config)
-	dir, err := c.store.GetCheckpoint(args.Cid)
+	zipFile, err := c.store.GetCheckpoint(args.Cid)
 	if err != nil {
 		return nil, err
 	}
@@ -33,22 +34,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		return nil, err
 	}
 
-	var zipFile string
-	if args.Dir != "" {
-		// TODO BS I think this section might not make sense anymore w/o nats
-		file, err := c.store.GetCheckpoint(args.Dir)
-		if err != nil {
-			return nil, err
-		}
-		if file != nil {
-			zipFile = *file
-		}
-	} else {
-		zipFile = *dir
-	}
-
-	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
-	err = utils.UnzipFolder(zipFile, tmpdir)
+	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
+	err = utils.UnzipFolder(*zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
