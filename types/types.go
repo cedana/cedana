@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
@@ -15,23 +16,21 @@ type Job struct {
 	Command string `json:"command"`
 }
 
-// CedanaState encapsulates a CRIU checkpoint and includes
-// filesystem state for a full restore. Typically serialized and shot around
-// over the wire.
-type CedanaState struct {
-	ClientInfo     ClientInfo     `json:"client_info" mapstructure:"client_info"`
-	ProcessInfo    ProcessInfo    `json:"process_info" mapstructure:"process_info"`
-	CheckpointType CheckpointType `json:"checkpoint_type" mapstructure:"checkpoint_type"`
-
-	// either local or remote checkpoint path (url vs filesystem path)
-	CheckpointPath string `json:"checkpoint_path" mapstructure:"checkpoint_path"`
-
-	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
-	Flag            Flag            `json:"flag" mapstructure:"flag"`
+// A process encapsulates either a process or a container
+type ProcessState struct {
+	PID              int32            `json:"pid"`
+	Task             string           `json:"task"`
+	ContainerRuntime ContainerRuntime `json:"container_runtime"`
+	ContainerId      string           `json:"container_id"`
+	StartedAt        time.Time        `json:"started_at"`
+	ProcessInfo      ProcessInfo      `json:"process_info"`
+	CheckpointPath   string           `json:"checkpoint_path"`
+	CheckpointState  CheckpointState  `json:"checkpoint_state"`
+	Flag             Flag             `json:"flag"`
 }
 
-func (cs *CedanaState) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(cs, "", "  ")
+func (ps *ProcessState) SerializeToFolder(dir string) error {
+	serialized, err := json.MarshalIndent(ps, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -80,16 +79,9 @@ type GPUInfo struct {
 type ServerCommand struct {
 	Command   string `json:"command" mapstructure:"command"`
 	Heartbeat bool   `json:"heartbeat" mapstructure:"heartbeat"`
-	// orchestrator passes back the latest cedanaState to the client which can be used to verify
-	// the source prior to execution.
-	// TODO NR - implement verification
-	CedanaState CedanaState `json:"cedana_state" mapstructure:"cedana_state"`
-
 	// new job command to be executed
 	UpdatedTask string `json:"updated_task" mapstructure:"updated_task"`
 }
-
-type CheckpointType string
 
 // Flag and FlagReason are used together when pushing up state.
 // These should only encapsulate flags that an external service (like an orchestrator)
@@ -98,14 +90,10 @@ type CheckpointType string
 // Ideally, Flag should also never be empty.
 type Flag string
 type FlagReason string
-
 type CheckpointState string
+type ContainerRuntime string
 
 const (
-	CheckpointTypeNone    CheckpointType = "none"
-	CheckpointTypeCRIU    CheckpointType = "criu"
-	CheckpointTypePytorch CheckpointType = "pytorch"
-
 	CheckpointSuccess CheckpointState = "CHECKPOINTED"
 	CheckpointFailed  CheckpointState = "CHECKPOINT_FAILED"
 	RestoreSuccess    CheckpointState = "RESTORED"
@@ -120,4 +108,8 @@ const (
 	// setup is used by the orchestrator
 	JobSetupFailed Flag = "JOB_SETUP_FAILED"
 	JobDone        Flag = "JOB_DONE"
+
+	// supported container runtimes
+	ContainerRuntimeContainerd ContainerRuntime = "containerd"
+	ContainerRuntimeRunc       ContainerRuntime = "runc"
 )

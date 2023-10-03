@@ -22,6 +22,7 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
+	bolt "go.etcd.io/bbolt"
 	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
@@ -41,19 +42,18 @@ type Client struct {
 
 	channels *CommandChannels
 	context  context.Context
-	Process  cedana.ProcessInfo
 
 	jobId  string
 	selfId string
 
-	// a single big state glob
-	state cedana.CedanaState
-
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
-	// checkpoint store
+	// external checkpoint store
 	store utils.Store
+
+	// db meta/state store
+	db *bolt.DB
 }
 
 type Broadcaster[T any] struct {
@@ -126,6 +126,13 @@ func InstantiateClient() (*Client, error) {
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
 
+	// set up embedded key-value db
+	db, err := bolt.Open("/tmp/cedana.db", 0600, nil)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not open or create db")
+		return nil, err
+	}
+
 	return &Client{
 		CRIU:     criu,
 		logger:   &logger,
@@ -133,6 +140,7 @@ func InstantiateClient() (*Client, error) {
 		channels: channels,
 		context:  context.Background(),
 		fs:       fs,
+		db:       db,
 	}, nil
 }
 
@@ -193,6 +201,7 @@ func (c *Client) AddNATS(selfID, jobID, authToken string) error {
 
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
+	c.db.Close()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
@@ -252,7 +261,7 @@ func (c *Client) publishLogs(r, w *os.File) {
 	}
 }
 
-func (c *Client) publishStateOnce(state *cedana.CedanaState) {
+func (c *Client) publishStateOnce(state *cedana.ProcessState) {
 	if state == nil {
 		// we got no state, not necessarily an error condition - skip
 		return
@@ -357,7 +366,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *cedana.CedanaState {
+func (c *Client) getState(pid int32) *cedana.ProcessState {
 
 	if pid == 0 {
 		return nil
@@ -405,7 +414,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
-	return &cedana.CedanaState{
+	return &cedana.ProcessState{
 		ProcessInfo: cedana.ProcessInfo{
 			PID:                    pid,
 			OpenFds:                openFiles,
@@ -642,6 +651,18 @@ func (c *Client) RunTask(task string) (int32, error) {
 	if c.config.Client.ForwardLogs {
 		go c.publishLogs(r, w)
 	}
+
+	// serialize
+	err = c.db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("default"))
+		if err != nil {
+			return err
+		}
+
+		state := c.getState(pid)
+		b.Put()
+		return nil
+	})
 
 	return pid, nil
 }

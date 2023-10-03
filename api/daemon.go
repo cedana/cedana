@@ -105,6 +105,12 @@ type RegisterProcessArgs struct {
 type RegisterProcessResp struct {
 }
 
+type StatusArgs struct {
+}
+
+type StatusResp struct {
+}
+
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
 	cd.client.Process.PID = args.PID
 	return cd.client.Dump(args.Dir)
@@ -186,6 +192,8 @@ func (cd *CedanaDaemon) StartDaemon() {
 		cd.logger.Fatal().Err(err).Msg("could not start daemon")
 	}
 
+	// initialize db here
+
 	defer cd.Cleanup(listener)
 
 L:
@@ -204,9 +212,4 @@ L:
 			rpc.ServeConn(conn)
 		}
 	}
-}
-
-func isDaemonRunning() bool {
-	_, err := os.Stat("/tmp/cedana.sock")
-	return err == nil
 }

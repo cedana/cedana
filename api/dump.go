@@ -12,7 +12,6 @@ import (
 	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
-	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/protobuf/proto"
 
 	cedana "github.com/cedana/cedana/types"
@@ -106,19 +105,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	// check for GPU & send a simple signal if active
-	// this is hacky, but more often than not a sign that we've got a GPU
-	// TODO: only checks nvidia?
-	var attachedToHardwareAccel bool
-	var gpuFds []process.OpenFilesStat
-	for _, f := range state.ProcessInfo.OpenFds {
-		if strings.Contains(f.Path, "nvidia") {
-			gpuFds = append(gpuFds, f)
-		}
-	}
-	if len(gpuFds) != 0 {
-		attachedToHardwareAccel = true
-	}
 	// processname + datetime
 	// strip out non posix-compliant characters from the processname
 	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
@@ -132,24 +118,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		if err := os.Mkdir(checkpointFolderPath, 0o755); err != nil {
 			return "", err
 		}
-	}
-
-	// If the user hasn't configured signaling in the case they're using the GPU
-	// they haven't read the docs and the signal just gets lost in the aether anyway.
-	if attachedToHardwareAccel && c.config.Client.SignalProcessPreDump {
-		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
-		// for now, don't set any opts and skip using CRIU. Future work to intercept CUDA calls
-
-		c.Process.AttachedToHardwareAccel = attachedToHardwareAccel
-		checkpointPath := c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
-		if checkpointPath != nil {
-			// copy checkpoint into checkpointFolderPath
-			if err := utils.CopyFile(*checkpointPath, checkpointFolderPath); err != nil {
-				return "", err
-			}
-		}
-		c.state.CheckpointType = cedana.CheckpointTypePytorch
-		return checkpointFolderPath, nil
 	}
 
 	c.copyOpenFiles(checkpointFolderPath)

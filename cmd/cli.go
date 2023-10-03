@@ -65,6 +65,7 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 		if dir == "" {
+			// should be a default dump directory as well?
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
 				return fmt.Errorf("no dump directory specified")
 			}
@@ -266,6 +267,23 @@ var startTaskCmd = &cobra.Command{
 	},
 }
 
+var psCmd = &cobra.Command{
+	Use:   "ps",
+	Short: "List managed processes or containers",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 var natsCmd = &cobra.Command{
 	Use:   "nats",
 	Short: "Start NATS server for cedana client",
@@ -355,6 +373,7 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
+	rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
 
