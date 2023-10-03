@@ -82,6 +82,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
+
 	pid, err := client.Restore(args)
 
 	return &task.RestoreResp{
@@ -90,6 +91,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}, err
 }
 
+// Not needed I do not think...
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 	client := s.Client
 	_, err := client.RunTask(args.Task)

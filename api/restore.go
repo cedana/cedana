@@ -17,9 +17,18 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
+	// Here we just want to call store.GetCheckpoint
+	// setting auth token for now
+	c.config.Connection.CedanaAuthToken = "brandonsmith"
+	c.store = utils.NewCedanaStore(c.config)
+	dir, err := c.store.GetCheckpoint(args.Cid)
+	if err != nil {
+		return nil, err
+	}
+
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
-	err := os.Mkdir(tmpdir, 0755)
+	err = os.Mkdir(tmpdir, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +44,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 			zipFile = *file
 		}
 	} else {
-		zipFile = checkpointPath
+		zipFile = *dir
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
@@ -330,7 +339,6 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	// if we have a server command, otherwise default to base CRIU wrapper mode
 	switch args.Type {
 	case task.RestoreArgs_PROCESS:
 		tmpdir, err := c.prepareRestore(opts, args, "")
