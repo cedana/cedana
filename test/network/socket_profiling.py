@@ -32,6 +32,7 @@ def get_ports(pid):
     ports = [conn.laddr.port for conn in proc.connections(kind='all')]
     return ports
 
+# reading tcpdump directly instead of using scapy because it works w/ localhost as well
 def process_tcpdump_output(port_filters):
     cmd = ['sudo', 'tcpdump', '-l', '-S', '-i', 'any', port_filters]  # Replace with your tcpdump command
     print(cmd)
@@ -86,3 +87,17 @@ if __name__ == "__main__":
             executor.submit(process_tcpdump_output, port_filters)
     else:
         print("No ports found.")
+
+    # checkpoint 
+    time.sleep(60)
+    checkpoint_started_at = time.time()
+    print("starting dump of process...")
+    subprocess.run("mkdir tmp")
+    chkpt_cmd = "sudo ./../../cedana dump {} -d tmp".format(pid)
+    process = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
+    checkpoint_completed_at = time.time()
+   
+    # instant restore
+    # restore (from outside for now)
+
+    restore_time = time.time()
