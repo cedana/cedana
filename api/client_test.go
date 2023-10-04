@@ -137,7 +137,7 @@ func TestClient_TryStartJob(t *testing.T) {
 		}
 
 		go mockServerRetryCmd(c)
-		err := c.TryStartJob(nil)
+		err := c.TryStartJob(nil, "test")
 		if err != nil {
 			t.Errorf("Expected no error, but got %v", err)
 		}

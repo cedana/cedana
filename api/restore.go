@@ -15,7 +15,7 @@ import (
 	cedana "github.com/cedana/cedana/types"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -24,18 +24,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	}
 
 	var zipFile string
-	if cmd != nil {
-		file, err := c.store.GetCheckpoint(cmd.CedanaState.CheckpointPath)
-		if err != nil {
-			return nil, err
-		}
-		if file != nil {
-			zipFile = *file
-		}
-
-	} else {
-		zipFile = checkpointPath
-	}
+	zipFile = checkpointPath
+	
 	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
 	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
@@ -189,7 +179,7 @@ func (c *Client) RuncRestore(imgPath string, containerId string, opts *container
 	return nil
 }
 
-func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error) {
+func (c *Client) Restore(path *string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir string
 	var pid *int32
@@ -204,28 +194,7 @@ func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error
 	}
 
 	// if we have a server command, otherwise default to base CRIU wrapper mode
-	if cmd != nil {
-		switch cmd.CedanaState.CheckpointType {
-		case cedana.CheckpointTypeCRIU:
-			tmpdir, err := c.prepareRestore(&opts, cmd, "")
-			if err != nil {
-				return nil, err
-			}
-			dir = *tmpdir
-
-			pid, err = c.criuRestore(&opts, nfy, dir)
-			if err != nil {
-				return nil, err
-			}
-
-		case cedana.CheckpointTypePytorch:
-			err := c.pyTorchRestore()
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		dir, err := c.prepareRestore(&opts, nil, *path)
+	dir, err := c.prepareRestore(&opts, nil, *path)
 		if err != nil {
 			return nil, err
 		}

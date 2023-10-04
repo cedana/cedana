@@ -51,7 +51,6 @@ type Logs struct {
 }
 
 type ProcessInfo struct {
-	PID                     int32                   `json:"pid" mapstructure:"pid"`
 	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
 	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // list of open FDs
 	OpenWriteOnlyFilePaths  []string                `json:"open_write_only" mapstructure:"open_write_only"`
@@ -83,13 +82,7 @@ type ServerCommand struct {
 	UpdatedTask string `json:"updated_task" mapstructure:"updated_task"`
 }
 
-// Flag and FlagReason are used together when pushing up state.
-// These should only encapsulate flags that an external service (like an orchestrator)
-// can use for deciding what to do - especially in the case that the daemon reaches a point
-// after which further actions are not possible (or shouldn't be possible).
-// Ideally, Flag should also never be empty.
 type Flag string
-type FlagReason string
 type CheckpointState string
 type ContainerRuntime string
 

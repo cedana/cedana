@@ -91,6 +91,7 @@ type StartNATSResp struct {
 }
 
 type StartTaskArgs struct {
+	ID   string
 	Task string
 }
 
@@ -112,8 +113,7 @@ type StatusResp struct {
 }
 
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
-	cd.client.Process.PID = args.PID
-	return cd.client.Dump(args.Dir)
+	return cd.client.Dump(args.Dir, args.PID)
 }
 
 func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
@@ -147,13 +147,13 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 	if err != nil {
 		resp.Error = err
 	}
-	go cd.client.startNATSService()
+	go cd.client.startNATSService(args.JobID)
 
 	return nil
 }
 
 func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
-	err := cd.client.TryStartJob(&args.Task)
+	err := cd.client.TryStartJob(&args.Task, args.ID)
 	if err != nil {
 		resp.Error = err
 	}
