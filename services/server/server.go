@@ -47,16 +47,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	// r, err := zip.OpenReader(client.CheckpointDir + ".zip")
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// defer r.Close()
-
-	// for _, f := range r.File {
-	// 	zipFileSize += f.FileHeader.CompressedSize64
-	// }
-
 	file, err := os.Open(client.CheckpointDir + ".zip")
 	if err != nil {
 		return nil, err
