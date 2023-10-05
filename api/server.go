@@ -279,8 +279,6 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		s.Client.state.Flag = task.FlagEnum_JOB_RUNNING
 		s.Client.Process.PID = pid
 	} else {
-		// enter a failure state, where we wait indefinitely for a command from NATS instead of
-		// continuing
 		// TODO BS: this should be at market level
 		s.Client.Logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
 		s.Client.state.Flag = task.FlagEnum_JOB_STARTUP_FAILED

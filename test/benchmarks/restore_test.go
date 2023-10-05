@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/api/services/task"
 )
 
 func BenchmarkLoopRestore(b *testing.B) {
@@ -23,12 +24,18 @@ func BenchmarkLoopRestore(b *testing.B) {
 		return
 	}
 
+	args := &task.RestoreArgs{
+		Cid:  "", //Empty makes it to where we don't use cedana market store
+		Type: task.RestoreArgs_PROCESS,
+		Dir:  checkpoint,
+	}
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.NatsRestore(nil, &checkpoint)
+		_, err := c.Restore(args)
 		if err != nil {
-			b.Errorf("Error in c.Natsrestore(): %v", err)
+			b.Errorf("Error in c.Restore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -54,12 +61,18 @@ func BenchmarkServerRestore(b *testing.B) {
 		return
 	}
 
+	args := &task.RestoreArgs{
+		Cid:  "", //Empty makes it to where we don't use cedana market store
+		Type: task.RestoreArgs_PROCESS,
+		Dir:  checkpoint,
+	}
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.NatsRestore(nil, &checkpoint)
+		_, err := c.Restore(args)
 		if err != nil {
-			b.Errorf("Error in c.Natsrestore(): %v", err)
+			b.Errorf("Error in c.Restore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -85,12 +98,18 @@ func BenchmarkPytorchRestore(b *testing.B) {
 		return
 	}
 
+	args := &task.RestoreArgs{
+		Cid:  "", //Empty makes it to where we don't use cedana market store
+		Type: task.RestoreArgs_PROCESS,
+		Dir:  checkpoint,
+	}
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.NatsRestore(nil, &checkpoint)
+		_, err := c.Restore(args)
 		if err != nil {
-			b.Errorf("Error in c.Natsrestore(): %v", err)
+			b.Errorf("Error in c.Restore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -117,12 +136,18 @@ func BenchmarkRegressionRestore(b *testing.B) {
 		return
 	}
 
+	args := &task.RestoreArgs{
+		Cid:  "", //Empty makes it to where we don't use cedana market store
+		Type: task.RestoreArgs_PROCESS,
+		Dir:  checkpoint,
+	}
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.NatsRestore(nil, &checkpoint)
+		_, err := c.Restore(args)
 		if err != nil {
-			b.Errorf("Error in c.Natsrestore(): %v", err)
+			b.Errorf("Error in c.Restore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
@@ -147,12 +172,18 @@ func BenchmarkVisionRestore(b *testing.B) {
 		return
 	}
 
+	args := &task.RestoreArgs{
+		Cid:  "", //Empty makes it to where we don't use cedana market store
+		Type: task.RestoreArgs_PROCESS,
+		Dir:  checkpoint,
+	}
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.NatsRestore(nil, &checkpoint)
+		_, err := c.Restore(args)
 		if err != nil {
-			b.Errorf("Error in c.Natsrestore(): %v", err)
+			b.Errorf("Error in c.Restore(): %v", err)
 		}
 		b.StopTimer()
 		destroyPid(b, c)
