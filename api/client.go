@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -16,8 +15,6 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
-
-	cedana "github.com/cedana/cedana/types"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -29,9 +26,8 @@ type Client struct {
 	Logger *zerolog.Logger
 	config *utils.Config
 
-	channels *CommandChannels
-	context  context.Context
-	Process  *task.ProcessInfo
+	context context.Context
+	Process *task.ProcessInfo
 
 	// a single big state glob
 	state *task.ClientStateStreamingArgs
@@ -43,34 +39,6 @@ type Client struct {
 	store utils.Store
 
 	CheckpointDir string
-}
-
-type Broadcaster[T any] struct {
-	subscribers []chan T
-	mu          sync.Mutex
-}
-
-func (b *Broadcaster[T]) Subscribe() chan T {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	ch := make(chan T)
-	b.subscribers = append(b.subscribers, ch)
-	return ch
-}
-
-func (b *Broadcaster[T]) Broadcast(data T) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for _, ch := range b.subscribers {
-		ch <- data
-	}
-}
-
-type CommandChannels struct {
-	dumpCmdBroadcaster    Broadcaster[int]
-	restoreCmdBroadcaster Broadcaster[cedana.ServerCommand]
-	retryCmdBroadcaster   Broadcaster[cedana.ServerCommand]
-	preDumpBroadcaster    Broadcaster[int]
 }
 
 type ClientLogs struct {
@@ -104,24 +72,15 @@ func InstantiateClient() (*Client, error) {
 		return nil, err
 	}
 
-	// set up channels for daemon to listen on
-	channels := &CommandChannels{
-		dumpCmdBroadcaster:    Broadcaster[int]{},
-		restoreCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
-		retryCmdBroadcaster:   Broadcaster[cedana.ServerCommand]{},
-		preDumpBroadcaster:    Broadcaster[int]{},
-	}
-
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
 
 	return &Client{
-		CRIU:     criu,
-		Logger:   &logger,
-		config:   config,
-		channels: channels,
-		context:  context.Background(),
-		fs:       fs,
+		CRIU:    criu,
+		Logger:  &logger,
+		config:  config,
+		context: context.Background(),
+		fs:      fs,
 	}, nil
 }
 

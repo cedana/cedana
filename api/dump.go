@@ -153,7 +153,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	c.copyOpenFiles(checkpointFolderPath)
 	c.state.CheckpointType = task.CheckpointType_CRIU
 
-	c.channels.preDumpBroadcaster.Broadcast(1)
+	// TODO BS: look into how this will be handled with grpc
+	// c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }

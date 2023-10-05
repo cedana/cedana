@@ -2,10 +2,8 @@ package api
 
 import (
 	"testing"
-	"time"
 
 	"github.com/cedana/cedana/api/services/task"
-	cedana "github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/afero"
 )
@@ -55,14 +53,15 @@ func TestClient_WriteOnlyFds(t *testing.T) {
 	}
 }
 
-func mockServerRetryCmd(c *Client) {
-	// wait 30 seconds and fire a message on the recover channel
-	// that breaks enterDoomLoop(), to update the runTask() for loop
-	time.Sleep(10 * time.Second)
-	c.channels.retryCmdBroadcaster.Broadcast(cedana.ServerCommand{
-		UpdatedTask: "echo 'Hello, World!'",
-	})
-}
+// TODO BS: this will mock what cedana market orchestrator does instead
+// func mockServerRetryCmd(c *Client) {
+// 	// wait 30 seconds and fire a message on the recover channel
+// 	// that breaks enterDoomLoop(), to update the runTask() for loop
+// 	time.Sleep(10 * time.Second)
+// 	c.channels.retryCmdBroadcaster.Broadcast(cedana.ServerCommand{
+// 		UpdatedTask: "echo 'Hello, World!'",
+// 	})
+// }
 
 func contains(paths []string, path string) bool {
 	for _, p := range paths {
