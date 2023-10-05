@@ -7,7 +7,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
+	"github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -35,11 +38,15 @@ type service struct {
 	Client            *api.Client
 	ClientLogStream   task.TaskService_LogStreamingServer
 	ClientStateStream task.TaskService_ClientStateStreamingServer
+	r                 *os.File
+	w                 *os.File
 	task.UnimplementedTaskServiceServer
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-
+	// Close before dumping
+	s.r.Close()
+	s.w.Close()
 	// var zipFileSize uint64
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
@@ -118,19 +125,29 @@ func (s *service) publishStateContinous(rate int) {
 	}
 }
 
+// This is for the orchestrator
 func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
 	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
+	buf := make([]byte, 4096)
 
 	for {
 		select {
 		case <-stream.Context().Done():
 			return nil // Client disconnected
 		default:
+			n, err := s.r.Read(buf)
+			if err != nil {
+				break
+			}
 			if limiter.Allow() {
-
-				response := &task.LogStreamingArgs{}
+				// TODO BS Needs implementation
+				response := &task.LogStreamingArgs{
+					Timestamp: time.Now().Local().Format(time.RFC3339),
+					Source:    "Not implemented",
+					Level:     "INFO",
+					Msg:       string(buf[:n]),
+				}
 				if err := stream.Send(response); err != nil {
-					log.Printf("Error sending log message: %v", err)
 					return err
 				}
 			}
@@ -138,6 +155,7 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 	}
 }
 
+// This is for the orchestrator
 func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStreamingServer) error {
 	// Store the client's stream when it connects.
 	s.ClientStateStream = stream
@@ -164,13 +182,91 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	}
 }
 
-// Not needed I do not think...
+func closeCommonFds(parentPID, childPID int32) error {
+	parent, err := process.NewProcess(parentPID)
+	if err != nil {
+		return err
+	}
+
+	child, err := process.NewProcess(childPID)
+	if err != nil {
+		return err
+	}
+
+	parentFds, err := parent.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	childFds, err := child.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, pfd := range parentFds {
+		for _, cfd := range childFds {
+			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
+				// we have a match, close the FD
+				err := syscall.Close(int(cfd.Fd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *service) runTask(task string) (int32, error) {
+	var pid int32
+
+	if task == "" {
+		return 0, fmt.Errorf("could not find task in config")
+	}
+
+	// need a more resilient/retriable way of doing this
+	r, w, err := os.Pipe()
+	s.r = r
+	s.w = w
+	if err != nil {
+		return 0, err
+	}
+
+	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd := exec.Command("bash", "-c", task)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stdin = nullFile
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	err = cmd.Start()
+	if err != nil {
+		return 0, err
+	}
+
+	pid = int32(cmd.Process.Pid)
+	ppid := int32(os.Getpid())
+
+	closeCommonFds(ppid, pid)
+	return pid, nil
+}
+
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
-	client := s.Client
-	_, err := client.RunTask(args.Task)
+
+	_, err := s.runTask(args.Task)
+	if err != nil {
+		return nil, err
+	}
 
 	return &task.StartTaskResp{
-		Error: err.Error(),
+		Error: "",
 	}, err
 }
 
