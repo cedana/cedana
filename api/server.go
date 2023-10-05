@@ -53,7 +53,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	client.Process.PID = args.PID
 
 	err := client.Dump(args.Dir)
-
 	if err != nil {
 		return nil, err
 	}
