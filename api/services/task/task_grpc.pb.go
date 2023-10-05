@@ -25,6 +25,9 @@ type TaskServiceClient interface {
 	Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
 	StartTask(ctx context.Context, in *StartTaskArgs, opts ...grpc.CallOption) (*StartTaskResp, error)
+	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
+	ClientStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_ClientStateStreamingClient, error)
+	MetaStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_MetaStateStreamingClient, error)
 }
 
 type taskServiceClient struct {
@@ -62,6 +65,99 @@ func (c *taskServiceClient) StartTask(ctx context.Context, in *StartTaskArgs, op
 	return out, nil
 }
 
+func (c *taskServiceClient) LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], "/cedana.services.task.TaskService/LogStreaming", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &taskServiceLogStreamingClient{stream}
+	return x, nil
+}
+
+type TaskService_LogStreamingClient interface {
+	Send(*LogStreamingArgs) error
+	Recv() (*LogStreamingResp, error)
+	grpc.ClientStream
+}
+
+type taskServiceLogStreamingClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceLogStreamingClient) Send(m *LogStreamingArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *taskServiceLogStreamingClient) Recv() (*LogStreamingResp, error) {
+	m := new(LogStreamingResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *taskServiceClient) ClientStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_ClientStateStreamingClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], "/cedana.services.task.TaskService/ClientStateStreaming", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &taskServiceClientStateStreamingClient{stream}
+	return x, nil
+}
+
+type TaskService_ClientStateStreamingClient interface {
+	Send(*ClientStateStreamingArgs) error
+	Recv() (*ClientStateStreamingResp, error)
+	grpc.ClientStream
+}
+
+type taskServiceClientStateStreamingClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceClientStateStreamingClient) Send(m *ClientStateStreamingArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *taskServiceClientStateStreamingClient) Recv() (*ClientStateStreamingResp, error) {
+	m := new(ClientStateStreamingResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *taskServiceClient) MetaStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_MetaStateStreamingClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[2], "/cedana.services.task.TaskService/MetaStateStreaming", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &taskServiceMetaStateStreamingClient{stream}
+	return x, nil
+}
+
+type TaskService_MetaStateStreamingClient interface {
+	Send(*MetaStateStreamingArgs) error
+	Recv() (*MetaStateStreamingResp, error)
+	grpc.ClientStream
+}
+
+type taskServiceMetaStateStreamingClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceMetaStateStreamingClient) Send(m *MetaStateStreamingArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *taskServiceMetaStateStreamingClient) Recv() (*MetaStateStreamingResp, error) {
+	m := new(MetaStateStreamingResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -69,6 +165,9 @@ type TaskServiceServer interface {
 	Dump(context.Context, *DumpArgs) (*DumpResp, error)
 	Restore(context.Context, *RestoreArgs) (*RestoreResp, error)
 	StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error)
+	LogStreaming(TaskService_LogStreamingServer) error
+	ClientStateStreaming(TaskService_ClientStateStreamingServer) error
+	MetaStateStreaming(TaskService_MetaStateStreamingServer) error
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -84,6 +183,15 @@ func (UnimplementedTaskServiceServer) Restore(context.Context, *RestoreArgs) (*R
 }
 func (UnimplementedTaskServiceServer) StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartTask not implemented")
+}
+func (UnimplementedTaskServiceServer) LogStreaming(TaskService_LogStreamingServer) error {
+	return status.Errorf(codes.Unimplemented, "method LogStreaming not implemented")
+}
+func (UnimplementedTaskServiceServer) ClientStateStreaming(TaskService_ClientStateStreamingServer) error {
+	return status.Errorf(codes.Unimplemented, "method ClientStateStreaming not implemented")
+}
+func (UnimplementedTaskServiceServer) MetaStateStreaming(TaskService_MetaStateStreamingServer) error {
+	return status.Errorf(codes.Unimplemented, "method MetaStateStreaming not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -152,6 +260,84 @@ func _TaskService_StartTask_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_LogStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).LogStreaming(&taskServiceLogStreamingServer{stream})
+}
+
+type TaskService_LogStreamingServer interface {
+	Send(*LogStreamingResp) error
+	Recv() (*LogStreamingArgs, error)
+	grpc.ServerStream
+}
+
+type taskServiceLogStreamingServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceLogStreamingServer) Send(m *LogStreamingResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *taskServiceLogStreamingServer) Recv() (*LogStreamingArgs, error) {
+	m := new(LogStreamingArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _TaskService_ClientStateStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).ClientStateStreaming(&taskServiceClientStateStreamingServer{stream})
+}
+
+type TaskService_ClientStateStreamingServer interface {
+	Send(*ClientStateStreamingResp) error
+	Recv() (*ClientStateStreamingArgs, error)
+	grpc.ServerStream
+}
+
+type taskServiceClientStateStreamingServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceClientStateStreamingServer) Send(m *ClientStateStreamingResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *taskServiceClientStateStreamingServer) Recv() (*ClientStateStreamingArgs, error) {
+	m := new(ClientStateStreamingArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _TaskService_MetaStateStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).MetaStateStreaming(&taskServiceMetaStateStreamingServer{stream})
+}
+
+type TaskService_MetaStateStreamingServer interface {
+	Send(*MetaStateStreamingResp) error
+	Recv() (*MetaStateStreamingArgs, error)
+	grpc.ServerStream
+}
+
+type taskServiceMetaStateStreamingServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceMetaStateStreamingServer) Send(m *MetaStateStreamingResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *taskServiceMetaStateStreamingServer) Recv() (*MetaStateStreamingArgs, error) {
+	m := new(MetaStateStreamingArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -172,6 +358,25 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TaskService_StartTask_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "LogStreaming",
+			Handler:       _TaskService_LogStreaming_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ClientStateStreaming",
+			Handler:       _TaskService_ClientStateStreaming_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "MetaStateStreaming",
+			Handler:       _TaskService_MetaStateStreaming_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "task.proto",
 }

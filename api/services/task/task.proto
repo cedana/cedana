@@ -33,8 +33,118 @@ message StartTaskResp {
     string Error = 1;
 }
 
+// Log Streaming args
+message LogStreamingArgs {
+  string Timestamp = 1;
+  string Source = 2;
+  string Level = 3;
+  string Msg = 4;
+}
+message LogStreamingResp {
+  string Status = 1;
+}
+
+// Client State Streaming args
+
+message ClientStateStreamingArgs {
+  ClientInfo ClientInfo = 1;
+  ProcessInfo ProcessInfo = 2;
+  CheckpointType CheckpointType = 3;
+  string CheckpointPath = 4;
+  string CheckpointState = 5;
+  string Flag = 6;
+}
+
+message ClientInfo {
+  string Id = 1;
+  string Hostname = 2;
+  string Platform = 3;
+  string OS = 4;
+  uint64 Uptime = 5;
+  uint64 RemainingMemory = 6;
+}
+
+message ProcessInfo {
+  int32 PID = 1;
+  bool AttachedToHardwareAccel = 2;
+  repeated OpenFilesStat OpenFds = 3;
+  repeated string OpenWriteOnlyFilePaths = 4;
+  repeated ConnectionStat OpenConnections = 5;
+  float MemoryPercent = 6;
+  bool IsRunning = 7;
+  string Status = 8;
+}
+
+message OpenFilesStat {
+  string Path = 1;
+  uint64 Fd = 2;
+}
+
+message ConnectionStat {
+  uint32 Fd = 1;
+  uint32 Family = 2;
+  uint32 Type = 3;
+  Addr Laddr = 4;
+  Addr Raddr = 5;
+  string Status = 6;
+  repeated int32 Uids = 7;
+  int32 Pid = 8;
+}
+
+message Addr {
+  string IP = 1;
+  uint32 Port = 2;
+}
+
+message CheckpointType {
+  string CheckpointType = 1;
+}
+
+message CheckpointState {
+  string CheckpointState = 1;
+}
+
+message Flag {
+  string Flag = 1;
+}
+
+message ClientStateStreamingResp {
+  string Status = 1;
+}
+
+// MetaState Streaming args
+
+message MetaStateStreamingArgs {
+  ProviderEvent Event = 1;
+  CheckpointReason CheckpointReason = 2;
+}
+
+
+message CheckpointReason {
+  enum CheckpointReasonEnum {
+    INSTANCE_TERMINATION = 0;
+    JOB_TERMINATION = 1;
+    HEARTBEAT = 2;
+  }
+  CheckpointReasonEnum Reason = 1;
+}
+
+message ProviderEvent {
+  string InstanceID = 1;
+  string FaultCode = 2;
+  bool MarkedForTermination = 3;
+  int64 TerminationTime = 4;
+}
+
+message MetaStateStreamingResp {
+  string Status = 1;
+}
+
 service TaskService {
     rpc Dump(DumpArgs) returns (DumpResp);
     rpc Restore(RestoreArgs) returns (RestoreResp);
     rpc StartTask(StartTaskArgs) returns (StartTaskResp);
+    rpc LogStreaming(stream LogStreamingArgs) returns (stream LogStreamingResp);
+    rpc ClientStateStreaming(stream ClientStateStreamingArgs) returns (stream ClientStateStreamingResp);
+    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
 }

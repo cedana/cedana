@@ -641,6 +641,7 @@ func (c *Client) RunTask(task string) (int32, error) {
 
 	c.closeCommonFds(ppid, pid)
 
+	// TODO BS: replace publishLogs with using grpc's bidirectional streaming.
 	if c.config.Client.ForwardLogs {
 		go c.publishLogs(r, w)
 	}
