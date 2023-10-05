@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -31,8 +32,9 @@ type UploadResponse struct {
 }
 
 type service struct {
-	Client       *api.Client
-	ClientStream task.TaskService_LogStreamingServer
+	Client            *api.Client
+	ClientLogStream   task.TaskService_LogStreamingServer
+	ClientStateStream task.TaskService_ClientStateStreamingServer
 	task.UnimplementedTaskServiceServer
 }
 
@@ -106,9 +108,9 @@ func (s *service) publishStateContinous(rate int) {
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	for range ticker.C {
 		if s.Client.Process.PID != 0 {
-			args := &task.LogStreamingArgs{}
+			args := &task.ClientStateStreamingArgs{}
 
-			if err := s.ClientStream.Send(args); err != nil {
+			if err := s.ClientStateStream.Send(args); err != nil {
 				log.Printf("Error sending LogStreamingArgs to client: %v", err)
 				return
 			}
@@ -117,8 +119,28 @@ func (s *service) publishStateContinous(rate int) {
 }
 
 func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
+	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil // Client disconnected
+		default:
+			if limiter.Allow() {
+
+				response := &task.LogStreamingArgs{}
+				if err := stream.Send(response); err != nil {
+					log.Printf("Error sending log message: %v", err)
+					return err
+				}
+			}
+		}
+	}
+}
+
+func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStreamingServer) error {
 	// Store the client's stream when it connects.
-	s.ClientStream = stream
+	s.ClientStateStream = stream
 
 	go s.publishStateContinous(30)
 
@@ -132,10 +154,10 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 			return err
 		}
 
-		if s.ClientStream != nil {
+		if s.ClientStateStream != nil {
 
-			args := &task.LogStreamingArgs{}
-			if err := s.ClientStream.Send(args); err != nil {
+			args := &task.ClientStateStreamingArgs{}
+			if err := s.ClientStateStream.Send(args); err != nil {
 				return err
 			}
 		}
