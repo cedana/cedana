@@ -2,7 +2,6 @@ package api
 
 import (
 	"os"
-	"syscall"
 	"testing"
 )
 
@@ -43,47 +42,47 @@ func skipCI(t *testing.T) {
 
 // Tests the correctness of TCP checkpoint/restore on a process with
 // multiple connections
-func Test_MultiConn(t *testing.T) {
-	skipCI(t)
-	c, err := InstantiateClient()
-	if err != nil {
-		t.Error(err)
-	}
+// func Test_MultiConn(t *testing.T) {
+// 	skipCI(t)
+// 	c, err := InstantiateClient()
+// 	if err != nil {
+// 		t.Error(err)
+// 	}
 
-	err = os.MkdirAll("dumpdir", 0755)
-	if err != nil {
-		t.Error(err)
-	}
+// 	err = os.MkdirAll("dumpdir", 0755)
+// 	if err != nil {
+// 		t.Error(err)
+// 	}
 
-	exec := tcpTests["multiconn"].exec
+// 	exec := tcpTests["multiconn"].exec
 
-	pid, err := c.RunTask(exec)
-	if err != nil {
-		t.Error(err)
-	}
+// 	pid, err := c.RunTask(exec)
+// 	if err != nil {
+// 		t.Error(err)
+// 	}
 
-	c.Process.PID = pid
-	t.Cleanup(func() {
-		syscall.Kill(int(pid), syscall.SIGKILL)
-		os.RemoveAll("dumpdir")
-		c.cleanupClient()
-	})
+// 	c.Process.PID = pid
+// 	t.Cleanup(func() {
+// 		syscall.Kill(int(pid), syscall.SIGKILL)
+// 		os.RemoveAll("dumpdir")
+// 		c.cleanupClient()
+// 	})
 
-	oldState := c.getState(c.Process.PID)
-	t.Logf("old state: %+v", oldState)
+// 	oldState := c.getState(c.Process.PID)
+// 	t.Logf("old state: %+v", oldState)
 
-	err = c.Dump("dumpdir")
-	if err != nil {
-		t.Error(err)
-	}
+// 	err = c.Dump("dumpdir")
+// 	if err != nil {
+// 		t.Error(err)
+// 	}
 
-	// we have a running process, get network data before
-	// then get network data after
+// 	// we have a running process, get network data before
+// 	// then get network data after
 
-	// and validate/compare
-	// validation is important, because even if we've C/Rd it can C/R incorrectly
+// 	// and validate/compare
+// 	// validation is important, because even if we've C/Rd it can C/R incorrectly
 
-}
+// }
 
 func Test_DatabaseConn(t *testing.T) {
 	// spin up a process w/ a connection to a database

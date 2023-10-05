@@ -259,7 +259,20 @@ func (s *service) runTask(task string) (int32, error) {
 
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 
-	_, err := s.runTask(args.Task)
+	pid, err := s.runTask(args.Task)
+
+	if err == nil {
+		s.Client.Logger.Info().Msgf("managing process with pid %d", pid)
+		s.Client.state.Flag = task.FlagEnum_JOB_RUNNING
+		s.Client.Process.PID = pid
+	} else {
+		// enter a failure state, where we wait indefinitely for a command from NATS instead of
+		// continuing
+		// TODO BS: this should be at market level
+		s.Client.Logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
+		s.Client.state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
+		// TODO BS: replace doom loop with just retrying from market
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"os"
-	"syscall"
 	"testing"
 	"time"
 
@@ -55,91 +53,6 @@ func TestClient_WriteOnlyFds(t *testing.T) {
 	if contains(paths, "/path/to/file3") {
 		t.Errorf("expected path '/path/to/file3' to not be included in the output, but it was")
 	}
-}
-
-func TestClient_RunTask(t *testing.T) {
-	// Test case: Task is empty
-	t.Run("TaskIsEmpty", func(t *testing.T) {
-		c := &Client{
-			config: &utils.Config{
-				Client: utils.Client{
-					Task: "",
-				},
-			},
-		}
-
-		_, err := c.RunTask(c.config.Client.Task)
-
-		// Verify that the error is returned
-		if err == nil {
-			t.Error("Expected error, but got nil")
-		}
-	})
-
-	// Test case: Task is not empty
-	t.Run("TaskIsNotEmpty", func(t *testing.T) {
-		// skip this test for CI - the check for detached process fails
-		// inside a docker container
-
-		if os.Getenv("CI") != "" {
-			t.Skip("Skipping test in CI environment")
-		}
-
-		c := &Client{
-			config: &utils.Config{
-				Client: utils.Client{
-					Task: "echo 'Hello, World!'; sleep 5",
-				},
-			},
-		}
-
-		pid, err := c.RunTask(c.config.Client.Task)
-
-		// Verify that no error is returned
-		if err != nil {
-			t.Errorf("Expected no error, but got %v", err)
-		}
-
-		// Verify that the pid is greater than 0
-		if pid <= 0 {
-			t.Errorf("Expected pid > 0, but got %d", pid)
-		}
-
-		// Verify that the process is actually detached
-		if syscall.Getppid() != syscall.Getpgrp() {
-			t.Error("Expected process to be detached")
-		}
-	})
-
-}
-
-func TestClient_TryStartJob(t *testing.T) {
-	t.Run("TaskFailsOnce", func(t *testing.T) {
-		logger := utils.GetLogger()
-
-		// start a server
-		utils.RunDefaultServer(t)
-
-		c := &Client{
-			config: &utils.Config{
-				Client: utils.Client{
-					Task: "",
-				},
-			},
-			channels: &CommandChannels{
-				retryCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
-			},
-			Logger: &logger,
-			// enterDoomLoop() makes a JetStream call
-		}
-
-		go mockServerRetryCmd(c)
-		err := c.TryStartJob(nil)
-		if err != nil {
-			t.Errorf("Expected no error, but got %v", err)
-		}
-
-	})
 }
 
 func mockServerRetryCmd(c *Client) {

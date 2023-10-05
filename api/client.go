@@ -4,16 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
-	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -35,9 +32,6 @@ type Client struct {
 	channels *CommandChannels
 	context  context.Context
 	Process  *task.ProcessInfo
-
-	jobId  string
-	selfId string
 
 	// a single big state glob
 	state *task.ClientStateStreamingArgs
@@ -137,24 +131,6 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
-// Function called whenever we enter a failed state and need
-// to wait for a command from the orchestrator to continue/unstuck the system.
-// Ideally we can use this across the board whenever a case props up that requires
-// orchestrator/external intervention.
-// Takes a flag as input, which is used to craft a state to pass to NATS and waits
-// for a signal to exit. Since go blocks until a signal is received, we use a channel.
-func (c *Client) enterDoomLoop() *cedana.ServerCommand {
-	retryChn := c.channels.retryCmdBroadcaster.Subscribe()
-	// c.publishStateOnce(&c.state)
-	for {
-		select {
-		case cmd := <-retryChn:
-			c.Logger.Info().Msgf("received recover command")
-			return &cmd
-		}
-	}
-}
-
 // sets up subscribers for dump and restore commands
 func (c *Client) timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
@@ -169,7 +145,7 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		// c.Logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
+		c.Logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
 	}
 
 	var openFiles []*task.OpenFilesStat
@@ -267,10 +243,9 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 // flags.
 
 func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string {
-	fs := &afero.Afero{Fs: afero.NewOsFs()}
 	var paths []string
 	for _, fd := range openFds {
-		info, err := fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
+		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
 			// c.Logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
@@ -298,66 +273,6 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 		}
 	}
 	return paths
-}
-
-// In the case where a program is execed from the daemon, we need to close FDs in common
-// because without some complicated mechanics (like forking a shell process and then execing the task inside it)
-// it's super difficult to fully detach a new process from Go.
-// With ForkExec (see client-daemon.go) we get 90% of the way there, the last 10% is in finding the
-// common FDs with the parent process and closing them.
-// For an MVP/hack for now, just close the .pid file created by the daemon, which seems to be the problem child
-func (c *Client) closeCommonFds(parentPID, childPID int32) error {
-	parent, err := process.NewProcess(parentPID)
-	if err != nil {
-		return err
-	}
-
-	child, err := process.NewProcess(childPID)
-	if err != nil {
-		return err
-	}
-
-	parentFds, err := parent.OpenFiles()
-	if err != nil {
-		return err
-	}
-
-	childFds, err := child.OpenFiles()
-	if err != nil {
-		return err
-	}
-
-	for _, pfd := range parentFds {
-		for _, cfd := range childFds {
-			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
-				// we have a match, close the FD
-				c.Logger.Info().Msgf("closing common FD parent: %s, child: %s", pfd.Path, cfd.Path)
-				err := syscall.Close(int(cfd.Fd))
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option {
-	totalWait := 10 * time.Minute
-	reconnectDelay := time.Second
-
-	opts = append(opts, nats.ReconnectWait(reconnectDelay))
-	opts = append(opts, nats.MaxReconnects(int(totalWait/reconnectDelay)))
-	opts = append(opts, nats.DisconnectHandler(func(nc *nats.Conn) {
-		logger.Info().Msgf("Disconnected: will attempt reconnects for %.0fm", totalWait.Minutes())
-	}))
-	opts = append(opts, nats.ReconnectHandler(func(nc *nats.Conn) {
-		logger.Info().Msgf("Reconnected [%s]", nc.ConnectedUrl())
-	}))
-	opts = append(opts, nats.ClosedHandler(func(nc *nats.Conn) {
-		logger.Info().Msgf("Exiting: %v", nc.LastError())
-	}))
-	return opts
 }
 
 // func (c *Client) startNATSService() {
@@ -403,82 +318,3 @@ func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option 
 // 		}
 // 	}
 // }
-
-func (c *Client) TryStartJob(taskPath *string) error {
-	if taskPath == nil {
-		// try config
-		taskPath = &c.config.Client.Task
-		c.Logger.Info().Msgf("no task provided, using task in config: %s", *taskPath)
-	}
-	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
-	var err error
-	for i := 0; i < 5; i++ {
-		pid, err := c.RunTask(*taskPath)
-		if err == nil {
-			c.Logger.Info().Msgf("managing process with pid %d", pid)
-			c.state.Flag = task.FlagEnum_JOB_RUNNING
-			c.Process.PID = pid
-			break
-		} else {
-			// enter a failure state, where we wait indefinitely for a command from NATS instead of
-			// continuing
-			c.Logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
-			c.state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
-			// TODO BS: replace doom loop
-			recoveryCmd := c.enterDoomLoop()
-			taskPath = &recoveryCmd.UpdatedTask
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Deprecated
-func (c *Client) RunTask(task string) (int32, error) {
-	var pid int32
-
-	if task == "" {
-		return 0, fmt.Errorf("could not find task in config")
-	}
-
-	// need a more resilient/retriable way of doing this
-	_, w, err := os.Pipe()
-	if err != nil {
-		return 0, err
-	}
-
-	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		return 0, err
-	}
-
-	cmd := exec.Command("bash", "-c", task)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
-
-	cmd.Stdin = nullFile
-	cmd.Stdout = w
-	cmd.Stderr = w
-
-	err = cmd.Start()
-	if err != nil {
-		return 0, err
-	}
-
-	pid = int32(cmd.Process.Pid)
-	ppid := int32(os.Getpid())
-
-	c.closeCommonFds(ppid, pid)
-
-	// TODO BS: replace publishLogs with using grpc's bidirectional streaming.
-	// if c.config.Client.ForwardLogs {
-	// 	go c.publishLogs(r, w)
-	// }
-
-	return pid, nil
-}

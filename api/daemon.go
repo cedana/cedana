@@ -146,14 +146,6 @@ func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *Conta
 // 	return nil
 // }
 
-func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
-	err := cd.client.TryStartJob(&args.Task)
-	if err != nil {
-		resp.Error = err
-	}
-	return err
-}
-
 func NewDaemon(stop chan struct{}) *CedanaDaemon {
 	c, err := InstantiateClient()
 	if err != nil {
