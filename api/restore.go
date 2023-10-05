@@ -25,7 +25,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 
 	var zipFile string
 	zipFile = checkpointPath
-	
+
 	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
 	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
@@ -46,7 +46,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		return nil, err
 	}
 
-	var checkpointState cedana.CedanaState
+	var checkpointState cedana.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
@@ -92,7 +92,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
+func (c *Client) restoreFiles(ps *cedana.ProcessState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return
@@ -101,7 +101,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range cc.ProcessInfo.OpenWriteOnlyFilePaths {
+		for _, f := range ps.ProcessInfo.OpenWriteOnlyFilePaths {
 			if info.Name() == filepath.Base(f) {
 				// copy file to path
 				err = os.MkdirAll(filepath.Dir(f), 0755)
@@ -179,9 +179,9 @@ func (c *Client) RuncRestore(imgPath string, containerId string, opts *container
 	return nil
 }
 
-func (c *Client) Restore(path *string) (*int32, error) {
+func (c *Client) Restore(path string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
-	var dir string
+	var dir *string
 	var pid *int32
 
 	opts := c.prepareRestoreOpts()
@@ -194,14 +194,13 @@ func (c *Client) Restore(path *string) (*int32, error) {
 	}
 
 	// if we have a server command, otherwise default to base CRIU wrapper mode
-	dir, err := c.prepareRestore(&opts, nil, *path)
-		if err != nil {
-			return nil, err
-		}
-		pid, err = c.criuRestore(&opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
+	dir, err := c.prepareRestore(&opts, path)
+	if err != nil {
+		return nil, err
+	}
+	pid, err = c.criuRestore(&opts, nfy, *dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return pid, nil

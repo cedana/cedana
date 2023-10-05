@@ -604,7 +604,9 @@ func (c *Client) startNATSService(id string) {
 				c.logger.Warn().Msgf("could not generate state: %v", err)
 			}
 
-			pid, err := c.Restore(&cmd, nil)
+			// where does path come from? TODO NR
+
+			pid, err := c.Restore(cmd.RestorePath)
 			if err != nil {
 				c.logger.Warn().Msgf("could not restore process: %v", err)
 				state.CheckpointState = cedana.RestoreFailed

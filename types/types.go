@@ -80,6 +80,7 @@ type ServerCommand struct {
 	Heartbeat bool   `json:"heartbeat" mapstructure:"heartbeat"`
 	// new job command to be executed
 	UpdatedTask string `json:"updated_task" mapstructure:"updated_task"`
+	RestorePath string `json:"restore_path" mapstructure:"restore_path"`
 }
 
 type Flag string
