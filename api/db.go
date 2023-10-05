@@ -136,3 +136,22 @@ func (db *DB) GetPID(id string) (int32, error) {
 	})
 	return pid, err
 }
+
+func (db *DB) ReturnAllEntries() ([]map[string]string, error) {
+	var out []map[string]string
+	err := db.conn.View(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte("default"))
+		if root == nil {
+			return fmt.Errorf("could not find bucket")
+		}
+
+		root.ForEach(func(k, v []byte) error {
+			out = append(out, map[string]string{
+				string(k): string(v),
+			})
+			return nil
+		})
+		return nil
+	})
+	return out, err
+}

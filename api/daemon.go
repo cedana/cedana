@@ -1,11 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net"
 	"net/rpc"
 	"os"
+	"strings"
 
 	container "github.com/cedana/cedana/container"
+	cedana "github.com/cedana/cedana/types"
 	"github.com/rs/zerolog"
 )
 
@@ -110,6 +113,8 @@ type StatusArgs struct {
 }
 
 type StatusResp struct {
+	IDPID    []map[string]string
+	PIDState []map[string]cedana.ProcessState
 }
 
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
@@ -158,6 +163,32 @@ func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) erro
 		resp.Error = err
 	}
 	return err
+}
+
+func (cd *CedanaDaemon) Ps(args *StatusArgs, resp *StatusResp) error {
+	out, err := cd.client.db.ReturnAllEntries()
+	if err != nil {
+		return err
+	}
+	for _, entry := range out {
+		for k, v := range entry {
+			if strings.Contains(v, "{") {
+				var state cedana.ProcessState
+				err := json.Unmarshal([]byte(v), &state)
+				if err != nil {
+					return err
+				}
+				resp.PIDState = append(resp.PIDState, map[string]cedana.ProcessState{
+					k: state,
+				})
+			} else {
+				resp.IDPID = append(resp.IDPID, map[string]string{
+					k: v,
+				})
+			}
+		}
+	}
+	return nil
 }
 
 func NewDaemon(stop chan struct{}) *CedanaDaemon {

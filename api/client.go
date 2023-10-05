@@ -645,7 +645,7 @@ func (c *Client) TryStartJob(task *string, id string) error {
 	}
 
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
-	var state *cedana.ProcessState
+	var state cedana.ProcessState
 	var err error
 	for i := 0; i < 5; i++ {
 		pid, err := c.RunTask(*task)
@@ -659,7 +659,7 @@ func (c *Client) TryStartJob(task *string, id string) error {
 			// continuing
 			c.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
 			state.Flag = cedana.JobStartupFailed
-			recoveryCmd := c.enterDoomLoop(state)
+			recoveryCmd := c.enterDoomLoop(&state)
 			task = &recoveryCmd.UpdatedTask
 		}
 	}
@@ -668,7 +668,7 @@ func (c *Client) TryStartJob(task *string, id string) error {
 		return err
 	}
 
-	err = c.db.CreateOrUpdateCedanaProcess(id, state)
+	err = c.db.CreateOrUpdateCedanaProcess(id, &state)
 	if err != nil {
 		return err
 	}

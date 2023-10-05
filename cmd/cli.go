@@ -50,6 +50,11 @@ func NewCLI() (*CLI, error) {
 	}, nil
 }
 
+var dumpCmd = &cobra.Command{
+	Use:   "dump",
+	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
+}
+
 var dumpProcessCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Manually checkpoint a running process to a directory",
@@ -87,11 +92,6 @@ var dumpProcessCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-var dumpCmd = &cobra.Command{
-	Use:   "dump",
-	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
 }
 
 var containerdDumpCmd = &cobra.Command{
@@ -246,7 +246,8 @@ var containerdRestoreCmd = &cobra.Command{
 var startTaskCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start and register a new process with Cedana",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
 		if err != nil {
@@ -255,10 +256,30 @@ var startTaskCmd = &cobra.Command{
 
 		a := api.StartTaskArgs{
 			Task: args[0],
+			ID:   args[1],
 		}
 
 		var resp api.StartTaskResp
 		err = cli.conn.Call("CedanaDaemon.StartTask", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
+var psCmd = &cobra.Command{
+	Use:   "ps",
+	Short: "List running processes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		var resp api.StatusResp
+		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
 		if err != nil {
 			return err
 		}
@@ -356,6 +377,7 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
+	rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
 
