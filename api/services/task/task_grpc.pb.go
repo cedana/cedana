@@ -75,8 +75,8 @@ func (c *taskServiceClient) LogStreaming(ctx context.Context, opts ...grpc.CallO
 }
 
 type TaskService_LogStreamingClient interface {
-	Send(*LogStreamingArgs) error
-	Recv() (*LogStreamingResp, error)
+	Send(*LogStreamingResp) error
+	Recv() (*LogStreamingArgs, error)
 	grpc.ClientStream
 }
 
@@ -84,12 +84,12 @@ type taskServiceLogStreamingClient struct {
 	grpc.ClientStream
 }
 
-func (x *taskServiceLogStreamingClient) Send(m *LogStreamingArgs) error {
+func (x *taskServiceLogStreamingClient) Send(m *LogStreamingResp) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *taskServiceLogStreamingClient) Recv() (*LogStreamingResp, error) {
-	m := new(LogStreamingResp)
+func (x *taskServiceLogStreamingClient) Recv() (*LogStreamingArgs, error) {
+	m := new(LogStreamingArgs)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -265,8 +265,8 @@ func _TaskService_LogStreaming_Handler(srv interface{}, stream grpc.ServerStream
 }
 
 type TaskService_LogStreamingServer interface {
-	Send(*LogStreamingResp) error
-	Recv() (*LogStreamingArgs, error)
+	Send(*LogStreamingArgs) error
+	Recv() (*LogStreamingResp, error)
 	grpc.ServerStream
 }
 
@@ -274,12 +274,12 @@ type taskServiceLogStreamingServer struct {
 	grpc.ServerStream
 }
 
-func (x *taskServiceLogStreamingServer) Send(m *LogStreamingResp) error {
+func (x *taskServiceLogStreamingServer) Send(m *LogStreamingArgs) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *taskServiceLogStreamingServer) Recv() (*LogStreamingArgs, error) {
-	m := new(LogStreamingArgs)
+func (x *taskServiceLogStreamingServer) Recv() (*LogStreamingResp, error) {
+	m := new(LogStreamingResp)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

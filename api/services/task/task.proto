@@ -144,7 +144,7 @@ service TaskService {
     rpc Dump(DumpArgs) returns (DumpResp);
     rpc Restore(RestoreArgs) returns (RestoreResp);
     rpc StartTask(StartTaskArgs) returns (StartTaskResp);
-    rpc LogStreaming(stream LogStreamingArgs) returns (stream LogStreamingResp);
+    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
     rpc ClientStateStreaming(stream ClientStateStreamingArgs) returns (stream ClientStateStreamingResp);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
 }

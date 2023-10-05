@@ -29,12 +29,12 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	var checkpointPath string
 	fd, _, err := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
 	if err != 0 {
-		c.logger.Fatal().Err(err).Msg("could not open pid")
+		c.Logger.Fatal().Err(err).Msg("could not open pid")
 	}
 	s := syscall.SIGUSR1
 	_, _, err = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
 	if err != 0 {
-		c.logger.Info().Msgf("could not send signal to pid %d", pid)
+		c.Logger.Info().Msgf("could not send signal to pid %d", pid)
 	}
 
 	// we want to sleep the dumping thread here to wait for the process
@@ -64,7 +64,7 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 		return "", err
 	}
 
@@ -137,7 +137,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	// If the user hasn't configured signaling in the case they're using the GPU
 	// they haven't read the docs and the signal just gets lost in the aether anyway.
 	if attachedToHardwareAccel && c.config.Client.SignalProcessPreDump {
-		c.logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
+		c.Logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
 		// for now, don't set any opts and skip using CRIU. Future work to intercept CUDA calls
 
 		c.Process.AttachedToHardwareAccel = attachedToHardwareAccel
@@ -178,7 +178,7 @@ func (c *Client) copyOpenFiles(dir string) error {
 }
 
 func (c *Client) postDump(dumpdir string) {
-	c.logger.Info().Msg("compressing checkpoint...")
+	c.Logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
 	// copy open writeonly fds one more time
@@ -186,29 +186,29 @@ func (c *Client) postDump(dumpdir string) {
 	// post checkpoint
 	err := c.copyOpenFiles(dumpdir)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 
 	c.state.CheckpointPath = compressedCheckpointPath
 	// sneak in a serialized cedanaCheckpoint object
 	err = c.state.SerializeToFolder(dumpdir)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 
-	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+	c.Logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
 	err = utils.ZipFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 
 	// if client is being orchestrated, push to NATS storage
 	if c.config.CedanaManaged {
-		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
+		c.Logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
 		err := c.store.PushCheckpoint(compressedCheckpointPath)
 		if err != nil {
-			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
+			c.Logger.Info().Msgf("error pushing checkpoint: %v", err)
 		}
 	}
 }
@@ -230,7 +230,7 @@ func (c *Client) RuncDump(root string, containerId string, opts *container.CriuO
 
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 	return nil
 }
@@ -238,7 +238,7 @@ func (c *Client) RuncDump(root string, containerId string, opts *container.CriuO
 func (c *Client) ContainerDump(dir string, containerId string) error {
 	err := container.Dump(dir, containerId)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 	return nil
 }
@@ -256,7 +256,7 @@ func (c *Client) Dump(dir string) error {
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
+		c.Logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
 		return err
 	}
 	defer img.Close()
@@ -266,24 +266,24 @@ func (c *Client) Dump(dir string) error {
 
 	nfy := utils.Notify{
 		Config:          c.config,
-		Logger:          c.logger,
+		Logger:          c.Logger,
 		PreDumpAvail:    true,
 		PostDumpAvail:   true,
 		PreRestoreAvail: true,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, c.Process.PID)
+	c.Logger.Info().Msgf(`beginning dump of pid %d`, c.Process.PID)
 
 	if !c.Process.AttachedToHardwareAccel {
 		_, err = c.CRIU.Dump(opts, &nfy)
 		if err != nil {
 			// check for sudo error
 			if strings.Contains(err.Error(), "errno 0") {
-				c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+				c.Logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 				return err
 			}
 
-			c.logger.Warn().Msgf("error dumping process: %v", err)
+			c.Logger.Warn().Msgf("error dumping process: %v", err)
 			return err
 		}
 	}

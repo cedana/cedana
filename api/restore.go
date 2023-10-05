@@ -34,30 +34,30 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
+	c.Logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
 	err = utils.UnzipFolder(*zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+		c.Logger.Info().Err(err).Msg("error decompressing checkpoint")
 	}
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		c.Logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
 		return nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
+		c.Logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
 		return nil, err
 	}
 
 	var checkpointState cedana.CedanaState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		c.Logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
 		return nil, err
 	}
 
@@ -93,7 +93,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		c.Logger.Fatal().Err(err)
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 					return err
 				}
 
-				c.logger.Info().Msgf("copying file %s to %s", path, f)
+				c.Logger.Info().Msgf("copying file %s to %s", path, f)
 				// copyFile copies to folder, so grab folder path
 				err := utils.CopyFile(path, filepath.Dir(f))
 				if err != nil {
@@ -130,7 +130,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 	})
 
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error copying files")
+		c.Logger.Fatal().Err(err).Msg("error copying files")
 	}
 }
 
@@ -149,7 +149,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 
 	img, err := os.Open(dir)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not open directory")
+		c.Logger.Fatal().Err(err).Msg("could not open directory")
 	}
 	defer img.Close()
 
@@ -159,16 +159,16 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
-		c.logger.Warn().Msgf("error restoring process: %v", err)
+		c.Logger.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("process restored: %v", resp)
+	c.Logger.Info().Msgf("process restored: %v", resp)
 
 	// clean up
 	err = os.RemoveAll(dir)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error removing directory")
+		c.Logger.Fatal().Err(err).Msg("error removing directory")
 	}
 	c.cleanupClient()
 	return resp.Restore.Pid, nil
@@ -209,30 +209,30 @@ func (c *Client) prepareNatsRestore(opts *rpc.CriuOpts, cmd *cedana.ServerComman
 	} else {
 		zipFile = checkpointPath
 	}
-	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
+	c.Logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
 	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+		c.Logger.Info().Err(err).Msg("error decompressing checkpoint")
 	}
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		c.Logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
 		return nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
+		c.Logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
 		return nil, err
 	}
 
 	var checkpointState cedana.CedanaState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		c.Logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
 		return nil, err
 	}
 
@@ -271,7 +271,7 @@ func (c *Client) NatsRestore(cmd *cedana.ServerCommand, path *string) (*int32, e
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
 		Config:          c.config,
-		Logger:          c.logger,
+		Logger:          c.Logger,
 		PreDumpAvail:    true,
 		PostDumpAvail:   true,
 		PreRestoreAvail: true,
@@ -320,7 +320,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
 		Config:          c.config,
-		Logger:          c.logger,
+		Logger:          c.Logger,
 		PreDumpAvail:    true,
 		PostDumpAvail:   true,
 		PreRestoreAvail: true,

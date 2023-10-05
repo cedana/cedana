@@ -157,12 +157,12 @@ func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) erro
 func NewDaemon(stop chan struct{}) *CedanaDaemon {
 	c, err := InstantiateClient()
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("Could not instantiate client")
+		c.Logger.Fatal().Err(err).Msg("Could not instantiate client")
 	}
 
 	return &CedanaDaemon{
 		client: c,
-		logger: c.logger,
+		logger: c.Logger,
 		stop:   stop,
 	}
 }

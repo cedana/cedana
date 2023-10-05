@@ -36,7 +36,7 @@ func TestClient_WriteOnlyFds(t *testing.T) {
 	logger := utils.GetLogger()
 	c := &Client{
 		fs:     mockFS,
-		logger: &logger,
+		Logger: &logger,
 	}
 
 	paths := c.WriteOnlyFds(openFds, 1)
@@ -131,7 +131,7 @@ func TestClient_TryStartJob(t *testing.T) {
 			channels: &CommandChannels{
 				retryCmdBroadcaster: Broadcaster[cedana.ServerCommand]{},
 			},
-			logger: &logger,
+			Logger: &logger,
 			// enterDoomLoop() makes a JetStream call
 			js: js,
 		}

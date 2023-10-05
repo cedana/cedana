@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
@@ -29,7 +31,8 @@ type UploadResponse struct {
 }
 
 type service struct {
-	Client *api.Client
+	Client       *api.Client
+	ClientStream task.TaskService_LogStreamingServer
 	task.UnimplementedTaskServiceServer
 }
 
@@ -98,6 +101,46 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}, err
 }
 
+func (s *service) publishStateContinous(rate int) {
+	s.Client.Logger.Info().Msgf("pid: %d", s.Client.Process.PID)
+	ticker := time.NewTicker(time.Duration(rate) * time.Second)
+	for range ticker.C {
+		if s.Client.Process.PID != 0 {
+			args := &task.LogStreamingArgs{}
+
+			if err := s.ClientStream.Send(args); err != nil {
+				log.Printf("Error sending LogStreamingArgs to client: %v", err)
+				return
+			}
+		}
+	}
+}
+
+func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
+	// Store the client's stream when it connects.
+	s.ClientStream = stream
+
+	for {
+		// Here we can do something with LogStreamingResp
+		_, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// Send a message to the client (e.g., "Hello, client!") when needed.
+		if s.ClientStream != nil {
+
+			args := &task.LogStreamingArgs{}
+			if err := s.ClientStream.Send(args); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // Not needed I do not think...
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 	client := s.Client
@@ -106,20 +149,6 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	return &task.StartTaskResp{
 		Error: err.Error(),
 	}, err
-}
-
-func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
-	for {
-		// Here we can do something with LogStreamingArgs
-		_, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		stream.Send(&task.LogStreamingResp{Status: "OK"})
-	}
 }
 
 type Server struct {
