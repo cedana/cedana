@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -105,6 +106,20 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	return &task.StartTaskResp{
 		Error: err.Error(),
 	}, err
+}
+
+func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
+	for {
+		// Here we can do something with LogStreamingArgs
+		_, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		stream.Send(&task.LogStreamingResp{Status: "OK"})
+	}
 }
 
 type Server struct {
