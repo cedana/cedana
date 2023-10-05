@@ -5,20 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "debug cedana daemon",
+            // Easier to attach than debug the daemon
+            "name": "attach to running cedana daemon",
             "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${fileDirname}",
+            "asRoot": true,
+            "request": "attach",
+            "mode": "local",
             "console": "integratedTerminal",
-            "args": ["client", "daemon"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
         },
         {
             "name": "debug cedana dump",

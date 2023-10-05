@@ -77,16 +77,15 @@ func BenchmarkDumpLoop(b *testing.B) {
 		b.Errorf("Error in getFilenames(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, fileNames)
-
-	c.Process.PID = pid[0]
+	_, pidList, _ := LookForPid(c, fileNames)
+	pid := pidList[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		fmt.Printf("--- Running benchmarkDumpLoop iteration %d ---\n", i+1)
-		err := c.Dump(dumpDir)
+		err := c.Dump(dumpDir, pid)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -108,18 +107,18 @@ func BenchmarkDumpServer(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"server.pid"})
+	_, pidList, _ := LookForPid(c, []string{"server.pid"})
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
-	c.Process.PID = pid[0]
+	pid := pidList[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		fmt.Printf("--- Running benchmarkDumpServer iteration %d ---\n", i+1)
-		err := c.Dump(dumpDir)
+		err := c.Dump(dumpDir, pid)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -141,19 +140,19 @@ func BenchmarkDumpPytorch(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch.pid"})
+	_, pidList, _ := LookForPid(c, []string{"pytorch.pid"})
+	pid := pidList[0]
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	b.Logf("pid: %v", pid)
-	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		fmt.Printf("--- Running benchmarkDumpPytorch iteration %d ---\n", i+1)
-		err := c.Dump(dumpDir)
+		err := c.Dump(dumpDir, pid)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -175,19 +174,19 @@ func BenchmarkDumpPytorchVision(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch_vision.pid"})
+	_, pidList, _ := LookForPid(c, []string{"pytorch_vision.pid"})
+	pid := pidList[0]
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	b.Logf("pid: %v", pid)
-	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
 		fmt.Printf("--- Running benchmarkDumpPytorchVision iteration %d ---\n", i+1)
-		err := c.Dump(dumpDir)
+		err := c.Dump(dumpDir, pid)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}
@@ -212,18 +211,18 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 		b.Errorf("Error in instantiateClient(): %v", err)
 	}
 
-	_, pid, _ := LookForPid(c, []string{"pytorch_regression.pid"})
+	_, pidList, _ := LookForPid(c, []string{"pytorch_regression.pid"})
+	pid := pidList[0]
 
 	// this will always be one pid
 	// never no pids since the error above accounts for that
 	b.Logf("pid: %v", pid)
-	c.Process.PID = pid[0]
 
 	// We want a list of all binaries that are to be ran and benchmarked,
 	// have them write their pid to temp files on disk and then have the testing suite read from them
 
 	for i := 0; i < b.N; i++ {
-		err := c.Dump(dumpDir)
+		err := c.Dump(dumpDir, pid)
 		if err != nil {
 			b.Errorf("Error in dump(): %v", err)
 		}

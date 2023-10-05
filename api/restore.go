@@ -15,7 +15,7 @@ import (
 	cedana "github.com/cedana/cedana/types"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -24,18 +24,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 	}
 
 	var zipFile string
-	if cmd != nil {
-		file, err := c.store.GetCheckpoint(cmd.CedanaState.CheckpointPath)
-		if err != nil {
-			return nil, err
-		}
-		if file != nil {
-			zipFile = *file
-		}
+	zipFile = checkpointPath
 
-	} else {
-		zipFile = checkpointPath
-	}
 	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
 	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
@@ -56,7 +46,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, cmd *cedana.ServerCommand, c
 		return nil, err
 	}
 
-	var checkpointState cedana.CedanaState
+	var checkpointState cedana.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
@@ -102,7 +92,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
+func (c *Client) restoreFiles(ps *cedana.ProcessState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return
@@ -111,7 +101,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range cc.ProcessInfo.OpenWriteOnlyFilePaths {
+		for _, f := range ps.ProcessInfo.OpenWriteOnlyFilePaths {
 			if info.Name() == filepath.Base(f) {
 				// copy file to path
 				err = os.MkdirAll(filepath.Dir(f), 0755)
@@ -189,9 +179,9 @@ func (c *Client) RuncRestore(imgPath string, containerId string, opts *container
 	return nil
 }
 
-func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error) {
+func (c *Client) Restore(path string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
-	var dir string
+	var dir *string
 	var pid *int32
 
 	opts := c.prepareRestoreOpts()
@@ -204,35 +194,13 @@ func (c *Client) Restore(cmd *cedana.ServerCommand, path *string) (*int32, error
 	}
 
 	// if we have a server command, otherwise default to base CRIU wrapper mode
-	if cmd != nil {
-		switch cmd.CedanaState.CheckpointType {
-		case cedana.CheckpointTypeCRIU:
-			tmpdir, err := c.prepareRestore(&opts, cmd, "")
-			if err != nil {
-				return nil, err
-			}
-			dir = *tmpdir
-
-			pid, err = c.criuRestore(&opts, nfy, dir)
-			if err != nil {
-				return nil, err
-			}
-
-		case cedana.CheckpointTypePytorch:
-			err := c.pyTorchRestore()
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		dir, err := c.prepareRestore(&opts, nil, *path)
-		if err != nil {
-			return nil, err
-		}
-		pid, err = c.criuRestore(&opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
+	dir, err := c.prepareRestore(&opts, path)
+	if err != nil {
+		return nil, err
+	}
+	pid, err = c.criuRestore(&opts, nfy, *dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return pid, nil

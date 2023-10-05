@@ -1,11 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net"
 	"net/rpc"
 	"os"
+	"strings"
 
 	container "github.com/cedana/cedana/container"
+	cedana "github.com/cedana/cedana/types"
 	"github.com/rs/zerolog"
 )
 
@@ -91,6 +94,7 @@ type StartNATSResp struct {
 }
 
 type StartTaskArgs struct {
+	ID   string
 	Task string
 }
 
@@ -105,9 +109,16 @@ type RegisterProcessArgs struct {
 type RegisterProcessResp struct {
 }
 
+type StatusArgs struct {
+}
+
+type StatusResp struct {
+	IDPID    []map[string]string
+	PIDState []map[string]cedana.ProcessState
+}
+
 func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
-	cd.client.Process.PID = args.PID
-	return cd.client.Dump(args.Dir)
+	return cd.client.Dump(args.Dir, args.PID)
 }
 
 func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
@@ -123,7 +134,7 @@ func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp
 }
 
 func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
-	pid, err := cd.client.Restore(nil, &args.Path)
+	pid, err := cd.client.Restore(args.Path)
 	if err != nil {
 		resp.Error = err
 	}
@@ -141,17 +152,43 @@ func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) erro
 	if err != nil {
 		resp.Error = err
 	}
-	go cd.client.startNATSService()
+	go cd.client.startNATSService(args.JobID)
 
 	return nil
 }
 
 func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
-	err := cd.client.TryStartJob(&args.Task)
+	err := cd.client.TryStartJob(&args.Task, args.ID)
 	if err != nil {
 		resp.Error = err
 	}
 	return err
+}
+
+func (cd *CedanaDaemon) Ps(args *StatusArgs, resp *StatusResp) error {
+	out, err := cd.client.db.ReturnAllEntries()
+	if err != nil {
+		return err
+	}
+	for _, entry := range out {
+		for k, v := range entry {
+			if strings.Contains(v, "{") {
+				var state cedana.ProcessState
+				err := json.Unmarshal([]byte(v), &state)
+				if err != nil {
+					return err
+				}
+				resp.PIDState = append(resp.PIDState, map[string]cedana.ProcessState{
+					k: state,
+				})
+			} else {
+				resp.IDPID = append(resp.IDPID, map[string]string{
+					k: v,
+				})
+			}
+		}
+	}
+	return nil
 }
 
 func NewDaemon(stop chan struct{}) *CedanaDaemon {
@@ -186,6 +223,8 @@ func (cd *CedanaDaemon) StartDaemon() {
 		cd.logger.Fatal().Err(err).Msg("could not start daemon")
 	}
 
+	// initialize db here
+
 	defer cd.Cleanup(listener)
 
 L:
@@ -204,9 +243,4 @@ L:
 			rpc.ServeConn(conn)
 		}
 	}
-}
-
-func isDaemonRunning() bool {
-	_, err := os.Stat("/tmp/cedana.sock")
-	return err == nil
 }

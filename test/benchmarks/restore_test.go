@@ -26,7 +26,7 @@ func BenchmarkLoopRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -57,7 +57,7 @@ func BenchmarkServerRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -88,7 +88,7 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -120,7 +120,7 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
@@ -150,7 +150,7 @@ func BenchmarkVisionRestore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := c.Restore(nil, &checkpoint)
+		_, err := c.Restore(checkpoint)
 		if err != nil {
 			b.Errorf("Error in c.restore(): %v", err)
 		}
