@@ -120,6 +120,8 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 	// Store the client's stream when it connects.
 	s.ClientStream = stream
 
+	go s.publishStateContinous(30)
+
 	for {
 		// Here we can do something with LogStreamingResp
 		_, err := stream.Recv()
@@ -130,7 +132,6 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 			return err
 		}
 
-		// Send a message to the client (e.g., "Hello, client!") when needed.
 		if s.ClientStream != nil {
 
 			args := &task.LogStreamingArgs{}
