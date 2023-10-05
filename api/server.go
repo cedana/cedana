@@ -9,14 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	task "github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -109,6 +108,56 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}, err
 }
 
+func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
+	err := s.Client.ContainerDump(args.Ref, args.ContainerId)
+	if err != nil {
+		return nil, err
+	}
+	return &task.ContainerDumpResp{}, nil
+}
+
+func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
+	err := s.Client.ContainerRestore(args.ImgPath, args.ContainerId)
+	if err != nil {
+		return nil, err
+	}
+	return &task.ContainerRestoreResp{}, nil
+}
+
+func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
+	// TODO BS: This is a hack for now
+	criuOpts := &container.CriuOpts{
+		ImagesDirectory: args.CriuOpts.ImagesDirectory,
+		WorkDirectory:   args.CriuOpts.WorkDirectory,
+		LeaveRunning:    true,
+		TcpEstablished:  false,
+	}
+
+	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &task.RuncDumpResp{}, nil
+}
+
+func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
+
+	opts := &container.RuncOpts{
+		Root:          args.Opts.Root,
+		Bundle:        args.Opts.Bundle,
+		ConsoleSocket: args.Opts.ConsoleSocket,
+		Detatch:       args.Opts.Detatch,
+	}
+
+	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &task.RuncRestoreResp{}, nil
+}
+
 func (s *service) publishStateContinous(rate int) {
 	s.Client.Logger.Info().Msgf("pid: %d", s.Client.Process.PID)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
@@ -179,41 +228,6 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 			}
 		}
 	}
-}
-
-func closeCommonFds(parentPID, childPID int32) error {
-	parent, err := process.NewProcess(parentPID)
-	if err != nil {
-		return err
-	}
-
-	child, err := process.NewProcess(childPID)
-	if err != nil {
-		return err
-	}
-
-	parentFds, err := parent.OpenFiles()
-	if err != nil {
-		return err
-	}
-
-	childFds, err := child.OpenFiles()
-	if err != nil {
-		return err
-	}
-
-	for _, pfd := range parentFds {
-		for _, cfd := range childFds {
-			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
-				// we have a match, close the FD
-				err := syscall.Close(int(cfd.Fd))
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (s *service) runTask(task string) (int32, error) {

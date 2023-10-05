@@ -1,10 +1,6 @@
 package api
 
 import (
-	"net"
-	"net/rpc"
-	"os"
-
 	container "github.com/cedana/cedana/container"
 	"github.com/rs/zerolog"
 )
@@ -105,35 +101,19 @@ type RegisterProcessArgs struct {
 type RegisterProcessResp struct {
 }
 
-func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
-	cd.client.Process.PID = args.PID
-	return cd.client.Dump(args.Dir)
-}
+// func (cd *CedanaDaemon) Dump(args *DumpArgs, resp *DumpResp) error {
+// 	cd.client.Process.PID = args.PID
+// 	return cd.client.Dump(args.Dir)
+// }
 
-func (cd *CedanaDaemon) ContainerDump(args *ContainerDumpArgs, resp *ContainerDumpResp) error {
-	return cd.client.ContainerDump(args.Ref, args.ContainerId)
-}
-
-func (cd *CedanaDaemon) RuncDump(args *RuncDumpArgs, resp *ContainerDumpResp) error {
-	return cd.client.RuncDump(args.Root, args.ContainerId, &args.CriuOpts)
-}
-
-func (cd *CedanaDaemon) RuncRestore(args *RuncRestoreArgs, resp *RuncRestoreResp) error {
-	return cd.client.RuncRestore(args.ImagePath, args.ContainerId, args.Opts)
-}
-
-func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
-	pid, err := cd.client.NatsRestore(nil, &args.Path)
-	if err != nil {
-		resp.Error = err
-	}
-	resp.NewPID = *pid
-	return err
-}
-
-func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *ContainerRestoreResp) error {
-	return cd.client.ContainerRestore(args.ImgPath, args.ContainerId)
-}
+// func (cd *CedanaDaemon) Restore(args *RestoreArgs, resp *RestoreResp) error {
+// 	pid, err := cd.client.NatsRestore(nil, &args.Path)
+// 	if err != nil {
+// 		resp.Error = err
+// 	}
+// 	resp.NewPID = *pid
+// 	return err
+// }
 
 // func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {
 // 	// scaffold daemon w/ NATS
@@ -146,59 +126,54 @@ func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *Conta
 // 	return nil
 // }
 
-func NewDaemon(stop chan struct{}) *CedanaDaemon {
-	c, err := InstantiateClient()
-	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("Could not instantiate client")
-	}
+// func NewDaemon(stop chan struct{}) *CedanaDaemon {
+// 	c, err := InstantiateClient()
+// 	if err != nil {
+// 		c.Logger.Fatal().Err(err).Msg("Could not instantiate client")
+// 	}
 
-	return &CedanaDaemon{
-		client: c,
-		logger: c.Logger,
-		stop:   stop,
-	}
-}
+// 	return &CedanaDaemon{
+// 		client: c,
+// 		logger: c.Logger,
+// 		stop:   stop,
+// 	}
+// }
 
-func (cd *CedanaDaemon) Cleanup(listener net.Listener) {
-	if listener != nil {
-		listener.Close()
-	}
-	os.Remove("/tmp/cedana.sock")
-}
+// func (cd *CedanaDaemon) Cleanup(listener net.Listener) {
+// 	if listener != nil {
+// 		listener.Close()
+// 	}
+// 	os.Remove("/tmp/cedana.sock")
+// }
 
-func (cd *CedanaDaemon) StartDaemon() {
-	_, err := os.Stat("/tmp/cedana.sock")
-	if err == nil {
-		cd.logger.Info().Msg("cleaning old socket file...")
-		os.Remove("/tmp/cedana.sock")
-	}
+// func (cd *CedanaDaemon) StartDaemon() {
+// 	_, err := os.Stat("/tmp/cedana.sock")
+// 	if err == nil {
+// 		cd.logger.Info().Msg("cleaning old socket file...")
+// 		os.Remove("/tmp/cedana.sock")
+// 	}
 
-	listener, err := net.Listen("unix", "/tmp/cedana.sock")
-	if err != nil {
-		cd.logger.Fatal().Err(err).Msg("could not start daemon")
-	}
+// 	listener, err := net.Listen("unix", "/tmp/cedana.sock")
+// 	if err != nil {
+// 		cd.logger.Fatal().Err(err).Msg("could not start daemon")
+// 	}
 
-	defer cd.Cleanup(listener)
+// 	defer cd.Cleanup(listener)
 
-L:
-	for {
-		select {
-		case <-cd.stop:
-			// this isn't working - fix NR
-			// have to kill w/ kill -9 for now
-			cd.logger.Info().Msg("stop hit, terminating daemon...")
-			break L
-		default:
-			conn, err := listener.Accept()
-			if err != nil {
-				cd.logger.Fatal().Err(err).Msg("could not start daemon")
-			}
-			rpc.ServeConn(conn)
-		}
-	}
-}
-
-func isDaemonRunning() bool {
-	_, err := os.Stat("/tmp/cedana.sock")
-	return err == nil
-}
+// L:
+// 	for {
+// 		select {
+// 		case <-cd.stop:
+// 			// this isn't working - fix NR
+// 			// have to kill w/ kill -9 for now
+// 			cd.logger.Info().Msg("stop hit, terminating daemon...")
+// 			break L
+// 		default:
+// 			conn, err := listener.Accept()
+// 			if err != nil {
+// 				cd.logger.Fatal().Err(err).Msg("could not start daemon")
+// 			}
+// 			rpc.ServeConn(conn)
+// 		}
+// 	}
+// }

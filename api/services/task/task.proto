@@ -155,8 +155,91 @@ enum checkpointType {
 service TaskService {
     rpc Dump(DumpArgs) returns (DumpResp);
     rpc Restore(RestoreArgs) returns (RestoreResp);
-    rpc StartTask(StartTaskArgs) returns (StartTaskResp);
+
+    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
+    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
+
+    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
+    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
+    
+    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
+    
     rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
     rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ClientStateStreamingArgs);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+}
+
+message ContainerDumpArgs {
+  string ContainerId = 1;
+  string Ref = 2;
+}
+
+message ContainerDumpResp {
+  string CheckpointPath = 1;
+  string Error = 2;
+}
+
+message ContainerRestoreArgs {
+  string ImgPath = 1;
+  string ContainerId = 2;
+}
+
+message ContainerRestoreResp {
+  string Error = 1;
+}
+
+message RuncDumpArgs {
+  string Root = 1;
+  string CheckpointPath = 2;
+  string ContainerId = 3;
+  CriuOpts CriuOpts = 4;
+}
+
+message RuncDumpResp {
+  string Error = 1;
+}
+
+message CriuOpts {
+  string ImagesDirectory = 1;
+  string WorkDirectory = 2;
+  string ParentImage = 3;
+  bool LeaveRunning = 4;
+  bool TcpEstablished = 5;
+  bool ExternalUnixConnections = 6;
+  bool ShellJob = 7;
+  bool FileLocks = 8;
+  bool PreDump = 9;
+  uint32 EmptyNs = 12;
+  bool AutoDedup = 13;
+  bool LazyPages = 14;
+  int32 StatusFd = 15;
+  string LsmProfile = 16;
+  string LsmMountContext = 17;
+}
+
+message RuncRestoreArgs {
+  string ContainerId = 1;
+  string ImagePath = 2;
+  RuncOpts Opts = 3;
+}
+
+message RuncOpts {
+  string Root = 1;
+  string ContainerId = 2;
+  string Bundle = 3;
+  bool SystemdCgroup = 4;
+  bool NoPivot = 5;
+  bool NoMountFallback = 6;
+  bool NoNewKeyring = 7;
+  string Rootless = 8;
+  bool NoSubreaper = 9;
+  bool Keep = 10;
+  string ConsoleSocket = 11;
+  bool Detatch = 12;
+  string PidFile = 13;
+  int32 PreserveFds = 14;
+}
+
+message RuncRestoreResp {
+  string Error = 1;
 }

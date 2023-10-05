@@ -24,6 +24,10 @@ const _ = grpc.SupportPackageIsVersion7
 type TaskServiceClient interface {
 	Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
+	ContainerDump(ctx context.Context, in *ContainerDumpArgs, opts ...grpc.CallOption) (*ContainerDumpResp, error)
+	ContainerRestore(ctx context.Context, in *ContainerRestoreArgs, opts ...grpc.CallOption) (*ContainerRestoreResp, error)
+	RuncDump(ctx context.Context, in *RuncDumpArgs, opts ...grpc.CallOption) (*RuncDumpResp, error)
+	RuncRestore(ctx context.Context, in *RuncRestoreArgs, opts ...grpc.CallOption) (*RuncRestoreResp, error)
 	StartTask(ctx context.Context, in *StartTaskArgs, opts ...grpc.CallOption) (*StartTaskResp, error)
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
 	ClientStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_ClientStateStreamingClient, error)
@@ -50,6 +54,42 @@ func (c *taskServiceClient) Dump(ctx context.Context, in *DumpArgs, opts ...grpc
 func (c *taskServiceClient) Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error) {
 	out := new(RestoreResp)
 	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/Restore", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ContainerDump(ctx context.Context, in *ContainerDumpArgs, opts ...grpc.CallOption) (*ContainerDumpResp, error) {
+	out := new(ContainerDumpResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/ContainerDump", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ContainerRestore(ctx context.Context, in *ContainerRestoreArgs, opts ...grpc.CallOption) (*ContainerRestoreResp, error) {
+	out := new(ContainerRestoreResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/ContainerRestore", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) RuncDump(ctx context.Context, in *RuncDumpArgs, opts ...grpc.CallOption) (*RuncDumpResp, error) {
+	out := new(RuncDumpResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/RuncDump", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) RuncRestore(ctx context.Context, in *RuncRestoreArgs, opts ...grpc.CallOption) (*RuncRestoreResp, error) {
+	out := new(RuncRestoreResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/RuncRestore", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +204,10 @@ func (x *taskServiceMetaStateStreamingClient) Recv() (*MetaStateStreamingResp, e
 type TaskServiceServer interface {
 	Dump(context.Context, *DumpArgs) (*DumpResp, error)
 	Restore(context.Context, *RestoreArgs) (*RestoreResp, error)
+	ContainerDump(context.Context, *ContainerDumpArgs) (*ContainerDumpResp, error)
+	ContainerRestore(context.Context, *ContainerRestoreArgs) (*ContainerRestoreResp, error)
+	RuncDump(context.Context, *RuncDumpArgs) (*RuncDumpResp, error)
+	RuncRestore(context.Context, *RuncRestoreArgs) (*RuncRestoreResp, error)
 	StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error)
 	LogStreaming(TaskService_LogStreamingServer) error
 	ClientStateStreaming(TaskService_ClientStateStreamingServer) error
@@ -180,6 +224,18 @@ func (UnimplementedTaskServiceServer) Dump(context.Context, *DumpArgs) (*DumpRes
 }
 func (UnimplementedTaskServiceServer) Restore(context.Context, *RestoreArgs) (*RestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
+}
+func (UnimplementedTaskServiceServer) ContainerDump(context.Context, *ContainerDumpArgs) (*ContainerDumpResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ContainerDump not implemented")
+}
+func (UnimplementedTaskServiceServer) ContainerRestore(context.Context, *ContainerRestoreArgs) (*ContainerRestoreResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ContainerRestore not implemented")
+}
+func (UnimplementedTaskServiceServer) RuncDump(context.Context, *RuncDumpArgs) (*RuncDumpResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RuncDump not implemented")
+}
+func (UnimplementedTaskServiceServer) RuncRestore(context.Context, *RuncRestoreArgs) (*RuncRestoreResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RuncRestore not implemented")
 }
 func (UnimplementedTaskServiceServer) StartTask(context.Context, *StartTaskArgs) (*StartTaskResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartTask not implemented")
@@ -238,6 +294,78 @@ func _TaskService_Restore_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TaskServiceServer).Restore(ctx, req.(*RestoreArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_ContainerDump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerDumpArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ContainerDump(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/ContainerDump",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ContainerDump(ctx, req.(*ContainerDumpArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_ContainerRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRestoreArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ContainerRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/ContainerRestore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ContainerRestore(ctx, req.(*ContainerRestoreArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_RuncDump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RuncDumpArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).RuncDump(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/RuncDump",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).RuncDump(ctx, req.(*RuncDumpArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_RuncRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RuncRestoreArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).RuncRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/RuncRestore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).RuncRestore(ctx, req.(*RuncRestoreArgs))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -352,6 +480,22 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restore",
 			Handler:    _TaskService_Restore_Handler,
+		},
+		{
+			MethodName: "ContainerDump",
+			Handler:    _TaskService_ContainerDump_Handler,
+		},
+		{
+			MethodName: "ContainerRestore",
+			Handler:    _TaskService_ContainerRestore_Handler,
+		},
+		{
+			MethodName: "RuncDump",
+			Handler:    _TaskService_RuncDump_Handler,
+		},
+		{
+			MethodName: "RuncRestore",
+			Handler:    _TaskService_RuncRestore_Handler,
 		},
 		{
 			MethodName: "StartTask",

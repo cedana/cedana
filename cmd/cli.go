@@ -360,5 +360,5 @@ func init() {
 
 	initContainerdCommands()
 
-	clientDaemonCmd.AddCommand(natsCmd)
+	// clientDaemonCmd.AddCommand(natsCmd)
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -232,6 +233,41 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 		}
 	}
 	return paths
+}
+
+func closeCommonFds(parentPID, childPID int32) error {
+	parent, err := process.NewProcess(parentPID)
+	if err != nil {
+		return err
+	}
+
+	child, err := process.NewProcess(childPID)
+	if err != nil {
+		return err
+	}
+
+	parentFds, err := parent.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	childFds, err := child.OpenFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, pfd := range parentFds {
+		for _, cfd := range childFds {
+			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
+				// we have a match, close the FD
+				err := syscall.Close(int(cfd.Fd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // func (c *Client) startNATSService() {
