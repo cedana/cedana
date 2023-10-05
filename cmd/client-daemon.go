@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/services/server"
 	"github.com/cedana/cedana/utils"
 	gd "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
@@ -77,7 +76,7 @@ var clientDaemonRPCCmd = &cobra.Command{
 
 		logger := utils.GetLogger()
 
-		if err := server.StartGRPCServer(); err != nil {
+		if err := api.StartGRPCServer(); err != nil {
 			logger.Error().Err(err).Msg("Failed to start gRPC server")
 		}
 

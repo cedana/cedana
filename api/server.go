@@ -1,4 +1,4 @@
-package server
+package api
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/api"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/shirou/gopsutil/v3/process"
@@ -35,7 +34,7 @@ type UploadResponse struct {
 }
 
 type service struct {
-	Client            *api.Client
+	Client            *Client
 	ClientLogStream   task.TaskService_LogStreamingServer
 	ClientStateStream task.TaskService_ClientStateStreamingServer
 	r                 *os.File
@@ -279,7 +278,7 @@ func (s *Server) New() (*grpc.Server, error) {
 
 	grpcServer := grpc.NewServer()
 
-	client, err := api.InstantiateClient()
+	client, err := InstantiateClient()
 	if err != nil {
 		return nil, err
 	}

@@ -9,13 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
-	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/protobuf/proto"
-
-	cedana "github.com/cedana/cedana/types"
 )
 
 const (
@@ -75,7 +73,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	c.Process = state.ProcessInfo
 
 	// save state for serialization at this point
-	c.state = *state
+	c.state = state
 
 	// check network connections
 	var hasTCP bool
@@ -110,7 +108,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	// this is hacky, but more often than not a sign that we've got a GPU
 	// TODO: only checks nvidia?
 	var attachedToHardwareAccel bool
-	var gpuFds []process.OpenFilesStat
+	var gpuFds []*task.OpenFilesStat
 	for _, f := range state.ProcessInfo.OpenFds {
 		if strings.Contains(f.Path, "nvidia") {
 			gpuFds = append(gpuFds, f)
@@ -148,12 +146,12 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 				return "", err
 			}
 		}
-		c.state.CheckpointType = cedana.CheckpointTypePytorch
+		c.state.CheckpointType = task.CheckpointType_PYTORCH
 		return checkpointFolderPath, nil
 	}
 
 	c.copyOpenFiles(checkpointFolderPath)
-	c.state.CheckpointType = cedana.CheckpointTypeCRIU
+	c.state.CheckpointType = task.CheckpointType_CRIU
 
 	c.channels.preDumpBroadcaster.Broadcast(1)
 
@@ -190,11 +188,6 @@ func (c *Client) postDump(dumpdir string) {
 	}
 
 	c.state.CheckpointPath = compressedCheckpointPath
-	// sneak in a serialized cedanaCheckpoint object
-	err = c.state.SerializeToFolder(dumpdir)
-	if err != nil {
-		c.Logger.Fatal().Err(err)
-	}
 
 	c.Logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
@@ -290,7 +283,7 @@ func (c *Client) Dump(dir string) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	c.state.CheckpointState = cedana.CheckpointSuccess
+	c.state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	c.postDump(dumpdir)
 	c.cleanupClient()
 

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,17 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
-	retrier "github.com/eapache/go-resiliency/retrier"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
-	"golang.org/x/time/rate"
 
 	cedana "github.com/cedana/cedana/types"
 )
@@ -33,21 +29,18 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	nc *nats.Conn
-	js jetstream.JetStream
-
 	Logger *zerolog.Logger
 	config *utils.Config
 
 	channels *CommandChannels
 	context  context.Context
-	Process  cedana.ProcessInfo
+	Process  *task.ProcessInfo
 
 	jobId  string
 	selfId string
 
 	// a single big state glob
-	state cedana.CedanaState
+	state *task.ClientStateStreamingArgs
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
@@ -138,205 +131,10 @@ func InstantiateClient() (*Client, error) {
 	}, nil
 }
 
-// Layers daemon capabilities onto client (adding nats, jetstream and jetstream contexts)
-func (c *Client) AddNATS(selfID, jobID, authToken string) error {
-	c.selfId = selfID
-	c.jobId = jobID
-
-	opts := []nats.Option{nats.Name(fmt.Sprintf("CEDANA_CLIENT_%s", selfID))}
-	opts = setupConnOptions(opts, c.Logger)
-	opts = append(opts, nats.Token(authToken))
-
-	var nc *nats.Conn
-	var err error
-	for i := 0; i < 5; i++ {
-		nc, err = nats.Connect(c.config.Connection.NATSUrl, opts...)
-		if err == nil {
-			break
-		}
-		// reread config - I think there's a race that happens here with
-		// read server overrides and the NATS connection.
-		// TODO NR: should probably fix this
-		c.config, _ = utils.InitConfig()
-		c.Logger.Warn().Msgf(
-			"NATS connection failed (attempt %d/%d) with error: %v. Retrying...",
-			i+1,
-			5,
-			err,
-		)
-		time.Sleep(30 * time.Second)
-	}
-
-	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("Could not connect to NATS")
-		return err
-	}
-	c.nc = nc
-
-	// set up JetStream
-	js, err := jetstream.New(nc)
-	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("Could not set up JetStream management interface")
-		return err
-	}
-	c.js = js
-
-	jsc, err := nc.JetStream()
-	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("Could not set up JetStream context")
-		return err
-	}
-
-	natsStore := utils.NewNATSStore(c.Logger, jsc, c.jobId)
-	c.store = natsStore
-
-	return nil
-}
-
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
 	c.Logger.Info().Msg("cleaning up client")
 	return nil
-}
-
-// deprecated
-func (c *Client) publishStateContinuous(rate int) {
-	c.Logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
-	ticker := time.NewTicker(time.Duration(rate) * time.Second)
-	c.Logger.Info().Msgf("pid: %d, task: %s", c.Process.PID, c.config.Client.Task)
-	// publish state continuously
-	for range ticker.C {
-		if c.Process.PID != 0 {
-			state := c.getState(c.Process.PID)
-			c.publishStateOnce(state)
-		}
-	}
-}
-
-// deprecated
-func (c *Client) publishLogs(r, w *os.File) {
-	// we want to close this pipe prior to a checkpoint
-	preDumpChn := c.channels.preDumpBroadcaster.Subscribe()
-
-	// Limiting to 5 every 10 seconds
-	limiter := rate.NewLimiter(rate.Every(10*time.Second), 5)
-
-	buf := make([]byte, 4096)
-	for {
-		select {
-		case <-preDumpChn:
-			w.Close()
-			r.Close()
-		default:
-			n, err := r.Read(buf)
-			if err != nil {
-				break
-			}
-			if limiter.Allow() {
-				logEntry := &ClientLogs{
-					Timestamp: time.Now().Local().Format(time.RFC3339),
-					Source:    c.selfId,
-					Level:     "INFO",
-					Msg:       string(buf[:n]),
-				}
-
-				data, err := json.Marshal(logEntry)
-				if err != nil {
-					c.Logger.Info().Msgf("could not marshal log entry: %v", err)
-					continue
-				}
-
-				// we don't care about acks for logs right now
-				_, err = c.js.PublishAsync(strings.Join([]string{"CEDANA", c.jobId, c.selfId, "logs"}, "."), data)
-				if err != nil {
-					c.Logger.Info().Msgf("could not publish log entry: %v", err)
-				}
-			}
-		}
-	}
-}
-
-// deprecated
-func (c *Client) publishStateOnce(state *cedana.CedanaState) {
-	if state == nil {
-		// we got no state, not necessarily an error condition - skip
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		c.Logger.Info().Msgf("could not marshal state: %v", err)
-	}
-	_, err = c.js.Publish(ctx, strings.Join([]string{"CEDANA", c.jobId, c.selfId, "state"}, "."), data)
-	if err != nil {
-		c.Logger.Info().Msgf("could not publish state: %v", err)
-	}
-}
-
-// deprecated with grpc rpc endpoints
-func (c *Client) subscribeToCommands(timeoutSec int) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
-	defer cancel()
-
-	r := retrier.New(retrier.ExponentialBackoff(10, 5*time.Second), nil)
-
-	var cons jetstream.Consumer
-	var err error
-	err = r.Run(func() error {
-		cons, err = c.js.CreateOrUpdateConsumer(ctx, "CEDANA", jetstream.ConsumerConfig{
-			AckPolicy:     jetstream.AckExplicitPolicy,
-			DeliverPolicy: jetstream.DeliverNewPolicy,
-			FilterSubject: strings.Join([]string{"CEDANA", c.jobId, c.selfId, "commands"}, "."),
-		})
-		return err
-	},
-	)
-
-	if err != nil {
-		c.Logger.Info().Msgf("could not subscribe to commands: %v", err)
-	}
-
-	for {
-		// on timer, initiate fetch and wait until we timeout
-		// waits until timeout
-		msg, err := cons.Fetch(1)
-		if err != nil {
-			c.Logger.Info().Msgf("could not subscribe to commands: %v", err)
-		}
-
-		for msg := range msg.Messages() {
-			c.Logger.Debug().Msgf("received raw command: %v", msg)
-			if msg != nil {
-				var cmd cedana.ServerCommand
-				err := json.Unmarshal(msg.Data(), &cmd)
-				if err != nil {
-					c.Logger.Info().Msgf("could not unmarshal command: %v", err)
-				}
-
-				c.Logger.Info().Msgf("received command: %v", cmd)
-				if cmd.Command == "checkpoint" {
-					msg.Ack()
-					c.channels.dumpCmdBroadcaster.Broadcast(1)
-					state := c.getState(c.Process.PID)
-					c.publishStateOnce(state)
-				} else if cmd.Command == "restore" {
-					msg.Ack()
-					c.channels.restoreCmdBroadcaster.Broadcast(cmd)
-					state := c.getState(c.Process.PID)
-					c.publishStateOnce(state)
-				} else if cmd.Command == "retry" {
-					msg.Ack()
-					c.channels.retryCmdBroadcaster.Broadcast(cmd)
-				} else {
-					c.Logger.Info().Msgf("received unknown command: %v", cmd)
-					msg.Ack()
-				}
-			}
-		}
-	}
 }
 
 // Function called whenever we enter a failed state and need
@@ -347,7 +145,7 @@ func (c *Client) subscribeToCommands(timeoutSec int) {
 // for a signal to exit. Since go blocks until a signal is received, we use a channel.
 func (c *Client) enterDoomLoop() *cedana.ServerCommand {
 	retryChn := c.channels.retryCmdBroadcaster.Subscribe()
-	c.publishStateOnce(&c.state)
+	// c.publishStateOnce(&c.state)
 	for {
 		select {
 		case cmd := <-retryChn:
@@ -363,7 +161,7 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.Logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *cedana.CedanaState {
+func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 
 	if pid == 0 {
 		return nil
@@ -371,25 +169,53 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		c.Logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
+		// c.Logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
 	}
 
-	var openFiles []process.OpenFilesStat
+	var openFiles []*task.OpenFilesStat
 	var writeOnlyFiles []string
-	var openConnections []net.ConnectionStat
-	var flag cedana.Flag
+	var openConnections []*task.ConnectionStat
+	var flag task.FlagEnum
 
 	if p != nil {
-		openFiles, err = p.OpenFiles()
+		openFilesOrig, err := p.OpenFiles()
+		for _, f := range openFilesOrig {
+			openFiles = append(openFiles, &task.OpenFilesStat{
+				Fd:   f.Fd,
+				Path: f.Path,
+			})
+		}
+
 		if err != nil {
 			// don't want to error out and break
 			return nil
 		}
 		// used for network barriers (TODO: NR)
-		openConnections, err = p.Connections()
+		openConnectionsOrig, err := p.Connections()
 		if err != nil {
 			return nil
 		}
+		for _, c := range openConnectionsOrig {
+			Laddr := &task.Addr{
+				IP:   c.Laddr.IP,
+				Port: c.Laddr.Port,
+			}
+			Raddr := &task.Addr{
+				IP:   c.Raddr.IP,
+				Port: c.Raddr.Port,
+			}
+			openConnections = append(openConnections, &task.ConnectionStat{
+				Fd:     c.Fd,
+				Family: c.Family,
+				Type:   c.Type,
+				Laddr:  Laddr,
+				Raddr:  Raddr,
+				Status: c.Status,
+				Pid:    c.Pid,
+				Uids:   c.Uids,
+			})
+		}
+
 		writeOnlyFiles = c.WriteOnlyFds(openFiles, pid)
 	}
 
@@ -400,7 +226,7 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	// we're potentially overriding a failed flag here.
 	// In the case of a restored/resuscitated process this is a good thing
 	if isRunning {
-		flag = cedana.JobRunning
+		flag = task.FlagEnum_JOB_RUNNING
 	}
 
 	// this is the status as returned by gopsutil.
@@ -411,8 +237,8 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	h, _ := host.Info()
 
 	// ignore sending network for now, little complicated
-	return &cedana.CedanaState{
-		ProcessInfo: cedana.ProcessInfo{
+	return &task.ClientStateStreamingArgs{
+		ProcessInfo: &task.ProcessInfo{
 			PID:                    pid,
 			OpenFds:                openFiles,
 			OpenWriteOnlyFilePaths: writeOnlyFiles,
@@ -421,8 +247,8 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 			OpenConnections:        openConnections,
 			Status:                 strings.Join(status, ""),
 		},
-		ClientInfo: cedana.ClientInfo{
-			Id:              c.selfId,
+		ClientInfo: &task.ClientInfo{
+			Id:              "NOT IMPLEMENTED",
 			Hostname:        h.Hostname,
 			Platform:        h.Platform,
 			OS:              h.OS,
@@ -434,19 +260,19 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 	}
 }
 
-func (c *Client) GetStateForGRPC
-
 // WriteOnlyFds takes a snapshot of files that are open (in writeonly) by process PID
 // and outputs full paths. For concurrent processes (multithreaded) this can be dangerous and lead to
 // weird race conditions (maybe).
 // To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
 // flags.
-func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []string {
+
+func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string {
+	fs := &afero.Afero{Fs: afero.NewOsFs()}
 	var paths []string
 	for _, fd := range openFds {
-		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
+		info, err := fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
-			c.Logger.Debug().Msgf("could not read fdinfo: %v", err)
+			// c.Logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
 		}
 
@@ -457,7 +283,7 @@ func (c *Client) WriteOnlyFds(openFds []process.OpenFilesStat, pid int32) []stri
 				// so converting flags: 0100002 -> 32770
 				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
 				if err != nil {
-					c.Logger.Debug().Msgf("could not parse flags: %v", err)
+					// c.Logger.Debug().Msgf("could not parse flags: %v", err)
 					continue
 				}
 
@@ -534,72 +360,73 @@ func setupConnOptions(opts []nats.Option, logger *zerolog.Logger) []nats.Option 
 	return opts
 }
 
-func (c *Client) startNATSService() {
-	// create a subscription to NATS commands from the orchestrator first
-	go c.subscribeToCommands(300)
+// func (c *Client) startNATSService() {
+// 	// create a subscription to NATS commands from the orchestrator first
+// 	go c.subscribeToCommands(300)
 
-	go c.publishStateContinuous(30)
+// 	go c.publishStateContinuous(30)
 
-	// listen for broadcast commands
-	// subscribe to our broadcasters
-	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
-	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
+// 	// listen for broadcast commands
+// 	// subscribe to our broadcasters
+// 	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
+// 	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
 
-	dir := c.config.SharedStorage.DumpStorageDir
+// 	dir := c.config.SharedStorage.DumpStorageDir
 
-	for {
-		select {
-		case <-dumpCmdChn:
-			c.Logger.Info().Msg("received checkpoint command from NATS server")
-			err := c.Dump(dir)
-			if err != nil {
-				c.Logger.Warn().Msgf("could not checkpoint process: %v", err)
-				c.state.CheckpointState = cedana.CheckpointFailed
-				c.publishStateOnce(c.getState(c.Process.PID))
-			}
-			c.state.CheckpointState = cedana.CheckpointSuccess
-			c.publishStateOnce(c.getState(c.Process.PID))
+// 	for {
+// 		select {
+// 		case <-dumpCmdChn:
+// 			c.Logger.Info().Msg("received checkpoint command from NATS server")
+// 			err := c.Dump(dir)
+// 			if err != nil {
+// 				c.Logger.Warn().Msgf("could not checkpoint process: %v", err)
+// 				c.state.CheckpointState = cedana.CheckpointFailed
+// 				c.publishStateOnce(c.getState(c.Process.PID))
+// 			}
+// 			c.state.CheckpointState = cedana.CheckpointSuccess
+// 			c.publishStateOnce(c.getState(c.Process.PID))
 
-		case cmd := <-restoreCmdChn:
-			c.Logger.Info().Msg("received restore command from NATS server")
-			pid, err := c.NatsRestore(&cmd, nil)
-			if err != nil {
-				c.Logger.Warn().Msgf("could not restore process: %v", err)
-				c.state.CheckpointState = cedana.RestoreFailed
-				c.publishStateOnce(c.getState(c.Process.PID))
-			}
-			c.state.CheckpointState = cedana.RestoreSuccess
-			c.Process.PID = *pid
-			c.publishStateOnce(c.getState(c.Process.PID))
+// 		case cmd := <-restoreCmdChn:
+// 			c.Logger.Info().Msg("received restore command from NATS server")
+// 			pid, err := c.NatsRestore(&cmd, nil)
+// 			if err != nil {
+// 				c.Logger.Warn().Msgf("could not restore process: %v", err)
+// 				c.state.CheckpointState = cedana.RestoreFailed
+// 				c.publishStateOnce(c.getState(c.Process.PID))
+// 			}
+// 			c.state.CheckpointState = cedana.RestoreSuccess
+// 			c.Process.PID = *pid
+// 			c.publishStateOnce(c.getState(c.Process.PID))
 
-		default:
-			time.Sleep(1 * time.Second)
-		}
-	}
-}
+// 		default:
+// 			time.Sleep(1 * time.Second)
+// 		}
+// 	}
+// }
 
-func (c *Client) TryStartJob(task *string) error {
-	if task == nil {
+func (c *Client) TryStartJob(taskPath *string) error {
+	if taskPath == nil {
 		// try config
-		task = &c.config.Client.Task
-		c.Logger.Info().Msgf("no task provided, using task in config: %s", *task)
+		taskPath = &c.config.Client.Task
+		c.Logger.Info().Msgf("no task provided, using task in config: %s", *taskPath)
 	}
 	// 5 attempts arbitrarily chosen - up to the orchestrator to send the correct task
 	var err error
 	for i := 0; i < 5; i++ {
-		pid, err := c.RunTask(*task)
+		pid, err := c.RunTask(*taskPath)
 		if err == nil {
 			c.Logger.Info().Msgf("managing process with pid %d", pid)
-			c.state.Flag = cedana.JobRunning
+			c.state.Flag = task.FlagEnum_JOB_RUNNING
 			c.Process.PID = pid
 			break
 		} else {
 			// enter a failure state, where we wait indefinitely for a command from NATS instead of
 			// continuing
 			c.Logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, i+1)
-			c.state.Flag = cedana.JobStartupFailed
+			c.state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
+			// TODO BS: replace doom loop
 			recoveryCmd := c.enterDoomLoop()
-			task = &recoveryCmd.UpdatedTask
+			taskPath = &recoveryCmd.UpdatedTask
 		}
 	}
 
@@ -610,6 +437,7 @@ func (c *Client) TryStartJob(task *string) error {
 	return nil
 }
 
+// Deprecated
 func (c *Client) RunTask(task string) (int32, error) {
 	var pid int32
 
@@ -618,7 +446,7 @@ func (c *Client) RunTask(task string) (int32, error) {
 	}
 
 	// need a more resilient/retriable way of doing this
-	r, w, err := os.Pipe()
+	_, w, err := os.Pipe()
 	if err != nil {
 		return 0, err
 	}
@@ -648,9 +476,9 @@ func (c *Client) RunTask(task string) (int32, error) {
 	c.closeCommonFds(ppid, pid)
 
 	// TODO BS: replace publishLogs with using grpc's bidirectional streaming.
-	if c.config.Client.ForwardLogs {
-		go c.publishLogs(r, w)
-	}
+	// if c.config.Client.ForwardLogs {
+	// 	go c.publishLogs(r, w)
+	// }
 
 	return pid, nil
 }

@@ -49,9 +49,9 @@ message LogStreamingResp {
 message ClientStateStreamingArgs {
   ClientInfo ClientInfo = 1;
   ProcessInfo ProcessInfo = 2;
-  CheckpointType CheckpointType = 3;
+  checkpointType CheckpointType = 3;
   string CheckpointPath = 4;
-  string CheckpointState = 5;
+  checkpointState CheckpointState = 5;
   FlagEnum Flag = 6;
 }
 
@@ -96,13 +96,6 @@ message Addr {
   uint32 Port = 2;
 }
 
-message CheckpointType {
-  string CheckpointType = 1;
-}
-
-message CheckpointState {
-  string CheckpointState = 1;
-}
 
 enum FlagEnum {
   JOB_STARTUP_FAILED = 0;
@@ -144,6 +137,19 @@ message ProviderEvent {
 
 message MetaStateStreamingResp {
   string Status = 1;
+}
+
+enum checkpointState {
+  CHECKPOINTED = 0;
+  CHECKPOINT_FAILED = 1;
+  RESTORED = 2;
+  RESTORE_FAILED = 3;
+}
+
+enum checkpointType {
+  NONE = 0;
+  CRIU = 1;
+  PYTORCH = 2;
 }
 
 service TaskService {

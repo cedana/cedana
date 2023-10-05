@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cedana/cedana/api/services/task"
 	cedana "github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
-	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 )
 
 func TestClient_WriteOnlyFds(t *testing.T) {
-	openFds := []process.OpenFilesStat{
+	openFds := []*task.OpenFilesStat{
 		{Fd: 1, Path: "/path/to/file1"},
 		{Fd: 2, Path: "/path/to/file2 (deleted)"},
 		{Fd: 3, Path: "/path/to/file3"},
@@ -120,8 +120,6 @@ func TestClient_TryStartJob(t *testing.T) {
 		// start a server
 		utils.RunDefaultServer(t)
 
-		js := utils.CreateTestJetstream(t)
-
 		c := &Client{
 			config: &utils.Config{
 				Client: utils.Client{
@@ -133,7 +131,6 @@ func TestClient_TryStartJob(t *testing.T) {
 			},
 			Logger: &logger,
 			// enterDoomLoop() makes a JetStream call
-			js: js,
 		}
 
 		go mockServerRetryCmd(c)

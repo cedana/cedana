@@ -3,10 +3,6 @@ package types
 // Against better convention, types
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 )
@@ -28,22 +24,6 @@ type CedanaState struct {
 
 	CheckpointState CheckpointState `json:"checkpoint_state" mapstructure:"checkpoint_state"`
 	Flag            Flag            `json:"flag" mapstructure:"flag"`
-}
-
-func (cs *CedanaState) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(cs, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "checkpoint_state.json")
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-	_, err = file.Write(serialized)
-	return err
 }
 
 type Logs struct {

@@ -135,16 +135,16 @@ func (cd *CedanaDaemon) ContainerRestore(args *ContainerRestoreArgs, resp *Conta
 	return cd.client.ContainerRestore(args.ImgPath, args.ContainerId)
 }
 
-func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {
-	// scaffold daemon w/ NATS
-	err := cd.client.AddNATS(args.SelfID, args.JobID, args.AuthToken)
-	if err != nil {
-		resp.Error = err
-	}
-	go cd.client.startNATSService()
+// func (cd *CedanaDaemon) StartNATS(args *StartNATSArgs, resp *StartNATSResp) error {
+// 	// scaffold daemon w/ NATS
+// 	err := cd.client.AddNATS(args.SelfID, args.JobID, args.AuthToken)
+// 	if err != nil {
+// 		resp.Error = err
+// 	}
+// 	go cd.client.startNATSService()
 
-	return nil
-}
+// 	return nil
+// }
 
 func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) error {
 	err := cd.client.TryStartJob(&args.Task)
