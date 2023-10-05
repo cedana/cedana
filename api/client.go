@@ -199,6 +199,7 @@ func (c *Client) cleanupClient() error {
 	return nil
 }
 
+// deprecated
 func (c *Client) publishStateContinuous(rate int) {
 	c.Logger.Info().Msgf("publishing state on CEDANA.%s.%s.state", c.jobId, c.selfId)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
@@ -212,6 +213,7 @@ func (c *Client) publishStateContinuous(rate int) {
 	}
 }
 
+// deprecated
 func (c *Client) publishLogs(r, w *os.File) {
 	// we want to close this pipe prior to a checkpoint
 	preDumpChn := c.channels.preDumpBroadcaster.Subscribe()
@@ -254,6 +256,7 @@ func (c *Client) publishLogs(r, w *os.File) {
 	}
 }
 
+// deprecated
 func (c *Client) publishStateOnce(state *cedana.CedanaState) {
 	if state == nil {
 		// we got no state, not necessarily an error condition - skip
@@ -273,6 +276,7 @@ func (c *Client) publishStateOnce(state *cedana.CedanaState) {
 	}
 }
 
+// deprecated with grpc rpc endpoints
 func (c *Client) subscribeToCommands(timeoutSec int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
@@ -429,6 +433,8 @@ func (c *Client) getState(pid int32) *cedana.CedanaState {
 		CheckpointState: c.state.CheckpointState,
 	}
 }
+
+func (c *Client) GetStateForGRPC
 
 // WriteOnlyFds takes a snapshot of files that are open (in writeonly) by process PID
 // and outputs full paths. For concurrent processes (multithreaded) this can be dangerous and lead to

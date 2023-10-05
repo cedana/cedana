@@ -52,7 +52,7 @@ message ClientStateStreamingArgs {
   CheckpointType CheckpointType = 3;
   string CheckpointPath = 4;
   string CheckpointState = 5;
-  string Flag = 6;
+  FlagEnum Flag = 6;
 }
 
 message ClientInfo {
@@ -104,8 +104,14 @@ message CheckpointState {
   string CheckpointState = 1;
 }
 
-message Flag {
-  string Flag = 1;
+enum FlagEnum {
+  JOB_STARTUP_FAILED = 0;
+  JOB_KILLED = 1;
+  JOB_IDLE = 2;
+  JOB_RUNNING = 3;
+  JOB_PENDING = 4;
+  JOB_SETUP_FAILED = 5;
+  JOB_DONE = 6;
 }
 
 message ClientStateStreamingResp {
