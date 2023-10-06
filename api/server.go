@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"sync"
 	"syscall"
 	"time"
@@ -53,47 +52,69 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	s.Client.Process.PID = args.PID
 
+	if args.Type != task.DumpArgs_MARKET {
+		var state task.ProcessState
+
+		state.Flag = task.FlagEnum_JOB_RUNNING
+		state.PID = args.PID
+
+		err := s.Client.db.CreateOrUpdateCedanaProcess("NOT_MARKET", &state)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
 	err := s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := os.Open(s.Client.CheckpointDir + ".zip")
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+	switch args.Type {
+	case task.DumpArgs_SELF_SERVE:
+		// TODO BS: This is a hack for now
+	case task.DumpArgs_MARKET:
+		file, err := os.Open(s.Client.CheckpointDir + ".zip")
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
 
-	// Get the file size
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
+		// Get the file size
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
 
-	// Get the size
-	size := fileInfo.Size()
+		// Get the size
+		size := fileInfo.Size()
 
-	// zipFileSize += 4096
+		// zipFileSize += 4096
 
-	checkpointFullSize := int64(size)
+		checkpointFullSize := int64(size)
 
-	multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
-	if err != nil {
-		return nil, err
-	}
+		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
+		if err != nil {
+			return nil, err
+		}
 
-	err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, s.Client.CheckpointDir)
-	if err != nil {
-		return nil, err
-	}
+		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, s.Client.CheckpointDir)
+		if err != nil {
+			return nil, err
+		}
 
-	err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
-	if err != nil {
-		return nil, err
+		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
+		if err != nil {
+			return nil, err
+		}
+
+		return &task.DumpResp{
+			Error: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+		}, nil
 	}
 
 	return &task.DumpResp{
-		Error: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+		Error: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
 	}, nil
 }
 
@@ -125,6 +146,7 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
+	// TODO BS: This is a hack for now
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
@@ -345,12 +367,16 @@ func addGRPC() (*Server, error) {
 	return server, nil
 }
 
-func StartGRPCServer() error {
+func StartGRPCServer() (*grpc.Server, error) {
 	var wg sync.WaitGroup
+
+	// Create a context with a cancel function
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	srv, err := addGRPC()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	startCh := make(chan struct{})
@@ -367,11 +393,16 @@ func StartGRPCServer() error {
 	}()
 
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+	// signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case <-interrupt:
+	case <-ctx.Done():
+	}
 
 	wg.Wait()
 
 	// Cleanup here
 
-	return nil
+	return srv.grpcServer, nil
 }

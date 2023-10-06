@@ -7,6 +7,11 @@ option go_package = "github.com/cedana/cedana/api/services/task";
 message DumpArgs {
   int32 PID = 1;
   string Dir = 2;
+  enum DumpType {
+    SELF_SERVE = 0;
+    MARKET = 1;
+  }
+  DumpType Type = 3;
 }
 message DumpResp {
     string Error = 1;

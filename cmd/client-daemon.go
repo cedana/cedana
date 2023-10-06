@@ -14,7 +14,7 @@ var clientDaemonRPCCmd = &cobra.Command{
 
 		logger := utils.GetLogger()
 
-		if err := api.StartGRPCServer(); err != nil {
+		if _, err := api.StartGRPCServer(); err != nil {
 			logger.Error().Err(err).Msg("Failed to start gRPC server")
 		}
 
