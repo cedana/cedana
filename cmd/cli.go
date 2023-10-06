@@ -120,7 +120,6 @@ func (c *CheckpointTaskService) Close() {
 	c.conn.Close()
 }
 
-// TODO BS: Have cli dial grpc server instead of old rpc server
 func NewCLI() (*CLI, error) {
 	cfg, err := utils.InitConfig()
 	if err != nil {

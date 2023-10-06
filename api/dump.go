@@ -172,8 +172,6 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 
 	if c.config.CedanaManaged {
 		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
-		// TODO BS: This should just updating cedana market db
-		// err := c.store.PushCheckpoint(compressedCheckpointPath)
 		if err != nil {
 			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
 		}
