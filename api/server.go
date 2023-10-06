@@ -42,6 +42,17 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+
+	// TODO BS: REMOVE, THIS IS FOR TESTING
+
+	var state task.ProcessState
+	state.Flag = task.FlagEnum_JOB_RUNNING
+	state.PID = args.PID
+	err := s.Client.db.CreateOrUpdateCedanaProcess("test", &state)
+	if err != nil {
+		return nil, err
+	}
+
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -52,7 +63,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	s.Client.Process.PID = args.PID
 
-	err := s.Client.Dump(args.Dir, args.PID)
+	err = s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
 		return nil, err
 	}

@@ -268,7 +268,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	c.state.CheckpointState = task.CheckpointState_CHECKPOINTED
+	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	c.postDump(dumpdir, state)
 	c.cleanupClient()
 
