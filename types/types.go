@@ -3,6 +3,9 @@ package types
 // Against better convention, types
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -23,6 +26,22 @@ type ProcessState struct {
 	CheckpointPath   string           `json:"checkpoint_path"`
 	CheckpointState  CheckpointState  `json:"checkpoint_state"`
 	Flag             Flag             `json:"flag"`
+}
+
+func (ps *ProcessState) SerializeToFolder(dir string) error {
+	serialized, err := json.MarshalIndent(ps, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "checkpoint_state.json")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	_, err = file.Write(serialized)
+	return err
 }
 
 type Logs struct {

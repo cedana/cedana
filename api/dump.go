@@ -120,7 +120,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 
 	c.copyOpenFiles(checkpointFolderPath, state)
-	c.channels.preDumpBroadcaster.Broadcast(1)
+	// c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }
@@ -214,6 +214,11 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 
 func (c *Client) Dump(dir string, pid int32) error {
 	defer c.timeTrack(time.Now(), "dump")
+
+	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
+	if exists {
+		c.jobId = jobId
+	}
 
 	opts := c.prepareCheckpointOpts()
 	dumpdir, err := c.prepareDump(pid, dir, opts)

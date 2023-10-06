@@ -44,6 +44,8 @@ type Client struct {
 	// db meta/state store
 	db *DB
 
+	jobId string
+
 	CheckpointDir string
 }
 
