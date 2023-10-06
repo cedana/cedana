@@ -70,7 +70,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
  #   setup_env(args.delay, args.jitter, args.loss)
 
-    command = "sudo ./../../cedana start -p 'python3 server_client.py --mode server'"
+    command = "sudo ./cedana exec -p 'python3 test/network/server_client.py --mode server' socket_test"
     process = subprocess.Popen(["sh", "-c", command], stdout=subprocess.PIPE)
     pid = int(process.communicate()[0].decode().strip())
     print("Started process with PID {}".format(pid))
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     checkpoint_started_at = time.time()
     print("starting dump of process...")
     subprocess.run("mkdir tmp")
-    chkpt_cmd = "sudo ./../../cedana dump {} -d tmp".format(pid)
+    chkpt_cmd = "sudo ./cedana dump {} -d tmp".format(pid)
     process = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     checkpoint_completed_at = time.time()
    

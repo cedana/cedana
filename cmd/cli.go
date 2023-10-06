@@ -246,7 +246,7 @@ var containerdRestoreCmd = &cobra.Command{
 }
 
 var startTaskCmd = &cobra.Command{
-	Use:   "start",
+	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
 	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
 	Args:  cobra.ExactArgs(2),
@@ -288,6 +288,18 @@ var psCmd = &cobra.Command{
 		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
 		if err != nil {
 			return err
+		}
+
+		for _, entry := range resp.PIDState {
+			for k, v := range entry {
+				fmt.Printf("%v: %v\n", k, v)
+			}
+		}
+
+		for _, entry := range resp.IDPID {
+			for k, v := range entry {
+				fmt.Printf("%v: %v\n", k, v)
+			}
 		}
 
 		return nil

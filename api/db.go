@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -130,9 +129,15 @@ func (db *DB) GetPID(id string) (int32, error) {
 		if pidBytes == nil {
 			return fmt.Errorf("could not find pid")
 		}
-		pid = int32(binary.BigEndian.Uint32(pidBytes))
 
-		return nil
+		pid64, err := strconv.ParseInt(string(pidBytes), 10, 32)
+		if err != nil {
+			return err
+		}
+
+		pid = int32(pid64)
+
+		return err
 	})
 	return pid, err
 }

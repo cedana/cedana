@@ -163,6 +163,12 @@ func (cd *CedanaDaemon) StartTask(args *StartTaskArgs, resp *StartTaskResp) erro
 	if err != nil {
 		resp.Error = err
 	}
+	// get pid from ID
+	pid, err := cd.client.db.GetPID(args.ID)
+	if err != nil {
+		resp.Error = err
+	}
+	resp.PID = pid
 	return err
 }
 
