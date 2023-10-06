@@ -28,6 +28,7 @@ message RestoreResp {
 
 message StartTaskArgs {
   string Task = 1;
+  string Id = 2;
 }
 message StartTaskResp {
     string Error = 1;
