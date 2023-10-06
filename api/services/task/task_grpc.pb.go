@@ -147,7 +147,7 @@ func (c *taskServiceClient) ClientStateStreaming(ctx context.Context, opts ...gr
 
 type TaskService_ClientStateStreamingClient interface {
 	Send(*ClientStateStreamingResp) error
-	Recv() (*ClientStateStreamingArgs, error)
+	Recv() (*ProcessState, error)
 	grpc.ClientStream
 }
 
@@ -159,8 +159,8 @@ func (x *taskServiceClientStateStreamingClient) Send(m *ClientStateStreamingResp
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *taskServiceClientStateStreamingClient) Recv() (*ClientStateStreamingArgs, error) {
-	m := new(ClientStateStreamingArgs)
+func (x *taskServiceClientStateStreamingClient) Recv() (*ProcessState, error) {
+	m := new(ProcessState)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func _TaskService_ClientStateStreaming_Handler(srv interface{}, stream grpc.Serv
 }
 
 type TaskService_ClientStateStreamingServer interface {
-	Send(*ClientStateStreamingArgs) error
+	Send(*ProcessState) error
 	Recv() (*ClientStateStreamingResp, error)
 	grpc.ServerStream
 }
@@ -428,7 +428,7 @@ type taskServiceClientStateStreamingServer struct {
 	grpc.ServerStream
 }
 
-func (x *taskServiceClientStateStreamingServer) Send(m *ClientStateStreamingArgs) error {
+func (x *taskServiceClientStateStreamingServer) Send(m *ProcessState) error {
 	return x.ServerStream.SendMsg(m)
 }
 

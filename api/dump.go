@@ -11,7 +11,7 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
-	cedana "github.com/cedana/cedana/types"
+	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
@@ -129,7 +129,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 // TODO NR: should we add a check for filesize here? Worried about dealing with massive files.
 // This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
 // written to on network storage or something.
-func (c *Client) copyOpenFiles(dir string, state *cedana.ProcessState) error {
+func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 	if len(state.ProcessInfo.OpenWriteOnlyFilePaths) == 0 {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (c *Client) copyOpenFiles(dir string, state *cedana.ProcessState) error {
 
 // we pass a final state to postDump so we can serialize at the exact point
 // the checkpoint was written.
-func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
+func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
@@ -158,7 +158,7 @@ func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
 
 	state.CheckpointPath = compressedCheckpointPath
 	// sneak in a serialized state obj
-	err = state.SerializeToFolder(dumpdir)
+	err = types.SerializeToFolder(dumpdir, state)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}

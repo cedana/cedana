@@ -28,8 +28,8 @@ type ProcessState struct {
 	Flag             Flag             `json:"flag"`
 }
 
-func (ps *ProcessState) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(ps, "", "  ")
+func SerializeToFolder(dir string, state *task.ProcessState) error {
+	serialized, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}

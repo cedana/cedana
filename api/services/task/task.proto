@@ -46,14 +46,38 @@ message LogStreamingResp {
 
 // Client State Streaming args
 
-message ClientStateStreamingArgs {
-  ClientInfo ClientInfo = 1;
-  ProcessInfo ProcessInfo = 2;
-  checkpointType CheckpointType = 3;
-  string CheckpointPath = 4;
-  checkpointState CheckpointState = 5;
-  FlagEnum Flag = 6;
+message ProcessState {
+  int32 PID = 1;
+  string Task = 2;
+  ContainerRuntimeOpts ContainerRuntime = 3;
+  string ContainerId = 4;
+  string StartedAt = 5;
+  ProcessInfo ProcessInfo = 6;
+  checkpointType CheckpointType = 7;
+  string CheckpointPath = 8;
+  checkpointState CheckpointState = 9;
+  FlagEnum Flag = 10;
+  enum ContainerRuntimeOpts {
+    CONTAINERD = 0;
+    RUNC = 1;
+  }
 }
+
+// ContainerRuntimeContainerd ContainerRuntime = "containerd"
+// ContainerRuntimeRunc       ContainerRuntime = "runc"
+
+// // A process encapsulates either a process or a container
+// type ProcessState struct {
+// 	PID              int32            `json:"pid"`
+// 	Task             string           `json:"task"`
+// 	ContainerRuntime ContainerRuntime `json:"container_runtime"`
+// 	ContainerId      string           `json:"container_id"`
+// 	StartedAt        time.Time        `json:"started_at"`
+// 	ProcessInfo      ProcessInfo      `json:"process_info"`
+// 	CheckpointPath   string           `json:"checkpoint_path"`
+// 	CheckpointState  CheckpointState  `json:"checkpoint_state"`
+// 	Flag             Flag             `json:"flag"`
+// }
 
 message ClientInfo {
   string Id = 1;
@@ -165,7 +189,7 @@ service TaskService {
     rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
     
     rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
-    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ClientStateStreamingArgs);
+    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
 }
 

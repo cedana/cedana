@@ -12,8 +12,6 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
-
-	cedana "github.com/cedana/cedana/types"
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
@@ -54,7 +52,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		return nil, err
 	}
 
-	var checkpointState cedana.ProcessState
+	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
@@ -100,7 +98,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(ps *cedana.ProcessState, dir string) {
+func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return

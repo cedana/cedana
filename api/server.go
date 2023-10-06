@@ -162,7 +162,7 @@ func (s *service) publishStateContinous(rate int) {
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	for range ticker.C {
 		if s.Client.Process.PID != 0 {
-			args := &task.ClientStateStreamingArgs{}
+			args := &task.ProcessState{}
 
 			if err := s.ClientStateStream.Send(args); err != nil {
 				log.Printf("Error sending LogStreamingArgs to client: %v", err)
@@ -221,7 +221,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 
 		if s.ClientStateStream != nil {
 
-			args := &task.ClientStateStreamingArgs{}
+			args := &task.ProcessState{}
 			if err := s.ClientStateStream.Send(args); err != nil {
 				return err
 			}

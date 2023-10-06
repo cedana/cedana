@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	cedana "github.com/cedana/cedana/types"
+	"github.com/cedana/cedana/api/services/task"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -25,7 +25,7 @@ func (db *DB) Close() error {
 // KISS for now - but we may want to separate out into subbuckets as we add more
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
 // structure is xid: pid, pid: state
-func (db *DB) CreateOrUpdateCedanaProcess(id string, state *cedana.ProcessState) error {
+func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) error {
 	return db.conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {
@@ -56,8 +56,8 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *cedana.ProcessState)
 	})
 }
 
-func (db *DB) GetStateFromID(id string) (*cedana.ProcessState, error) {
-	var state cedana.ProcessState
+func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
+	var state task.ProcessState
 
 	err := db.conn.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte("default"))
@@ -81,7 +81,7 @@ func (db *DB) GetStateFromID(id string) (*cedana.ProcessState, error) {
 	return &state, err
 }
 
-func (db *DB) UpdateProcessStateWithID(id string, state *cedana.ProcessState) error {
+func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) error {
 	return db.conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {
@@ -102,7 +102,7 @@ func (db *DB) UpdateProcessStateWithID(id string, state *cedana.ProcessState) er
 	})
 }
 
-func (db *DB) UpdateProcessStateWithPID(pid int32, state *cedana.ProcessState) error {
+func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) error {
 	return db.conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {

@@ -16,8 +16,6 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 	bolt "go.etcd.io/bbolt"
-
-	cedana "github.com/cedana/cedana/types"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -33,7 +31,7 @@ type Client struct {
 	Process *task.ProcessInfo
 
 	// a single big state glob
-	state *task.ClientStateStreamingArgs
+	state *task.ProcessState
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
@@ -116,17 +114,20 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
+func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	if pid == 0 {
 		return nil, nil
 	}
 
-	var oldState *cedana.ProcessState
-	var state cedana.ProcessState
+	var oldState *task.ProcessState
+	var state task.ProcessState
 
 	err := c.db.conn.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
+		if b == nil {
+			return fmt.Errorf("could not find bucket")
+		}
 		v := b.Get([]byte(strconv.Itoa(int(pid))))
 
 		err := json.Unmarshal(v, &oldState)
@@ -151,14 +152,14 @@ func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
 		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
 	}
 
-	var openFiles []task.OpenFilesStat
+	var openFiles []*task.OpenFilesStat
 	var writeOnlyFiles []string
-	var openConnections []task.ConnectionStat
+	var openConnections []*task.ConnectionStat
 
 	if p != nil {
 		openFilesOrig, err := p.OpenFiles()
 		for _, f := range openFilesOrig {
-			openFiles = append(openFiles, task.OpenFilesStat{
+			openFiles = append(openFiles, &task.OpenFilesStat{
 				Fd:   f.Fd,
 				Path: f.Path,
 			})
@@ -182,7 +183,7 @@ func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
 				IP:   c.Raddr.IP,
 				Port: c.Raddr.Port,
 			}
-			openConnections = append(openConnections, task.ConnectionStat{
+			openConnections = append(openConnections, &task.ConnectionStat{
 				Fd:     c.Fd,
 				Family: c.Family,
 				Type:   c.Type,
@@ -209,7 +210,7 @@ func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
 	status, _ := p.Status()
 
 	// ignore sending network for now, little complicated
-	state.ProcessInfo = cedana.ProcessInfo{
+	state.ProcessInfo = &task.ProcessInfo{
 		OpenFds:                openFiles,
 		OpenWriteOnlyFilePaths: writeOnlyFiles,
 		MemoryPercent:          memoryUsed,
@@ -227,7 +228,7 @@ func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
 // To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
 // flags.
 
-func (c *Client) WriteOnlyFds(openFds []task.OpenFilesStat, pid int32) []string {
+func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string {
 	var paths []string
 	for _, fd := range openFds {
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
@@ -260,7 +261,7 @@ func (c *Client) WriteOnlyFds(openFds []task.OpenFilesStat, pid int32) []string 
 	return paths
 }
 
-func (c *Client) getState(pid int32) (*cedana.ProcessState, error) {
+func (c *Client) getState(pid int32) (*task.ProcessState, error) {
 	state, err := c.generateState(pid)
 	if err != nil {
 		return nil, err
