@@ -61,20 +61,19 @@ func skipCI(t *testing.T) {
 // 		t.Error(err)
 // 	}
 
-// 	c.Process.PID = pid
-// 	t.Cleanup(func() {
-// 		syscall.Kill(int(pid), syscall.SIGKILL)
-// 		os.RemoveAll("dumpdir")
-// 		c.cleanupClient()
-// 	})
+// t.Cleanup(func() {
+// 	syscall.Kill(int(pid), syscall.SIGKILL)
+// 	os.RemoveAll("dumpdir")
+// 	c.cleanupClient()
+// })
 
-// 	oldState := c.getState(c.Process.PID)
-// 	t.Logf("old state: %+v", oldState)
+// oldState, _ := c.getState(pid)
+// t.Logf("old state: %+v", oldState)
 
-// 	err = c.Dump("dumpdir")
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
+// err = c.Dump("dumpdir", pid)
+// if err != nil {
+// 	t.Error(err)
+// }
 
 // 	// we have a running process, get network data before
 // 	// then get network data after

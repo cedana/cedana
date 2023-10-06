@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,10 +13,11 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
+	bolt "go.etcd.io/bbolt"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -24,7 +26,7 @@ var AppFs = afero.NewOsFs()
 type Client struct {
 	CRIU *utils.Criu
 
-	Logger *zerolog.Logger
+	logger *zerolog.Logger
 	config *utils.Config
 
 	context context.Context
@@ -36,8 +38,11 @@ type Client struct {
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
-	// checkpoint store
+	// external checkpoint store
 	store utils.Store
+
+	// db meta/state store
+	db *DB
 
 	CheckpointDir string
 }
@@ -76,47 +81,82 @@ func InstantiateClient() (*Client, error) {
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
 
+	// set up embedded key-value db
+	conn, err := bolt.Open("/tmp/cedana.db", 0600, nil)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not open or create db")
+		return nil, err
+	}
+
+	db := &DB{
+		conn: conn,
+	}
+
 	return &Client{
 		CRIU:    criu,
-		Logger:  &logger,
+		logger:  &logger,
 		config:  config,
 		context: context.Background(),
 		fs:      fs,
+		db:      db,
 	}, nil
 }
 
 func (c *Client) cleanupClient() error {
 	c.CRIU.Cleanup()
-	c.Logger.Info().Msg("cleaning up client")
+	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
 
 // sets up subscribers for dump and restore commands
 func (c *Client) timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
-	c.Logger.Debug().Msgf("%s took %s", name, elapsed)
+	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
-func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
+func (c *Client) generateState(pid int32) (*cedana.ProcessState, error) {
 
 	if pid == 0 {
+		return nil, nil
+	}
+
+	var oldState *cedana.ProcessState
+	var state cedana.ProcessState
+
+	err := c.db.conn.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("default"))
+		v := b.Get([]byte(strconv.Itoa(int(pid))))
+
+		err := json.Unmarshal(v, &oldState)
+		if err != nil {
+			return err
+		}
+
 		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if oldState != nil {
+		// set to oldState, and just update parts of it
+		state = *oldState
 	}
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		c.Logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
+		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
 	}
 
-	var openFiles []*task.OpenFilesStat
+	var openFiles []task.OpenFilesStat
 	var writeOnlyFiles []string
-	var openConnections []*task.ConnectionStat
-	var flag task.FlagEnum
+	var openConnections []task.ConnectionStat
 
 	if p != nil {
 		openFilesOrig, err := p.OpenFiles()
 		for _, f := range openFilesOrig {
-			openFiles = append(openFiles, &task.OpenFilesStat{
+			openFiles = append(openFiles, task.OpenFilesStat{
 				Fd:   f.Fd,
 				Path: f.Path,
 			})
@@ -124,12 +164,12 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 
 		if err != nil {
 			// don't want to error out and break
-			return nil
+			return nil, nil
 		}
 		// used for network barriers (TODO: NR)
 		openConnectionsOrig, err := p.Connections()
 		if err != nil {
-			return nil
+			return nil, nil
 		}
 		for _, c := range openConnectionsOrig {
 			Laddr := &task.Addr{
@@ -140,7 +180,7 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 				IP:   c.Raddr.IP,
 				Port: c.Raddr.Port,
 			}
-			openConnections = append(openConnections, &task.ConnectionStat{
+			openConnections = append(openConnections, task.ConnectionStat{
 				Fd:     c.Fd,
 				Family: c.Family,
 				Type:   c.Type,
@@ -161,39 +201,22 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 	// if the process is actually running, we don't care that
 	// we're potentially overriding a failed flag here.
 	// In the case of a restored/resuscitated process this is a good thing
-	if isRunning {
-		flag = task.FlagEnum_JOB_RUNNING
-	}
 
 	// this is the status as returned by gopsutil.
 	// ideally we want more than this, or some parsing to happen from this end
 	status, _ := p.Status()
 
-	m, _ := mem.VirtualMemory()
-	h, _ := host.Info()
-
 	// ignore sending network for now, little complicated
-	return &task.ClientStateStreamingArgs{
-		ProcessInfo: &task.ProcessInfo{
-			PID:                    pid,
-			OpenFds:                openFiles,
-			OpenWriteOnlyFilePaths: writeOnlyFiles,
-			MemoryPercent:          memoryUsed,
-			IsRunning:              isRunning,
-			OpenConnections:        openConnections,
-			Status:                 strings.Join(status, ""),
-		},
-		ClientInfo: &task.ClientInfo{
-			Id:              "NOT IMPLEMENTED",
-			Hostname:        h.Hostname,
-			Platform:        h.Platform,
-			OS:              h.OS,
-			Uptime:          h.Uptime,
-			RemainingMemory: m.Available,
-		},
-		Flag:            flag,
-		CheckpointState: c.state.CheckpointState,
+	state.ProcessInfo = cedana.ProcessInfo{
+		OpenFds:                openFiles,
+		OpenWriteOnlyFilePaths: writeOnlyFiles,
+		MemoryPercent:          memoryUsed,
+		IsRunning:              isRunning,
+		OpenConnections:        openConnections,
+		Status:                 strings.Join(status, ""),
 	}
+
+	return &state, nil
 }
 
 // WriteOnlyFds takes a snapshot of files that are open (in writeonly) by process PID
@@ -202,12 +225,12 @@ func (c *Client) getState(pid int32) *task.ClientStateStreamingArgs {
 // To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
 // flags.
 
-func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string {
+func (c *Client) WriteOnlyFds(openFds []task.OpenFilesStat, pid int32) []string {
 	var paths []string
 	for _, fd := range openFds {
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
-			// c.Logger.Debug().Msgf("could not read fdinfo: %v", err)
+			// c.logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
 		}
 
@@ -218,7 +241,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 				// so converting flags: 0100002 -> 32770
 				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
 				if err != nil {
-					// c.Logger.Debug().Msgf("could not parse flags: %v", err)
+					// c.logger.Debug().Msgf("could not parse flags: %v", err)
 					continue
 				}
 
@@ -233,6 +256,20 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 		}
 	}
 	return paths
+}
+
+func (c *Client) getState(pid int32) (*cedana.ProcessState, error) {
+	state, err := c.generateState(pid)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.db.UpdateProcessStateWithPID(pid, state)
+	if err != nil {
+		return nil, err
+	}
+
+	return state, err
 }
 
 func closeCommonFds(parentPID, childPID int32) error {
@@ -286,10 +323,10 @@ func closeCommonFds(parentPID, childPID int32) error {
 // 	for {
 // 		select {
 // 		case <-dumpCmdChn:
-// 			c.Logger.Info().Msg("received checkpoint command from NATS server")
+// 			c.logger.Info().Msg("received checkpoint command from NATS server")
 // 			err := c.Dump(dir)
 // 			if err != nil {
-// 				c.Logger.Warn().Msgf("could not checkpoint process: %v", err)
+// 				c.logger.Warn().Msgf("could not checkpoint process: %v", err)
 // 				c.state.CheckpointState = cedana.CheckpointFailed
 // 				c.publishStateOnce(c.getState(c.Process.PID))
 // 			}
@@ -297,10 +334,10 @@ func closeCommonFds(parentPID, childPID int32) error {
 // 			c.publishStateOnce(c.getState(c.Process.PID))
 
 // 		case cmd := <-restoreCmdChn:
-// 			c.Logger.Info().Msg("received restore command from NATS server")
+// 			c.logger.Info().Msg("received restore command from NATS server")
 // 			pid, err := c.NatsRestore(&cmd, nil)
 // 			if err != nil {
-// 				c.Logger.Warn().Msgf("could not restore process: %v", err)
+// 				c.logger.Warn().Msgf("could not restore process: %v", err)
 // 				c.state.CheckpointState = cedana.RestoreFailed
 // 				c.publishStateOnce(c.getState(c.Process.PID))
 // 			}

@@ -34,30 +34,30 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		return nil, err
 	}
 
-	c.Logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
+	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
 	err = utils.UnzipFolder(*zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.Logger.Info().Err(err).Msg("error decompressing checkpoint")
+		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
 	}
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
 		return nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
+		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
 		return nil, err
 	}
 
-	var checkpointState cedana.CedanaState
+	var checkpointState cedana.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
 		return nil, err
 	}
 
@@ -93,14 +93,14 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 	}
 	return nil
 }
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
+func (c *Client) restoreFiles(ps *cedana.ProcessState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return
@@ -109,7 +109,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range cc.ProcessInfo.OpenWriteOnlyFilePaths {
+		for _, f := range ps.ProcessInfo.OpenWriteOnlyFilePaths {
 			if info.Name() == filepath.Base(f) {
 				// copy file to path
 				err = os.MkdirAll(filepath.Dir(f), 0755)
@@ -117,7 +117,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 					return err
 				}
 
-				c.Logger.Info().Msgf("copying file %s to %s", path, f)
+				c.logger.Info().Msgf("copying file %s to %s", path, f)
 				// copyFile copies to folder, so grab folder path
 				err := utils.CopyFile(path, filepath.Dir(f))
 				if err != nil {
@@ -130,7 +130,7 @@ func (c *Client) restoreFiles(cc *cedana.CedanaState, dir string) {
 	})
 
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("error copying files")
+		c.logger.Fatal().Err(err).Msg("error copying files")
 	}
 }
 
@@ -149,7 +149,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 
 	img, err := os.Open(dir)
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("could not open directory")
+		c.logger.Fatal().Err(err).Msg("could not open directory")
 	}
 	defer img.Close()
 
@@ -159,16 +159,16 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
-		c.Logger.Warn().Msgf("error restoring process: %v", err)
+		c.logger.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
 
-	c.Logger.Info().Msgf("process restored: %v", resp)
+	c.logger.Info().Msgf("process restored: %v", resp)
 
 	// clean up
 	err = os.RemoveAll(dir)
 	if err != nil {
-		c.Logger.Fatal().Err(err).Msg("error removing directory")
+		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
 	c.cleanupClient()
 	return resp.Restore.Pid, nil
@@ -190,13 +190,13 @@ func (c *Client) RuncRestore(imgPath string, containerId string, opts *container
 
 func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
-	var dir string
+	var dir *string
 	var pid *int32
 
 	opts := c.prepareRestoreOpts()
 	nfy := utils.Notify{
 		Config:          c.config,
-		Logger:          c.Logger,
+		Logger:          c.logger,
 		PreDumpAvail:    true,
 		PostDumpAvail:   true,
 		PreRestoreAvail: true,
@@ -208,9 +208,9 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		if err != nil {
 			return nil, err
 		}
-		dir = *tmpdir
+		dir = tmpdir
 
-		pid, err = c.criuRestore(opts, nfy, dir)
+		pid, err = c.criuRestore(opts, nfy, *dir)
 		if err != nil {
 			return nil, err
 		}

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/utils"
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -10,14 +10,8 @@ import (
 var clientDaemonRPCCmd = &cobra.Command{
 	Use:   "daemon-grpc",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
-	Run: func(cmd *cobra.Command, args []string) {
-
-		logger := utils.GetLogger()
-
-		if err := api.StartGRPCServer(); err != nil {
-			logger.Error().Err(err).Msg("Failed to start gRPC server")
-		}
-
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return fmt.Errorf("missing subcommand")
 	},
 }
 

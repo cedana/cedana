@@ -11,6 +11,7 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
+	cedana "github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
@@ -25,14 +26,14 @@ const (
 // Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
 func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	var checkpointPath string
-	fd, _, err := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
-	if err != 0 {
-		c.Logger.Fatal().Err(err).Msg("could not open pid")
+	fd, _, errno := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
+	if errno != 0 {
+		c.logger.Fatal().Err(errno).Msg("could not open pid")
 	}
 	s := syscall.SIGUSR1
-	_, _, err = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
-	if err != 0 {
-		c.Logger.Info().Msgf("could not send signal to pid %d", pid)
+	_, _, errno = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
+	if errno != 0 {
+		c.logger.Info().Msgf("could not send signal to pid %d", pid)
 	}
 
 	// we want to sleep the dumping thread here to wait for the process
@@ -40,7 +41,10 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	// it'll just pause the spawned dump goroutine
 
 	// while we wait, try and get the fd of the checkpoint as its being written
-	state := c.getState(c.Process.PID)
+	state, err := c.getState(pid)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("could not get state")
+	}
 	for _, f := range state.ProcessInfo.OpenFds {
 		// TODO NR: add more checkpoint options
 		if strings.Contains(f.Path, "pt") {
@@ -62,18 +66,14 @@ func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 		return "", err
 	}
 
-	state := c.getState(pid)
-	if state == nil {
+	state, err := c.getState(pid)
+	if state == nil || err != nil {
 		return "", fmt.Errorf("could not get state")
 	}
-	c.Process = state.ProcessInfo
-
-	// save state for serialization at this point
-	c.state = state
 
 	// check network connections
 	var hasTCP bool
@@ -104,19 +104,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	// check for GPU & send a simple signal if active
-	// this is hacky, but more often than not a sign that we've got a GPU
-	// TODO: only checks nvidia?
-	var attachedToHardwareAccel bool
-	var gpuFds []*task.OpenFilesStat
-	for _, f := range state.ProcessInfo.OpenFds {
-		if strings.Contains(f.Path, "nvidia") {
-			gpuFds = append(gpuFds, f)
-		}
-	}
-	if len(gpuFds) != 0 {
-		attachedToHardwareAccel = true
-	}
 	// processname + datetime
 	// strip out non posix-compliant characters from the processname
 	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
@@ -132,29 +119,8 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		}
 	}
 
-	// If the user hasn't configured signaling in the case they're using the GPU
-	// they haven't read the docs and the signal just gets lost in the aether anyway.
-	if attachedToHardwareAccel && c.config.Client.SignalProcessPreDump {
-		c.Logger.Info().Msgf("GPU use detected, signaling process pid %d and waiting for %d s...", pid, c.config.Client.SignalProcessTimeout)
-		// for now, don't set any opts and skip using CRIU. Future work to intercept CUDA calls
-
-		c.Process.AttachedToHardwareAccel = attachedToHardwareAccel
-		checkpointPath := c.signalProcessAndWait(pid, c.config.Client.SignalProcessTimeout)
-		if checkpointPath != nil {
-			// copy checkpoint into checkpointFolderPath
-			if err := utils.CopyFile(*checkpointPath, checkpointFolderPath); err != nil {
-				return "", err
-			}
-		}
-		c.state.CheckpointType = task.CheckpointType_PYTORCH
-		return checkpointFolderPath, nil
-	}
-
-	c.copyOpenFiles(checkpointFolderPath)
-	c.state.CheckpointType = task.CheckpointType_CRIU
-
-	// TODO BS: look into how this will be handled with grpc
-	// c.channels.preDumpBroadcaster.Broadcast(1)
+	c.copyOpenFiles(checkpointFolderPath, state)
+	c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }
@@ -163,11 +129,11 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 // TODO NR: should we add a check for filesize here? Worried about dealing with massive files.
 // This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
 // written to on network storage or something.
-func (c *Client) copyOpenFiles(dir string) error {
-	if len(c.Process.OpenWriteOnlyFilePaths) == 0 {
+func (c *Client) copyOpenFiles(dir string, state *cedana.ProcessState) error {
+	if len(state.ProcessInfo.OpenWriteOnlyFilePaths) == 0 {
 		return nil
 	}
-	for _, f := range c.Process.OpenWriteOnlyFilePaths {
+	for _, f := range state.ProcessInfo.OpenWriteOnlyFilePaths {
 		if err := utils.CopyFile(f, dir); err != nil {
 			return err
 		}
@@ -176,35 +142,44 @@ func (c *Client) copyOpenFiles(dir string) error {
 	return nil
 }
 
-func (c *Client) postDump(dumpdir string) {
-	c.Logger.Info().Msg("compressing checkpoint...")
+// we pass a final state to postDump so we can serialize at the exact point
+// the checkpoint was written.
+func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
+	c.logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written
 	// post checkpoint
-	err := c.copyOpenFiles(dumpdir)
+	err := c.copyOpenFiles(dumpdir, state)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 	}
 
-	c.state.CheckpointPath = compressedCheckpointPath
+	state.CheckpointPath = compressedCheckpointPath
+	// sneak in a serialized state obj
+	err = state.SerializeToFolder(dumpdir)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
 
-	c.Logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
 	err = utils.ZipFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 	}
 
 	if c.config.CedanaManaged {
-		c.Logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
+		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
 		// TODO BS: This should just updating cedana market db
 		// err := c.store.PushCheckpoint(compressedCheckpointPath)
 		if err != nil {
-			c.Logger.Info().Msgf("error pushing checkpoint: %v", err)
+			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
 		}
 	}
+
+	c.db.UpdateProcessStateWithID(c.jobId, state)
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -224,7 +199,7 @@ func (c *Client) RuncDump(root string, containerId string, opts *container.CriuO
 
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 	}
 	return nil
 }
@@ -232,16 +207,16 @@ func (c *Client) RuncDump(root string, containerId string, opts *container.CriuO
 func (c *Client) ContainerDump(dir string, containerId string) error {
 	err := container.Dump(dir, containerId)
 	if err != nil {
-		c.Logger.Fatal().Err(err)
+		c.logger.Fatal().Err(err)
 	}
 	return nil
 }
 
-func (c *Client) Dump(dir string) error {
+func (c *Client) Dump(dir string, pid int32) error {
 	defer c.timeTrack(time.Now(), "dump")
 
 	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(c.Process.PID, dir, opts)
+	dumpdir, err := c.prepareDump(pid, dir, opts)
 	if err != nil {
 		return err
 	}
@@ -250,34 +225,38 @@ func (c *Client) Dump(dir string) error {
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		c.Logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
+		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
 		return err
 	}
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(int32(c.Process.PID))
+	opts.Pid = proto.Int32(pid)
 
 	nfy := utils.Notify{
 		Config:          c.config,
-		Logger:          c.Logger,
+		Logger:          c.logger,
 		PreDumpAvail:    true,
 		PostDumpAvail:   true,
 		PreRestoreAvail: true,
 	}
 
-	c.Logger.Info().Msgf(`beginning dump of pid %d`, c.Process.PID)
-
-	if !c.Process.AttachedToHardwareAccel {
+	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
+	state, err := c.generateState(pid)
+	if err != nil {
+		c.logger.Warn().Msgf("could not generate state: %v", err)
+		return err
+	}
+	if !state.ProcessInfo.AttachedToHardwareAccel {
 		_, err = c.CRIU.Dump(opts, &nfy)
 		if err != nil {
 			// check for sudo error
 			if strings.Contains(err.Error(), "errno 0") {
-				c.Logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+				c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 				return err
 			}
 
-			c.Logger.Warn().Msgf("error dumping process: %v", err)
+			c.logger.Warn().Msgf("error dumping process: %v", err)
 			return err
 		}
 	}
@@ -285,7 +264,7 @@ func (c *Client) Dump(dir string) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	c.state.CheckpointState = task.CheckpointState_CHECKPOINTED
-	c.postDump(dumpdir)
+	c.postDump(dumpdir, state)
 	c.cleanupClient()
 
 	return nil

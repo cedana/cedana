@@ -52,7 +52,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	s.Client.Process.PID = args.PID
 
-	err := s.Client.Dump(args.Dir)
+	err := s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 }
 
 func (s *service) publishStateContinous(rate int) {
-	s.Client.Logger.Info().Msgf("pid: %d", s.Client.Process.PID)
+	s.Client.logger.Info().Msgf("pid: %d", s.Client.Process.PID)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	for range ticker.C {
 		if s.Client.Process.PID != 0 {
@@ -275,12 +275,12 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	pid, err := s.runTask(args.Task)
 
 	if err == nil {
-		s.Client.Logger.Info().Msgf("managing process with pid %d", pid)
+		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
 		s.Client.state.Flag = task.FlagEnum_JOB_RUNNING
 		s.Client.Process.PID = pid
 	} else {
 		// TODO BS: this should be at market level
-		s.Client.Logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
+		s.Client.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
 		s.Client.state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
 		// TODO BS: replace doom loop with just retrying from market
 	}
