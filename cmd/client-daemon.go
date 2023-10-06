@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
 	"net/rpc"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +22,14 @@ var daemonSignal = flag.String("s", "", "")
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return fmt.Errorf("missing subcommand")
+	},
+}
+
+var startDaemonCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 	Run: func(cmd *cobra.Command, args []string) {
 
 		logger := utils.GetLogger()
@@ -33,13 +43,13 @@ var clientDaemonCmd = &cobra.Command{
 		}
 
 		ctx := &gd.Context{
-			PidFileName: "cedana.pid",
+			PidFileName: "/tmp/cedana.pid",
 			PidFilePerm: 0o644,
-			LogFileName: "cedana-daemon.log",
+			LogFileName: "/tmp/cedana-daemon.log",
 			LogFilePerm: 0o664,
 			WorkDir:     "./",
 			Umask:       027,
-			Args:        []string{executable, "daemon"},
+			Args:        []string{executable, "daemon", "start"},
 		}
 
 		gd.AddCommand(gd.StringFlag(daemonSignal, "stop"), syscall.SIGTERM, termHandler)
@@ -70,9 +80,33 @@ var clientDaemonCmd = &cobra.Command{
 	},
 }
 
+var stopDaemonCmd = &cobra.Command{
+	Use:   "stop",
+	Short: "Stop cedana client daemon",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// kill -9 daemon
+		// read from PID file
+		pidFile, err := os.ReadFile("/tmp/cedana.pid")
+		if err != nil {
+			return err
+		}
+		pid, err := strconv.Atoi(string(pidFile))
+		if err != nil {
+			return err
+		}
+
+		err = syscall.Kill(pid, syscall.SIGKILL)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
-	if sig == syscall.SIGQUIT {
+	if sig == syscall.SIGTERM || sig == syscall.SIGQUIT {
 		<-done
 	}
 	return gd.ErrStop
@@ -84,4 +118,6 @@ func clientAPI() {
 
 func init() {
 	rootCmd.AddCommand(clientDaemonCmd)
+	clientDaemonCmd.AddCommand(startDaemonCmd)
+	clientDaemonCmd.AddCommand(stopDaemonCmd)
 }

@@ -7,16 +7,12 @@ require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.6
-	github.com/containerd/go-runc v1.0.0
-	github.com/containerd/typeurl v1.0.2
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/docker v24.0.4+incompatible
 	github.com/eapache/go-resiliency v1.4.0
 	github.com/glebarez/sqlite v1.9.0
-	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.3.0
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/nats-io/nats-server/v2 v2.9.21
@@ -29,6 +25,7 @@ require (
 	github.com/sevlyar/go-daemon v0.1.6
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.5.0
+	go.etcd.io/bbolt v1.3.7
 	golang.org/x/sys v0.12.0
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.53.0
@@ -63,6 +60,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
@@ -115,7 +113,6 @@ require (
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	go.etcd.io/bbolt v1.3.7 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect

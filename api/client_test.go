@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
+	bolt "go.etcd.io/bbolt"
 )
 
 func TestClient_WriteOnlyFds(t *testing.T) {
@@ -122,6 +123,12 @@ func TestClient_TryStartJob(t *testing.T) {
 
 		js := utils.CreateTestJetstream(t)
 
+		mockDB, err := bolt.Open("test.db", 0600, nil)
+		if err != nil {
+			t.Error(err)
+		}
+		defer mockDB.Close()
+
 		c := &Client{
 			config: &utils.Config{
 				Client: utils.Client{
@@ -134,14 +141,14 @@ func TestClient_TryStartJob(t *testing.T) {
 			logger: &logger,
 			// enterDoomLoop() makes a JetStream call
 			js: js,
+			db: &DB{conn: mockDB},
 		}
 
 		go mockServerRetryCmd(c)
-		err := c.TryStartJob(nil)
+		err = c.TryStartJob(nil, "test")
 		if err != nil {
 			t.Errorf("Expected no error, but got %v", err)
 		}
-
 	})
 }
 

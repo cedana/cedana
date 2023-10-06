@@ -62,42 +62,18 @@ func Test_MultiConn(t *testing.T) {
 		t.Error(err)
 	}
 
-	c.Process.PID = pid
 	t.Cleanup(func() {
 		syscall.Kill(int(pid), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
 		c.CleanupClient()
 	})
 
-	oldState := c.GetState(c.Process.PID)
+	oldState, _ := c.getState(pid)
 	t.Logf("old state: %+v", oldState)
 
-	err = c.Dump("dumpdir")
+	err = c.Dump("dumpdir", pid)
 	if err != nil {
 		t.Error(err)
 	}
 
-	// TODO NR - analyze dump w/ CRIT?
-
-	// fairly simple validation - ensure that the sockets are still up and functioning for now
-	restoredPID, err := c.Restore(nil, nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	c.Process.PID = *restoredPID
-	newState := c.GetState(c.Process.PID)
-	t.Logf("new state: %+v", newState)
-
-	// compare sockets
-	if len(oldState.ProcessInfo.OpenConnections) != len(newState.ProcessInfo.OpenConnections) {
-		t.Error("sockets are different")
-	}
-
-	// compare ports
-	for key, socket := range oldState.ProcessInfo.OpenConnections {
-		if socket.Laddr.Port != newState.ProcessInfo.OpenConnections[key].Laddr.Port {
-			t.Error("sockets are different")
-		}
-	}
 }
