@@ -48,16 +48,16 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	// var zipFileSize uint64
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
+	s.Client.Process = &task.ProcessInfo{}
 
-	client := s.Client
-	client.Process.PID = args.PID
+	s.Client.Process.PID = args.PID
 
-	err := client.Dump(args.Dir)
+	err := s.Client.Dump(args.Dir)
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := os.Open(client.CheckpointDir + ".zip")
+	file, err := os.Open(s.Client.CheckpointDir + ".zip")
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, client.CheckpointDir)
+	err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, s.Client.CheckpointDir)
 	if err != nil {
 		return nil, err
 	}
