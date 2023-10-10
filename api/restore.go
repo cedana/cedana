@@ -177,7 +177,29 @@ func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
-func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
+func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
+
+	if !opts.Detatch {
+		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
+		if err != nil {
+			return err
+		}
+
+		var data map[string]interface{}
+
+		if err := json.Unmarshal(jsonData, &data); err != nil {
+			return err
+		}
+
+		data["process"].(map[string]interface{})["terminal"] = false
+		updatedJSON, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
+			return err
+		}
+	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {

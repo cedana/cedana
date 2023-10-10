@@ -399,7 +399,6 @@ func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired("bundle")
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
-	// Make this optional in a later update
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
 	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
 

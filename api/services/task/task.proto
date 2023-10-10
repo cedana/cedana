@@ -250,7 +250,7 @@ message CriuOpts {
 message RuncRestoreArgs {
   string ContainerId = 1;
   string ImagePath = 2;
-  RuncOpts Opts = 3;
+  RuncOpts Opts = 4;
 }
 
 message RuncOpts {
