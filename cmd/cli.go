@@ -370,7 +370,7 @@ var startTaskCmd = &cobra.Command{
 
 		taskArgs := &task.StartTaskArgs{
 			Task: args[0],
-			// ID:   args[1],
+			Id:   args[1],
 		}
 
 		resp := cli.cts.StartTask(taskArgs)

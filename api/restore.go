@@ -172,11 +172,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func (c *Client) pyTorchRestore() error {
-	// TODO Not implemented yet
-	return nil
-}
-
 func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
