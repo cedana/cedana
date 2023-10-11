@@ -11,7 +11,6 @@ import (
 )
 
 type Config struct {
-	CedanaManaged bool          `json:"cedana_managed" mapstructure:"cedana_managed"`
 	Client        Client        `json:"client" mapstructure:"client"`
 	ActionScripts ActionScripts `json:"action_scripts" mapstructure:"action_scripts"`
 	Connection    Connection    `json:"connection" mapstructure:"connection"`
@@ -91,7 +90,6 @@ func InitConfig() (*Config, error) {
 
 	// override setting is ugly, need to abstract this away somehow
 	if err == nil && so != nil {
-		viper.Set("cedana_managed", so.CedanaManaged)
 		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
 		viper.Set("client.task", so.Client.Task)
 	}

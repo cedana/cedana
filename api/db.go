@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -24,10 +23,15 @@ func (db *DB) Close() error {
 
 // KISS for now - but we may want to separate out into subbuckets as we add more
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
-// structure is xid: pid, pid: state
+// structure is default -> xid, xid -> pid, pid: state (arrows denote buckets)
 func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) error {
 	return db.conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
+		if err != nil {
+			return err
+		}
+
+		job, err := root.CreateBucketIfNotExists([]byte(id))
 		if err != nil {
 			return err
 		}
@@ -42,12 +46,7 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) e
 			return fmt.Errorf("pid 0 returned from state - is process running?")
 		}
 
-		err = root.Put([]byte(id), []byte(strconv.Itoa(int(pid))))
-		if err != nil {
-			return err
-		}
-
-		err = root.Put([]byte(strconv.Itoa(int(pid))), marshaledState)
+		err = job.Put([]byte(strconv.Itoa(int(pid))), marshaledState)
 		if err != nil {
 			return err
 		}
@@ -56,6 +55,7 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) e
 	})
 }
 
+// This automatically gets the latest entry in the job bucket
 func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 	var state task.ProcessState
 
@@ -65,16 +65,13 @@ func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 			return fmt.Errorf("could not find bucket")
 		}
 
-		pid := root.Get([]byte(id))
-		if pid == nil {
-			return fmt.Errorf("could not find pid")
+		job := root.Bucket([]byte(id))
+		if job == nil {
+			return fmt.Errorf("could not find job")
 		}
 
-		marshaledState := root.Get(pid)
-		if marshaledState == nil {
-			return fmt.Errorf("could not find state")
-		}
-
+		c := job.Cursor()
+		_, marshaledState := c.Last()
 		return json.Unmarshal(marshaledState, &state)
 	})
 
@@ -104,17 +101,29 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 
 func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) error {
 	return db.conn.Update(func(tx *bolt.Tx) error {
-		root, err := tx.CreateBucketIfNotExists([]byte("default"))
-		if err != nil {
-			return err
+		root := tx.Bucket([]byte("default"))
+		if root == nil {
+			return fmt.Errorf("could not find bucket")
 		}
 
-		marshaledState, err := json.Marshal(state)
-		if err != nil {
-			return err
-		}
-
-		return root.Put([]byte(strconv.Itoa(int(pid))), marshaledState)
+		root.ForEachBucket(func(k []byte) error {
+			job := root.Bucket(k)
+			if job == nil {
+				return fmt.Errorf("could not find job")
+			}
+			job.ForEach(func(k, v []byte) error {
+				if string(k) == strconv.Itoa(int(pid)) {
+					marshaledState, err := json.Marshal(state)
+					if err != nil {
+						return err
+					}
+					return job.Put(k, marshaledState)
+				}
+				return nil
+			})
+			return nil
+		})
+		return nil
 	})
 }
 
@@ -126,13 +135,25 @@ func (db *DB) GetPID(id string) (int32, error) {
 			return fmt.Errorf("could not find bucket")
 		}
 
-		pidBytes := root.Get([]byte(id))
+		job := root.Bucket([]byte(id))
+		if job == nil {
+			return fmt.Errorf("could not find job")
+		}
+
+		c := job.Cursor()
+		pidBytes, _ := c.Last()
 		if pidBytes == nil {
 			return fmt.Errorf("could not find pid")
 		}
-		pid = int32(binary.BigEndian.Uint32(pidBytes))
 
-		return nil
+		pid64, err := strconv.ParseInt(string(pidBytes), 10, 32)
+		if err != nil {
+			return err
+		}
+
+		pid = int32(pid64)
+
+		return err
 	})
 	return pid, err
 }

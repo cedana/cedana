@@ -8,14 +8,17 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var id string
 var dir string
 var ref string
+
 var containerId string
 var imgPath string
 var runcPath string
@@ -155,6 +158,12 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		if id == "" {
+			id = xid.New().String()
+			cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
+		}
+
 		if dir == "" {
 			// should be a default dump directory as well?
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
@@ -164,9 +173,12 @@ var dumpProcessCmd = &cobra.Command{
 			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
 
+		// always self serve when invoked from CLI
 		dumpArgs := task.DumpArgs{
-			PID: int32(pid),
-			Dir: dir,
+			PID:   int32(pid),
+			Dir:   dir,
+			JobID: id,
+			Type:  task.DumpArgs_SELF_SERVE,
 		}
 
 		resp := cli.cts.CheckpointTask(&dumpArgs)
@@ -358,7 +370,7 @@ var startTaskCmd = &cobra.Command{
 
 		taskArgs := &task.StartTaskArgs{
 			Task: args[0],
-			// ID:   args[1],
+			Id:   args[1],
 		}
 
 		resp := cli.cts.StartTask(taskArgs)
@@ -431,6 +443,8 @@ func initContainerdCommands() {
 func init() {
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	dumpProcessCmd.Flags().StringVarP(&id, "jobid", "j", "", "optionally specify an id (randomly generated if omitted)")
+	dumpProcessCmd.MarkFlagRequired("dir")
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 

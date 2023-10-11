@@ -182,11 +182,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func (c *Client) pyTorchRestore() error {
-	// TODO Not implemented yet
-	return nil
-}
-
 func (c *Client) patchPodman(rootfs string) error {
 	ctx := registry.GetContext()
 	var (
@@ -352,32 +347,13 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	switch args.Type {
-	case task.RestoreArgs_PROCESS:
-		tmpdir, err := c.prepareRestore(opts, args, "")
-		if err != nil {
-			return nil, err
-		}
-		dir = tmpdir
-
-		pid, err = c.criuRestore(opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
-	case task.RestoreArgs_PYTORCH:
-		err := c.pyTorchRestore()
-		if err != nil {
-			return nil, err
-		}
-	default:
-		dir, err := c.prepareRestore(opts, nil, args.Dir)
-		if err != nil {
-			return nil, err
-		}
-		pid, err = c.criuRestore(opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
+	dir, err := c.prepareRestore(opts, nil, args.Dir)
+	if err != nil {
+		return nil, err
+	}
+	pid, err = c.criuRestore(opts, nfy, *dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return pid, nil

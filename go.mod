@@ -10,6 +10,7 @@ require (
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.7
 	github.com/containerd/typeurl/v2 v2.1.1
+	github.com/containers/podman/v4 v4.7.1
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/docker v24.0.6+incompatible
@@ -120,11 +121,12 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/letsencrypt/boulder v0.0.0-20231011161212-a5c277200488 // indirect
-	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
+	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
@@ -226,12 +228,12 @@ require (
 )
 
 require (
-	github.com/adrg/strutil v0.3.1
-	github.com/containers/podman/v4 v4.7.1
+	github.com/adrg/strutil v0.3.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rs/zerolog v1.31.0
-	github.com/shirou/gopsutil/v3 v3.23.9
+	github.com/rs/zerolog v1.28.0
+	github.com/sevlyar/go-daemon v0.1.6
+	github.com/shirou/gopsutil/v3 v3.23.7
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

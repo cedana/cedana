@@ -12,6 +12,7 @@ message DumpArgs {
     MARKET = 1;
   }
   DumpType Type = 3;
+  string JobID = 4;
 }
 message DumpResp {
     string Error = 1;
@@ -19,12 +20,7 @@ message DumpResp {
 
 message RestoreArgs {
   string Cid = 1;
-  enum ProcessType {
-    PROCESS = 0;
-    PYTORCH = 1;
-  }
-  ProcessType Type = 2;
-  string Dir = 3;
+  string Dir = 2;
 }
 message RestoreResp {
     string Error = 1;
@@ -59,10 +55,9 @@ message ProcessState {
   string ContainerId = 4;
   string StartedAt = 5;
   ProcessInfo ProcessInfo = 6;
-  checkpointType CheckpointType = 7;
-  string CheckpointPath = 8;
-  checkpointState CheckpointState = 9;
-  FlagEnum Flag = 10;
+  string CheckpointPath = 7;
+  checkpointState CheckpointState = 8;
+  FlagEnum Flag = 9;
   enum ContainerRuntimeOpts {
     CONTAINERD = 0;
     RUNC = 1;
@@ -174,12 +169,6 @@ enum checkpointState {
   CHECKPOINT_FAILED = 1;
   RESTORED = 2;
   RESTORE_FAILED = 3;
-}
-
-enum checkpointType {
-  NONE = 0;
-  CRIU = 1;
-  PYTORCH = 2;
 }
 
 service TaskService {
