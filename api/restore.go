@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,15 +11,6 @@ import (
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
-	"github.com/containers/podman/v4/cmd/podman/registry"
-	"github.com/containers/podman/v4/libpod"
-	"github.com/containers/podman/v4/libpod/define"
-	"github.com/containers/podman/v4/pkg/checkpoint"
-	"github.com/containers/podman/v4/pkg/domain/entities"
-	"github.com/containers/podman/v4/pkg/specgen"
-	"github.com/containers/podman/v4/pkg/specgen/generate"
-	"github.com/containers/podman/v4/pkg/specgenutil"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -182,122 +172,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func (c *Client) patchPodman(rootfs string) error {
-	ctx := registry.GetContext()
-	var (
-		runOpts entities.ContainerRunOptions
-		ctrs    []*libpod.Container
-		opts    entities.ContainerCreateOptions
-	)
-
-	runOpts.CIDFile = ""
-	runOpts.Rm = false
-	runOpts.OutputStream = os.Stdout
-	runOpts.InputStream = os.Stdin
-	runOpts.ErrorStream = os.Stderr
-
-	s := specgen.NewSpecGenerator(rootfs, true)
-	if err := specgenutil.FillOutSpecGen(s, &opts, []string{rootfs}); err != nil {
-		return err
-	}
-
-	s.RawImageName = "test"
-
-	registry.ContainerEngine().ContainerRun(ctx, runOpts)
-	Libpod := &libpod.Runtime{}
-
-	img, resolvedImageName := runOpts.Spec.GetImage()
-
-	if img != nil && resolvedImageName != "" {
-		_, err := img.Inspect(ctx, nil)
-		if err != nil {
-			return err
-		}
-	}
-	namesOrIds := []string{resolvedImageName}
-
-	warn, err := generate.CompleteSpec(ctx, Libpod, runOpts.Spec)
-	if err != nil {
-		return err
-	}
-	// Print warnings
-	for _, w := range warn {
-		fmt.Fprintf(os.Stderr, "%s\n", w)
-	}
-
-	var restoreOptions entities.RestoreOptions
-	restoreOptions.Name = runOpts.Spec.Name
-	restoreOptions.Pod = runOpts.Spec.Pod
-
-	filterFuncs := []libpod.ContainerFilter{
-		func(c *libpod.Container) bool {
-			state, _ := c.State()
-			return state == define.ContainerStateExited
-		},
-	}
-
-	newRestoreOptions := libpod.ContainerCheckpointOptions{
-		Keep:            restoreOptions.Keep,
-		TCPEstablished:  restoreOptions.TCPEstablished,
-		TargetFile:      restoreOptions.Import,
-		Name:            restoreOptions.Name,
-		IgnoreRootfs:    restoreOptions.IgnoreRootFS,
-		IgnoreVolumes:   restoreOptions.IgnoreVolumes,
-		IgnoreStaticIP:  restoreOptions.IgnoreStaticIP,
-		IgnoreStaticMAC: restoreOptions.IgnoreStaticMAC,
-		ImportPrevious:  restoreOptions.ImportPrevious,
-		Pod:             restoreOptions.Pod,
-		PrintStats:      restoreOptions.PrintStats,
-		FileLocks:       restoreOptions.FileLocks,
-	}
-
-	idToRawInput := map[string]string{}
-	switch {
-	case restoreOptions.Import != "":
-		ctrs, err = checkpoint.CRImportCheckpointTar(ctx, Libpod, restoreOptions)
-	case restoreOptions.All:
-		ctrs, err = Libpod.GetContainers(false, filterFuncs...)
-	default:
-		for _, nameOrID := range namesOrIds {
-			logrus.Debugf("look up container: %q", nameOrID)
-			c, err := Libpod.LookupContainer(nameOrID)
-			if err == nil {
-				ctrs = append(ctrs, c)
-				idToRawInput[c.ID()] = nameOrID
-			} else {
-				// If container was not found, check if this is a checkpoint image
-				logrus.Debugf("look up image: %q", nameOrID)
-				img, _, err := Libpod.LibimageRuntime().LookupImage(nameOrID, nil)
-				if err != nil {
-					return fmt.Errorf("no such container or image: %s", nameOrID)
-				}
-				newRestoreOptions.CheckpointImageID = img.ID()
-				mountPoint, err := img.Mount(ctx, nil, "")
-				defer func() {
-					if err := img.Unmount(true); err != nil {
-						logrus.Errorf("Failed to unmount image: %v", err)
-					}
-				}()
-				if err != nil {
-					return err
-				}
-				importedCtrs, err := checkpoint.CRImportCheckpoint(ctx, Libpod, restoreOptions, mountPoint)
-				if err != nil {
-					// CRImportCheckpoint is expected to import exactly one container from checkpoint image
-					return fmt.Errorf("unable to import checkpoint from image: %q: %v", nameOrID, err)
-				} else {
-					ctrs = append(ctrs, importedCtrs[0])
-				}
-			}
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	if !opts.Detatch {
@@ -320,10 +194,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
 			return err
 		}
-	}
-
-	if err := c.patchPodman(strings.Split(opts.Bundle, "/")[8]); err != nil {
-		return err
 	}
 
 	if err := container.RuncRestore(imgPath, containerId, *opts); err != nil {
