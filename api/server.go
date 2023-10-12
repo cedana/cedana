@@ -304,6 +304,13 @@ func (s *service) runTask(task string) (int32, error) {
 		return 0, err
 	}
 
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			s.logger.Error().Err(err).Msg("failed to run task")
+		}
+	}()
+
 	pid = int32(cmd.Process.Pid)
 	ppid := int32(os.Getpid())
 
