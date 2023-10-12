@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/types"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -133,6 +134,56 @@ func (db *DB) setNewDbConn() error {
 	}
 
 	db.conn = database
+
+	return nil
+}
+
+func (s *DB) getContainerConfigFromDB(id []byte, config *types.ContainerConfig, ctrsBkt *bolt.Bucket) error {
+	ctrBkt := ctrsBkt.Bucket(id)
+	if ctrBkt == nil {
+		return fmt.Errorf("container %s not found in DB", string(id))
+	}
+
+	configBytes := ctrBkt.Get(configKey)
+	if configBytes == nil {
+		return fmt.Errorf("container %s missing config key in DB", string(id))
+	}
+
+	if err := json.Unmarshal(configBytes, config); err != nil {
+		return fmt.Errorf("unmarshalling container %s config: %w", string(id), err)
+	}
+
+	// TODO Move over these types
+	// // convert ports to the new format if needed
+	// if len(config.ContainerNetworkConfig.OldPortMappings) > 0 && len(config.ContainerNetworkConfig.PortMappings) == 0 {
+	// 	config.ContainerNetworkConfig.PortMappings = ocicniPortsToNetTypesPorts(config.ContainerNetworkConfig.OldPortMappings)
+	// 	// keep the OldPortMappings in case an user has to downgrade podman
+
+	// 	// indicate that the config was modified and should be written back to the db when possible
+	// 	config.rewrite = true
+	// }
+
+	return nil
+}
+
+func (s *DB) getContainerStateDB(id []byte, ctrsBkt *bolt.Bucket) error {
+	newState := new(types.ContainerState)
+	ctrToUpdate := ctrsBkt.Bucket(id)
+
+	newStateBytes := ctrToUpdate.Get(stateKey)
+	if newStateBytes == nil {
+		return fmt.Errorf("container does not have a state key in DB")
+	}
+
+	if err := json.Unmarshal(newStateBytes, newState); err != nil {
+		return fmt.Errorf("unmarshalling container state: %w", err)
+	}
+
+	// backwards compat, previously we used an extra bucket for the netns so try to get it from there
+	netNSBytes := ctrToUpdate.Get(netNSKey)
+	if netNSBytes != nil && newState.NetNS == "" {
+		newState.NetNS = string(netNSBytes)
+	}
 
 	return nil
 }
