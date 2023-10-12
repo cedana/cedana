@@ -188,7 +188,6 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 	var (
 		config *types.ContainerConfig
 		state  *types.ContainerState
-		ctrBkt *bolt.Bucket
 	)
 
 	byteId := []byte(containerId)
@@ -204,17 +203,21 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		if err != nil {
 			return err
 		}
-		ctrBkt = bkt
+
+		if err := db.getContainerConfigFromDB(byteId, config, bkt); err != nil {
+			return err
+		}
+
+		if err := db.getContainerStateDB(byteId, state, bkt); err != nil {
+			return err
+		}
+
 		return nil
 	})
 
 	if err != nil {
 		return err
 	}
-
-	db.getContainerConfigFromDB(byteId, config, ctrBkt)
-
-	db.getContainerStateDB(byteId, state, ctrBkt)
 
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 

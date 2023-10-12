@@ -100,7 +100,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-dump", "/tmp/cedana_runc_test/", "container-printer"],
+            "args": ["debug", "runc-dump", "/tmp/test/", "ca46981c02dbf08def32a263c448d46493876325c434d5e654d9c311c27bcfdb"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },

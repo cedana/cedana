@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
@@ -87,6 +88,8 @@ var debugRuncDumpCmd = &cobra.Command{
 		containerId := args[1]
 		root := "/var/run/runc"
 
+		client := api.Client{}
+
 		criuOpts := &container.CriuOpts{
 			ImagesDirectory: imgPath,
 			WorkDirectory:   "",
@@ -94,12 +97,7 @@ var debugRuncDumpCmd = &cobra.Command{
 			TcpEstablished:  false,
 		}
 
-		runcContainer := container.GetContainerFromRunc(containerId, root)
-
-		err := runcContainer.RuncCheckpoint(criuOpts, runcContainer.Pid)
-		if err != nil {
-			return err
-		}
+		client.RuncDump(root, containerId, criuOpts)
 
 		return nil
 	},
