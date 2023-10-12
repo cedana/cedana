@@ -19,7 +19,7 @@ message DumpResp {
 }
 
 message RestoreArgs {
-  string Cid = 1;
+  string CheckpointId = 1;
   string Dir = 2;
 }
 message RestoreResp {
@@ -113,7 +113,7 @@ message ConnectionStat {
   Addr Raddr = 5;
   string Status = 6;
   repeated int32 Uids = 7;
-  int32 Pid = 8;
+  int32 PID = 8;
 }
 
 message Addr {

@@ -313,8 +313,8 @@ var restoreProcessCmd = &cobra.Command{
 		}
 
 		restoreArgs := task.RestoreArgs{
-			Cid: "Not Implemented",
-			Dir: args[0],
+			CheckpointId: "Not Implemented",
+			Dir:          args[0],
 		}
 
 		resp := cli.cts.RestoreTask(&restoreArgs)

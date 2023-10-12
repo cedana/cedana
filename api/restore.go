@@ -15,12 +15,8 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
-	// Here we just want to call store.GetCheckpoint
-	// setting auth token for now
-	c.config.Connection.CedanaAuthToken = "brandonsmith"
-	c.config.Connection.CedanaUrl = "http://localhost:1324"
-	c.store = utils.NewCedanaStore(c.config)
-	zipFile, err := c.store.GetCheckpoint(args.Cid)
+	c.remoteStore = utils.NewCedanaStore(c.config)
+	zipFile, err := c.remoteStore.GetCheckpoint(args.CheckpointId)
 	if err != nil {
 		return nil, err
 	}

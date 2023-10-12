@@ -30,8 +30,8 @@ type Client struct {
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
-	// external checkpoint store
-	store utils.Store
+	// external checkpoint remoteStore
+	remoteStore utils.Store
 
 	// db meta/state store
 	db *DB
@@ -168,24 +168,24 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 		if err != nil {
 			return nil, nil
 		}
-		for _, c := range openConnectionsOrig {
+		for _, conn := range openConnectionsOrig {
 			Laddr := &task.Addr{
-				IP:   c.Laddr.IP,
-				Port: c.Laddr.Port,
+				IP:   conn.Laddr.IP,
+				Port: conn.Laddr.Port,
 			}
 			Raddr := &task.Addr{
-				IP:   c.Raddr.IP,
-				Port: c.Raddr.Port,
+				IP:   conn.Raddr.IP,
+				Port: conn.Raddr.Port,
 			}
 			openConnections = append(openConnections, &task.ConnectionStat{
-				Fd:     c.Fd,
-				Family: c.Family,
-				Type:   c.Type,
+				Fd:     conn.Fd,
+				Family: conn.Family,
+				Type:   conn.Type,
 				Laddr:  Laddr,
 				Raddr:  Raddr,
-				Status: c.Status,
-				Pid:    c.Pid,
-				Uids:   c.Uids,
+				Status: conn.Status,
+				PID:    conn.Pid,
+				Uids:   conn.Uids,
 			})
 		}
 
