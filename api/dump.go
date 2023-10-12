@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -194,9 +195,40 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
 
+	var (
+		config *types.ContainerConfig
+		state  *types.ContainerState
+		ctrBkt *bolt.Bucket
+	)
+
+	byteId := []byte(containerId)
+
+	db := &DB{conn: nil, dbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
+
+	if err := db.setNewDbConn(); err != nil {
+		return err
+	}
+
+	err := db.conn.View(func(tx *bolt.Tx) error {
+		bkt, err := getCtrBucket(tx)
+		if err != nil {
+			return err
+		}
+		ctrBkt = bkt
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	db.getContainerConfigFromDB(byteId, config, ctrBkt)
+
+	db.getContainerStateDB(byteId, state, ctrBkt)
+
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
+	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}

@@ -166,7 +166,7 @@ func (s *DB) getContainerConfigFromDB(id []byte, config *types.ContainerConfig, 
 	return nil
 }
 
-func (s *DB) getContainerStateDB(id []byte, ctrsBkt *bolt.Bucket) error {
+func (s *DB) getContainerStateDB(id []byte, state *types.ContainerState, ctrsBkt *bolt.Bucket) error {
 	newState := new(types.ContainerState)
 	ctrToUpdate := ctrsBkt.Bucket(id)
 
@@ -184,6 +184,8 @@ func (s *DB) getContainerStateDB(id []byte, ctrsBkt *bolt.Bucket) error {
 	if netNSBytes != nil && newState.NetNS == "" {
 		newState.NetNS = string(netNSBytes)
 	}
+
+	state = newState
 
 	return nil
 }
