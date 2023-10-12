@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
@@ -178,6 +179,15 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 func (c *Client) pyTorchRestore() error {
 	// TODO Not implemented yet
 	return nil
+}
+
+func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.ContainerState, error) {
+	dumpSpec := new(spec.Spec)
+	if _, err := utils.ReadJSONFile(dumpSpec, checkpointDir, "spec.dump"); err != nil {
+		return nil, nil, err
+	}
+
+	return nil, nil, nil
 }
 
 func (c *Client) patchPodman(config *types.ContainerConfig, state *types.ContainerState) error {
