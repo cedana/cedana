@@ -1,24 +1,20 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"log"
+	"net/rpc"
+	"os"
 	"strconv"
 
-	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-var id string
 var dir string
 var ref string
-
 var containerId string
 var imgPath string
 var runcPath string
@@ -34,95 +30,8 @@ var returnPID bool
 
 type CLI struct {
 	cfg    *utils.Config
-	cts    *CheckpointTaskService
+	conn   *rpc.Client
 	logger zerolog.Logger
-}
-
-type CheckpointTaskService struct {
-	ctx     context.Context
-	client  task.TaskServiceClient
-	conn    *grpc.ClientConn // Keep a reference to the connection
-	address string
-}
-
-func NewCheckpointTaskService(addr string) *CheckpointTaskService {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(addr, opts...)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-
-	client := task.NewTaskServiceClient(conn)
-
-	ctx := context.Background()
-
-	return &CheckpointTaskService{
-		client:  client,
-		conn:    conn, // Keep a reference to the connection
-		address: addr,
-		ctx:     ctx,
-	}
-}
-
-func (c *CheckpointTaskService) CheckpointTask(args *task.DumpArgs) *task.DumpResp {
-	resp, err := c.client.Dump(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) RestoreTask(args *task.RestoreArgs) *task.RestoreResp {
-	resp, err := c.client.Restore(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) CheckpointContainer(args *task.ContainerDumpArgs) *task.ContainerDumpResp {
-	resp, err := c.client.ContainerDump(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) ContainerRestore(args *task.ContainerRestoreArgs) *task.ContainerRestoreResp {
-	resp, err := c.client.ContainerRestore(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) CheckpointRunc(args *task.RuncDumpArgs) *task.RuncDumpResp {
-	resp, err := c.client.RuncDump(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) RuncRestore(args *task.RuncRestoreArgs) *task.RuncRestoreResp {
-	resp, err := c.client.RuncRestore(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) StartTask(args *task.StartTaskArgs) *task.StartTaskResp {
-	resp, err := c.client.StartTask(c.ctx, args)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return resp
-}
-
-func (c *CheckpointTaskService) Close() {
-	c.conn.Close()
 }
 
 func NewCLI() (*CLI, error) {
@@ -130,13 +39,15 @@ func NewCLI() (*CLI, error) {
 	if err != nil {
 		return nil, err
 	}
-	cts := NewCheckpointTaskService("localhost:8080")
-
+	client, err := rpc.Dial("unix", "/tmp/cedana.sock")
+	if err != nil {
+		return nil, fmt.Errorf("could not connect to daemon at /tmp/cedana.sock, running as root?: %w", err)
+	}
 	logger := utils.GetLogger()
 
 	return &CLI{
 		cfg:    cfg,
-		cts:    cts,
+		conn:   client,
 		logger: logger,
 	}, nil
 }
@@ -160,12 +71,6 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		if id == "" {
-			id = xid.New().String()
-			cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
-		}
-
 		if dir == "" {
 			// should be a default dump directory as well?
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
@@ -174,22 +79,16 @@ var dumpProcessCmd = &cobra.Command{
 			dir = cli.cfg.SharedStorage.DumpStorageDir
 			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
-
-		// always self serve when invoked from CLI
-		dumpArgs := task.DumpArgs{
-			PID:   int32(pid),
-			Dir:   dir,
-			JobID: id,
-			Type:  task.DumpArgs_SELF_SERVE,
+		a := api.DumpArgs{
+			PID: int32(pid),
+			Dir: dir,
 		}
 
-		resp := cli.cts.CheckpointTask(&dumpArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.DumpResp
+		err = cli.conn.Call("CedanaDaemon.Dump", a, &resp)
+		if err != nil {
+			return err
 		}
-
-		cli.cts.Close()
 
 		cli.logger.Info().Msgf("checkpoint of process %d written successfully to %s", pid, dir)
 
@@ -207,18 +106,16 @@ var containerdDumpCmd = &cobra.Command{
 			return err
 		}
 
-		dumpArgs := task.ContainerDumpArgs{
-			ContainerId: containerId,
+		a := api.ContainerDumpArgs{
 			Ref:         ref,
-		}
-		resp := cli.cts.CheckpointContainer(&dumpArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+			ContainerId: containerId,
 		}
 
-		cli.cts.Close()
-
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.ContainerDump", a, &resp)
+		if err != nil {
+			return err
+		}
 		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
@@ -236,28 +133,25 @@ var runcDumpCmd = &cobra.Command{
 
 		root = "/var/run/runc"
 
-		criuOpts := &task.CriuOpts{
+		criuOpts := &container.CriuOpts{
 			ImagesDirectory: runcPath,
 			WorkDirectory:   workPath,
 			LeaveRunning:    true,
 			TcpEstablished:  false,
 		}
 
-		dumpArgs := task.RuncDumpArgs{
+		a := api.RuncDumpArgs{
 			Root:           root,
 			CheckpointPath: checkpointPath,
 			ContainerId:    containerId,
-			CriuOpts:       criuOpts,
+			CriuOpts:       *criuOpts,
 		}
 
-		resp := cli.cts.CheckpointRunc(&dumpArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.RuncDump", a, &resp)
+		if err != nil {
+			return err
 		}
-
-		cli.cts.Close()
-
 		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, runcPath)
 		return nil
 	},
@@ -273,27 +167,24 @@ var runcRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		opts := &task.RuncOpts{
+		opts := &container.RuncOpts{
 			Root:          root,
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detatch:       detach,
 		}
 
-		restoreArgs := &task.RuncRestoreArgs{
+		a := api.RuncRestoreArgs{
 			ImagePath:   runcPath,
 			ContainerId: containerId,
 			Opts:        opts,
 		}
 
-		resp := cli.cts.RuncRestore(restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.ContainerDumpResp
+		err = cli.conn.Call("CedanaDaemon.RuncRestore", a, &resp)
+		if err != nil {
+			return err
 		}
-
-		cli.cts.Close()
-
 		cli.logger.Info().Msgf("container %s successfully restored", containerId)
 		return nil
 	},
@@ -314,18 +205,15 @@ var restoreProcessCmd = &cobra.Command{
 			return err
 		}
 
-		restoreArgs := task.RestoreArgs{
-			CheckpointId: "Not Implemented",
-			Dir:          args[0],
+		a := api.RestoreArgs{
+			Path: args[0],
 		}
 
-		resp := cli.cts.RestoreTask(&restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.RestoreResp
+		err = cli.conn.Call("CedanaDaemon.Restore", a, &resp)
+		if err != nil {
+			return err
 		}
-
-		cli.cts.Close()
 
 		return nil
 	},
@@ -341,18 +229,16 @@ var containerdRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		restoreArgs := &task.ContainerRestoreArgs{
+		a := api.ContainerRestoreArgs{
 			ImgPath:     imgPath,
 			ContainerId: containerId,
 		}
 
-		resp := cli.cts.ContainerRestore(restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.ContainerRestoreResp
+		err = cli.conn.Call("CedanaDaemon.ContainerRestore", a, &resp)
+		if err != nil {
+			return err
 		}
-
-		cli.cts.Close()
 
 		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, ref)
 		return nil
@@ -370,40 +256,97 @@ var startTaskCmd = &cobra.Command{
 			return err
 		}
 
-		taskArgs := &task.StartTaskArgs{
+		a := api.StartTaskArgs{
 			Task: args[0],
-			Id:   args[1],
+			ID:   args[1],
 		}
 
-		resp := cli.cts.StartTask(taskArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		var resp api.StartTaskResp
+		err = cli.conn.Call("CedanaDaemon.StartTask", a, &resp)
+		if err != nil {
+			return err
 		}
 
-		cli.cts.Close()
+		if returnPID {
+			fmt.Println(resp.PID)
+		}
+
 		return nil
 	},
 }
 
-// var psCmd = &cobra.Command{
-// 	Use:   "ps",
-// 	Short: "List running processes",
-// 	RunE: func(cmd *cobra.Command, args []string) error {
-// 		cli, err := NewCLI()
-// 		if err != nil {
-// 			return err
-// 		}
+var psCmd = &cobra.Command{
+	Use:   "ps",
+	Short: "List running processes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
 
-// 		var resp api.StatusResp
-// 		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
-// 		if err != nil {
-// 			return err
-// 		}
+		var resp api.StatusResp
+		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
+		if err != nil {
+			return err
+		}
 
-// 		return nil
-// 	},
-// }
+		for _, entry := range resp.PIDState {
+			for k, v := range entry {
+				fmt.Printf("%v: %v\n", k, v)
+			}
+		}
+
+		for _, entry := range resp.IDPID {
+			for k, v := range entry {
+				fmt.Printf("%v: %v\n", k, v)
+			}
+		}
+
+		return nil
+	},
+}
+
+var natsCmd = &cobra.Command{
+	Use:   "nats",
+	Short: "Start NATS server for cedana client",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		selfId, exists := os.LookupEnv("CEDANA_CLIENT_ID")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_CLIENT_ID - something went wrong during instance creation")
+		}
+
+		jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_JOB_ID - something went wrong during instance creation")
+		}
+
+		authToken, exists := os.LookupEnv("CEDANA_AUTH_TOKEN")
+		if !exists {
+			cli.logger.Fatal().Msg("Could not find CEDANA_AUTH_TOKEN - something went wrong during instance creation")
+		}
+
+		a := api.StartNATSArgs{
+			SelfID:    selfId,
+			JobID:     jobId,
+			AuthToken: authToken,
+		}
+
+		var resp api.StartNATSResp
+		err = cli.conn.Call("CedanaDaemon.StartNATS", a, &resp)
+		if err != nil {
+			return err
+		}
+
+		cli.logger.Info().Msgf("NATS client started, waiting for commands sent to job %s", jobId)
+
+		return nil
+	},
+}
 
 func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
@@ -446,8 +389,6 @@ func initContainerdCommands() {
 func init() {
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
-	dumpProcessCmd.Flags().StringVarP(&id, "jobid", "j", "", "optionally specify an id (randomly generated if omitted)")
-	dumpProcessCmd.MarkFlagRequired("dir")
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 
@@ -456,10 +397,11 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(startTaskCmd)
-	// rootCmd.AddCommand(psCmd)
+	rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
 
 	initContainerdCommands()
 
+	clientDaemonCmd.AddCommand(natsCmd)
 }

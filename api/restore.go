@@ -7,29 +7,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
+
+	cedana "github.com/cedana/cedana/types"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
-	c.remoteStore = utils.NewCedanaStore(c.config)
-	zipFile, err := c.remoteStore.GetCheckpoint(args.CheckpointId)
-	if err != nil {
-		return nil, err
-	}
-
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, error) {
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
-	err = os.Mkdir(tmpdir, 0755)
+	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
-	err = utils.UnzipFolder(*zipFile, tmpdir)
+	var zipFile string
+	zipFile = checkpointPath
+
+	c.logger.Info().Msgf("decompressing %s to %s", zipFile, tmpdir)
+	err = utils.UnzipFolder(zipFile, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
@@ -48,7 +46,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		return nil, err
 	}
 
-	var checkpointState task.ProcessState
+	var checkpointState cedana.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
@@ -94,7 +92,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 
 // restoreFiles looks at the files copied during checkpoint and copies them back to the
 // original path, creating folders along the way.
-func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
+func (c *Client) restoreFiles(ps *cedana.ProcessState, dir string) {
 	_, err := os.Stat(dir)
 	if err != nil {
 		return
@@ -128,14 +126,14 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 	}
 }
 
-func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
+func (c *Client) prepareRestoreOpts() rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:       proto.Int32(2),
 		LogFile:        proto.String("restore.log"),
 		TcpEstablished: proto.Bool(true),
 	}
 
-	return &opts
+	return opts
 
 }
 
@@ -164,8 +162,12 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error removing directory")
 	}
-	c.cleanupClient()
+	c.CleanupClient()
 	return resp.Restore.Pid, nil
+}
+
+func (c *Client) pyTorchRestore() error {
+	return nil
 }
 
 func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
@@ -177,7 +179,7 @@ func (c *Client) RuncRestore(imgPath string, containerId string, opts *container
 	return nil
 }
 
-func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
+func (c *Client) Restore(path string) (*int32, error) {
 	defer c.timeTrack(time.Now(), "restore")
 	var dir *string
 	var pid *int32
@@ -191,11 +193,12 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	dir, err := c.prepareRestore(opts, nil, args.Dir)
+	// if we have a server command, otherwise default to base CRIU wrapper mode
+	dir, err := c.prepareRestore(&opts, path)
 	if err != nil {
 		return nil, err
 	}
-	pid, err = c.criuRestore(opts, nfy, *dir)
+	pid, err = c.criuRestore(&opts, nfy, *dir)
 	if err != nil {
 		return nil, err
 	}

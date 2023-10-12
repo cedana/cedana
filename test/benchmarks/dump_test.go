@@ -234,6 +234,7 @@ func BenchmarkDumpPytorchRegression(b *testing.B) {
 			// Code to run after the benchmark
 			// Convert the int64 value to bytes
 
+			// TODO BS Make this dump variable just an enum...
 			FileIPCCleanup(b, dumpDir, "dump")
 
 		},

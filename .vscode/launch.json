@@ -14,22 +14,6 @@
             "console": "integratedTerminal",
         },
         {
-            "name": "debug cedana daemon-grpc",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "asRoot": true,
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "buildFlags": "-buildvcs=false",
-            "args": ["daemon-grpc"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
-                "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
-            },
-        },
-        {
             "name": "debug cedana dump",
             "type": "go",
             "asRoot": true,

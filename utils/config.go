@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	CedanaManaged bool          `json:"cedana_managed" mapstructure:"cedana_managed"`
 	Client        Client        `json:"client" mapstructure:"client"`
 	ActionScripts ActionScripts `json:"action_scripts" mapstructure:"action_scripts"`
 	Connection    Connection    `json:"connection" mapstructure:"connection"`
@@ -33,8 +34,12 @@ type ActionScripts struct {
 }
 
 type Connection struct {
+	NATSUrl       string `json:"nats_url" mapstructure:"nats_url"`
+	NATSPort      int    `json:"nats_port" mapstructure:"nats_port"`
+	NATSAuthToken string `json:"nats_auth_token" mapstructure:"nats_auth_token"`
 	// for cedana managed systems
 	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
+	CedanaPort      int    `json:"cedana_port" mapstructure:"cedana_port"`
 	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 }
 
@@ -90,7 +95,11 @@ func InitConfig() (*Config, error) {
 
 	// override setting is ugly, need to abstract this away somehow
 	if err == nil && so != nil {
+		viper.Set("cedana_managed", so.CedanaManaged)
 		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
+		viper.Set("connection.nats_url", so.Connection.NATSUrl)
+		viper.Set("connection.nats_port", so.Connection.NATSPort)
+		viper.Set("connection.auth_token", so.Connection.NATSAuthToken)
 		viper.Set("client.task", so.Client.Task)
 	}
 

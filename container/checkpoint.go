@@ -1205,6 +1205,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 			}
 		}
 	}
+	// TODO BS Replace with zerolog
 
 	data, err := proto.Marshal(req)
 	if err != nil {
