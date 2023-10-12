@@ -21,6 +21,7 @@ require (
 	github.com/rs/xid v1.5.0
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.5.0
+	go.etcd.io/bbolt v1.3.7
 	golang.org/x/sys v0.12.0
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.53.0
@@ -103,7 +104,6 @@ require (
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	go.etcd.io/bbolt v1.3.7 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect

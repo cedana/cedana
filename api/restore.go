@@ -177,6 +177,11 @@ func (c *Client) pyTorchRestore() error {
 	return nil
 }
 
+func (c *Client) patchPodman() error {
+
+	return nil
+}
+
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	if !opts.Detatch {
