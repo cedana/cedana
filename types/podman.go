@@ -134,8 +134,27 @@ type ContainerConfig struct {
 	// This field should never be written to the db, the json tag ensures this.
 	rewrite bool `json:"-"`
 
+	Networks map[string]PerNetworkOptions `json:"newNetworks,omitempty"`
+
 	// embedded sub-configs
 
+}
+type PerNetworkOptions struct {
+	// StaticIPs for this container. Optional.
+	// swagger:type []string
+	StaticIPs []net.IP `json:"static_ips,omitempty"`
+	// Aliases contains a list of names which the dns server should resolve
+	// to this container. Should only be set when DNSEnabled is true on the Network.
+	// If aliases are set but there is no dns support for this network the
+	// network interface implementation should ignore this and NOT error.
+	// Optional.
+	Aliases []string `json:"aliases,omitempty"`
+	// StaticMac for this container. Optional.
+	// swagger:strfmt string
+	StaticMAC HardwareAddr `json:"static_mac,omitempty"`
+	// InterfaceName for this container. Required in the backend.
+	// Optional in the frontend. Will be filled with ethX (where X is a integer) when empty.
+	InterfaceName string `json:"interface_name"`
 }
 
 type ContainerState struct {

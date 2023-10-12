@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/cedana/cedana/api/services/task"
 	bolt "go.etcd.io/bbolt"
 )
 
 type DB struct {
-	conn *bolt.DB
+	conn   *bolt.DB
+	dbLock sync.Mutex
+	dbPath string
 }
 
 func NewDB(db *bolt.DB) *DB {
@@ -116,6 +119,30 @@ func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) err
 
 		return root.Put([]byte(strconv.Itoa(int(pid))), marshaledState)
 	})
+}
+
+func (db *DB) setNewDbConn() error {
+	// We need an in-memory lock to avoid issues around POSIX file advisory
+	// locks as described in the link below:
+	// https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081
+	db.dbLock.Lock()
+
+	database, err := bolt.Open(db.dbPath, 0600, nil)
+	if err != nil {
+		return fmt.Errorf("opening database %s: %w", db.dbPath, err)
+	}
+
+	db.conn = database
+
+	return nil
+}
+
+func getIDBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	bkt := tx.Bucket(idRegistryBkt)
+	if bkt == nil {
+		return nil, fmt.Errorf("id registry bucket not found in DB")
+	}
+	return bkt, nil
 }
 
 func (db *DB) GetPID(id string) (int32, error) {
