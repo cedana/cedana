@@ -113,15 +113,12 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		// if dir in config is ~./cedana, this creates ~./cedana/exampleProcess_2020_01_02_15_04/
-		// the folder path is passed to CRIU, which creates memory dumps and other checkpoint images into the folder
-		if err := os.Mkdir(checkpointFolderPath, 0o755); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o755); err != nil {
 			return "", err
 		}
 	}
 
 	c.copyOpenFiles(checkpointFolderPath, state)
-	// c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }
@@ -171,14 +168,7 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 		c.logger.Fatal().Err(err)
 	}
 
-	if c.config.CedanaManaged {
-		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
-		if err != nil {
-			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
-		}
-	}
-
-	c.db.UpdateProcessStateWithID(c.jobId, state)
+	c.db.UpdateProcessStateWithID(c.jobID, state)
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -248,7 +238,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 
 	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
 	if exists {
-		c.jobId = jobId
+		c.jobID = jobId
 	}
 
 	opts := c.prepareCheckpointOpts()
@@ -256,8 +246,6 @@ func (c *Client) Dump(dir string, pid int32) error {
 	if err != nil {
 		return err
 	}
-
-	c.CheckpointDir = dumpdir
 
 	img, err := os.Open(dumpdir)
 	if err != nil {

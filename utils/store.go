@@ -216,8 +216,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 }
 
 func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
-	filePath := checkpointPath + ".zip"
-	binaryOfFile, err := os.ReadFile(filePath)
+	binaryOfFile, err := os.ReadFile(checkpointPath)
 	if err != nil {
 		fmt.Println("Error reading zip file:", err)
 		return err

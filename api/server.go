@@ -15,6 +15,7 @@ import (
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -33,6 +34,7 @@ type UploadResponse struct {
 
 type service struct {
 	Client            *Client
+	logger            *zerolog.Logger
 	ClientLogStream   task.TaskService_LogStreamingServer
 	ClientStateStream task.TaskService_ClientStateStreamingServer
 	r                 *os.File
@@ -45,24 +47,23 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
-	// var zipFileSize uint64
+
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
-	s.Client.Process = &task.ProcessInfo{}
 
-	s.Client.Process.PID = args.PID
+	pid := args.PID
 
 	if args.Type != task.DumpArgs_MARKET {
+		s.Client.generateState(args.PID)
 		var state task.ProcessState
 
 		state.Flag = task.FlagEnum_JOB_RUNNING
-		state.PID = args.PID
+		state.PID = pid
 
-		err := s.Client.db.CreateOrUpdateCedanaProcess("NOT_MARKET", &state)
+		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	err := s.Client.Dump(args.Dir, args.PID)
@@ -72,9 +73,22 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	switch args.Type {
 	case task.DumpArgs_SELF_SERVE:
-		// TODO BS: This is a hack for now
+		// if not market - we don't push up the checkpoint to anywhere
+		s.logger.Info().Msgf("Process %d checkpointed to %s", args.PID, args.Dir)
 	case task.DumpArgs_MARKET:
-		file, err := os.Open(s.Client.CheckpointDir + ".zip")
+		// get checkpoint file
+		state, err := s.Client.db.GetStateFromID(args.JobID)
+		if err != nil {
+			return nil, err
+		}
+
+		if state == nil {
+			return nil, fmt.Errorf("no state found for job %s", args.JobID)
+		}
+
+		checkpointPath := state.CheckpointPath
+
+		file, err := os.Open(checkpointPath)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +112,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, err
 		}
 
-		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, s.Client.CheckpointDir)
+		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			return nil, err
 		}
@@ -180,10 +194,15 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 }
 
 func (s *service) publishStateContinous(rate int) {
-	s.Client.logger.Info().Msgf("pid: %d", s.Client.Process.PID)
+	// get PID from id
+	pid, err := s.Client.db.GetPID(s.Client.jobID)
+	if err != nil {
+		s.logger.Warn().Msgf("could not get pid: %v", err)
+	}
+	s.logger.Info().Msgf("pid: %d", pid)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	for range ticker.C {
-		if s.Client.Process.PID != 0 {
+		if pid != 0 {
 			args := &task.ProcessState{}
 
 			if err := s.ClientStateStream.Send(args); err != nil {
@@ -334,8 +353,11 @@ func (s *Server) New() (*grpc.Server, error) {
 		return nil, err
 	}
 
+	logger := utils.GetLogger()
+
 	service := &service{
 		Client: client,
+		logger: &logger,
 	}
 
 	task.RegisterTaskServiceServer(grpcServer, service)

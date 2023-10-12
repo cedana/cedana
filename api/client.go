@@ -22,29 +22,24 @@ import (
 var AppFs = afero.NewOsFs()
 
 type Client struct {
-	CRIU *utils.Criu
-
-	logger *zerolog.Logger
-	config *utils.Config
-
+	CRIU    *utils.Criu
+	logger  *zerolog.Logger
+	config  *utils.Config
 	context context.Context
-	Process *task.ProcessInfo
-
-	// a single big state glob
-	state *task.ProcessState
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
 
-	// external checkpoint store
-	store utils.Store
+	// external checkpoint remoteStore
+	remoteStore utils.Store
 
 	// db meta/state store
 	db *DB
 
-	jobId string
-
-	CheckpointDir string
+	// a separate client is created for each connection to the gRPC client,
+	// and the jobID is set at instantiation time. We rely on whatever is callig
+	// InstantiateClient() to set the jobID correctly.
+	jobID string
 }
 
 type ClientLogs struct {
@@ -173,24 +168,24 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 		if err != nil {
 			return nil, nil
 		}
-		for _, c := range openConnectionsOrig {
+		for _, conn := range openConnectionsOrig {
 			Laddr := &task.Addr{
-				IP:   c.Laddr.IP,
-				Port: c.Laddr.Port,
+				IP:   conn.Laddr.IP,
+				Port: conn.Laddr.Port,
 			}
 			Raddr := &task.Addr{
-				IP:   c.Raddr.IP,
-				Port: c.Raddr.Port,
+				IP:   conn.Raddr.IP,
+				Port: conn.Raddr.Port,
 			}
 			openConnections = append(openConnections, &task.ConnectionStat{
-				Fd:     c.Fd,
-				Family: c.Family,
-				Type:   c.Type,
+				Fd:     conn.Fd,
+				Family: conn.Family,
+				Type:   conn.Type,
 				Laddr:  Laddr,
 				Raddr:  Raddr,
-				Status: c.Status,
-				Pid:    c.Pid,
-				Uids:   c.Uids,
+				Status: conn.Status,
+				PID:    conn.Pid,
+				Uids:   conn.Uids,
 			})
 		}
 
@@ -226,13 +221,12 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 // weird race conditions (maybe).
 // To avoid actually using ptrace (TODO NR) we loop through the openFds of the process and check the
 // flags.
-
 func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string {
 	var paths []string
 	for _, fd := range openFds {
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
-			// c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
 			continue
 		}
 
@@ -243,7 +237,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 				// so converting flags: 0100002 -> 32770
 				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
 				if err != nil {
-					// c.logger.Debug().Msgf("could not parse flags: %v", err)
+					c.logger.Debug().Msgf("could not parse flags: %v", err)
 					continue
 				}
 
@@ -308,47 +302,3 @@ func closeCommonFds(parentPID, childPID int32) error {
 	}
 	return nil
 }
-
-// func (c *Client) startNATSService() {
-// 	// create a subscription to NATS commands from the orchestrator first
-// 	go c.subscribeToCommands(300)
-
-// 	go c.publishStateContinuous(30)
-
-// 	// listen for broadcast commands
-// 	// subscribe to our broadcasters
-// 	dumpCmdChn := c.channels.dumpCmdBroadcaster.Subscribe()
-// 	restoreCmdChn := c.channels.restoreCmdBroadcaster.Subscribe()
-
-// 	dir := c.config.SharedStorage.DumpStorageDir
-
-// 	for {
-// 		select {
-// 		case <-dumpCmdChn:
-// 			c.logger.Info().Msg("received checkpoint command from NATS server")
-// 			err := c.Dump(dir)
-// 			if err != nil {
-// 				c.logger.Warn().Msgf("could not checkpoint process: %v", err)
-// 				c.state.CheckpointState = cedana.CheckpointFailed
-// 				c.publishStateOnce(c.getState(c.Process.PID))
-// 			}
-// 			c.state.CheckpointState = cedana.CheckpointSuccess
-// 			c.publishStateOnce(c.getState(c.Process.PID))
-
-// 		case cmd := <-restoreCmdChn:
-// 			c.logger.Info().Msg("received restore command from NATS server")
-// 			pid, err := c.NatsRestore(&cmd, nil)
-// 			if err != nil {
-// 				c.logger.Warn().Msgf("could not restore process: %v", err)
-// 				c.state.CheckpointState = cedana.RestoreFailed
-// 				c.publishStateOnce(c.getState(c.Process.PID))
-// 			}
-// 			c.state.CheckpointState = cedana.RestoreSuccess
-// 			c.Process.PID = *pid
-// 			c.publishStateOnce(c.getState(c.Process.PID))
-
-// 		default:
-// 			time.Sleep(1 * time.Second)
-// 		}
-// 	}
-// }

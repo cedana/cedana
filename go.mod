@@ -66,6 +66,7 @@ require (
 	github.com/intel/goresctrl v0.3.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
@@ -132,6 +133,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/rs/zerolog v1.28.0
+	github.com/sevlyar/go-daemon v0.1.6
 	github.com/shirou/gopsutil/v3 v3.23.7
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.15.0

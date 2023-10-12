@@ -19,12 +19,8 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
-	// Here we just want to call store.GetCheckpoint
-	// setting auth token for now
-	c.config.Connection.CedanaAuthToken = "brandonsmith"
-	c.config.Connection.CedanaUrl = "http://localhost:1324"
-	c.store = utils.NewCedanaStore(c.config)
-	zipFile, err := c.store.GetCheckpoint(args.Cid)
+	c.remoteStore = utils.NewCedanaStore(c.config)
+	zipFile, err := c.remoteStore.GetCheckpoint(args.CheckpointId)
 	if err != nil {
 		return nil, err
 	}
@@ -361,32 +357,13 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	switch args.Type {
-	case task.RestoreArgs_PROCESS:
-		tmpdir, err := c.prepareRestore(opts, args, "")
-		if err != nil {
-			return nil, err
-		}
-		dir = tmpdir
-
-		pid, err = c.criuRestore(opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
-	case task.RestoreArgs_PYTORCH:
-		err := c.pyTorchRestore()
-		if err != nil {
-			return nil, err
-		}
-	default:
-		dir, err := c.prepareRestore(opts, nil, args.Dir)
-		if err != nil {
-			return nil, err
-		}
-		pid, err = c.criuRestore(opts, nfy, *dir)
-		if err != nil {
-			return nil, err
-		}
+	dir, err := c.prepareRestore(opts, nil, args.Dir)
+	if err != nil {
+		return nil, err
+	}
+	pid, err = c.criuRestore(opts, nfy, *dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return pid, nil
