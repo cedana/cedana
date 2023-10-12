@@ -357,8 +357,8 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
-var startTaskCmd = &cobra.Command{
-	Use:   "start",
+var execTaskCmd = &cobra.Command{
+	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
 	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
 	Args:  cobra.ExactArgs(2),
@@ -384,24 +384,22 @@ var startTaskCmd = &cobra.Command{
 	},
 }
 
-// var psCmd = &cobra.Command{
-// 	Use:   "ps",
-// 	Short: "List running processes",
-// 	RunE: func(cmd *cobra.Command, args []string) error {
-// 		cli, err := NewCLI()
-// 		if err != nil {
-// 			return err
-// 		}
+var psCmd = &cobra.Command{
+	Use:   "ps",
+	Short: "List running processes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
 
-// 		var resp api.StatusResp
-// 		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
-// 		if err != nil {
-// 			return err
-// 		}
+		if err != nil {
+			return err
+		}
 
-// 		return nil
-// 	},
-// }
+		return nil
+	},
+}
 
 func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
@@ -451,7 +449,7 @@ func init() {
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
-	rootCmd.AddCommand(startTaskCmd)
+	rootCmd.AddCommand(execTaskCmd)
 	// rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
