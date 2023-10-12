@@ -12,7 +12,6 @@ import (
 // dupe of client_config.go in orchestrator, fine for now until we have a shared library
 
 type ConfigClient struct {
-	CedanaManaged bool          `json:"cedana_managed"`
 	Client        Client        `json:"client"`
 	ActionScripts ActionScripts `json:"action_scripts"`
 	Connection    Connection    `json:"connection"`

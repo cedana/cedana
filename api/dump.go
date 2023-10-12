@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"google.golang.org/protobuf/proto"
-
-	cedana "github.com/cedana/cedana/types"
 )
 
 const (
@@ -114,15 +114,12 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		// if dir in config is ~./cedana, this creates ~./cedana/exampleProcess_2020_01_02_15_04/
-		// the folder path is passed to CRIU, which creates memory dumps and other checkpoint images into the folder
-		if err := os.Mkdir(checkpointFolderPath, 0o755); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o755); err != nil {
 			return "", err
 		}
 	}
 
 	c.copyOpenFiles(checkpointFolderPath, state)
-	c.channels.preDumpBroadcaster.Broadcast(1)
 
 	return checkpointFolderPath, nil
 }
@@ -131,7 +128,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 // TODO NR: should we add a check for filesize here? Worried about dealing with massive files.
 // This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
 // written to on network storage or something.
-func (c *Client) copyOpenFiles(dir string, state *cedana.ProcessState) error {
+func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 	if len(state.ProcessInfo.OpenWriteOnlyFilePaths) == 0 {
 		return nil
 	}
@@ -146,7 +143,7 @@ func (c *Client) copyOpenFiles(dir string, state *cedana.ProcessState) error {
 
 // we pass a final state to postDump so we can serialize at the exact point
 // the checkpoint was written.
-func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
+func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
 
@@ -160,7 +157,7 @@ func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
 
 	state.CheckpointPath = compressedCheckpointPath
 	// sneak in a serialized state obj
-	err = state.SerializeToFolder(dumpdir)
+	err = types.SerializeToFolder(dumpdir, state)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
@@ -172,16 +169,7 @@ func (c *Client) postDump(dumpdir string, state *cedana.ProcessState) {
 		c.logger.Fatal().Err(err)
 	}
 
-	// if client is being orchestrated, push to NATS storage
-	if c.config.CedanaManaged {
-		c.logger.Info().Msg("client is managed by a cedana orchestrator, pushing checkpoint..")
-		err := c.store.PushCheckpoint(compressedCheckpointPath)
-		if err != nil {
-			c.logger.Info().Msgf("error pushing checkpoint: %v", err)
-		}
-	}
-
-	c.db.UpdateProcessStateWithID(c.jobId, state)
+	c.db.UpdateProcessStateWithID(c.jobID, state)
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -216,6 +204,11 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 
 func (c *Client) Dump(dir string, pid int32) error {
 	defer c.timeTrack(time.Now(), "dump")
+
+	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
+	if exists {
+		c.jobID = jobId
+	}
 
 	opts := c.prepareCheckpointOpts()
 	dumpdir, err := c.prepareDump(pid, dir, opts)
@@ -263,9 +256,9 @@ func (c *Client) Dump(dir string, pid int32) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	state.CheckpointState = cedana.CheckpointSuccess
+	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	c.postDump(dumpdir, state)
-	c.CleanupClient()
+	c.cleanupClient()
 
 	return nil
 }

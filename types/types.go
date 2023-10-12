@@ -8,8 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/net"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/cedana/cedana/api/services/task"
 )
 
 type Job struct {
@@ -29,8 +28,8 @@ type ProcessState struct {
 	Flag             Flag             `json:"flag"`
 }
 
-func (ps *ProcessState) SerializeToFolder(dir string) error {
-	serialized, err := json.MarshalIndent(ps, "", "  ")
+func SerializeToFolder(dir string, state *task.ProcessState) error {
+	serialized, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -51,13 +50,13 @@ type Logs struct {
 }
 
 type ProcessInfo struct {
-	AttachedToHardwareAccel bool                    `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
-	OpenFds                 []process.OpenFilesStat `json:"open_fds" mapstructure:"open_fds"` // list of open FDs
-	OpenWriteOnlyFilePaths  []string                `json:"open_write_only" mapstructure:"open_write_only"`
-	OpenConnections         []net.ConnectionStat    `json:"open_connections" mapstructure:"open_connections"` // open network connections
-	MemoryPercent           float32                 `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
-	IsRunning               bool                    `json:"is_running" mapstructure:"is_running"`
-	Status                  string                  `json:"status" mapstructure:"status"`
+	AttachedToHardwareAccel bool                  `json:"attached_to_hardware_accel" mapstructure:"attached_to_hardware_accel"`
+	OpenFds                 []task.OpenFilesStat  `json:"open_fds" mapstructure:"open_fds"` // list of open FDs
+	OpenWriteOnlyFilePaths  []string              `json:"open_write_only" mapstructure:"open_write_only"`
+	OpenConnections         []task.ConnectionStat `json:"open_connections" mapstructure:"open_connections"` // open network connections
+	MemoryPercent           float32               `json:"memory_percent" mapstructure:"memory_percent"`     // % of total RAM used
+	IsRunning               bool                  `json:"is_running" mapstructure:"is_running"`
+	Status                  string                `json:"status" mapstructure:"status"`
 }
 
 type ClientInfo struct {

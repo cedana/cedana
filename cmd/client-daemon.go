@@ -3,7 +3,6 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"net/rpc"
 	"os"
 	"strconv"
 	"syscall"
@@ -33,9 +32,6 @@ var startDaemonCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		logger := utils.GetLogger()
-
-		cd := api.NewDaemon(stop)
-		rpc.Register(cd)
 
 		executable, err := os.Executable()
 		if err != nil {
@@ -67,14 +63,12 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		go cd.StartDaemon()
+		go startgRPCServer()
 
 		err = gd.ServeSignals()
 		if err != nil {
 			logger.Fatal().Err(err)
 		}
-
-		go clientAPI()
 
 		logger.Info().Msg("daemon terminated")
 	},
@@ -112,8 +106,13 @@ func termHandler(sig os.Signal) error {
 	return gd.ErrStop
 }
 
-func clientAPI() {
-	// listens to
+func startgRPCServer() {
+	logger := utils.GetLogger()
+
+	if _, err := api.StartGRPCServer(); err != nil {
+		logger.Error().Err(err).Msg("Failed to start gRPC server")
+	}
+
 }
 
 func init() {
