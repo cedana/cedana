@@ -25,8 +25,8 @@ func BenchmarkLoopRestore(b *testing.B) {
 	}
 
 	args := &task.RestoreArgs{
-		Cid: "", //Empty makes it to where we don't use cedana market store
-		Dir: checkpoint,
+		CheckpointId: "", //Empty makes it to where we don't use cedana market store
+		Dir:          checkpoint,
 	}
 
 	b.ResetTimer()
@@ -61,8 +61,8 @@ func BenchmarkServerRestore(b *testing.B) {
 	}
 
 	args := &task.RestoreArgs{
-		Cid: "", //Empty makes it to where we don't use cedana market store
-		Dir: checkpoint,
+		CheckpointId: "", //Empty makes it to where we don't use cedana market store
+		Dir:          checkpoint,
 	}
 
 	b.ResetTimer()
@@ -97,8 +97,8 @@ func BenchmarkPytorchRestore(b *testing.B) {
 	}
 
 	args := &task.RestoreArgs{
-		Cid: "", //Empty makes it to where we don't use cedana market store
-		Dir: checkpoint,
+		CheckpointId: "", //Empty makes it to where we don't use cedana market store
+		Dir:          checkpoint,
 	}
 
 	b.ResetTimer()
@@ -134,8 +134,8 @@ func BenchmarkRegressionRestore(b *testing.B) {
 	}
 
 	args := &task.RestoreArgs{
-		Cid: "", //Empty makes it to where we don't use cedana market store
-		Dir: checkpoint,
+		CheckpointId: "", //Empty makes it to where we don't use cedana market store
+		Dir:          checkpoint,
 	}
 
 	b.ResetTimer()
@@ -169,8 +169,8 @@ func BenchmarkVisionRestore(b *testing.B) {
 	}
 
 	args := &task.RestoreArgs{
-		Cid: "", //Empty makes it to where we don't use cedana market store
-		Dir: checkpoint,
+		CheckpointId: "", //Empty makes it to where we don't use cedana market store
+		Dir:          checkpoint,
 	}
 
 	b.ResetTimer()
