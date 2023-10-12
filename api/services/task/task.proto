@@ -1,0 +1,264 @@
+syntax = "proto3";
+
+package cedana.services.task;
+
+option go_package = "github.com/cedana/cedana/api/services/task";
+
+message DumpArgs {
+  int32 PID = 1;
+  string Dir = 2;
+  enum DumpType {
+    SELF_SERVE = 0;
+    MARKET = 1;
+  }
+  DumpType Type = 3;
+  string JobID = 4;
+}
+message DumpResp {
+    string Error = 1;
+}
+
+message RestoreArgs {
+  string CheckpointId = 1;
+  string Dir = 2;
+}
+message RestoreResp {
+    string Error = 1;
+    int32 NewPID = 2;
+}
+
+message StartTaskArgs {
+  string Task = 1;
+  string Id = 2;
+}
+message StartTaskResp {
+    string Error = 1;
+}
+
+// Log Streaming args
+message LogStreamingArgs {
+  string Timestamp = 1;
+  string Source = 2;
+  string Level = 3;
+  string Msg = 4;
+}
+message LogStreamingResp {
+  string Status = 1;
+}
+
+// Client State Streaming args
+
+message ProcessState {
+  int32 PID = 1;
+  string Task = 2;
+  ContainerRuntimeOpts ContainerRuntime = 3;
+  string ContainerId = 4;
+  string StartedAt = 5;
+  ProcessInfo ProcessInfo = 6;
+  string CheckpointPath = 7;
+  checkpointState CheckpointState = 8;
+  FlagEnum Flag = 9;
+  enum ContainerRuntimeOpts {
+    CONTAINERD = 0;
+    RUNC = 1;
+  }
+}
+
+// ContainerRuntimeContainerd ContainerRuntime = "containerd"
+// ContainerRuntimeRunc       ContainerRuntime = "runc"
+
+// // A process encapsulates either a process or a container
+// type ProcessState struct {
+// 	PID              int32            `json:"pid"`
+// 	Task             string           `json:"task"`
+// 	ContainerRuntime ContainerRuntime `json:"container_runtime"`
+// 	ContainerId      string           `json:"container_id"`
+// 	StartedAt        time.Time        `json:"started_at"`
+// 	ProcessInfo      ProcessInfo      `json:"process_info"`
+// 	CheckpointPath   string           `json:"checkpoint_path"`
+// 	CheckpointState  CheckpointState  `json:"checkpoint_state"`
+// 	Flag             Flag             `json:"flag"`
+// }
+
+message ClientInfo {
+  string Id = 1;
+  string Hostname = 2;
+  string Platform = 3;
+  string OS = 4;
+  uint64 Uptime = 5;
+  uint64 RemainingMemory = 6;
+}
+
+message ProcessInfo {
+  int32 PID = 1;
+  bool AttachedToHardwareAccel = 2;
+  repeated OpenFilesStat OpenFds = 3;
+  repeated string OpenWriteOnlyFilePaths = 4;
+  repeated ConnectionStat OpenConnections = 5;
+  float MemoryPercent = 6;
+  bool IsRunning = 7;
+  string Status = 8;
+}
+
+message OpenFilesStat {
+  string Path = 1;
+  uint64 Fd = 2;
+}
+
+message ConnectionStat {
+  uint32 Fd = 1;
+  uint32 Family = 2;
+  uint32 Type = 3;
+  Addr Laddr = 4;
+  Addr Raddr = 5;
+  string Status = 6;
+  repeated int32 Uids = 7;
+  int32 PID = 8;
+}
+
+message Addr {
+  string IP = 1;
+  uint32 Port = 2;
+}
+
+
+enum FlagEnum {
+  JOB_STARTUP_FAILED = 0;
+  JOB_KILLED = 1;
+  JOB_IDLE = 2;
+  JOB_RUNNING = 3;
+  JOB_PENDING = 4;
+  JOB_SETUP_FAILED = 5;
+  JOB_DONE = 6;
+}
+
+message ClientStateStreamingResp {
+  string Status = 1;
+}
+
+// MetaState Streaming args
+
+message MetaStateStreamingArgs {
+  ProviderEvent Event = 1;
+  CheckpointReason CheckpointReason = 2;
+}
+
+
+message CheckpointReason {
+  enum CheckpointReasonEnum {
+    INSTANCE_TERMINATION = 0;
+    JOB_TERMINATION = 1;
+    HEARTBEAT = 2;
+  }
+  CheckpointReasonEnum Reason = 1;
+}
+
+message ProviderEvent {
+  string InstanceID = 1;
+  string FaultCode = 2;
+  bool MarkedForTermination = 3;
+  int64 TerminationTime = 4;
+}
+
+message MetaStateStreamingResp {
+  string Status = 1;
+}
+
+enum checkpointState {
+  CHECKPOINTED = 0;
+  CHECKPOINT_FAILED = 1;
+  RESTORED = 2;
+  RESTORE_FAILED = 3;
+}
+
+service TaskService {
+    rpc Dump(DumpArgs) returns (DumpResp);
+    rpc Restore(RestoreArgs) returns (RestoreResp);
+
+    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
+    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
+
+    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
+    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
+    
+    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
+    
+    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
+    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
+    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+}
+
+message ContainerDumpArgs {
+  string ContainerId = 1;
+  string Ref = 2;
+}
+
+message ContainerDumpResp {
+  string CheckpointPath = 1;
+  string Error = 2;
+}
+
+message ContainerRestoreArgs {
+  string ImgPath = 1;
+  string ContainerId = 2;
+}
+
+message ContainerRestoreResp {
+  string Error = 1;
+}
+
+message RuncDumpArgs {
+  string Root = 1;
+  string CheckpointPath = 2;
+  string ContainerId = 3;
+  CriuOpts CriuOpts = 4;
+}
+
+message RuncDumpResp {
+  string Error = 1;
+}
+
+message CriuOpts {
+  string ImagesDirectory = 1;
+  string WorkDirectory = 2;
+  string ParentImage = 3;
+  bool LeaveRunning = 4;
+  bool TcpEstablished = 5;
+  bool ExternalUnixConnections = 6;
+  bool ShellJob = 7;
+  bool FileLocks = 8;
+  bool PreDump = 9;
+  uint32 EmptyNs = 12;
+  bool AutoDedup = 13;
+  bool LazyPages = 14;
+  int32 StatusFd = 15;
+  string LsmProfile = 16;
+  string LsmMountContext = 17;
+}
+
+message RuncRestoreArgs {
+  string ContainerId = 1;
+  string ImagePath = 2;
+  RuncOpts Opts = 3;
+}
+
+message RuncOpts {
+  string Root = 1;
+  string ContainerId = 2;
+  string Bundle = 3;
+  bool SystemdCgroup = 4;
+  bool NoPivot = 5;
+  bool NoMountFallback = 6;
+  bool NoNewKeyring = 7;
+  string Rootless = 8;
+  bool NoSubreaper = 9;
+  bool Keep = 10;
+  string ConsoleSocket = 11;
+  bool Detatch = 12;
+  string PidFile = 13;
+  int32 PreserveFds = 14;
+}
+
+message RuncRestoreResp {
+  string Error = 1;
+}
