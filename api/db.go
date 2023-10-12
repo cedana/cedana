@@ -137,14 +137,6 @@ func (db *DB) setNewDbConn() error {
 	return nil
 }
 
-func getIDBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	bkt := tx.Bucket(idRegistryBkt)
-	if bkt == nil {
-		return nil, fmt.Errorf("id registry bucket not found in DB")
-	}
-	return bkt, nil
-}
-
 func (db *DB) GetPID(id string) (int32, error) {
 	var pid int32
 	err := db.conn.View(func(tx *bolt.Tx) error {
