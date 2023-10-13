@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/types"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -147,7 +146,7 @@ func (db *DB) setNewDbConn() error {
 	return nil
 }
 
-func (s *DB) getContainerConfigFromDB(id []byte, config *types.ContainerConfig, ctrsBkt *bolt.Bucket) error {
+func (s *DB) getContainerConfigFromDB(id []byte, config *map[string]interface{}, ctrsBkt *bolt.Bucket) error {
 	ctrBkt := ctrsBkt.Bucket(id)
 	if ctrBkt == nil {
 		return fmt.Errorf("container %s not found in DB", string(id))
@@ -158,7 +157,7 @@ func (s *DB) getContainerConfigFromDB(id []byte, config *types.ContainerConfig, 
 		return fmt.Errorf("container %s missing config key in DB", string(id))
 	}
 
-	if err := json.Unmarshal(configBytes, config); err != nil {
+	if err := json.Unmarshal(configBytes, &config); err != nil {
 		return fmt.Errorf("unmarshalling container %s config: %w", string(id), err)
 	}
 
@@ -175,8 +174,7 @@ func (s *DB) getContainerConfigFromDB(id []byte, config *types.ContainerConfig, 
 	return nil
 }
 
-func (s *DB) getContainerStateDB(id []byte, state *types.ContainerState, ctrsBkt *bolt.Bucket) error {
-	newState := new(types.ContainerState)
+func (s *DB) getContainerStateDB(id []byte, state *map[string]interface{}, ctrsBkt *bolt.Bucket) error {
 	ctrToUpdate := ctrsBkt.Bucket(id)
 
 	newStateBytes := ctrToUpdate.Get(stateKey)
@@ -184,17 +182,9 @@ func (s *DB) getContainerStateDB(id []byte, state *types.ContainerState, ctrsBkt
 		return fmt.Errorf("container does not have a state key in DB")
 	}
 
-	if err := json.Unmarshal(newStateBytes, newState); err != nil {
+	if err := json.Unmarshal(newStateBytes, &state); err != nil {
 		return fmt.Errorf("unmarshalling container state: %w", err)
 	}
-
-	// backwards compat, previously we used an extra bucket for the netns so try to get it from there
-	netNSBytes := ctrToUpdate.Get(netNSKey)
-	if netNSBytes != nil && newState.NetNS == "" {
-		newState.NetNS = string(netNSBytes)
-	}
-
-	state = newState
 
 	return nil
 }

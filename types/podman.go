@@ -463,7 +463,7 @@ type ContainerNameSpaceConfig struct {
 	CgroupNsCtr string `json:"cgroupNsCtr,omitempty"`
 }
 
-type IDMappingOptions struct {
+type IDMapping struct {
 	// UIDMap and GIDMap are used for setting up a layer's root filesystem
 	// for use inside of a user namespace where ID mapping is being used.
 	// If HostUIDMapping/HostGIDMapping is true, no mapping of the
@@ -480,6 +480,8 @@ type IDMappingOptions struct {
 	AutoUserNs     bool
 	AutoUserNsOpts AutoUserNsOptions
 }
+
+type IDMappingOptions = IDMapping
 type AutoUserNsOptions struct {
 	// Size defines the size for the user namespace.  If it is set to a
 	// value bigger than 0, the user namespace will have exactly this size.

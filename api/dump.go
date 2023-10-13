@@ -185,10 +185,16 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
 
-	var (
-		config *types.ContainerConfig
-		state  *types.ContainerState
-	)
+	config := make(map[string]interface{})
+	state := make(map[string]interface{})
+
+	runcContainer := container.GetContainerFromRunc(containerId, root)
+
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerId + "/userdata"
 
 	byteId := []byte(containerId)
 
@@ -198,19 +204,29 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		return err
 	}
 
-	err := db.conn.View(func(tx *bolt.Tx) error {
+	err = db.conn.View(func(tx *bolt.Tx) error {
 		bkt, err := getCtrBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		if err := db.getContainerConfigFromDB(byteId, config, bkt); err != nil {
+		if err := db.getContainerConfigFromDB(byteId, &config, bkt); err != nil {
 			return err
 		}
 
-		if err := db.getContainerStateDB(byteId, state, bkt); err != nil {
+		if err := db.getContainerStateDB(byteId, &state, bkt); err != nil {
 			return err
 		}
+
+		utils.WriteJSONFile(config, "/tmp/test", "config.dump")
+
+		jsonPath := filepath.Join(bundlePath, "config.json")
+		cfg, _, err := utils.NewFromFile(jsonPath)
+		if err != nil {
+			return err
+		}
+
+		utils.WriteJSONFile(cfg, "/tmp/test", "spec.dump")
 
 		return nil
 	})
@@ -219,12 +235,6 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		return err
 	}
 
-	runcContainer := container.GetContainerFromRunc(containerId, root)
-
-	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-	}
 	return nil
 }
 

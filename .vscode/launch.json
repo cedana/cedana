@@ -100,7 +100,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-dump", "/tmp/test/", "ca46981c02dbf08def32a263c448d46493876325c434d5e654d9c311c27bcfdb"],
+            "args": ["debug", "runc-dump", "/tmp/test/", "c6f146eba5c1e518fad945e42deb6d043f8695466e8e1edd4677849c23a65573"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
