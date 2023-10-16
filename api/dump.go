@@ -188,7 +188,7 @@ func checkIfPodman(containerId string) bool {
 	return err == nil
 }
 
-func patchPodman(containerId string) error {
+func patchPodmanDump(containerId string) error {
 
 	config := make(map[string]interface{})
 	state := make(map[string]interface{})
@@ -247,7 +247,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 	}
 
 	if checkIfPodman(containerId) {
-		if err := patchPodman(containerId); err != nil {
+		if err := patchPodmanDump(containerId); err != nil {
 			return err
 		}
 	}

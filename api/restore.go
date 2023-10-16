@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -187,135 +185,10 @@ func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.Cont
 	return nil, nil, nil
 }
 
-func (c *Client) patchPodman(config *types.ContainerConfig, state *types.ContainerState) error {
-	configNetworks := config.Networks
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		return err
-	}
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	ctrID := []byte("test")
-	ctrName := []byte("test")
-	networks := make(map[string][]byte, len(configNetworks))
-	for net, opts := range configNetworks {
-		// Check that we don't have any empty network names
-		if net == "" {
-			return fmt.Errorf("network names cannot be an empty string")
-		}
-		if opts.InterfaceName == "" {
-			return fmt.Errorf("network interface name cannot be an empty string")
-		}
-		optBytes, err := json.Marshal(opts)
-		if err != nil {
-			return fmt.Errorf("marshalling network options JSON for container %s: %w", ctrID, err)
-		}
-		networks[net] = optBytes
-	}
-
-	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
-
-	if err := db.SetNewDbConn(); err != nil {
-		return err
-	}
-
-	defer db.Conn.Close()
-
-	db.Conn.Update(func(tx *bolt.Tx) error {
-
-		idsBucket, err := utils.GetIDBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		namesBucket, err := utils.GetNamesBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		ctrBucket, err := utils.GetCtrBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		allCtrsBucket, err := utils.GetAllCtrsBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		// If a pod was given, check if it exists
-
-		idExist := idsBucket.Get(ctrID)
-
-		if idExist != nil {
-			err = fmt.Errorf("ID \"%s\" is in use", ctrID)
-			if allCtrsBucket.Get(idExist) == nil {
-				err = fmt.Errorf("ID \"%s\" is in use but not found in all containers bucket", ctrID)
-			}
-			return fmt.Errorf("ID \"%s\" is in use: %w", string(ctrID), err)
-		}
-
-		nameExist := namesBucket.Get(ctrName)
-		if nameExist != nil {
-			err = fmt.Errorf("name \"%s\" is in use", string(ctrName))
-			if allCtrsBucket.Get(nameExist) == nil {
-				err = fmt.Errorf("name \"%s\" is in use but not found in all containers bucket", string(ctrName))
-			}
-			return fmt.Errorf("name \"%s\" is in use: %w", string(ctrName), err)
-		}
-
-		if err := idsBucket.Put(ctrID, ctrName); err != nil {
-			return fmt.Errorf("adding container %s ID to DB: %w", string(ctrID), err)
-		}
-		if err := namesBucket.Put(ctrName, ctrID); err != nil {
-			return fmt.Errorf("adding container %s name (%s) to DB: %w", string(ctrID), string(ctrName), err)
-		}
-		if err := allCtrsBucket.Put(ctrID, ctrName); err != nil {
-			return fmt.Errorf("adding container %s to all containers bucket in DB: %w", string(ctrID), err)
-		}
-
-		newCtrBkt, err := ctrBucket.CreateBucket(ctrID)
-		if err != nil {
-			return fmt.Errorf("adding container %s bucket to DB: %w", string(ctrID), err)
-		}
-
-		if err := newCtrBkt.Put(utils.ConfigKey, configJSON); err != nil {
-			return fmt.Errorf("adding container %s config to DB: %w", string(ctrID), err)
-		}
-		if err := newCtrBkt.Put(utils.StateKey, stateJSON); err != nil {
-			return fmt.Errorf("adding container %s state to DB: %w", string(ctrID), err)
-		}
-
-		if len(networks) > 0 {
-			ctrNetworksBkt, err := newCtrBkt.CreateBucket(utils.NetworksBkt)
-			if err != nil {
-				return fmt.Errorf("creating networks bucket for container %s: %w", string(ctrID), err)
-			}
-			for network, opts := range networks {
-				if err := ctrNetworksBkt.Put([]byte(network), opts); err != nil {
-					return fmt.Errorf("adding network %q to networks bucket for container %s: %w", network, string(ctrID), err)
-				}
-			}
-		}
-
-		if _, err := newCtrBkt.CreateBucket(utils.DependenciesBkt); err != nil {
-			return fmt.Errorf("creating dependencies bucket for container %s: %w", string(ctrID), err)
-		}
-		// TODO missing add ctr to pod
-		// TODO missing named config.NamedVolumes loop
-		return nil
-	})
-
-	return nil
-}
-
-func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
-
+func patchPodmanRestore(opts *container.RuncOpts) error {
 	ctx := context.Background()
 
+	// Podman run -d state
 	if !opts.Detatch {
 		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
 		if err != nil {
@@ -338,12 +211,26 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		}
 	}
 	// Here is the podman patch
-	utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint"))
+	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
 		return err
 	}
+
+	if checkIfPodman(containerId) {
+		if err := patchPodmanRestore(opts); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
