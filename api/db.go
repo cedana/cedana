@@ -10,22 +10,29 @@ import (
 )
 
 type DB struct {
-	conn *bolt.DB
 }
 
-func NewDB(db *bolt.DB) *DB {
-	return &DB{conn: db}
-}
-
-func (db *DB) Close() error {
-	return db.conn.Close()
+func NewDB() (*bolt.DB, error) {
+	// set up embedded key-value db
+	conn, err := bolt.Open("/tmp/cedana.db", 0600, nil)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 // KISS for now - but we may want to separate out into subbuckets as we add more
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
 // structure is default -> xid, xid -> pid, pid: state (arrows denote buckets)
 func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) error {
-	return db.conn.Update(func(tx *bolt.Tx) error {
+	conn, err := NewDB()
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {
 			return err
@@ -59,7 +66,14 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) e
 func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 	var state task.ProcessState
 
-	err := db.conn.View(func(tx *bolt.Tx) error {
+	conn, err := NewDB()
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	err = conn.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte("default"))
 		if root == nil {
 			return fmt.Errorf("could not find bucket")
@@ -78,8 +92,47 @@ func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 	return &state, err
 }
 
+func (db *DB) GetStateFromPID(pid int32) (*task.ProcessState, error) {
+	var state task.ProcessState
+
+	conn, err := NewDB()
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	err = conn.View(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte("default"))
+		if root == nil {
+			return fmt.Errorf("could not find bucket")
+		}
+
+		root.ForEachBucket(func(k []byte) error {
+			job := root.Bucket(k)
+			job.ForEach(func(k, v []byte) error {
+				if string(k) == strconv.Itoa(int(pid)) {
+					return json.Unmarshal(v, &state)
+				}
+				return nil
+			})
+			return nil
+		})
+		return nil
+	})
+
+	return &state, err
+}
+
 func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) error {
-	return db.conn.Update(func(tx *bolt.Tx) error {
+	conn, err := NewDB()
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return conn.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {
 			return err
@@ -100,7 +153,14 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 }
 
 func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) error {
-	return db.conn.Update(func(tx *bolt.Tx) error {
+	conn, err := NewDB()
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return conn.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte("default"))
 		if root == nil {
 			return fmt.Errorf("could not find bucket")
@@ -129,7 +189,15 @@ func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) err
 
 func (db *DB) GetPID(id string) (int32, error) {
 	var pid int32
-	err := db.conn.View(func(tx *bolt.Tx) error {
+
+	conn, err := NewDB()
+	if err != nil {
+		return 0, err
+	}
+
+	defer conn.Close()
+
+	err = conn.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte("default"))
 		if root == nil {
 			return fmt.Errorf("could not find bucket")
@@ -160,7 +228,15 @@ func (db *DB) GetPID(id string) (int32, error) {
 
 func (db *DB) ReturnAllEntries() ([]map[string]string, error) {
 	var out []map[string]string
-	err := db.conn.View(func(tx *bolt.Tx) error {
+
+	conn, err := NewDB()
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	err = conn.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte("default"))
 		if root == nil {
 			return fmt.Errorf("could not find bucket")

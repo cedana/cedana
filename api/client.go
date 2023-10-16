@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -15,7 +14,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
-	bolt "go.etcd.io/bbolt"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -75,16 +73,7 @@ func InstantiateClient() (*Client, error) {
 	// set up filesystem wrapper
 	fs := &afero.Afero{Fs: AppFs}
 
-	// set up embedded key-value db
-	conn, err := bolt.Open("/tmp/cedana.db", 0600, nil)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not open or create db")
-		return nil, err
-	}
-
-	db := &DB{
-		conn: conn,
-	}
+	db := &DB{}
 
 	return &Client{
 		CRIU:    criu,
@@ -114,24 +103,8 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 		return nil, nil
 	}
 
-	var oldState *task.ProcessState
 	var state task.ProcessState
-
-	err := c.db.conn.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("default"))
-		if b == nil {
-			return fmt.Errorf("could not find bucket")
-		}
-		v := b.Get([]byte(strconv.Itoa(int(pid))))
-
-		err := json.Unmarshal(v, &oldState)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
+	oldState, err := c.db.GetStateFromPID(pid)
 	if err != nil {
 		return nil, err
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	bolt "github.com/boltdb/bolt"
 )
 
 var id string
@@ -393,8 +395,35 @@ var psCmd = &cobra.Command{
 			return err
 		}
 
+		// open db in read-only mode
+		conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			cli.logger.Fatal().Err(err).Msg("Could not open or create db")
+			return err
+		}
+
+		var out []map[string]string
+		err = conn.View(func(tx *bolt.Tx) error {
+			root := tx.Bucket([]byte("default"))
+			if root == nil {
+				return fmt.Errorf("could not find bucket")
+			}
+
+			root.ForEach(func(k, v []byte) error {
+				out = append(out, map[string]string{
+					string(k): string(v),
+				})
+				return nil
+			})
+			return nil
+		})
+
 		if err != nil {
 			return err
+		}
+
+		for k, v := range out {
+			fmt.Printf("%s: %s\n", k, v)
 		}
 
 		return nil
@@ -450,7 +479,7 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(execTaskCmd)
-	// rootCmd.AddCommand(psCmd)
+	rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
 
