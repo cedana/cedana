@@ -23,7 +23,7 @@ func NewDB() (*bolt.DB, error) {
 
 // KISS for now - but we may want to separate out into subbuckets as we add more
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
-// structure is default -> xid, xid -> pid, pid: state (arrows denote buckets)
+// structure is default -> xid, xid -> pid: state (arrows denote buckets)
 func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) error {
 	conn, err := NewDB()
 	if err != nil {
@@ -224,31 +224,4 @@ func (db *DB) GetPID(id string) (int32, error) {
 		return err
 	})
 	return pid, err
-}
-
-func (db *DB) ReturnAllEntries() ([]map[string]string, error) {
-	var out []map[string]string
-
-	conn, err := NewDB()
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	err = conn.View(func(tx *bolt.Tx) error {
-		root := tx.Bucket([]byte("default"))
-		if root == nil {
-			return fmt.Errorf("could not find bucket")
-		}
-
-		root.ForEach(func(k, v []byte) error {
-			out = append(out, map[string]string{
-				string(k): string(v),
-			})
-			return nil
-		})
-		return nil
-	})
-	return out, err
 }

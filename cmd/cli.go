@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	bolt "github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 var id string
@@ -403,32 +403,45 @@ var psCmd = &cobra.Command{
 		}
 
 		defer conn.Close()
-
-		var out []map[string]string
+		var idPid []map[string]string
+		var pidState []map[string]string
 		err = conn.View(func(tx *bolt.Tx) error {
 			root := tx.Bucket([]byte("default"))
 			if root == nil {
 				return fmt.Errorf("could not find bucket")
 			}
 
-			root.ForEach(func(k, v []byte) error {
-				out = append(out, map[string]string{
-					string(k): string(v),
+			root.ForEachBucket(func(k []byte) error {
+				job := root.Bucket(k)
+				jobId := string(k)
+				job.ForEach(func(k, v []byte) error {
+					idPid = append(idPid, map[string]string{
+						jobId: string(v),
+					})
+					pidState = append(pidState, map[string]string{
+						string(k): string(v),
+					})
+
+					return nil
 				})
 				return nil
 			})
+
+			if err != nil {
+				return err
+			}
 			return nil
 		})
 
-		if err != nil {
-			return err
+		for _, v := range idPid {
+			fmt.Printf("%s\n", v)
 		}
 
-		for k, v := range out {
-			fmt.Printf("%s: %s\n", k, v)
+		for _, v := range pidState {
+			fmt.Printf("%s\n", v)
 		}
 
-		return nil
+		return err
 	},
 }
 
