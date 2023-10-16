@@ -60,19 +60,21 @@ var debugRuncRestoreCmd = &cobra.Command{
 		// Typical routes
 		// root := "/var/run/runc"
 		// bundle := "$HOME/bundle"
-		// consoleSocket := "$HOME/tty.sock"
+		// consoleSocket := "/home/brandonsmith/tty.sock"
 		root := args[2]
 		bundle := args[3]
-		consoleSocket := args[4]
+		// consoleSocket := args[4]
 		opts := &container.RuncOpts{
-			Root:          root,
-			Bundle:        bundle,
-			ConsoleSocket: consoleSocket,
+			Root:    root,
+			Bundle:  bundle,
+			Detatch: false,
 		}
 		imgPath := args[0]
 		containerId := args[1]
 
-		err := container.RuncRestore(imgPath, containerId, *opts)
+		client := api.Client{}
+
+		err := client.RuncRestore(imgPath, containerId, opts)
 		if err != nil {
 			return err
 		}

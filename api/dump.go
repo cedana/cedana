@@ -76,16 +76,16 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", fmt.Errorf("could not get state")
 	}
 
-	// check network connections
+	// check network Connections
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	for _, conn := range state.ProcessInfo.OpenConnections {
-		if conn.Type == syscall.SOCK_STREAM { // TCP
+	for _, Conn := range state.ProcessInfo.OpenConnections {
+		if Conn.Type == syscall.SOCK_STREAM { // TCP
 			hasTCP = true
 		}
 
-		if conn.Type == syscall.AF_UNIX { // Interprocess
+		if Conn.Type == syscall.AF_UNIX { // Interprocess
 			hasExtUnixSocket = true
 		}
 	}
@@ -198,27 +198,27 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 
 	byteId := []byte(containerId)
 
-	db := &DB{conn: nil, dbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
+	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
 
-	if err := db.setNewDbConn(); err != nil {
+	if err := db.SetNewDbConn(); err != nil {
 		return err
 	}
 
-	err = db.conn.View(func(tx *bolt.Tx) error {
-		bkt, err := getCtrBucket(tx)
+	err = db.Conn.View(func(tx *bolt.Tx) error {
+		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		if err := db.getContainerConfigFromDB(byteId, &config, bkt); err != nil {
+		if err := db.GetContainerConfigFromDB(byteId, &config, bkt); err != nil {
 			return err
 		}
 
-		if err := db.getContainerStateDB(byteId, &state, bkt); err != nil {
+		if err := db.GetContainerStateDB(byteId, &state, bkt); err != nil {
 			return err
 		}
 
-		utils.WriteJSONFile(config, "/tmp/test", "config.dump")
+		utils.WriteJSONFile(config, filepath.Join(bundlePath, "checkpoint"), "config.dump")
 
 		jsonPath := filepath.Join(bundlePath, "config.json")
 		cfg, _, err := utils.NewFromFile(jsonPath)
@@ -226,7 +226,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 			return err
 		}
 
-		utils.WriteJSONFile(cfg, "/tmp/test", "spec.dump")
+		utils.WriteJSONFile(cfg, filepath.Join(bundlePath, "checkpoint"), "spec.dump")
 
 		return nil
 	})

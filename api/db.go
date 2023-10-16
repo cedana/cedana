@@ -130,65 +130,6 @@ func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) err
 	})
 }
 
-func (db *DB) setNewDbConn() error {
-	// We need an in-memory lock to avoid issues around POSIX file advisory
-	// locks as described in the link below:
-	// https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081
-	db.dbLock.Lock()
-
-	database, err := bolt.Open(db.dbPath, 0600, nil)
-	if err != nil {
-		return fmt.Errorf("opening database %s: %w", db.dbPath, err)
-	}
-
-	db.conn = database
-
-	return nil
-}
-
-func (s *DB) getContainerConfigFromDB(id []byte, config *map[string]interface{}, ctrsBkt *bolt.Bucket) error {
-	ctrBkt := ctrsBkt.Bucket(id)
-	if ctrBkt == nil {
-		return fmt.Errorf("container %s not found in DB", string(id))
-	}
-
-	configBytes := ctrBkt.Get(configKey)
-	if configBytes == nil {
-		return fmt.Errorf("container %s missing config key in DB", string(id))
-	}
-
-	if err := json.Unmarshal(configBytes, &config); err != nil {
-		return fmt.Errorf("unmarshalling container %s config: %w", string(id), err)
-	}
-
-	// TODO Move over these types
-	// // convert ports to the new format if needed
-	// if len(config.ContainerNetworkConfig.OldPortMappings) > 0 && len(config.ContainerNetworkConfig.PortMappings) == 0 {
-	// 	config.ContainerNetworkConfig.PortMappings = ocicniPortsToNetTypesPorts(config.ContainerNetworkConfig.OldPortMappings)
-	// 	// keep the OldPortMappings in case an user has to downgrade podman
-
-	// 	// indicate that the config was modified and should be written back to the db when possible
-	// 	config.rewrite = true
-	// }
-
-	return nil
-}
-
-func (s *DB) getContainerStateDB(id []byte, state *map[string]interface{}, ctrsBkt *bolt.Bucket) error {
-	ctrToUpdate := ctrsBkt.Bucket(id)
-
-	newStateBytes := ctrToUpdate.Get(stateKey)
-	if newStateBytes == nil {
-		return fmt.Errorf("container does not have a state key in DB")
-	}
-
-	if err := json.Unmarshal(newStateBytes, &state); err != nil {
-		return fmt.Errorf("unmarshalling container state: %w", err)
-	}
-
-	return nil
-}
-
 func (db *DB) GetPID(id string) (int32, error) {
 	var pid int32
 	err := db.conn.View(func(tx *bolt.Tx) error {

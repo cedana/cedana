@@ -774,3 +774,33 @@ type ContainerState struct {
 	RestoreLog       string    `json:"restoreLog,omitempty"`
 	Restored         bool      `json:"restored,omitempty"`
 }
+
+type RuntimeContainerMetadata struct {
+	// The provided name and the ID of the image that was used to
+	// instantiate the container.
+	ImageName string `json:"image-name"` // Applicable to both PodSandboxes and Containers
+	ImageID   string `json:"image-id"`   // Applicable to both PodSandboxes and Containers
+	// The container's name, which for an infrastructure container is usually PodName + "-infra".
+	ContainerName string `json:"name"`                 // Applicable to both PodSandboxes and Containers, mandatory
+	CreatedAt     int64  `json:"created-at"`           // Applicable to both PodSandboxes and Containers
+	MountLabel    string `json:"mountlabel,omitempty"` // Applicable to both PodSandboxes and Containers
+}
+
+type RestoreOptions struct {
+	All             bool
+	IgnoreRootFS    bool
+	IgnoreVolumes   bool
+	IgnoreStaticIP  bool
+	IgnoreStaticMAC bool
+	Import          string
+	CheckpointImage bool
+	Keep            bool
+	Latest          bool
+	Name            string
+	TCPEstablished  bool
+	ImportPrevious  string
+	PublishPorts    []string
+	Pod             string
+	PrintStats      bool
+	FileLocks       bool
+}

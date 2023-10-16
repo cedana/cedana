@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -215,32 +216,32 @@ func (c *Client) patchPodman(config *types.ContainerConfig, state *types.Contain
 		networks[net] = optBytes
 	}
 
-	db := &DB{conn: nil, dbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
+	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
 
-	if err := db.setNewDbConn(); err != nil {
+	if err := db.SetNewDbConn(); err != nil {
 		return err
 	}
 
-	defer db.conn.Close()
+	defer db.Conn.Close()
 
-	db.conn.Update(func(tx *bolt.Tx) error {
+	db.Conn.Update(func(tx *bolt.Tx) error {
 
-		idsBucket, err := getIDBucket(tx)
+		idsBucket, err := utils.GetIDBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		namesBucket, err := getNamesBucket(tx)
+		namesBucket, err := utils.GetNamesBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		ctrBucket, err := getCtrBucket(tx)
+		ctrBucket, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		allCtrsBucket, err := getAllCtrsBucket(tx)
+		allCtrsBucket, err := utils.GetAllCtrsBucket(tx)
 		if err != nil {
 			return err
 		}
@@ -281,15 +282,15 @@ func (c *Client) patchPodman(config *types.ContainerConfig, state *types.Contain
 			return fmt.Errorf("adding container %s bucket to DB: %w", string(ctrID), err)
 		}
 
-		if err := newCtrBkt.Put(configKey, configJSON); err != nil {
+		if err := newCtrBkt.Put(utils.ConfigKey, configJSON); err != nil {
 			return fmt.Errorf("adding container %s config to DB: %w", string(ctrID), err)
 		}
-		if err := newCtrBkt.Put(stateKey, stateJSON); err != nil {
+		if err := newCtrBkt.Put(utils.StateKey, stateJSON); err != nil {
 			return fmt.Errorf("adding container %s state to DB: %w", string(ctrID), err)
 		}
 
 		if len(networks) > 0 {
-			ctrNetworksBkt, err := newCtrBkt.CreateBucket(networksBkt)
+			ctrNetworksBkt, err := newCtrBkt.CreateBucket(utils.NetworksBkt)
 			if err != nil {
 				return fmt.Errorf("creating networks bucket for container %s: %w", string(ctrID), err)
 			}
@@ -300,10 +301,9 @@ func (c *Client) patchPodman(config *types.ContainerConfig, state *types.Contain
 			}
 		}
 
-		if _, err := newCtrBkt.CreateBucket(dependenciesBkt); err != nil {
+		if _, err := newCtrBkt.CreateBucket(utils.DependenciesBkt); err != nil {
 			return fmt.Errorf("creating dependencies bucket for container %s: %w", string(ctrID), err)
 		}
-		// TODO missing add dependencies for the container
 		// TODO missing add ctr to pod
 		// TODO missing named config.NamedVolumes loop
 		return nil
@@ -313,6 +313,8 @@ func (c *Client) patchPodman(config *types.ContainerConfig, state *types.Contain
 }
 
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
+
+	ctx := context.Background()
 
 	if !opts.Detatch {
 		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
@@ -335,6 +337,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 			return err
 		}
 	}
+	// Here is the podman patch
+	utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint"))
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
