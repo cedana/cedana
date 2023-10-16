@@ -183,17 +183,16 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
+func checkIfPodman(containerId string) bool {
+	_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", containerId, "userdata"))
+	return err == nil
+}
+
+func patchPodman(containerId string) error {
 
 	config := make(map[string]interface{})
 	state := make(map[string]interface{})
 
-	runcContainer := container.GetContainerFromRunc(containerId, root)
-
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-	}
 	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerId + "/userdata"
 
 	byteId := []byte(containerId)
@@ -204,7 +203,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		return err
 	}
 
-	err = db.Conn.View(func(tx *bolt.Tx) error {
+	err := db.Conn.View(func(tx *bolt.Tx) error {
 		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
@@ -233,6 +232,24 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 
 	if err != nil {
 		return err
+	}
+	return nil
+
+}
+
+func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
+
+	runcContainer := container.GetContainerFromRunc(containerId, root)
+
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
+
+	if checkIfPodman(containerId) {
+		if err := patchPodman(containerId); err != nil {
+			return err
+		}
 	}
 
 	return nil
