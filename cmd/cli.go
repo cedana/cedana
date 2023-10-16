@@ -402,6 +402,8 @@ var psCmd = &cobra.Command{
 			return err
 		}
 
+		defer conn.Close()
+
 		var out []map[string]string
 		err = conn.View(func(tx *bolt.Tx) error {
 			root := tx.Bucket([]byte("default"))
