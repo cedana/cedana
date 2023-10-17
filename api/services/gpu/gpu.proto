@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package cedana.services.gpu;
+package cedanagpu;
 
 option go_package = "github.com/cedana/cedana/api/services/gpu";
 

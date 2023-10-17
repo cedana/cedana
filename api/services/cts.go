@@ -19,8 +19,9 @@ type services struct {
 type ServiceClient struct {
 	ctx context.Context
 	services
-	connMu sync.Mutex
-	conn   *grpc.ClientConn
+	connMu   sync.Mutex
+	taskConn *grpc.ClientConn
+	gpuConn  *grpc.ClientConn
 }
 
 func (s *ServiceClient) TaskService() task.TaskServiceClient {
@@ -29,7 +30,7 @@ func (s *ServiceClient) TaskService() task.TaskServiceClient {
 	}
 	s.connMu.Lock()
 	defer s.connMu.Unlock()
-	return task.NewTaskServiceClient(s.conn)
+	return task.NewTaskServiceClient(s.taskConn)
 }
 
 func (s *ServiceClient) GPUService() gpu.CedanaGPUClient {
@@ -38,25 +39,31 @@ func (s *ServiceClient) GPUService() gpu.CedanaGPUClient {
 	}
 	s.connMu.Lock()
 	defer s.connMu.Unlock()
-	return gpu.NewCedanaGPUClient(s.conn)
+	return gpu.NewCedanaGPUClient(s.gpuConn)
 }
 
 func NewClient(addr string, ctx context.Context) *ServiceClient {
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(addr, opts...)
+	taskConn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 
-	taskClient := task.NewTaskServiceClient(conn)
-	gpuClient := gpu.NewCedanaGPUClient(conn)
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+
+	taskClient := task.NewTaskServiceClient(taskConn)
+	gpuClient := gpu.NewCedanaGPUClient(gpuConn)
 
 	client := &ServiceClient{
 		services: services{taskService: taskClient, gpuService: gpuClient},
 		connMu:   sync.Mutex{},
-		conn:     conn,
+		taskConn: taskConn,
+		gpuConn:  gpuConn,
 		ctx:      ctx,
 	}
 	return client
@@ -127,5 +134,6 @@ func (c *ServiceClient) GpuCheckpoint(args *gpu.CheckpointRequest) *gpu.Checkpoi
 }
 
 func (c *ServiceClient) Close() {
-	c.conn.Close()
+	c.gpuConn.Close()
+	c.taskConn.Close()
 }
