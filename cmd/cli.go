@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	bolt "go.etcd.io/bbolt"
 )
 
 var id string
@@ -357,8 +359,8 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
-var startTaskCmd = &cobra.Command{
-	Use:   "start",
+var execTaskCmd = &cobra.Command{
+	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
 	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
 	Args:  cobra.ExactArgs(2),
@@ -384,24 +386,64 @@ var startTaskCmd = &cobra.Command{
 	},
 }
 
-// var psCmd = &cobra.Command{
-// 	Use:   "ps",
-// 	Short: "List running processes",
-// 	RunE: func(cmd *cobra.Command, args []string) error {
-// 		cli, err := NewCLI()
-// 		if err != nil {
-// 			return err
-// 		}
+var psCmd = &cobra.Command{
+	Use:   "ps",
+	Short: "List running processes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
 
-// 		var resp api.StatusResp
-// 		err = cli.conn.Call("CedanaDaemon.Ps", &api.StatusArgs{}, &resp)
-// 		if err != nil {
-// 			return err
-// 		}
+		// open db in read-only mode
+		conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			cli.logger.Fatal().Err(err).Msg("Could not open or create db")
+			return err
+		}
 
-// 		return nil
-// 	},
-// }
+		defer conn.Close()
+		var idPid []map[string]string
+		var pidState []map[string]string
+		err = conn.View(func(tx *bolt.Tx) error {
+			root := tx.Bucket([]byte("default"))
+			if root == nil {
+				return fmt.Errorf("could not find bucket")
+			}
+
+			root.ForEachBucket(func(k []byte) error {
+				job := root.Bucket(k)
+				jobId := string(k)
+				job.ForEach(func(k, v []byte) error {
+					idPid = append(idPid, map[string]string{
+						jobId: string(v),
+					})
+					pidState = append(pidState, map[string]string{
+						string(k): string(v),
+					})
+
+					return nil
+				})
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		for _, v := range idPid {
+			fmt.Printf("%s\n", v)
+		}
+
+		for _, v := range pidState {
+			fmt.Printf("%s\n", v)
+		}
+
+		return err
+	},
+}
 
 func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
@@ -450,8 +492,8 @@ func init() {
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
-	rootCmd.AddCommand(startTaskCmd)
-	// rootCmd.AddCommand(psCmd)
+	rootCmd.AddCommand(execTaskCmd)
+	rootCmd.AddCommand(psCmd)
 
 	initRuncCommands()
 
