@@ -17,6 +17,7 @@ type services struct {
 }
 
 type ServiceClient struct {
+	ctx context.Context
 	services
 	connMu sync.Mutex
 	conn   *grpc.ClientConn
@@ -31,14 +32,17 @@ func (s *ServiceClient) TaskService() task.TaskServiceClient {
 	return task.NewTaskServiceClient(s.conn)
 }
 
-type CheckpointTaskService struct {
-	ctx     context.Context
-	client  task.TaskServiceClient
-	conn    *grpc.ClientConn // Keep a reference to the connection
-	address string
+func (s *ServiceClient) GPUService() gpu.CedanaGPUClient {
+	if s.gpuService != nil {
+		return s.gpuService
+	}
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	return gpu.NewCedanaGPUClient(s.conn)
 }
 
-func NewCheckpointTaskService(addr string) *CheckpointTaskService {
+func NewClient(addr string) *ServiceClient {
+
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial(addr, opts...)
@@ -46,101 +50,81 @@ func NewCheckpointTaskService(addr string) *CheckpointTaskService {
 		log.Fatalf("fail to dial: %v", err)
 	}
 
-	client := task.NewTaskServiceClient(conn)
+	taskClient := task.NewTaskServiceClient(conn)
+	gpuClient := gpu.NewCedanaGPUClient(conn)
 
-	ctx := context.Background()
-
-	return &CheckpointTaskService{
-		client:  client,
-		conn:    conn, // Keep a reference to the connection
-		address: addr,
-		ctx:     ctx,
+	client := &ServiceClient{
+		services: services{taskService: taskClient, gpuService: gpuClient},
+		connMu:   sync.Mutex{},
+		conn:     conn,
 	}
+	return client
 }
 
-func (c *CheckpointTaskService) CheckpointTask(args *task.DumpArgs) *task.DumpResp {
-	resp, err := c.client.Dump(c.ctx, args)
+func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) *task.DumpResp {
+	resp, err := c.services.taskService.Dump(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) RestoreTask(args *task.RestoreArgs) *task.RestoreResp {
-	resp, err := c.client.Restore(c.ctx, args)
+func (c *ServiceClient) RestoreTask(args *task.RestoreArgs) *task.RestoreResp {
+	resp, err := c.services.taskService.Restore(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) CheckpointContainer(args *task.ContainerDumpArgs) *task.ContainerDumpResp {
-	resp, err := c.client.ContainerDump(c.ctx, args)
+func (c *ServiceClient) CheckpointContainer(args *task.ContainerDumpArgs) *task.ContainerDumpResp {
+	resp, err := c.services.taskService.ContainerDump(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) ContainerRestore(args *task.ContainerRestoreArgs) *task.ContainerRestoreResp {
-	resp, err := c.client.ContainerRestore(c.ctx, args)
+func (c *ServiceClient) ContainerRestore(args *task.ContainerRestoreArgs) *task.ContainerRestoreResp {
+	resp, err := c.services.taskService.ContainerRestore(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) CheckpointRunc(args *task.RuncDumpArgs) *task.RuncDumpResp {
-	resp, err := c.client.RuncDump(c.ctx, args)
+func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) *task.RuncDumpResp {
+	resp, err := c.services.taskService.RuncDump(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) RuncRestore(args *task.RuncRestoreArgs) *task.RuncRestoreResp {
-	resp, err := c.client.RuncRestore(c.ctx, args)
+func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) *task.RuncRestoreResp {
+	resp, err := c.services.taskService.RuncRestore(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) StartTask(args *task.StartTaskArgs) *task.StartTaskResp {
-	resp, err := c.client.StartTask(c.ctx, args)
+func (c *ServiceClient) StartTask(args *task.StartTaskArgs) *task.StartTaskResp {
+	resp, err := c.services.taskService.StartTask(c.ctx, args)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	return resp
 }
 
-func (c *CheckpointTaskService) Close() {
+func (c *ServiceClient) GpuCheckpoint(args *gpu.CheckpointRequest) *gpu.CheckpointResponse {
+	resp, err := c.services.gpuService.Checkpoint(c.ctx, args)
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+	return resp
+}
+
+func (c *ServiceClient) Close() {
 	c.conn.Close()
-}
-
-type GPUCheckpointTaskService struct {
-	ctx     context.Context
-	client  gpu.CedanaGPUClient
-	conn    *grpc.ClientConn // Keep a reference to the connection
-	address string
-}
-
-func NewGpuCheckpointTaskService(addr string) *GPUCheckpointTaskService {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(addr, opts...)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-
-	client := gpu.NewCedanaGPUClient(conn)
-
-	ctx := context.Background()
-
-	return &GPUCheckpointTaskService{
-		client:  client,
-		conn:    conn, // Keep a reference to the connection
-		address: addr,
-		ctx:     ctx,
-	}
 }

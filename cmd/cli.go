@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/cedana/cedana/api/services"
+	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
@@ -31,7 +32,7 @@ var detach bool
 
 type CLI struct {
 	cfg    *utils.Config
-	cts    *services.CheckpointTaskService
+	cts    *services.ServiceClient
 	logger zerolog.Logger
 }
 
@@ -40,7 +41,7 @@ func NewCLI() (*CLI, error) {
 	if err != nil {
 		return nil, err
 	}
-	cts := services.NewCheckpointTaskService("localhost:8080")
+	cts := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
 
@@ -126,6 +127,28 @@ var containerdDumpCmd = &cobra.Command{
 		if resp.Error != "" {
 			return fmt.Errorf(resp.Error)
 		}
+
+		cli.cts.Close()
+
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
+var gpuDumpCmd = &cobra.Command{
+	Use:   "gpu",
+	Short: "Manually checkpoint a running gpu accelerated process",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		dumpArgs := gpu.CheckpointRequest{}
+		resp := cli.cts.GpuCheckpoint(&dumpArgs)
+
+		cli.logger.Debug().Msgf("grpc response: %s", resp.String())
 
 		cli.cts.Close()
 
@@ -409,5 +432,7 @@ func init() {
 	initRuncCommands()
 
 	initContainerdCommands()
+
+	rootCmd.AddCommand(gpuDumpCmd)
 
 }
