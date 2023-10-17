@@ -41,7 +41,7 @@ func (s *ServiceClient) GPUService() gpu.CedanaGPUClient {
 	return gpu.NewCedanaGPUClient(s.conn)
 }
 
-func NewClient(addr string) *ServiceClient {
+func NewClient(addr string, ctx context.Context) *ServiceClient {
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -57,6 +57,7 @@ func NewClient(addr string) *ServiceClient {
 		services: services{taskService: taskClient, gpuService: gpuClient},
 		connMu:   sync.Mutex{},
 		conn:     conn,
+		ctx:      ctx,
 	}
 	return client
 }

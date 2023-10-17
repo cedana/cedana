@@ -48,6 +48,20 @@
             },
         },
         {
+            "name": "debug cedana gpu",
+            "type": "go",
+            "asRoot": true,
+            "request": "launch",
+            "mode": "debug",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["gpu"],
+            "env": {
+                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+            },
+        },
+        {
             "name": "debug cedana dump container",
             "type": "go",
             "asRoot": true,
