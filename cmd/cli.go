@@ -436,6 +436,6 @@ func init() {
 
 	initContainerdCommands()
 
-	rootCmd.AddCommand(gpuDumpCmd)
+	dumpCmd.AddCommand(gpuDumpCmd)
 
 }
