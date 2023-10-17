@@ -151,7 +151,39 @@ var gpuDumpCmd = &cobra.Command{
 		dumpArgs := gpu.CheckpointRequest{}
 		resp := cli.cts.GpuCheckpoint(&dumpArgs)
 
-		cli.logger.Debug().Msgf("grpc response: %s", resp.String())
+		if resp.Success {
+			err = fmt.Errorf("GPU Checkpoint failed")
+			cli.logger.Err(err)
+		} else {
+			cli.logger.Debug().Msg("GPU Checkpoint successful")
+		}
+
+		cli.cts.Close()
+
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
+var gpuRestoreCmd = &cobra.Command{
+	Use:   "gpu",
+	Short: "Manually restore a running gpu accelerated process",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		dumpArgs := gpu.RestoreRequest{}
+		resp := cli.cts.GpuRestore(&dumpArgs)
+
+		if resp.Success {
+			err = fmt.Errorf("GPU Restore failed")
+			cli.logger.Err(err)
+		} else {
+			cli.logger.Debug().Msg("GPU Restore successful")
+		}
 
 		cli.cts.Close()
 
@@ -437,5 +469,6 @@ func init() {
 	initContainerdCommands()
 
 	dumpCmd.AddCommand(gpuDumpCmd)
+	restoreCmd.AddCommand(gpuRestoreCmd)
 
 }

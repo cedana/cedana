@@ -133,6 +133,14 @@ func (c *ServiceClient) GpuCheckpoint(args *gpu.CheckpointRequest) *gpu.Checkpoi
 	return resp
 }
 
+func (c *ServiceClient) GpuRestore(args *gpu.RestoreRequest) *gpu.RestoreResponse {
+	resp, err := c.services.gpuService.Restore(c.ctx, args)
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+	return resp
+}
+
 func (c *ServiceClient) Close() {
 	c.gpuConn.Close()
 	c.taskConn.Close()
