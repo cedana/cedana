@@ -89,7 +89,7 @@ if __name__ == "__main__":
         print("No ports found.")
 
     # checkpoint 
-    time.sleep(60)
+    time.sleep(20)
     checkpoint_started_at = time.time()
     print("starting dump of process...")
     subprocess.run("mkdir tmp")
@@ -100,4 +100,6 @@ if __name__ == "__main__":
     # instant restore
     # restore (from outside for now)
 
-    restore_time = time.time()
+    restore_started_at = time.time()
+    print("starting restore of process...")
+
