@@ -171,11 +171,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func (c *Client) pyTorchRestore() error {
-	// TODO Not implemented yet
-	return nil
-}
-
 func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.ContainerState, error) {
 	dumpSpec := new(spec.Spec)
 	if _, err := utils.ReadJSONFile(dumpSpec, checkpointDir, "spec.dump"); err != nil {

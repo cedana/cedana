@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -15,8 +14,6 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/docker/docker/pkg/stringid"
 	bolt "go.etcd.io/bbolt"
-
-	"github.com/sirupsen/logrus"
 
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -498,14 +495,4 @@ func JSONDeepCopy(from, to interface{}) error {
 		return err
 	}
 	return json.Unmarshal(tmp, to)
-}
-
-func getOCICgroupPath(config *types.ContainerConfig) (string, error) {
-
-	// When the OCI runtime is set to use Systemd as a cgroup manager, it
-	// expects cgroups to be passed as follows:
-	// slice:prefix:name
-	systemdCgroups := fmt.Sprintf("%s:libpod:%s", path.Base(config.CgroupParent))
-	logrus.Debugf("Setting Cgroups for container to %s", systemdCgroups)
-	return systemdCgroups, nil
 }
