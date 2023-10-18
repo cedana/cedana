@@ -18,8 +18,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var id string
-var tag string
 var dir string
 var ref string
 
@@ -176,7 +174,7 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
-		id = xid.New().String()
+		id := xid.New().String()
 		cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
 
 		if dir == "" {
@@ -257,7 +255,7 @@ var dumpJobCmd = &cobra.Command{
 			return fmt.Errorf("no job id specified")
 		}
 
-		id = args[0]
+		id := args[0]
 
 		if dir == "" {
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
@@ -610,7 +608,9 @@ func init() {
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 	dumpProcessCmd.MarkFlagRequired("dir")
-	dumpProcessCmd.MarkFlagsMutuallyExclusive("id", "tag")
+
+	dumpCmd.AddCommand(dumpJobCmd)
+	dumpJobCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)

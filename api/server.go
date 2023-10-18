@@ -331,7 +331,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("failed to run task")
+			s.logger.Error().Err(err).Msg("task terminated with error")
 		}
 	}()
 

@@ -147,12 +147,23 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 			return err
 		}
 
-		pid := root.Get([]byte(id))
-		if pid == nil {
-			return fmt.Errorf("could not find pid")
+		job := root.Bucket([]byte(id))
+		if job == nil {
+			return fmt.Errorf("could not find job")
 		}
 
-		return root.Put(pid, marshaledState)
+		job.ForEach(func(k, v []byte) error {
+			pid, err := strconv.Atoi(string(k))
+			if err != nil {
+				return err
+			}
+			if pid == int(state.PID) {
+				return job.Put(k, marshaledState)
+			}
+			return nil
+		})
+
+		return nil
 	})
 }
 
