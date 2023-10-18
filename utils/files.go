@@ -7,6 +7,44 @@ import (
 	"path/filepath"
 )
 
+func CopyDirectory(sourcePath, destinationPath string) error {
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	if !sourceInfo.IsDir() {
+		return fmt.Errorf("%s is not a directory", sourcePath)
+	}
+
+	err = os.MkdirAll(destinationPath, sourceInfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		sourceChild := filepath.Join(sourcePath, entry.Name())
+		destinationChild := filepath.Join(destinationPath, entry.Name())
+
+		if entry.IsDir() {
+			if err := CopyDirectory(sourceChild, destinationChild); err != nil {
+				return err
+			}
+		} else {
+			if err := CopyFile(sourceChild, destinationChild); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func CopyFile(src, dstFolder string) error {
 	sfi, err := os.Stat(src)
 	if err != nil {
@@ -39,13 +77,13 @@ func CopyFile(src, dstFolder string) error {
 func copyFileContents(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return err 
+		return err
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return err 
+		return err
 	}
 	defer func() {
 		cerr := out.Close()
@@ -55,8 +93,8 @@ func copyFileContents(src, dst string) error {
 	}()
 
 	if _, err = io.Copy(out, in); err != nil {
-		return err 
+		return err
 	}
 	err = out.Sync()
-	return err 
+	return err
 }

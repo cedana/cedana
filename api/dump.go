@@ -24,6 +24,11 @@ const (
 	sys_pidfd_getfd       = 438
 )
 
+type Bundle struct {
+	ContainerId string
+	Bundle      string
+}
+
 // Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
 func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
 	var checkpointPath string
@@ -183,9 +188,16 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-func checkIfPodman(containerId string) bool {
-	_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", containerId, "userdata"))
-	return err == nil
+func checkIfPodman(b Bundle) bool {
+	var matched bool
+	if b.ContainerId != "" {
+		_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", b.ContainerId, "userdata"))
+		return err == nil
+	} else {
+		pattern := "/var/lib/containers/storage/overlay-containers/.*?/userdata"
+		matched, _ = regexp.MatchString(pattern, b.Bundle)
+	}
+	return matched
 }
 
 func patchPodmanDump(containerId string) error {
@@ -202,6 +214,8 @@ func patchPodmanDump(containerId string) error {
 	if err := db.SetNewDbConn(); err != nil {
 		return err
 	}
+
+	defer db.Conn.Close()
 
 	err := db.Conn.View(func(tx *bolt.Tx) error {
 		bkt, err := utils.GetCtrBucket(tx)
@@ -239,6 +253,8 @@ func patchPodmanDump(containerId string) error {
 
 func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
 
+	bundle := Bundle{ContainerId: containerId}
+
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
@@ -246,7 +262,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		c.logger.Fatal().Err(err)
 	}
 
-	if checkIfPodman(containerId) {
+	if checkIfPodman(bundle) {
 		if err := patchPodmanDump(containerId); err != nil {
 			return err
 		}

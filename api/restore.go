@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,10 +11,8 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
-	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -171,15 +170,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.ContainerState, error) {
-	dumpSpec := new(spec.Spec)
-	if _, err := utils.ReadJSONFile(dumpSpec, checkpointDir, "spec.dump"); err != nil {
-		return nil, nil, err
-	}
-
-	return nil, nil, nil
-}
-
 func patchPodmanRestore(opts *container.RuncOpts) error {
 	ctx := context.Background()
 
@@ -215,16 +205,36 @@ func patchPodmanRestore(opts *container.RuncOpts) error {
 
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
+	bundle := Bundle{Bundle: opts.Bundle}
+
+	isPodman := checkIfPodman(bundle)
+
+	if isPodman {
+
+		parts := strings.Split(opts.Bundle, "/")
+		parts[6] = containerId
+
+		newBundle := strings.Join(parts, "/")
+
+		if err := utils.CopyDirectory(opts.Bundle, newBundle); err != nil {
+			return err
+		}
+
+		opts.Bundle = newBundle
+	}
+
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
 		return err
 	}
 
-	if checkIfPodman(containerId) {
-		if err := patchPodmanRestore(opts); err != nil {
-			return err
+	go func() {
+		if isPodman {
+			if err := patchPodmanRestore(opts); err != nil {
+				log.Fatal(err)
+			}
 		}
-	}
+	}()
 
 	return nil
 }

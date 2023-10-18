@@ -170,7 +170,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
-		return nil, err
+		return &task.RuncDumpResp{Error: err.Error()}, err
 	}
 
 	return &task.RuncDumpResp{}, nil
@@ -187,7 +187,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
 	if err != nil {
-		return nil, err
+		return &task.RuncRestoreResp{Error: err.Error()}, err
 	}
 
 	return &task.RuncRestoreResp{}, nil
