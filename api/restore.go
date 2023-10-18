@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -170,7 +171,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(opts *container.RuncOpts) error {
+func patchPodmanRestore(opts *container.RuncOpts, containerId string) error {
 	ctx := context.Background()
 
 	// Podman run -d state
@@ -196,7 +197,7 @@ func patchPodmanRestore(opts *container.RuncOpts) error {
 		}
 	}
 	// Here is the podman patch
-	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint")); err != nil {
+	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint"), containerId); err != nil {
 		return err
 	}
 
@@ -212,15 +213,22 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 	if isPodman {
 
 		parts := strings.Split(opts.Bundle, "/")
+		runPath := "/run/containers/storage/overlay-containers/" + parts[6] + "/userdata"
+		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
 		parts[6] = containerId
+		// exclude last part for rsync
+		parts = parts[1 : len(parts)-1]
+		newBundle := "/" + strings.Join(parts, "/")
 
-		newBundle := strings.Join(parts, "/")
-
-		if err := utils.CopyDirectory(opts.Bundle, newBundle); err != nil {
+		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
 			return err
 		}
 
-		opts.Bundle = newBundle
+		if err := rsyncDirectories(runPath, newRunPath); err != nil {
+			return err
+		}
+
+		opts.Bundle = newBundle + "/userdata"
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
@@ -230,12 +238,29 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 	go func() {
 		if isPodman {
-			if err := patchPodmanRestore(opts); err != nil {
+			if err := patchPodmanRestore(opts, containerId); err != nil {
 				log.Fatal(err)
 			}
 		}
 	}()
 
+	return nil
+}
+
+// Define the rsync command and arguments
+// Set the output and error streams to os.Stdout and os.Stderr to see the output of rsync
+// Run the rsync command
+
+func rsyncDirectories(source, destination string) error {
+	cmd := exec.Command("sudo", "rsync", "-av", "--exclude=attach", source, destination)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
