@@ -344,11 +344,20 @@ var restoreFromIDCmd = &cobra.Command{
 		}
 
 		var checkpointPath string
+		db := api.NewDB()
 
-		db, err := api.NewDB()
+		paths, err := db.GetLatestLocalCheckpoints(args[0])
 		if err != nil {
 			return err
 		}
+
+		if len(paths) == 0 {
+			return fmt.Errorf("no checkpoint found for id %s", args[0])
+		}
+
+		// TODO NR - we just take first process for now. Have to look into
+		// restoring clusters/multiple processes attached to a job.
+		checkpointPath = *paths[0]
 
 		// pass path to restore task
 		restoreArgs := task.RestoreArgs{
