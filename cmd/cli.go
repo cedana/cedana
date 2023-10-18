@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
@@ -315,8 +316,45 @@ var restoreProcessCmd = &cobra.Command{
 		}
 
 		restoreArgs := task.RestoreArgs{
-			CheckpointId: "Not Implemented",
-			Dir:          args[0],
+			CheckpointId:   "Not Implemented",
+			CheckpointPath: args[0],
+			Type:           task.RestoreArgs_LOCAL,
+		}
+
+		resp := cli.cts.RestoreTask(&restoreArgs)
+
+		if resp.Error != "" {
+			return fmt.Errorf(resp.Error)
+		}
+
+		cli.cts.Close()
+
+		return nil
+	},
+}
+
+var restoreFromIDCmd = &cobra.Command{
+	Use:   "id",
+	Short: "Manually restore a process or container from an input id",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		var checkpointPath string
+
+		db, err := api.NewDB()
+		if err != nil {
+			return err
+		}
+
+		// pass path to restore task
+		restoreArgs := task.RestoreArgs{
+			CheckpointId:   args[0],
+			CheckpointPath: checkpointPath,
+			Type:           task.RestoreArgs_LOCAL,
 		}
 
 		resp := cli.cts.RestoreTask(&restoreArgs)
