@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/cedana/cedana/api/services/task"
 	bolt "go.etcd.io/bbolt"
 )
 
 type DB struct {
+	conn   *bolt.DB
+	dbLock sync.Mutex
+	dbPath string
 }
 
 func NewDB() (*bolt.DB, error) {

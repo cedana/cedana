@@ -85,7 +85,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc", "/tmp/cedana_runc_test/", "container-restore-1"],
+            "args": ["debug", "runc-restore", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/checkpoint", "test", "/var/run/runc", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
@@ -100,7 +100,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-dump", "/tmp/cedana_runc_test/", "container-printer"],
+            "args": ["debug", "runc-dump", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/checkpoint", "2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },

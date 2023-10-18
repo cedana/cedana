@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,8 +10,10 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -168,12 +171,61 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func (c *Client) RuncRestore(imgPath string, containerId string, opts *container.RuncOpts) error {
+func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.ContainerState, error) {
+	dumpSpec := new(spec.Spec)
+	if _, err := utils.ReadJSONFile(dumpSpec, checkpointDir, "spec.dump"); err != nil {
+		return nil, nil, err
+	}
+
+	return nil, nil, nil
+}
+
+func patchPodmanRestore(opts *container.RuncOpts) error {
+	ctx := context.Background()
+
+	// Podman run -d state
+	if !opts.Detatch {
+		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
+		if err != nil {
+			return err
+		}
+
+		var data map[string]interface{}
+
+		if err := json.Unmarshal(jsonData, &data); err != nil {
+			return err
+		}
+
+		data["process"].(map[string]interface{})["terminal"] = false
+		updatedJSON, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
+			return err
+		}
+	}
+	// Here is the podman patch
+	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
 		return err
 	}
+
+	if checkIfPodman(containerId) {
+		if err := patchPodmanRestore(opts); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
