@@ -358,6 +358,7 @@ var restoreFromIDCmd = &cobra.Command{
 		// TODO NR - we just take first process for now. Have to look into
 		// restoring clusters/multiple processes attached to a job.
 		checkpointPath = *paths[0]
+		fmt.Println("checkpoint path:", checkpointPath)
 
 		// pass path to restore task
 		restoreArgs := task.RestoreArgs{
@@ -537,6 +538,7 @@ func init() {
 	dumpProcessCmd.MarkFlagRequired("dir")
 
 	restoreCmd.AddCommand(restoreProcessCmd)
+	restoreCmd.AddCommand(restoreFromIDCmd)
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
