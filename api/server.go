@@ -343,6 +343,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 
 	return &task.StartTaskResp{
 		Error: "",
+		Pid:   pid,
 	}, err
 }
 
