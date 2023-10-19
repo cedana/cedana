@@ -18,7 +18,9 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 // Unused for now...
@@ -74,7 +76,10 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	switch args.Type {
 	case task.DumpArgs_SELF_SERVE:
 		// if not market - we don't push up the checkpoint to anywhere
-		s.logger.Info().Msgf("Process %d checkpointed to %s", args.PID, args.Dir)
+		s.logger.Info().Msg("Not implemented")
+		err = status.Error(codes.Unimplemented, "not implemented")
+		return nil, err
+
 	case task.DumpArgs_MARKET:
 		// get checkpoint file
 		state, err := s.Client.db.GetStateFromID(args.JobID)
@@ -90,6 +95,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		file, err := os.Open(checkpointPath)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 			return nil, err
 		}
 		defer file.Close()
@@ -97,6 +103,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
+
 			return nil, err
 		}
 
@@ -109,26 +116,29 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
 			return nil, err
 		}
 
 		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 			return nil, err
 		}
 
 		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
 			return nil, err
 		}
 
 		return &task.DumpResp{
-			Error: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			Message: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
 		}, nil
 	}
 
 	return &task.DumpResp{
-		Error: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
+		Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
 	}, nil
 }
 
@@ -136,11 +146,15 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	client := s.Client
 
 	pid, err := client.Restore(args)
+	if err != nil {
+		err = status.Error(codes.Internal, "Error with restore")
+		return nil, err
+	}
 
 	return &task.RestoreResp{
-		Error:  err.Error(),
-		NewPID: *pid,
-	}, err
+		Message: fmt.Sprintf("Successfully restore process: %v", pid),
+		NewPID:  *pid,
+	}, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
@@ -254,9 +268,11 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 		// Here we can do something with LogStreamingResp
 		_, err := stream.Recv()
 		if err == io.EOF {
-			return nil
+			s.logger.Debug().Msgf("Client has closed connection")
+			break
 		}
 		if err != nil {
+			s.logger.Debug().Msgf("Unable to read from client, %v", err)
 			return err
 		}
 
@@ -264,10 +280,12 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 
 			args := &task.ProcessState{}
 			if err := s.ClientStateStream.Send(args); err != nil {
-				return err
+				s.logger.Debug().Msgf("Issue sending process state")
+				break
 			}
 		}
 	}
+	return nil
 }
 
 func (s *service) runTask(task string) (int32, error) {
@@ -342,7 +360,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
 
 	return &task.StartTaskResp{
-		Error: "",
+		Message: "",
 	}, err
 }
 

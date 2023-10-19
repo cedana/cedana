@@ -15,7 +15,7 @@ message DumpArgs {
   string JobID = 4;
 }
 message DumpResp {
-    string Error = 1;
+    string Message = 1;
 }
 
 message RestoreArgs {
@@ -23,7 +23,7 @@ message RestoreArgs {
   string Dir = 2;
 }
 message RestoreResp {
-    string Error = 1;
+    string Message = 1;
     int32 NewPID = 2;
 }
 
@@ -32,7 +32,7 @@ message StartTaskArgs {
   string Id = 2;
 }
 message StartTaskResp {
-    string Error = 1;
+    string Message = 1;
 }
 
 // Log Streaming args
@@ -63,22 +63,6 @@ message ProcessState {
     RUNC = 1;
   }
 }
-
-// ContainerRuntimeContainerd ContainerRuntime = "containerd"
-// ContainerRuntimeRunc       ContainerRuntime = "runc"
-
-// // A process encapsulates either a process or a container
-// type ProcessState struct {
-// 	PID              int32            `json:"pid"`
-// 	Task             string           `json:"task"`
-// 	ContainerRuntime ContainerRuntime `json:"container_runtime"`
-// 	ContainerId      string           `json:"container_id"`
-// 	StartedAt        time.Time        `json:"started_at"`
-// 	ProcessInfo      ProcessInfo      `json:"process_info"`
-// 	CheckpointPath   string           `json:"checkpoint_path"`
-// 	CheckpointState  CheckpointState  `json:"checkpoint_state"`
-// 	Flag             Flag             `json:"flag"`
-// }
 
 message ClientInfo {
   string Id = 1;
@@ -195,7 +179,7 @@ message ContainerDumpArgs {
 
 message ContainerDumpResp {
   string CheckpointPath = 1;
-  string Error = 2;
+  string Message = 2;
 }
 
 message ContainerRestoreArgs {
@@ -204,7 +188,7 @@ message ContainerRestoreArgs {
 }
 
 message ContainerRestoreResp {
-  string Error = 1;
+  string Message = 1;
 }
 
 message RuncDumpArgs {
@@ -215,7 +199,7 @@ message RuncDumpArgs {
 }
 
 message RuncDumpResp {
-  string Error = 1;
+  string Message = 1;
 }
 
 message CriuOpts {
@@ -260,5 +244,5 @@ message RuncOpts {
 }
 
 message RuncRestoreResp {
-  string Error = 1;
+  string Message = 1;
 }

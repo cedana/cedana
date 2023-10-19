@@ -185,13 +185,9 @@ var dumpProcessCmd = &cobra.Command{
 
 		resp := cli.cts.CheckpointTask(&dumpArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
-
-		cli.logger.Info().Msgf("checkpoint of process %d written successfully to %s", pid, dir)
 
 		return nil
 	},
@@ -213,13 +209,10 @@ var containerdDumpCmd = &cobra.Command{
 		}
 		resp := cli.cts.CheckpointContainer(&dumpArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }
@@ -252,13 +245,10 @@ var runcDumpCmd = &cobra.Command{
 
 		resp := cli.cts.CheckpointRunc(&dumpArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, runcPath)
 		return nil
 	},
 }
@@ -288,13 +278,10 @@ var runcRestoreCmd = &cobra.Command{
 
 		resp := cli.cts.RuncRestore(restoreArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s successfully restored", containerId)
 		return nil
 	},
 }
@@ -321,9 +308,7 @@ var restoreProcessCmd = &cobra.Command{
 
 		resp := cli.cts.RestoreTask(&restoreArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
@@ -348,13 +333,10 @@ var containerdRestoreCmd = &cobra.Command{
 
 		resp := cli.cts.ContainerRestore(restoreArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, ref)
 		return nil
 	},
 }
@@ -377,9 +359,7 @@ var execTaskCmd = &cobra.Command{
 
 		resp := cli.cts.StartTask(taskArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 		return nil
