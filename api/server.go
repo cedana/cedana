@@ -45,7 +45,7 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-
+	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -145,16 +145,40 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
 
-	pid, err := client.Restore(args)
-	if err != nil {
-		err = status.Error(codes.Internal, "Error with restore")
-		return nil, err
-	}
+	switch args.Type {
+	case task.RestoreArgs_LOCAL:
+		// assume a suitable file has been passed to args
 
-	return &task.RestoreResp{
-		Message: fmt.Sprintf("Successfully restore process: %v", pid),
-		NewPID:  *pid,
-	}, nil
+		pid, err := client.Restore(args)
+		if err != nil {
+			err = status.Error(codes.Internal, "Error with restore")
+			return nil, err
+		}
+
+		return &task.RestoreResp{
+			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			NewPID:  *pid,
+		}, err
+
+	case task.RestoreArgs_REMOTE:
+		client.remoteStore = utils.NewCedanaStore(client.config)
+		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
+		if err != nil {
+			return nil, err
+		}
+
+		pid, err := client.Restore(&task.RestoreArgs{
+			Type:           task.RestoreArgs_REMOTE,
+			CheckpointId:   args.CheckpointId,
+			CheckpointPath: *zipFile,
+		})
+
+		return &task.RestoreResp{
+			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			NewPID:  *pid,
+		}, err
+	}
+	return &task.RestoreResp{}, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
@@ -184,7 +208,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
-		return nil, err
+		return &task.RuncDumpResp{Message: "failed"}, err
 	}
 
 	return &task.RuncDumpResp{}, nil
@@ -201,7 +225,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
 	if err != nil {
-		return nil, err
+		return &task.RuncRestoreResp{Message: "failed"}, err
 	}
 
 	return &task.RuncRestoreResp{}, nil
@@ -325,7 +349,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("failed to run task")
+			s.logger.Error().Err(err).Msg("task terminated with: ")
 		}
 	}()
 

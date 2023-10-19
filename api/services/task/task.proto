@@ -14,14 +14,21 @@ message DumpArgs {
   DumpType Type = 3;
   string JobID = 4;
 }
+
 message DumpResp {
     string Message = 1;
 }
 
 message RestoreArgs {
-  string CheckpointId = 1;
-  string Dir = 2;
+  enum RestoreType {
+    LOCAL = 0; 
+    REMOTE = 1;
+  }
+  RestoreType Type = 1;
+  string CheckpointId = 2;
+  string CheckpointPath = 3;
 }
+
 message RestoreResp {
     string Message = 1;
     int32 NewPID = 2;
@@ -33,6 +40,7 @@ message StartTaskArgs {
 }
 message StartTaskResp {
     string Message = 1;
+    int32 PID = 2;
 }
 
 // Log Streaming args

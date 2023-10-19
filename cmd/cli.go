@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
@@ -16,7 +17,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var id string
 var dir string
 var ref string
 
@@ -88,7 +88,7 @@ func (c *CheckpointTaskService) CheckpointContainer(args *task.ContainerDumpArgs
 	return resp, nil
 }
 
-func (c *CheckpointTaskService) ContainerRestore(args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
+func (c *CheckpointTaskService) RestoreContainer(args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
 	resp, err := c.client.ContainerRestore(c.ctx, args)
 	if err != nil {
 		return nil, err
@@ -143,14 +143,22 @@ func NewCLI() (*CLI, error) {
 	}, nil
 }
 
+// --------------------
+// Top-level Dump/Restore CLI commands
+// --------------------
+
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
 }
 
+// ---------------
+// Manual checkpoint/restore with a PID
+// ---------------
+
 var dumpProcessCmd = &cobra.Command{
 	Use:   "process",
-	Short: "Manually checkpoint a running process to a directory",
+	Short: "Manually checkpoint a running process [pid] to a directory [-d]",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
@@ -163,13 +171,11 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
-		if id == "" {
-			id = xid.New().String()
-			cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
-		}
+		id := xid.New().String()
+		cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
 
 		if dir == "" {
-			// should be a default dump directory as well?
+			// TODO NR - should we default to /tmp?
 			if cli.cfg.SharedStorage.DumpStorageDir == "" {
 				return fmt.Errorf("no dump directory specified")
 			}
@@ -199,6 +205,121 @@ var dumpProcessCmd = &cobra.Command{
 	},
 }
 
+// -----------------
+// Checkpoint/restore of a job w/ ID (currently limited to processes)
+// -----------------
+
+var dumpJobCmd = &cobra.Command{
+	Use:   "job",
+	Args:  cobra.ExactArgs(1),
+	Short: "Manually checkpoint a running job to a directory",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// TODO NR - this needs to be extended to include container checkpoints
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		if args[0] == "" {
+			return fmt.Errorf("no job id specified")
+		}
+
+		id := args[0]
+
+		if dir == "" {
+			if cli.cfg.SharedStorage.DumpStorageDir == "" {
+				return fmt.Errorf("no dump directory specified")
+			}
+			dir = cli.cfg.SharedStorage.DumpStorageDir
+			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
+		}
+
+		// get PID of running job
+		// TODO NR - we should be querying the API for this instead of
+		// directly opening the db. Permissions issue
+		db := api.NewDB()
+		pid, err := db.GetPID(id)
+		if err != nil {
+			return err
+		}
+
+		if pid == 0 {
+			return fmt.Errorf("pid 0 returned from state - is process running?")
+		}
+
+		dumpArgs := task.DumpArgs{
+			PID:   pid,
+			JobID: id,
+			Dir:   dir,
+			Type:  task.DumpArgs_SELF_SERVE,
+		}
+
+		resp, err := cli.cts.CheckpointTask(&dumpArgs)
+		if err != nil {
+			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
+		cli.cts.Close()
+
+		return err
+	},
+}
+
+var restoreJobCmd = &cobra.Command{
+	Use:   "job",
+	Short: "Manually restore a process or container from an input id",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// TODO NR - add support for containers, currently supports only process
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		var checkpointPath string
+		db := api.NewDB()
+
+		paths, err := db.GetLatestLocalCheckpoints(args[0])
+		if err != nil {
+			return err
+		}
+
+		if len(paths) == 0 {
+			return fmt.Errorf("no checkpoint found for id %s", args[0])
+		}
+
+		// TODO NR - we just take first process for now. Have to look into
+		// restoring clusters/multiple processes attached to a job.
+		checkpointPath = *paths[0]
+		fmt.Println("checkpoint path:", checkpointPath)
+
+		// pass path to restore task
+		restoreArgs := task.RestoreArgs{
+			CheckpointId:   args[0],
+			CheckpointPath: checkpointPath,
+			Type:           task.RestoreArgs_LOCAL,
+		}
+
+		resp, err := cli.cts.RestoreTask(&restoreArgs)
+
+		if err != nil {
+			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
+		cli.cts.Close()
+
+		return nil
+	},
+}
+
+// -----------------------
+// Checkpoint/Restore of a containerd container
+// -----------------------
+
 var containerdDumpCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
@@ -226,6 +347,10 @@ var containerdDumpCmd = &cobra.Command{
 		return nil
 	},
 }
+
+// -----------------------
+// Checkpoint/Restore of a runc container
+// -----------------------
 
 var runcDumpCmd = &cobra.Command{
 	Use:   "runc",
@@ -319,8 +444,8 @@ var restoreProcessCmd = &cobra.Command{
 		}
 
 		restoreArgs := task.RestoreArgs{
-			CheckpointId: "Not Implemented",
-			Dir:          args[0],
+			CheckpointId:   "Not Implemented",
+			CheckpointPath: args[0],
 		}
 
 		resp, err := cli.cts.RestoreTask(&restoreArgs)
@@ -351,7 +476,7 @@ var containerdRestoreCmd = &cobra.Command{
 			ContainerId: containerId,
 		}
 
-		resp, err := cli.cts.ContainerRestore(restoreArgs)
+		resp, err := cli.cts.RestoreContainer(restoreArgs)
 		if err != nil {
 			cli.logger.Error().Msgf("Restore task failed: %v", err)
 		}
@@ -388,6 +513,7 @@ var execTaskCmd = &cobra.Command{
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
+		fmt.Print(resp.PID)
 		return nil
 	},
 }
@@ -422,7 +548,7 @@ var psCmd = &cobra.Command{
 				jobId := string(k)
 				job.ForEach(func(k, v []byte) error {
 					idPid = append(idPid, map[string]string{
-						jobId: string(v),
+						jobId: string(k),
 					})
 					pidState = append(pidState, map[string]string{
 						string(k): string(v),
@@ -491,10 +617,13 @@ func initContainerdCommands() {
 func init() {
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
-	dumpProcessCmd.Flags().StringVarP(&id, "jobid", "j", "", "optionally specify an id (randomly generated if omitted)")
 	dumpProcessCmd.MarkFlagRequired("dir")
 
+	dumpCmd.AddCommand(dumpJobCmd)
+	dumpJobCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+
 	restoreCmd.AddCommand(restoreProcessCmd)
+	restoreCmd.AddCommand(restoreJobCmd)
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)

@@ -17,10 +17,10 @@
             "name": "debug cedana daemon-grpc",
             "type": "go",
             "request": "launch",
-            "mode": "debug",
+            "mode": "exec",
             "asRoot": true,
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
+            "program": "${workspaceFolder}/cedana",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
             "args": ["daemon", "start"],
@@ -85,7 +85,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-restore", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/checkpoint", "test", "/var/run/runc", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/"],
+            "args": ["debug", "runc-restore", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint", "asdasf", "/var/run/runc", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },
@@ -100,7 +100,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-dump", "/var/lib/containers/storage/overlay-containers/2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60/userdata/checkpoint", "2d9e2e002e5b5419ce1aec07a7d03534b156c857cb498c943c1504e238f4cc60"],
+            "args": ["debug", "runc-dump", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint", "8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
             },

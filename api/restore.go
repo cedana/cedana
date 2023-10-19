@@ -3,36 +3,30 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
-	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/proto"
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
-	c.remoteStore = utils.NewCedanaStore(c.config)
-	zipFile, err := c.remoteStore.GetCheckpoint(args.CheckpointId)
-	if err != nil {
-		return nil, err
-	}
-
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
-	err = os.Mkdir(tmpdir, 0755)
+	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
-	err = utils.UnzipFolder(*zipFile, tmpdir)
+	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
+	err = utils.UnzipFolder(checkpointPath, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
@@ -72,15 +66,6 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	opts.ShellJob = proto.Bool(isShellJob)
 
 	c.restoreFiles(&checkpointState, tmpdir)
-
-	// TODO: network restore logic
-	// TODO: checksum val
-
-	// Remove for now for testing
-	// err = os.Remove(zipFile)
-	if err != nil {
-		return nil, err
-	}
 
 	return &tmpdir, nil
 }
@@ -171,16 +156,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func getPodmanConfigs(checkpointDir string) (*types.ContainerConfig, *types.ContainerState, error) {
-	dumpSpec := new(spec.Spec)
-	if _, err := utils.ReadJSONFile(dumpSpec, checkpointDir, "spec.dump"); err != nil {
-		return nil, nil, err
-	}
-
-	return nil, nil, nil
-}
-
-func patchPodmanRestore(opts *container.RuncOpts) error {
+func patchPodmanRestore(opts *container.RuncOpts, containerId, imgPath string) error {
 	ctx := context.Background()
 
 	// Podman run -d state
@@ -205,8 +181,9 @@ func patchPodmanRestore(opts *container.RuncOpts) error {
 			return err
 		}
 	}
+
 	// Here is the podman patch
-	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint")); err != nil {
+	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
 		return err
 	}
 
@@ -215,17 +192,62 @@ func patchPodmanRestore(opts *container.RuncOpts) error {
 
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
+	bundle := Bundle{Bundle: opts.Bundle}
+
+	isPodman := checkIfPodman(bundle)
+
+	if isPodman {
+
+		parts := strings.Split(opts.Bundle, "/")
+		runPath := "/run/containers/storage/overlay-containers/" + parts[6] + "/userdata"
+		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
+		parts[6] = containerId
+		// exclude last part for rsync
+		parts = parts[1 : len(parts)-1]
+		newBundle := "/" + strings.Join(parts, "/")
+
+		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
+			return err
+		}
+
+		if err := rsyncDirectories(runPath, newRunPath); err != nil {
+			return err
+		}
+
+		opts.Bundle = newBundle + "/userdata"
+	}
+
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
 		return err
 	}
 
-	if checkIfPodman(containerId) {
-		if err := patchPodmanRestore(opts); err != nil {
-			return err
+	go func() {
+		if isPodman {
+			if err := patchPodmanRestore(opts, containerId, imgPath); err != nil {
+				log.Fatal(err)
+			}
 		}
-	}
+	}()
 
+	return nil
+}
+
+// Define the rsync command and arguments
+// Set the output and error streams to os.Stdout and os.Stderr to see the output of rsync
+// Run the rsync command
+
+// Using rsync instead of cp -r, for some reason cp -r was not copying all the files and directories over but rsync does...
+func rsyncDirectories(source, destination string) error {
+	cmd := exec.Command("sudo", "rsync", "-av", "--exclude=attach", source, destination)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -243,7 +265,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	dir, err := c.prepareRestore(opts, nil, args.Dir)
+	dir, err := c.prepareRestore(opts, nil, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
