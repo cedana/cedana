@@ -39,13 +39,13 @@ func CopyFile(src, dstFolder string) error {
 func copyFileContents(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return err 
+		return err
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return err 
+		return err
 	}
 	defer func() {
 		cerr := out.Close()
@@ -55,8 +55,8 @@ func copyFileContents(src, dst string) error {
 	}()
 
 	if _, err = io.Copy(out, in); err != nil {
-		return err 
+		return err
 	}
 	err = out.Sync()
-	return err 
+	return err
 }

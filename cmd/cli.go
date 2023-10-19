@@ -478,6 +478,7 @@ var runcRestoreCmd = &cobra.Command{
 		cli.cts.Close()
 
 		cli.logger.Info().Msgf("container %s successfully restored", containerId)
+
 		return nil
 	},
 }
