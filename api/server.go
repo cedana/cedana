@@ -43,7 +43,7 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-
+	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -135,12 +135,36 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
 
-	pid, err := client.Restore(args)
+	switch args.Type {
+	case task.RestoreArgs_LOCAL:
+		// assume a suitable file has been passed to args
 
-	return &task.RestoreResp{
-		Error:  err.Error(),
-		NewPID: *pid,
-	}, err
+		pid, err := client.Restore(args)
+
+		return &task.RestoreResp{
+			Error:  err.Error(),
+			NewPID: *pid,
+		}, err
+
+	case task.RestoreArgs_REMOTE:
+		client.remoteStore = utils.NewCedanaStore(client.config)
+		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
+		if err != nil {
+			return nil, err
+		}
+
+		pid, err := client.Restore(&task.RestoreArgs{
+			Type:           task.RestoreArgs_REMOTE,
+			CheckpointId:   args.CheckpointId,
+			CheckpointPath: *zipFile,
+		})
+
+		return &task.RestoreResp{
+			Error:  err.Error(),
+			NewPID: *pid,
+		}, err
+	}
+	return &task.RestoreResp{}, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
@@ -307,7 +331,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("failed to run task")
+			s.logger.Error().Err(err).Msg("task terminated with: ")
 		}
 	}()
 
@@ -343,6 +367,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 
 	return &task.StartTaskResp{
 		Error: "",
+		PID:   pid,
 	}, err
 }
 

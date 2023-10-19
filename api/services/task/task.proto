@@ -14,14 +14,21 @@ message DumpArgs {
   DumpType Type = 3;
   string JobID = 4;
 }
+
 message DumpResp {
     string Error = 1;
 }
 
 message RestoreArgs {
-  string CheckpointId = 1;
-  string Dir = 2;
+  enum RestoreType {
+    LOCAL = 0; 
+    REMOTE = 1;
+  }
+  RestoreType Type = 1;
+  string CheckpointId = 2;
+  string CheckpointPath = 3;
 }
+
 message RestoreResp {
     string Error = 1;
     int32 NewPID = 2;
@@ -33,6 +40,7 @@ message StartTaskArgs {
 }
 message StartTaskResp {
     string Error = 1;
+    int32 PID = 2;
 }
 
 // Log Streaming args
@@ -63,22 +71,6 @@ message ProcessState {
     RUNC = 1;
   }
 }
-
-// ContainerRuntimeContainerd ContainerRuntime = "containerd"
-// ContainerRuntimeRunc       ContainerRuntime = "runc"
-
-// // A process encapsulates either a process or a container
-// type ProcessState struct {
-// 	PID              int32            `json:"pid"`
-// 	Task             string           `json:"task"`
-// 	ContainerRuntime ContainerRuntime `json:"container_runtime"`
-// 	ContainerId      string           `json:"container_id"`
-// 	StartedAt        time.Time        `json:"started_at"`
-// 	ProcessInfo      ProcessInfo      `json:"process_info"`
-// 	CheckpointPath   string           `json:"checkpoint_path"`
-// 	CheckpointState  CheckpointState  `json:"checkpoint_state"`
-// 	Flag             Flag             `json:"flag"`
-// }
 
 message ClientInfo {
   string Id = 1;
