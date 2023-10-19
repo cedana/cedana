@@ -203,7 +203,7 @@ func checkIfPodman(b Bundle) bool {
 	return matched
 }
 
-func patchPodmanDump(containerId string) error {
+func patchPodmanDump(containerId, imgPath string) error {
 
 	config := make(map[string]interface{})
 	state := make(map[string]interface{})
@@ -234,7 +234,7 @@ func patchPodmanDump(containerId string) error {
 			return err
 		}
 
-		utils.WriteJSONFile(config, filepath.Join(bundlePath, "checkpoint"), "config.dump")
+		utils.WriteJSONFile(config, imgPath, "config.dump")
 
 		jsonPath := filepath.Join(bundlePath, "config.json")
 		cfg, _, err := utils.NewFromFile(jsonPath)
@@ -242,7 +242,7 @@ func patchPodmanDump(containerId string) error {
 			return err
 		}
 
-		utils.WriteJSONFile(cfg, filepath.Join(bundlePath, "checkpoint"), "spec.dump")
+		utils.WriteJSONFile(cfg, imgPath, "spec.dump")
 
 		return nil
 	})
@@ -266,7 +266,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 	}
 
 	if checkIfPodman(bundle) {
-		if err := patchPodmanDump(containerId); err != nil {
+		if err := patchPodmanDump(containerId, opts.ImagesDirectory); err != nil {
 			return err
 		}
 	}
