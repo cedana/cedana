@@ -203,6 +203,8 @@ func patchPodmanDump(containerId string) error {
 		return err
 	}
 
+	defer db.Conn.Close()
+
 	err := db.Conn.View(func(tx *bolt.Tx) error {
 		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {

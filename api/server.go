@@ -360,7 +360,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
 
 	return &task.StartTaskResp{
-		Message: "",
+		Message: fmt.Sprintf("Started task: %v", pid),
 	}, err
 }
 

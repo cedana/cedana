@@ -23,7 +23,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "buildFlags": "-buildvcs=false",
-            "args": ["daemon-grpc"],
+            "args": ["daemon", "start"],
             "env": {
                 "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
                 "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
