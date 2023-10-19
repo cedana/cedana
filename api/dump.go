@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -75,16 +76,16 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", fmt.Errorf("could not get state")
 	}
 
-	// check network connections
+	// check network Connections
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	for _, conn := range state.ProcessInfo.OpenConnections {
-		if conn.Type == syscall.SOCK_STREAM { // TCP
+	for _, Conn := range state.ProcessInfo.OpenConnections {
+		if Conn.Type == syscall.SOCK_STREAM { // TCP
 			hasTCP = true
 		}
 
-		if conn.Type == syscall.AF_UNIX { // Interprocess
+		if Conn.Type == syscall.AF_UNIX { // Interprocess
 			hasExtUnixSocket = true
 		}
 	}
@@ -182,13 +183,75 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) RuncDump(root string, containerId string, opts *container.CriuOpts) error {
+func checkIfPodman(containerId string) bool {
+	_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", containerId, "userdata"))
+	return err == nil
+}
+
+func patchPodmanDump(containerId string) error {
+
+	config := make(map[string]interface{})
+	state := make(map[string]interface{})
+
+	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerId + "/userdata"
+
+	byteId := []byte(containerId)
+
+	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
+
+	if err := db.SetNewDbConn(); err != nil {
+		return err
+	}
+
+	err := db.Conn.View(func(tx *bolt.Tx) error {
+		bkt, err := utils.GetCtrBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		if err := db.GetContainerConfigFromDB(byteId, &config, bkt); err != nil {
+			return err
+		}
+
+		if err := db.GetContainerStateDB(byteId, &state, bkt); err != nil {
+			return err
+		}
+
+		utils.WriteJSONFile(config, filepath.Join(bundlePath, "checkpoint"), "config.dump")
+
+		jsonPath := filepath.Join(bundlePath, "config.json")
+		cfg, _, err := utils.NewFromFile(jsonPath)
+		if err != nil {
+			return err
+		}
+
+		utils.WriteJSONFile(cfg, filepath.Join(bundlePath, "checkpoint"), "spec.dump")
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
+
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
+
+	if checkIfPodman(containerId) {
+		if err := patchPodmanDump(containerId); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

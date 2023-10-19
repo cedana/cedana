@@ -97,6 +97,10 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
+func (c *Client) checkpointGPU() {
+
+}
+
 func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	if pid == 0 {
