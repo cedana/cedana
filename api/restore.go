@@ -171,7 +171,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(opts *container.RuncOpts, containerId string) error {
+func patchPodmanRestore(opts *container.RuncOpts, containerId, imgPath string) error {
 	ctx := context.Background()
 
 	// Podman run -d state
@@ -196,8 +196,9 @@ func patchPodmanRestore(opts *container.RuncOpts, containerId string) error {
 			return err
 		}
 	}
+
 	// Here is the podman patch
-	if err := utils.CRImportCheckpoint(ctx, filepath.Join(opts.Bundle, "checkpoint"), containerId); err != nil {
+	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
 		return err
 	}
 
@@ -238,7 +239,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 	go func() {
 		if isPodman {
-			if err := patchPodmanRestore(opts, containerId); err != nil {
+			if err := patchPodmanRestore(opts, containerId, imgPath); err != nil {
 				log.Fatal(err)
 			}
 		}
