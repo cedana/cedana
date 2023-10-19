@@ -18,21 +18,15 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
-	c.remoteStore = utils.NewCedanaStore(c.config)
-	zipFile, err := c.remoteStore.GetCheckpoint(args.CheckpointId)
-	if err != nil {
-		return nil, err
-	}
-
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
-	err = os.Mkdir(tmpdir, 0755)
+	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", *zipFile, tmpdir)
-	err = utils.UnzipFolder(*zipFile, tmpdir)
+	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
+	err = utils.UnzipFolder(checkpointPath, tmpdir)
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
@@ -72,15 +66,6 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	opts.ShellJob = proto.Bool(isShellJob)
 
 	c.restoreFiles(&checkpointState, tmpdir)
-
-	// TODO: network restore logic
-	// TODO: checksum val
-
-	// Remove for now for testing
-	// err = os.Remove(zipFile)
-	if err != nil {
-		return nil, err
-	}
 
 	return &tmpdir, nil
 }
@@ -280,7 +265,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		PreRestoreAvail: true,
 	}
 
-	dir, err := c.prepareRestore(opts, nil, args.Dir)
+	dir, err := c.prepareRestore(opts, nil, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}

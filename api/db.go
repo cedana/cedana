@@ -16,7 +16,11 @@ type DB struct {
 	dbPath string
 }
 
-func NewDB() (*bolt.DB, error) {
+func NewDB() *DB {
+	return &DB{}
+}
+
+func NewBoltConn() (*bolt.DB, error) {
 	// set up embedded key-value db
 	conn, err := bolt.Open("/tmp/cedana.db", 0600, nil)
 	if err != nil {
@@ -29,7 +33,7 @@ func NewDB() (*bolt.DB, error) {
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
 // structure is default -> xid, xid -> pid: state (arrows denote buckets)
 func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) error {
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return err
 	}
@@ -70,7 +74,7 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) e
 func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 	var state task.ProcessState
 
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +103,7 @@ func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 func (db *DB) GetStateFromPID(pid int32) (*task.ProcessState, error) {
 	var state task.ProcessState
 
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +133,7 @@ func (db *DB) GetStateFromPID(pid int32) (*task.ProcessState, error) {
 }
 
 func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) error {
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return err
 	}
@@ -147,17 +151,28 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 			return err
 		}
 
-		pid := root.Get([]byte(id))
-		if pid == nil {
-			return fmt.Errorf("could not find pid")
+		job := root.Bucket([]byte(id))
+		if job == nil {
+			return fmt.Errorf("could not find job")
 		}
 
-		return root.Put(pid, marshaledState)
+		job.ForEach(func(k, v []byte) error {
+			pid, err := strconv.Atoi(string(k))
+			if err != nil {
+				return err
+			}
+			if pid == int(state.PID) {
+				return job.Put(k, marshaledState)
+			}
+			return nil
+		})
+
+		return nil
 	})
 }
 
 func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) error {
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return err
 	}
@@ -194,7 +209,7 @@ func (db *DB) UpdateProcessStateWithPID(pid int32, state *task.ProcessState) err
 func (db *DB) GetPID(id string) (int32, error) {
 	var pid int32
 
-	conn, err := NewDB()
+	conn, err := NewBoltConn()
 	if err != nil {
 		return 0, err
 	}
@@ -228,4 +243,41 @@ func (db *DB) GetPID(id string) (int32, error) {
 		return err
 	})
 	return pid, err
+}
+func (db *DB) GetLatestLocalCheckpoints(id string) ([]*string, error) {
+	var checkpoints []*string
+
+	conn, err := NewBoltConn()
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	err = conn.View(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte("default"))
+		if root == nil {
+			return fmt.Errorf("could not find bucket")
+		}
+
+		job := root.Bucket([]byte(id))
+		if job == nil {
+			return fmt.Errorf("could not find job")
+		}
+
+		job.ForEach(func(k, v []byte) error {
+			// unmarshal each PID/state k/v pair and extract checkpoint path
+			state := task.ProcessState{}
+			err := json.Unmarshal(v, &state)
+			if err != nil {
+				return err
+			}
+			checkpoints = append(checkpoints, &state.CheckpointPath)
+			return nil
+		})
+
+		return nil
+	})
+
+	return checkpoints, err
 }

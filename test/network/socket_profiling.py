@@ -4,8 +4,6 @@ import subprocess
 import time
 import argparse
 import psutil
-from scapy.all import TCP, sniff
-from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 
 def setup_network(delay, jitter, loss):
@@ -70,7 +68,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
  #   setup_env(args.delay, args.jitter, args.loss)
 
-    command = "sudo ./cedana exec -p 'python3 test/network/server_client.py --mode server' socket_test"
+    command = "sudo ./cedana exec 'python3 test/network/server_client.py --mode server' socket_test"
     process = subprocess.Popen(["sh", "-c", command], stdout=subprocess.PIPE)
     pid = int(process.communicate()[0].decode().strip())
     print("Started process with PID {}".format(pid))
@@ -78,7 +76,7 @@ if __name__ == "__main__":
     # start monitoring tcp seq data 
     # wait a few seconds before starting 
     time.sleep(5)
-    ports = get_ports(pid)
+    ports = [8001]
     print(ports)
     if ports:
         port_filters = " or ".join([f"port {port}" for port in ports])
@@ -89,15 +87,20 @@ if __name__ == "__main__":
         print("No ports found.")
 
     # checkpoint 
-    time.sleep(60)
+    time.sleep(20)
     checkpoint_started_at = time.time()
     print("starting dump of process...")
     subprocess.run("mkdir tmp")
-    chkpt_cmd = "sudo ./cedana dump {} -d tmp".format(pid)
+    chkpt_cmd = "sudo ./cedana dump {} -d tmp".format("socket_test")
     process = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     checkpoint_completed_at = time.time()
 
     # instant restore
     # restore (from outside for now)
+    time.sleep(10)
+    restore_started_at = time.time()
+    print("starting restore of process...")
+    restore_cmd = "sudo ./cedana restore {}".format("socket_test")
+    process = subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
+    restore_completed_at = time.time()
 
-    restore_time = time.time()
