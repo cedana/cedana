@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # start monitoring tcp seq data 
     # wait a few seconds before starting 
     time.sleep(5)
-    ports = get_ports(pid)
+    ports = [8001]
     print(ports)
     if ports:
         port_filters = " or ".join([f"port {port}" for port in ports])
