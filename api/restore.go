@@ -251,6 +251,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 // Set the output and error streams to os.Stdout and os.Stderr to see the output of rsync
 // Run the rsync command
 
+// Using rsync instead of cp -r, for some reason cp -r was not copying all the files and directories over but rsync does...
 func rsyncDirectories(source, destination string) error {
 	cmd := exec.Command("sudo", "rsync", "-av", "--exclude=attach", source, destination)
 

@@ -63,7 +63,7 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
-		startgRPCServer()
+		go startgRPCServer()
 
 		err = gd.ServeSignals()
 		if err != nil {

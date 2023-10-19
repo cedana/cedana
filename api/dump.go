@@ -24,6 +24,9 @@ const (
 	sys_pidfd_getfd       = 438
 )
 
+// The bundle includes path to bundle and the runc/podman container id of the bundle. The bundle is a folder that includes the oci spec config.json
+// as well as the rootfs used for setting up the container. Sometimes rootfs can be defined elsewhere. Podman adds extra directories and files in their
+// bundle including a file called attach which is a unix socket for attaching stdin, stdout to the terminal
 type Bundle struct {
 	ContainerId string
 	Bundle      string
