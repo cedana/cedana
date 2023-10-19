@@ -43,7 +43,7 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-
+	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -331,7 +331,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("task terminated with error")
+			s.logger.Error().Err(err).Msg("task terminated with: ")
 		}
 	}()
 

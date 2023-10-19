@@ -266,6 +266,8 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		// get PID of running job
+		// TODO NR - we should be querying the API for this instead of
+		// directly opening the db. Permissions issue
 		db := api.NewDB()
 		pid, err := db.GetPID(id)
 		if err != nil {
