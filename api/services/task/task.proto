@@ -40,6 +40,7 @@ message StartTaskArgs {
 }
 message StartTaskResp {
     string Error = 1;
+    int32 PID = 2;
 }
 
 // Log Streaming args

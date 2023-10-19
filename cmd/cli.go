@@ -505,6 +505,7 @@ var execTaskCmd = &cobra.Command{
 		}
 
 		cli.cts.Close()
+		fmt.Print(resp.PID)
 		return nil
 	},
 }
