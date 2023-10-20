@@ -14,6 +14,10 @@ jobs:
         with:
           go-version: '1.20'
 
+      - name: Install CRIU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y criu
+
       - name: Test
         run: CI=true go test -bench=. -v ./...
-
