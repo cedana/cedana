@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
@@ -59,19 +60,21 @@ var debugRuncRestoreCmd = &cobra.Command{
 		// Typical routes
 		// root := "/var/run/runc"
 		// bundle := "$HOME/bundle"
-		// consoleSocket := "$HOME/tty.sock"
+		// consoleSocket := "/home/brandonsmith/tty.sock"
 		root := args[2]
 		bundle := args[3]
-		consoleSocket := args[4]
+		// consoleSocket := args[4]
 		opts := &container.RuncOpts{
-			Root:          root,
-			Bundle:        bundle,
-			ConsoleSocket: consoleSocket,
+			Root:    root,
+			Bundle:  bundle,
+			Detatch: false,
 		}
 		imgPath := args[0]
 		containerId := args[1]
 
-		err := container.RuncRestore(imgPath, containerId, *opts)
+		client := api.Client{}
+
+		err := client.RuncRestore(imgPath, containerId, opts)
 		if err != nil {
 			return err
 		}
@@ -87,6 +90,8 @@ var debugRuncDumpCmd = &cobra.Command{
 		containerId := args[1]
 		root := "/var/run/runc"
 
+		client := api.Client{}
+
 		criuOpts := &container.CriuOpts{
 			ImagesDirectory: imgPath,
 			WorkDirectory:   "",
@@ -94,12 +99,7 @@ var debugRuncDumpCmd = &cobra.Command{
 			TcpEstablished:  false,
 		}
 
-		runcContainer := container.GetContainerFromRunc(containerId, root)
-
-		err := runcContainer.RuncCheckpoint(criuOpts, runcContainer.Pid)
-		if err != nil {
-			return err
-		}
+		client.RuncDump(root, containerId, criuOpts)
 
 		return nil
 	},
