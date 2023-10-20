@@ -14,57 +14,65 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
+func setup(t *testing.T) (task.TaskServiceClient, error) {
+	lis := bufconn.Listen(1024 * 1024)
+	t.Cleanup(func() {
+		lis.Close()
+	})
+
+	srv := grpc.NewServer()
+	t.Cleanup(func() {
+		srv.Stop()
+	})
+
+	mockDB, err := bolt.Open("test.db", 0600, nil)
+	t.Cleanup(func() {
+		mockDB.Close()
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	c, err := InstantiateClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logger := utils.GetLogger()
+
+	svc := service{Client: c, logger: &logger}
+	task.RegisterTaskServiceServer(srv, &svc)
+
+	go func() {
+		if err := srv.Serve(lis); err != nil {
+			log.Fatalf("srv.Serve %v", err)
+		}
+	}()
+
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+	conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		conn.Close()
+	})
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+
+	client := task.NewTaskServiceClient(conn)
+	return client, err
+}
+
 func Test_Dump(t *testing.T) {
 }
 
 func TestClient_RunTask(t *testing.T) {
 	t.Run("TaskIsEmpty", func(t *testing.T) {
-		lis := bufconn.Listen(1024 * 1024)
-		t.Cleanup(func() {
-			lis.Close()
-		})
-
-		srv := grpc.NewServer()
-		t.Cleanup(func() {
-			srv.Stop()
-		})
-
-		mockDB, err := bolt.Open("test.db", 0600, nil)
-		t.Cleanup(func() {
-			mockDB.Close()
-		})
+		client, err := setup(t)
 		if err != nil {
-			t.Error(err)
+			t.Error("error setting up grpc client")
 		}
-
-		c, err := InstantiateClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		logger := utils.GetLogger()
-
-		svc := service{Client: c, logger: &logger}
-		task.RegisterTaskServiceServer(srv, &svc)
-
-		go func() {
-			if err := srv.Serve(lis); err != nil {
-				log.Fatalf("srv.Serve %v", err)
-			}
-		}()
-
-		dialer := func(context.Context, string) (net.Conn, error) {
-			return lis.Dial()
-		}
-		conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		t.Cleanup(func() {
-			conn.Close()
-		})
-		if err != nil {
-			log.Fatalf("fail to dial: %v", err)
-		}
-
-		client := task.NewTaskServiceClient(conn)
 
 		ctx := context.Background()
 
@@ -80,53 +88,10 @@ func TestClient_RunTask(t *testing.T) {
 func TestClient_TryStartJob(t *testing.T) {
 	t.Run("TaskFailsOnce", func(t *testing.T) {
 
-		lis := bufconn.Listen(1024 * 1024)
-		t.Cleanup(func() {
-			lis.Close()
-		})
-
-		srv := grpc.NewServer()
-		t.Cleanup(func() {
-			srv.Stop()
-		})
-
-		mockDB, err := bolt.Open("test.db", 0600, nil)
-		t.Cleanup(func() {
-			mockDB.Close()
-		})
+		client, err := setup(t)
 		if err != nil {
-			t.Error(err)
+			t.Error("error setting up grpc client")
 		}
-
-		c, err := InstantiateClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		logger := utils.GetLogger()
-
-		svc := service{Client: c, logger: &logger}
-		task.RegisterTaskServiceServer(srv, &svc)
-
-		go func() {
-			if err := srv.Serve(lis); err != nil {
-				log.Fatalf("srv.Serve %v", err)
-			}
-		}()
-
-		dialer := func(context.Context, string) (net.Conn, error) {
-			return lis.Dial()
-		}
-		conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		t.Cleanup(func() {
-			conn.Close()
-		})
-		if err != nil {
-			log.Fatalf("fail to dial: %v", err)
-		}
-
-		client := task.NewTaskServiceClient(conn)
-
 		ctx := context.Background()
 
 		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test"})
