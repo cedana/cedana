@@ -119,15 +119,15 @@ func Test_MultiConn(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		syscall.Kill(int(resp.Pid), syscall.SIGKILL)
+		syscall.Kill(int(resp.PID), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
 		c.cleanupClient()
 	})
 
-	oldState, _ := c.getState(resp.Pid)
+	oldState, _ := c.getState(resp.PID)
 	t.Logf("old state: %+v", oldState)
 
-	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.Pid, Type: task.DumpArgs_SELF_SERVE, JobID: exec})
+	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_SELF_SERVE, JobID: exec})
 	if err != nil {
 		t.Error(err)
 	}

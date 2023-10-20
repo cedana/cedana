@@ -399,6 +399,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 
 	return &task.StartTaskResp{
 		Message: fmt.Sprintf("Started task: %v", pid),
+		PID:     pid,
 	}, err
 }
 
