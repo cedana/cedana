@@ -1,8 +1,19 @@
 package api
 
 import (
+	"context"
+	"log"
+	"net"
 	"os"
+	"syscall"
 	"testing"
+
+	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
+	bolt "go.etcd.io/bbolt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 //  Tests defined here are different from benchmarking in that we aren't looking for
@@ -42,47 +53,92 @@ func skipCI(t *testing.T) {
 
 // Tests the correctness of TCP checkpoint/restore on a process with
 // multiple connections
-// func Test_MultiConn(t *testing.T) {
-// 	skipCI(t)
-// 	c, err := InstantiateClient()
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
+func Test_MultiConn(t *testing.T) {
+	skipCI(t)
 
-// 	err = os.MkdirAll("dumpdir", 0755)
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
+	err := os.MkdirAll("dumpdir", 0755)
+	if err != nil {
+		t.Error(err)
+	}
 
-// 	exec := tcpTests["multiconn"].exec
+	lis := bufconn.Listen(1024 * 1024)
+	t.Cleanup(func() {
+		lis.Close()
+	})
 
-// 	pid, err := c.RunTask(exec)
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
+	srv := grpc.NewServer()
+	t.Cleanup(func() {
+		srv.Stop()
+	})
 
-// t.Cleanup(func() {
-// 	syscall.Kill(int(pid), syscall.SIGKILL)
-// 	os.RemoveAll("dumpdir")
-// 	c.cleanupClient()
-// })
+	mockDB, err := bolt.Open("test.db", 0600, nil)
+	t.Cleanup(func() {
+		mockDB.Close()
+	})
+	if err != nil {
+		t.Error(err)
+	}
 
-// oldState, _ := c.getState(pid)
-// t.Logf("old state: %+v", oldState)
+	c, err := InstantiateClient()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// err = c.Dump("dumpdir", pid)
-// if err != nil {
-// 	t.Error(err)
-// }
+	logger := utils.GetLogger()
 
-// 	// we have a running process, get network data before
-// 	// then get network data after
+	svc := service{Client: c, logger: &logger}
+	task.RegisterTaskServiceServer(srv, &svc)
 
-// 	// and validate/compare
-// 	// validation is important, because even if we've C/Rd it can C/R incorrectly
+	go func() {
+		if err := srv.Serve(lis); err != nil {
+			log.Fatalf("srv.Serve %v", err)
+		}
+	}()
 
-// }
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+	conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		conn.Close()
+	})
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
 
+	client := task.NewTaskServiceClient(conn)
+
+	ctx := context.Background()
+
+	exec := tcpTests["multiconn"].exec
+
+	resp, err := client.StartTask(ctx, &task.StartTaskArgs{Task: exec, Id: exec})
+
+	if err != nil {
+		t.Errorf("test failed: %s", err)
+	}
+
+	t.Cleanup(func() {
+		syscall.Kill(int(resp.PID), syscall.SIGKILL)
+		os.RemoveAll("dumpdir")
+		c.cleanupClient()
+	})
+
+	oldState, _ := c.getState(resp.PID)
+	t.Logf("old state: %+v", oldState)
+
+	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_SELF_SERVE, JobID: exec})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// we have a running process, get network data before
+	// then get network data after
+
+	// and validate/compare
+	// validation is important, because even if we've C/Rd it can C/R incorrectly
+
+}
 func Test_DatabaseConn(t *testing.T) {
 	// spin up a process w/ a connection to a database
 	// verify correctness on restore
