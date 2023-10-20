@@ -18,7 +18,9 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 // Unused for now...
@@ -43,7 +45,7 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-
+	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -62,34 +64,42 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
 		if err != nil {
+			err = status.Error(codes.NotFound, "db not found")
 			return nil, err
 		}
 	}
 
 	err := s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "Invalid arguments")
 		return nil, err
 	}
 
 	switch args.Type {
 	case task.DumpArgs_SELF_SERVE:
 		// if not market - we don't push up the checkpoint to anywhere
-		s.logger.Info().Msgf("Process %d checkpointed to %s", args.PID, args.Dir)
+		s.logger.Info().Msg("Not implemented")
+		err = status.Error(codes.Unimplemented, "not implemented")
+		return nil, err
+
 	case task.DumpArgs_MARKET:
 		// get checkpoint file
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
+			err = status.Error(codes.NotFound, "jobid not found in db")
 			return nil, err
 		}
 
 		if state == nil {
-			return nil, fmt.Errorf("no state found for job %s", args.JobID)
+			err = status.Error(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
+			return nil, err
 		}
 
 		checkpointPath := state.CheckpointPath
 
 		file, err := os.Open(checkpointPath)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 			return nil, err
 		}
 		defer file.Close()
@@ -97,6 +107,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
+			err = status.Error(codes.NotFound, "checkpoint zip not found")
 			return nil, err
 		}
 
@@ -109,43 +120,75 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
 			return nil, err
 		}
 
 		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 			return nil, err
 		}
 
 		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 		if err != nil {
+			err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
 			return nil, err
 		}
 
 		return &task.DumpResp{
-			Error: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			Message: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
 		}, nil
 	}
 
 	return &task.DumpResp{
-		Error: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
+		Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
 	}, nil
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
 
-	pid, err := client.Restore(args)
+	switch args.Type {
+	case task.RestoreArgs_LOCAL:
+		// assume a suitable file has been passed to args
 
-	return &task.RestoreResp{
-		Error:  err.Error(),
-		NewPID: *pid,
-	}, err
+		pid, err := client.Restore(args)
+		if err != nil {
+			err = status.Error(codes.Internal, "Error with restore")
+			return nil, err
+		}
+
+		return &task.RestoreResp{
+			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			NewPID:  *pid,
+		}, err
+
+	case task.RestoreArgs_REMOTE:
+		client.remoteStore = utils.NewCedanaStore(client.config)
+		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
+		if err != nil {
+			return nil, err
+		}
+
+		pid, err := client.Restore(&task.RestoreArgs{
+			Type:           task.RestoreArgs_REMOTE,
+			CheckpointId:   args.CheckpointId,
+			CheckpointPath: *zipFile,
+		})
+
+		return &task.RestoreResp{
+			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			NewPID:  *pid,
+		}, err
+	}
+	return &task.RestoreResp{}, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
 	err := s.Client.ContainerDump(args.Ref, args.ContainerId)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
 		return nil, err
 	}
 	return &task.ContainerDumpResp{}, nil
@@ -154,6 +197,7 @@ func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArg
 func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
 	err := s.Client.ContainerRestore(args.ImgPath, args.ContainerId)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
 		return nil, err
 	}
 	return &task.ContainerRestoreResp{}, nil
@@ -170,6 +214,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
 	}
 
@@ -187,10 +232,11 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
 	}
 
-	return &task.RuncRestoreResp{}, nil
+	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
 func (s *service) publishStateContinous(rate int) {
@@ -254,9 +300,11 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 		// Here we can do something with LogStreamingResp
 		_, err := stream.Recv()
 		if err == io.EOF {
-			return nil
+			s.logger.Debug().Msgf("Client has closed connection")
+			break
 		}
 		if err != nil {
+			s.logger.Debug().Msgf("Unable to read from client, %v", err)
 			return err
 		}
 
@@ -264,10 +312,12 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 
 			args := &task.ProcessState{}
 			if err := s.ClientStateStream.Send(args); err != nil {
-				return err
+				s.logger.Debug().Msgf("Issue sending process state")
+				break
 			}
 		}
 	}
+	return nil
 }
 
 func (s *service) runTask(task string) (int32, error) {
@@ -307,7 +357,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("failed to run task")
+			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
 
@@ -335,15 +385,20 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
 		// TODO BS: replace doom loop with just retrying from market
 	}
+	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
+
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
 	}
 
-	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
+	if state.Flag == task.FlagEnum_JOB_STARTUP_FAILED {
+		err = status.Error(codes.Internal, "Task setup failed")
+		return nil, err
+	}
 
 	return &task.StartTaskResp{
-		Error: "",
-		Pid:   pid,
+		Message: fmt.Sprintf("Started task: %v", pid),
 	}, err
 }
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,7 +194,7 @@ func createEnvCacheMap(env []string) map[string]int {
 
 // CRImportCheckpoint it the function which imports the information
 // from checkpoint tarball and re-creates the container from that information
-func CRImportCheckpoint(ctx context.Context, dir string) error {
+func CRImportCheckpoint(ctx context.Context, dir, containerId string) error {
 
 	// Load spec.dump from temporary directory
 	dumpSpec := new(rspec.Spec)
@@ -238,7 +239,7 @@ func CRImportCheckpoint(ctx context.Context, dir string) error {
 		return errors.New("cannot import checkpoints of containers with dependencies")
 	}
 
-	err = CreateContainer(&ctrState, ctrConfig, db)
+	err = CreateContainer(&ctrState, ctrConfig, db, containerId)
 	if err != nil {
 		return err
 	}
@@ -246,9 +247,42 @@ func CRImportCheckpoint(ctx context.Context, dir string) error {
 	return nil
 }
 
-func CreateContainer(ctrState *map[string]interface{}, ctrConfig *types.ContainerConfig, db *DB) error {
-	ctrId := stringid.GenerateRandomID()
+func replaceId(dir, id string, position int) string {
+	parts := strings.Split(dir, "/")
+	parts[position] = id
+	parts = parts[1:]
+	return "/" + strings.Join(parts, "/")
+}
+
+func patchConfigDirectories(ctrConfig *types.ContainerConfig, containerId string) {
+	shmDir := replaceId(ctrConfig.ShmDir, containerId, 6)
+	ctrConfig.ShmDir = shmDir
+
+	commonPidFile := replaceId(ctrConfig.ConmonPidFile, containerId, 5)
+	ctrConfig.ConmonPidFile = commonPidFile
+
+	ctrConfig.ID = containerId
+
+	mount := replaceId(ctrConfig.Mounts[0], containerId, 6)
+
+	ctrConfig.Mounts = []string{mount}
+
+	pidFile := replaceId(ctrConfig.PidFile, containerId, 5)
+	ctrConfig.PidFile = pidFile
+
+	secretsPath := replaceId(ctrConfig.SecretsPath, containerId, 6)
+	ctrConfig.SecretsPath = secretsPath
+
+	staticDir := replaceId(ctrConfig.StaticDir, containerId, 6)
+	ctrConfig.StaticDir = staticDir
+}
+
+func CreateContainer(ctrState *map[string]interface{}, ctrConfig *types.ContainerConfig, db *DB, containerId string) error {
+	// ctrId := stringid.GenerateRandomID()
+	ctrId := containerId
 	configNetworks := ctrConfig.Networks
+	// Here we modify ctrConfig and ctrState
+	patchConfigDirectories(ctrConfig, containerId)
 	configJSON, err := json.Marshal(ctrConfig)
 	if err != nil {
 		return err
@@ -384,6 +418,10 @@ func CreateContainer(ctrState *map[string]interface{}, ctrConfig *types.Containe
 
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
