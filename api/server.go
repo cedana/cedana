@@ -64,12 +64,14 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
 		if err != nil {
+			err = status.Error(codes.NotFound, "db not found")
 			return nil, err
 		}
 	}
 
 	err := s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "Invalid arguments")
 		return nil, err
 	}
 
@@ -84,11 +86,13 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// get checkpoint file
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
+			err = status.Error(codes.NotFound, "jobid not found in db")
 			return nil, err
 		}
 
 		if state == nil {
-			return nil, fmt.Errorf("no state found for job %s", args.JobID)
+			err = status.Error(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
+			return nil, err
 		}
 
 		checkpointPath := state.CheckpointPath
@@ -103,7 +107,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
-
+			err = status.Error(codes.NotFound, "checkpoint zip not found")
 			return nil, err
 		}
 
@@ -184,6 +188,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
 	err := s.Client.ContainerDump(args.Ref, args.ContainerId)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
 		return nil, err
 	}
 	return &task.ContainerDumpResp{}, nil
@@ -192,6 +197,7 @@ func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArg
 func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
 	err := s.Client.ContainerRestore(args.ImgPath, args.ContainerId)
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
 		return nil, err
 	}
 	return &task.ContainerRestoreResp{}, nil
@@ -208,7 +214,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
-		return &task.RuncDumpResp{Message: "failed"}, err
+		err = status.Error(codes.InvalidArgument, "invalid argument")
+		return nil, err
 	}
 
 	return &task.RuncDumpResp{}, nil
@@ -225,10 +232,11 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
 	if err != nil {
-		return &task.RuncRestoreResp{Message: "failed"}, err
+		err = status.Error(codes.InvalidArgument, "invalid argument")
+		return nil, err
 	}
 
-	return &task.RuncRestoreResp{}, nil
+	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
 func (s *service) publishStateContinous(rate int) {
@@ -349,7 +357,7 @@ func (s *service) runTask(task string) (int32, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Error().Err(err).Msg("task terminated with: ")
+			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
 
@@ -377,11 +385,17 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
 		// TODO BS: replace doom loop with just retrying from market
 	}
+	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
+
 	if err != nil {
+		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
 	}
 
-	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
+	if state.Flag == task.FlagEnum_JOB_STARTUP_FAILED {
+		err = status.Error(codes.Internal, "Task setup failed")
+		return nil, err
+	}
 
 	return &task.StartTaskResp{
 		Message: fmt.Sprintf("Started task: %v", pid),

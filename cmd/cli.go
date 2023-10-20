@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -192,9 +193,13 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		resp, err := cli.cts.CheckpointTask(&dumpArgs)
-
 		if err != nil {
-			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -256,7 +261,12 @@ var dumpJobCmd = &cobra.Command{
 
 		resp, err := cli.cts.CheckpointTask(&dumpArgs)
 		if err != nil {
-			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -303,9 +313,13 @@ var restoreJobCmd = &cobra.Command{
 		}
 
 		resp, err := cli.cts.RestoreTask(&restoreArgs)
-
 		if err != nil {
-			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -335,9 +349,13 @@ var containerdDumpCmd = &cobra.Command{
 			Ref:         ref,
 		}
 		resp, err := cli.cts.CheckpointContainer(&dumpArgs)
-
 		if err != nil {
-			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -381,7 +399,12 @@ var runcDumpCmd = &cobra.Command{
 		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
 
 		if err != nil {
-			cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -417,7 +440,12 @@ var runcRestoreCmd = &cobra.Command{
 
 		resp, err := cli.cts.RuncRestore(restoreArgs)
 		if err != nil {
-			cli.logger.Error().Msgf("Restore task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -450,7 +478,12 @@ var restoreProcessCmd = &cobra.Command{
 
 		resp, err := cli.cts.RestoreTask(&restoreArgs)
 		if err != nil {
-			cli.logger.Error().Msgf("Restore task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -478,7 +511,12 @@ var containerdRestoreCmd = &cobra.Command{
 
 		resp, err := cli.cts.RestoreContainer(restoreArgs)
 		if err != nil {
-			cli.logger.Error().Msgf("Restore task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
@@ -507,7 +545,12 @@ var execTaskCmd = &cobra.Command{
 
 		resp, err := cli.cts.StartTask(taskArgs)
 		if err != nil {
-			cli.logger.Error().Msgf("Start task failed: %v", err)
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Start task failed: %v", err)
+			}
 		}
 
 		cli.logger.Info().Msgf("Response: %v", resp.Message)
