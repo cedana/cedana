@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/cedana/cedana/api"
@@ -14,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -45,12 +45,12 @@ type CheckpointTaskService struct {
 	address string
 }
 
-func NewCheckpointTaskService(addr string) *CheckpointTaskService {
+func NewCheckpointTaskService(addr string) (*CheckpointTaskService, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
 
 	client := task.NewTaskServiceClient(conn)
@@ -62,63 +62,63 @@ func NewCheckpointTaskService(addr string) *CheckpointTaskService {
 		conn:    conn, // Keep a reference to the connection
 		address: addr,
 		ctx:     ctx,
-	}
+	}, nil
 }
 
-func (c *CheckpointTaskService) CheckpointTask(args *task.DumpArgs) *task.DumpResp {
+func (c *CheckpointTaskService) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
 	resp, err := c.client.Dump(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) RestoreTask(args *task.RestoreArgs) *task.RestoreResp {
+func (c *CheckpointTaskService) RestoreTask(args *task.RestoreArgs) (*task.RestoreResp, error) {
 	resp, err := c.client.Restore(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) CheckpointContainer(args *task.ContainerDumpArgs) *task.ContainerDumpResp {
+func (c *CheckpointTaskService) CheckpointContainer(args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
 	resp, err := c.client.ContainerDump(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) RestoreContainer(args *task.ContainerRestoreArgs) *task.ContainerRestoreResp {
+func (c *CheckpointTaskService) RestoreContainer(args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
 	resp, err := c.client.ContainerRestore(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) CheckpointRunc(args *task.RuncDumpArgs) *task.RuncDumpResp {
+func (c *CheckpointTaskService) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
 	resp, err := c.client.RuncDump(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) RuncRestore(args *task.RuncRestoreArgs) *task.RuncRestoreResp {
+func (c *CheckpointTaskService) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
 	resp, err := c.client.RuncRestore(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
-func (c *CheckpointTaskService) StartTask(args *task.StartTaskArgs) *task.StartTaskResp {
+func (c *CheckpointTaskService) StartTask(args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 	resp, err := c.client.StartTask(c.ctx, args)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
-	return resp
+	return resp, nil
 }
 
 func (c *CheckpointTaskService) Close() {
@@ -130,7 +130,10 @@ func NewCLI() (*CLI, error) {
 	if err != nil {
 		return nil, err
 	}
-	cts := NewCheckpointTaskService("localhost:8080")
+	cts, err := NewCheckpointTaskService("localhost:8080")
+	if err != nil {
+		return nil, err
+	}
 
 	logger := utils.GetLogger()
 
@@ -148,11 +151,6 @@ func NewCLI() (*CLI, error) {
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
-}
-
-var restoreCmd = &cobra.Command{
-	Use:   "restore",
-	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
 }
 
 // ---------------
@@ -194,41 +192,17 @@ var dumpProcessCmd = &cobra.Command{
 			Type:  task.DumpArgs_SELF_SERVE,
 		}
 
-		resp := cli.cts.CheckpointTask(&dumpArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
-
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("checkpoint of process %d written successfully to %s", pid, dir)
-
-		return nil
-	},
-}
-
-var restoreProcessCmd = &cobra.Command{
-	Use:   "process",
-	Short: "Manually restore a process from a checkpoint located at input path",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+		resp, err := cli.cts.CheckpointTask(&dumpArgs)
 		if err != nil {
-			return err
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
-		restoreArgs := task.RestoreArgs{
-			CheckpointId:   "Not Implemented",
-			CheckpointPath: args[0],
-			Type:           task.RestoreArgs_LOCAL,
-		}
-
-		resp := cli.cts.RestoreTask(&restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
@@ -285,13 +259,19 @@ var dumpJobCmd = &cobra.Command{
 			Type:  task.DumpArgs_SELF_SERVE,
 		}
 
-		resp := cli.cts.CheckpointTask(&dumpArgs)
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		resp, err := cli.cts.CheckpointTask(&dumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
 		cli.cts.Close()
-		cli.logger.Info().Msgf("checkpoint of job %s written successfully to %s", id, dir)
 
 		return err
 	},
@@ -332,11 +312,17 @@ var restoreJobCmd = &cobra.Command{
 			Type:           task.RestoreArgs_LOCAL,
 		}
 
-		resp := cli.cts.RestoreTask(&restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		resp, err := cli.cts.RestoreTask(&restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
@@ -362,43 +348,20 @@ var containerdDumpCmd = &cobra.Command{
 			ContainerId: containerId,
 			Ref:         ref,
 		}
-		resp := cli.cts.CheckpointContainer(&dumpArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
-
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
-		return nil
-	},
-}
-
-var containerdRestoreCmd = &cobra.Command{
-	Use:   "containerd",
-	Short: "Manually checkpoint a running container to a directory",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+		resp, err := cli.cts.CheckpointContainer(&dumpArgs)
 		if err != nil {
-			return err
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
 
-		restoreArgs := &task.ContainerRestoreArgs{
-			ImgPath:     imgPath,
-			ContainerId: containerId,
-		}
-
-		resp := cli.cts.RestoreContainer(restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
-		}
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s restored from %s successfully", containerId, ref)
 		return nil
 	},
 }
@@ -433,15 +396,21 @@ var runcDumpCmd = &cobra.Command{
 			CriuOpts:       criuOpts,
 		}
 
-		resp := cli.cts.CheckpointRunc(&dumpArgs)
+		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
 
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
 		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, runcPath)
 		return nil
 	},
 }
@@ -469,15 +438,91 @@ var runcRestoreCmd = &cobra.Command{
 			Opts:        opts,
 		}
 
-		resp := cli.cts.RuncRestore(restoreArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		resp, err := cli.cts.RuncRestore(restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
 		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s successfully restored", containerId)
+		return nil
+	},
+}
+
+var restoreCmd = &cobra.Command{
+	Use:   "restore",
+	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
+}
+
+var restoreProcessCmd = &cobra.Command{
+	Use:   "process",
+	Short: "Manually restore a process from a checkpoint located at input path",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		restoreArgs := task.RestoreArgs{
+			CheckpointId:   "Not Implemented",
+			CheckpointPath: args[0],
+		}
+
+		resp, err := cli.cts.RestoreTask(&restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
+		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
+		cli.cts.Close()
+
+		return nil
+	},
+}
+
+var containerdRestoreCmd = &cobra.Command{
+	Use:   "containerd",
+	Short: "Manually checkpoint a running container to a directory",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		restoreArgs := &task.ContainerRestoreArgs{
+			ImgPath:     imgPath,
+			ContainerId: containerId,
+		}
+
+		resp, err := cli.cts.RestoreContainer(restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
+		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
+		cli.cts.Close()
+
 		return nil
 	},
 }
@@ -498,11 +543,17 @@ var execTaskCmd = &cobra.Command{
 			Id:   args[1],
 		}
 
-		resp := cli.cts.StartTask(taskArgs)
-
-		if resp.Error != "" {
-			return fmt.Errorf(resp.Error)
+		resp, err := cli.cts.StartTask(taskArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Start task failed: %v", err)
+			}
 		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 		fmt.Print(resp.PID)

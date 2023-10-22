@@ -16,7 +16,7 @@ message DumpArgs {
 }
 
 message DumpResp {
-    string Error = 1;
+    string Message = 1;
 }
 
 message RestoreArgs {
@@ -30,7 +30,7 @@ message RestoreArgs {
 }
 
 message RestoreResp {
-    string Error = 1;
+    string Message = 1;
     int32 NewPID = 2;
 }
 
@@ -39,7 +39,7 @@ message StartTaskArgs {
   string Id = 2;
 }
 message StartTaskResp {
-    string Error = 1;
+    string Message = 1;
     int32 PID = 2;
 }
 
@@ -187,7 +187,7 @@ message ContainerDumpArgs {
 
 message ContainerDumpResp {
   string CheckpointPath = 1;
-  string Error = 2;
+  string Message = 2;
 }
 
 message ContainerRestoreArgs {
@@ -196,7 +196,7 @@ message ContainerRestoreArgs {
 }
 
 message ContainerRestoreResp {
-  string Error = 1;
+  string Message = 1;
 }
 
 message RuncDumpArgs {
@@ -207,7 +207,7 @@ message RuncDumpArgs {
 }
 
 message RuncDumpResp {
-  string Error = 1;
+  string Message = 1;
 }
 
 message CriuOpts {
@@ -252,5 +252,5 @@ message RuncOpts {
 }
 
 message RuncRestoreResp {
-  string Error = 1;
+  string Message = 1;
 }
