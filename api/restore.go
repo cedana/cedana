@@ -218,12 +218,12 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 	if isPodman {
 		var spec rspec.Spec
 		parts := strings.Split(opts.Bundle, "/")
-		runPath := "/run/containers/storage/overlay-containers/" + parts[6] + "/userdata"
 		oldContainerId := parts[6]
 
-		newLibPath := "/var/lib/containers/storage/overlay/" + containerId + "/merged"
-
+		runPath := "/run/containers/storage/overlay-containers/" + oldContainerId + "/userdata"
 		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
+		newVarPath := "/var/lib/containers/storage/overlay/" + containerId + "/merged"
+
 		parts[6] = containerId
 		// exclude last part for rsync
 		parts = parts[1 : len(parts)-1]
@@ -237,48 +237,30 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 			return err
 		}
 
-		var config map[string]interface{}
 		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
 		if err != nil {
 			return err
 		}
 
-		if err := json.Unmarshal(configFile, &config); err != nil {
-			return err
-		}
-
-		recursivelyReplace(config, oldContainerId, containerId)
-
-		updatedConfig, err := json.Marshal(config)
-		if err != nil {
-			return err
-		}
-
-		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
-			return err
-		}
-
-		configFile, err = os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
-		if err != nil {
-			return err
-		}
 		if err := json.Unmarshal(configFile, &spec); err != nil {
 			return err
 		}
 
-		libPath := spec.Root.Path + "/"
+		recursivelyReplace(&spec, oldContainerId, containerId)
+
+		varPath := spec.Root.Path + "/"
 
 		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
 			return err
 		}
 
-		if err := rsyncDirectories(libPath, newLibPath); err != nil {
+		if err := rsyncDirectories(varPath, newVarPath); err != nil {
 			return err
 		}
 
-		spec.Root.Path = newLibPath
+		spec.Root.Path = newVarPath
 
-		updatedConfig, err = json.Marshal(spec)
+		updatedConfig, err := json.Marshal(spec)
 		if err != nil {
 			return err
 		}
