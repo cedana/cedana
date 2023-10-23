@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package cedanagpu;
+
+option go_package = "github.com/cedana/cedana/api/services/gpu";
+
+
+service CedanaGPU {
+    rpc Checkpoint(CheckpointRequest) returns (CheckpointResponse) {};
+    rpc Restore(RestoreRequest) returns (RestoreResponse) {};
+}
+
+message CheckpointRequest {}
+
+message CheckpointResponse {
+    bool success = 1;
+}
+
+message RestoreRequest {}
+
+message RestoreResponse {
+    bool success = 1;
+}
