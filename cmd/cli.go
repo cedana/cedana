@@ -122,6 +122,96 @@ var dumpProcessCmd = &cobra.Command{
 	},
 }
 
+var restoreProcessCmd = &cobra.Command{
+	Use:   "process",
+	Short: "Manually restore a process from a checkpoint located at input path",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		restoreArgs := task.RestoreArgs{
+			CheckpointId:   "Not Implemented",
+			CheckpointPath: args[0],
+		}
+
+		resp, err := cli.cts.RestoreTask(&restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
+			}
+		}
+
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
+		cli.cts.Close()
+
+		return nil
+	},
+}
+
+var gpuDumpCmd = &cobra.Command{
+	Use:   "gpu",
+	Short: "Manually checkpoint a running gpu accelerated process",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		dumpArgs := gpu.CheckpointRequest{}
+		_, err = cli.cts.GpuCheckpoint(&dumpArgs)
+
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v", err)
+			}
+		}
+		cli.cts.Close()
+
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
+var gpuRestoreCmd = &cobra.Command{
+	Use:   "gpu",
+	Short: "Manually restore a running gpu accelerated process",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+
+		dumpArgs := gpu.RestoreRequest{}
+		_, err = cli.cts.GpuRestore(&dumpArgs)
+
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Gpu restore task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Gpu restore task failed: %v", err)
+			}
+		}
+
+		cli.cts.Close()
+
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+		return nil
+	},
+}
+
 // -----------------
 // Checkpoint/restore of a job w/ ID (currently limited to processes)
 // -----------------
@@ -278,9 +368,9 @@ var containerdDumpCmd = &cobra.Command{
 	},
 }
 
-var gpuDumpCmd = &cobra.Command{
-	Use:   "gpu",
-	Short: "Manually checkpoint a running gpu accelerated process",
+var containerdRestoreCmd = &cobra.Command{
+	Use:   "containerd",
+	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
@@ -288,49 +378,25 @@ var gpuDumpCmd = &cobra.Command{
 			return err
 		}
 
-		dumpArgs := gpu.CheckpointRequest{}
-		_, err = cli.cts.GpuCheckpoint(&dumpArgs)
+		restoreArgs := &task.ContainerRestoreArgs{
+			ImgPath:     imgPath,
+			ContainerId: containerId,
+		}
 
+		resp, err := cli.cts.RestoreContainer(restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v, %v", st.Message(), st.Code())
+				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v", err)
-			}
-		}
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
-		return nil
-	},
-}
-
-var gpuRestoreCmd = &cobra.Command{
-	Use:   "gpu",
-	Short: "Manually restore a running gpu accelerated process",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		dumpArgs := gpu.RestoreRequest{}
-		_, err = cli.cts.GpuRestore(&dumpArgs)
-
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Gpu restore task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Gpu restore task failed: %v", err)
+				cli.logger.Error().Msgf("Restore task failed: %v", err)
 			}
 		}
 
+		cli.logger.Info().Msgf("Response: %v", resp.Message)
+
 		cli.cts.Close()
 
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }
@@ -428,72 +494,6 @@ var runcRestoreCmd = &cobra.Command{
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
-}
-
-var restoreProcessCmd = &cobra.Command{
-	Use:   "process",
-	Short: "Manually restore a process from a checkpoint located at input path",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		restoreArgs := task.RestoreArgs{
-			CheckpointId:   "Not Implemented",
-			CheckpointPath: args[0],
-		}
-
-		resp, err := cli.cts.RestoreTask(&restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
-			}
-		}
-
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
-	},
-}
-
-var containerdRestoreCmd = &cobra.Command{
-	Use:   "containerd",
-	Short: "Manually checkpoint a running container to a directory",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		restoreArgs := &task.ContainerRestoreArgs{
-			ImgPath:     imgPath,
-			ContainerId: containerId,
-		}
-
-		resp, err := cli.cts.RestoreContainer(restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
-			}
-		}
-
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
-	},
 }
 
 var execTaskCmd = &cobra.Command{
