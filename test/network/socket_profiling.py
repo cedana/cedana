@@ -38,8 +38,11 @@ def start_tcpdump_capture(port_filters):
 # reading tcpdump directly instead of using scapy because it works w/ localhost as well
 
 def process_tcpdump_output(proc):
+    print("starting processing stdout of tcpdump...")
     proc.terminate()
+    print("terminate passed")
     stdout, _ = proc.communicate()
+    print(stdout)
 
     with open('tcpdump_output.csv', 'w', newline='') as csvfile:
         fieldnames = ['timestamp', 'iface', 'src', 'dest', 'flags', 'seq_start', 'seq_end', 'ack', 'win', 'options', 'length']

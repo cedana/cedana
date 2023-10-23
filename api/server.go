@@ -75,15 +75,17 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
+	var resp task.DumpResp
+
 	switch args.Type {
 	case task.DumpArgs_SELF_SERVE:
 		// if not market - we don't push up the checkpoint to anywhere
-		s.logger.Info().Msg("Not implemented")
-		err = status.Error(codes.Unimplemented, "not implemented")
-		return nil, err
+		// we've checkpointed, just return
+		resp = task.DumpResp{
+			Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
+		}
 
 	case task.DumpArgs_MARKET:
-		// get checkpoint file
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
 			err = status.Error(codes.NotFound, "jobid not found in db")
@@ -136,14 +138,12 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, err
 		}
 
-		return &task.DumpResp{
+		resp = task.DumpResp{
 			Message: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
-		}, nil
+		}
 	}
 
-	return &task.DumpResp{
-		Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
-	}, nil
+	return &resp, nil
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
@@ -155,8 +155,8 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 		pid, err := client.Restore(args)
 		if err != nil {
-			err = status.Error(codes.Internal, "Error with restore")
-			return nil, err
+			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			return nil, staterr
 		}
 
 		return &task.RestoreResp{
@@ -178,7 +178,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		})
 
 		return &task.RestoreResp{
-			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
 		}, err
 	}

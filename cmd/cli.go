@@ -300,6 +300,8 @@ var restoreJobCmd = &cobra.Command{
 			return fmt.Errorf("no checkpoint found for id %s", args[0])
 		}
 
+		fmt.Printf("paths: %v\n", paths)
+
 		// TODO NR - we just take first process for now. Have to look into
 		// restoring clusters/multiple processes attached to a job.
 		checkpointPath = *paths[0]

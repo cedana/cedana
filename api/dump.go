@@ -163,6 +163,7 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	}
 
 	state.CheckpointPath = compressedCheckpointPath
+	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	// sneak in a serialized state obj
 	err = types.SerializeToFolder(dumpdir, state)
 	if err != nil {
@@ -285,11 +286,6 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 func (c *Client) Dump(dir string, pid int32) error {
 	defer c.timeTrack(time.Now(), "dump")
 
-	jobId, exists := os.LookupEnv("CEDANA_JOB_ID")
-	if exists {
-		c.jobID = jobId
-	}
-
 	opts := c.prepareCheckpointOpts()
 	dumpdir, err := c.prepareDump(pid, dir, opts)
 	if err != nil {
@@ -336,7 +332,6 @@ func (c *Client) Dump(dir string, pid int32) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	c.postDump(dumpdir, state)
 	c.cleanupClient()
 
