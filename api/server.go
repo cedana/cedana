@@ -371,8 +371,15 @@ func (s *service) runTask(task string) (int32, error) {
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 
 	var state task.ProcessState
+	var taskToRun string
 
-	pid, err := s.runTask(args.Task)
+	if args.Task == "" {
+		taskToRun = s.Client.config.Client.Task
+	} else {
+		taskToRun = args.Task
+	}
+
+	pid, err := s.runTask(taskToRun)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
