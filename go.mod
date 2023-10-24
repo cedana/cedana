@@ -148,5 +148,6 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.9
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
+	github.com/tchap/go-patricia v2.3.0+incompatible
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
