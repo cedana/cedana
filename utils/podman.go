@@ -52,6 +52,8 @@ const (
 	graphDriverName = "graph-driver-name"
 	osName          = "os"
 	volPathName     = "volume-path"
+
+	StorePath = "/var/lib/containers/storage/overlay-containers"
 )
 
 var (
@@ -195,6 +197,7 @@ func createEnvCacheMap(env []string) map[string]int {
 // CRImportCheckpoint it the function which imports the information
 // from checkpoint tarball and re-creates the container from that information
 func CRImportCheckpoint(ctx context.Context, dir, containerId string) error {
+	var metadata types.RuntimeContainerMetadata
 
 	// Load spec.dump from temporary directory
 	dumpSpec := new(rspec.Spec)
@@ -206,7 +209,33 @@ func CRImportCheckpoint(ctx context.Context, dir, containerId string) error {
 	if _, err := ReadJSONFile(ctrConfig, dir, "config.dump"); err != nil {
 		return err
 	}
+
+	ctrStorage := new(types.StoreContainer)
+	if _, err := ReadJSONFile(ctrStorage, dir, "containers.json"); err != nil {
+		return err
+	}
+
+	storeConfig := new([]types.StoreContainer)
+	if _, err := ReadJSONFile(storeConfig, StorePath, "containers.json"); err != nil {
+		return err
+	}
+
 	ctrID := ctrConfig.ID
+
+	ctrStorage.ID = containerId //Set this to the wanted containerId
+
+	if err := json.Unmarshal([]byte(ctrStorage.Metadata), &metadata); err != nil {
+		return err
+	}
+
+	metadata.CreatedAt = time.Now().Local().Unix()
+	metadata.ImageName = ctrStorage.Names[0]
+
+	*storeConfig = append(*storeConfig, *ctrStorage)
+
+	if _, err := WriteJSONFile(storeConfig, StorePath, "containers.json"); err != nil {
+		return err
+	}
 
 	ctrState := make(map[string]interface{})
 

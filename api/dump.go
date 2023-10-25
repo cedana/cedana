@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/docker/docker/pkg/namesgenerator"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
@@ -205,6 +206,7 @@ func checkIfPodman(b Bundle) bool {
 }
 
 func patchPodmanDump(containerId, imgPath string) error {
+	var containerStoreData *types.StoreContainer
 
 	config := make(map[string]interface{})
 	state := make(map[string]interface{})
@@ -222,6 +224,7 @@ func patchPodmanDump(containerId, imgPath string) error {
 	defer db.Conn.Close()
 
 	err := db.Conn.View(func(tx *bolt.Tx) error {
+
 		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
@@ -247,6 +250,29 @@ func patchPodmanDump(containerId, imgPath string) error {
 
 		return nil
 	})
+
+	ctrConfig := new(types.ContainerConfig)
+	if _, err := utils.ReadJSONFile(ctrConfig, imgPath, "config.dump"); err != nil {
+		return err
+	}
+
+	storeConfig := new([]types.StoreContainer)
+	if _, err := utils.ReadJSONFile(storeConfig, utils.StorePath, "containers.json"); err != nil {
+		return err
+	}
+
+	// Grabbing the state of the container in containers.json for the specific podman container
+	for _, container := range *storeConfig {
+		if container.ID == ctrConfig.ID {
+			containerStoreData = &container
+		}
+	}
+	name := namesgenerator.GetRandomName(0)
+
+	containerStoreData.Names = []string{name}
+
+	// Saving the current state of containers.json for the specific podman container we are checkpointing
+	utils.WriteJSONFile(containerStoreData, imgPath, "containers.json")
 
 	if err != nil {
 		return err
