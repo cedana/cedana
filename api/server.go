@@ -160,7 +160,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		}
 
 		return &task.RestoreResp{
-			Message: fmt.Sprintf("Successfully restore process: %v", pid),
+			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
 		}, err
 
