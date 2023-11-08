@@ -21,6 +21,14 @@ dumpQuery = f"SELECT * FROM {benchmarkTable} WHERE cmd_type = 'dump'"
 restoreQuery = f"SELECT * FROM {benchmarkTable} WHERE cmd_type = 'restore'"
 
 
+def ExtractDump(): 
+    dumpDf = pd.read_sql_query(dumpQuery, conn)
+    dumpDf.to_csv("dump.csv", index=False)
+
+def ExtractRestore(): 
+    restoreDf = pd.read_sql_query(restoreQuery, conn)
+    restoreDf.to_csv("restore.csv", index=False)
+
 def AnalyzeBenchmarks(query, title):
     mainDf = pd.read_sql_query(query, conn)
     print(mainDf.head())
@@ -85,8 +93,8 @@ def AnalyzeBenchmarks(query, title):
     plt.title(f'{title} Benchmark Analysis')
 
 
-AnalyzeBenchmarks(dumpQuery, "dump")
-AnalyzeBenchmarks(restoreQuery, "restore")
-plt.show()
+ExtractDump()
+ExtractRestore()
+
 # Close the connection
 conn.close()

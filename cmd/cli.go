@@ -79,6 +79,21 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
+		dumpArgs := gpu.CheckpointRequest{}
+		_, err = cli.cts.GpuCheckpoint(&dumpArgs)
+
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v", err)
+			}
+		}
+		cli.cts.Close()
+
+		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
+
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
 			return err
@@ -97,14 +112,14 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		// always self serve when invoked from CLI
-		dumpArgs := task.DumpArgs{
+		cpuDumpArgs := task.DumpArgs{
 			PID:   int32(pid),
 			Dir:   dir,
 			JobID: id,
 			Type:  task.DumpArgs_SELF_SERVE,
 		}
 
-		resp, err := cli.cts.CheckpointTask(&dumpArgs)
+		resp, err := cli.cts.CheckpointTask(&cpuDumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -151,34 +166,6 @@ var restoreProcessCmd = &cobra.Command{
 
 		cli.cts.Close()
 
-		return nil
-	},
-}
-
-var gpuDumpCmd = &cobra.Command{
-	Use:   "gpu",
-	Short: "Manually checkpoint a running gpu accelerated process",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		dumpArgs := gpu.CheckpointRequest{}
-		_, err = cli.cts.GpuCheckpoint(&dumpArgs)
-
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v", err)
-			}
-		}
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }

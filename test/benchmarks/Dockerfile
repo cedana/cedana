@@ -24,4 +24,9 @@ ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
 
+## Run benchmarks 
+RUN ./test/benchmarks/large_data_benchmark.sh
+## Publish to bigquery 
+ENV 
+
 ENTRYPOINT /bin/bash
