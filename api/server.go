@@ -350,22 +350,19 @@ func (s *service) runTask(task, workingDir string) (int32, error) {
 	}
 
 	cmd.Stdin = nullFile
-	cmd.Stdout = w
-	cmd.Stderr = w
+	// capture and pipe stdout to a file (/var/log/cedana-output.log for now)
+	outputFile, err := os.OpenFile("/var/log/cedana-output.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
+	if err != nil {
+		return 0, err
+	}
 
-	env := os.Environ()
-	virtualEnv := "/home/nravic/go/src/github.com/cedana/cedana-benchmarks/nanoGPT/env"
-	env = append(env, fmt.Sprintf("PATH=%s/bin:%s", virtualEnv, os.Getenv("PATH")))
-	env = append(env, fmt.Sprintf("CONDA_PREFIX=%s", virtualEnv))
-
-	cmd.Env = env
+	cmd.Stdout = io.MultiWriter(w, outputFile)
+	cmd.Stderr = io.MultiWriter(w, outputFile)
 
 	err = cmd.Start()
 	if err != nil {
 		return 0, err
 	}
-
-	// capture stderr
 
 	go func() {
 		err := cmd.Wait()
