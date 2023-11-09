@@ -22,10 +22,10 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 ## Usage
 
-To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. Configuration gets created at `~/.cedana/cedana_config.json` by calling `cedana bootstrap`. To use Cedana, you'll need to spin up the daemon, which listens on a socket created at `/tmp/cedana.sock`: 
+To use Cedana in a standalone context, you can directly checkpoint and restore processes with the cedana client. Configuration gets created at `~/.cedana/cedana_config.json` by calling `cedana bootstrap`. To use Cedana, you'll need to spin up the daemon, which is a simple gRPC daemon listening on 8080: 
 
 ```sh
-sudo cedana daemon
+sudo cedana daemon start 
 ```
 
 ### Checkpointing 

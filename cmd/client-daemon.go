@@ -80,7 +80,7 @@ var stopDaemonCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// kill -9 daemon
 		// read from PID file
-		pidFile, err := os.ReadFile("/tmp/cedana.pid")
+		pidFile, err := os.ReadFile("/var/log/cedana.pid")
 		if err != nil {
 			return err
 		}

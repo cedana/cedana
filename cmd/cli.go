@@ -7,7 +7,6 @@ import (
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
@@ -78,21 +77,6 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		dumpArgs := gpu.CheckpointRequest{}
-		_, err = cli.cts.GpuCheckpoint(&dumpArgs)
-
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Gpu checkpoint task failed: %v", err)
-			}
-		}
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -166,35 +150,6 @@ var restoreProcessCmd = &cobra.Command{
 
 		cli.cts.Close()
 
-		return nil
-	},
-}
-
-var gpuRestoreCmd = &cobra.Command{
-	Use:   "gpu",
-	Short: "Manually restore a running gpu accelerated process",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		dumpArgs := gpu.RestoreRequest{}
-		_, err = cli.cts.GpuRestore(&dumpArgs)
-
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Gpu restore task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Gpu restore task failed: %v", err)
-			}
-		}
-
-		cli.cts.Close()
-
-		cli.logger.Info().Msgf("container %s dumped successfully to %s", containerId, dir)
 		return nil
 	},
 }
@@ -634,8 +589,4 @@ func init() {
 	initRuncCommands()
 
 	initContainerdCommands()
-
-	dumpCmd.AddCommand(gpuDumpCmd)
-	restoreCmd.AddCommand(gpuRestoreCmd)
-
 }

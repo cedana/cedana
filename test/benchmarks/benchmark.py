@@ -11,9 +11,15 @@ def setup():
     repo_url="https://github.com/cedana/cedana-benchmarks"
     subprocess.run(["git", "clone", repo_url, benchmarking_dir])
 
+    # get cedana daemon pid from pid file 
+    with open("/var/log/daemon.pid", "r") as file:
+        daemon_pid = int(file.read().strip())
+
+    return daemon_pid
+
 def cleanup():
     os.removedirs(benchmarking_dir)
-    # assume daemon is started elsewhere 
+
 def get_process_by_pid(pid):
     # Get a psutil.Process object for the given pid
     try:
@@ -111,8 +117,8 @@ def run_exec(cmd, jobID):
     return pid 
 
 
-def main(daemonPID): 
-    setup()
+def main(): 
+    daemon_pid = setup()
     jobIDs = [
         "loop",
         "regression",
@@ -129,9 +135,11 @@ def main(daemonPID):
         for y in range(num_samples):
             process_pid = run_exec(cmds[x], jobID)
             time.sleep(1)
-            run_checkpoint(daemonPID, jobID, process_pid)
+            run_checkpoint(daemon_pid, jobID, process_pid)
             time.sleep(1)
 
     # delete benchmarking folder
+    cleanup()
 
-main(27885)
+
+
