@@ -12,8 +12,10 @@ def setup():
     subprocess.run(["git", "clone", repo_url, benchmarking_dir])
 
     # get cedana daemon pid from pid file 
-    with open("/var/log/daemon.pid", "r") as file:
+    with open("/var/log/cedana.pid", "r") as file:
         daemon_pid = int(file.read().strip())
+
+    print("found daemon running at pid {}".format(daemon_pid))
 
     return daemon_pid
 
@@ -125,11 +127,11 @@ def main():
     ]
     cmds = [
         "./benchmarks/test.sh",
-        "python3 benchmarks/regression/main.py"
+        "'python3 benchmarks/regression/main.py'"
     ]
 
     # run in a loop 
-    num_samples = 100
+    num_samples = 5
     for x in range(len(jobIDs)): 
         jobID = jobIDs[x]
         for y in range(num_samples):
@@ -141,5 +143,4 @@ def main():
     # delete benchmarking folder
     cleanup()
 
-
-
+main()

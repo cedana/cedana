@@ -31,6 +31,9 @@ var bundle string
 var consoleSocket string
 var detach bool
 
+// working directory for execTask
+var wd string
+
 type CLI struct {
 	cfg    *utils.Config
 	cts    *services.ServiceClient
@@ -452,8 +455,9 @@ var execTaskCmd = &cobra.Command{
 		}
 
 		taskArgs := &task.StartTaskArgs{
-			Task: args[0],
-			Id:   args[1],
+			Task:       args[0],
+			Id:         args[1],
+			WorkingDir: wd,
 		}
 
 		resp, err := cli.cts.StartTask(taskArgs)
@@ -580,6 +584,8 @@ func init() {
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
+
+	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)

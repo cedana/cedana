@@ -320,7 +320,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task string) (int32, error) {
+func (s *service) runTask(task, workingDir string) (int32, error) {
 	var pid int32
 
 	if task == "" {
@@ -345,19 +345,38 @@ func (s *service) runTask(task string) (int32, error) {
 		Setsid: true,
 	}
 
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
 	cmd.Stdin = nullFile
 	cmd.Stdout = w
 	cmd.Stderr = w
+
+	env := os.Environ()
+	virtualEnv := "/home/nravic/go/src/github.com/cedana/cedana-benchmarks/nanoGPT/env"
+	env = append(env, fmt.Sprintf("PATH=%s/bin:%s", virtualEnv, os.Getenv("PATH")))
+	env = append(env, fmt.Sprintf("CONDA_PREFIX=%s", virtualEnv))
+
+	cmd.Env = env
 
 	err = cmd.Start()
 	if err != nil {
 		return 0, err
 	}
 
+	// capture stderr
+
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
+			buf := make([]byte, 4096)
+			_, err := r.Read(buf)
+			if err != nil {
+				s.logger.Error().Msgf("stderr: %v", err)
+			}
+			s.logger.Error().Msgf("stderr: %s", string(buf))
 		}
 	}()
 
@@ -379,7 +398,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun)
+	pid, err := s.runTask(taskToRun, args.WorkingDir)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
