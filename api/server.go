@@ -373,7 +373,6 @@ func (s *service) runTask(task, workingDir string) (int32, error) {
 			if err != nil {
 				s.logger.Warn().Err(err).Msgf("could not read stderr, file likely closed")
 			}
-			s.logger.Error().Msgf("stderr: %s", string(buf))
 		}
 	}()
 

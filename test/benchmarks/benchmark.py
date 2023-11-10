@@ -8,6 +8,7 @@ import requests
 import psutil
 
 benchmarking_dir = "benchmarks"
+output_dir = "benchmark_results"
 
 
 def setup():
@@ -49,14 +50,17 @@ def start_resource_measurement(pid):
     return mem_before, cpu_before, disk_before
 
 
-def start_pprof(jobid, iteration, out_dir): 
+def start_pprof(filename): 
     pprof_base_url = "http://localhost:6060"
-    cpu_profile_filename = "{}/cpu_{}_{}.pprof".format(out_dir, jobid, iteration)
-    requests.get(f"{pprof_base_url}/start-profiling?prefix={cpu_profile_filename}")
+    resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
+    print("got status code {} from profiler".format(resp.status_code))
 
-def stop_pprof():
+def stop_pprof(filename):
     pprof_base_url = "http://localhost:6060"
-    requests.get(f"{pprof_base_url}/stop-profiling")
+    resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
+    print("got status code {} from profiler".format(resp.status_code))
+    if resp.status_code != 200:
+        print("error from profiler: {}".format(resp.text))
 
 def stop_resource_measurement(pid, mem_before, cpu_before, disk_before, started_at, completed_at, jobID, process_mem_used):
     daemon = get_process_by_pid(pid)
@@ -91,7 +95,7 @@ def stop_resource_measurement(pid, mem_before, cpu_before, disk_before, started_
         ])
 
 
-def run_checkpoint(daemonPID, jobID, process_pid, iteration): 
+def run_checkpoint(daemonPID, jobID, process_pid, iteration, output_dir): 
     chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID)
 
     process = get_process_by_pid(process_pid)
@@ -100,11 +104,14 @@ def run_checkpoint(daemonPID, jobID, process_pid, iteration):
     mem, cpu, disk = start_resource_measurement(daemonPID)
     checkpoint_started_at = time.perf_counter()
 
-    start_pprof(jobID, iteration, "benchmark_output") 
+    cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
+  
+    start_pprof(cpu_profile_filename) 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
     p.wait()
     checkpoint_completed_at = time.perf_counter()
+    stop_pprof(cpu_profile_filename)
 
     # also writes to a csv 
     stop_resource_measurement(
@@ -155,7 +162,7 @@ def main():
         for y in range(num_samples):
             process_pid = run_exec(cmds[x], jobID)
             time.sleep(1)
-            run_checkpoint(daemon_pid, jobID, process_pid, y)
+            run_checkpoint(daemon_pid, jobID, process_pid, y, output_dir)
             time.sleep(1)
 
     # delete benchmarking folder
