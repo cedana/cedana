@@ -94,7 +94,7 @@ func TestClient_TryStartJob(t *testing.T) {
 		}
 		ctx := context.Background()
 
-		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test"})
+		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test", LogOutputFile: "somefile"})
 
 		if err != nil {
 			t.Errorf("failed to start task: %v", err)

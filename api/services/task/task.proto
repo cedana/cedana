@@ -38,6 +38,7 @@ message StartTaskArgs {
   string Task = 1;
   string Id = 2;
   string WorkingDir = 3;
+  string LogOutputFile = 4;
 }
 
 message StartTaskResp {

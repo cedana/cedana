@@ -320,9 +320,8 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task, workingDir string) (int32, error) {
+func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error) {
 	var pid int32
-
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
 	}
@@ -350,8 +349,11 @@ func (s *service) runTask(task, workingDir string) (int32, error) {
 	}
 
 	cmd.Stdin = nullFile
-	// capture and pipe stdout to a file (/var/log/cedana-output.log for now)
-	outputFile, err := os.OpenFile("/var/log/cedana-output.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
+	if logOutputFile == "" {
+		// default to /var/log/cedana-output.log
+		logOutputFile = "/var/log/cedana-output.log"
+	}
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
 	if err != nil {
 		return 0, err
 	}
@@ -394,7 +396,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun, args.WorkingDir)
+	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
