@@ -1,11 +1,15 @@
 import csv
 import os
+import shutil
 import subprocess
 import time
+import requests 
 
 import psutil
 
 benchmarking_dir = "benchmarks"
+
+
 def setup():
     # download benchmarking repo
     repo_url="https://github.com/cedana/cedana-benchmarks"
@@ -20,7 +24,7 @@ def setup():
     return daemon_pid
 
 def cleanup():
-    os.removedirs(benchmarking_dir)
+    shutil.rmtree(benchmarking_dir)
 
 def get_process_by_pid(pid):
     # Get a psutil.Process object for the given pid
@@ -43,6 +47,16 @@ def start_resource_measurement(pid):
     cpu_before = process.cpu_percent(interval=1)
     disk_before = psutil.disk_usage('/').used
     return mem_before, cpu_before, disk_before
+
+
+def start_pprof(jobid, iteration, out_dir): 
+    pprof_base_url = "http://localhost:6060"
+    cpu_profile_filename = "{}/cpu_{}_{}.pprof".format(out_dir, jobid, iteration)
+    requests.get(f"{pprof_base_url}/start-profiling?prefix={cpu_profile_filename}")
+
+def stop_pprof():
+    pprof_base_url = "http://localhost:6060"
+    requests.get(f"{pprof_base_url}/stop-profiling")
 
 def stop_resource_measurement(pid, mem_before, cpu_before, disk_before, started_at, completed_at, jobID, process_mem_used):
     daemon = get_process_by_pid(pid)
@@ -77,7 +91,7 @@ def stop_resource_measurement(pid, mem_before, cpu_before, disk_before, started_
         ])
 
 
-def run_checkpoint(daemonPID, jobID, process_pid): 
+def run_checkpoint(daemonPID, jobID, process_pid, iteration): 
     chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID)
 
     process = get_process_by_pid(process_pid)
@@ -85,8 +99,11 @@ def run_checkpoint(daemonPID, jobID, process_pid):
 
     mem, cpu, disk = start_resource_measurement(daemonPID)
     checkpoint_started_at = time.perf_counter()
-   
-    subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
+
+    start_pprof(jobID, iteration, "benchmark_output") 
+    p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
+    # used for capturing full time instead of directly exiting
+    p.wait()
     checkpoint_completed_at = time.perf_counter()
 
     # also writes to a csv 
@@ -102,13 +119,14 @@ def run_checkpoint(daemonPID, jobID, process_pid):
         )
 
 def run_restore(jobID):
-    restore_started_at = time.monotonic_ns()
+    restore_started_at = time.perf_counter()
     print("starting restore of process at {}".format(restore_started_at))
     restore_cmd = "sudo ./cedana restore job {}".format(jobID)
     
-    subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
-    
-    restore_completed_at = time.monotonic_ns()
+    p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
+    p.wait()
+
+    restore_completed_at = time.perf_counter()
     print("completed restore of process at {}".format(restore_completed_at))
 
 def run_exec(cmd, jobID): 
@@ -137,7 +155,7 @@ def main():
         for y in range(num_samples):
             process_pid = run_exec(cmds[x], jobID)
             time.sleep(1)
-            run_checkpoint(daemon_pid, jobID, process_pid)
+            run_checkpoint(daemon_pid, jobID, process_pid, y)
             time.sleep(1)
 
     # delete benchmarking folder

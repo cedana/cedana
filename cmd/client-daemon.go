@@ -61,6 +61,11 @@ var startDaemonCmd = &cobra.Command{
 
 		defer ctx.Release()
 
+		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
+			logger.Info().Msg("profiling enabled, listening on 6060")
+			go startProfiler()
+		}
+
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
 		go startgRPCServer()
@@ -113,6 +118,11 @@ func startgRPCServer() {
 		logger.Error().Err(err).Msg("Failed to start gRPC server")
 	}
 
+}
+
+// Used for debugging and profiling only!
+func startProfiler() {
+	utils.StartPprofServer()
 }
 
 func init() {

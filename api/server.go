@@ -371,7 +371,7 @@ func (s *service) runTask(task, workingDir string) (int32, error) {
 			buf := make([]byte, 4096)
 			_, err := r.Read(buf)
 			if err != nil {
-				s.logger.Error().Msgf("stderr: %v", err)
+				s.logger.Warn().Err(err).Msgf("could not read stderr, file likely closed")
 			}
 			s.logger.Error().Msgf("stderr: %s", string(buf))
 		}
