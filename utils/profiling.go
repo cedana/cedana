@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 )
 
+// TODO NR - add memory profiling
 func setupProfilerHandlers() {
 	// Handler to start CPU profiling
 	http.HandleFunc("/start-profiling", func(w http.ResponseWriter, r *http.Request) {

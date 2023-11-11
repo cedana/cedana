@@ -5,6 +5,9 @@ import subprocess
 import time
 import requests 
 import profile_pb2
+from google.cloud import bigquery
+from google.cloud.bigquery import LoadJobConfig, SourceFormat
+
 
 import psutil
 
@@ -149,6 +152,47 @@ def run_exec(cmd, jobID):
 
 def analyze_pprof(output_dir):
     pass 
+
+def push_to_bigquery():
+# Initialize a BigQuery client
+    client = bigquery.Client()
+
+    dataset_id = 'devtest'
+    table_id = 'benchmarking_naiive'
+
+# Set the path to your CSV file
+    csv_file_path = 'benchmark_output.csv'
+
+# Create a job config
+    job_config = LoadJobConfig(
+        source_format=SourceFormat.CSV,
+        skip_leading_rows=1,  # Change this according to your CSV file
+        autodetect=True,  # Auto-detect schema if the table doesn't exist
+        write_disposition="WRITE_TRUNCATE",  # Options are WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
+)
+
+# Get the dataset and table reference
+    dataset_ref = client.dataset(dataset_id)
+    table_ref = dataset_ref.table(table_id)
+
+    # API request to start the job
+    with open(csv_file_path, "rb") as source_file:
+        load_job = client.load_table_from_file(
+            source_file,
+            table_ref,
+            job_config=job_config
+        )  
+
+    load_job.result()  
+
+    if load_job.errors is not None:
+        print('Errors:', load_job.errors)
+    else:
+        print('Job finished successfully.')
+
+    # Get the table details
+    table = client.get_table(table_ref)  
+    print('Loaded {} rows to {}'.format(table.num_rows, table_id))
   
 def main(): 
     daemon_pid = setup()
@@ -162,7 +206,7 @@ def main():
     ]
 
     # run in a loop 
-    num_samples = 5
+    num_samples = 20
     for x in range(len(jobIDs)): 
         jobID = jobIDs[x]
         for y in range(num_samples):
@@ -173,9 +217,7 @@ def main():
 
     # todo - run analysis on pprof and make new csv 
 
-    # todo - send to bigquery 
+    push_to_bigquery()
 
     # delete benchmarking folder
     cleanup()
-
-main()
