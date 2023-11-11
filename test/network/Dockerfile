@@ -10,7 +10,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository ppa:criu/ppa
-RUN apt update && apt install -y criu python3 pip sudo 
+RUN apt update && apt install -y criu python3 pip apt-transport-https ca-certificates gnupg curl sudo
 
 
 RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
@@ -21,4 +21,10 @@ RUN pip install -r test/benchmarks/requirements
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
-CMD ./test/benchmarks/large_data_benchmark.sh -n 5
+# set up bq cli 
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+RUN apt-get update && sudo apt-get install google-cloud-cli
+
+ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+ENV CEDANA_PROFILING_ENABLED=true
+CMD python3 test/benchmarks/benchmarks.py

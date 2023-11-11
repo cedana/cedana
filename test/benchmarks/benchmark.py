@@ -64,7 +64,7 @@ def start_recording(pid):
     try:
         p = psutil.Process(pid)
         initial_data['cpu_times'] = p.cpu_times()
-        initial_data['memory'] = p.memory_info().rss
+        initial_data['memory'] = p.memory_full_info().uss
         initial_data['disk_io'] = psutil.disk_io_counters()
         initial_data['cpu_percent'] = p.cpu_percent(interval=None)
         initial_data['time'] = psutil.cpu_times()
@@ -92,7 +92,7 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
     cpu_percent = 100 * cpu_time_total_diff / cpu_total_time_diff if cpu_total_time_diff else 0
 
     # Memory usage in KB
-    current_memory = p.memory_info().rss
+    current_memory = p.memory_full_info().uss
     memory_used_kb = (current_memory - initial_data['memory']) / 1024
         
     # Disk I/O
@@ -116,8 +116,8 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
                 'Memory Used Daemon', 
                 'Write Count', 
                 'Read Count', 
-                'Write Bytes', 
-                'Read Bytes', 
+                'Write (MB)', 
+                'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
                 'Time Taken'
@@ -131,8 +131,8 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
             memory_used_kb,
             write_count_diff,
             read_count_diff,
-            write_bytes_diff,
-            read_bytes_diff,
+            write_bytes_diff / (1024 * 1024), # convert to MB
+            read_bytes_diff / (1024 * 1024), # convert to MB
             cpu_utilization,
             cpu_percent,
             completed_at - started_at
