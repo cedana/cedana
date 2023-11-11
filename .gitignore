@@ -1,25 +1,10 @@
 cedana
 client_config.yaml
-cedana-daemon.log
-cedana.pid
-cmd.test
-*.test
-cmd/_home*
 
-test/benchmarks/benchmarking/results/*
-!test/benchmarks/benchmarking/results/.gitkeep  # Include the placeholder file
-test/benchmarks/benchmarking/pids/*
-!test/benchmarks/benchmarking/pids/.gitkeep
-test/benchmarks/benchmarking/processes/*
-!test/benchmarks/benchmarking/processes/.gitkeep
-test/benchmarks/benchmarking/temp/*
-!test/benchmarks/benchmarking/temp/.gitkeep
-test/benchmarks/cedana_restore
-
-dataset/
-dist/
-open_fds.json
 *.vhs
 .gitconfig
 
-*.test
+benchmarks
+benchmark_*
+*.csv
+tmp

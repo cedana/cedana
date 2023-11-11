@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import time
 import requests 
+import profile_pb2
 
 import psutil
 
@@ -15,6 +16,9 @@ def setup():
     # download benchmarking repo
     repo_url="https://github.com/cedana/cedana-benchmarks"
     subprocess.run(["git", "clone", repo_url, benchmarking_dir])
+
+    # make folder for storing results
+    os.makedirs(output_dir, exist_ok=True)
 
     # get cedana daemon pid from pid file 
     with open("/var/log/cedana.pid", "r") as file:
@@ -143,7 +147,9 @@ def run_exec(cmd, jobID):
     pid = int(process.communicate()[0].decode().strip())
     return pid 
 
-
+def analyze_pprof(output_dir):
+    pass 
+  
 def main(): 
     daemon_pid = setup()
     jobIDs = [
@@ -164,6 +170,10 @@ def main():
             time.sleep(1)
             run_checkpoint(daemon_pid, jobID, process_pid, y, output_dir)
             time.sleep(1)
+
+    # todo - run analysis on pprof and make new csv 
+
+    # todo - send to bigquery 
 
     # delete benchmarking folder
     cleanup()
