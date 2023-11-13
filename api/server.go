@@ -23,6 +23,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const defaultLogPath string = "/var/log/cedana-output.log"
+
 // Unused for now...
 type GrpcService interface {
 	Register(*grpc.Server) error
@@ -351,7 +353,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	cmd.Stdin = nullFile
 	if logOutputFile == "" {
 		// default to /var/log/cedana-output.log
-		logOutputFile = "/var/log/cedana-output.log"
+		logOutputFile = defaultLogPath
 	}
 	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
 	if err != nil {

@@ -39,7 +39,7 @@ var startDaemonCmd = &cobra.Command{
 		}
 
 		ctx := &gd.Context{
-			PidFileName: "/var/log/cedana.pid",
+			PidFileName: "/run/cedana.pid",
 			PidFilePerm: 0o644,
 			LogFileName: "/var/log/cedana-daemon.log",
 			LogFilePerm: 0o664,

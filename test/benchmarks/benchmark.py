@@ -24,7 +24,7 @@ def setup():
     os.makedirs(output_dir, exist_ok=True)
 
     # get cedana daemon pid from pid file 
-    with open("/var/log/cedana.pid", "r") as file:
+    with open("/run/cedana.pid", "r") as file:
         daemon_pid = int(file.read().strip())
 
     print("found daemon running at pid {}".format(daemon_pid))
