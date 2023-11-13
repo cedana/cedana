@@ -363,6 +363,8 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	cmd.Stdout = io.MultiWriter(w, outputFile)
 	cmd.Stderr = io.MultiWriter(w, outputFile)
 
+	cmd.Env = os.Environ()
+
 	err = cmd.Start()
 	if err != nil {
 		return 0, err

@@ -22,7 +22,9 @@ ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
 ## set up bq env and run benchmarks
-ENV USER="root" # crap for bq env 
-RUN python3 /test/benchmarks/benchmarks.py
+ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+
+RUN mkdir benchmark_results
+RUN python3 test/benchmarks/benchmark.py
 
 ENTRYPOINT /bin/bash
