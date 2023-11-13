@@ -23,6 +23,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const defaultLogPath string = "/var/log/cedana-output.log"
+
 // Unused for now...
 type GrpcService interface {
 	Register(*grpc.Server) error
@@ -320,9 +322,8 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task string) (int32, error) {
+func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error) {
 	var pid int32
-
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
 	}
@@ -345,9 +346,22 @@ func (s *service) runTask(task string) (int32, error) {
 		Setsid: true,
 	}
 
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
 	cmd.Stdin = nullFile
-	cmd.Stdout = w
-	cmd.Stderr = w
+	if logOutputFile == "" {
+		// default to /var/log/cedana-output.log
+		logOutputFile = defaultLogPath
+	}
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd.Stdout = io.MultiWriter(w, outputFile)
+	cmd.Stderr = io.MultiWriter(w, outputFile)
 
 	err = cmd.Start()
 	if err != nil {
@@ -358,6 +372,11 @@ func (s *service) runTask(task string) (int32, error) {
 		err := cmd.Wait()
 		if err != nil {
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
+			buf := make([]byte, 4096)
+			_, err := r.Read(buf)
+			if err != nil {
+				s.logger.Warn().Err(err).Msgf("could not read stderr, file likely closed")
+			}
 		}
 	}()
 
@@ -379,7 +398,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun)
+	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)

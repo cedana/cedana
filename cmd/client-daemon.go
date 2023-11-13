@@ -39,7 +39,7 @@ var startDaemonCmd = &cobra.Command{
 		}
 
 		ctx := &gd.Context{
-			PidFileName: "/var/log/cedana.pid",
+			PidFileName: "/run/cedana.pid",
 			PidFilePerm: 0o644,
 			LogFileName: "/var/log/cedana-daemon.log",
 			LogFilePerm: 0o664,
@@ -61,6 +61,11 @@ var startDaemonCmd = &cobra.Command{
 
 		defer ctx.Release()
 
+		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
+			logger.Info().Msg("profiling enabled, listening on 6060")
+			go startProfiler()
+		}
+
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
 
 		go startgRPCServer()
@@ -80,7 +85,7 @@ var stopDaemonCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// kill -9 daemon
 		// read from PID file
-		pidFile, err := os.ReadFile("/tmp/cedana.pid")
+		pidFile, err := os.ReadFile("/run/cedana.pid")
 		if err != nil {
 			return err
 		}
@@ -113,6 +118,11 @@ func startgRPCServer() {
 		logger.Error().Err(err).Msg("Failed to start gRPC server")
 	}
 
+}
+
+// Used for debugging and profiling only!
+func startProfiler() {
+	utils.StartPprofServer()
 }
 
 func init() {

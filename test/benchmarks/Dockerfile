@@ -13,8 +13,6 @@ RUN apt-get update && \
 RUN add-apt-repository ppa:criu/ppa
 RUN apt update && apt install -y criu python3 pip sudo 
 
-
-
 RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
 WORKDIR /cedana
 RUN pip install -r test/benchmarks/requirements
@@ -23,5 +21,8 @@ RUN pip install -r test/benchmarks/requirements
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
+## set up bq env and run benchmarks
+ENV USER="root" # crap for bq env 
+RUN python3 /test/benchmarks/benchmarks.py
 
 ENTRYPOINT /bin/bash
