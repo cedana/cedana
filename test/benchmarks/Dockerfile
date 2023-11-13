@@ -17,7 +17,6 @@ RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
 WORKDIR /cedana 
 
 RUN git checkout fix/dockerfile-update
-RUN pip install -r test/benchmarks/requirements
 
 
 ENV USER="root"
@@ -25,6 +24,7 @@ RUN go build && ./cedana bootstrap
 
 ## set up bq env and run benchmarks
 ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+RUN cd test/benchmarks pip install -r requirements 
 
 RUN mkdir benchmark_results
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
