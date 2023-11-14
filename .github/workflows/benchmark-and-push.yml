@@ -1,1 +1,22 @@
 name: Benchmark and Publish 
+on: 
+  schedule: 
+    - cron: '0 0 * * *'
+
+# Cancel any preceding run on the pull request.
+concurrency:
+  group: docker-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/cedana' }}
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run Docker Test (${{ matrix.os }})
+      run: sudo ./scripts/ci/benchmark-and-push.sh
+      env:
+        GITHUB_TOKEN: ${{ secrets.BIGQUERY_TOKEN }}
