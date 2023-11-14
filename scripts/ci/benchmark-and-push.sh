@@ -8,6 +8,12 @@ add-apt-repository \
 
 ./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+if [ -z "$GITHUB_TOKEN" ]
+then
+    echo "GITHUB_TOKEN is not set"
+    exit 1
+
+
 # docker sign in to ghcr 
 docker login ghcr.io -u cedana -p $GITHUB_TOKEN
 sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
