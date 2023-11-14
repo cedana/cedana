@@ -6,7 +6,7 @@ on:
 # Cancel any preceding run on the pull request.
 concurrency:
   group: docker-test-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/cedana' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/cedana-dev' }}
 
 jobs:
   build:
