@@ -94,8 +94,8 @@ jobs:
       - name: Build and push (benchmarking image)
         uses: docker/build-push-action@v5
         with:
-          context: "{{defaultContext}}:test/benchmark"
-          file: "{{defaultContext}}:test/benchmark/Dockerfile"
+          context: ./test/benchmark
+          file: ./test/benchmark/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
