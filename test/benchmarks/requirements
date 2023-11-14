@@ -2,10 +2,11 @@ matplotlib==3.7.2
 pandas==2.0.3
 numpy==1.25.2
 Pillow==10.0.0
-Pillow==10.0.0
 six==1.16.0
 torch==2.0.1
 torchvision==0.15.2
-psutil==5.9.5
-typing_extensions==4.8.0
-protobuf==4.25.0
+typing_extensions
+protobuf==3.20.1
+google-cloud-bigquery
+requests 
+psutil

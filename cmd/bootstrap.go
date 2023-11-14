@@ -74,7 +74,7 @@ After=network.target
 
 [Service]
 Type=forking
-ExecStart=/usr/bin/cedana daemon
+ExecStart=/usr/bin/cedana daemon start 
 Restart=on-failure
 
 [Install]
