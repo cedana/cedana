@@ -88,10 +88,13 @@ jobs:
         with:
           images: ghcr.io/cedana/cedana-benchmarking 
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push (benchmarking image)
         uses: docker/build-push-action@v5
         with:
-          context: /home/runner/work/cedana/cedana/test/benchmark
+          context: "{{defaultContext}}:test/benchmarks"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
