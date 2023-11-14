@@ -1,7 +1,7 @@
 name: Benchmark and Publish 
 on: 
   schedule: 
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * 0'
 
 # Cancel any preceding run on the pull request.
 concurrency:
@@ -19,4 +19,4 @@ jobs:
     - name: Run Docker Test (${{ matrix.os }})
       run: sudo ./scripts/ci/benchmark-and-push.sh
       env:
-        GITHUB_TOKEN: ${{ secrets.BIGQUERY_TOKEN }}
+        BIGQUERY_TOKEN: ${{ secrets.BIGQUERY_TOKEN }}
