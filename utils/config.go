@@ -61,7 +61,7 @@ func InitConfig() (*Config, error) {
 	viper.SetConfigName("client_config")
 
 	// InitConfig should do the testing for path
-	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o644)
+	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o664)
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Println("client_config.json does not exist, creating sample config...")
 		_, err = os.Create(filepath.Join(homedir, ".cedana", "client_config.json"))
