@@ -8,6 +8,8 @@ add-apt-repository \
 
 ./apt-install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+# docker sign in to ghcr 
+docker login ghcr.io -u cedana -p $GITHUB_TOKEN
 sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
 
 if [ -z "$BIGQUERY_TOKEN" ]
