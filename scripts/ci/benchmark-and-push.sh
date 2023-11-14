@@ -6,7 +6,7 @@ add-apt-repository \
    $(lsb_release -cs) \
    stable test"
 
-./apt-install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # docker sign in to ghcr 
 docker login ghcr.io -u cedana -p $GITHUB_TOKEN
