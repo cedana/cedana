@@ -24,14 +24,13 @@ RUN go build && ./cedana bootstrap
 
 ## set up bq env and run benchmarks
 ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+ENV CEDANA_PROFILING_ENABLED=true 
 RUN cd test/benchmarks pip install -r requirements 
 
 RUN mkdir benchmark_results
 ## have to force protobuf compilation with older version
-RUN pip install protobuf==3.20.1
+RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 ## start daemon and benchmark 
-RUN ./cedana daemon start 
-
-ENTRYPOINT /bin/bash
+CMD ["sh", "-c", "./cedana daemon start && python3 test/benchmarks/benchmark.py"]
