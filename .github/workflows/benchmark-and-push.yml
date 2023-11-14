@@ -23,7 +23,7 @@ jobs:
         ref: fix/iterate-benchmark 
        
     - name: Run Benchmarking Script (${{ matrix.os }})
-      run: sudo ./cedana/scripts/ci/benchmark-and-push.sh
+      run: sudo make -C scripts/ci benchmarking
       env:
         BIGQUERY_TOKEN: ${{ secrets.BIGQUERY_TOKEN }}
         GITHUB_ACTOR: ${{ github.actor }}
