@@ -16,9 +16,6 @@ RUN apt update && apt install -y criu python3 pip sudo
 RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
 WORKDIR /cedana 
 
-RUN git checkout fix/dockerfile-update
-
-
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
