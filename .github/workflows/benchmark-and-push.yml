@@ -41,7 +41,6 @@ jobs:
 
     - name: Run Benchmarking Script (${{ matrix.os }})
       uses: lhotari/action-upterm@v1
-      run: sudo -E make -C scripts/ci benchmarking
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         GITHUB_ACTOR: ${{ github.actor }}
