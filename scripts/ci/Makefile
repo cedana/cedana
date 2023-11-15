@@ -6,5 +6,5 @@ endif
 
 export CONTAINER_TERMINAL
 
-benchmarking:
+benchmark:
 	./benchmark-and-push.sh
