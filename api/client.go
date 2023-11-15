@@ -120,7 +120,7 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
+		c.logger.Info().Msgf("Could not instantiate new gopsutil process for pid %d with error: %v", pid, err)
 	}
 
 	var openFiles []*task.OpenFilesStat
