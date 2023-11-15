@@ -12,6 +12,7 @@ if [ -z "$GITHUB_TOKEN" ]
 then
     echo "GITHUB_TOKEN is not set"
     exit 1
+endif
 
 # docker sign in to ghcr 
 docker login ghcr.io -u cedana -p $GITHUB_TOKEN
@@ -21,6 +22,8 @@ if [ -z "$BIGQUERY_TOKEN" ]
 then
     echo "BIGQUERY_TOKEN is not set"
     exit 1
+endif 
+
 
 sudo docker run --privileged --tmpfs /run -it cedana ghcr.io/cedana/cedana-benchmarking:latest
 
