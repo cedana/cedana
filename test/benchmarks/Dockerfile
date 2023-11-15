@@ -19,8 +19,10 @@ WORKDIR /cedana
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
+# force leave_running=false for benchmarks 
+RUN echo '{"client":{"leave_running":false,"signal_process_pre_dump":false,"signal_process_timeout":0,"task":"./test/benchmarks/benchmarking/processes/loop"}}' > ~/.cedana/client_config.json
+
 ## set up bq env and run benchmarks
-ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
 ENV CEDANA_PROFILING_ENABLED=true 
 RUN cd test/benchmarks pip install -r requirements 
 
