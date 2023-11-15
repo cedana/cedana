@@ -11,12 +11,17 @@ concurrency:
 
 jobs:
   build:
+    
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest]
+    
     steps:
-
     - name: Checkout cedana
       uses: actions/checkout@v2
       with:
