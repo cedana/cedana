@@ -21,10 +21,19 @@ jobs:
       uses: actions/checkout@v2
       with:
         ref: fix/iterate-benchmark 
+
+        steps:
+
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
        
     - name: Run Benchmarking Script (${{ matrix.os }})
-      run: sudo make -C scripts/ci benchmarking
+      run: sudo -E make -C scripts/ci benchmarking
       env:
-        BIGQUERY_TOKEN: ${{ secrets.BIGQUERY_TOKEN }}
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ github.token }}
