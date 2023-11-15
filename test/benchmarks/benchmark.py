@@ -142,7 +142,7 @@ def analyze_pprof(filename):
     pass 
 
 def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats): 
-    chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID)
+    chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
 
     # TODO NR - fix 
     initial_data = start_recording(daemonPID)
@@ -236,7 +236,10 @@ def main():
     for x in range(len(jobIDs)): 
         jobID = jobIDs[x]
         for y in range(num_samples):
-            process_stats = run_exec(cmds[x], jobID)
+            # we pass a job ID + iteration to generate a unique one every time. 
+            # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and 
+            # we end up getting a killed PID.
+            process_stats = run_exec(cmds[x], jobID+"-"+str(y))
             time.sleep(1)
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
             time.sleep(1)
