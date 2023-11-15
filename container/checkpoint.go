@@ -620,6 +620,11 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	root := "/run/containerd/runc/default"
 
+	_, err = os.Stat(root)
+	if err != nil {
+		root = "/host/run/containerd/runc/k8s.io"
+	}
+
 	c := GetContainerFromRunc(container.ID, root)
 
 	err = c.RuncCheckpoint(criuOpts, c.Pid)
