@@ -25,5 +25,5 @@ then
 fi 
 
 
-sudo docker run -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS --privileged --tmpfs /run -it cedana-benchmarking ghcr.io/cedana/cedana-benchmarking:latest
+sudo docker run -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS --privileged --tmpfs /run cedana-benchmarking ghcr.io/cedana/cedana-benchmarking:latest
 
