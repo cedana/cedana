@@ -29,6 +29,7 @@ CONTAINER_CREDENTIAL_PATH=/tmp/creds.json
 
 sudo docker run \
  -v $GOOGLE_APPLICATION_CREDENTIALS:$CONTAINER_CREDENTIAL_PATH \
- -e GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_CREDENTIAL_PATH --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
+ -e GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_CREDENTIAL_PATH \
+ -e PROJECT_ID=cedana-benchmarking --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
 
