@@ -25,10 +25,6 @@ jobs:
     steps:
     - name: Checkout cedana
       uses: actions/checkout@v2
-      with:
-        ref: fix/iterate-benchmark 
-
-        steps:
 
     - id: 'auth'
       name: 'Authenticate to Google Cloud'
