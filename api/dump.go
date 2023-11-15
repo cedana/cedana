@@ -122,7 +122,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		if err := os.MkdirAll(checkpointFolderPath, 0o755); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o664); err != nil {
 			return "", err
 		}
 	}

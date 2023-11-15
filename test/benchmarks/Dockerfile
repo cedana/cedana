@@ -7,22 +7,27 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install everything else 
 RUN apt-get update && \
-    apt-get install -y software-properties-common git zip && \
+    apt-get install -y software-properties-common git zip protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository ppa:criu/ppa
 RUN apt update && apt install -y criu python3 pip sudo 
 
 RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
-WORKDIR /cedana
-RUN pip install -r test/benchmarks/requirements
-
+WORKDIR /cedana 
 
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
 ## set up bq env and run benchmarks
-ENV USER="root" # crap for bq env 
-RUN python3 /test/benchmarks/benchmarks.py
+ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+ENV CEDANA_PROFILING_ENABLED=true 
+RUN cd test/benchmarks pip install -r requirements 
 
-ENTRYPOINT /bin/bash
+RUN mkdir benchmark_results
+## have to force protobuf compilation with older version
+RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery
+RUN cd test/benchmarks && protoc --python_out=. profile.proto
+
+## start daemon and benchmark 
+CMD ["sh", "-c", "./cedana daemon start && python3 test/benchmarks/benchmark.py"]

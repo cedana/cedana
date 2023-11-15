@@ -355,13 +355,15 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o655)
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		return 0, err
 	}
 
 	cmd.Stdout = io.MultiWriter(w, outputFile)
 	cmd.Stderr = io.MultiWriter(w, outputFile)
+
+	cmd.Env = os.Environ()
 
 	err = cmd.Start()
 	if err != nil {
