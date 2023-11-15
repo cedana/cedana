@@ -20,7 +20,6 @@ ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
 ## set up bq env and run benchmarks
-ENV GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
 ENV CEDANA_PROFILING_ENABLED=true 
 RUN cd test/benchmarks pip install -r requirements 
 

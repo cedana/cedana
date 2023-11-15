@@ -18,12 +18,12 @@ fi
 docker login ghcr.io -u cedana -p $GITHUB_TOKEN
 sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
 
-if [ -z "$BIGQUERY_TOKEN" ]
+if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]
 then
-    echo "BIGQUERY_TOKEN is not set"
+    echo "GOOGLE_APPLICATION_CREDENTIALS is not set"
     exit 1
 fi 
 
 
-sudo docker run --privileged --tmpfs /run -it cedana ghcr.io/cedana/cedana-benchmarking:latest
+sudo docker run -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS --privileged --tmpfs /run -it cedana-benchmarking ghcr.io/cedana/cedana-benchmarking:latest
 
