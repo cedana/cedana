@@ -36,7 +36,7 @@ jobs:
         service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
 
     - name: Run Benchmarking Script (${{ matrix.os }})
-      use: lhotari/action-upterm@v1
+      uses: lhotari/action-upterm@v1
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         GITHUB_ACTOR: ${{ github.actor }}
