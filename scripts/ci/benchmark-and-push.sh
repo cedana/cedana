@@ -15,7 +15,7 @@ then
 fi 
 
 # docker sign in to ghcr 
-docker login ghcr.io -u cedana -p $GITHUB_TOKEN
+echo $GITHUB_TOKEN | sudo docker login ghcr.io -u cedana --password-stdin
 sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]
@@ -24,6 +24,5 @@ then
     exit 1
 fi 
 
-
-sudo docker run -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS --privileged --tmpfs /run cedana-benchmarking ghcr.io/cedana/cedana-benchmarking:latest
+sudo docker run -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS --privileged --tmpfs /run cedana-benchmarking 
 
