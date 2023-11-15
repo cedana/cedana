@@ -27,8 +27,10 @@ jobs:
     - id: 'auth'
       name: 'Authenticate to Google Cloud'
       uses: 'google-github-actions/auth@v1'
+      env: 
+        WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
       with:
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
        
     - name: Run Benchmarking Script (${{ matrix.os }})
