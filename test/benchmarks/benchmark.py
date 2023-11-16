@@ -223,10 +223,12 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
     ]
     cmds = [
+        "./benchmarks/server"
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
@@ -234,6 +236,7 @@ def main():
     # run in a loop 
     num_samples = 30
     for x in range(len(jobIDs)): 
+        print("Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x]))
         jobID = jobIDs[x]
         for y in range(num_samples):
             # we pass a job ID + iteration to generate a unique one every time. 
