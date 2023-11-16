@@ -305,6 +305,7 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 	err := container.Dump(dir, containerId)
 	if err != nil {
 		c.logger.Fatal().Err(err)
+		return err
 	}
 	return nil
 }
