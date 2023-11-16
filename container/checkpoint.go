@@ -365,6 +365,9 @@ func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*
 	}
 	opts = append(opts, timeoutOpt)
 	client, err := containerd.New(containerdEndpoint, opts...)
+	if err != nil {
+		fmt.Print("failed to create client")
+	}
 	ctx, cancel := AppContext(ctx)
 	return client, ctx, cancel, err
 }
