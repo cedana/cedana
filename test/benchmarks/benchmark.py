@@ -223,10 +223,12 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
     ]
     cmds = [
+        "./benchmarks/server"
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
