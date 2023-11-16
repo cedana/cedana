@@ -234,6 +234,7 @@ def main():
     # run in a loop 
     num_samples = 30
     for x in range(len(jobIDs)): 
+        print("Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x]))
         jobID = jobIDs[x]
         for y in range(num_samples):
             # we pass a job ID + iteration to generate a unique one every time. 
