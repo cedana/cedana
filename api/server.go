@@ -352,12 +352,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 
 	var gpuCmd *exec.Cmd
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		exportCmd := exec.Command("export LD_PRELOAD=/home/wfoy/go/src/github.com/cedana/cedana/libcedana-gpu.so")
-		err = exportCmd.Start()
-		if err != nil {
-			s.logger.Fatal().Err(err)
-		}
-
 		gpuCmd = exec.Command("bash", "-c", "/home/wfoy/go/src/github.com/cedana/cedana/gpu-controller")
 		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
@@ -373,6 +367,8 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 			s.logger.Fatal().Err(err)
 		}
 		s.logger.Info().Msgf("GPU controller started with pid: %d", gpuCmd.Process.Pid)
+	} else {
+		s.logger.Info().Msg("GPU controller not enabled")
 	}
 
 	cmd.Stdin = nullFile

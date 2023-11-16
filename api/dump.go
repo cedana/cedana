@@ -312,6 +312,10 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 func (c *Client) Dump(dir string, pid int32) error {
 	defer c.timeTrack(time.Now(), "dump")
 
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		c.checkpointGPU()
+	}
+
 	opts := c.prepareCheckpointOpts()
 	dumpdir, err := c.prepareDump(pid, dir, opts)
 	if err != nil {
@@ -342,19 +346,19 @@ func (c *Client) Dump(dir string, pid int32) error {
 		c.logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
-	if !state.ProcessInfo.AttachedToHardwareAccel {
-		_, err = c.CRIU.Dump(opts, &nfy)
-		if err != nil {
-			// check for sudo error
-			if strings.Contains(err.Error(), "errno 0") {
-				c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
-				return err
-			}
-
-			c.logger.Warn().Msgf("error dumping process: %v", err)
+	// if !state.ProcessInfo.AttachedToHardwareAccel {
+	_, err = c.CRIU.Dump(opts, &nfy)
+	if err != nil {
+		// check for sudo error
+		if strings.Contains(err.Error(), "errno 0") {
+			c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 			return err
 		}
+
+		c.logger.Warn().Msgf("error dumping process: %v", err)
+		return err
 	}
+	// }
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
