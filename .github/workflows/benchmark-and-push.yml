@@ -36,7 +36,7 @@ jobs:
         service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
 
     - name: Run Benchmarking Script (${{ matrix.os }})
-      run: sudo -E make -C scripts/ci benchmark
+      run: echo $GITHUB_TOKEN | sudo make -C scripts/ci benchmark
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         GITHUB_ACTOR: ${{ github.actor }}
