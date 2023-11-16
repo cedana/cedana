@@ -502,6 +502,8 @@ func containerdCheckpoint(id string, ref string) error {
 
 	ctx := gocontext.Background()
 
+	ctx = namespaces.WithNamespace(ctx, "k8s.io")
+
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
 		logger.Fatal().Err(err)
