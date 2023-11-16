@@ -366,7 +366,7 @@ var runcDumpCmd = &cobra.Command{
 		root = "/var/run/runc"
 
 		if _, err := os.Stat(root); err != nil {
-			root = "/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io"
+			root = "/host/run/containerd/runc/k8s.io"
 		}
 
 		criuOpts := &task.CriuOpts{
