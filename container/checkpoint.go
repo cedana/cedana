@@ -359,8 +359,12 @@ func loadState(root string) (*State, error) {
 
 func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
 	timeoutOpt := containerd.WithTimeout(0)
+	containerdEndpoint := "/run/containerd/containerd.sock"
+	if _, err := os.Stat(containerdEndpoint); err != nil {
+		containerdEndpoint = "/host/run/k3s/containerd/containerd.sock"
+	}
 	opts = append(opts, timeoutOpt)
-	client, err := containerd.New("/run/containerd/containerd.sock", opts...)
+	client, err := containerd.New(containerdEndpoint, opts...)
 	ctx, cancel := AppContext(ctx)
 	return client, ctx, cancel, err
 }
@@ -612,11 +616,6 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		fmt.Printf("Checkpointing to %s\n", image)
 		defer os.RemoveAll(image)
 	}
-
-	// Replace with our criu checkpoint
-	// if err := runtimeTask.Checkpoint(ctx, image, request.Options); err != nil {
-	// 	return &apiTasks.CheckpointTaskResponse{}, err
-	// }
 
 	root := "/run/containerd/runc/default"
 
