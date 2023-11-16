@@ -39,5 +39,6 @@ jobs:
       run: sudo -E make -C scripts/ci benchmark 
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        GOOGLE_CLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

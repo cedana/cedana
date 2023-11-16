@@ -8,8 +8,7 @@ add-apt-repository \
 
 ./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-echo "checking for token..."
-echo $GITHUB_TOKEN
+echo "project id: $GOOGLE_CLOUD_PROJECT"
 
 if [ -z "$GITHUB_TOKEN" ]
 then
@@ -33,6 +32,6 @@ CONTAINER_CREDENTIAL_PATH=/tmp/creds.json
 sudo docker run \
  -v $GOOGLE_APPLICATION_CREDENTIALS:$CONTAINER_CREDENTIAL_PATH \
  -e GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_CREDENTIAL_PATH \
- -e PROJECT_ID=cedana-benchmarking --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
+ -e GOOGLE_CLOUD_PROJECT=cedana-benchmarking --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
 
