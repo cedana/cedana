@@ -8,6 +8,9 @@ add-apt-repository \
 
 ./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+echo "checking for token..."
+echo $GITHUB_TOKEN
+
 if [ -z "$GITHUB_TOKEN" ]
 then
     echo "GITHUB_TOKEN is not set"
