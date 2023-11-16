@@ -512,6 +512,15 @@ func containerdCheckpoint(id string, ref string) error {
 	// 	containerd.WithCheckpointRuntime,
 	// }
 
+	// Testing purposes
+	containers, err := containerdClient.Containers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, container := range containers {
+		fmt.Println(container.ID())
+	}
+
 	container, err := containerdClient.LoadContainer(ctx, id)
 	if err != nil {
 		return err
