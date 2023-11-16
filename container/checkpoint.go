@@ -364,6 +364,7 @@ func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*
 		containerdEndpoint = "/host/run/k3s/containerd/containerd.sock"
 	}
 	opts = append(opts, timeoutOpt)
+
 	client, err := containerd.New(containerdEndpoint, opts...)
 	if err != nil {
 		fmt.Print("failed to create client")
@@ -502,8 +503,6 @@ func containerdCheckpoint(id string, ref string) error {
 
 	ctx := gocontext.Background()
 
-	ctx = namespaces.WithNamespace(ctx, "k8s.io")
-
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
 		logger.Fatal().Err(err)
@@ -513,6 +512,7 @@ func containerdCheckpoint(id string, ref string) error {
 	// containerdOpts := []containerd.CheckpointOpts{
 	// 	containerd.WithCheckpointRuntime,
 	// }
+	ctx = namespaces.WithNamespace(ctx, "k8s.io")
 
 	// Testing purposes
 	containers, err := containerdClient.Containers(ctx)
