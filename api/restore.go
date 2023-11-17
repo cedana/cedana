@@ -317,9 +317,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath); err != nil {
-			return err
-		}
+
+		rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath)
+
 		if err := rsyncDirectories(opts.Bundle, tmpPath); err != nil {
 			return err
 		}
