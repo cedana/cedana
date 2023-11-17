@@ -314,12 +314,25 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		}
 
 		tmpPath := "/tmp/" + podID
-		os.Mkdir(tmpPath, 0644)
-		rsyncDirectories(podPath, tmpPath)
-		rsyncDirectories("/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath)
-		rsyncDirectories("/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath)
-		rsyncDirectories("/kubepods/besteffort/"+podID, tmpPath)
-		rsyncDirectories(opts.Bundle, tmpPath)
+		if err := os.Mkdir(tmpPath, 0644); err != nil {
+			return err
+		}
+
+		if err := rsyncDirectories("/host"+podPath, tmpPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories(opts.Bundle, tmpPath); err != nil {
+			return err
+		}
 
 		// // Update paths and perform recursive copy
 		// err = updateAndCopyDirectories(config, "/tmp", "podd7f6555a-8d1e-46ae-b97a-7c3639682bbb", newPodID, "52f274894cf23cd0e23192ef00ce2a7615cb548f30b9f5517dc7324d9611e4da", newContainerID)
