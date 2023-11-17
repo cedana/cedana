@@ -220,7 +220,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		return nil, err
 	}
 
-	return &task.RuncDumpResp{}, nil
+	return &task.RuncDumpResp{Message: "successful dump to " + args.CriuOpts.ImagesDirectory}, nil
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
