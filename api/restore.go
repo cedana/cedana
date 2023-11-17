@@ -277,11 +277,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 	if isK3s {
 		var spec rspec.Spec
-		var podID string
-		var podPath string
 
-		parts := strings.Split(opts.Bundle, "/")
-		oldContainerID := parts[7]
+		// parts := strings.Split(opts.Bundle, "/")
+		// oldContainerID := parts[7]
 		configPath := opts.Bundle + "/config.json" // Replace with your actual path
 
 		data, err := os.ReadFile(configPath)
@@ -302,29 +300,21 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 		// var directories []string
 
-		mounts := spec.Mounts
-
-		for _, mount := range mounts {
-			if mount.Destination == "/etc/hosts" {
-				parts := strings.Split(mount.Source, "/")
-				podID = parts[5]
-				podPath = "/var/lib/kubelet/pods/" + podID
-				break
-			}
-		}
+		sandboxID := spec.Annotations["io.kubernetes.cri.sandbox-id"]
+		podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
 
 		tmpPath := "/tmp/" + podID
 		if err := os.Mkdir(tmpPath, 0644); err != nil {
 			return err
 		}
 
-		if err := rsyncDirectories("/host"+podPath, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/var/lib/kubelet/pods/"+podID, tmpPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath); err != nil {
 			return err
 		}
 		if err := rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath); err != nil {
