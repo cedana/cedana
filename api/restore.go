@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -215,6 +216,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 	isPodman := checkIfPodman(bundle)
 
+	isK3s := true
+
 	if isPodman {
 		var spec rspec.Spec
 		parts := strings.Split(opts.Bundle, "/")
@@ -270,6 +273,58 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		}
 
 		opts.Bundle = newBundle + "/userdata"
+	}
+
+	if isK3s {
+		var spec rspec.Spec
+		var podID string
+		var podPath string
+
+		parts := strings.Split(opts.Bundle, "/")
+		oldContainerID := parts[6]
+		configPath := opts.Bundle + "config.json" // Replace with your actual path
+
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			fmt.Println("Error reading config.json:", err)
+			return err
+		}
+
+		// Unmarshal JSON data into a map
+		if err := json.Unmarshal(data, &spec); err != nil {
+			fmt.Println("Error decoding config.json:", err)
+			return err
+		}
+
+		// Generate new IDs
+		// newPodID := uuid.New().String()
+		// newContainerID := uuid.New().String()
+
+		// var directories []string
+
+		mounts := spec.Mounts
+
+		for _, mount := range mounts {
+			if mount.Destination == "/etc/hosts" {
+				parts := strings.Split(mount.Source, "/")
+				podID = parts[4]
+			}
+			podPath = "/var/lib/kubelet/pods/" + podID
+		}
+
+		tmpPath := "/tmp/" + podID
+		os.Mkdir(tmpPath, 0644)
+		rsyncDirectories(podPath, tmpPath)
+		rsyncDirectories("/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath)
+		rsyncDirectories("/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+oldContainerID, tmpPath)
+		rsyncDirectories("/kubepods/besteffort/"+podID, tmpPath)
+		rsyncDirectories(opts.Bundle, tmpPath)
+
+		// // Update paths and perform recursive copy
+		// err = updateAndCopyDirectories(config, "/tmp", "podd7f6555a-8d1e-46ae-b97a-7c3639682bbb", newPodID, "52f274894cf23cd0e23192ef00ce2a7615cb548f30b9f5517dc7324d9611e4da", newContainerID)
+		// if err != nil {
+		// 	fmt.Println("Error copying directories:", err)
+		// }
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
