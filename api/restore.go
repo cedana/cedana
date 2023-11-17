@@ -307,7 +307,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		for _, mount := range mounts {
 			if mount.Destination == "/etc/hosts" {
 				parts := strings.Split(mount.Source, "/")
-				podID = parts[4]
+				podID = parts[5]
 				podPath = "/var/lib/kubelet/pods/" + podID
 				break
 			}
