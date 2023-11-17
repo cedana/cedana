@@ -282,7 +282,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 
 		parts := strings.Split(opts.Bundle, "/")
 		oldContainerID := parts[6]
-		configPath := opts.Bundle + "config.json" // Replace with your actual path
+		configPath := opts.Bundle + "/config.json" // Replace with your actual path
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
@@ -308,8 +308,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 			if mount.Destination == "/etc/hosts" {
 				parts := strings.Split(mount.Source, "/")
 				podID = parts[4]
+				podPath = "/var/lib/kubelet/pods/" + podID
+				break
 			}
-			podPath = "/var/lib/kubelet/pods/" + podID
 		}
 
 		tmpPath := "/tmp/" + podID
