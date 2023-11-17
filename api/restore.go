@@ -281,7 +281,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		var podPath string
 
 		parts := strings.Split(opts.Bundle, "/")
-		oldContainerID := parts[6]
+		oldContainerID := parts[7]
 		configPath := opts.Bundle + "/config.json" // Replace with your actual path
 
 		data, err := os.ReadFile(configPath)
