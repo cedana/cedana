@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -220,6 +221,46 @@ func killRuncContainer(containerID string) error {
 	return nil
 }
 
+func copyFiles(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Construct the destination path by joining the destination directory
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join(dst, relPath)
+
+		// If it's a directory, create it in the destination
+		if info.IsDir() {
+			return os.MkdirAll(destPath, os.ModePerm)
+		}
+
+		// If it's a file, copy it to the destination
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		sourceFile, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer sourceFile.Close()
+
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			return err
+		}
+		defer destFile.Close()
+
+		_, err = io.Copy(destFile, sourceFile)
+		return err
+	})
+}
+
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
@@ -349,17 +390,17 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		// 	fmt.Println("Error copying directories:", err)
 		// }
 
-		if err := rsyncDirectories(tmpPodsPath, podsPath); err != nil {
+		if err := copyFiles(tmpPodsPath, podsPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories(tmpVarPath, varPath); err != nil {
+		if err := copyFiles(tmpVarPath, varPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories(tmpRunPath, runPath); err != nil {
+		if err := copyFiles(tmpRunPath, runPath); err != nil {
 			return err
 		}
-		rsyncDirectories(tmpBesteffortPath, besteffortPath)
-		if err := rsyncDirectories(tmpBundlePath, opts.Bundle); err != nil {
+		copyFiles(tmpBesteffortPath, besteffortPath)
+		if err := copyFiles(tmpBundlePath, opts.Bundle); err != nil {
 			return err
 		}
 	}
