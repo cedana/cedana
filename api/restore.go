@@ -261,6 +261,18 @@ func copyFiles(src, dst string) error {
 	})
 }
 
+func dropLastDirectory(path string) (string, error) {
+	cleanPath := filepath.Clean(path)
+	parentDir := filepath.Dir(cleanPath)
+
+	// Check if the path is root directory
+	if parentDir == cleanPath {
+		return "", fmt.Errorf("cannot drop last directory of root directory")
+	}
+
+	return parentDir, nil
+}
+
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
@@ -390,17 +402,34 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		// 	fmt.Println("Error copying directories:", err)
 		// }
 
-		if err := copyFiles(tmpPodsPath, podsPath); err != nil {
+		cleanPodsPath, err := dropLastDirectory(podsPath)
+		if err != nil {
 			return err
 		}
-		if err := copyFiles(tmpVarPath, varPath); err != nil {
+		if err := copyFiles(tmpPodsPath, cleanPodsPath); err != nil {
 			return err
 		}
-		if err := copyFiles(tmpRunPath, runPath); err != nil {
+		cleanVarPath, err := dropLastDirectory(varPath)
+		if err != nil {
 			return err
 		}
+		if err := copyFiles(tmpVarPath, cleanVarPath); err != nil {
+			return err
+		}
+		cleanRunPath, err := dropLastDirectory(runPath)
+		if err != nil {
+			return err
+		}
+		if err := copyFiles(tmpRunPath, cleanRunPath); err != nil {
+			return err
+		}
+
 		copyFiles(tmpBesteffortPath, besteffortPath)
-		if err := copyFiles(tmpBundlePath, opts.Bundle); err != nil {
+		cleanBundlePath, err := dropLastDirectory(opts.Bundle)
+		if err != nil {
+			return err
+		}
+		if err := copyFiles(tmpBundlePath, cleanBundlePath); err != nil {
 			return err
 		}
 	}
