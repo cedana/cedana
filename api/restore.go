@@ -210,6 +210,16 @@ func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	}
 }
 
+func killRuncContainer(containerID string) error {
+	cmd := exec.Command("sudo", "/host/bin/runc", "--root", "/host/run/containerd/runc/k8s.io", "kill", containerID)
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
@@ -308,22 +318,23 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 			return err
 		}
 
-		if err := rsyncDirectories("/host/var/lib/kubelet/pods/"+podID, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/var/lib/kubelet/pods/"+podID, tmpPath+"pods"); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath+"var-io.containerd.grpc.v1.cri"); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath); err != nil {
+		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath+"run-io.containerd.grpc.v1.cri"); err != nil {
 			return err
 		}
 
-		rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath)
+		rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath+"besteffort")
 
 		if err := rsyncDirectories(opts.Bundle, tmpPath); err != nil {
 			return err
 		}
 
+		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy
 		// err = updateAndCopyDirectories(config, "/tmp", "podd7f6555a-8d1e-46ae-b97a-7c3639682bbb", newPodID, "52f274894cf23cd0e23192ef00ce2a7615cb548f30b9f5517dc7324d9611e4da", newContainerID)
 		// if err != nil {
