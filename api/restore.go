@@ -313,24 +313,32 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		sandboxID := spec.Annotations["io.kubernetes.cri.sandbox-id"]
 		podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
 
-		tmpPath := "/tmp/" + podID
+		tmpPath := filepath.Join("/tmp", podID)
 		if err := os.Mkdir(tmpPath, 0644); err != nil {
 			return err
 		}
-
-		if err := rsyncDirectories("/host/var/lib/kubelet/pods/"+podID, tmpPath+"pods"); err != nil {
+		tmpPodsPath := filepath.Join(tmpPath, "pods")
+		podsPath := filepath.Join("/host/var/lib/kubelet/pods", podID)
+		if err := rsyncDirectories(podsPath, tmpPodsPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath+"var-io.containerd.grpc.v1.cri"); err != nil {
+		tmpVarPath := filepath.Join(tmpPath, "var")
+		varPath := filepath.Join("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes", sandboxID)
+		if err := rsyncDirectories(varPath, tmpVarPath); err != nil {
 			return err
 		}
-		if err := rsyncDirectories("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/"+sandboxID, tmpPath+"run-io.containerd.grpc.v1.cri"); err != nil {
+		tmpRunPath := filepath.Join(tmpPath, "run")
+		runPath := filepath.Join("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes", sandboxID)
+		if err := rsyncDirectories(runPath, tmpRunPath); err != nil {
 			return err
 		}
 
-		rsyncDirectories("/host/kubepods/besteffort/"+podID, tmpPath+"besteffort")
+		tmpBesteffortPath := filepath.Join(tmpPath, "besteffort")
+		besteffortPath := filepath.Join("/host/kubepods/besteffort", podID)
+		rsyncDirectories(besteffortPath, tmpBesteffortPath)
 
-		if err := rsyncDirectories(opts.Bundle, tmpPath); err != nil {
+		tmpBundlePath := filepath.Join(tmpPath, "bundle")
+		if err := rsyncDirectories(opts.Bundle, tmpBundlePath); err != nil {
 			return err
 		}
 
@@ -340,6 +348,20 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		// if err != nil {
 		// 	fmt.Println("Error copying directories:", err)
 		// }
+
+		if err := rsyncDirectories(tmpPodsPath, podsPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories(tmpVarPath, varPath); err != nil {
+			return err
+		}
+		if err := rsyncDirectories(tmpRunPath, runPath); err != nil {
+			return err
+		}
+		rsyncDirectories(tmpBesteffortPath, besteffortPath)
+		if err := rsyncDirectories(tmpBundlePath, opts.Bundle); err != nil {
+			return err
+		}
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
