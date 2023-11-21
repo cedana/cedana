@@ -195,7 +195,7 @@ def push_to_bigquery():
         source_format=SourceFormat.CSV,
         skip_leading_rows=1,  # Change this according to your CSV file
         autodetect=True,  # Auto-detect schema if the table doesn't exist
-        write_disposition="WRITE_TRUNCATE",  # Options are WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
+        write_disposition="WRITE_APPEND",  # Options are WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
 )
 
     dataset_ref = client.dataset(dataset_id)
