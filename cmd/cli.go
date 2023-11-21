@@ -32,6 +32,8 @@ var bundle string
 var consoleSocket string
 var detach bool
 
+var isK3s bool
+
 // working directory for execTask
 var wd string
 
@@ -422,6 +424,7 @@ var runcRestoreCmd = &cobra.Command{
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   runcPath,
 			ContainerId: containerId,
+			IsK3S:       isK3s,
 			Opts:        opts,
 		}
 
@@ -552,6 +555,7 @@ func initRuncCommands() {
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
 	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
+	runcRestoreCmd.Flags().BoolVar(&isK3s, "isK3s", false, "pass whether or not we are checkpointing a container in a k3s agent")
 
 	restoreCmd.AddCommand(runcRestoreCmd)
 

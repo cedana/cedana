@@ -273,13 +273,15 @@ func dropLastDirectory(path string) (string, error) {
 	return parentDir, nil
 }
 
-func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
+func restorePauseContainer() {
+
+}
+
+func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
 
 	isPodman := checkIfPodman(bundle)
-
-	isK3s := true
 
 	if isPodman {
 		var spec rspec.Spec
@@ -394,6 +396,12 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		if err := rsyncDirectories(opts.Bundle, tmpBundlePath); err != nil {
 			return err
 		}
+
+		// TODO before killing runc container, need to do a checkpoint on pause container
+		// Checkpoint pause container
+		// Restore pause container
+		// Get pid of pause container
+		// Patch config.json to reflect new pid in namespaces
 
 		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy

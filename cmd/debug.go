@@ -74,7 +74,7 @@ var debugRuncRestoreCmd = &cobra.Command{
 
 		client := api.Client{}
 
-		err := client.RuncRestore(imgPath, containerId, opts)
+		err := client.RuncRestore(imgPath, containerId, false, opts)
 		if err != nil {
 			return err
 		}

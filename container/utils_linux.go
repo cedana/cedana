@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	"github.com/coreos/go-systemd/v22/activation"
+	"github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 	"golang.org/x/sys/unix"
@@ -318,6 +320,67 @@ const (
 	CT_ACT_RUN
 	CT_ACT_RESTORE
 )
+
+func GetContainers(root string) ([]containerStateJson, error) {
+	list, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var s []containerStateJson
+
+	for _, item := range list {
+		if !item.IsDir() {
+			continue
+		}
+		st, err := item.Info()
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				// Possible race with runc delete.
+				continue
+			}
+			return nil, err
+		}
+		// This cast is safe on Linux.
+		uid := st.Sys().(*syscall.Stat_t).Uid
+		owner, err := user.LookupUid(int(uid))
+		if err != nil {
+			owner.Name = fmt.Sprintf("#%d", uid)
+		}
+
+		container, err := libcontainer.Load(root, item.Name())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load container %s: %v\n", item.Name(), err)
+			continue
+		}
+		containerStatus, err := container.Status()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "status for %s: %v\n", item.Name(), err)
+			continue
+		}
+		state, err := container.State()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "state for %s: %v\n", item.Name(), err)
+			continue
+		}
+		pid := state.BaseState.InitProcessPid
+		if containerStatus == libcontainer.Stopped {
+			pid = 0
+		}
+		bundle, annotations := utils.Annotations(state.Config.Labels)
+		s = append(s, containerStateJson{
+			Version:        state.BaseState.Config.Version,
+			ID:             state.BaseState.ID,
+			InitProcessPid: pid,
+			Status:         containerStatus.String(),
+			Bundle:         bundle,
+			Rootfs:         state.BaseState.Config.Rootfs,
+			Created:        state.BaseState.Created,
+			Annotations:    annotations,
+			Owner:          owner.Name,
+		})
+	}
+	return s, nil
+}
 
 func StartContainer(context *RuncOpts, action CtAct, criuOpts *libcontainer.CriuOpts) (int, error) {
 	spec, err := setupSpec(context)
