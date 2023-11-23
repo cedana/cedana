@@ -432,7 +432,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *cont
 
 		pauseContainerOpts := &container.RuncOpts{
 			Root:    opts.Root,
-			Bundle:  pauseContainer.Bundle,
+			Bundle:  "/host" + pauseContainer.Bundle,
 			Detatch: true,
 		}
 
