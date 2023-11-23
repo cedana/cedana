@@ -436,7 +436,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *cont
 			Detatch: true,
 		}
 
-		c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, pauseContainerOpts)
+		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, pauseContainerOpts); err != nil {
+			return err
+		}
 
 		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy
