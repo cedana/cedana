@@ -411,7 +411,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *cont
 			if ns.Type == "network" {
 				// Looking for the pid of the pause container from the path to the network namespace
 				split := strings.Split(ns.Path, "/")
-				pausePid, err = strconv.Atoi(split[1])
+				pausePid, err = strconv.Atoi(split[2])
 				if err != nil {
 					return err
 				}
