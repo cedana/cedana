@@ -321,12 +321,12 @@ const (
 	CT_ACT_RESTORE
 )
 
-func GetContainers(root string) ([]containerStateJson, error) {
+func GetContainers(root string) ([]ContainerStateJson, error) {
 	list, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
-	var s []containerStateJson
+	var s []ContainerStateJson
 
 	for _, item := range list {
 		if !item.IsDir() {
@@ -367,7 +367,7 @@ func GetContainers(root string) ([]containerStateJson, error) {
 			pid = 0
 		}
 		bundle, annotations := utils.Annotations(state.Config.Labels)
-		s = append(s, containerStateJson{
+		s = append(s, ContainerStateJson{
 			Version:        state.BaseState.Config.Version,
 			ID:             state.BaseState.ID,
 			InitProcessPid: pid,

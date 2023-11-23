@@ -174,7 +174,7 @@ type containerState interface {
 	status() Status
 }
 
-type containerStateJson struct {
+type ContainerStateJson struct {
 	// Version is the OCI version for the container
 	Version string `json:"ociVersion"`
 	// ID is the container ID
