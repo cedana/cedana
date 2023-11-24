@@ -309,10 +309,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
 
 		for i, s := range sources {
-			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(s, sandboxID, "-", i)))
-			if err := rsyncDirectories(filepath.Join(s, sandboxID), sourceList[i]); err != nil {
-				return err
-			}
+			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
+
+			copyFiles(filepath.Join(s, sandboxID), sourceList[i])
 		}
 	}
 
