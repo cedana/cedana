@@ -283,6 +283,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	bundle := Bundle{Bundle: opts.Bundle}
 	var tmpSources string
 	var sandboxID string
+	var sourceList []string
 	if len(sources) > 0 {
 		var spec rspec.Spec
 		tmpSources = filepath.Join("/tmp", "sources")
@@ -308,7 +309,10 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
 
 		for i, s := range sources {
-			rsyncDirectories(s+sandboxID, filepath.Join("/tmp", "sources", fmt.Sprint(s, "-", i)))
+			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(s, "-", i)))
+			if err := rsyncDirectories(s+sandboxID, sourceList[i]); err != nil {
+				return err
+			}
 		}
 	}
 
