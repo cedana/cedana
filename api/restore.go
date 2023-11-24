@@ -278,9 +278,35 @@ func restorePauseContainer() {
 
 }
 
-func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *container.RuncOpts) error {
+func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
+	var tmpSources string
+	var sandboxID string
+	if len(sources) > 0 {
+		var spec rspec.Spec
+		tmpSources = filepath.Join("/tmp", "sources")
+
+		configLocation := filepath.Join(opts.Bundle, "config.json")
+
+		_, err := os.Stat(configLocation)
+		if err == nil {
+			configFile, err := os.ReadFile(configLocation)
+			if err != nil {
+				return err
+			}
+
+			if err := json.Unmarshal(configFile, &spec); err != nil {
+				return err
+			}
+		}
+		sandboxID = spec.Annotations["io.kubernetes.cri.sandbox-id"]
+		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
+
+		for i, s := range sources {
+			rsyncDirectories(s+sandboxID, filepath.Join("/tmp", "sources", fmt.Sprint(s, "-", i)))
+		}
+	}
 
 	isPodman := checkIfPodman(bundle)
 
@@ -436,7 +462,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *cont
 			Detatch: true,
 		}
 
-		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, pauseContainerOpts); err != nil {
+		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
+		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
+		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerOpts); err != nil {
 			return err
 		}
 
@@ -476,6 +504,12 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, opts *cont
 		}
 		if err := copyFiles(tmpBundlePath, cleanBundlePath); err != nil {
 			return err
+		}
+	}
+
+	if len(sources) > 0 {
+		for i, s := range sources {
+			copyFiles(filepath.Join(tmpSources, fmt.Sprint(s, "-", i)), filepath.Join(s, sandboxID))
 		}
 	}
 

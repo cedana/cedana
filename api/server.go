@@ -232,7 +232,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Detatch:       args.Opts.Detatch,
 	}
 
-	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, opts)
+	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
