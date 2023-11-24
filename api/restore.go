@@ -287,6 +287,10 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		var spec rspec.Spec
 		tmpSources = filepath.Join("/tmp", "sources")
 
+		if err := os.Mkdir(tmpSources, 0777); err != nil {
+			return err
+		}
+		defer os.Remove(tmpSources)
 		configLocation := filepath.Join(opts.Bundle, "config.json")
 
 		_, err := os.Stat(configLocation)
