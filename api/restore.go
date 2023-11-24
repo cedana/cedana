@@ -310,7 +310,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		for i, s := range sources {
 			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(s, "-", i)))
-			if err := rsyncDirectories(s+sandboxID, sourceList[i]); err != nil {
+			if err := rsyncDirectories(filepath.Join(s, sandboxID), sourceList[i]); err != nil {
 				return err
 			}
 		}
@@ -471,7 +471,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 
 		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
-		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
+		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
 		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerOpts); err != nil {
 			return err
 		}
