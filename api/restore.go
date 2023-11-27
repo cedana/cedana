@@ -331,6 +331,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 			copyFiles(filepath.Join(s, sandboxID), sourceList[i])
 		}
+		copyFiles(opts.Bundle, "/tmp/sources/bundle")
 	}
 
 	isPodman := checkIfPodman(bundle)
@@ -538,6 +539,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		for i, s := range sources {
 			copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID))
 		}
+		// Copy bundle over
+		copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID))
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
