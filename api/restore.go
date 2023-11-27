@@ -500,7 +500,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
 		}
-
+		if _, err := os.Create("/tmp/sources/netns"); err != nil {
+			return err
+		}
 		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
 			return err
 		}
