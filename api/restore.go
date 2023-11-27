@@ -536,6 +536,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		for i, s := range sources {
 			copyFiles(filepath.Join(tmpSources, fmt.Sprint(s, "-", i)), filepath.Join(s, sandboxID))
 		}
+		killRuncContainer(sandboxID)
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
