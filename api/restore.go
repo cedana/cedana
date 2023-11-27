@@ -274,8 +274,13 @@ func dropLastDirectory(path string) (string, error) {
 	return parentDir, nil
 }
 
-func restorePauseContainer() {
+func mount(src, tgt string) error {
+	cmd := exec.Command("mount", "--bind", src, tgt)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
 
+	return nil
 }
 
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
@@ -284,13 +289,13 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	var tmpSources string
 	var sandboxID string
 	var sourceList []string
+	var pauseNetNs string
+	var nsPath string
+
 	if len(sources) > 0 {
 		var spec rspec.Spec
 		tmpSources = filepath.Join("/tmp", "sources")
 
-		if err := os.Mkdir(tmpSources, 0777); err != nil {
-			return err
-		}
 		defer os.Remove(tmpSources)
 		configLocation := filepath.Join(opts.Bundle, "config.json")
 
@@ -307,7 +312,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 		sandboxID = spec.Annotations["io.kubernetes.cri.sandbox-id"]
 		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-		var nsPath string
 		var networkIndex int
 		for i, ns := range spec.Linux.Namespaces {
 			if ns.Type == "network" {
@@ -329,9 +333,13 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		for i, s := range sources {
 			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
 
-			copyFiles(filepath.Join(s, sandboxID), sourceList[i])
+			if err := copyFiles(filepath.Join(s, sandboxID), sourceList[i]); err != nil {
+				return err
+			}
 		}
-		copyFiles(opts.Bundle, "/tmp/sources/bundle")
+		if err := copyFiles(opts.Bundle, "/tmp/sources/bundle"); err != nil {
+			return err
+		}
 	}
 
 	isPodman := checkIfPodman(bundle)
@@ -487,6 +495,15 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			Bundle:  "/host" + pauseContainer.Bundle,
 			Detatch: true,
 		}
+		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
+
+		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
+			return err
+		}
+
+		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
+			return err
+		}
 
 		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
 		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
@@ -523,7 +540,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		copyFiles(tmpBesteffortPath, besteffortPath)
+		if err := copyFiles(tmpBesteffortPath, besteffortPath); err != nil {
+			return err
+		}
 		cleanBundlePath, err := dropLastDirectory(opts.Bundle)
 		if err != nil {
 			return err
@@ -537,10 +556,18 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		killRuncContainer(sandboxID)
 
 		for i, s := range sources {
-			copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID))
+			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
+				return err
+			}
 		}
 		// Copy bundle over
-		copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID))
+		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
+			return err
+		}
+		if err := mount("/tmp/sources/netns", filepath.Join("/host", nsPath)); err != nil {
+			return err
+		}
+
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
