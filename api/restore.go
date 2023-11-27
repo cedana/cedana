@@ -307,13 +307,17 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 		sandboxID = spec.Annotations["io.kubernetes.cri.sandbox-id"]
 		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-		var hostPrefixedPath string
-		for _, ns := range spec.Linux.Namespaces {
+		var nsPath string
+		var networkIndex int
+		for i, ns := range spec.Linux.Namespaces {
 			if ns.Type == "network" {
-				hostPrefixedPath = filepath.Join("/host", ns.Path)
-				ns.Path = hostPrefixedPath
+				nsPath = ns.Path
+				networkIndex = i
+				break
 			}
 		}
+
+		spec.Linux.Namespaces[networkIndex].Path = filepath.Join("/host", nsPath)
 
 		specJson, err := json.Marshal(&spec)
 		if err != nil {
