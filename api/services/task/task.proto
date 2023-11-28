@@ -8,8 +8,8 @@ message DumpArgs {
   int32 PID = 1;
   string Dir = 2;
   enum DumpType {
-    SELF_SERVE = 0;
-    MARKET = 1;
+    LOCAL = 0;
+    REMOTE = 1;
   }
   DumpType Type = 3;
   string JobID = 4;

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/cedana/cedana/api"
@@ -103,7 +104,7 @@ var dumpProcessCmd = &cobra.Command{
 			PID:   int32(pid),
 			Dir:   dir,
 			JobID: id,
-			Type:  task.DumpArgs_SELF_SERVE,
+			Type:  task.DumpArgs_LOCAL,
 		}
 
 		resp, err := cli.cts.CheckpointTask(&cpuDumpArgs)
@@ -199,11 +200,18 @@ var dumpJobCmd = &cobra.Command{
 			return fmt.Errorf("pid 0 returned from state - is process running?")
 		}
 
+		var taskType task.DumpArgs_DumpType
+		if os.Getenv("CEDANA_REMOTE") == "true" {
+			taskType = task.DumpArgs_REMOTE
+		} else {
+			taskType = task.DumpArgs_LOCAL
+		}
+
 		dumpArgs := task.DumpArgs{
 			PID:   pid,
 			JobID: id,
 			Dir:   dir,
-			Type:  task.DumpArgs_MARKET,
+			Type:  taskType,
 		}
 
 		resp, err := cli.cts.CheckpointTask(&dumpArgs)
@@ -254,11 +262,17 @@ var restoreJobCmd = &cobra.Command{
 		checkpointPath = *paths[0]
 		fmt.Println("checkpoint path:", checkpointPath)
 
+		var taskType task.RestoreArgs_RestoreType
+		if os.Getenv("CEDANA_REMOTE") == "true" {
+			taskType = task.RestoreArgs_REMOTE
+		} else {
+			taskType = task.RestoreArgs_LOCAL
+		}
 		// pass path to restore task
 		restoreArgs := task.RestoreArgs{
 			CheckpointId:   args[0],
 			CheckpointPath: checkpointPath,
-			Type:           task.RestoreArgs_LOCAL,
+			Type:           taskType,
 		}
 
 		resp, err := cli.cts.RestoreTask(&restoreArgs)
