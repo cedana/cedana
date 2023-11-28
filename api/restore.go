@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
@@ -290,7 +291,12 @@ func umount(tgt string) error {
 
 	return nil
 }
-
+func generateCustomID() string {
+	uuidObj := uuid.New()
+	// Extract specific segments from the generated UUID
+	id := fmt.Sprintf("cni-%s-%s-%s-%s", uuidObj[0:4], uuidObj[5:9], uuidObj[10:14], uuidObj[15:16])
+	return id
+}
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
@@ -567,17 +573,11 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 	if len(sources) > 0 {
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(opts.Pid), "ns", "net")
-		file, err := os.Create("/tmp/sources/netns")
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
-			return err
-		}
-
-		killRuncContainer(sandboxID)
-		file, err = os.Create("/host/" + nsPath)
+		parts := strings.Split(nsPath, "/")
+		parts = parts[:len(parts)-1]
+		parts = append(parts, generateCustomID())
+		nsPath = strings.Join(parts[0:len(parts)-1], "/")
+		file, err := os.Create("/host/" + nsPath)
 		if err != nil {
 			return err
 		}
@@ -585,6 +585,10 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := mount(pauseNetNs, "/host/"+nsPath); err != nil {
 			return err
 		}
+
+		killRuncContainer(sandboxID)
+
+		defer file.Close()
 
 		for i, s := range sources {
 			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
