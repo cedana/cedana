@@ -595,7 +595,11 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			}
 		}
 	}()
-
+	defer func() {
+		os.RemoveAll(filepath.Join("/tmp", sandboxID))
+		os.RemoveAll(filepath.Join("/tmp", "pause_checkpoint"))
+		os.RemoveAll(filepath.Join("/tmp", "sources"))
+	}()
 	return nil
 }
 
