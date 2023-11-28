@@ -282,6 +282,14 @@ func mount(src, tgt string) error {
 
 	return nil
 }
+func umount(tgt string) error {
+	cmd := exec.Command("umount", tgt)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
@@ -599,6 +607,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		os.RemoveAll(filepath.Join("/tmp", sandboxID))
 		os.RemoveAll(filepath.Join("/tmp", "pause_checkpoint"))
 		os.RemoveAll(filepath.Join("/tmp", "sources"))
+		umount("/tmp/sources/netns")
 	}()
 	return nil
 }
