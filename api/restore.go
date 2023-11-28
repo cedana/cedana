@@ -322,13 +322,19 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 
 		spec.Linux.Namespaces[networkIndex].Path = filepath.Join("/host", nsPath)
-
 		specJson, err := json.Marshal(&spec)
 		if err != nil {
 			return err
 		}
 
 		os.WriteFile(configLocation, specJson, 0777)
+
+		// This is to bypass the issue with runc restore not finding sources
+		for i, m := range spec.Mounts {
+			if strings.HasPrefix(m.Source, "/") {
+				spec.Mounts[i].Source = filepath.Join("/host", m.Source)
+			}
+		}
 
 		for i, s := range sources {
 			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
@@ -428,7 +434,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		sandboxID := spec.Annotations["io.kubernetes.cri.sandbox-id"]
 		podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-
 		tmpPath := filepath.Join("/tmp", podID)
 		if err := os.Mkdir(tmpPath, 0644); err != nil {
 			return err
