@@ -306,11 +306,12 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	var pauseNetNs string
 	var nsPath string
 	var spec rspec.Spec
+	var configLocation string
 	if len(sources) > 0 {
 		tmpSources = filepath.Join("/tmp", "sources")
 
 		defer os.Remove(tmpSources)
-		configLocation := filepath.Join(opts.Bundle, "config.json")
+		configLocation = filepath.Join(opts.Bundle, "config.json")
 
 		_, err := os.Stat(configLocation)
 		if err == nil {
@@ -340,7 +341,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		os.WriteFile(configLocation, specJson, 0777)
+		if err := os.WriteFile(configLocation, specJson, 0777); err != nil {
+			return err
+		}
 
 		// This is to bypass the issue with runc restore not finding sources
 		for i, m := range spec.Mounts {
@@ -590,8 +593,17 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		for i, ns := range spec.Linux.Namespaces {
 			if ns.Type == "network" {
-				spec.Linux.Namespaces[i].Path = newNsPath
+				spec.Linux.Namespaces[i].Path = "/host" + newNsPath
 			}
+		}
+
+		specJson, err := json.Marshal(&spec)
+		if err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(configLocation, specJson, 0777); err != nil {
+			return err
 		}
 
 		for i, s := range sources {
