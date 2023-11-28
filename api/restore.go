@@ -513,9 +513,11 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
 		}
-		if _, err := os.Create("/tmp/sources/netns"); err != nil {
+		file, err := os.Create("/tmp/sources/netns")
+		if err != nil {
 			return err
 		}
+		defer file.Close()
 		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
 			return err
 		}
@@ -582,9 +584,11 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
 			return err
 		}
-		if _, err := os.Create(filepath.Join("/host", nsPath)); err != nil {
+		file, err := os.Create(filepath.Join("/host", nsPath))
+		if err != nil {
 			return err
 		}
+		defer file.Close()
 		if err := mount("/tmp/sources/netns", filepath.Join("/host", nsPath)); err != nil {
 			return err
 		}
