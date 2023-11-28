@@ -566,6 +566,9 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
 			return err
 		}
+		if _, err := os.Create(filepath.Join("/host", nsPath)); err != nil {
+			return err
+		}
 		if err := mount("/tmp/sources/netns", filepath.Join("/host", nsPath)); err != nil {
 			return err
 		}
