@@ -294,7 +294,7 @@ func umount(tgt string) error {
 func generateCustomID() string {
 	uuidObj := uuid.New()
 	// Extract specific segments from the generated UUID
-	id := fmt.Sprintf("cni-%s-%s-%s-%s", uuidObj[0:4], uuidObj[5:9], uuidObj[10:14], uuidObj[15:16])
+	id := fmt.Sprintf("cni-%s", uuidObj.String())
 	return id
 }
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
@@ -575,7 +575,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(opts.Pid), "ns", "net")
 		parts := strings.Split(nsPath, "/")
 		parts = parts[:len(parts)-1]
-		parts = append(parts, generateCustomID())
+		id := generateCustomID()
+		parts = append(parts, id)
 		nsPath = strings.Join(parts[0:len(parts)-1], "/")
 		file, err := os.Create("/host/" + nsPath)
 		if err != nil {
