@@ -513,14 +513,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
 		}
-		file, err := os.Create("/tmp/sources/netns")
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
-			return err
-		}
 
 		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
 		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
@@ -584,12 +576,13 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
 			return err
 		}
-		file, err := os.Create(filepath.Join("/host", nsPath))
+
+		file, err := os.Create("/tmp/sources/netns")
 		if err != nil {
 			return err
 		}
 		defer file.Close()
-		if err := mount("/tmp/sources/netns", filepath.Join("/host", nsPath)); err != nil {
+		if err := mount(pauseNetNs, nsPath); err != nil {
 			return err
 		}
 
