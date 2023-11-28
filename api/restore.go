@@ -602,7 +602,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		if err := os.WriteFile(configLocation, specJson, 0777); err != nil {
+		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
 			return err
 		}
 
