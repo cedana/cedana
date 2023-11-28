@@ -305,9 +305,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	var sourceList []string
 	var pauseNetNs string
 	var nsPath string
-
+	var spec rspec.Spec
 	if len(sources) > 0 {
-		var spec rspec.Spec
 		tmpSources = filepath.Join("/tmp", "sources")
 
 		defer os.Remove(tmpSources)
@@ -589,7 +588,11 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		killRuncContainer(sandboxID)
 
-		defer file.Close()
+		for i, ns := range spec.Linux.Namespaces {
+			if ns.Type == "network" {
+				spec.Linux.Namespaces[i].Path = newNsPath
+			}
+		}
 
 		for i, s := range sources {
 			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
