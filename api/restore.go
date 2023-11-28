@@ -577,8 +577,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		parts = parts[:len(parts)-1]
 		id := generateCustomID()
 		parts = append(parts, id)
-		nsPath = strings.Join(parts[0:len(parts)-1], "/")
-		file, err := os.Create("/host/" + nsPath)
+		newNsPath := strings.Join(parts, "/")
+		file, err := os.Create("/host/" + newNsPath)
 		if err != nil {
 			return err
 		}
