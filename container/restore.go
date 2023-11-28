@@ -156,4 +156,5 @@ type RuncOpts struct {
 	Detatch         bool
 	PidFile         string
 	PreserveFds     int
+	Pid             int
 }

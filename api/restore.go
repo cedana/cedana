@@ -507,6 +507,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			Root:    opts.Root,
 			Bundle:  "/host" + pauseContainer.Bundle,
 			Detatch: true,
+			Pid:     pausePid,
 		}
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
 
@@ -565,7 +566,25 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	}
 
 	if len(sources) > 0 {
+		pauseNetNs = filepath.Join("/proc", strconv.Itoa(opts.Pid), "ns", "net")
+		file, err := os.Create("/tmp/sources/netns")
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		if err := mount(pauseNetNs, "/tmp/sources/netns"); err != nil {
+			return err
+		}
+
 		killRuncContainer(sandboxID)
+		file, err = os.Create("/host/" + nsPath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		if err := mount(pauseNetNs, "/host/"+nsPath); err != nil {
+			return err
+		}
 
 		for i, s := range sources {
 			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
@@ -574,15 +593,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 		// Copy bundle over
 		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
-			return err
-		}
-
-		file, err := os.Create("/tmp/sources/netns")
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		if err := mount(pauseNetNs, nsPath); err != nil {
 			return err
 		}
 
