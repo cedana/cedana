@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -52,8 +53,12 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	s.r.Close()
 	s.w.Close()
 
-	cfg := utils.Config{}
-	store := utils.NewCedanaStore(&cfg)
+	cfg, err := utils.InitConfig()
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
+	}
+	store := utils.NewCedanaStore(cfg)
 
 	pid := args.PID
 
@@ -66,15 +71,15 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
 		if err != nil {
-			err = status.Error(codes.NotFound, "db not found")
+			err = status.Error(codes.Internal, err.Error())
 			return nil, err
 		}
 	}
 
-	err := s.Client.Dump(args.Dir, args.PID)
+	err = s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "Invalid arguments")
-		return nil, err
+		st := status.New(codes.Internal, err.Error())
+		return nil, st.Err()
 	}
 
 	var resp task.DumpResp
@@ -90,54 +95,71 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	case task.DumpArgs_MARKET:
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
-			err = status.Error(codes.NotFound, "jobid not found in db")
-			return nil, err
+			st := status.New(codes.Internal, err.Error())
+			return nil, st.Err()
 		}
 
 		if state == nil {
-			err = status.Error(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
-			return nil, err
+			st := status.New(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		checkpointPath := state.CheckpointPath
 
 		file, err := os.Open(checkpointPath)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.NotFound, "checkpoint zip not found")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 		defer file.Close()
 
 		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
-			err = status.Error(codes.NotFound, "checkpoint zip not found")
-			return nil, err
+			st := status.New(codes.Internal, "checkpoint zip stat failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		// Get the size
 		size := fileInfo.Size()
 
 		// zipFileSize += 4096
-
 		checkpointFullSize := int64(size)
 
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "CreateMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "StartMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "CompleteMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		resp = task.DumpResp{

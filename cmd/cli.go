@@ -203,7 +203,7 @@ var dumpJobCmd = &cobra.Command{
 			PID:   pid,
 			JobID: id,
 			Dir:   dir,
-			Type:  task.DumpArgs_SELF_SERVE,
+			Type:  task.DumpArgs_MARKET,
 		}
 
 		resp, err := cli.cts.CheckpointTask(&dumpArgs)

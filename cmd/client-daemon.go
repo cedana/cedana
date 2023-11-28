@@ -103,6 +103,24 @@ var stopDaemonCmd = &cobra.Command{
 	},
 }
 
+var statusDaemonCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Status cedana client daemon",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		pidFile, err := os.ReadFile("/run/cedana.pid")
+		if err != nil {
+			return err
+		}
+		_, err = strconv.Atoi(string(pidFile))
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	},
+}
+
 func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
 	if sig == syscall.SIGTERM || sig == syscall.SIGQUIT {
