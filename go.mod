@@ -75,6 +75,7 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -143,6 +144,7 @@ require (
 	github.com/adrg/strutil v0.3.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/rs/zerolog v1.31.0
 	github.com/sevlyar/go-daemon v0.1.6
 	github.com/shirou/gopsutil/v3 v3.23.9

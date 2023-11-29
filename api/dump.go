@@ -33,46 +33,6 @@ type Bundle struct {
 	Bundle      string
 }
 
-// Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
-func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
-	var checkpointPath string
-	fd, _, errno := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
-	if errno != 0 {
-		c.logger.Fatal().Err(errno).Msg("could not open pid")
-	}
-	s := syscall.SIGUSR1
-	_, _, errno = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
-	if errno != 0 {
-		c.logger.Info().Msgf("could not send signal to pid %d", pid)
-	}
-
-	// we want to sleep the dumping thread here to wait for the process
-	// to finish executing. This likely won't have any effects when run in daemon mode,
-	// it'll just pause the spawned dump goroutine
-
-	// while we wait, try and get the fd of the checkpoint as its being written
-	state, err := c.getState(pid)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not get state")
-	}
-	for _, f := range state.ProcessInfo.OpenFds {
-		// TODO NR: add more checkpoint options
-		if strings.Contains(f.Path, "pt") {
-			sfi, err := os.Stat(f.Path)
-			if err != nil {
-				continue
-			}
-			if sfi.Mode().IsRegular() {
-				checkpointPath = f.Path
-			}
-		}
-	}
-
-	time.Sleep(time.Duration(timeout) * time.Second)
-
-	return &checkpointPath
-}
-
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {

@@ -62,18 +62,16 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	pid := args.PID
 
-	if args.Type != task.DumpArgs_MARKET {
-		s.Client.generateState(args.PID)
-		var state task.ProcessState
+	s.Client.generateState(args.PID)
+	var state task.ProcessState
 
-		state.Flag = task.FlagEnum_JOB_RUNNING
-		state.PID = pid
+	state.Flag = task.FlagEnum_JOB_RUNNING
+	state.PID = pid
 
-		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
-		if err != nil {
-			err = status.Error(codes.Internal, err.Error())
-			return nil, err
-		}
+	err = s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
 
 	err = s.Client.Dump(args.Dir, args.PID)
@@ -85,14 +83,12 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	var resp task.DumpResp
 
 	switch args.Type {
-	case task.DumpArgs_SELF_SERVE:
-		// if not market - we don't push up the checkpoint to anywhere
-		// we've checkpointed, just return
+	case task.DumpArgs_LOCAL:
 		resp = task.DumpResp{
 			Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
 		}
 
-	case task.DumpArgs_MARKET:
+	case task.DumpArgs_REMOTE:
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
 			st := status.New(codes.Internal, err.Error())
@@ -119,7 +115,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 		defer file.Close()
 
-		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
 			st := status.New(codes.Internal, "checkpoint zip stat failed")
@@ -162,8 +157,15 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, st.Err()
 		}
 
+		state.RemoteState.CheckpointID = cid
+		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+
+		s.Client.db.UpdateProcessStateWithID(args.JobID, state)
+
 		resp = task.DumpResp{
-			Message: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			CheckpointID: cid,
+			UploadID:     multipartCheckpointResp.UploadID,
 		}
 	}
 
@@ -175,8 +177,10 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
+		if args.CheckpointPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
 		// assume a suitable file has been passed to args
-
 		pid, err := client.Restore(args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
@@ -189,6 +193,9 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		}, err
 
 	case task.RestoreArgs_REMOTE:
+		if args.CheckpointId == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
+		}
 		client.remoteStore = utils.NewCedanaStore(client.config)
 		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
 		if err != nil {

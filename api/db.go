@@ -20,6 +20,10 @@ func NewDB() *DB {
 	return &DB{}
 }
 
+func (db *DB) Close() error {
+	return db.conn.Close()
+}
+
 func NewBoltConn() (*bolt.DB, error) {
 	// set up embedded key-value db
 	conn, err := bolt.Open("/tmp/cedana.db", 0600, nil)
