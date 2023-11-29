@@ -519,7 +519,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 
 		pauseContainerDumpOpts := &container.CriuOpts{
-			LeaveRunning:    false,
+			LeaveRunning:    true,
 			TcpEstablished:  false,
 			ImagesDirectory: "/tmp/pause_checkpoint",
 		}
