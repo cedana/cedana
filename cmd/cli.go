@@ -246,7 +246,6 @@ var restoreJobCmd = &cobra.Command{
 		}
 
 		db := api.NewDB()
-		defer db.Close()
 
 		var restoreArgs task.RestoreArgs
 		if os.Getenv("CEDANA_REMOTE") == "true" {
