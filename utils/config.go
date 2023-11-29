@@ -107,5 +107,5 @@ func GenSampleConfig() string {
 		"cedana_user": "random-user",
 		"cedana_auth_token": "random-token"
 	}
-	`
+}`
 }
