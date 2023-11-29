@@ -73,7 +73,8 @@ def start_recording(pid):
 
     return initial_data
 
-def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_stats):
+# TODO - analyze pprof data! 
+def stop_recording(operation_type, pid, initial_data, jobID, completed_at, started_at, process_stats):
     p = psutil.Process(pid)
     # CPU times
     current_cpu_times = p.cpu_times()
@@ -112,6 +113,7 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
             writer.writerow([
                 'Timestamp', 
                 'Job ID', 
+                'Operation Type',
                 'Memory Used Target',
                 'Memory Used Daemon', 
                 'Write Count', 
@@ -127,6 +129,7 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
         writer.writerow([
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
             jobID,
+            operation_type,
             process_stats['memory'],
             memory_used_kb,
             write_count_diff,
@@ -142,9 +145,8 @@ def analyze_pprof(filename):
     pass 
 
 def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats): 
-    chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
+    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
 
-    # TODO NR - fix 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
@@ -156,19 +158,23 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
 
     # these values have an error range in 35ms! I blame Python?
     checkpoint_completed_at = time.monotonic_ns()  
-    stop_recording(daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
 
-def run_restore(jobID):
-    restore_started_at = time.perf_counter()
-    print("starting restore of process at {}".format(restore_started_at))
-    restore_cmd = "sudo ./cedana restore job {}".format(jobID)
-    
+def run_restore(daemonPID, jobID, iteration, output_dir, process_stats):
+    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
+
+    initial_data = start_recording(daemonPID)
+    cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
+    start_pprof(cpu_profile_filename)
+
+    restore_started_at = time.monotonic_ns() 
     p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
 
-    restore_completed_at = time.perf_counter()
-    print("completed restore of process at {}".format(restore_completed_at))
+    restore_completed_at = time.monotonic_ns()
+    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
+    stop_pprof(cpu_profile_filename)
 
 def run_exec(cmd, jobID): 
     process_stats = {}
@@ -223,18 +229,16 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
-        "server",
         "loop",
         "regression",
     ]
     cmds = [
-        "./benchmarks/server"
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
 
     # run in a loop 
-    num_samples = 30
+    num_samples = 5 
     for x in range(len(jobIDs)): 
         print("Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x]))
         jobID = jobIDs[x]
@@ -244,7 +248,12 @@ def main():
             # we end up getting a killed PID.
             process_stats = run_exec(cmds[x], jobID+"-"+str(y))
             time.sleep(1)
+
+            # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
+            time.sleep(1)
+
+            run_restore(daemon_pid, jobID, y, output_dir, process_stats)
             time.sleep(1)
 
     push_to_bigquery()

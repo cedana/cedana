@@ -213,6 +213,11 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			CheckpointPath: *zipFile,
 		})
 
+		if err != nil {
+			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			return nil, staterr
+		}
+
 		return &task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
