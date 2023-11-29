@@ -535,9 +535,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
 		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
-		if err := os.Mkdir("/tmp/pause_checkpoint", 0644); err != nil {
-			return err
-		}
+
 		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerRestoreOpts); err != nil {
 			return err
 		}
