@@ -157,6 +157,11 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, st.Err()
 		}
 
+		// initialize remoteState if nil
+		if state.RemoteState == nil {
+			state.RemoteState = &task.RemoteState{}
+		}
+
 		state.RemoteState.CheckpointID = cid
 		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
 

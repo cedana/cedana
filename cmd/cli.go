@@ -538,6 +538,7 @@ var psCmd = &cobra.Command{
 				return job.ForEach(func(k, v []byte) error {
 					var state task.ProcessState
 					var remoteCheckpointID string
+					var status string
 					err := json.Unmarshal(v, &state)
 					if err != nil {
 						return err
@@ -547,7 +548,11 @@ var psCmd = &cobra.Command{
 						remoteCheckpointID = state.RemoteState.CheckpointID
 					}
 
-					data = append(data, []string{jobId, string(k), state.ProcessInfo.Status, state.CheckpointPath, remoteCheckpointID})
+					if state.ProcessInfo != nil {
+						status = state.ProcessInfo.Status
+					}
+
+					data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
 					return nil
 				})
 			})

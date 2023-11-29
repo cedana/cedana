@@ -79,10 +79,20 @@ func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 	}
 	defer file.Close()
 
-	resp, err := http.Get(url)
+	httpClient := &http.Client{}
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("unexpected status code: %v", resp.Status)
 	}
