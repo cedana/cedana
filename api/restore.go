@@ -511,13 +511,23 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			}
 		}
 
-		pauseContainerOpts := &container.RuncOpts{
+		pauseContainerRestoreOpts := &container.RuncOpts{
 			Root:    opts.Root,
 			Bundle:  "/host" + pauseContainer.Bundle,
 			Detatch: true,
 			Pid:     pausePid,
 		}
+
+		pauseContainerDumpOpts := &container.CriuOpts{
+			LeaveRunning:    false,
+			TcpEstablished:  false,
+			ImagesDirectory: "/tmp/pause_checkpoint",
+		}
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
+
+		if err := c.RuncDump("/host/run/containerd/runc/k8s.io", pauseContainer.ID, pauseContainerDumpOpts); err != nil {
+			return err
+		}
 
 		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
@@ -528,7 +538,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		if err := os.Mkdir("/tmp/pause_checkpoint", 0644); err != nil {
 			return err
 		}
-		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerOpts); err != nil {
+		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerRestoreOpts); err != nil {
 			return err
 		}
 
