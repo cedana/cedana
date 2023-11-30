@@ -113,7 +113,7 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v, %v", st.Code(), st.Message(), st.Details())
 			} else {
 				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
