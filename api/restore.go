@@ -430,10 +430,18 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
 		for _, link := range links {
-			if _, err := os.Stat(link.Value); err != nil {
+			// Check if the target file exists
+			if _, err := os.Stat(link.Value); os.IsNotExist(err) {
+				// Target file does not exist, attempt to create a symbolic link
 				if err := os.Symlink(link.Key, link.Value); err != nil {
-					return err
+					// Handle the error if creating symlink fails
+					fmt.Println("Error creating symlink:", err)
+					// Handle the error or log it as needed
 				}
+			} else if err != nil {
+				// Handle other errors from os.Stat if any
+				fmt.Println("Error checking file info:", err)
+				// Handle the error or log it as needed
 			}
 		}
 		// parts := strings.Split(opts.Bundle, "/")
