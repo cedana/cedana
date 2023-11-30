@@ -229,16 +229,18 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
     ]
     cmds = [
+        "./benchmarks/server"
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
 
     # run in a loop 
-    num_samples = 5 
+    num_samples = 10 
     for x in range(len(jobIDs)): 
         print("Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x]))
         jobID = jobIDs[x]
