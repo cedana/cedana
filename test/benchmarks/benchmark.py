@@ -49,12 +49,12 @@ def measure_disk_usage(checkpoint_dir):
 def start_pprof(filename): 
     pprof_base_url = "http://localhost:6060"
     resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
-    print("got status code {} from profiler".format(resp.status_code))
+    if resp.status_code != 200:
+        print("error from profiler: {}".format(resp.text))
 
 def stop_pprof(filename):
     pprof_base_url = "http://localhost:6060"
     resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
-    print("got status code {} from profiler".format(resp.status_code))
     if resp.status_code != 200:
         print("error from profiler: {}".format(resp.text))
 

@@ -99,6 +99,11 @@ var stopDaemonCmd = &cobra.Command{
 			return err
 		}
 
+		err = os.Remove("/run/cedana.pid")
+		if err != nil {
+			return err
+		}
+
 		return nil
 	},
 }
