@@ -426,6 +426,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			{"/host/var/run/secrets", "/var/run/secrets"},
 			{"/host/var/lib/rancher", "/var/lib/rancher"},
 			{"/host/run/k3s", "/run/k3s"},
+			{"/host/var/lib/kubelet", "/var/lib/kubelet"},
 		}
 		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
 		for _, link := range links {
