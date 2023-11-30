@@ -36,7 +36,7 @@ echo '{"client":{"leave_running":false,"signal_process_pre_dump":false,"signal_p
 
 sudo docker run \
  -v $GOOGLE_APPLICATION_CREDENTIALS:$CONTAINER_CREDENTIAL_PATH \
- -v client_config.json:/home/.cedana/client_config.json \
+ -v ${PWD}/client_config.json:/home/.cedana/client_config.json \
  -e GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_CREDENTIAL_PATH \
  -e PROJECT_ID=cedana-benchmarking --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
