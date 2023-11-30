@@ -38,7 +38,6 @@ sudo docker run \
  -v $GOOGLE_APPLICATION_CREDENTIALS:$CONTAINER_CREDENTIAL_PATH \
  -v client_config.json:/home/.cedana/client_config.json \
  -e GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_CREDENTIAL_PATH \
- -e PROJECT_ID=cedana-benchmarking \ 
- -e CHECKPOINTSVC_URL=$CHECKPOINTSVC_URL --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
+ -e PROJECT_ID=cedana-benchmarking --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
 
