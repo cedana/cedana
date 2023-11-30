@@ -132,28 +132,19 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
-			st := status.New(codes.Internal, "CreateMultiPartUpload failed")
-			st.WithDetails(&errdetails.ErrorInfo{
-				Reason: err.Error(),
-			})
+			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
 
 		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
-			st := status.New(codes.Internal, "StartMultiPartUpload failed")
-			st.WithDetails(&errdetails.ErrorInfo{
-				Reason: err.Error(),
-			})
+			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
 
 		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 		if err != nil {
-			st := status.New(codes.Internal, "CompleteMultiPartUpload failed")
-			st.WithDetails(&errdetails.ErrorInfo{
-				Reason: err.Error(),
-			})
+			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
 
