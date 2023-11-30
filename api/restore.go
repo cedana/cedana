@@ -606,12 +606,12 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		id := generateCustomID()
 		parts = append(parts, id)
 		newNsPath := strings.Join(parts, "/")
-		file, err := os.Create("/host/" + newNsPath)
+		file, err := os.Create(newNsPath)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
-		if err := mount(pauseNetNs, "/host/"+newNsPath); err != nil {
+		if err := mount(pauseNetNs, newNsPath); err != nil {
 			return err
 		}
 
@@ -619,7 +619,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		for i, ns := range spec.Linux.Namespaces {
 			if ns.Type == "network" {
-				spec.Linux.Namespaces[i].Path = "/host" + newNsPath
+				spec.Linux.Namespaces[i].Path = newNsPath
 			}
 		}
 
