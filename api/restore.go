@@ -297,6 +297,12 @@ func generateCustomID() string {
 	id := fmt.Sprintf("cni-%s", uuidObj.String())
 	return id
 }
+
+type linkPairs struct {
+	Key   string
+	Value string
+}
+
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
@@ -426,6 +432,21 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	if isK3s {
 		var spec rspec.Spec
 
+		links := []linkPairs{
+			{"/host/var/run/netns", "/var/run/netns"},
+			{"/host/run/containerd", "/run/containerd"},
+			{"/host/var/run/secrets", "/var/run/secrets"},
+			{"/host/var/lib/rancher", "/var/lib/rancher"},
+			{"/host/run/k3s", "/run/k3s"},
+		}
+		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
+		for _, link := range links {
+			if _, err := os.Stat(link.Value); err != nil {
+				if err := os.Symlink(link.Key, link.Value); err != nil {
+					return err
+				}
+			}
+		}
 		// parts := strings.Split(opts.Bundle, "/")
 		// oldContainerID := parts[7]
 		configPath := opts.Bundle + "/config.json" // Replace with your actual path
