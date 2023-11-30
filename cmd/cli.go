@@ -2,13 +2,16 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
+	"github.com/olekukonko/tablewriter"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -103,7 +106,7 @@ var dumpProcessCmd = &cobra.Command{
 			PID:   int32(pid),
 			Dir:   dir,
 			JobID: id,
-			Type:  task.DumpArgs_SELF_SERVE,
+			Type:  task.DumpArgs_LOCAL,
 		}
 
 		resp, err := cli.cts.CheckpointTask(&cpuDumpArgs)
@@ -199,11 +202,18 @@ var dumpJobCmd = &cobra.Command{
 			return fmt.Errorf("pid 0 returned from state - is process running?")
 		}
 
+		var taskType task.DumpArgs_DumpType
+		if os.Getenv("CEDANA_REMOTE") == "true" {
+			taskType = task.DumpArgs_REMOTE
+		} else {
+			taskType = task.DumpArgs_LOCAL
+		}
+
 		dumpArgs := task.DumpArgs{
 			PID:   pid,
 			JobID: id,
 			Dir:   dir,
-			Type:  task.DumpArgs_SELF_SERVE,
+			Type:  taskType,
 		}
 
 		resp, err := cli.cts.CheckpointTask(&dumpArgs)
@@ -235,32 +245,49 @@ var restoreJobCmd = &cobra.Command{
 			return err
 		}
 
-		var checkpointPath string
 		db := api.NewDB()
 
-		paths, err := db.GetLatestLocalCheckpoints(args[0])
-		if err != nil {
-			return err
+		var restoreArgs task.RestoreArgs
+		if os.Getenv("CEDANA_REMOTE") == "true" {
+			jobState, err := db.GetStateFromID(args[0])
+			if err != nil {
+				return err
+			}
+
+			remoteState := jobState.GetRemoteState()
+			if remoteState == nil {
+				return fmt.Errorf("no remote state found for id %s", args[0])
+			}
+
+			if remoteState.CheckpointID == "" {
+				return fmt.Errorf("no checkpoint found for id %s", args[0])
+			}
+
+			restoreArgs = task.RestoreArgs{
+				CheckpointId:   remoteState.CheckpointID,
+				CheckpointPath: "",
+				Type:           task.RestoreArgs_REMOTE,
+			}
+		} else {
+			paths, err := db.GetLatestLocalCheckpoints(args[0])
+			if err != nil {
+				return err
+			}
+
+			if len(paths) == 0 {
+				return fmt.Errorf("no checkpoint found for id %s", args[0])
+			}
+
+			fmt.Printf("paths: %v\n", paths)
+
+			checkpointPath := *paths[0]
+			restoreArgs = task.RestoreArgs{
+				CheckpointId:   "",
+				CheckpointPath: checkpointPath,
+				Type:           task.RestoreArgs_LOCAL,
+			}
 		}
-
-		if len(paths) == 0 {
-			return fmt.Errorf("no checkpoint found for id %s", args[0])
-		}
-
-		fmt.Printf("paths: %v\n", paths)
-
-		// TODO NR - we just take first process for now. Have to look into
-		// restoring clusters/multiple processes attached to a job.
-		checkpointPath = *paths[0]
-		fmt.Println("checkpoint path:", checkpointPath)
-
 		// pass path to restore task
-		restoreArgs := task.RestoreArgs{
-			CheckpointId:   args[0],
-			CheckpointPath: checkpointPath,
-			Type:           task.RestoreArgs_LOCAL,
-		}
-
 		resp, err := cli.cts.RestoreTask(&restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
@@ -480,7 +507,7 @@ var execTaskCmd = &cobra.Command{
 
 var psCmd = &cobra.Command{
 	Use:   "ps",
-	Short: "List running processes",
+	Short: "List managed processes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
 		if err != nil {
@@ -495,45 +522,54 @@ var psCmd = &cobra.Command{
 		}
 
 		defer conn.Close()
-		var idPid []map[string]string
-		var pidState []map[string]string
+
+		// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
+		var data [][]string
 		err = conn.View(func(tx *bolt.Tx) error {
 			root := tx.Bucket([]byte("default"))
 			if root == nil {
 				return fmt.Errorf("could not find bucket")
 			}
 
-			root.ForEachBucket(func(k []byte) error {
+			return root.ForEachBucket(func(k []byte) error {
 				job := root.Bucket(k)
 				jobId := string(k)
-				job.ForEach(func(k, v []byte) error {
-					idPid = append(idPid, map[string]string{
-						jobId: string(k),
-					})
-					pidState = append(pidState, map[string]string{
-						string(k): string(v),
-					})
+				return job.ForEach(func(k, v []byte) error {
+					var state task.ProcessState
+					var remoteCheckpointID string
+					var status string
+					err := json.Unmarshal(v, &state)
+					if err != nil {
+						return err
+					}
 
+					if state.RemoteState != nil {
+						remoteCheckpointID = state.RemoteState.CheckpointID
+					}
+
+					if state.ProcessInfo != nil {
+						status = state.ProcessInfo.Status
+					}
+
+					data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
 					return nil
 				})
-				return nil
 			})
-
-			if err != nil {
-				return err
-			}
-			return nil
 		})
 
-		for _, v := range idPid {
-			fmt.Printf("%s\n", v)
+		if err != nil {
+			return err
 		}
 
-		for _, v := range pidState {
-			fmt.Printf("%s\n", v)
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Job ID", "PID", "Status", "Local Checkpoint Path", "Remote Checkpoint ID"})
+
+		for _, v := range data {
+			table.Append(v)
 		}
 
-		return err
+		table.Render() // Send output
+		return nil
 	},
 }
 

@@ -99,7 +99,30 @@ var stopDaemonCmd = &cobra.Command{
 			return err
 		}
 
+		err = os.Remove("/run/cedana.pid")
+		if err != nil {
+			return err
+		}
+
 		return nil
+	},
+}
+
+var statusDaemonCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Status cedana client daemon",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		pidFile, err := os.ReadFile("/run/cedana.pid")
+		if err != nil {
+			return err
+		}
+		_, err = strconv.Atoi(string(pidFile))
+		if err != nil {
+			return err
+		}
+
+		return nil
+
 	},
 }
 

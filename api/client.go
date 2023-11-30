@@ -231,6 +231,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 	return paths
 }
 
+// Generates state using gops and updates pid state in db.
 func (c *Client) getState(pid int32) (*task.ProcessState, error) {
 	state, err := c.generateState(pid)
 	if err != nil {

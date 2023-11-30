@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -52,96 +53,124 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	s.r.Close()
 	s.w.Close()
 
-	cfg := utils.Config{}
-	store := utils.NewCedanaStore(&cfg)
+	cfg, err := utils.InitConfig()
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
+	}
+	store := utils.NewCedanaStore(cfg)
 
 	pid := args.PID
 
-	if args.Type != task.DumpArgs_MARKET {
-		s.Client.generateState(args.PID)
-		var state task.ProcessState
+	s.Client.generateState(args.PID)
+	var state task.ProcessState
 
-		state.Flag = task.FlagEnum_JOB_RUNNING
-		state.PID = pid
+	state.Flag = task.FlagEnum_JOB_RUNNING
+	state.PID = pid
 
-		err := s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
-		if err != nil {
-			err = status.Error(codes.NotFound, "db not found")
-			return nil, err
-		}
+	err = s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
 
-	err := s.Client.Dump(args.Dir, args.PID)
+	err = s.Client.Dump(args.Dir, args.PID)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "Invalid arguments")
-		return nil, err
+		st := status.New(codes.Internal, err.Error())
+		return nil, st.Err()
 	}
 
 	var resp task.DumpResp
 
 	switch args.Type {
-	case task.DumpArgs_SELF_SERVE:
-		// if not market - we don't push up the checkpoint to anywhere
-		// we've checkpointed, just return
+	case task.DumpArgs_LOCAL:
 		resp = task.DumpResp{
 			Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
 		}
 
-	case task.DumpArgs_MARKET:
+	case task.DumpArgs_REMOTE:
 		state, err := s.Client.db.GetStateFromID(args.JobID)
 		if err != nil {
-			err = status.Error(codes.NotFound, "jobid not found in db")
-			return nil, err
+			st := status.New(codes.Internal, err.Error())
+			return nil, st.Err()
 		}
 
 		if state == nil {
-			err = status.Error(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
-			return nil, err
+			st := status.New(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		checkpointPath := state.CheckpointPath
 
 		file, err := os.Open(checkpointPath)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.NotFound, "checkpoint zip not found")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 		defer file.Close()
 
-		// Get the file size
 		fileInfo, err := file.Stat()
 		if err != nil {
-			err = status.Error(codes.NotFound, "checkpoint zip not found")
-			return nil, err
+			st := status.New(codes.Internal, "checkpoint zip stat failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		// Get the size
 		size := fileInfo.Size()
 
 		// zipFileSize += 4096
-
 		checkpointFullSize := int64(size)
 
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "CreateMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "StartMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
 		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
-			return nil, err
+			st := status.New(codes.Internal, "CompleteMultiPartUpload failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
 		}
 
+		// initialize remoteState if nil
+		if state.RemoteState == nil {
+			state.RemoteState = &task.RemoteState{}
+		}
+
+		state.RemoteState.CheckpointID = cid
+		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+
+		s.Client.db.UpdateProcessStateWithID(args.JobID, state)
+
 		resp = task.DumpResp{
-			Message: fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			CheckpointID: cid,
+			UploadID:     multipartCheckpointResp.UploadID,
 		}
 	}
 
@@ -153,8 +182,10 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
+		if args.CheckpointPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
 		// assume a suitable file has been passed to args
-
 		pid, err := client.Restore(args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
@@ -167,6 +198,9 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		}, err
 
 	case task.RestoreArgs_REMOTE:
+		if args.CheckpointId == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
+		}
 		client.remoteStore = utils.NewCedanaStore(client.config)
 		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
 		if err != nil {
@@ -178,6 +212,11 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			CheckpointId:   args.CheckpointId,
 			CheckpointPath: *zipFile,
 		})
+
+		if err != nil {
+			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			return nil, staterr
+		}
 
 		return &task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
