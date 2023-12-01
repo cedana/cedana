@@ -1053,7 +1053,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 			}
 		}
 		var pauseSpec rspec.Spec
-		pauseJson, err := os.ReadFile(pauseContainer.Bundle + "/config.json")
+		pauseJson, err := os.ReadFile("/host" + pauseContainer.Bundle + "/config.json")
 		if err != nil {
 			return err
 		}
