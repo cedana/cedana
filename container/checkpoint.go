@@ -1034,16 +1034,12 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
 	var pausePid int
 	if nsPath != "" {
-		for _, ns := range c.Config.Namespaces {
-			if ns.Type == "network" {
-				// Looking for the pid of the pause container from the path to the network namespace
-				split := strings.Split(ns.Path, "/")
-				pausePid, err = strconv.Atoi(split[2])
-				if err != nil {
-					return err
-				}
-			}
+		split := strings.Split(nsPath, "/")
+		pausePid, err = strconv.Atoi(split[2])
+		if err != nil {
+			return err
 		}
+
 		ctrs, err := GetContainers(root)
 		if err != nil {
 			return err
