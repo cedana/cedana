@@ -1142,7 +1142,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
-func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcontainer.CriuOpts) error {
+func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcontainer.CriuOpts, runcRoot string) error {
 	const logFile = "restore.log"
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1226,7 +1226,7 @@ func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcont
 				return err
 			}
 
-			ctrs, err := GetContainers(root)
+			ctrs, err := GetContainers(runcRoot)
 			if err != nil {
 				return err
 			}
@@ -1401,7 +1401,7 @@ type Runner struct {
 	subCgroupPaths  map[string]string
 }
 
-func (r *Runner) Run(config *specs.Process) (int, error) {
+func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
 	logger := cedanaUtils.GetLogger()
 	var err error
 	defer func() {
@@ -1453,7 +1453,7 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 
 	switch r.action {
 	case CT_ACT_RESTORE:
-		err = r.container.Restore(process, r.criuOpts)
+		err = r.container.Restore(process, r.criuOpts, runcRoot)
 	default:
 		panic("Unknown action")
 	}
@@ -1642,5 +1642,5 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *libcontainer.Criu
 		criuOpts:        criuOpts,
 		init:            true,
 	}
-	return r.Run(spec.Process)
+	return r.Run(spec.Process, context.Root)
 }

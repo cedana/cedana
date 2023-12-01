@@ -975,7 +975,7 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int, root string) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int, runcRoot string) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1040,7 +1040,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 			return err
 		}
 
-		ctrs, err := GetContainers(root)
+		ctrs, err := GetContainers(runcRoot)
 		if err != nil {
 			return err
 		}
