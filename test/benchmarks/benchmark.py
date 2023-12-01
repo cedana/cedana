@@ -234,7 +234,7 @@ def main():
         "regression",
     ]
     cmds = [
-        "./benchmarks/server"
+        "'python3 benchmarks/server_client.py --mode server'",
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
