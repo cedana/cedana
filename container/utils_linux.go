@@ -1212,7 +1212,6 @@ func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcont
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
 	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
-	var pausePid int
 	if nsPath != "" {
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
@@ -1220,26 +1219,8 @@ func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcont
 		// to do and ignore external network namespaces.
 		err := c.checkCriuVersion(31100)
 		if err == nil {
-			split := strings.Split(nsPath, "/")
-			pausePid, err = strconv.Atoi(split[2])
-			if err != nil {
-				return err
-			}
-
-			ctrs, err := GetContainers(runcRoot)
-			if err != nil {
-				return err
-			}
-
-			var pauseContainer ContainerStateJson
-
-			for _, c := range ctrs {
-				if c.InitProcessPid == pausePid {
-					pauseContainer = c
-				}
-			}
 			var pauseSpec rspec.Spec
-			pauseJson, err := os.ReadFile(pauseContainer.Bundle + "/config.json")
+			pauseJson, err := os.ReadFile("/tmp/sources/bundle/config.json")
 			if err != nil {
 				return err
 			}

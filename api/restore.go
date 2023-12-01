@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -481,14 +482,34 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		// TODO before killing runc container, need to do a checkpoint on pause container
-		// Checkpoint pause container
-		// Restore pause container
-		// Get pid of pause container
-		// Patch config.json to reflect new pid in namespaces
+		var nsPath string
+		for _, ns := range spec.Linux.Namespaces {
+			if ns.Type == "network" {
+				nsPath = ns.Path
+			}
+		}
+		split := strings.Split(nsPath, "/")
+		pausePid, err := strconv.Atoi(split[2])
+		if err != nil {
+			return err
+		}
 
-		// Looping through namespaces taken from the spec of the container we are trying to
-		// checkpoint.
+		ctrs, err := container.GetContainers(opts.Root)
+		if err != nil {
+			return err
+		}
+
+		var pauseContainer container.ContainerStateJson
+
+		for _, c := range ctrs {
+			if c.InitProcessPid == pausePid {
+				pauseContainer = c
+			}
+		}
+
+		if err := copyFiles(pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
+			return err
+		}
 
 		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy
