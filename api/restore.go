@@ -9,14 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -310,8 +308,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	var tmpSources string
 	var sandboxID string
 	var sourceList []string
-	var pauseNetNs string
-	var nsPath string
 	var spec rspec.Spec
 	var configLocation string
 	if len(sources) > 0 {
@@ -333,12 +329,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		}
 		sandboxID = spec.Annotations["io.kubernetes.cri.sandbox-id"]
 		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" {
-				nsPath = ns.Path
-				break
-			}
-		}
 
 		for i, s := range sources {
 			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
@@ -491,7 +481,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		var pausePid int
 		// TODO before killing runc container, need to do a checkpoint on pause container
 		// Checkpoint pause container
 		// Restore pause container
@@ -500,106 +489,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 		// Looping through namespaces taken from the spec of the container we are trying to
 		// checkpoint.
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" {
-				// Looking for the pid of the pause container from the path to the network namespace
-				split := strings.Split(ns.Path, "/")
-				pausePid, err = strconv.Atoi(split[2])
-				if err != nil {
-					return err
-				}
-			}
-		}
-		ctrs, err := container.GetContainers(opts.Root)
-		if err != nil {
-			return err
-		}
-
-		var pauseContainer container.ContainerStateJson
-
-		for _, c := range ctrs {
-			if c.InitProcessPid == pausePid {
-				pauseContainer = c
-			}
-		}
-
-		pauseContainerRestoreOpts := &container.RuncOpts{
-			Root:    opts.Root,
-			Bundle:  "/host" + pauseContainer.Bundle,
-			Detatch: true,
-			Pid:     pausePid,
-		}
-
-		pauseContainerDumpOpts := &libcontainer.CriuOpts{
-			LeaveRunning:    true,
-			TcpEstablished:  false,
-			ImagesDirectory: "/tmp/pause_checkpoint",
-		}
-		var pauseSpec rspec.Spec
-		pauseJson, err := os.ReadFile(pauseContainer.Bundle + "/config.json")
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(pauseJson, &pauseSpec); err != nil {
-			return err
-		}
-		for _, ns := range pauseSpec.Linux.Namespaces {
-			if ns.Type == "network" {
-				nsPath = ns.Path
-				break
-			}
-		}
-
-		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
-		parts := strings.Split(nsPath, "/")
-		parts = parts[:len(parts)-1]
-		id := generateCustomID()
-		parts = append(parts, id)
-		newNsPath := strings.Join(parts, "/")
-		file, err := os.Create(newNsPath)
-		if err != nil {
-			return err
-		}
-
-		defer file.Close()
-		if err := mount(pauseNetNs, newNsPath); err != nil {
-			return err
-		}
-
-		for i, ns := range pauseSpec.Linux.Namespaces {
-			if ns.Type == "network" {
-				pauseSpec.Linux.Namespaces[i].Path = newNsPath
-				break
-			}
-		}
-
-		specJson, err := json.Marshal(&pauseSpec)
-		if err != nil {
-			return err
-		}
-
-		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
-			return err
-		}
-
-		if err := copyFiles(pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
-			return err
-		}
-
-		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
-			return err
-		}
-
-		if err := c.RuncDump("/host/run/containerd/runc/k8s.io", pauseContainer.ID, pauseContainerDumpOpts); err != nil {
-			return err
-		}
-
-		// TODO find a more general way to do the rsync copy to and from tmp for k8s files to do proper restore
-		pauseSources := &[]string{"/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes/", "/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes/"}
-
-		if err := c.RuncRestore("/tmp/pause_checkpoint", pauseContainer.ID, false, *pauseSources, pauseContainerRestoreOpts); err != nil {
-			return err
-		}
 
 		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy
