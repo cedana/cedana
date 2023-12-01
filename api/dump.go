@@ -13,6 +13,7 @@ import (
 	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
 	bolt "go.etcd.io/bbolt"
@@ -281,7 +282,7 @@ func patchPodmanDump(containerId, imgPath string) error {
 
 }
 
-func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
+func (c *Client) RuncDump(root, containerId string, opts *libcontainer.CriuOpts) error {
 
 	bundle := Bundle{ContainerId: containerId}
 

@@ -4,6 +4,10 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+message External {
+    repeated string String = 1;
+}
+
 message DumpArgs {
   int32 PID = 1;
   string Dir = 2;

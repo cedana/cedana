@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	goruntime "runtime"
@@ -197,6 +198,7 @@ type ContainerStateJson struct {
 
 type RuncContainer struct {
 	Id                   string
+	StateDir             string
 	Root                 string
 	Pid                  int
 	Config               *configs.Config // standin for configs.Config from runc
@@ -237,6 +239,7 @@ type CriuOpts struct {
 	StatusFd                int                // fd for feedback when lazy server is ready
 	LsmProfile              string             // LSM profile used to restore the container
 	LsmMountContext         string             // LSM mount context value to use during restore
+	External                []string           // ignore external namespaces
 }
 
 type loadedState struct {
@@ -628,7 +631,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		return &apiTasks.CheckpointTaskResponse{}, fmt.Errorf("invalid task checkpoint option for %s", container.Runtime.Name)
 	}
 
-	criuOpts := &CriuOpts{
+	criuOpts := &libcontainer.CriuOpts{
 		ImagesDirectory:         opts.ImagePath,
 		WorkDirectory:           opts.WorkPath,
 		LeaveRunning:            !opts.Exit,
@@ -970,7 +973,7 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1020,6 +1023,32 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 	}
 
+	// If the container is running in a network namespace and has
+	// a path to the network namespace configured, we will dump
+	// that network namespace as an external namespace and we
+	// will expect that the namespace exists during restore.
+	// This basically means that CRIU will ignore the namespace
+	// and expect to be setup correctly.
+	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
+	if nsPath != "" {
+		// For this to work we need at least criu 3.11.0 => 31100.
+		// As there was already a successful version check we will
+		// not error out if it fails. runc will just behave as it used
+		// to do and ignore external network namespaces.
+		err := c.checkCriuVersion(31100)
+		if err == nil {
+			// CRIU expects the information about an external namespace
+			// like this: --external net[<inode>]:<key>
+			// This <key> is always 'extRootNetNS'.
+			var netns syscall.Stat_t
+			err = syscall.Stat(nsPath, &netns)
+			if err != nil {
+				return err
+			}
+			criuExternal := fmt.Sprintf("net[%d]:extRootNetNS", netns.Ino)
+			rpcOpts.External = append(rpcOpts.External, criuExternal)
+		}
+	}
 	// if criuOpts.WorkDirectory is not set, criu default is used.
 	if criuOpts.WorkDirectory != "" {
 		if err := os.Mkdir(criuOpts.WorkDirectory, 0o700); err != nil && !os.IsExist(err) {
@@ -1158,7 +1187,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int) error {
 	return nil
 }
 
-func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
+func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *libcontainer.CriuOpts, extraFiles []*os.File) error {
 	logger := utils.GetLogger()
 
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)

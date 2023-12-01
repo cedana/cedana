@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -92,7 +93,7 @@ var debugRuncDumpCmd = &cobra.Command{
 
 		client := api.Client{}
 
-		criuOpts := &container.CriuOpts{
+		criuOpts := &libcontainer.CriuOpts{
 			ImagesDirectory: imgPath,
 			WorkDirectory:   "",
 			LeaveRunning:    true,

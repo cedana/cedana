@@ -16,6 +16,7 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -536,12 +537,42 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			Pid:     pausePid,
 		}
 
-		pauseContainerDumpOpts := &container.CriuOpts{
+		pauseContainerDumpOpts := &libcontainer.CriuOpts{
 			LeaveRunning:    true,
 			TcpEstablished:  false,
 			ImagesDirectory: "/tmp/pause_checkpoint",
 		}
+
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
+		parts := strings.Split(nsPath, "/")
+		parts = parts[:len(parts)-1]
+		id := generateCustomID()
+		parts = append(parts, id)
+		newNsPath := strings.Join(parts, "/")
+		file, err := os.Create(newNsPath)
+		if err != nil {
+			return err
+		}
+
+		defer file.Close()
+		if err := mount(pauseNetNs, newNsPath); err != nil {
+			return err
+		}
+
+		for i, ns := range spec.Linux.Namespaces {
+			if ns.Type == "network" {
+				spec.Linux.Namespaces[i].Path = newNsPath
+			}
+		}
+
+		specJson, err := json.Marshal(&spec)
+		if err != nil {
+			return err
+		}
+
+		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
+			return err
+		}
 
 		if err := c.RuncDump("/host/run/containerd/runc/k8s.io", pauseContainer.ID, pauseContainerDumpOpts); err != nil {
 			return err
@@ -600,37 +631,8 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 	}
 
 	if len(sources) > 0 {
-		pauseNetNs = filepath.Join("/proc", strconv.Itoa(opts.Pid), "ns", "net")
-		parts := strings.Split(nsPath, "/")
-		parts = parts[:len(parts)-1]
-		id := generateCustomID()
-		parts = append(parts, id)
-		newNsPath := strings.Join(parts, "/")
-		file, err := os.Create(newNsPath)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		if err := mount(pauseNetNs, newNsPath); err != nil {
-			return err
-		}
 
 		killRuncContainer(sandboxID)
-
-		for i, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" {
-				spec.Linux.Namespaces[i].Path = newNsPath
-			}
-		}
-
-		specJson, err := json.Marshal(&spec)
-		if err != nil {
-			return err
-		}
-
-		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
-			return err
-		}
 
 		for i, s := range sources {
 			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
