@@ -519,9 +519,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		if err := copyFiles(tmpBesteffortPath, besteffortPath); err != nil {
-			return err
-		}
+		copyFiles(tmpBesteffortPath, besteffortPath)
 		cleanBundlePath, err := dropLastDirectory(opts.Bundle)
 		if err != nil {
 			return err
