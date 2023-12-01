@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -54,6 +55,7 @@ import (
 	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -666,7 +668,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	c := GetContainerFromRunc(container.ID, root)
 
-	err = c.RuncCheckpoint(criuOpts, c.Pid)
+	err = c.RuncCheckpoint(criuOpts, c.Pid, root)
 	if err != nil {
 		return nil, err
 	}
@@ -973,7 +975,7 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int, root string) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1030,12 +1032,49 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int)
 	// This basically means that CRIU will ignore the namespace
 	// and expect to be setup correctly.
 	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
+	var pausePid int
 	if nsPath != "" {
+		for _, ns := range c.Config.Namespaces {
+			if ns.Type == "network" {
+				// Looking for the pid of the pause container from the path to the network namespace
+				split := strings.Split(ns.Path, "/")
+				pausePid, err = strconv.Atoi(split[2])
+				if err != nil {
+					return err
+				}
+			}
+		}
+		ctrs, err := GetContainers(root)
+		if err != nil {
+			return err
+		}
+
+		var pauseContainer ContainerStateJson
+
+		for _, c := range ctrs {
+			if c.InitProcessPid == pausePid {
+				pauseContainer = c
+			}
+		}
+		var pauseSpec rspec.Spec
+		pauseJson, err := os.ReadFile(pauseContainer.Bundle + "/config.json")
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(pauseJson, &pauseSpec); err != nil {
+			return err
+		}
+		for _, ns := range pauseSpec.Linux.Namespaces {
+			if ns.Type == "network" {
+				nsPath = ns.Path
+				break
+			}
+		}
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
 		// not error out if it fails. runc will just behave as it used
 		// to do and ignore external network namespaces.
-		err := c.checkCriuVersion(31100)
+		err = c.checkCriuVersion(31100)
 		if err == nil {
 			// CRIU expects the information about an external namespace
 			// like this: --external net[<inode>]:<key>

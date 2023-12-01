@@ -288,7 +288,7 @@ func (c *Client) RuncDump(root, containerId string, opts *libcontainer.CriuOpts)
 
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid)
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
