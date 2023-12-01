@@ -340,13 +340,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			}
 		}
 
-		// This is to bypass the issue with runc restore not finding sources
-		for i, m := range spec.Mounts {
-			if strings.HasPrefix(m.Source, "/") {
-				spec.Mounts[i].Source = filepath.Join("/host", m.Source)
-			}
-		}
-
 		for i, s := range sources {
 			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
 
@@ -542,6 +535,20 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			TcpEstablished:  false,
 			ImagesDirectory: "/tmp/pause_checkpoint",
 		}
+		var pauseSpec rspec.Spec
+		pauseJson, err := os.ReadFile(pauseContainer.Bundle + "/config.json")
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(pauseJson, &pauseSpec); err != nil {
+			return err
+		}
+		for _, ns := range pauseSpec.Linux.Namespaces {
+			if ns.Type == "network" {
+				nsPath = ns.Path
+				break
+			}
+		}
 
 		pauseNetNs = filepath.Join("/proc", strconv.Itoa(pausePid), "ns", "net")
 		parts := strings.Split(nsPath, "/")
@@ -559,13 +566,14 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		for i, ns := range spec.Linux.Namespaces {
+		for i, ns := range pauseSpec.Linux.Namespaces {
 			if ns.Type == "network" {
-				spec.Linux.Namespaces[i].Path = newNsPath
+				pauseSpec.Linux.Namespaces[i].Path = newNsPath
+				break
 			}
 		}
 
-		specJson, err := json.Marshal(&spec)
+		specJson, err := json.Marshal(&pauseSpec)
 		if err != nil {
 			return err
 		}
@@ -574,7 +582,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		if err := copyFiles("/host"+pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
+		if err := copyFiles(pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
 			return err
 		}
 
