@@ -574,11 +574,15 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		if err := c.RuncDump("/host/run/containerd/runc/k8s.io", pauseContainer.ID, pauseContainerDumpOpts); err != nil {
+		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
 		}
 
-		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
+		if err := copyFiles("/host"+pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
+			return err
+		}
+
+		if err := c.RuncDump("/host/run/containerd/runc/k8s.io", pauseContainer.ID, pauseContainerDumpOpts); err != nil {
 			return err
 		}
 
