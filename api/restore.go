@@ -570,15 +570,15 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			return err
 		}
 
-		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
-			return err
-		}
-
 		if err := os.Mkdir("/tmp/sources", 0644); err != nil {
 			return err
 		}
 
 		if err := copyFiles("/host"+pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
+			return err
+		}
+
+		if err := os.WriteFile("/tmp/sources/bundle/config.json", specJson, 0644); err != nil {
 			return err
 		}
 
