@@ -72,7 +72,7 @@ func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
 
 func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 	url := cs.url + "/checkpoint/" + cid
-	downloadPath := "checkpoint.zip"
+	downloadPath := "checkpoint.tar.gz"
 	file, err := os.Create(downloadPath)
 	if err != nil {
 		return nil, err

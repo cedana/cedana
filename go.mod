@@ -63,6 +63,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -142,6 +143,7 @@ require (
 
 require (
 	github.com/adrg/strutil v0.3.1
+	github.com/felixge/fgprof v0.9.3
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5

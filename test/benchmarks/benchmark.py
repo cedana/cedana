@@ -148,7 +148,7 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
 
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
+    cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
 
     checkpoint_started_at = time.monotonic_ns() 
@@ -165,7 +165,7 @@ def run_restore(daemonPID, jobID, iteration, output_dir, process_stats):
     restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
 
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
+    cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
 
     restore_started_at = time.monotonic_ns() 
@@ -229,12 +229,10 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
-        "server",
         "loop",
         "regression",
     ]
     cmds = [
-        "'python3 benchmarks/server_client.py --mode server'",
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]

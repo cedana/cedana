@@ -38,6 +38,22 @@ var cfgCmd = &cobra.Command{
 	},
 }
 
+var compressCmd = &cobra.Command{
+	Use:  "compress",
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return utils.TarFolder(args[0], args[1])
+	},
+}
+
+var decompressCmd = &cobra.Command{
+	Use:  "decompress",
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return utils.UntarFolder(args[0], args[1])
+	},
+}
+
 // experimental, testing out debugging the container checkpointing
 var containerCmd = &cobra.Command{
 	Use: "container",
@@ -111,4 +127,6 @@ func init() {
 	debugCmd.AddCommand(containerCmd)
 	debugCmd.AddCommand(debugRuncRestoreCmd)
 	debugCmd.AddCommand(debugRuncDumpCmd)
+	debugCmd.AddCommand(compressCmd)
+	debugCmd.AddCommand(decompressCmd)
 }

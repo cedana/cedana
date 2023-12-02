@@ -28,7 +28,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err = utils.UnzipFolder(checkpointPath, tmpdir)
+	err = utils.UntarFolder(checkpointPath, tmpdir)
+
 	if err != nil {
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")

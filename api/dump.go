@@ -113,7 +113,7 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 // the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.logger.Info().Msg("compressing checkpoint...")
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar.gz"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written
@@ -133,7 +133,8 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 
 	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
-	err = utils.ZipFolder(dumpdir, compressedCheckpointPath)
+	// TODO NR - switch to tar
+	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
