@@ -5,10 +5,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime/pprof"
+
+	"github.com/felixge/fgprof"
 )
 
 // TODO NR - add memory profiling
+// TODO NR - do we need to play with sampling rate here?
+var stop func() error
+
 func setupProfilerHandlers() {
 	// Handler to start CPU profiling
 	http.HandleFunc("/start-profiling", func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +30,7 @@ func setupProfilerHandlers() {
 			return
 		}
 
-		pprof.StartCPUProfile(cpu)
+		stop = fgprof.Start(cpu, fgprof.FormatPprof)
 
 		// TODO NR - add memory profile
 		fmt.Println("Started CPU profiling")
@@ -45,7 +49,7 @@ func setupProfilerHandlers() {
 			return
 		}
 
-		pprof.StopCPUProfile()
+		stop()
 		f, err := os.Open(filename + ".pprof")
 		if err != nil {
 			// Set the header before writing the response body
