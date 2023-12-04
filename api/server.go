@@ -48,6 +48,7 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+	defer s.Client.timeTrack(time.Now(), "managed-dump")
 	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()

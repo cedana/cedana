@@ -42,7 +42,7 @@ var compressCmd = &cobra.Command{
 	Use:  "compress",
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return utils.TarFolder(args[0], args[1])
+		return utils.TarGzFolder(args[0], args[1])
 	},
 }
 
@@ -50,7 +50,7 @@ var decompressCmd = &cobra.Command{
 	Use:  "decompress",
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return utils.UntarFolder(args[0], args[1])
+		return utils.UntarGzFolder(args[0], args[1])
 	},
 }
 
