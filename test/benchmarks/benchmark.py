@@ -254,7 +254,8 @@ def main():
             # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and 
             # we end up getting a killed PID.
             process_stats = run_exec(cmds[x], jobID+"-"+str(y))
-            time.sleep(1)
+            # wait a few seconds for memory to allocate 
+            time.sleep(5)
 
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
