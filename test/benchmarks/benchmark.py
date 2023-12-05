@@ -160,7 +160,7 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
 
-def run_restore(daemonPID, jobID, iteration, output_dir, process_stats):
+def run_restore(daemonPID, jobID, iteration, output_dir):
     restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
 
     initial_data = start_recording(daemonPID)
