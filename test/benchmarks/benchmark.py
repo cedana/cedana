@@ -188,7 +188,7 @@ def run_exec(cmd, jobID):
     process_stats['pid'] = pid
 
     psutil_process = psutil.Process(pid)
-    process_stats['memory_kb'] = psutil_process.memory_info().rss / 1024 # convert to KB
+    process_stats['memory_kb'] = psutil_process.memory_full_info().uss / 1024 # convert to KB
 
     return process_stats 
 
