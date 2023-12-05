@@ -20,6 +20,7 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
+	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
@@ -34,6 +35,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
 		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
 	}
+	c.timers.Stop(utils.DecompressOp)
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
@@ -325,10 +327,13 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.timers.Start(utils.CriuRestoreOp)
 	pid, err = c.criuRestore(opts, nfy, *dir)
 	if err != nil {
 		return nil, err
 	}
+	c.timers.Stop(utils.CriuRestoreOp)
 
 	return pid, nil
 }
