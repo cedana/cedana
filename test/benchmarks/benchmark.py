@@ -73,10 +73,8 @@ def start_recording(pid):
 
     return initial_data
 
-# TODO - analyze pprof data! 
 def stop_recording(operation_type, pid, initial_data, jobID, completed_at, started_at, process_stats):
     p = psutil.Process(pid)
-    # CPU times
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data['cpu_times'].user
     cpu_time_system_diff = current_cpu_times.system - initial_data['cpu_times'].system
@@ -89,7 +87,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     cpu_total_time_diff = sum(getattr(current_time, attr) - getattr(initial_data['time'], attr)
                                   for attr in ['user', 'system', 'idle'])
 
-        # Calculate the percentage of CPU utilization
+    # Calculate the percentage of CPU utilization
     cpu_percent = 100 * cpu_time_total_diff / cpu_total_time_diff if cpu_total_time_diff else 0
 
     # Memory usage in KB
@@ -114,7 +112,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Timestamp', 
                 'Job ID', 
                 'Operation Type',
-                'Memory Used Target',
+                'Memory Used Target (KB)',
                 'Memory Used Daemon', 
                 'Write Count', 
                 'Read Count', 
@@ -130,7 +128,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
             jobID,
             operation_type,
-            process_stats['memory'],
+            process_stats['memory_kb'],
             memory_used_kb,
             write_count_diff,
             read_count_diff,
@@ -147,6 +145,7 @@ def analyze_pprof(filename):
 def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats): 
     chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
 
+    # initial data here is fine - we want to measure impact of daemon on system 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
@@ -173,6 +172,10 @@ def run_restore(daemonPID, jobID, iteration, output_dir, process_stats):
     p.wait()
 
     restore_completed_at = time.monotonic_ns()
+
+    # nil value here
+    process_stats = {}
+    process_stats["memory_kb"] = 0
     stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
 
@@ -185,7 +188,7 @@ def run_exec(cmd, jobID):
     process_stats['pid'] = pid
 
     psutil_process = psutil.Process(pid)
-    process_stats['memory'] = psutil_process.memory_info().rss / 1024
+    process_stats['memory_kb'] = psutil_process.memory_info().rss / 1024 # convert to KB
 
     return process_stats 
 
@@ -229,10 +232,12 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
     ]
     cmds = [
+        "./benchmarks/server",
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'"
     ]
@@ -253,7 +258,7 @@ def main():
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
             time.sleep(1)
 
-            run_restore(daemon_pid, jobID, y, output_dir, process_stats)
+            run_restore(daemon_pid, jobID, y, output_dir)
             time.sleep(1)
 
     push_to_bigquery()
