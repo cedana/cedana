@@ -240,7 +240,7 @@ def main():
     cmds = [
         "./benchmarks/server",
         "./benchmarks/test.sh",
-        "'python3 benchmarks/regression/main.py'"
+        "'python3 benchmarks/regression/main.py'",
         "'python3 benchmarks/1gb_pytorch.py'"
     ]
 
