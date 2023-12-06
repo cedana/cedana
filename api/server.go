@@ -15,7 +15,6 @@ import (
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
@@ -207,7 +206,7 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	criuOpts := &libcontainer.CriuOpts{
+	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
