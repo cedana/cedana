@@ -1020,6 +1020,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
+		External:        []string{},
 	}
 
 	// if criuOpts.WorkDirectory is not set, criu default is used.
