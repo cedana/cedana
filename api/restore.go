@@ -305,42 +305,6 @@ type linkPairs struct {
 func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
-	var tmpSources string
-	var sandboxID string
-	var sourceList []string
-	var spec rspec.Spec
-	var configLocation string
-	if len(sources) > 0 {
-		tmpSources = filepath.Join("/tmp", "sources")
-
-		defer os.Remove(tmpSources)
-		configLocation = filepath.Join(opts.Bundle, "config.json")
-
-		_, err := os.Stat(configLocation)
-		if err == nil {
-			configFile, err := os.ReadFile(configLocation)
-			if err != nil {
-				return err
-			}
-
-			if err := json.Unmarshal(configFile, &spec); err != nil {
-				return err
-			}
-		}
-		sandboxID = spec.Annotations["io.kubernetes.cri.sandbox-id"]
-		// podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-
-		for i, s := range sources {
-			sourceList = append(sourceList, filepath.Join("/tmp", "sources", fmt.Sprint(sandboxID, "-", i)))
-
-			if err := copyFiles(filepath.Join(s, sandboxID), sourceList[i]); err != nil {
-				return err
-			}
-		}
-		if err := copyFiles(opts.Bundle, "/tmp/sources/bundle"); err != nil {
-			return err
-		}
-	}
 
 	isPodman := checkIfPodman(bundle)
 
@@ -443,22 +407,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 			fmt.Println("Error decoding config.json:", err)
 			return err
 		}
-
-		// Generate new IDs
-		// newPodID := uuid.New().String()
-		// newContainerID := uuid.New().String()
-
-		// var directories []string
-
-		sandboxID := spec.Annotations["io.kubernetes.cri.sandbox-id"]
-
-		killRuncContainer(sandboxID)
-		// // Update paths and perform recursive copy
-		// err = updateAndCopyDirectories(config, "/tmp", "podd7f6555a-8d1e-46ae-b97a-7c3639682bbb", newPodID, "52f274894cf23cd0e23192ef00ce2a7615cb548f30b9f5517dc7324d9611e4da", newContainerID)
-		// if err != nil {
-		// 	fmt.Println("Error copying directories:", err)
-		// }
-
 	}
 
 	err := container.RuncRestore(imgPath, containerId, *opts)
