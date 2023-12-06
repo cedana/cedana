@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -452,64 +451,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		// var directories []string
 
 		sandboxID := spec.Annotations["io.kubernetes.cri.sandbox-id"]
-		podID := spec.Annotations["io.kubernetes.cri.sandbox-uid"]
-		tmpPath := filepath.Join("/tmp", podID)
-		if err := os.Mkdir(tmpPath, 0644); err != nil {
-			return err
-		}
-		tmpPodsPath := filepath.Join(tmpPath, "pods")
-		podsPath := filepath.Join("/host/var/lib/kubelet/pods", podID)
-		if err := rsyncDirectories(podsPath, tmpPodsPath); err != nil {
-			return err
-		}
-		tmpVarPath := filepath.Join(tmpPath, "var")
-		varPath := filepath.Join("/host/var/lib/rancher/k3s/agent/containerd/io.containerd.grpc.v1.cri/sandboxes", sandboxID)
-		if err := rsyncDirectories(varPath, tmpVarPath); err != nil {
-			return err
-		}
-		tmpRunPath := filepath.Join(tmpPath, "run")
-		runPath := filepath.Join("/host/run/k3s/containerd/io.containerd.grpc.v1.cri/sandboxes", sandboxID)
-		if err := rsyncDirectories(runPath, tmpRunPath); err != nil {
-			return err
-		}
-
-		tmpBesteffortPath := filepath.Join(tmpPath, "besteffort")
-		besteffortPath := filepath.Join("/host/kubepods/besteffort", podID)
-		rsyncDirectories(besteffortPath, tmpBesteffortPath)
-
-		tmpBundlePath := filepath.Join(tmpPath, "bundle")
-		if err := rsyncDirectories(opts.Bundle, tmpBundlePath); err != nil {
-			return err
-		}
-
-		var nsPath string
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" {
-				nsPath = ns.Path
-			}
-		}
-		split := strings.Split(nsPath, "/")
-		pausePid, err := strconv.Atoi(split[2])
-		if err != nil {
-			return err
-		}
-
-		ctrs, err := container.GetContainers(opts.Root)
-		if err != nil {
-			return err
-		}
-
-		var pauseContainer container.ContainerStateJson
-
-		for _, c := range ctrs {
-			if c.InitProcessPid == pausePid {
-				pauseContainer = c
-			}
-		}
-
-		if err := copyFiles(pauseContainer.Bundle, "/tmp/sources/bundle"); err != nil {
-			return err
-		}
 
 		killRuncContainer(sandboxID)
 		// // Update paths and perform recursive copy
@@ -517,52 +458,6 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 		// if err != nil {
 		// 	fmt.Println("Error copying directories:", err)
 		// }
-
-		cleanPodsPath, err := dropLastDirectory(podsPath)
-		if err != nil {
-			return err
-		}
-		if err := copyFiles(tmpPodsPath, cleanPodsPath); err != nil {
-			return err
-		}
-		cleanVarPath, err := dropLastDirectory(varPath)
-		if err != nil {
-			return err
-		}
-		if err := copyFiles(tmpVarPath, cleanVarPath); err != nil {
-			return err
-		}
-		cleanRunPath, err := dropLastDirectory(runPath)
-		if err != nil {
-			return err
-		}
-		if err := copyFiles(tmpRunPath, cleanRunPath); err != nil {
-			return err
-		}
-
-		copyFiles(tmpBesteffortPath, besteffortPath)
-		cleanBundlePath, err := dropLastDirectory(opts.Bundle)
-		if err != nil {
-			return err
-		}
-		if err := copyFiles(tmpBundlePath, cleanBundlePath); err != nil {
-			return err
-		}
-	}
-
-	if len(sources) > 0 {
-
-		killRuncContainer(sandboxID)
-
-		for i, s := range sources {
-			if err := copyFiles(filepath.Join(tmpSources, fmt.Sprint(sandboxID, "-", i)), filepath.Join(s, sandboxID)); err != nil {
-				return err
-			}
-		}
-		// Copy bundle over
-		if err := copyFiles("/tmp/sources/bundle", filepath.Join("/host/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/", sandboxID)); err != nil {
-			return err
-		}
 
 	}
 
