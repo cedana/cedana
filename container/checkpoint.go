@@ -1020,7 +1020,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
-		External:        []string{"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:k8ssecrets"},
+		External:        []string{"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:k8sSecrets"},
 	}
 
 	// if criuOpts.WorkDirectory is not set, criu default is used.
