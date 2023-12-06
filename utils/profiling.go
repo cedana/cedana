@@ -64,6 +64,9 @@ func (t *Timings) Flush() error {
 		_ = os.WriteFile("/var/log/cedana-profile.json", jsonData, 0644)
 	}
 
+	t.data = make(map[string]int64)
+	t.timers = make(map[OperationType]time.Time)
+
 	return nil
 }
 

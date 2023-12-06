@@ -7,6 +7,7 @@ import requests
 import profile_pb2
 from google.cloud import bigquery
 from google.cloud.bigquery import LoadJobConfig, SourceFormat
+import json
 
 
 import psutil
@@ -101,8 +102,21 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     read_bytes_diff = current_disk_io.read_bytes - initial_data['disk_io'].read_bytes
     write_bytes_diff = current_disk_io.write_bytes - initial_data['disk_io'].write_bytes
 
-    # also get size of checkpoint
+    # read from profiling json 
+    network_op = ""
+    compress_op = ""
+    if operation_type == "checkpoint":
+        network_op = "upload"
+        compress_op = "compress"
+    else: 
+        network_op = "download"
+        compress_op = "decompress"
 
+    with open("/var/log/cedana-profile.json", 'r') as f:
+        profiling_data = json.load(f)
+        op_duration = profiling_data[operation_type]
+        network_duration = profiling_data[network_op]
+        compress_duration = profiling_data[compress_op]
 
     with open("benchmark_output.csv", mode='a', newline='') as file:
         writer = csv.writer(file)
@@ -120,7 +134,10 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
-                'Time Taken'
+                'Total Duration',
+                'Operation Duration',
+                'Network Duration',
+                "Compression Duration",
                 ])
         
         # Write the resource usage data
@@ -136,8 +153,14 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             read_bytes_diff / (1024 * 1024), # convert to MB
             cpu_utilization,
             cpu_percent,
-            completed_at - started_at
+            completed_at - started_at,
+            op_duration,
+            network_duration,
+            compress_duration
         ])
+
+        # delete profile file after
+        os.remove("/var/log/cedana-profile.json")
 
 def analyze_pprof(filename):
     pass 
@@ -196,7 +219,7 @@ def push_to_bigquery():
     client = bigquery.Client()
 
     dataset_id = 'devtest'
-    table_id = 'benchmarking_naiive'
+    table_id = 'benchmarks'
 
     csv_file_path = 'benchmark_output.csv'
 

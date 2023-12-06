@@ -177,6 +177,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
 
+	var resp task.RestoreResp
+
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
 		if args.CheckpointPath == "" {
@@ -189,10 +191,10 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, staterr
 		}
 
-		return &task.RestoreResp{
+		resp = task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
-		}, err
+		}
 
 	case task.RestoreArgs_REMOTE:
 		if args.CheckpointId == "" {
@@ -218,14 +220,14 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, staterr
 		}
 
-		return &task.RestoreResp{
+		resp = task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
-		}, err
+		}
 	}
 
 	s.Client.timers.Flush()
-	return &task.RestoreResp{}, nil
+	return &resp, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {

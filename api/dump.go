@@ -114,7 +114,7 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.timers.Start(utils.CompressOp)
 	c.logger.Info().Msg("compressing checkpoint...")
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar.gz"}, "")
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written
