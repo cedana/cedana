@@ -28,7 +28,6 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -1208,51 +1207,7 @@ func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcont
 			LazyPages:       proto.Bool(criuOpts.LazyPages),
 		},
 	}
-	// Same as during checkpointing. If the container has a specific network namespace
-	// assigned to it, this now expects that the checkpoint will be restored in a
-	// already created network namespace.
-	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
-	if nsPath != "" {
-		// For this to work we need at least criu 3.11.0 => 31100.
-		// As there was already a successful version check we will
-		// not error out if it fails. runc will just behave as it used
-		// to do and ignore external network namespaces.
-		err := c.checkCriuVersion(31100)
-		if err == nil {
-			var pauseSpec rspec.Spec
-			pauseJson, err := os.ReadFile("/tmp/sources/bundle/config.json")
-			if err != nil {
-				return err
-			}
-			if err := json.Unmarshal(pauseJson, &pauseSpec); err != nil {
-				return err
-			}
-			for _, ns := range pauseSpec.Linux.Namespaces {
-				if ns.Type == "network" {
-					nsPath = ns.Path
-					break
-				}
-			}
-			// CRIU wants the information about an existing network namespace
-			// like this: --inherit-fd fd[<fd>]:<key>
-			// The <key> needs to be the same as during checkpointing.
-			// We are always using 'extRootNetNS' as the key in this.
-			netns, err := os.Open(nsPath)
-			defer netns.Close()
-			if err != nil {
-				logrus.Error("If a specific network namespace is defined it must exist: %s", err)
-				return fmt.Errorf("Requested network namespace %v does not exist", nsPath)
-			}
-			inheritFd := new(criurpc.InheritFd)
-			inheritFd.Key = proto.String("extRootNetNS")
-			// The offset of four is necessary because 0, 1, 2 and 3 is already
-			// used by stdin, stdout, stderr, 'criu swrk' socket.
-			inheritFd.Fd = proto.Int32(int32(4 + len(extraFiles)))
-			req.Opts.InheritFd = append(req.Opts.InheritFd, inheritFd)
-			// All open FDs need to be transferred to CRIU via extraFiles
-			extraFiles = append(extraFiles, netns)
-		}
-	}
+
 	if criuOpts.LsmProfile != "" {
 		// CRIU older than 3.16 has a bug which breaks the possibility
 		// to set a different LSM profile.

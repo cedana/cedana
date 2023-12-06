@@ -12,10 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	goruntime "runtime"
@@ -55,7 +53,6 @@ import (
 	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -1025,65 +1022,6 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 	}
 
-	// If the container is running in a network namespace and has
-	// a path to the network namespace configured, we will dump
-	// that network namespace as an external namespace and we
-	// will expect that the namespace exists during restore.
-	// This basically means that CRIU will ignore the namespace
-	// and expect to be setup correctly.
-	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
-	var pausePid int
-	if nsPath != "" {
-		split := strings.Split(nsPath, "/")
-		pausePid, err = strconv.Atoi(split[2])
-		if err != nil {
-			return err
-		}
-
-		ctrs, err := GetContainers(runcRoot)
-		if err != nil {
-			return err
-		}
-
-		var pauseContainer ContainerStateJson
-
-		for _, c := range ctrs {
-			if c.InitProcessPid == pausePid {
-				pauseContainer = c
-			}
-		}
-		var pauseSpec rspec.Spec
-		pauseJson, err := os.ReadFile("/host" + pauseContainer.Bundle + "/config.json")
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(pauseJson, &pauseSpec); err != nil {
-			return err
-		}
-		for _, ns := range pauseSpec.Linux.Namespaces {
-			if ns.Type == "network" {
-				nsPath = ns.Path
-				break
-			}
-		}
-		// For this to work we need at least criu 3.11.0 => 31100.
-		// As there was already a successful version check we will
-		// not error out if it fails. runc will just behave as it used
-		// to do and ignore external network namespaces.
-		err = c.checkCriuVersion(31100)
-		if err == nil {
-			// CRIU expects the information about an external namespace
-			// like this: --external net[<inode>]:<key>
-			// This <key> is always 'extRootNetNS'.
-			var netns syscall.Stat_t
-			err = syscall.Stat(nsPath, &netns)
-			if err != nil {
-				return err
-			}
-			criuExternal := fmt.Sprintf("net[%d]:extRootNetNS", netns.Ino)
-			rpcOpts.External = append(rpcOpts.External, criuExternal)
-		}
-	}
 	// if criuOpts.WorkDirectory is not set, criu default is used.
 	if criuOpts.WorkDirectory != "" {
 		if err := os.Mkdir(criuOpts.WorkDirectory, 0o700); err != nil && !os.IsExist(err) {
