@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/cgroups"
 	"github.com/cedana/runc/libcontainer/configs"
 	"github.com/checkpoint-restore/go-criu/v6"
@@ -92,7 +91,7 @@ func (c *RuncContainer) addCriuDumpMount(req *criurpc.CriuReq, m *configs.Mount)
 	req.Opts.ExtMnt = append(req.Opts.ExtMnt, extMnt)
 }
 
-func (c *RuncContainer) checkCriuFeatures(criuOpts *libcontainer.CriuOpts, rpcOpts *criurpc.CriuOpts, criuFeat *criurpc.CriuFeatures) error {
+func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.CriuOpts, criuFeat *criurpc.CriuFeatures) error {
 	t := criurpc.CriuReqType_FEATURE_CHECK
 	logger := utils.GetLogger()
 

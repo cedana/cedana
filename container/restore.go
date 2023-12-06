@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -120,9 +119,10 @@ func containerdRestore(id string, ref string) error {
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 
-	criuOpts := libcontainer.CriuOpts{
+	criuOpts := CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
+		External:        []string{"mnt[k8sSecrets]:/var/run/secrets/kubernetes.io/serviceaccount"},
 	}
 
 	runcOpts := &RuncOpts{

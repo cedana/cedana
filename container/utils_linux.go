@@ -1031,7 +1031,7 @@ func (c *RuncContainer) prepareCriuRestoreMounts(mounts []*configs.Mount) error 
 	return nil
 }
 
-func (c *RuncContainer) restoreNetwork(req *criurpc.CriuReq, criuOpts *libcontainer.CriuOpts) {
+func (c *RuncContainer) restoreNetwork(req *criurpc.CriuReq, criuOpts *CriuOpts) {
 	for _, iface := range c.Config.Networks {
 		switch iface.Type {
 		case "veth":
@@ -1141,7 +1141,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
-func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcontainer.CriuOpts, runcRoot string) error {
+func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *CriuOpts, runcRoot string) error {
 	const logFile = "restore.log"
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1205,6 +1205,7 @@ func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *libcont
 			OrphanPtsMaster: proto.Bool(true),
 			AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 			LazyPages:       proto.Bool(criuOpts.LazyPages),
+			External:        criuOpts.External,
 		},
 	}
 
@@ -1333,7 +1334,7 @@ type Runner struct {
 	container       *RuncContainer
 	action          CtAct
 	notifySocket    *notifySocket
-	criuOpts        *libcontainer.CriuOpts
+	criuOpts        *CriuOpts
 	subCgroupPaths  map[string]string
 }
 
@@ -1531,7 +1532,7 @@ func GetContainers(root string) ([]ContainerStateJson, error) {
 	return s, nil
 }
 
-func StartContainer(context *RuncOpts, action CtAct, criuOpts *libcontainer.CriuOpts) (int, error) {
+func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, error) {
 	spec, err := setupSpec(context)
 	if err != nil {
 		return -1, err

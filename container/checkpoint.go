@@ -630,7 +630,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		return &apiTasks.CheckpointTaskResponse{}, fmt.Errorf("invalid task checkpoint option for %s", container.Runtime.Name)
 	}
 
-	criuOpts := &libcontainer.CriuOpts{
+	criuOpts := &CriuOpts{
 		ImagesDirectory:         opts.ImagePath,
 		WorkDirectory:           opts.WorkPath,
 		LeaveRunning:            !opts.Exit,
@@ -972,7 +972,7 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int, runcRoot string) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot string) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1020,7 +1020,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
-		External:        []string{},
+		External:        []string{"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:k8sSecrets"},
 	}
 
 	// if criuOpts.WorkDirectory is not set, criu default is used.
@@ -1161,7 +1161,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *libcontainer.CriuOpts, pid int,
 	return nil
 }
 
-func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *libcontainer.CriuOpts, extraFiles []*os.File) error {
+func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
 	logger := utils.GetLogger()
 
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
