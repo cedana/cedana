@@ -48,7 +48,6 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-	defer s.Client.timeTrack(time.Now(), "managed-dump")
 	s.Client.jobID = args.JobID
 	// Close before dumping
 	s.r.Close()
@@ -131,6 +130,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// zipFileSize += 4096
 		checkpointFullSize := int64(size)
 
+		s.Client.timers.Start(utils.UploadOp)
+
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
@@ -149,6 +150,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, st.Err()
 		}
 
+		s.Client.timers.Stop(utils.UploadOp)
+
 		// initialize remoteState if nil
 		if state.RemoteState == nil {
 			state.RemoteState = &task.RemoteState{}
@@ -166,11 +169,15 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
+	s.Client.timers.Flush()
+
 	return &resp, nil
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	client := s.Client
+
+	var resp task.RestoreResp
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
@@ -184,20 +191,23 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, staterr
 		}
 
-		return &task.RestoreResp{
+		resp = task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
-		}, err
+		}
 
 	case task.RestoreArgs_REMOTE:
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 		client.remoteStore = utils.NewCedanaStore(client.config)
+
+		s.Client.timers.Start(utils.DownloadOp)
 		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
+		s.Client.timers.Stop(utils.DownloadOp)
 
 		pid, err := client.Restore(&task.RestoreArgs{
 			Type:           task.RestoreArgs_REMOTE,
@@ -210,12 +220,14 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, staterr
 		}
 
-		return &task.RestoreResp{
+		resp = task.RestoreResp{
 			Message: fmt.Sprintf("Successfully restored process: %v", *pid),
 			NewPID:  *pid,
-		}, err
+		}
 	}
-	return &task.RestoreResp{}, nil
+
+	s.Client.timers.Flush()
+	return &resp, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {

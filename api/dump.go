@@ -112,8 +112,9 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 // we pass a final state to postDump so we can serialize at the exact point
 // the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
+	c.timers.Start(utils.CompressOp)
 	c.logger.Info().Msg("compressing checkpoint...")
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar.gz"}, "")
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written
@@ -140,6 +141,7 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	}
 
 	c.db.UpdateProcessStateWithID(c.jobID, state)
+	c.timers.Stop(utils.CompressOp)
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -304,6 +306,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 		return err
 	}
 	if !state.ProcessInfo.AttachedToHardwareAccel {
+		c.timers.Start(utils.CriuCheckpointOp)
 		_, err = c.CRIU.Dump(opts, &nfy)
 		if err != nil {
 			// check for sudo error
@@ -315,6 +318,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 			c.logger.Warn().Msgf("error dumping process: %v", err)
 			return err
 		}
+		c.timers.Stop(utils.CriuCheckpointOp)
 	}
 
 	// CRIU ntfy hooks get run before this,

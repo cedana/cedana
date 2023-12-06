@@ -38,6 +38,9 @@ type Client struct {
 	// and the jobID is set at instantiation time. We rely on whatever is callig
 	// InstantiateClient() to set the jobID correctly.
 	jobID string
+
+	// used for perf, CEDANA_PROFILING_ENABLED needs to be set
+	timers *utils.Timings
 }
 
 type ClientLogs struct {
@@ -75,6 +78,8 @@ func InstantiateClient() (*Client, error) {
 
 	db := &DB{}
 
+	t := utils.NewTimings()
+
 	return &Client{
 		CRIU:    criu,
 		logger:  &logger,
@@ -82,6 +87,7 @@ func InstantiateClient() (*Client, error) {
 		context: context.Background(),
 		fs:      fs,
 		db:      db,
+		timers:  t,
 	}, nil
 }
 

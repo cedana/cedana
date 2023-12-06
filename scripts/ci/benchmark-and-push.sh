@@ -45,4 +45,4 @@ sudo docker run \
  -e GOOGLE_CLOUD_PROJECT=cedana-benchmarking \
   --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
-
+# delete bucket from minio after benchmarking 
