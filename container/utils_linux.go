@@ -254,14 +254,14 @@ func Create(root, id string, config *configs.Config) (*RuncContainer, error) {
 	// probably true in almost all scenarios). Checking all the hierarchies
 	// would be too expensive.
 	if cm.Exists() {
-		pids, err := cm.GetAllPids()
+		//pids, err := cm.GetAllPids()
 		// Reading PIDs can race with cgroups removal, so ignore ENOENT and ENODEV.
 		if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENODEV) {
 			return nil, fmt.Errorf("unable to get cgroup PIDs: %w", err)
 		}
-		if len(pids) != 0 {
-			return nil, fmt.Errorf("container's cgroup is not empty: %d process(es) found", len(pids))
-		}
+		//if len(pids) != 0 {
+		//return nil, fmt.Errorf("container's cgroup is not empty: %d process(es) found", len(pids))
+		//}
 	}
 
 	// Check that cgroup is not frozen. Do not use Exists() here
