@@ -311,7 +311,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 	var pausePid int
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 	for _, ns := range runcContainer.Config.Namespaces {
-		if ns.Type == "network" {
+		if ns.Type == "NEWNET" {
 			// Looking for the pid of the pause container from the path to the network namespace
 			split := strings.Split(ns.Path, "/")
 			pausePid, _ = strconv.Atoi(split[1])
