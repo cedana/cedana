@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -308,32 +307,8 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		}
 	}
 	bundle := Bundle{ContainerId: containerId}
-	var pausePid int
 	runcContainer := container.GetContainerFromRunc(containerId, root)
-	for _, ns := range runcContainer.Config.Namespaces {
-		if ns.Type == "NEWNET" {
-			// Looking for the pid of the pause container from the path to the network namespace
-			split := strings.Split(ns.Path, "/")
-			pausePid, _ = strconv.Atoi(split[2])
-		}
-	}
-	ctrs, err := container.GetContainers(root)
-	if err != nil {
-		return err
-	}
-
-	var pauseContainerJson container.ContainerStateJson
-
-	for _, c := range ctrs {
-		if c.InitProcessPid == pausePid {
-			pauseContainerJson = c
-			break
-		}
-	}
-
-	pauseContainer := container.GetContainerFromRunc(pauseContainerJson.ID, root)
-
-	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, pauseContainer.Config)
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}

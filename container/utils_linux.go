@@ -1289,7 +1289,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// Same as during checkpointing. If the container has a specific network namespace
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
-	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
+	nsPath := "/proc/41044/ns/net"
 	if nsPath != "" {
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
