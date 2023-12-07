@@ -1249,7 +1249,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// * its parent must not be overmounted
 	// c.config.Rootfs is bind-mounted to a temporary directory
 	// to satisfy these requirements.
-	root := filepath.Join(c.Root, "criu-root")
+	root := filepath.Join(c.Root, "/criu-root")
 	if err := os.Mkdir(root, 0o755); err != nil {
 		return err
 	}
