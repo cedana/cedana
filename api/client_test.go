@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -94,7 +95,11 @@ func TestClient_TryStartJob(t *testing.T) {
 		}
 		ctx := context.Background()
 
-		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test", LogOutputFile: "somefile"})
+		// get uid and gid
+		uid := uint32(os.Getuid())
+		gid := uint32(os.Getgid())
+
+		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test", LogOutputFile: "somefile", UID: uid, GID: gid})
 
 		if err != nil {
 			t.Errorf("failed to start task: %v", err)
