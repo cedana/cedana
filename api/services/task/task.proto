@@ -41,6 +41,8 @@ message StartTaskArgs {
   string Id = 2;
   string WorkingDir = 3;
   string LogOutputFile = 4;
+  uint32 UID = 5;
+  uint32 GID = 6;
 }
 
 message StartTaskResp {

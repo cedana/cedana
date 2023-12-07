@@ -365,7 +365,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error) {
+func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
 	var pid int32
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
@@ -387,6 +387,10 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	cmd := exec.Command("bash", "-c", task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
+		Credential: &syscall.Credential{
+			Uid: uid,
+			Gid: gid,
+		},
 	}
 
 	if workingDir != "" {
@@ -443,7 +447,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile)
+	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
