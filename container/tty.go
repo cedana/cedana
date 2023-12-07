@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"sync"
 
-	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/utils"
 	"github.com/containerd/console"
 )
@@ -31,7 +30,7 @@ func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
 
 // setup pipes for the process so that advanced features like c/r are able to easily checkpoint
 // and restore the process's IO without depending on a host specific path or device
-func setupProcessPipes(p *libcontainer.Process, rootuid, rootgid int) (*tty, error) {
+func setupProcessPipes(p *Process, rootuid, rootgid int) (*tty, error) {
 	i, err := p.InitializeIO(rootuid, rootgid)
 	if err != nil {
 		return nil, err
@@ -63,7 +62,7 @@ func setupProcessPipes(p *libcontainer.Process, rootuid, rootgid int) (*tty, err
 	return t, nil
 }
 
-func inheritStdio(process *libcontainer.Process) {
+func inheritStdio(process *Process) {
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr

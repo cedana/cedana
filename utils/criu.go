@@ -1,14 +1,18 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"syscall"
 
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -95,6 +99,40 @@ func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify) 
 	}
 
 	return resp, nil
+}
+
+// WriteJSON writes the provided struct v to w using standard json marshaling
+// without a trailing newline. This is used instead of json.Encoder because
+// there might be a problem in json decoder in some cases, see:
+// https://github.com/docker/docker/issues/14203#issuecomment-174177790
+func WriteJSON(w io.Writer, v interface{}) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// SendRawFd sends a specific file descriptor over the given AF_UNIX socket.
+func SendRawFd(socket *os.File, msg string, fd uintptr) error {
+	oob := unix.UnixRights(int(fd))
+	return unix.Sendmsg(int(socket.Fd()), []byte(msg), oob, nil, 0)
+}
+
+const MaxNameLen = 4096
+
+// SendFile sends a file over the given AF_UNIX socket. file.Name() is also
+// included so that if the other end uses RecvFile, the file will have the same
+// name information.
+func SendFile(socket *os.File, file *os.File) error {
+	name := file.Name()
+	if len(name) >= MaxNameLen {
+		return fmt.Errorf("sendfd: filename too long: %s", name)
+	}
+	err := SendRawFd(socket, name, file.Fd())
+	runtime.KeepAlive(file)
+	return err
 }
 
 func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, features *rpc.CriuFeatures) (*rpc.CriuResp, error) {

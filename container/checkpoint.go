@@ -19,10 +19,10 @@ import (
 	goruntime "runtime"
 
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/cgroups"
 	"github.com/cedana/runc/libcontainer/cgroups/manager"
 	"github.com/cedana/runc/libcontainer/configs"
+	"github.com/cedana/runc/libcontainer/system"
 	"github.com/checkpoint-restore/go-criu/v6"
 	criurpc "github.com/checkpoint-restore/go-criu/v6/rpc"
 	containerd "github.com/containerd/containerd"
@@ -54,6 +54,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
@@ -210,6 +211,259 @@ type RuncContainer struct {
 	DockerConfig         *dockerTypes.ContainerJSON
 	IntelRdtManager      *Manager
 	State                containerState
+}
+
+func (c *RuncContainer) saveState(s *State) (retErr error) {
+	tmpFile, err := os.CreateTemp(c.StateDir, "state-")
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if retErr != nil {
+			tmpFile.Close()
+			os.Remove(tmpFile.Name())
+		}
+	}()
+
+	err = utils.WriteJSON(tmpFile, s)
+	if err != nil {
+		return err
+	}
+	err = tmpFile.Close()
+	if err != nil {
+		return err
+	}
+
+	stateFilePath := filepath.Join(c.StateDir, stateFilename)
+	return os.Rename(tmpFile.Name(), stateFilePath)
+}
+func (c *RuncContainer) currentState() (*State, error) {
+	var (
+		startTime           uint64
+		externalDescriptors []string
+		pid                 = -1
+	)
+	if c.InitProcess != nil {
+		pid = c.InitProcess.pid()
+		startTime, _ = c.InitProcess.startTime()
+		externalDescriptors = c.InitProcess.externalDescriptors()
+	}
+
+	intelRdtPath := ""
+	if c.IntelRdtManager != nil {
+		intelRdtPath = c.IntelRdtManager.GetPath()
+	}
+	state := &State{
+		BaseState: BaseState{
+			ID:                   c.ID(),
+			Config:               *c.Config,
+			InitProcessPid:       pid,
+			InitProcessStartTime: startTime,
+			Created:              c.Created,
+		},
+		Rootless:            c.Config.RootlessEUID && c.Config.RootlessCgroups,
+		CgroupPaths:         c.CgroupManager.GetPaths(),
+		IntelRdtPath:        intelRdtPath,
+		NamespacePaths:      make(map[configs.NamespaceType]string),
+		ExternalDescriptors: externalDescriptors,
+	}
+	if pid > 0 {
+		for _, ns := range c.Config.Namespaces {
+			state.NamespacePaths[ns.Type] = ns.GetPath(pid)
+		}
+		for _, nsType := range configs.NamespaceTypes() {
+			if !configs.IsNamespaceSupported(nsType) {
+				continue
+			}
+			if _, ok := state.NamespacePaths[nsType]; !ok {
+				ns := configs.Namespace{Type: nsType}
+				state.NamespacePaths[ns.Type] = ns.GetPath(pid)
+			}
+		}
+	}
+	return state, nil
+}
+func (c *RuncContainer) updateState(process parentProcess) (*State, error) {
+	if process != nil {
+		c.InitProcess = process
+	}
+	state, err := c.currentState()
+	if err != nil {
+		return nil, err
+	}
+	err = c.saveState(state)
+	if err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+type restoredProcess struct {
+	cmd              *exec.Cmd
+	processStartTime uint64
+	fds              []string
+}
+
+func (p *restoredProcess) start() error {
+	return errors.New("restored process cannot be started")
+}
+
+func (p *restoredProcess) pid() int {
+	return p.cmd.Process.Pid
+}
+
+func (p *restoredProcess) terminate() error {
+	err := p.cmd.Process.Kill()
+	if _, werr := p.wait(); err == nil {
+		err = werr
+	}
+	return err
+}
+
+func (p *restoredProcess) wait() (*os.ProcessState, error) {
+	// TODO: how do we wait on the actual process?
+	// maybe use --exec-cmd in criu
+	err := p.cmd.Wait()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return nil, err
+		}
+	}
+	st := p.cmd.ProcessState
+	return st, nil
+}
+
+func (p *restoredProcess) startTime() (uint64, error) {
+	return p.processStartTime, nil
+}
+
+func (p *restoredProcess) signal(s os.Signal) error {
+	return p.cmd.Process.Signal(s)
+}
+
+func (p *restoredProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *restoredProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
+func (p *restoredProcess) forwardChildLogs() chan error {
+	return nil
+}
+func newRestoredProcess(cmd *exec.Cmd, fds []string) (*restoredProcess, error) {
+	var err error
+	pid := cmd.Process.Pid
+	stat, err := system.Stat(pid)
+	if err != nil {
+		return nil, err
+	}
+	return &restoredProcess{
+		cmd:              cmd,
+		processStartTime: stat.StartTime,
+		fds:              fds,
+	}, nil
+}
+
+func (c *RuncContainer) criuNotifications(resp *criurpc.CriuResp, process *Process, cmd *exec.Cmd, opts *CriuOpts, fds []string, oob []byte) error {
+	notify := resp.GetNotify()
+	if notify == nil {
+		return fmt.Errorf("invalid response: %s", resp.String())
+	}
+	script := notify.GetScript()
+	logrus.Debugf("notify: %s\n", script)
+	switch script {
+	case "post-dump":
+		f, err := os.Create(filepath.Join(c.StateDir, "checkpoint"))
+		if err != nil {
+			return err
+		}
+		f.Close()
+	case "network-unlock":
+		if err := unlockNetwork(c.Config); err != nil {
+			return err
+		}
+	case "network-lock":
+		if err := lockNetwork(c.Config); err != nil {
+			return err
+		}
+	case "setup-namespaces":
+		if c.Config.Hooks != nil {
+			s, err := c.currentOCIState()
+			if err != nil {
+				return nil
+			}
+			s.Pid = int(notify.GetPid())
+
+			if err := c.Config.Hooks.Run(configs.Prestart, s); err != nil {
+				return err
+			}
+			if err := c.Config.Hooks.Run(configs.CreateRuntime, s); err != nil {
+				return err
+			}
+		}
+	case "post-restore":
+		pid := notify.GetPid()
+
+		p, err := os.FindProcess(int(pid))
+		if err != nil {
+			return err
+		}
+		cmd.Process = p
+
+		r, err := newRestoredProcess(cmd, fds)
+		if err != nil {
+			return err
+		}
+		process.ops = r
+		if err := c.State.transition(&restoredState{
+			imageDir: opts.ImagesDirectory,
+			c:        c,
+		}); err != nil {
+			return err
+		}
+		// create a timestamp indicating when the restored checkpoint was started
+		c.Created = time.Now().UTC()
+		if _, err := c.updateState(r); err != nil {
+			return err
+		}
+		if err := os.Remove(filepath.Join(c.StateDir, "checkpoint")); err != nil {
+			if !os.IsNotExist(err) {
+				logrus.Error(err)
+			}
+		}
+	case "orphan-pts-master":
+		scm, err := unix.ParseSocketControlMessage(oob)
+		if err != nil {
+			return err
+		}
+		fds, err := unix.ParseUnixRights(&scm[0])
+		if err != nil {
+			return err
+		}
+
+		master := os.NewFile(uintptr(fds[0]), "orphan-pts-master")
+		defer master.Close()
+
+		// While we can access console.master, using the API is a good idea.
+		if err := utils.SendFile(process.ConsoleSocket, master); err != nil {
+			return err
+		}
+	case "status-ready":
+		if opts.StatusFd != -1 {
+			// write \0 to status fd to notify that lazy page server is ready
+			_, err := unix.Write(opts.StatusFd, []byte{0})
+			if err != nil {
+				logrus.Warnf("can't write \\0 to status fd: %v", err)
+			}
+			_ = unix.Close(opts.StatusFd)
+			opts.StatusFd = -1
+		}
+	}
+	return nil
 }
 
 // this comes from runc, see github.com/cedana/runc
@@ -1166,7 +1420,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	return nil
 }
 
-func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
+func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
 	logger := utils.GetLogger()
 
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
@@ -1234,6 +1488,14 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 		return err
 	}
 
+	var extFds []string
+	if process != nil {
+		extFds, err = getPipeFds(criuProcess.Pid)
+		if err != nil {
+			return err
+		}
+	}
+
 	logger.Debug().Msgf("Using CRIU in %s mode", req.GetType().String())
 	// In the case of criurpc.CriuReqType_FEATURE_CHECK req.GetOpts()
 	// should be empty. For older CRIU versions it still will be
@@ -1267,7 +1529,7 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 	buf := make([]byte, 10*4096)
 	oob := make([]byte, 4096)
 	for {
-		n, _, _, _, err := criuClientCon.ReadMsgUnix(buf, oob)
+		n, oobn, _, _, err := criuClientCon.ReadMsgUnix(buf, oob)
 		if req.Opts != nil && req.Opts.StatusFd != nil {
 			// Close status_fd as soon as we got something back from criu,
 			// assuming it has consumed (reopened) it by this time.
@@ -1292,21 +1554,35 @@ func (c *RuncContainer) criuSwrk(process *libcontainer.Process, req *criurpc.Cri
 		if err != nil {
 			return err
 		}
+		t := resp.GetType()
 		if !resp.GetSuccess() {
-			typeString := req.GetType().String()
-			return fmt.Errorf("criu failed: type %s errno %d\nlog file: %s", typeString, resp.GetCrErrno(), logPath)
+			return fmt.Errorf("criu failed: type %s errno %d", t, resp.GetCrErrno())
 		}
 
-		t := resp.GetType()
-		switch {
-		case t == criurpc.CriuReqType_FEATURE_CHECK:
-			logger.Debug().Msgf("Feature check says: %s", resp)
+		switch t {
+		case criurpc.CriuReqType_FEATURE_CHECK:
+			logrus.Debugf("Feature check says: %s", resp)
 			criuFeatures = resp.GetFeatures()
-		case t == criurpc.CriuReqType_NOTIFY:
-			// removed notify functionality
-		case t == criurpc.CriuReqType_RESTORE:
-		case t == criurpc.CriuReqType_DUMP:
-		case t == criurpc.CriuReqType_PRE_DUMP:
+		case criurpc.CriuReqType_NOTIFY:
+			if err := c.criuNotifications(resp, process, cmd, opts, extFds, oob[:oobn]); err != nil {
+				return err
+			}
+			req = &criurpc.CriuReq{
+				Type:          &t,
+				NotifySuccess: proto.Bool(true),
+			}
+			data, err = proto.Marshal(req)
+			if err != nil {
+				return err
+			}
+			_, err = criuClientCon.Write(data)
+			if err != nil {
+				return err
+			}
+			continue
+		case criurpc.CriuReqType_RESTORE:
+		case criurpc.CriuReqType_DUMP:
+		case criurpc.CriuReqType_PRE_DUMP:
 		default:
 			return fmt.Errorf("unable to parse the response %s", resp.String())
 		}

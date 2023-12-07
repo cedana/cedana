@@ -5,7 +5,6 @@ import (
 	"os/signal"
 
 	cedanaUtils "github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/system"
 	"github.com/cedana/runc/libcontainer/utils"
 
@@ -53,7 +52,7 @@ type Fields map[string]interface{}
 
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
-func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach bool) (int, error) {
+func (h *signalHandler) forward(process *Process, tty *tty, detach bool) (int, error) {
 	logger := cedanaUtils.GetLogger()
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.

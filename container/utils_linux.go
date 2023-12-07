@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -38,8 +39,8 @@ var errEmptyID = errors.New("container id cannot be empty")
 
 // newProcess returns a new libcontainer Process with the arguments from the
 // spec and stdio from the current process.
-func newProcess(p specs.Process) (*libcontainer.Process, error) {
-	lp := &libcontainer.Process{
+func newProcess(p specs.Process) (*Process, error) {
+	lp := &Process{
 		Args: p.Args,
 		Env:  p.Env,
 		// TODO: fix libcontainer's API to better support uid/gid in a typesafe way.
@@ -84,7 +85,7 @@ func destroy(container *libcontainer.Container) {
 }
 
 // setupIO modifies the given process config according to the options.
-func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
+func setupIO(process *Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
 	if createTTY {
 		process.Stdin = nil
 		process.Stdout = nil
@@ -136,7 +137,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 // createPidFile creates a file with the processes pid inside it atomically
 // it creates a temp file with the paths filename + '.' infront of it
 // then renames the file
-func createPidFile(path string, process *libcontainer.Process) error {
+func createPidFile(path string, process *Process) error {
 	pid, err := process.Pid()
 	if err != nil {
 		return err
@@ -619,6 +620,18 @@ type processOperations interface {
 	pid() int
 }
 
+var errInvalidProcess = errors.New("invalid process")
+
+// Pid returns the process ID
+func (p Process) Pid() (int, error) {
+	// math.MinInt32 is returned here, because it's invalid value
+	// for the kill() system call.
+	if p.ops == nil {
+		return math.MinInt32, errInvalidProcess
+	}
+	return p.ops.pid(), nil
+}
+
 type Process struct {
 	// The command to be run followed by any arguments.
 	Args []string
@@ -694,6 +707,71 @@ type Process struct {
 	SubCgroupPaths map[string]string
 }
 
+// Wait waits for the process to exit.
+// Wait releases any resources associated with the Process
+func (p Process) Wait() (*os.ProcessState, error) {
+	if p.ops == nil {
+		return nil, fmt.Errorf("Error waiting for process")
+	}
+	return p.ops.wait()
+}
+
+// Signal sends a signal to the Process.
+func (p Process) Signal(sig os.Signal) error {
+	if p.ops == nil {
+		return fmt.Errorf("Error sending signal to process")
+	}
+	return p.ops.signal(sig)
+}
+
+type IO struct {
+	Stdin  io.WriteCloser
+	Stdout io.ReadCloser
+	Stderr io.ReadCloser
+}
+
+// InitializeIO creates pipes for use with the process's stdio and returns the
+// opposite side for each. Do not use this if you want to have a pseudoterminal
+// set up for you by libcontainer (TODO: fix that too).
+// TODO: This is mostly unnecessary, and should be handled by clients.
+func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
+	var fds []uintptr
+	i = &IO{}
+	// cleanup in case of an error
+	defer func() {
+		if err != nil {
+			for _, fd := range fds {
+				_ = unix.Close(int(fd))
+			}
+		}
+	}()
+	// STDIN
+	r, w, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
+	fds = append(fds, r.Fd(), w.Fd())
+	p.Stdin, i.Stdin = r, w
+	// STDOUT
+	if r, w, err = os.Pipe(); err != nil {
+		return nil, err
+	}
+	fds = append(fds, r.Fd(), w.Fd())
+	p.Stdout, i.Stdout = w, r
+	// STDERR
+	if r, w, err = os.Pipe(); err != nil {
+		return nil, err
+	}
+	fds = append(fds, r.Fd(), w.Fd())
+	p.Stderr, i.Stderr = w, r
+	// change ownership of the pipes in case we are in a user namespace
+	for _, fd := range fds {
+		if err := unix.Fchown(int(fd), rootuid, rootgid); err != nil {
+			return nil, &os.PathError{Op: "fchown", Path: "fd " + strconv.Itoa(int(fd)), Err: err}
+		}
+	}
+	return i, nil
+}
 func mountViaFDs(source string, srcFD *int, target, dstFD, fstype string, flags uintptr, data string) error {
 	src := source
 	if srcFD != nil {
@@ -1141,7 +1219,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
-func (c *RuncContainer) Restore(process *libcontainer.Process, criuOpts *CriuOpts, runcRoot string) error {
+func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string) error {
 	const logFile = "restore.log"
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1427,7 +1505,7 @@ func (r *Runner) destroy() {
 	}
 }
 
-func (r *Runner) terminate(p *libcontainer.Process) {
+func (r *Runner) terminate(p *Process) {
 	_ = p.Signal(unix.SIGKILL)
 	_, _ = p.Wait()
 }
