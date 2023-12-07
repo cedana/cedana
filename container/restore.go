@@ -122,7 +122,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	criuOpts := CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
-		External:        []string{"mnt[k8sSecrets]:/var/run/secrets/kubernetes.io/serviceaccount"},
+		External:        []string{"mnt[k8sSecrets]:/var/run/secrets/kubernetes.io/serviceaccount", "mnt[k8sHostname]:/etc/hostname"},
 	}
 
 	runcOpts := &RuncOpts{
