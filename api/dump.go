@@ -314,7 +314,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 		if ns.Type == "NEWNET" {
 			// Looking for the pid of the pause container from the path to the network namespace
 			split := strings.Split(ns.Path, "/")
-			pausePid, _ = strconv.Atoi(split[1])
+			pausePid, _ = strconv.Atoi(split[2])
 		}
 	}
 	ctrs, err := container.GetContainers(root)
