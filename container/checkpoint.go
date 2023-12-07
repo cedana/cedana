@@ -1024,7 +1024,8 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:k8sSecrets",
 			"mnt[/etc/hostname]:k8sHostname",
 			"mnt[/dev/termination-log]:/dev/termination-log",
-			"mnt[/etc/hosts]:/etc/hosts"},
+			"mnt[/etc/hosts]:/etc/hosts",
+			"mnt[/data]:/data"},
 	}
 
 	// if criuOpts.WorkDirectory is not set, criu default is used.
