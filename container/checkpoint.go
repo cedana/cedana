@@ -920,7 +920,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	c := GetContainerFromRunc(container.ID, root)
 
-	err = c.RuncCheckpoint(criuOpts, c.Pid, root)
+	err = c.RuncCheckpoint(criuOpts, c.Pid, root, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1227,7 +1227,7 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot string) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot string, pauseConfig *configs.Config) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1288,7 +1288,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	// will expect that the namespace exists during restore.
 	// This basically means that CRIU will ignore the namespace
 	// and expect to be setup correctly.
-	nsPath := c.Config.Namespaces.PathOf(configs.NEWNET)
+	nsPath := pauseConfig.Namespaces.PathOf(configs.NEWNET)
 	if nsPath != "" {
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
