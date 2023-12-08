@@ -128,7 +128,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			"mnt[/dev/termination-log]:/dev/termination-log",
 			"mnt[/etc/hosts]:/etc/hosts",
 			"mnt[/data]:/data"},
-		MntnsCompatMode: true,
+		MntnsCompatMode: false,
 	}
 
 	runcOpts := &RuncOpts{
