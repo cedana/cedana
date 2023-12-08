@@ -1062,6 +1062,8 @@ func (c *RuncContainer) prepareCriuRestoreMounts(mounts []*configs.Mount) error 
 		switch m.Device {
 		case "tmpfs":
 			tmpfs = append(tmpfs, m.Destination)
+		case "bind":
+			tmpfs = append(tmpfs, m.Destination)
 		}
 	}
 	// Now go through all mounts and create the mountpoints
