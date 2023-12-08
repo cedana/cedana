@@ -1219,7 +1219,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
-func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string) error {
+func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string) error {
 	const logFile = "restore.log"
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1289,7 +1289,13 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// Same as during checkpointing. If the container has a specific network namespace
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
-	nsPath := "/proc/41044/ns/net"
+	//TODO BS pull this dynamically from original container
+	pidBytes, err := os.ReadFile(filepath.Join(bundle, "init.pid"))
+	if err != nil {
+		return err
+	}
+	pidStr := string(pidBytes)
+	nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
 	if nsPath != "" {
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
@@ -1445,6 +1451,7 @@ type Runner struct {
 	notifySocket    *notifySocket
 	criuOpts        *CriuOpts
 	subCgroupPaths  map[string]string
+	bundle          string
 }
 
 func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
@@ -1499,7 +1506,7 @@ func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
 
 	switch r.action {
 	case CT_ACT_RESTORE:
-		err = r.container.Restore(process, r.criuOpts, runcRoot)
+		err = r.container.Restore(process, r.criuOpts, runcRoot, r.bundle)
 	default:
 		panic("Unknown action")
 	}
@@ -1687,6 +1694,7 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, e
 		action:          action,
 		criuOpts:        criuOpts,
 		init:            true,
+		bundle:          context.Bundle,
 	}
 	return r.Run(spec.Process, context.Root)
 }
