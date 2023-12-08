@@ -494,6 +494,7 @@ type CriuOpts struct {
 	LsmProfile              string             // LSM profile used to restore the container
 	LsmMountContext         string             // LSM mount context value to use during restore
 	External                []string           // ignore external namespaces
+	MntnsCompatMode         bool
 }
 
 type loadedState struct {

@@ -1284,6 +1284,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 			LazyPages:       proto.Bool(criuOpts.LazyPages),
 			External:        criuOpts.External,
+			MntnsCompatMode: proto.Bool(criuOpts.MntnsCompatMode),
 		},
 	}
 	// Same as during checkpointing. If the container has a specific network namespace
