@@ -365,7 +365,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error) {
+func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
 	var pid int32
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
@@ -387,6 +387,10 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	cmd := exec.Command("bash", "-c", task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
+		Credential: &syscall.Credential{
+			Uid: uid,
+			Gid: gid,
+		},
 	}
 
 	if workingDir != "" {
@@ -395,9 +399,20 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 
 	var gpuCmd *exec.Cmd
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		gpuCmd = exec.Command("bash", "-c", "/home/nravic/go/src/github.com/cedana/cedana/gpu-controller")
+		controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
+		if controllerPath == "" {
+			err := fmt.Errorf("gpu controller path not set")
+			s.logger.Fatal().Err(err)
+			return 0, err
+		}
+
+		gpuCmd = exec.Command("bash", "-c", controllerPath)
 		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
+			Credential: &syscall.Credential{
+				Uid: uid,
+				Gid: gid,
+			},
 		}
 		err := gpuCmd.Start()
 		go func() {
@@ -410,8 +425,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 			s.logger.Fatal().Err(err)
 		}
 		s.logger.Info().Msgf("GPU controller started with pid: %d", gpuCmd.Process.Pid)
-	} else {
-		s.logger.Info().Msg("GPU controller not enabled")
 	}
 
 	cmd.Stdin = nullFile
@@ -419,7 +432,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return 0, err
 	}
@@ -471,7 +484,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile)
+	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
