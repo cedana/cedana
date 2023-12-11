@@ -33,46 +33,6 @@ type Bundle struct {
 	Bundle      string
 }
 
-// Signals a process prior to dumping with SIGUSR1 and outputs any created checkpoints
-func (c *Client) signalProcessAndWait(pid int32, timeout int) *string {
-	var checkpointPath string
-	fd, _, errno := syscall.Syscall(sys_pidfd_open, uintptr(pid), 0, 0)
-	if errno != 0 {
-		c.logger.Fatal().Err(errno).Msg("could not open pid")
-	}
-	s := syscall.SIGUSR1
-	_, _, errno = syscall.Syscall6(sys_pidfd_send_signal, uintptr(fd), uintptr(s), 0, 0, 0, 0)
-	if errno != 0 {
-		c.logger.Info().Msgf("could not send signal to pid %d", pid)
-	}
-
-	// we want to sleep the dumping thread here to wait for the process
-	// to finish executing. This likely won't have any effects when run in daemon mode,
-	// it'll just pause the spawned dump goroutine
-
-	// while we wait, try and get the fd of the checkpoint as its being written
-	state, err := c.getState(pid)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not get state")
-	}
-	for _, f := range state.ProcessInfo.OpenFds {
-		// TODO NR: add more checkpoint options
-		if strings.Contains(f.Path, "pt") {
-			sfi, err := os.Stat(f.Path)
-			if err != nil {
-				continue
-			}
-			if sfi.Mode().IsRegular() {
-				checkpointPath = f.Path
-			}
-		}
-	}
-
-	time.Sleep(time.Duration(timeout) * time.Second)
-
-	return &checkpointPath
-}
-
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
@@ -122,7 +82,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		if err := os.MkdirAll(checkpointFolderPath, 0o755); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o664); err != nil {
 			return "", err
 		}
 	}
@@ -152,8 +112,9 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 // we pass a final state to postDump so we can serialize at the exact point
 // the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
+	c.timers.Start(utils.CompressOp)
 	c.logger.Info().Msg("compressing checkpoint...")
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".zip"}, "")
+	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	// copy open writeonly fds one more time
 	// TODO NR - this is a wasted operation - should check if bytes have been written
@@ -173,12 +134,14 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 
 	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
-	err = utils.ZipFolder(dumpdir, compressedCheckpointPath)
+	// TODO NR - switch to tar
+	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
 
 	c.db.UpdateProcessStateWithID(c.jobID, state)
+	c.timers.Stop(utils.CompressOp)
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -346,7 +309,8 @@ func (c *Client) Dump(dir string, pid int32) error {
 		c.logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
-	// if !state.ProcessInfo.AttachedToHardwareAccel {
+
+	c.timers.Start(utils.CriuCheckpointOp)
 	_, err = c.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
@@ -358,7 +322,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 		c.logger.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
-	// }
+	c.timers.Stop(utils.CriuCheckpointOp)
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with

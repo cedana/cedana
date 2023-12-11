@@ -37,6 +37,7 @@ jobs:
 
   build-and-push-image: 
     runs-on: ubuntu-latest 
+    needs: release
 
     permissions: 
       contents: read
@@ -70,6 +71,11 @@ jobs:
 
   build-and-push-benchmarking-image: 
     runs-on: ubuntu-latest
+    needs: release
+
+    permissions: 
+      contents: read
+      packages: write
 
     steps: 
       - name: Checkout
@@ -86,13 +92,15 @@ jobs:
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: ghcr.io/cedana/cedana-benchmarking 
+          images: ghcr.io/cedana/cedana-benchmarking
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push (benchmarking image)
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        uses: docker/build-push-action@v5
         with:
-          context: cedana/test/benchmark
-          file: cedana/test/benchmark/Dockerfile
+          context: "{{defaultContext}}:test/benchmarks"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

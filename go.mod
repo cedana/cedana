@@ -63,6 +63,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -75,6 +76,7 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -87,6 +89,7 @@ require (
 	github.com/opencontainers/runc v1.1.9 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/prometheus/client_golang v1.17.0 // indirect
@@ -141,8 +144,11 @@ require (
 
 require (
 	github.com/adrg/strutil v0.3.1
+	github.com/felixge/fgprof v0.9.3
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/olekukonko/tablewriter v0.0.5
+	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/rs/zerolog v1.31.0
 	github.com/sevlyar/go-daemon v0.1.6
 	github.com/shirou/gopsutil/v3 v3.23.9

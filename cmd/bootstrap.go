@@ -38,7 +38,7 @@ func (b *Bootstrap) bootstrap() {
 	_, err := os.Stat(configFolderPath)
 	if err != nil {
 		b.l.Info().Msg("config folder doesn't exist, creating...")
-		err = os.Mkdir(configFolderPath, 0o755)
+		err = os.Mkdir(configFolderPath, 0o664)
 		if err != nil {
 			b.l.Fatal().Err(err).Msg("could not create config folder")
 		}

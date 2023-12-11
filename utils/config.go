@@ -19,11 +19,9 @@ type Config struct {
 
 type Client struct {
 	// job to run
-	Task                 string `json:"task" mapstructure:"task"`
-	LeaveRunning         bool   `json:"leave_running" mapstructure:"leave_running"`
-	ForwardLogs          bool   `json:"forward_logs" mapstructure:"forward_logs"`
-	SignalProcessPreDump bool   `json:"signal_process_pre_dump" mapstructure:"signal_process_pre_dump"`
-	SignalProcessTimeout int    `json:"signal_process_timeout" mapstructure:"signal_process_timeout"`
+	Task         string `json:"task" mapstructure:"task"`
+	LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
+	ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
 }
 
 type ActionScripts struct {
@@ -35,6 +33,7 @@ type ActionScripts struct {
 type Connection struct {
 	// for cedana managed systems
 	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
+	CedanaUser      string `json:"cedana_user" mapstructure:"cedana_user"`
 	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 }
 
@@ -61,17 +60,13 @@ func InitConfig() (*Config, error) {
 	viper.SetConfigName("client_config")
 
 	// InitConfig should do the testing for path
-	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o644)
+	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o664)
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Println("client_config.json does not exist, creating sample config...")
-		_, err = os.Create(filepath.Join(homedir, ".cedana", "client_config.json"))
+		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o664)
 		if err != nil {
-			panic(fmt.Errorf("error creating config file: %v", err))
+			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}
-		// Set some dummy defaults, that are only loaded if the file doesn't exist
-		viper.Set("client.process_name", "someProcess")
-		viper.Set("client.leave_running", true)
-		viper.WriteConfig()
 	}
 
 	viper.AutomaticEnv()
@@ -98,4 +93,19 @@ func InitConfig() (*Config, error) {
 	return &config, nil
 }
 
-// // write to disk
+func GenSampleConfig() string {
+	return `{
+	"client": {
+		"process_name": "",
+		"leave_running": true
+	},
+	"shared_storage": {
+		"dump_storage_dir": "/tmp"
+	},
+	"connection": {
+		"cedana_url": "0.0.0.0",
+		"cedana_user": "random-user",
+		"cedana_auth_token": "random-token"
+	}
+}`
+}
