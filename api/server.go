@@ -402,6 +402,10 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		gpuCmd = exec.Command("bash", "-c", "/home/nravic/go/src/github.com/cedana/cedana/gpu-controller")
 		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
+			Credential: &syscall.Credential{
+				Uid: uid,
+				Gid: gid,
+			},
 		}
 		err := gpuCmd.Start()
 		go func() {
