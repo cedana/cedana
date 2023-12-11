@@ -399,7 +399,14 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	var gpuCmd *exec.Cmd
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		gpuCmd = exec.Command("bash", "-c", "/home/nravic/go/src/github.com/cedana/cedana/gpu-controller")
+		controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
+		if controllerPath == "" {
+			err := fmt.Errorf("gpu controller path not set")
+			s.logger.Fatal().Err(err)
+			return 0, err
+		}
+
+		gpuCmd = exec.Command("bash", "-c", controllerPath)
 		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
 			Credential: &syscall.Credential{
