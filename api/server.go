@@ -425,8 +425,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 			s.logger.Fatal().Err(err)
 		}
 		s.logger.Info().Msgf("GPU controller started with pid: %d", gpuCmd.Process.Pid)
-	} else {
-		s.logger.Info().Msg("GPU controller not enabled")
 	}
 
 	cmd.Stdin = nullFile
@@ -434,7 +432,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return 0, err
 	}

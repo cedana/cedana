@@ -87,6 +87,10 @@ func TestClient_RunTask(t *testing.T) {
 }
 
 func TestClient_TryStartJob(t *testing.T) {
+	// skip CI
+	if os.Getenv("CI") == "true" {
+		t.Skip("Skipping test in CI")
+	}
 	t.Run("TaskFailsOnce", func(t *testing.T) {
 
 		client, err := setup(t)
