@@ -397,6 +397,27 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		cmd.Dir = workingDir
 	}
 
+	var gpuCmd *exec.Cmd
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		gpuCmd = exec.Command("bash", "-c", "/home/nravic/go/src/github.com/cedana/cedana/gpu-controller")
+		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
+			Setsid: true,
+		}
+		err := gpuCmd.Start()
+		go func() {
+			err := gpuCmd.Wait()
+			if err != nil {
+				s.logger.Fatal().Err(err)
+			}
+		}()
+		if err != nil {
+			s.logger.Fatal().Err(err)
+		}
+		s.logger.Info().Msgf("GPU controller started with pid: %d", gpuCmd.Process.Pid)
+	} else {
+		s.logger.Info().Msg("GPU controller not enabled")
+	}
+
 	cmd.Stdin = nullFile
 	if logOutputFile == "" {
 		// default to /var/log/cedana-output.log
@@ -419,6 +440,13 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	go func() {
 		err := cmd.Wait()
+		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				s.logger.Fatal().Err(err)
+			}
+			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+		}
 		if err != nil {
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 			buf := make([]byte, 4096)

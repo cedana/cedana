@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/cedana/cedana/api/services/gpu"
@@ -70,6 +72,18 @@ func NewClient(addr string, ctx context.Context) *ServiceClient {
 }
 
 func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		gpuResp, err := c.GpuCheckpoint(&gpu.CheckpointRequest{
+			Directory: args.Dir,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !gpuResp.Success {
+			return nil, errors.New("gpu checkpoint failed")
+		}
+		log.Println("gpu checkpoint success")
+	}
 	resp, err := c.services.taskService.Dump(c.ctx, args)
 	if err != nil {
 		return nil, err
