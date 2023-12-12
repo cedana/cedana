@@ -1281,7 +1281,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			"mnt[/dev/termination-log]:/dev/termination-log",
 			"mnt[/etc/hosts]:/etc/hosts",
 			"mnt[/data]:/data",
-			"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:/var/run/secrets/kubernetes.io/serviceaccount"},
+		},
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
