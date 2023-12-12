@@ -1277,11 +1277,11 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 		External: []string{
-			"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:k8sSecrets",
 			"mnt[/etc/hostname]:k8sHostname",
 			"mnt[/dev/termination-log]:/dev/termination-log",
 			"mnt[/etc/hosts]:/etc/hosts",
-			"mnt[/data]:/data"},
+			"mnt[/data]:/data",
+			"mnt[/var/run/secrets/kubernetes.io/serviceaccount]:/var/run/secrets/kubernetes.io/serviceaccount"},
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
