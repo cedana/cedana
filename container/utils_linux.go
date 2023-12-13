@@ -1055,6 +1055,13 @@ func (c *RuncContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 	}
 	return nil
 }
+
+// prepareCriuRestoreMounts tries to set up the rootfs of the
+// container to be restored in the same way runc does it for
+// initial container creation. Even for a read-only rootfs container
+// runc modifies the rootfs to add mountpoints which do not exist.
+// This function also creates missing mountpoints as long as they
+// are not on top of a tmpfs, as CRIU will restore tmpfs content anyway.
 func (c *RuncContainer) prepareCriuRestoreMounts(mounts []*configs.Mount) error {
 	// First get a list of a all tmpfs mounts
 	tmpfs := []string{}
@@ -1092,7 +1099,7 @@ func (c *RuncContainer) prepareCriuRestoreMounts(mounts []*configs.Mount) error 
 			// points for mounts in bind mounts.
 			// This also happens during initial container creation.
 			// Without this CRIU restore will fail
-			// See: https://github.com/cedana/runc/issues/2748
+			// See: https://github.com/opencontainers/runc/issues/2748
 			// It is also not necessary to order the mount points
 			// because during initial container creation mounts are
 			// set up in the order they are configured.
@@ -1249,7 +1256,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// * its parent must not be overmounted
 	// c.config.Rootfs is bind-mounted to a temporary directory
 	// to satisfy these requirements.
-	root := filepath.Join(c.Root, "/host/criu-root")
+	root := filepath.Join(c.Root, "/criu-root")
 	if err := os.Mkdir(root, 0o755); err != nil {
 		return err
 	}
