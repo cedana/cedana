@@ -1481,7 +1481,7 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		// the initial CRIU run to detect the version. Skip it.
 		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
-	cmd := exec.Command("criu", "swrk", "3")
+	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
 	if process != nil {
 		cmd.Stdin = process.Stdin
 		cmd.Stdout = process.Stdout
