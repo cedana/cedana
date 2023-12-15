@@ -241,7 +241,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 }
 
 func (s *service) RuncList(ctx context.Context, args *task.RuncRoot) (*task.RuncList, error) {
-	s.Client.RuncList(args.Root)
 	return nil, nil
 }
 
