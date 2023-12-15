@@ -32,6 +32,7 @@ type TaskServiceClient interface {
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
 	ClientStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_ClientStateStreamingClient, error)
 	MetaStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_MetaStateStreamingClient, error)
+	ListRuncContainers(ctx context.Context, in *RuncRoot, opts ...grpc.CallOption) (*RuncList, error)
 }
 
 type taskServiceClient struct {
@@ -198,6 +199,15 @@ func (x *taskServiceMetaStateStreamingClient) Recv() (*MetaStateStreamingResp, e
 	return m, nil
 }
 
+func (c *taskServiceClient) ListRuncContainers(ctx context.Context, in *RuncRoot, opts ...grpc.CallOption) (*RuncList, error) {
+	out := new(RuncList)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/ListRuncContainers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -212,6 +222,7 @@ type TaskServiceServer interface {
 	LogStreaming(TaskService_LogStreamingServer) error
 	ClientStateStreaming(TaskService_ClientStateStreamingServer) error
 	MetaStateStreaming(TaskService_MetaStateStreamingServer) error
+	ListRuncContainers(context.Context, *RuncRoot) (*RuncList, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -248,6 +259,9 @@ func (UnimplementedTaskServiceServer) ClientStateStreaming(TaskService_ClientSta
 }
 func (UnimplementedTaskServiceServer) MetaStateStreaming(TaskService_MetaStateStreamingServer) error {
 	return status.Errorf(codes.Unimplemented, "method MetaStateStreaming not implemented")
+}
+func (UnimplementedTaskServiceServer) ListRuncContainers(context.Context, *RuncRoot) (*RuncList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRuncContainers not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -466,6 +480,24 @@ func (x *taskServiceMetaStateStreamingServer) Recv() (*MetaStateStreamingArgs, e
 	return m, nil
 }
 
+func _TaskService_ListRuncContainers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RuncRoot)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ListRuncContainers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/ListRuncContainers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ListRuncContainers(ctx, req.(*RuncRoot))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -500,6 +532,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartTask",
 			Handler:    _TaskService_StartTask_Handler,
+		},
+		{
+			MethodName: "ListRuncContainers",
+			Handler:    _TaskService_ListRuncContainers_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

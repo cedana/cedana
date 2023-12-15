@@ -495,6 +495,7 @@ type CriuOpts struct {
 	LsmMountContext         string             // LSM mount context value to use during restore
 	External                []string           // ignore external namespaces
 	MntnsCompatMode         bool
+	TcpClose                bool
 }
 
 type loadedState struct {

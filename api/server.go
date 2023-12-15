@@ -240,6 +240,11 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
+func (s *service) RuncList(ctx context.Context, args *task.RuncRoot) (*task.RuncList, error) {
+	s.Client.RuncList(args.Root)
+	return nil, nil
+}
+
 func (s *service) publishStateContinous(rate int) {
 	// get PID from id
 	pid, err := s.Client.db.GetPID(s.Client.jobID)

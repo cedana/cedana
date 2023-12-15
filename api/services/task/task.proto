@@ -185,8 +185,14 @@ service TaskService {
     rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
     rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+    rpc ListRuncContainers(RuncRoot) returns (RuncList);
 }
-
+message RuncRoot {
+    string Root = 1;
+}
+message RuncList {
+    repeated string Containers = 1;
+}
 message ContainerDumpArgs {
   string ContainerId = 1;
   string Ref = 2;
