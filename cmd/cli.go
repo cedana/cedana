@@ -34,6 +34,7 @@ var detach bool
 var netPid int32
 
 var isK3s bool
+var tcpEstablished bool
 
 // working directory for execTask
 var wd string
@@ -376,7 +377,7 @@ var runcDumpCmd = &cobra.Command{
 			ImagesDirectory: runcPath,
 			WorkDirectory:   workPath,
 			LeaveRunning:    true,
-			TcpEstablished:  false,
+			TcpEstablished:  tcpEstablished,
 		}
 
 		dumpArgs := task.RuncDumpArgs{
@@ -566,6 +567,7 @@ func initRuncCommands() {
 	runcDumpCmd.MarkFlagRequired("image")
 	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	runcDumpCmd.MarkFlagRequired("id")
+	runcDumpCmd.Flags().BoolVarP(&tcpEstablished, "tcp-established", "t", false, "tcp established")
 
 	dumpCmd.AddCommand(runcDumpCmd)
 }

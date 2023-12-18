@@ -210,7 +210,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
-		TcpEstablished:  false,
+		TcpEstablished:  args.CriuOpts.TcpEstablished,
 	}
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
