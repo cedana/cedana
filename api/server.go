@@ -229,6 +229,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Bundle:        args.Opts.Bundle,
 		ConsoleSocket: args.Opts.ConsoleSocket,
 		Detatch:       args.Opts.Detatch,
+		NetPid:        int(args.Opts.NetPid),
 	}
 
 	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)

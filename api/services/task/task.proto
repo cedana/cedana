@@ -263,6 +263,7 @@ message RuncOpts {
   bool Detatch = 12;
   string PidFile = 13;
   int32 PreserveFds = 14;
+  int32 NetPid = 15;
 }
 
 message RuncRestoreResp {

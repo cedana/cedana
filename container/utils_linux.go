@@ -1226,7 +1226,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
-func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string) error {
+func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string, netPid int) error {
 	const logFile = "restore.log"
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1304,6 +1304,9 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 		return err
 	}
 	pidStr := string(pidBytes)
+	if netPid != 0 {
+		pidStr = fmt.Sprint(netPid)
+	}
 	nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
 	if nsPath != "" {
 		// For this to work we need at least criu 3.11.0 => 31100.
@@ -1461,6 +1464,7 @@ type Runner struct {
 	criuOpts        *CriuOpts
 	subCgroupPaths  map[string]string
 	bundle          string
+	netPid          int
 }
 
 func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
@@ -1515,7 +1519,7 @@ func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
 
 	switch r.action {
 	case CT_ACT_RESTORE:
-		err = r.container.Restore(process, r.criuOpts, runcRoot, r.bundle)
+		err = r.container.Restore(process, r.criuOpts, runcRoot, r.bundle, r.netPid)
 	default:
 		panic("Unknown action")
 	}
@@ -1704,6 +1708,7 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, e
 		criuOpts:        criuOpts,
 		init:            true,
 		bundle:          context.Bundle,
+		netPid:          context.NetPid,
 	}
 	return r.Run(spec.Process, context.Root)
 }

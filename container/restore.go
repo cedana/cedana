@@ -138,6 +138,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
 		Detatch:       opts.Detatch,
+		NetPid:        opts.NetPid,
 	}
 
 	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
@@ -163,4 +164,5 @@ type RuncOpts struct {
 	PidFile         string
 	PreserveFds     int
 	Pid             int
+	NetPid          int
 }
