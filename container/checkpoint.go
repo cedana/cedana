@@ -1266,7 +1266,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		LogFile:         proto.String("dump.log"),
 		Root:            proto.String(c.Config.Rootfs), // TODO NR:not sure if workingDir is analogous here
 		ManageCgroups:   proto.Bool(true),
-		NotifyScripts:   proto.Bool(false),
+		NotifyScripts:   proto.Bool(true),
 		Pid:             proto.Int32(int32(pid)),
 		ShellJob:        proto.Bool(criuOpts.ShellJob),
 		LeaveRunning:    proto.Bool(criuOpts.LeaveRunning),
