@@ -161,5 +161,7 @@ func initRuncCommands() {
 
 	dumpCmd.AddCommand(runcDumpCmd)
 
+	runcGetRuncIdByName.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
+	runcGetRuncIdByName.Flags().StringVarP(&containerName, "container-name", "c", "", "name of container in k8s")
 	runcRoot.AddCommand(runcGetRuncIdByName)
 }
