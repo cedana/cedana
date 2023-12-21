@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/cedana/runc/libcontainer"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -38,21 +40,41 @@ func GetContainerIdByName(containerName string, root string) (string, error) {
 	}
 	for _, dir := range dirs {
 		var spec rspec.Spec
+		var runcSpec libcontainer.State
+		var bundle string
 		if dir.IsDir() {
-			configPath := filepath.Join(root, dir.Name(), "config.json")
-			if _, err := os.Stat(configPath); err == nil {
-				configFile, err := os.ReadFile(configPath)
+			statePath := filepath.Join(root, dir.Name(), "state.json")
+			if _, err := os.Stat(statePath); err == nil {
+				configFile, err := os.ReadFile(statePath)
 				if err != nil {
 					return "", err
 				}
-				if err := json.Unmarshal(configFile, &spec); err != nil {
+				if err := json.Unmarshal(configFile, &runcSpec); err != nil {
 					return "", err
+				}
+				for _, label := range runcSpec.Config.Labels {
+					splitLabel := strings.Split(label, "=")
+					if splitLabel[0] == "bundle" {
+						bundle = splitLabel[1]
+					}
 				}
 			}
 		}
-		if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
-			return dir.Name(), nil
+
+		configPath := filepath.Join("host", bundle, "config.json")
+		if _, err := os.Stat(configPath); err == nil {
+			configFile, err := os.ReadFile(configPath)
+			if err != nil {
+				return "", err
+			}
+			if err := json.Unmarshal(configFile, &spec); err != nil {
+				return "", err
+			}
+			if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
+				return dir.Name(), nil
+			}
 		}
+
 	}
 	return "", fmt.Errorf("Container id not found")
 }
