@@ -242,7 +242,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
-func (s *service) GetContainerIdByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
+func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
 	runcId, err := runc.GetContainerIdByName(args.ContainerName, args.Root)
 	if err != nil {
 		return nil, err
