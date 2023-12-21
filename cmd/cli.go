@@ -484,7 +484,7 @@ func init() {
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(execTaskCmd)
 	rootCmd.AddCommand(psCmd)
-
+	rootCmd.AddCommand(runcRoot)
 	initRuncCommands()
 
 	initContainerdCommands()
