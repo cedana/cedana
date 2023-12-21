@@ -1,11 +1,12 @@
-package api
+package runc
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
-func RuncList(root string) error {
+func List(root string) error {
 	dir, err := os.Open(root)
 	if err != nil {
 		return err
@@ -24,5 +25,18 @@ func RuncList(root string) error {
 			fmt.Println(fileInfo.Name())
 		}
 	}
+	return nil
+}
+
+func GetContainerConfigByName(containerName string, root string) error {
+	dirs, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+    for _, dir := range dirs {
+        if dir.IsDir() {
+            configPath := filepath.Join(root, dir.Name())
+        }
+    }
 	return nil
 }

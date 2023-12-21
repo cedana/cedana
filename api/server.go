@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
@@ -241,8 +242,15 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
-func (s *service) RuncList(ctx context.Context, args *task.RuncRoot) (*task.RuncList, error) {
-	return nil, nil
+func (s *service) RuncGetContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
+	runcId, err := runc.GetContainerIdByName(args.ContainerName, args.Root)
+	if err != nil {
+		return nil, err
+	}
+	resp := &task.CtrByNameResp{
+		RuncContainerName: runcId,
+	}
+	return resp, nil
 }
 
 func (s *service) publishStateContinous(rate int) {

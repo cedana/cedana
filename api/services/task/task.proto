@@ -186,6 +186,14 @@ service TaskService {
     rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
     rpc ListRuncContainers(RuncRoot) returns (RuncList);
+    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
+}
+message CtrByNameArgs {
+    string ContainerName = 1;
+    string Root = 2;
+}
+message CtrByNameResp {
+    string RuncContainerName = 1;
 }
 message RuncRoot {
     string Root = 1;
