@@ -16,7 +16,7 @@ var runcRoot = &cobra.Command{
 }
 
 var runcGetRuncIdByName = &cobra.Command{
-	Use:   "runc",
+	Use:   "get",
 	Short: "",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
