@@ -69,6 +69,14 @@ func NewClient(addr string, ctx context.Context) *ServiceClient {
 	return client
 }
 
+func (c *ServiceClient) GetRuncIdByName(args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
+	resp, err := c.services.taskService.GetRuncContainerByName(c.ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
 	resp, err := c.services.taskService.Dump(c.ctx, args)
 	if err != nil {
