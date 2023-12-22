@@ -243,7 +243,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 }
 
 func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
-	runcId, err := runc.GetContainerIdByName(args.ContainerName, args.Root)
+	runcId, bundle, err := runc.GetContainerIdByName(args.ContainerName, args.Root)
 	if err != nil {
 		return nil, err
 	}

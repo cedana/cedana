@@ -33,10 +33,10 @@ func List(root string) error {
 	return nil
 }
 
-func GetContainerIdByName(containerName string, root string) (string, error) {
+func GetContainerIdByName(containerName string, root string) (string, string, error) {
 	dirs, err := os.ReadDir(root)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, dir := range dirs {
 		var spec rspec.Spec
@@ -47,10 +47,10 @@ func GetContainerIdByName(containerName string, root string) (string, error) {
 			if _, err := os.Stat(statePath); err == nil {
 				configFile, err := os.ReadFile(statePath)
 				if err != nil {
-					return "", err
+					return "", "", err
 				}
 				if err := json.Unmarshal(configFile, &runcSpec); err != nil {
-					return "", err
+					return "", "", err
 				}
 				for _, label := range runcSpec.Config.Labels {
 					splitLabel := strings.Split(label, "=")
@@ -65,16 +65,16 @@ func GetContainerIdByName(containerName string, root string) (string, error) {
 		if _, err := os.Stat(configPath); err == nil {
 			configFile, err := os.ReadFile(configPath)
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 			if err := json.Unmarshal(configFile, &spec); err != nil {
-				return "", err
+				return "", "", err
 			}
 			if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
-				return dir.Name(), nil
+				return dir.Name(), bundle, nil
 			}
 		}
 
 	}
-	return "", fmt.Errorf("Container id not found")
+	return "", "", fmt.Errorf("Container id not found")
 }

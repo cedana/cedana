@@ -194,6 +194,7 @@ message CtrByNameArgs {
 }
 message CtrByNameResp {
     string RuncContainerName = 1;
+    string RuncBundlePath = 2;
 }
 message RuncRoot {
     string Root = 1;
