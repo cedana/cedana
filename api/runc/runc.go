@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/cedana/runc/libcontainer"
@@ -77,4 +78,33 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 
 	}
 	return "", "", fmt.Errorf("Container id not found")
+}
+
+func GetPausePid(bundlePath string) (int, error) {
+	var spec rspec.Spec
+	var pid int
+
+	configPath := filepath.Join("/host", bundlePath, "config.json")
+	if _, err := os.Stat(configPath); err == nil {
+		configFile, err := os.ReadFile(configPath)
+		if err != nil {
+			return 0, err
+		}
+		if err := json.Unmarshal(configFile, &spec); err != nil {
+			return 0, err
+		}
+		for _, ns := range spec.Linux.Namespaces {
+			if ns.Type == "network" {
+				path := ns.Path
+				splitPath := strings.Split(path, "/")
+				pid, err = strconv.Atoi(splitPath[1])
+				if err != nil {
+					return 0, err
+				}
+				break
+			}
+		}
+	}
+
+	return pid, nil
 }
