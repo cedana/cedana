@@ -249,6 +249,7 @@ func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNa
 	}
 	resp := &task.CtrByNameResp{
 		RuncContainerName: runcId,
+		RuncBundlePath:    bundle,
 	}
 	return resp, nil
 }
