@@ -34,6 +34,7 @@ type TaskServiceClient interface {
 	MetaStateStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_MetaStateStreamingClient, error)
 	ListRuncContainers(ctx context.Context, in *RuncRoot, opts ...grpc.CallOption) (*RuncList, error)
 	GetRuncContainerByName(ctx context.Context, in *CtrByNameArgs, opts ...grpc.CallOption) (*CtrByNameResp, error)
+	GetPausePid(ctx context.Context, in *PausePidArgs, opts ...grpc.CallOption) (*PausePidResp, error)
 }
 
 type taskServiceClient struct {
@@ -218,6 +219,15 @@ func (c *taskServiceClient) GetRuncContainerByName(ctx context.Context, in *CtrB
 	return out, nil
 }
 
+func (c *taskServiceClient) GetPausePid(ctx context.Context, in *PausePidArgs, opts ...grpc.CallOption) (*PausePidResp, error) {
+	out := new(PausePidResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/GetPausePid", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -234,6 +244,7 @@ type TaskServiceServer interface {
 	MetaStateStreaming(TaskService_MetaStateStreamingServer) error
 	ListRuncContainers(context.Context, *RuncRoot) (*RuncList, error)
 	GetRuncContainerByName(context.Context, *CtrByNameArgs) (*CtrByNameResp, error)
+	GetPausePid(context.Context, *PausePidArgs) (*PausePidResp, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -276,6 +287,9 @@ func (UnimplementedTaskServiceServer) ListRuncContainers(context.Context, *RuncR
 }
 func (UnimplementedTaskServiceServer) GetRuncContainerByName(context.Context, *CtrByNameArgs) (*CtrByNameResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRuncContainerByName not implemented")
+}
+func (UnimplementedTaskServiceServer) GetPausePid(context.Context, *PausePidArgs) (*PausePidResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPausePid not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -530,6 +544,24 @@ func _TaskService_GetRuncContainerByName_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_GetPausePid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PausePidArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).GetPausePid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/GetPausePid",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).GetPausePid(ctx, req.(*PausePidArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -572,6 +604,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRuncContainerByName",
 			Handler:    _TaskService_GetRuncContainerByName_Handler,
+		},
+		{
+			MethodName: "GetPausePid",
+			Handler:    _TaskService_GetPausePid_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -254,6 +254,17 @@ func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNa
 	return resp, nil
 }
 
+func (s *service) GetPausePid(ctx context.Context, args *task.PausePidArgs) (*task.PausePidResp, error) {
+	pid, err := runc.GetPausePid(args.BundlePath)
+	if err != nil {
+		return nil, err
+	}
+	resp := &task.PausePidResp{
+		PausePid: int64(pid),
+	}
+	return resp, nil
+}
+
 func (s *service) publishStateContinous(rate int) {
 	// get PID from id
 	pid, err := s.Client.db.GetPID(s.Client.jobID)

@@ -187,18 +187,31 @@ service TaskService {
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
     rpc ListRuncContainers(RuncRoot) returns (RuncList);
     rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
+    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
 }
+
+message PausePidArgs {
+    string BundlePath = 1;
+}
+
+message PausePidResp {
+    int64 PausePid = 1;
+}
+
 message CtrByNameArgs {
     string ContainerName = 1;
     string Root = 2;
 }
+
 message CtrByNameResp {
     string RuncContainerName = 1;
     string RuncBundlePath = 2;
 }
+
 message RuncRoot {
     string Root = 1;
 }
+
 message RuncList {
     repeated string Containers = 1;
 }
