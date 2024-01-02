@@ -1,8 +1,8 @@
 package api
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -345,7 +345,8 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		c.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
+		return err
 	}
 	defer gpuConn.Close()
 
@@ -354,7 +355,11 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 	args := gpu.CheckpointRequest{
 		Directory: dumpdir,
 	}
-	resp, err := gpuServiceConn.Checkpoint(c.context, &args)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
 	if err != nil {
 		c.logger.Warn().Msgf("could not checkpoint gpu: %v", err)
 		return err
