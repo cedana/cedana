@@ -73,6 +73,7 @@ message ProcessState {
   checkpointState CheckpointState = 8;
   FlagEnum Flag = 9;
   RemoteState RemoteState = 10;
+  bool GPUCheckpointed = 11;
   enum ContainerRuntimeOpts {
     CONTAINERD = 0;
     RUNC = 1;

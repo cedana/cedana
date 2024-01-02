@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -10,30 +11,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, *task.ProcessState, error) {
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
 	err = utils.UntarFolder(checkpointPath, tmpdir)
 
 	if err != nil {
-		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
 	}
 	c.timers.Stop(utils.DecompressOp)
 
@@ -41,20 +44,20 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
-		return nil, err
+		return nil, nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
-		return nil, err
+		return nil, nil, err
 	}
 
 	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// check open_fds. Useful for checking if process being restored
@@ -72,7 +75,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 
 	c.restoreFiles(&checkpointState, tmpdir)
 
-	return &tmpdir, nil
+	return &tmpdir, &checkpointState, nil
 }
 
 func (c *Client) ContainerRestore(imgPath string, containerId string) error {
@@ -132,7 +135,7 @@ func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (*int32, error) {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -315,17 +318,22 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	var pid *int32
 
 	opts := c.prepareRestoreOpts()
-	nfy := utils.Notify{
-		Config:          c.config,
-		Logger:          c.logger,
-		PreDumpAvail:    true,
-		PostDumpAvail:   true,
-		PreRestoreAvail: true,
+	nfy := Notify{
+		Logger: c.logger,
 	}
 
-	dir, err := c.prepareRestore(opts, nil, args.CheckpointPath)
+	dir, state, err := c.prepareRestore(opts, nil, args.CheckpointPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if state.GPUCheckpointed {
+		nfy.PreResumeFunc = NotifyFunc{
+			Avail: true,
+			Callback: func() error {
+				return c.gpuRestore(*dir)
+			},
+		}
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
@@ -336,4 +344,34 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	c.timers.Stop(utils.CriuRestoreOp)
 
 	return pid, nil
+}
+
+func (c *Client) gpuRestore(dir string) error {
+	// TODO NR - these should move out of here and be part of the Client lifecycle
+	// setting up a connection could be a source of slowdown for checkpointing
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.RestoreRequest{
+		Directory: dir,
+	}
+	resp, err := gpuServiceConn.Restore(c.context, &args)
+	if err != nil {
+		c.logger.Warn().Msgf("could not restore gpu: %v", err)
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("could not restore gpu")
+	}
+
+	return nil
 }

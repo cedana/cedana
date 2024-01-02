@@ -2,13 +2,16 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
@@ -20,7 +23,7 @@ import (
 var AppFs = afero.NewOsFs()
 
 type Client struct {
-	CRIU    *utils.Criu
+	CRIU    *Criu
 	logger  *zerolog.Logger
 	config  *utils.Config
 	context context.Context
@@ -41,6 +44,9 @@ type Client struct {
 
 	// used for perf, CEDANA_PROFILING_ENABLED needs to be set
 	timers *utils.Timings
+
+	// gpu checkpointing service conn
+	gpuServiceConn gpu.CedanaGPUClient
 }
 
 type ClientLogs struct {
@@ -54,7 +60,7 @@ func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
 
-	criu := utils.MakeCriu()
+	criu := MakeCriu()
 	_, err := criu.GetCriuVersion()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error checking CRIU version")
@@ -101,10 +107,6 @@ func (c *Client) cleanupClient() error {
 func (c *Client) timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
-}
-
-func (c *Client) checkpointGPU() {
-
 }
 
 func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
@@ -250,6 +252,22 @@ func (c *Client) getState(pid int32) (*task.ProcessState, error) {
 	}
 
 	return state, err
+}
+
+func (c *Client) SerializeStateToDir(dir string, state *task.ProcessState) error {
+	serialized, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "checkpoint_state.json")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	_, err = file.Write(serialized)
+	return err
 }
 
 func closeCommonFds(parentPID, childPID int32) error {

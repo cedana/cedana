@@ -25,6 +25,7 @@ import (
 )
 
 const defaultLogPath string = "/var/log/cedana-output.log"
+const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
 // Unused for now...
 type GrpcService interface {
@@ -399,32 +400,10 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	var gpuCmd *exec.Cmd
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
-		if controllerPath == "" {
-			err := fmt.Errorf("gpu controller path not set")
-			s.logger.Fatal().Err(err)
+		gpuCmd, err = s.RunGPUController(uid, gid)
+		if err != nil {
 			return 0, err
 		}
-
-		gpuCmd = exec.Command("bash", "-c", controllerPath)
-		gpuCmd.SysProcAttr = &syscall.SysProcAttr{
-			Setsid: true,
-			Credential: &syscall.Credential{
-				Uid: uid,
-				Gid: gid,
-			},
-		}
-		err := gpuCmd.Start()
-		go func() {
-			err := gpuCmd.Wait()
-			if err != nil {
-				s.logger.Fatal().Err(err)
-			}
-		}()
-		if err != nil {
-			s.logger.Fatal().Err(err)
-		}
-		s.logger.Info().Msgf("GPU controller started with pid: %d", gpuCmd.Process.Pid)
 	}
 
 	cmd.Stdin = nullFile
@@ -432,6 +411,8 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
+
+	// is this non-performant? do we need to flush at intervals instead of writing?
 	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return 0, err
@@ -449,7 +430,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	go func() {
 		err := cmd.Wait()
-		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
 			if err != nil {
 				s.logger.Fatal().Err(err)
@@ -471,6 +452,46 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	closeCommonFds(ppid, pid)
 	return pid, nil
+}
+
+func (s *service) RunGPUController(uid, gid uint32) (*exec.Cmd, error) {
+	var gpuCmd *exec.Cmd
+	controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
+	if controllerPath == "" {
+		err := fmt.Errorf("gpu controller path not set")
+		s.logger.Fatal().Err(err)
+		return nil, err
+	}
+
+	gpuCmd = exec.Command("bash", "-c", controllerPath)
+	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+		Credential: &syscall.Credential{
+			Uid: uid,
+			Gid: gid,
+		},
+	}
+
+	gpuLogFile, err := os.OpenFile(gpuDefaultLogPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return nil, err
+	}
+	gpuCmd.Stdout = gpuLogFile
+	gpuCmd.Stderr = gpuLogFile
+
+	err = gpuCmd.Start()
+	go func() {
+		err := gpuCmd.Wait()
+		if err != nil {
+			s.logger.Fatal().Err(err)
+		}
+	}()
+	if err != nil {
+		s.logger.Fatal().Err(err)
+	}
+	s.logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
+
+	return gpuCmd, nil
 }
 
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
@@ -521,7 +542,6 @@ type Server struct {
 }
 
 func (s *Server) New() (*grpc.Server, error) {
-
 	grpcServer := grpc.NewServer()
 
 	client, err := InstantiateClient()

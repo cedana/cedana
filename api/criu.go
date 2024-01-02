@@ -1,4 +1,4 @@
-package utils
+package api
 
 import (
 	"errors"
@@ -172,6 +172,8 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			err = nfy.PostSetupNamespaces()
 		case "post-resume":
 			err = nfy.PostResume()
+		case "pre-resume":
+			err = nfy.PreResume()
 		default:
 			err = nil
 		}
