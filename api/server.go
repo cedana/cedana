@@ -16,6 +16,7 @@ import (
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
@@ -55,7 +56,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
-
 	pid := args.PID
 
 	if args.Type != task.DumpArgs_MARKET {
@@ -102,42 +102,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		checkpointPath := state.CheckpointPath
 
-		file, err := os.Open(checkpointPath)
+		multipartCheckpointResp, err := store.FullMultipartUpload(checkpointPath)
 		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
-		}
-		defer file.Close()
-
-		// Get the file size
-		fileInfo, err := file.Stat()
-		if err != nil {
-			err = status.Error(codes.NotFound, "checkpoint zip not found")
-			return nil, err
-		}
-
-		// Get the size
-		size := fileInfo.Size()
-
-		// zipFileSize += 4096
-
-		checkpointFullSize := int64(size)
-
-		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
-		if err != nil {
-			err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
-			return nil, err
-		}
-
-		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
-		if err != nil {
-			err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
-			return nil, err
-		}
-
-		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
-		if err != nil {
-			err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
 			return nil, err
 		}
 
@@ -207,6 +173,10 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
+	jobId := uuid.New().String()
+
+	s.Client.jobID = jobId
+
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
@@ -214,7 +184,13 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 	}
 
+	cfg := utils.Config{}
+	store := utils.NewCedanaStore(&cfg)
+
+	store.FullMultipartUpload(args.CriuOpts.ImagesDirectory)
+
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
+
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err

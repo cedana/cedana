@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Abstraction for storing and retreiving checkpoints
@@ -60,6 +62,46 @@ func NewCedanaStore(cfg *Config) *CedanaStore {
 		logger: &logger,
 		cfg:    cfg,
 	}
+}
+
+func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadResponse, error) {
+	file, err := os.Open(checkpointPath)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+	defer file.Close()
+
+	// Get the file size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		err = status.Error(codes.NotFound, "checkpoint zip not found")
+		return &UploadResponse{}, err
+	}
+
+	// Get the size
+	size := fileInfo.Size()
+
+	checkpointFullSize := int64(size)
+
+	multipartCheckpointResp, cid, err := cs.CreateMultiPartUpload(checkpointFullSize)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+
+	err = cs.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+
+	err = cs.CompleteMultiPartUpload(multipartCheckpointResp, cid)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+	return &multipartCheckpointResp, nil
 }
 
 // ID to GetCheckpoint gets populated from the data sent over as part of a
@@ -193,6 +235,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	req.Header.Set("Content-Type", "application/json")
 
+	//TODO BS Have this be chosen by user, we should have a single auth on init
 	req.Header.Set("Authorization", "Bearer brandonsmith")
 
 	resp, err := httpClient.Do(req)
@@ -247,6 +290,8 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 		req.Header.Set("Content-Type", "application/octet-stream")
 		req.Header.Set("Transfer-Encoding", "chunked")
+
+		//TODO BS Have this be chosen by user, we should have a single auth on init
 		req.Header.Set("Authorization", "Bearer brandonsmith")
 
 		resp, err := httpClient.Do(req)
@@ -276,6 +321,7 @@ func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid st
 		return err
 	}
 
+	//TODO BS Have this be chosen by user, we should have a single auth on init
 	req.Header.Set("Authorization", "Bearer brandonsmith")
 
 	resp, err := httpClient.Do(req)
