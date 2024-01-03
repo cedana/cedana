@@ -356,12 +356,10 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 		Directory: dumpdir,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
 	if err != nil {
-		c.logger.Warn().Msgf("could not checkpoint gpu: %v", err)
 		return err
 	}
 

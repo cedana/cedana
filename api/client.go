@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
@@ -44,9 +43,6 @@ type Client struct {
 
 	// used for perf, CEDANA_PROFILING_ENABLED needs to be set
 	timers *utils.Timings
-
-	// gpu checkpointing service conn
-	gpuServiceConn gpu.CedanaGPUClient
 }
 
 type ClientLogs struct {
