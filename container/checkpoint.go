@@ -1036,6 +1036,9 @@ func CheckRuntime(current, expected string) bool {
 }
 
 func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
+	if ctx == nil {
+		ctx = gocontext.Background()
+	}
 	// This is for garbage collection
 	ctx, done, err := client.WithLease(ctx)
 	if err != nil {
