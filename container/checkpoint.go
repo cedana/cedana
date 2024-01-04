@@ -792,7 +792,15 @@ func containerdCheckpoint(id string, ref string) error {
 	// containerdOpts := []containerd.CheckpointOpts{
 	// 	containerd.WithCheckpointRuntime,
 	// }
+	if ctx == nil {
+		ctx = gocontext.Background()
+	}
+
 	ctx = namespaces.WithNamespace(ctx, "k8s.io")
+
+	if ctx == nil {
+		ctx = gocontext.Background()
+	}
 
 	// Testing purposes
 	containers, err := containerdClient.Containers(ctx)
