@@ -51,7 +51,6 @@ import (
 	dockercli "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/opencontainers/go-digest"
-	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
@@ -1087,12 +1086,7 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		defer task.Resume(ctx)
 	}
 
-	index := v1.Index{
-		Versioned: is.Versioned{
-			SchemaVersion: 2,
-		},
-		Annotations: make(map[string]string),
-	}
+	index := v1.Index{}
 	// TODO: this is where we do custom criu checkpoint
 	response, err := localCheckpointTask(ctx, client, &index, request, cr)
 	if err != nil {
