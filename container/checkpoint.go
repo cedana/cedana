@@ -816,8 +816,6 @@ func containerdCheckpoint(id string, ref string) error {
 		return err
 	}
 
-	ctx = namespaces.WithNamespace(ctx, "k8s.io")
-
 	task, err := container.Task(ctx, nil)
 	if err != nil {
 		if !errdefs.IsNotFound(err) {
