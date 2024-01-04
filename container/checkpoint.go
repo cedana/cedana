@@ -1035,6 +1035,7 @@ func CheckRuntime(current, expected string) bool {
 }
 
 func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
+
 	if ctx == nil {
 		ctx = gocontext.Background()
 	}
@@ -1044,6 +1045,8 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		return nil, err
 	}
 	defer done(ctx)
+	index := v1.Index{}
+
 	cr, err := client.ContainerService().Get(ctx, task.ID())
 	if err != nil {
 		return nil, err
@@ -1086,7 +1089,6 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		defer task.Resume(ctx)
 	}
 
-	index := v1.Index{}
 	// TODO: this is where we do custom criu checkpoint
 	response, err := localCheckpointTask(ctx, client, &index, request, cr)
 	if err != nil {
