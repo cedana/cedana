@@ -22,10 +22,10 @@ import (
 var AppFs = afero.NewOsFs()
 
 type Client struct {
-	CRIU    *Criu
-	logger  *zerolog.Logger
-	config  *utils.Config
-	context context.Context
+	CRIU   *Criu
+	logger *zerolog.Logger
+	config *utils.Config
+	ctx    context.Context
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
@@ -83,13 +83,13 @@ func InstantiateClient() (*Client, error) {
 	t := utils.NewTimings()
 
 	return &Client{
-		CRIU:    criu,
-		logger:  &logger,
-		config:  config,
-		context: context.Background(),
-		fs:      fs,
-		db:      db,
-		timers:  t,
+		CRIU:   criu,
+		logger: &logger,
+		config: config,
+		ctx:    context.Background(),
+		fs:     fs,
+		db:     db,
+		timers: t,
 	}, nil
 }
 

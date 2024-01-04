@@ -1,9 +1,11 @@
 package services
 
+// cts encapsulates functions to interact with the running grpc daemon
+
 import (
 	"context"
 	"log"
-	"sync"
+	"time"
 
 	"github.com/cedana/cedana/api/services/task"
 	"google.golang.org/grpc"
@@ -11,23 +13,11 @@ import (
 )
 
 type ServiceClient struct {
-	ctx         context.Context
 	taskService task.TaskServiceClient
-	connMu      sync.Mutex
 	taskConn    *grpc.ClientConn
 }
 
-func (s *ServiceClient) TaskService() task.TaskServiceClient {
-	if s.taskService != nil {
-		return s.taskService
-	}
-	s.connMu.Lock()
-	defer s.connMu.Unlock()
-	return task.NewTaskServiceClient(s.taskConn)
-}
-
-func NewClient(addr string, ctx context.Context) *ServiceClient {
-
+func NewClient(addr string) *ServiceClient {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	taskConn, err := grpc.Dial(addr, opts...)
@@ -39,15 +29,16 @@ func NewClient(addr string, ctx context.Context) *ServiceClient {
 
 	client := &ServiceClient{
 		taskService: taskClient,
-		connMu:      sync.Mutex{},
 		taskConn:    taskConn,
-		ctx:         ctx,
 	}
 	return client
 }
 
 func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
-	resp, err := c.taskService.Dump(c.ctx, args)
+	// TODO NR - timeouts here need to be fixed
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.Dump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +46,9 @@ func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, err
 }
 
 func (c *ServiceClient) RestoreTask(args *task.RestoreArgs) (*task.RestoreResp, error) {
-	resp, err := c.taskService.Restore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.Restore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +56,9 @@ func (c *ServiceClient) RestoreTask(args *task.RestoreArgs) (*task.RestoreResp, 
 }
 
 func (c *ServiceClient) CheckpointContainer(args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
-	resp, err := c.taskService.ContainerDump(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.ContainerDump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +66,9 @@ func (c *ServiceClient) CheckpointContainer(args *task.ContainerDumpArgs) (*task
 }
 
 func (c *ServiceClient) RestoreContainer(args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
-	resp, err := c.taskService.ContainerRestore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.ContainerRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +76,9 @@ func (c *ServiceClient) RestoreContainer(args *task.ContainerRestoreArgs) (*task
 }
 
 func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	resp, err := c.taskService.RuncDump(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.RuncDump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +86,9 @@ func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpR
 }
 
 func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
-	resp, err := c.taskService.RuncRestore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.RuncRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +96,9 @@ func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncResto
 }
 
 func (c *ServiceClient) StartTask(args *task.StartTaskArgs) (*task.StartTaskResp, error) {
-	resp, err := c.taskService.StartTask(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.StartTask(ctx, args)
 	if err != nil {
 		return nil, err
 	}

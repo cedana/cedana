@@ -50,6 +50,7 @@ type service struct {
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	s.Client.jobID = args.JobID
+	s.Client.ctx = ctx
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -176,9 +177,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	client := s.Client
-
 	var resp task.RestoreResp
+	s.Client.ctx = ctx
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
@@ -186,7 +186,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 		}
 		// assume a suitable file has been passed to args
-		pid, err := client.Restore(args)
+		pid, err := s.Client.Restore(args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			return nil, staterr
@@ -201,16 +201,16 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
-		client.remoteStore = utils.NewCedanaStore(client.config)
+		s.Client.remoteStore = utils.NewCedanaStore(s.Client.config)
 
 		s.Client.timers.Start(utils.DownloadOp)
-		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
+		zipFile, err := s.Client.remoteStore.GetCheckpoint(args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
 		s.Client.timers.Stop(utils.DownloadOp)
 
-		pid, err := client.Restore(&task.RestoreArgs{
+		pid, err := s.Client.Restore(&task.RestoreArgs{
 			Type:           task.RestoreArgs_REMOTE,
 			CheckpointId:   args.CheckpointId,
 			CheckpointPath: *zipFile,
@@ -372,6 +372,15 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		return 0, fmt.Errorf("could not find task in config")
 	}
 
+	var gpuCmd *exec.Cmd
+	var err error
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		gpuCmd, err = StartGPUController(uid, gid, s.logger)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	// need a more resilient/retriable way of doing this
 	r, w, err := os.Pipe()
 	s.r = r
@@ -396,14 +405,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	if workingDir != "" {
 		cmd.Dir = workingDir
-	}
-
-	var gpuCmd *exec.Cmd
-	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		gpuCmd, err = s.RunGPUController(uid, gid)
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	cmd.Stdin = nullFile
@@ -454,12 +455,12 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 	return pid, nil
 }
 
-func (s *service) RunGPUController(uid, gid uint32) (*exec.Cmd, error) {
+func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
 	var gpuCmd *exec.Cmd
 	controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
 	if controllerPath == "" {
 		err := fmt.Errorf("gpu controller path not set")
-		s.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 		return nil, err
 	}
 
@@ -483,13 +484,13 @@ func (s *service) RunGPUController(uid, gid uint32) (*exec.Cmd, error) {
 	go func() {
 		err := gpuCmd.Wait()
 		if err != nil {
-			s.logger.Fatal().Err(err)
+			logger.Fatal().Err(err)
 		}
 	}()
 	if err != nil {
-		s.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
-	s.logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
+	logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
 
 	return gpuCmd, nil
 }

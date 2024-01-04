@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -45,13 +44,11 @@ type CLI struct {
 }
 
 func NewCLI() (*CLI, error) {
-	ctx := context.Background()
-
 	cfg, err := utils.InitConfig()
 	if err != nil {
 		return nil, err
 	}
-	cts := services.NewClient("localhost:8080", ctx)
+	cts := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
 

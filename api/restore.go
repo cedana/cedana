@@ -347,8 +347,10 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 }
 
 func (c *Client) gpuRestore(dir string) error {
-	// TODO NR - these should move out of here and be part of the Client lifecycle
-	// setting up a connection could be a source of slowdown for checkpointing
+	// start gpu controller as well
+	StartGPUController(1000, 1000, c.logger)
+	time.Sleep(1 * time.Second)
+
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
@@ -363,7 +365,7 @@ func (c *Client) gpuRestore(dir string) error {
 	args := gpu.RestoreRequest{
 		Directory: dir,
 	}
-	resp, err := gpuServiceConn.Restore(c.context, &args)
+	resp, err := gpuServiceConn.Restore(c.ctx, &args)
 	if err != nil {
 		c.logger.Warn().Msgf("could not restore gpu: %v", err)
 		return err

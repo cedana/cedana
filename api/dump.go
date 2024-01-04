@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -288,11 +287,24 @@ func (c *Client) Dump(dir string, pid int32) error {
 	// add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		err = c.gpuCheckpoint(dumpdir)
+		err = c.gpuCheckpoint(dir)
 		if err != nil {
 			return err
 		}
 		GPUCheckpointed = true
+		// hack for now, grab file that starts w/ gpuckpt and move it to dumpdir
+		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if strings.Contains(path, "gpuckpt") {
+				err := utils.CopyFile(path, dumpdir)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	img, err := os.Open(dumpdir)
@@ -356,9 +368,7 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 		Directory: dumpdir,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
+	resp, err := gpuServiceConn.Checkpoint(c.ctx, &args)
 	if err != nil {
 		return err
 	}
