@@ -294,7 +294,8 @@ func (c *Client) Dump(dir string, pid int32) error {
 		GPUCheckpointed = true
 		// hack for now, grab file that starts w/ gpuckpt and move it to dumpdir
 		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if strings.Contains(path, "gpuckpt") {
+			if strings.Contains(path, "gpuckpt") || strings.Contains(path, "mem") {
+				c.logger.Info().Msgf("copying file %s to %s", path, dumpdir)
 				err := utils.CopyFile(path, dumpdir)
 				if err != nil {
 					return err
