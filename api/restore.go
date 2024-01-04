@@ -347,7 +347,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 }
 
 func (c *Client) gpuRestore(dir string) error {
-	// start gpu controller as well
+	// TODO NR - propagate uid/guid too
 	StartGPUController(1000, 1000, c.logger)
 	time.Sleep(1 * time.Second)
 
