@@ -75,7 +75,22 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 
 	c.restoreFiles(&checkpointState, tmpdir)
 
+	if err := chmodRecursive(tmpdir, 0755); err != nil {
+		c.logger.Fatal().Err(err).Msg("error changing permissions")
+		return nil, nil, err
+	}
+
 	return &tmpdir, &checkpointState, nil
+}
+
+// chmodRecursive changes the permissions of the given path and all its contents.
+func chmodRecursive(path string, mode os.FileMode) error {
+	return filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chmod(filePath, mode)
+	})
 }
 
 func (c *Client) ContainerRestore(imgPath string, containerId string) error {

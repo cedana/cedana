@@ -116,7 +116,6 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 // the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.timers.Start(utils.CompressOp)
-	c.logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	// copy open writeonly fds one more time
@@ -284,7 +283,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 		return err
 	}
 
-	// add another check here for task running w/ accel resources
+	// TODO NR:add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
 		err = c.gpuCheckpoint(dir)
@@ -292,6 +291,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 			return err
 		}
 		GPUCheckpointed = true
+		c.logger.Info().Msgf("gpu checkpointed, copying checkpoints...")
 		// hack for now, grab file that starts w/ gpuckpt and move it to dumpdir
 		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if strings.Contains(path, "gpuckpt") || strings.Contains(path, "mem") {
