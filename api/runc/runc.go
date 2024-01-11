@@ -71,7 +71,7 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 			if err := json.Unmarshal(configFile, &spec); err != nil {
 				return "", "", err
 			}
-			if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
+			if spec.Annotations["io.kubernetes.cri.sandbox-name"] == containerName {
 				return dir.Name(), bundle, nil
 			}
 		}
