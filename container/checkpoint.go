@@ -1269,6 +1269,14 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	}
 	defer imageDir.Close()
 
+	//Find all bind mounts and add them as external mountpoints
+	externalMounts := []string{}
+	for _, m := range c.Config.Mounts {
+		if m.IsBind() {
+			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination))
+		}
+	}
+
 	rpcOpts := criurpc.CriuOpts{
 		ImagesDirFd:     proto.Int32(int32(imageDir.Fd())),
 		LogLevel:        proto.Int32(4),
@@ -1286,11 +1294,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
-		External: []string{
-			"mnt[/etc/hostname]:k8sHostname",
-			"mnt[/dev/termination-log]:/dev/termination-log",
-			"mnt[/etc/hosts]:/etc/hosts",
-		},
+		External:        externalMounts,
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump

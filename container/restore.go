@@ -2,7 +2,10 @@ package container
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/cedana/cedana/utils"
 	"github.com/containerd/console"
@@ -11,6 +14,7 @@ import (
 	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/log"
 	"github.com/docker/docker/errdefs"
+	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func Restore(imgPath string, containerID string) error {
@@ -118,15 +122,33 @@ func containerdRestore(id string, ref string) error {
 }
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
+	var spec rspec.Spec
+
+	configPath := opts.Bundle + "/config.json"
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		fmt.Println("Error reading config.json:", err)
+		return err
+	}
+
+	if err := json.Unmarshal(data, &spec); err != nil {
+		fmt.Println("Error decoding config.json:", err)
+		return err
+	}
+
+	//Find where to mount to
+	externalMounts := []string{}
+	for _, m := range spec.Mounts {
+		if m.Type == "bind" {
+			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+		}
+	}
 
 	criuOpts := CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
-		External: []string{
-			"mnt[k8sHostname]:/etc/hostname",
-			"mnt[/dev/termination-log]:/dev/termination-log",
-			"mnt[/etc/hosts]:/etc/hosts",
-		},
+		External:        externalMounts,
 		MntnsCompatMode: false,
 		TcpClose:        true,
 	}
@@ -141,7 +163,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		NetPid:        opts.NetPid,
 	}
 
-	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
+	_, err = StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
 	if err != nil {
 		return err
 	}
