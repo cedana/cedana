@@ -51,6 +51,7 @@ import (
 	dockercli "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/opencontainers/go-digest"
+	is "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
@@ -1035,7 +1036,6 @@ func CheckRuntime(current, expected string) bool {
 }
 
 func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
-
 	if ctx == nil {
 		ctx = gocontext.Background()
 	}
@@ -1045,8 +1045,6 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		return nil, err
 	}
 	defer done(ctx)
-	index := v1.Index{}
-
 	cr, err := client.ContainerService().Get(ctx, task.ID())
 	if err != nil {
 		return nil, err
@@ -1089,6 +1087,12 @@ func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 		defer task.Resume(ctx)
 	}
 
+	index := v1.Index{
+		Versioned: is.Versioned{
+			SchemaVersion: 2,
+		},
+		Annotations: make(map[string]string),
+	}
 	// TODO: this is where we do custom criu checkpoint
 	response, err := localCheckpointTask(ctx, client, &index, request, cr)
 	if err != nil {
@@ -1286,7 +1290,6 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			"mnt[/etc/hostname]:k8sHostname",
 			"mnt[/dev/termination-log]:/dev/termination-log",
 			"mnt[/etc/hosts]:/etc/hosts",
-			"mnt[/data]:/data",
 		},
 	}
 	// If the container is running in a network namespace and has
