@@ -107,42 +107,6 @@ func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadRespon
 	return &multipartCheckpointResp, nil
 }
 
-// ID to GetCheckpoint gets populated from the data sent over as part of a
-// ServerCommand
-func (cs *CedanaStore) GetCheckpoint(id string) (*string, error) {
-	cs.logger.Debug().Msgf("getting checkpoint with id: %s", id)
-	url := cs.cfg.Connection.CedanaUrl + "/" + "checkpoint" + "/" + id
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+cs.cfg.Connection.CedanaAuthToken)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	filename := "cedana_checkpoint.zip"
-	outFile, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer outFile.Close()
-
-	// stream download to file
-	// this can be parallelized if we use the server chunks - TODO NR
-	_, err = io.Copy(outFile, resp.Body)
-	if err != nil {
-		panic(err)
-	}
-
-	return &filename, nil
-}
-
 func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 	url := cs.url + "/checkpoint/" + cid
 	downloadPath := "checkpoint.tar"
@@ -184,7 +148,7 @@ func (cs *CedanaStore) PushCheckpoint(filepath string) error {
 	return nil
 }
 
-func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, string, error) {
+func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, string, error) {
 	var uploadResp UploadResponse
 
 	cid := uuid.New().String()
@@ -202,7 +166,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	httpClient := &http.Client{}
@@ -210,7 +174,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -219,18 +183,18 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return uploadResp, "", fmt.Errorf("unexpected status code: %v", resp.Status)
+		return &uploadResp, "", fmt.Errorf("unexpected status code: %v", resp.Status)
 	}
 
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	cs.logger.Info().Msgf("response body: %s", string(respBody))
@@ -238,10 +202,10 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 	// Parse the JSON response into the struct
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		fmt.Println("Error parsing JSON response:", err)
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
-	return uploadResp, cid, nil
+	return &uploadResp, cid, nil
 }
 
 // expecting part size and part count from server, but not getting it..
