@@ -107,7 +107,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		checkpointPath := state.CheckpointPath
 
-		multipartCheckpointResp, err := store.FullMultipartUpload(checkpointPath)
+		file, err := os.Open(checkpointPath)
 		if err != nil {
 			st := status.New(codes.NotFound, "checkpoint zip not found")
 			st.WithDetails(&errdetails.ErrorInfo{

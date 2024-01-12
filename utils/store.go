@@ -93,18 +93,18 @@ func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadRespon
 		return &UploadResponse{}, err
 	}
 
-	err = cs.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
+	err = cs.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 		return &UploadResponse{}, err
 	}
 
-	err = cs.CompleteMultiPartUpload(multipartCheckpointResp, cid)
+	err = cs.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
 		return &UploadResponse{}, err
 	}
-	return &multipartCheckpointResp, nil
+	return multipartCheckpointResp, nil
 }
 
 func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
