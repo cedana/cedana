@@ -265,14 +265,24 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	cfg := utils.Config{}
 	store := utils.NewCedanaStore(&cfg)
 
-	multipartCheckpointResp, err := store.FullMultipartUpload(args.CriuOpts.ImagesDirectory)
-
-	err = s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
-
+	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "invalid argument")
-		return nil, err
+		st := status.New(codes.Internal, "Runc dump failed")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
 	}
+
+	multipartCheckpointResp, err := store.FullMultipartUpload(args.CriuOpts.ImagesDirectory)
+	if err != nil {
+		st := status.New(codes.Internal, "Failed to upload checkpoint")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
+	}
+
 	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, multipartCheckpointResp.UploadID)}, nil
 }
 
