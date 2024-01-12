@@ -67,6 +67,11 @@ func NewCedanaStore(cfg *Config) *CedanaStore {
 	}
 }
 
+// TODO NR - unimplemented stubs for now
+func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+	return nil, nil
+}
+
 func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadResponse, error) {
 	file, err := os.Open(checkpointPath)
 	if err != nil {

@@ -17,6 +17,25 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
+type RuncOpts struct {
+	Root            string
+	ContainerId     string
+	Bundle          string
+	SystemdCgroup   bool
+	NoPivot         bool
+	NoMountFallback bool
+	NoNewKeyring    bool
+	Rootless        string
+	NoSubreaper     bool
+	Keep            bool
+	ConsoleSocket   string
+	Detatch         bool
+	PidFile         string
+	PreserveFds     int
+	Pid             int
+	NetPid          int
+}
+
 func Restore(imgPath string, containerID string) error {
 
 	err := containerdRestore(containerID, imgPath)
@@ -168,23 +187,4 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		return err
 	}
 	return nil
-}
-
-type RuncOpts struct {
-	Root            string
-	ContainerId     string
-	Bundle          string
-	SystemdCgroup   bool
-	NoPivot         bool
-	NoMountFallback bool
-	NoNewKeyring    bool
-	Rootless        string
-	NoSubreaper     bool
-	Keep            bool
-	ConsoleSocket   string
-	Detatch         bool
-	PidFile         string
-	PreserveFds     int
-	Pid             int
-	NetPid          int
 }
