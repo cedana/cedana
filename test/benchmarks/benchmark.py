@@ -7,6 +7,7 @@ import requests
 import profile_pb2
 from google.cloud import bigquery
 from google.cloud.bigquery import LoadJobConfig, SourceFormat
+import json
 
 
 import psutil
@@ -49,12 +50,12 @@ def measure_disk_usage(checkpoint_dir):
 def start_pprof(filename): 
     pprof_base_url = "http://localhost:6060"
     resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
-    print("got status code {} from profiler".format(resp.status_code))
+    if resp.status_code != 200:
+        print("error from profiler: {}".format(resp.text))
 
 def stop_pprof(filename):
     pprof_base_url = "http://localhost:6060"
     resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
-    print("got status code {} from profiler".format(resp.status_code))
     if resp.status_code != 200:
         print("error from profiler: {}".format(resp.text))
 
@@ -73,9 +74,8 @@ def start_recording(pid):
 
     return initial_data
 
-def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_stats):
+def stop_recording(operation_type, pid, initial_data, jobID, completed_at, started_at, process_stats):
     p = psutil.Process(pid)
-    # CPU times
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data['cpu_times'].user
     cpu_time_system_diff = current_cpu_times.system - initial_data['cpu_times'].system
@@ -88,7 +88,7 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
     cpu_total_time_diff = sum(getattr(current_time, attr) - getattr(initial_data['time'], attr)
                                   for attr in ['user', 'system', 'idle'])
 
-        # Calculate the percentage of CPU utilization
+    # Calculate the percentage of CPU utilization
     cpu_percent = 100 * cpu_time_total_diff / cpu_total_time_diff if cpu_total_time_diff else 0
 
     # Memory usage in KB
@@ -102,8 +102,21 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
     read_bytes_diff = current_disk_io.read_bytes - initial_data['disk_io'].read_bytes
     write_bytes_diff = current_disk_io.write_bytes - initial_data['disk_io'].write_bytes
 
-    # also get size of checkpoint
+    # read from profiling json 
+    network_op = ""
+    compress_op = ""
+    if operation_type == "checkpoint":
+        network_op = "upload"
+        compress_op = "compress"
+    else: 
+        network_op = "download"
+        compress_op = "decompress"
 
+    with open("/var/log/cedana-profile.json", 'r') as f:
+        profiling_data = json.load(f)
+        op_duration = profiling_data[operation_type]
+        network_duration = profiling_data[network_op]
+        compress_duration = profiling_data[compress_op]
 
     with open("benchmark_output.csv", mode='a', newline='') as file:
         writer = csv.writer(file)
@@ -112,7 +125,8 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
             writer.writerow([
                 'Timestamp', 
                 'Job ID', 
-                'Memory Used Target',
+                'Operation Type',
+                'Memory Used Target (KB)',
                 'Memory Used Daemon', 
                 'Write Count', 
                 'Read Count', 
@@ -120,14 +134,18 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
                 'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
-                'Time Taken'
+                'Total Duration',
+                'Operation Duration',
+                'Network Duration',
+                "Compression Duration",
                 ])
         
         # Write the resource usage data
         writer.writerow([
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
             jobID,
-            process_stats['memory'],
+            operation_type,
+            process_stats['memory_kb'],
             memory_used_kb,
             write_count_diff,
             read_count_diff,
@@ -135,18 +153,24 @@ def stop_recording(pid, initial_data, jobID, completed_at, started_at, process_s
             read_bytes_diff / (1024 * 1024), # convert to MB
             cpu_utilization,
             cpu_percent,
-            completed_at - started_at
+            completed_at - started_at,
+            op_duration,
+            network_duration,
+            compress_duration
         ])
+
+        # delete profile file after
+        os.remove("/var/log/cedana-profile.json")
 
 def analyze_pprof(filename):
     pass 
 
 def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats): 
-    chkpt_cmd = "sudo ./cedana dump job {} -d tmp".format(jobID)
+    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID+"-"+str(iteration))
 
-    # TODO NR - fix 
+    # initial data here is fine - we want to measure impact of daemon on system 
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}".format(output_dir, jobID, iteration)
+    cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
 
     checkpoint_started_at = time.monotonic_ns() 
@@ -156,19 +180,27 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
 
     # these values have an error range in 35ms! I blame Python?
     checkpoint_completed_at = time.monotonic_ns()  
-    stop_recording(daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
 
-def run_restore(jobID):
-    restore_started_at = time.perf_counter()
-    print("starting restore of process at {}".format(restore_started_at))
-    restore_cmd = "sudo ./cedana restore job {}".format(jobID)
-    
+def run_restore(daemonPID, jobID, iteration, output_dir):
+    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
+
+    initial_data = start_recording(daemonPID)
+    cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
+    start_pprof(cpu_profile_filename)
+
+    restore_started_at = time.monotonic_ns() 
     p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
 
-    restore_completed_at = time.perf_counter()
-    print("completed restore of process at {}".format(restore_completed_at))
+    restore_completed_at = time.monotonic_ns()
+
+    # nil value here
+    process_stats = {}
+    process_stats["memory_kb"] = 0
+    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
+    stop_pprof(cpu_profile_filename)
 
 def run_exec(cmd, jobID): 
     process_stats = {}
@@ -179,7 +211,7 @@ def run_exec(cmd, jobID):
     process_stats['pid'] = pid
 
     psutil_process = psutil.Process(pid)
-    process_stats['memory'] = psutil_process.memory_info().rss / 1024
+    process_stats['memory_kb'] = psutil_process.memory_full_info().uss / 1024 # convert to KB
 
     return process_stats 
 
@@ -187,7 +219,7 @@ def push_to_bigquery():
     client = bigquery.Client()
 
     dataset_id = 'devtest'
-    table_id = 'benchmarking_naiive'
+    table_id = 'benchmarks'
 
     csv_file_path = 'benchmark_output.csv'
 
@@ -195,7 +227,7 @@ def push_to_bigquery():
         source_format=SourceFormat.CSV,
         skip_leading_rows=1,  # Change this according to your CSV file
         autodetect=True,  # Auto-detect schema if the table doesn't exist
-        write_disposition="WRITE_TRUNCATE",  # Options are WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
+        write_disposition="WRITE_APPEND",  # Options are WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
 )
 
     dataset_ref = client.dataset(dataset_id)
@@ -223,22 +255,36 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
+        "nn-1gb"
     ]
     cmds = [
+        "./benchmarks/server",
         "./benchmarks/test.sh",
-        "'python3 benchmarks/regression/main.py'"
+        "'python3 benchmarks/regression/main.py'",
+        "'python3 benchmarks/1gb_pytorch.py'"
     ]
 
     # run in a loop 
-    num_samples = 30
+    num_samples = 10 
     for x in range(len(jobIDs)): 
+        print("Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x]))
         jobID = jobIDs[x]
         for y in range(num_samples):
-            process_stats = run_exec(cmds[x], jobID)
-            time.sleep(1)
+            # we pass a job ID + iteration to generate a unique one every time. 
+            # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and 
+            # we end up getting a killed PID.
+            process_stats = run_exec(cmds[x], jobID+"-"+str(y))
+            # wait a few seconds for memory to allocate 
+            time.sleep(5)
+
+            # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
+            time.sleep(1)
+
+            run_restore(daemon_pid, jobID, y, output_dir)
             time.sleep(1)
 
     push_to_bigquery()

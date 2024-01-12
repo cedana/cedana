@@ -38,6 +38,9 @@ type Client struct {
 	// and the jobID is set at instantiation time. We rely on whatever is callig
 	// InstantiateClient() to set the jobID correctly.
 	jobID string
+
+	// used for perf, CEDANA_PROFILING_ENABLED needs to be set
+	timers *utils.Timings
 }
 
 type ClientLogs struct {
@@ -75,6 +78,8 @@ func InstantiateClient() (*Client, error) {
 
 	db := &DB{}
 
+	t := utils.NewTimings()
+
 	return &Client{
 		CRIU:    criu,
 		logger:  &logger,
@@ -82,6 +87,7 @@ func InstantiateClient() (*Client, error) {
 		context: context.Background(),
 		fs:      fs,
 		db:      db,
+		timers:  t,
 	}, nil
 }
 
@@ -120,7 +126,7 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		c.logger.Info().Msgf("Could not instantiate new gopsutil process with error %v", err)
+		c.logger.Info().Msgf("Could not instantiate new gopsutil process for pid %d with error: %v", pid, err)
 	}
 
 	var openFiles []*task.OpenFilesStat
@@ -231,6 +237,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 	return paths
 }
 
+// Generates state using gops and updates pid state in db.
 func (c *Client) getState(pid int32) (*task.ProcessState, error) {
 	state, err := c.generateState(pid)
 	if err != nil {

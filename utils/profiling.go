@@ -1,14 +1,79 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime/pprof"
+	"time"
+
+	"github.com/felixge/fgprof"
 )
 
+type Timings struct {
+	enabled bool
+	data    map[string]int64
+	timers  map[OperationType]time.Time
+}
+
+type OperationType string
+
+const (
+	CriuCheckpointOp OperationType = "checkpoint"
+	CriuRestoreOp    OperationType = "restore"
+	CompressOp       OperationType = "compress"
+	DecompressOp     OperationType = "decompress"
+	UploadOp         OperationType = "upload"
+	DownloadOp       OperationType = "download"
+)
+
+func NewTimings() *Timings {
+	enabled := os.Getenv("CEDANA_PROFILING_ENABLED") == "true"
+
+	return &Timings{
+		enabled: enabled,
+		data:    make(map[string]int64),
+		timers:  make(map[OperationType]time.Time),
+	}
+}
+
+func (t *Timings) Start(name OperationType) {
+	if !t.enabled {
+		return
+	}
+
+	t.timers[name] = time.Now()
+}
+
+func (t *Timings) Stop(name OperationType) {
+	if !t.enabled {
+		return
+	}
+
+	elapsed := time.Since(t.timers[name])
+	t.data[string(name)] = elapsed.Nanoseconds()
+}
+
+func (t *Timings) Flush() error {
+	if t.enabled {
+		jsonData, err := json.Marshal(t.data)
+		if err != nil {
+			return err
+		}
+		_ = os.WriteFile("/var/log/cedana-profile.json", jsonData, 0644)
+	}
+
+	t.data = make(map[string]int64)
+	t.timers = make(map[OperationType]time.Time)
+
+	return nil
+}
+
 // TODO NR - add memory profiling
+// TODO NR - do we need to play with sampling rate here?
+var stop func() error
+
 func setupProfilerHandlers() {
 	// Handler to start CPU profiling
 	http.HandleFunc("/start-profiling", func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +91,7 @@ func setupProfilerHandlers() {
 			return
 		}
 
-		pprof.StartCPUProfile(cpu)
+		stop = fgprof.Start(cpu, fgprof.FormatPprof)
 
 		// TODO NR - add memory profile
 		fmt.Println("Started CPU profiling")
@@ -45,7 +110,7 @@ func setupProfilerHandlers() {
 			return
 		}
 
-		pprof.StopCPUProfile()
+		stop()
 		f, err := os.Open(filename + ".pprof")
 		if err != nil {
 			// Set the header before writing the response body

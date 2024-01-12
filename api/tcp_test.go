@@ -127,7 +127,7 @@ func Test_MultiConn(t *testing.T) {
 	oldState, _ := c.getState(resp.PID)
 	t.Logf("old state: %+v", oldState)
 
-	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_SELF_SERVE, JobID: exec})
+	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_LOCAL, JobID: exec})
 	if err != nil {
 		t.Error(err)
 	}

@@ -12,8 +12,8 @@ message DumpArgs {
   int32 PID = 1;
   string Dir = 2;
   enum DumpType {
-    SELF_SERVE = 0;
-    MARKET = 1;
+    LOCAL = 0;
+    REMOTE = 1;
   }
   DumpType Type = 3;
   string JobID = 4;
@@ -21,6 +21,8 @@ message DumpArgs {
 
 message DumpResp {
     string Message = 1;
+    string CheckpointID = 2;
+    string UploadID = 3;
 }
 
 message RestoreArgs {
@@ -61,7 +63,6 @@ message LogStreamingResp {
   string Status = 1;
 }
 
-// Client State Streaming args
 
 message ProcessState {
   int32 PID = 1;
@@ -73,10 +74,16 @@ message ProcessState {
   string CheckpointPath = 7;
   checkpointState CheckpointState = 8;
   FlagEnum Flag = 9;
+  RemoteState RemoteState = 10;
   enum ContainerRuntimeOpts {
     CONTAINERD = 0;
     RUNC = 1;
   }
+}
+
+message RemoteState {
+  string CheckpointID = 1;
+  string UploadID = 2;
 }
 
 message ClientInfo {

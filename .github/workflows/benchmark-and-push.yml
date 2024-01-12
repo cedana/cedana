@@ -17,10 +17,7 @@ jobs:
       packages: 'read'
       id-token: 'write'
 
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubicloud
     
     steps:
     - name: Checkout cedana
@@ -36,8 +33,10 @@ jobs:
         service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
 
     - name: Run Benchmarking Script (${{ matrix.os }})
-      run: sudo -E make -C scripts/ci benchmarking
+      run: sudo -E make -C scripts/ci benchmark 
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        GOOGLE_CLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
         GITHUB_ACTOR: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CHECKPOINTSVC_URL: ${{ secrets.CHECKPOINTSVC_URL }}

@@ -37,6 +37,7 @@ jobs:
 
   build-and-push-image: 
     runs-on: ubuntu-latest 
+    needs: release
 
     permissions: 
       contents: read
@@ -70,6 +71,7 @@ jobs:
 
   build-and-push-benchmarking-image: 
     runs-on: ubuntu-latest
+    needs: release
 
     permissions: 
       contents: read
