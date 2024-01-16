@@ -90,6 +90,13 @@ func InitConfig() (*Config, error) {
 	}
 
 	viper.WriteConfig()
+
+	url := os.Getenv("MARKET_URL")
+	if url == "" {
+		return nil, fmt.Errorf("No market url set")
+	}
+
+	config.Connection.CedanaUrl = url
 	return &config, nil
 }
 
