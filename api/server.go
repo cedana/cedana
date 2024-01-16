@@ -262,10 +262,10 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 	}
 
-	cfg := utils.Config{}
-	store := utils.NewCedanaStore(&cfg)
+	cfg, err := utils.InitConfig()
+	store := utils.NewCedanaStore(cfg)
 
-	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
+	err = s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
