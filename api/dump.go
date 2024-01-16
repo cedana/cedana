@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/types"
@@ -16,6 +17,8 @@ import (
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
 	bolt "go.etcd.io/bbolt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -113,7 +116,6 @@ func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
 // the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.timers.Start(utils.CompressOp)
-	c.logger.Info().Msg("compressing checkpoint...")
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	// copy open writeonly fds one more time
@@ -127,7 +129,7 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	state.CheckpointPath = compressedCheckpointPath
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	// sneak in a serialized state obj
-	err = types.SerializeToFolder(dumpdir, state)
+	err = c.SerializeStateToDir(dumpdir, state)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
@@ -281,6 +283,31 @@ func (c *Client) Dump(dir string, pid int32) error {
 		return err
 	}
 
+	// TODO NR:add another check here for task running w/ accel resources
+	var GPUCheckpointed bool
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		err = c.gpuCheckpoint(dir)
+		if err != nil {
+			return err
+		}
+		GPUCheckpointed = true
+		c.logger.Info().Msgf("gpu checkpointed, copying checkpoints...")
+		// hack for now, grab file that starts w/ gpuckpt and move it to dumpdir
+		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if strings.Contains(path, "gpuckpt") || strings.Contains(path, "mem") {
+				c.logger.Info().Msgf("copying file %s to %s", path, dumpdir)
+				err := utils.CopyFile(path, dumpdir)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	img, err := os.Open(dumpdir)
 	if err != nil {
 		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
@@ -291,12 +318,8 @@ func (c *Client) Dump(dir string, pid int32) error {
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(pid)
 
-	nfy := utils.Notify{
-		Config:          c.config,
-		Logger:          c.logger,
-		PreDumpAvail:    true,
-		PostDumpAvail:   true,
-		PreRestoreAvail: true,
+	nfy := Notify{
+		Logger: c.logger,
 	}
 
 	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
@@ -305,26 +328,55 @@ func (c *Client) Dump(dir string, pid int32) error {
 		c.logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
-	if !state.ProcessInfo.AttachedToHardwareAccel {
-		c.timers.Start(utils.CriuCheckpointOp)
-		_, err = c.CRIU.Dump(opts, &nfy)
-		if err != nil {
-			// check for sudo error
-			if strings.Contains(err.Error(), "errno 0") {
-				c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
-				return err
-			}
 
-			c.logger.Warn().Msgf("error dumping process: %v", err)
+	c.timers.Start(utils.CriuCheckpointOp)
+	_, err = c.CRIU.Dump(opts, &nfy)
+	if err != nil {
+		// check for sudo error
+		if strings.Contains(err.Error(), "errno 0") {
+			c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 			return err
 		}
-		c.timers.Stop(utils.CriuCheckpointOp)
-	}
 
-	// CRIU ntfy hooks get run before this,
-	// so have to ensure that image files aren't tampered with
+		c.logger.Warn().Msgf("error dumping process: %v", err)
+		return err
+	}
+	c.timers.Stop(utils.CriuCheckpointOp)
+
+	state.GPUCheckpointed = GPUCheckpointed
 	c.postDump(dumpdir, state)
 	c.cleanupClient()
+
+	return nil
+}
+
+func (c *Client) gpuCheckpoint(dumpdir string) error {
+	// TODO NR - these should move out of here and be part of the Client lifecycle
+	// setting up a connection could be a source of slowdown for checkpointing
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		c.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
+		return err
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.CheckpointRequest{
+		Directory: dumpdir,
+	}
+
+	resp, err := gpuServiceConn.Checkpoint(c.ctx, &args)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("could not checkpoint gpu")
+	}
 
 	return nil
 }

@@ -25,6 +25,7 @@ import (
 )
 
 const defaultLogPath string = "/var/log/cedana-output.log"
+const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
 // Unused for now...
 type GrpcService interface {
@@ -49,6 +50,7 @@ type service struct {
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	s.Client.jobID = args.JobID
+	s.Client.ctx = ctx
 	// Close before dumping
 	s.r.Close()
 	s.w.Close()
@@ -175,9 +177,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	client := s.Client
-
 	var resp task.RestoreResp
+	s.Client.ctx = ctx
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
@@ -185,7 +186,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 		}
 		// assume a suitable file has been passed to args
-		pid, err := client.Restore(args)
+		pid, err := s.Client.Restore(args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			return nil, staterr
@@ -200,16 +201,16 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
-		client.remoteStore = utils.NewCedanaStore(client.config)
+		s.Client.remoteStore = utils.NewCedanaStore(s.Client.config)
 
 		s.Client.timers.Start(utils.DownloadOp)
-		zipFile, err := client.remoteStore.GetCheckpoint(args.CheckpointId)
+		zipFile, err := s.Client.remoteStore.GetCheckpoint(args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
 		s.Client.timers.Stop(utils.DownloadOp)
 
-		pid, err := client.Restore(&task.RestoreArgs{
+		pid, err := s.Client.Restore(&task.RestoreArgs{
 			Type:           task.RestoreArgs_REMOTE,
 			CheckpointId:   args.CheckpointId,
 			CheckpointPath: *zipFile,
@@ -365,10 +366,19 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error) {
+func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
 	var pid int32
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
+	}
+
+	var gpuCmd *exec.Cmd
+	var err error
+	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		gpuCmd, err = StartGPUController(uid, gid, s.logger)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	// need a more resilient/retriable way of doing this
@@ -387,6 +397,10 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	cmd := exec.Command("bash", "-c", task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
+		Credential: &syscall.Credential{
+			Uid: uid,
+			Gid: gid,
+		},
 	}
 
 	if workingDir != "" {
@@ -398,7 +412,9 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
+
+	// is this non-performant? do we need to flush at intervals instead of writing?
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return 0, err
 	}
@@ -415,6 +431,13 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 
 	go func() {
 		err := cmd.Wait()
+		if gpuCmd != nil {
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				s.logger.Fatal().Err(err)
+			}
+			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+		}
 		if err != nil {
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 			buf := make([]byte, 4096)
@@ -432,6 +455,46 @@ func (s *service) runTask(task, workingDir, logOutputFile string) (int32, error)
 	return pid, nil
 }
 
+func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	var gpuCmd *exec.Cmd
+	controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
+	if controllerPath == "" {
+		err := fmt.Errorf("gpu controller path not set")
+		logger.Fatal().Err(err)
+		return nil, err
+	}
+
+	gpuCmd = exec.Command("bash", "-c", controllerPath)
+	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+		Credential: &syscall.Credential{
+			Uid: uid,
+			Gid: gid,
+		},
+	}
+
+	gpuLogFile, err := os.OpenFile(gpuDefaultLogPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return nil, err
+	}
+	gpuCmd.Stdout = gpuLogFile
+	gpuCmd.Stderr = gpuLogFile
+
+	err = gpuCmd.Start()
+	go func() {
+		err := gpuCmd.Wait()
+		if err != nil {
+			logger.Fatal().Err(err)
+		}
+	}()
+	if err != nil {
+		logger.Fatal().Err(err)
+	}
+	logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
+
+	return gpuCmd, nil
+}
+
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
 
 	var state task.ProcessState
@@ -443,7 +506,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile)
+	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
 
 	if err == nil {
 		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
@@ -480,7 +543,6 @@ type Server struct {
 }
 
 func (s *Server) New() (*grpc.Server, error) {
-
 	grpcServer := grpc.NewServer()
 
 	client, err := InstantiateClient()

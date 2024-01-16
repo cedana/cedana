@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -20,10 +22,10 @@ import (
 var AppFs = afero.NewOsFs()
 
 type Client struct {
-	CRIU    *utils.Criu
-	logger  *zerolog.Logger
-	config  *utils.Config
-	context context.Context
+	CRIU   *Criu
+	logger *zerolog.Logger
+	config *utils.Config
+	ctx    context.Context
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
@@ -54,7 +56,7 @@ func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
 
-	criu := utils.MakeCriu()
+	criu := MakeCriu()
 	_, err := criu.GetCriuVersion()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error checking CRIU version")
@@ -81,13 +83,13 @@ func InstantiateClient() (*Client, error) {
 	t := utils.NewTimings()
 
 	return &Client{
-		CRIU:    criu,
-		logger:  &logger,
-		config:  config,
-		context: context.Background(),
-		fs:      fs,
-		db:      db,
-		timers:  t,
+		CRIU:   criu,
+		logger: &logger,
+		config: config,
+		ctx:    context.Background(),
+		fs:     fs,
+		db:     db,
+		timers: t,
 	}, nil
 }
 
@@ -101,10 +103,6 @@ func (c *Client) cleanupClient() error {
 func (c *Client) timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
-}
-
-func (c *Client) checkpointGPU() {
-
 }
 
 func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
@@ -250,6 +248,22 @@ func (c *Client) getState(pid int32) (*task.ProcessState, error) {
 	}
 
 	return state, err
+}
+
+func (c *Client) SerializeStateToDir(dir string, state *task.ProcessState) error {
+	serialized, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "checkpoint_state.json")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	_, err = file.Write(serialized)
+	return err
 }
 
 func closeCommonFds(parentPID, childPID int32) error {
