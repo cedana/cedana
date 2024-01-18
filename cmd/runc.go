@@ -75,6 +75,8 @@ var runcDumpCmd = &cobra.Command{
 			CheckpointPath: checkpointPath,
 			ContainerId:    containerId,
 			CriuOpts:       criuOpts,
+			//TODO BS: hard coded for now
+			Type: task.RuncDumpArgs_REMOTE,
 		}
 
 		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
