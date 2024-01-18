@@ -381,13 +381,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		}
 	}
 
-	// need a more resilient/retriable way of doing this
-	r, w, err := os.Pipe()
-	s.r = r
-	s.w = w
-	if err != nil {
-		return 0, err
-	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
@@ -419,8 +412,8 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		return 0, err
 	}
 
-	cmd.Stdout = io.MultiWriter(w, outputFile)
-	cmd.Stderr = io.MultiWriter(w, outputFile)
+	cmd.Stdout = outputFile
+	cmd.Stderr = outputFile
 
 	cmd.Env = os.Environ()
 
@@ -440,11 +433,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		}
 		if err != nil {
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
-			buf := make([]byte, 4096)
-			_, err := r.Read(buf)
-			if err != nil {
-				s.logger.Warn().Err(err).Msgf("could not read stderr, file likely closed")
-			}
 		}
 	}()
 
