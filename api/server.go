@@ -251,7 +251,25 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
+	var uploadID string
+	//TODO BS: This will be done at controller level, just doing it here for now...
 	jobId := uuid.New().String()
+	pid, err := runc.GetPidByContainerId(args.ContainerId, args.Root)
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
+	}
+	s.Client.generateState(int32(pid))
+	var state task.ProcessState
+
+	state.Flag = task.FlagEnum_JOB_RUNNING
+	state.PID = int32(pid)
+
+	err = s.Client.db.CreateOrUpdateCedanaProcess(jobId, &state)
+	if err != nil {
+		err = status.Error(codes.Internal, err.Error())
+		return nil, err
+	}
 
 	s.Client.jobID = jobId
 
@@ -276,17 +294,86 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		})
 		return nil, st.Err()
 	}
+	//if remote
+	if args.Type == task.RuncDumpArgs_REMOTE {
+		state, err := s.Client.db.GetStateFromID(jobId)
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+			return nil, st.Err()
+		}
 
-	multipartCheckpointResp, err := store.FullMultipartUpload(args.CriuOpts.ImagesDirectory)
-	if err != nil {
-		st := status.New(codes.Internal, "Failed to upload checkpoint")
-		st.WithDetails(&errdetails.ErrorInfo{
-			Reason: err.Error(),
-		})
-		return nil, st.Err()
+		if state == nil {
+			st := status.New(codes.NotFound, fmt.Sprintf("state not found for job %v", jobId))
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
+		}
+
+		checkpointPath := state.CheckpointPath
+
+		file, err := os.Open(checkpointPath)
+		if err != nil {
+			st := status.New(codes.NotFound, "checkpoint zip not found")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
+		}
+		defer file.Close()
+
+		fileInfo, err := file.Stat()
+		if err != nil {
+			st := status.New(codes.Internal, "checkpoint zip stat failed")
+			st.WithDetails(&errdetails.ErrorInfo{
+				Reason: err.Error(),
+			})
+			return nil, st.Err()
+		}
+
+		// Get the size
+		size := fileInfo.Size()
+
+		// zipFileSize += 4096
+		checkpointFullSize := int64(size)
+
+		s.Client.timers.Start(utils.UploadOp)
+
+		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
+		if err != nil {
+			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
+			return nil, st.Err()
+		}
+
+		err = store.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
+		if err != nil {
+			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
+			return nil, st.Err()
+		}
+
+		err = store.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
+		if err != nil {
+			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
+			return nil, st.Err()
+		}
+
+		s.Client.timers.Stop(utils.UploadOp)
+
+		// initialize remoteState if nil
+		if state.RemoteState == nil {
+			state.RemoteState = &task.RemoteState{}
+		}
+
+		state.RemoteState.CheckpointID = cid
+		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+
+		uploadID = multipartCheckpointResp.UploadID
+
+		s.Client.db.UpdateProcessStateWithID(jobId, state)
+
 	}
 
-	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, multipartCheckpointResp.UploadID)}, nil
+	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, uploadID)}, nil
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {

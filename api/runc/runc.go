@@ -34,6 +34,21 @@ func List(root string) error {
 	return nil
 }
 
+func GetPidByContainerId(containerId, root string) (int, error) {
+	statePath := filepath.Join(root, containerId, "state.json")
+	var runcSpec libcontainer.State
+	if _, err := os.Stat(statePath); err == nil {
+		configFile, err := os.ReadFile(statePath)
+		if err != nil {
+			return 0, err
+		}
+		if err := json.Unmarshal(configFile, &runcSpec); err != nil {
+			return 0, err
+		}
+	}
+	return runcSpec.InitProcessPid, nil
+}
+
 func GetContainerIdByName(containerName string, root string) (string, string, error) {
 	dirs, err := os.ReadDir(root)
 	if err != nil {

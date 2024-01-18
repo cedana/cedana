@@ -246,6 +246,13 @@ message RuncDumpArgs {
   string CheckpointPath = 2;
   string ContainerId = 3;
   CriuOpts CriuOpts = 4;
+  enum DumpType {
+    LOCAL = 0;
+    REMOTE = 1;
+  }
+  DumpType Type = 5;
+  string JobID = 6;
+
 }
 
 message RuncDumpResp {
@@ -275,6 +282,12 @@ message RuncRestoreArgs {
   string ImagePath = 2;
   bool IsK3s = 3;
   RuncOpts Opts = 4;
+  enum RestoreType {
+    LOCAL = 0; 
+    REMOTE = 1;
+  }
+  RestoreType Type = 5;
+
 }
 
 message RuncOpts {
