@@ -120,6 +120,7 @@ var runcRestoreCmd = &cobra.Command{
 			ContainerId: containerId,
 			IsK3S:       isK3s,
 			Opts:        opts,
+			Type:        task.RuncRestoreArgs_REMOTE,
 		}
 
 		resp, err := cli.cts.RuncRestore(restoreArgs)
