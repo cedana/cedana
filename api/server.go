@@ -252,6 +252,7 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
 	var uploadID string
+	var checkpointId string
 	//TODO BS: This will be done at controller level, just doing it here for now...
 	jobId := uuid.New().String()
 	pid, err := runc.GetPidByContainerId(args.ContainerId, args.Root)
@@ -345,6 +346,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 			return nil, st.Err()
 		}
 
+		checkpointId = cid
+
 		err = store.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
@@ -373,7 +376,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	}
 
-	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, uploadID), CheckpointId: state.RemoteState.CheckpointID}, nil
+	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, uploadID), CheckpointId: checkpointId}, nil
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
