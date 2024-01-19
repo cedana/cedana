@@ -385,12 +385,41 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Detatch:       args.Opts.Detatch,
 		NetPid:        int(args.Opts.NetPid),
 	}
+	switch args.Type {
+	case task.RuncRestoreArgs_LOCAL:
+		if args.ImagePath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
 
-	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
-	if err != nil {
-		err = status.Error(codes.InvalidArgument, "invalid argument")
-		return nil, err
+		err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
+		if err != nil {
+			err = status.Error(codes.InvalidArgument, "invalid argument")
+			return nil, err
+		}
+
+	case task.RuncRestoreArgs_REMOTE:
+		if args.CheckpointId == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
+		}
+		s.Client.remoteStore = utils.NewCedanaStore(s.Client.config)
+
+		s.Client.timers.Start(utils.DownloadOp)
+		zipFile, err := s.Client.remoteStore.GetCheckpoint(args.CheckpointId)
+		if err != nil {
+			return nil, err
+		}
+		s.Client.timers.Stop(utils.DownloadOp)
+
+		err = s.Client.RuncRestore(*zipFile, args.ContainerId, args.IsK3S, []string{}, opts)
+
+		if err != nil {
+			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			return nil, staterr
+		}
+
 	}
+
+	s.Client.timers.Flush()
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
