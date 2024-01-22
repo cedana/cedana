@@ -13,7 +13,6 @@ import (
 
 type ConfigClient struct {
 	Client        Client        `json:"client"`
-	ActionScripts ActionScripts `json:"action_scripts"`
 	Connection    Connection    `json:"connection"`
 	SharedStorage SharedStorage `json:"shared_storage"`
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
@@ -20,27 +21,29 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
 	"github.com/google/uuid"
+	"github.com/shirou/gopsutil/v3/process"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, *task.ProcessState, error) {
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
 	err = utils.UntarFolder(checkpointPath, tmpdir)
 
 	if err != nil {
-		// hack: error here is not fatal due to EOF (from a badly written utils.Compress)
-		c.logger.Info().Err(err).Msg("error decompressing checkpoint")
+		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
 	}
 	c.timers.Stop(utils.DecompressOp)
 
@@ -48,20 +51,20 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
-		return nil, err
+		return nil, nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
-		return nil, err
+		return nil, nil, err
 	}
 
 	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// check open_fds. Useful for checking if process being restored
@@ -79,7 +82,22 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 
 	c.restoreFiles(&checkpointState, tmpdir)
 
-	return &tmpdir, nil
+	if err := chmodRecursive(tmpdir, 0755); err != nil {
+		c.logger.Fatal().Err(err).Msg("error changing permissions")
+		return nil, nil, err
+	}
+
+	return &tmpdir, &checkpointState, nil
+}
+
+// chmodRecursive changes the permissions of the given path and all its contents.
+func chmodRecursive(path string, mode os.FileMode) error {
+	return filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chmod(filePath, mode)
+	})
 }
 
 func (c *Client) ContainerRestore(imgPath string, containerId string) error {
@@ -130,8 +148,8 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 
 func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(2),
-		LogFile:        proto.String("restore.log"),
+		LogLevel:       proto.Int32(4),
+		LogFile:        proto.String("cedana-restore.log"),
 		TcpEstablished: proto.Bool(true),
 	}
 
@@ -139,7 +157,7 @@ func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy utils.Notify, dir string) (*int32, error) {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -587,17 +605,25 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	var pid *int32
 
 	opts := c.prepareRestoreOpts()
-	nfy := utils.Notify{
-		Config:          c.config,
-		Logger:          c.logger,
-		PreDumpAvail:    true,
-		PostDumpAvail:   true,
-		PreRestoreAvail: true,
+	nfy := Notify{
+		Logger: c.logger,
 	}
 
-	dir, err := c.prepareRestore(opts, nil, args.CheckpointPath)
+	dir, state, err := c.prepareRestore(opts, nil, args.CheckpointPath)
 	if err != nil {
 		return nil, err
+	}
+
+	var gpuCmd *exec.Cmd
+	if state.GPUCheckpointed {
+		nfy.PreResumeFunc = NotifyFunc{
+			Avail: true,
+			Callback: func() error {
+				var err error
+				gpuCmd, err = c.gpuRestore(*dir)
+				return err
+			},
+		}
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
@@ -607,5 +633,59 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 	c.timers.Stop(utils.CriuRestoreOp)
 
+	if state.GPUCheckpointed {
+		go func() {
+			proc, err := process.NewProcess(*pid)
+			if err != nil {
+				c.logger.Error().Msgf("could not find process: %v", err)
+				return
+			}
+			for {
+				running, err := proc.IsRunning()
+				if err != nil || !running {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+			c.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
+			gpuCmd.Process.Kill()
+		}()
+	}
+
 	return pid, nil
+}
+
+func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
+	// TODO NR - propagate uid/guid too
+	gpuCmd, err := StartGPUController(1000, 1000, c.logger)
+	if err != nil {
+		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		return nil, err
+	}
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.RestoreRequest{
+		Directory: dir,
+	}
+	resp, err := gpuServiceConn.Restore(c.ctx, &args)
+	if err != nil {
+		c.logger.Warn().Msgf("could not restore gpu: %v", err)
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("could not restore gpu")
+	}
+
+	return gpuCmd, nil
 }

@@ -1,49 +1,23 @@
 package services
 
+// cts encapsulates functions to interact with the running grpc daemon
+
 import (
 	"context"
 	"log"
-	"sync"
+	"time"
 
-	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type services struct {
-	taskService task.TaskServiceClient
-	gpuService  gpu.CedanaGPUClient
-}
-
 type ServiceClient struct {
-	ctx context.Context
-	services
-	connMu   sync.Mutex
-	taskConn *grpc.ClientConn
-	gpuConn  *grpc.ClientConn
+	taskService task.TaskServiceClient
+	taskConn    *grpc.ClientConn
 }
 
-func (s *ServiceClient) TaskService() task.TaskServiceClient {
-	if s.taskService != nil {
-		return s.taskService
-	}
-	s.connMu.Lock()
-	defer s.connMu.Unlock()
-	return task.NewTaskServiceClient(s.taskConn)
-}
-
-func (s *ServiceClient) GPUService() gpu.CedanaGPUClient {
-	if s.gpuService != nil {
-		return s.gpuService
-	}
-	s.connMu.Lock()
-	defer s.connMu.Unlock()
-	return gpu.NewCedanaGPUClient(s.gpuConn)
-}
-
-func NewClient(addr string, ctx context.Context) *ServiceClient {
-
+func NewClient(addr string) *ServiceClient {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	taskConn, err := grpc.Dial(addr, opts...)
@@ -51,20 +25,11 @@ func NewClient(addr string, ctx context.Context) *ServiceClient {
 		log.Fatalf("fail to dial: %v", err)
 	}
 
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-
 	taskClient := task.NewTaskServiceClient(taskConn)
-	gpuClient := gpu.NewCedanaGPUClient(gpuConn)
 
 	client := &ServiceClient{
-		services: services{taskService: taskClient, gpuService: gpuClient},
-		connMu:   sync.Mutex{},
-		taskConn: taskConn,
-		gpuConn:  gpuConn,
-		ctx:      ctx,
+		taskService: taskClient,
+		taskConn:    taskConn,
 	}
 	return client
 }
@@ -78,7 +43,10 @@ func (c *ServiceClient) GetRuncIdByName(args *task.CtrByNameArgs) (*task.CtrByNa
 }
 
 func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
-	resp, err := c.services.taskService.Dump(c.ctx, args)
+	// TODO NR - timeouts here need to be fixed
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.Dump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +54,9 @@ func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, err
 }
 
 func (c *ServiceClient) RestoreTask(args *task.RestoreArgs) (*task.RestoreResp, error) {
-	resp, err := c.services.taskService.Restore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.Restore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +64,9 @@ func (c *ServiceClient) RestoreTask(args *task.RestoreArgs) (*task.RestoreResp, 
 }
 
 func (c *ServiceClient) CheckpointContainer(args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
-	resp, err := c.services.taskService.ContainerDump(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.ContainerDump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +74,9 @@ func (c *ServiceClient) CheckpointContainer(args *task.ContainerDumpArgs) (*task
 }
 
 func (c *ServiceClient) RestoreContainer(args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
-	resp, err := c.services.taskService.ContainerRestore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.ContainerRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +84,9 @@ func (c *ServiceClient) RestoreContainer(args *task.ContainerRestoreArgs) (*task
 }
 
 func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	resp, err := c.services.taskService.RuncDump(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.RuncDump(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +94,9 @@ func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpR
 }
 
 func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
-	resp, err := c.services.taskService.RuncRestore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.RuncRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -126,23 +104,9 @@ func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncResto
 }
 
 func (c *ServiceClient) StartTask(args *task.StartTaskArgs) (*task.StartTaskResp, error) {
-	resp, err := c.services.taskService.StartTask(c.ctx, args)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-func (c *ServiceClient) GpuCheckpoint(args *gpu.CheckpointRequest) (*gpu.CheckpointResponse, error) {
-	resp, err := c.services.gpuService.Checkpoint(c.ctx, args)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-func (c *ServiceClient) GpuRestore(args *gpu.RestoreRequest) (*gpu.RestoreResponse, error) {
-	resp, err := c.services.gpuService.Restore(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.StartTask(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +114,5 @@ func (c *ServiceClient) GpuRestore(args *gpu.RestoreRequest) (*gpu.RestoreRespon
 }
 
 func (c *ServiceClient) Close() {
-	c.gpuConn.Close()
 	c.taskConn.Close()
 }
