@@ -371,11 +371,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 			}
 			for {
 				running, err := proc.IsRunning()
-				if err != nil {
-					c.logger.Error().Msgf("could not check if process is running: %v", err)
-					return
-				}
-				if !running {
+				if err != nil || !running {
 					break
 				}
 				time.Sleep(1 * time.Second)
