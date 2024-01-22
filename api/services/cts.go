@@ -35,7 +35,9 @@ func NewClient(addr string) *ServiceClient {
 }
 
 func (c *ServiceClient) GetRuncIdByName(args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
-	resp, err := c.services.taskService.GetRuncContainerByName(c.ctx, args)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.GetRuncContainerByName(ctx, args)
 	if err != nil {
 		return nil, err
 	}
