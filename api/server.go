@@ -381,7 +381,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		}
 	}
 
-
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
 		return 0, err
@@ -444,6 +443,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 }
 
 func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d", uid, gid)
 	var gpuCmd *exec.Cmd
 	controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
 	if controllerPath == "" {
@@ -479,6 +479,7 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		logger.Fatal().Err(err)
 	}
 	logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
+	time.Sleep(50 * time.Millisecond)
 
 	return gpuCmd, nil
 }

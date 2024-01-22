@@ -16,6 +16,7 @@ import (
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -141,8 +142,8 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 
 func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(2),
-		LogFile:        proto.String("restore.log"),
+		LogLevel:       proto.Int32(4),
+		LogFile:        proto.String("cedana-restore.log"),
 		TcpEstablished: proto.Bool(true),
 	}
 
@@ -342,11 +343,14 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		return nil, err
 	}
 
+	var gpuCmd *exec.Cmd
 	if state.GPUCheckpointed {
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
-				return c.gpuRestore(*dir)
+				var err error
+				gpuCmd, err = c.gpuRestore(*dir)
+				return err
 			},
 		}
 	}
@@ -358,13 +362,39 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 	c.timers.Stop(utils.CriuRestoreOp)
 
+	if state.GPUCheckpointed {
+		go func() {
+			proc, err := process.NewProcess(*pid)
+			if err != nil {
+				c.logger.Error().Msgf("could not find process: %v", err)
+				return
+			}
+			for {
+				running, err := proc.IsRunning()
+				if err != nil {
+					c.logger.Error().Msgf("could not check if process is running: %v", err)
+					return
+				}
+				if !running {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+			c.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
+			gpuCmd.Process.Kill()
+		}()
+	}
+
 	return pid, nil
 }
 
-func (c *Client) gpuRestore(dir string) error {
+func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 	// TODO NR - propagate uid/guid too
-	StartGPUController(1000, 1000, c.logger)
-	time.Sleep(1 * time.Second)
+	gpuCmd, err := StartGPUController(1000, 1000, c.logger)
+	if err != nil {
+		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		return nil, err
+	}
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -383,12 +413,12 @@ func (c *Client) gpuRestore(dir string) error {
 	resp, err := gpuServiceConn.Restore(c.ctx, &args)
 	if err != nil {
 		c.logger.Warn().Msgf("could not restore gpu: %v", err)
-		return err
+		return nil, err
 	}
 
 	if !resp.Success {
-		return fmt.Errorf("could not restore gpu")
+		return nil, fmt.Errorf("could not restore gpu")
 	}
 
-	return nil
+	return gpuCmd, nil
 }
