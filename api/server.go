@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -28,6 +30,7 @@ const defaultLogPath string = "/var/log/cedana-output.log"
 const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
 // Unused for now...
+
 type GrpcService interface {
 	Register(*grpc.Server) error
 }
@@ -140,13 +143,13 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			return nil, st.Err()
 		}
 
-		err = store.StartMultiPartUpload(cid, &multipartCheckpointResp, checkpointPath)
+		err = store.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
 
-		err = store.CompleteMultiPartUpload(multipartCheckpointResp, cid)
+		err = store.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
@@ -250,21 +253,39 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	// TODO BS: This is a hack for now
+	jobId := uuid.New().String()
+
+	s.Client.jobID = jobId
+
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
-		TcpEstablished:  false,
+		TcpEstablished:  args.CriuOpts.TcpEstablished,
 	}
+
+	cfg := utils.Config{}
+	store := utils.NewCedanaStore(&cfg)
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "invalid argument")
-		return nil, err
+		st := status.New(codes.Internal, "Runc dump failed")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
 	}
 
-	return &task.RuncDumpResp{}, nil
+	multipartCheckpointResp, err := store.FullMultipartUpload(args.CriuOpts.ImagesDirectory)
+	if err != nil {
+		st := status.New(codes.Internal, "Failed to upload checkpoint")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
+	}
+
+	return &task.RuncDumpResp{Message: fmt.Sprintf("Dumped process %s to %s, multipart checkpoint id: %s", jobId, args.CriuOpts.ImagesDirectory, multipartCheckpointResp.UploadID)}, nil
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
@@ -274,15 +295,39 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Bundle:        args.Opts.Bundle,
 		ConsoleSocket: args.Opts.ConsoleSocket,
 		Detatch:       args.Opts.Detatch,
+		NetPid:        int(args.Opts.NetPid),
 	}
 
-	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, opts)
+	err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
 	}
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
+}
+
+func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
+	runcId, bundle, err := runc.GetContainerIdByName(args.ContainerName, args.Root)
+	if err != nil {
+		return nil, err
+	}
+	resp := &task.CtrByNameResp{
+		RuncContainerName: runcId,
+		RuncBundlePath:    bundle,
+	}
+	return resp, nil
+}
+
+func (s *service) GetPausePid(ctx context.Context, args *task.PausePidArgs) (*task.PausePidResp, error) {
+	pid, err := runc.GetPausePid(args.BundlePath)
+	if err != nil {
+		return nil, err
+	}
+	resp := &task.PausePidResp{
+		PausePid: int64(pid),
+	}
+	return resp, nil
 }
 
 func (s *service) publishStateContinous(rate int) {

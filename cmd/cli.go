@@ -32,6 +32,10 @@ var workPath string
 var bundle string
 var consoleSocket string
 var detach bool
+var netPid int32
+
+var isK3s bool
+var tcpEstablished bool
 
 // working directory for execTask
 var wd string
@@ -373,96 +377,6 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
-// -----------------------
-// Checkpoint/Restore of a runc container
-// -----------------------
-
-var runcDumpCmd = &cobra.Command{
-	Use:   "runc",
-	Short: "Manually checkpoint a running runc container to a directory",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		root = "/var/run/runc"
-
-		criuOpts := &task.CriuOpts{
-			ImagesDirectory: runcPath,
-			WorkDirectory:   workPath,
-			LeaveRunning:    true,
-			TcpEstablished:  false,
-		}
-
-		dumpArgs := task.RuncDumpArgs{
-			Root:           root,
-			CheckpointPath: checkpointPath,
-			ContainerId:    containerId,
-			CriuOpts:       criuOpts,
-		}
-
-		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
-
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
-			}
-		}
-
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
-	},
-}
-
-var runcRestoreCmd = &cobra.Command{
-	Use:   "runc",
-	Short: "Manually restore a running runc container to a directory",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
-		if err != nil {
-			return err
-		}
-
-		opts := &task.RuncOpts{
-			Root:          root,
-			Bundle:        bundle,
-			ConsoleSocket: consoleSocket,
-			Detatch:       detach,
-		}
-
-		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   runcPath,
-			ContainerId: containerId,
-			Opts:        opts,
-		}
-
-		resp, err := cli.cts.RuncRestore(restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
-			}
-		}
-
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
-	},
-}
-
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
@@ -581,27 +495,6 @@ var psCmd = &cobra.Command{
 	},
 }
 
-func initRuncCommands() {
-	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcRestoreCmd.MarkFlagRequired("image")
-	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
-	runcRestoreCmd.MarkFlagRequired("id")
-	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
-	runcRestoreCmd.MarkFlagRequired("bundle")
-	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
-	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
-	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
-
-	restoreCmd.AddCommand(runcRestoreCmd)
-
-	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcDumpCmd.MarkFlagRequired("image")
-	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
-	runcDumpCmd.MarkFlagRequired("id")
-
-	dumpCmd.AddCommand(runcDumpCmd)
-}
-
 func initContainerdCommands() {
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
 	containerdDumpCmd.MarkFlagRequired("image")
@@ -636,7 +529,7 @@ func init() {
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(execTaskCmd)
 	rootCmd.AddCommand(psCmd)
-
+	rootCmd.AddCommand(runcRoot)
 	initRuncCommands()
 
 	initContainerdCommands()

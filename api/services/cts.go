@@ -34,6 +34,16 @@ func NewClient(addr string) *ServiceClient {
 	return client
 }
 
+func (c *ServiceClient) GetRuncIdByName(args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	resp, err := c.taskService.GetRuncContainerByName(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *ServiceClient) CheckpointTask(args *task.DumpArgs) (*task.DumpResp, error) {
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)

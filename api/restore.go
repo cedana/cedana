@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -16,11 +17,16 @@ import (
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/containerd/containerd/identifiers"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/typeurl/v2"
+	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -231,7 +237,97 @@ func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	}
 }
 
-func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOpts) error {
+func killRuncContainer(containerID string) error {
+	cmd := exec.Command("sudo", "/host/bin/runc", "--root", "/host/run/containerd/runc/k8s.io", "kill", containerID)
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func copyFiles(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Construct the destination path by joining the destination directory
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join(dst, relPath)
+
+		// If it's a directory, create it in the destination
+		if info.IsDir() {
+			return os.MkdirAll(destPath, os.ModePerm)
+		}
+
+		// If it's a file, copy it to the destination
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		sourceFile, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer sourceFile.Close()
+
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			return err
+		}
+		defer destFile.Close()
+
+		_, err = io.Copy(destFile, sourceFile)
+		return err
+	})
+}
+
+func dropLastDirectory(path string) (string, error) {
+	cleanPath := filepath.Clean(path)
+	parentDir := filepath.Dir(cleanPath)
+
+	// Check if the path is root directory
+	if parentDir == cleanPath {
+		return "", fmt.Errorf("cannot drop last directory of root directory")
+	}
+
+	return parentDir, nil
+}
+
+func mount(src, tgt string) error {
+	cmd := exec.Command("mount", "--bind", src, tgt)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+func umount(tgt string) error {
+	cmd := exec.Command("umount", tgt)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+func generateCustomID() string {
+	uuidObj := uuid.New()
+	// Extract specific segments from the generated UUID
+	id := fmt.Sprintf("cni-%s", uuidObj.String())
+	return id
+}
+
+type linkPairs struct {
+	Key   string
+	Value string
+}
+
+func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
 
 	bundle := Bundle{Bundle: opts.Bundle}
 
@@ -294,6 +390,51 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 		opts.Bundle = newBundle + "/userdata"
 	}
 
+	if isK3s {
+		var spec rspec.Spec
+
+		links := []linkPairs{
+			{"/host/var/run/netns", "/var/run/netns"},
+			{"/host/run/containerd", "/run/containerd"},
+			{"/host/var/run/secrets", "/var/run/secrets"},
+			{"/host/var/lib/rancher", "/var/lib/rancher"},
+			{"/host/run/k3s", "/run/k3s"},
+			{"/host/var/lib/kubelet", "/var/lib/kubelet"},
+		}
+		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
+		for _, link := range links {
+			// Check if the target file exists
+			if _, err := os.Stat(link.Value); os.IsNotExist(err) {
+				// Target file does not exist, attempt to create a symbolic link
+				if err := os.Symlink(link.Key, link.Value); err != nil {
+					// Handle the error if creating symlink fails
+					fmt.Println("Error creating symlink:", err)
+					// Handle the error or log it as needed
+				}
+			} else if err != nil {
+				// Handle other errors from os.Stat if any
+				fmt.Println("Error checking file info:", err)
+				// Handle the error or log it as needed
+			}
+		}
+		//ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
+		// parts := strings.Split(opts.Bundle, "/")
+		// oldContainerID := parts[7]
+		configPath := opts.Bundle + "/config.json" // Replace with your actual path
+
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			fmt.Println("Error reading config.json:", err)
+			return err
+		}
+
+		// Unmarshal JSON data into a map
+		if err := json.Unmarshal(data, &spec); err != nil {
+			fmt.Println("Error decoding config.json:", err)
+			return err
+		}
+	}
+
 	err := container.RuncRestore(imgPath, containerId, *opts)
 	if err != nil {
 		return err
@@ -306,8 +447,138 @@ func (c *Client) RuncRestore(imgPath, containerId string, opts *container.RuncOp
 			}
 		}
 	}()
-
 	return nil
+}
+
+// Bundle represents an OCI bundle
+type OCIBundle struct {
+	// ID of the bundle
+	ID string
+	// Path to the bundle
+	Path string
+	// Namespace of the bundle
+	Namespace string
+}
+
+// ociSpecUserNS is a subset of specs.Spec used to reduce garbage during
+// unmarshal.
+type ociSpecUserNS struct {
+	Linux *linuxSpecUserNS
+}
+
+// linuxSpecUserNS is a subset of specs.Linux used to reduce garbage during
+// unmarshal.
+type linuxSpecUserNS struct {
+	GIDMappings []specs.LinuxIDMapping
+}
+
+// remappedGID reads the remapped GID 0 from the OCI spec, if it exists. If
+// there is no remapping, remappedGID returns 0. If the spec cannot be parsed,
+// remappedGID returns an error.
+func remappedGID(spec []byte) (uint32, error) {
+	var ociSpec ociSpecUserNS
+	err := json.Unmarshal(spec, &ociSpec)
+	if err != nil {
+		return 0, err
+	}
+	if ociSpec.Linux == nil || len(ociSpec.Linux.GIDMappings) == 0 {
+		return 0, nil
+	}
+	for _, mapping := range ociSpec.Linux.GIDMappings {
+		if mapping.ContainerID == 0 {
+			return mapping.HostID, nil
+		}
+	}
+	return 0, nil
+}
+
+// prepareBundleDirectoryPermissions prepares the permissions of the bundle
+// directory according to the needs of the current platform.
+// On Linux when user namespaces are enabled, the permissions are modified to
+// allow the remapped root GID to access the bundle.
+func prepareBundleDirectoryPermissions(path string, spec []byte) error {
+	gid, err := remappedGID(spec)
+	if err != nil {
+		return err
+	}
+	if gid == 0 {
+		return nil
+	}
+	if err := os.Chown(path, -1, int(gid)); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0710)
+}
+
+// NewBundle returns a new bundle on disk
+func NewBundle(ctx context.Context, root, state, id string, spec typeurl.Any) (b *OCIBundle, err error) {
+	if err := identifiers.Validate(id); err != nil {
+		return nil, fmt.Errorf("invalid task id %s: %w", id, err)
+	}
+
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+	work := filepath.Join(root, ns, id)
+	b = &OCIBundle{
+		ID:        id,
+		Path:      filepath.Join(state, ns, id),
+		Namespace: ns,
+	}
+	var paths []string
+	defer func() {
+		if err != nil {
+			for _, d := range paths {
+				os.RemoveAll(d)
+			}
+		}
+	}()
+	// create state directory for the bundle
+	if err := os.MkdirAll(filepath.Dir(b.Path), 0711); err != nil {
+		return nil, err
+	}
+	if err := os.Mkdir(b.Path, 0700); err != nil {
+		return nil, err
+	}
+	if typeurl.Is(spec, &specs.Spec{}) {
+		if err := prepareBundleDirectoryPermissions(b.Path, spec.GetValue()); err != nil {
+			return nil, err
+		}
+	}
+	paths = append(paths, b.Path)
+	// create working directory for the bundle
+	if err := os.MkdirAll(filepath.Dir(work), 0711); err != nil {
+		return nil, err
+	}
+	rootfs := filepath.Join(b.Path, "rootfs")
+	if err := os.MkdirAll(rootfs, 0711); err != nil {
+		return nil, err
+	}
+	paths = append(paths, rootfs)
+	if err := os.Mkdir(work, 0711); err != nil {
+		if !os.IsExist(err) {
+			return nil, err
+		}
+		os.RemoveAll(work)
+		if err := os.Mkdir(work, 0711); err != nil {
+			return nil, err
+		}
+	}
+	paths = append(paths, work)
+	// symlink workdir
+	if err := os.Symlink(work, filepath.Join(b.Path, "work")); err != nil {
+		return nil, err
+	}
+	if spec := spec.GetValue(); spec != nil {
+		// write the spec to the bundle
+		specPath := filepath.Join(b.Path, "config.json")
+		err = os.WriteFile(specPath, spec, 0666)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write bundle spec: %w", err)
+		}
+	}
+	return b, nil
 }
 
 // Define the rsync command and arguments

@@ -4,6 +4,10 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+message External {
+    repeated string String = 1;
+}
+
 message DumpArgs {
   int32 PID = 1;
   string Dir = 2;
@@ -191,8 +195,36 @@ service TaskService {
     rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
     rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+    rpc ListRuncContainers(RuncRoot) returns (RuncList);
+    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
+    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
 }
 
+message PausePidArgs {
+    string BundlePath = 1;
+}
+
+message PausePidResp {
+    int64 PausePid = 1;
+}
+
+message CtrByNameArgs {
+    string ContainerName = 1;
+    string Root = 2;
+}
+
+message CtrByNameResp {
+    string RuncContainerName = 1;
+    string RuncBundlePath = 2;
+}
+
+message RuncRoot {
+    string Root = 1;
+}
+
+message RuncList {
+    repeated string Containers = 1;
+}
 message ContainerDumpArgs {
   string ContainerId = 1;
   string Ref = 2;
@@ -244,6 +276,7 @@ message CriuOpts {
 message RuncRestoreArgs {
   string ContainerId = 1;
   string ImagePath = 2;
+  bool IsK3s = 3;
   RuncOpts Opts = 4;
 }
 
@@ -262,6 +295,7 @@ message RuncOpts {
   bool Detatch = 12;
   string PidFile = 13;
   int32 PreserveFds = 14;
+  int32 NetPid = 15;
 }
 
 message RuncRestoreResp {

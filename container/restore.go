@@ -2,17 +2,39 @@ package container
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/cedana/cedana/utils"
-	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/log"
 	"github.com/docker/docker/errdefs"
+	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
+
+type RuncOpts struct {
+	Root            string
+	ContainerId     string
+	Bundle          string
+	SystemdCgroup   bool
+	NoPivot         bool
+	NoMountFallback bool
+	NoNewKeyring    bool
+	Rootless        string
+	NoSubreaper     bool
+	Keep            bool
+	ConsoleSocket   string
+	Detatch         bool
+	PidFile         string
+	PreserveFds     int
+	Pid             int
+	NetPid          int
+}
 
 func Restore(imgPath string, containerID string) error {
 
@@ -119,10 +141,35 @@ func containerdRestore(id string, ref string) error {
 }
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
+	var spec rspec.Spec
 
-	criuOpts := libcontainer.CriuOpts{
+	configPath := opts.Bundle + "/config.json"
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		fmt.Println("Error reading config.json:", err)
+		return err
+	}
+
+	if err := json.Unmarshal(data, &spec); err != nil {
+		fmt.Println("Error decoding config.json:", err)
+		return err
+	}
+
+	//Find where to mount to
+	externalMounts := []string{}
+	for _, m := range spec.Mounts {
+		if m.Type == "bind" {
+			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+		}
+	}
+
+	criuOpts := CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
+		External:        externalMounts,
+		MntnsCompatMode: false,
+		TcpClose:        true,
 	}
 
 	runcOpts := &RuncOpts{
@@ -132,28 +179,12 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
 		Detatch:       opts.Detatch,
+		NetPid:        opts.NetPid,
 	}
 
-	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
+	_, err = StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-type RuncOpts struct {
-	Root            string
-	ContainerId     string
-	Bundle          string
-	SystemdCgroup   bool
-	NoPivot         bool
-	NoMountFallback bool
-	NoNewKeyring    bool
-	Rootless        string
-	NoSubreaper     bool
-	Keep            bool
-	ConsoleSocket   string
-	Detatch         bool
-	PidFile         string
-	PreserveFds     int
 }

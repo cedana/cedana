@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Abstraction for storing and retreiving checkpoints
@@ -71,6 +73,46 @@ func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
 	return nil, nil
 }
 
+func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadResponse, error) {
+	file, err := os.Open(checkpointPath)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+	defer file.Close()
+
+	// Get the file size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		err = status.Error(codes.NotFound, "checkpoint zip not found")
+		return &UploadResponse{}, err
+	}
+
+	// Get the size
+	size := fileInfo.Size()
+
+	checkpointFullSize := int64(size)
+
+	multipartCheckpointResp, cid, err := cs.CreateMultiPartUpload(checkpointFullSize)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+
+	err = cs.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+
+	err = cs.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
+	if err != nil {
+		err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
+		return &UploadResponse{}, err
+	}
+	return multipartCheckpointResp, nil
+}
+
 func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 	url := cs.url + "/checkpoint/" + cid
 	downloadPath := "checkpoint.tar"
@@ -112,7 +154,7 @@ func (cs *CedanaStore) PushCheckpoint(filepath string) error {
 	return nil
 }
 
-func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, string, error) {
+func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, string, error) {
 	var uploadResp UploadResponse
 
 	cid := uuid.New().String()
@@ -130,7 +172,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	httpClient := &http.Client{}
@@ -138,7 +180,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -147,18 +189,18 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return uploadResp, "", fmt.Errorf("unexpected status code: %v", resp.Status)
+		return &uploadResp, "", fmt.Errorf("unexpected status code: %v", resp.Status)
 	}
 
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
 	cs.logger.Info().Msgf("response body: %s", string(respBody))
@@ -166,10 +208,10 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (UploadResponse, st
 	// Parse the JSON response into the struct
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		fmt.Println("Error parsing JSON response:", err)
-		return uploadResp, "", err
+		return &uploadResp, "", err
 	}
 
-	return uploadResp, cid, nil
+	return &uploadResp, cid, nil
 }
 
 func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
