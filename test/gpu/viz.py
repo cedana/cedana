@@ -35,7 +35,7 @@ fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()
 plt.title('GPU Quicksort Performance')
 
-filename = 'out.txt'  # Replace with your actual file name
+filename = '/var/log/cedana-output.log'  # Replace with your actual file name
 
 # Initialize plot
 ax1.set_xlabel('Number of Elements')
