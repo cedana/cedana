@@ -26,7 +26,6 @@ def animate(i, filename, ax1, ax2):
     
     ax1.set_xlabel('Number of Elements')
     ax1.set_ylabel('Time (ms)', color='tab:red')
-    ax2.set_ylabel('Mega-elements/sec', color='tab:blue')
 
     if sizes:
         ax1.plot(sizes, times, color='tab:red')
@@ -42,7 +41,6 @@ filename = '/var/log/cedana-output.log'  # Replace with your actual file name
 # Initialize plot
 ax1.set_xlabel('Number of Elements')
 ax1.set_ylabel('Time (ms)', color='tab:red')
-ax2.set_ylabel('Mega-elements/sec', color='tab:blue')
 
 # Creating animation
 ani = FuncAnimation(fig, animate, fargs=(filename, ax1, ax2), interval=100)
