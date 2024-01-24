@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 
 	"github.com/spf13/viper"
 )
@@ -47,19 +47,32 @@ func InitConfig() (*Config, error) {
 		return nil, err
 	}
 
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+
 	homedir := u.HomeDir
 	viper.AddConfigPath(filepath.Join(homedir, ".cedana/"))
 	viper.SetConfigType("json")
 	viper.SetConfigName("client_config")
 
-	// InitConfig should do the testing for path
-	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o664)
-	if errors.Is(err, os.ErrNotExist) {
-		fmt.Println("client_config.json does not exist, creating sample config...")
-		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o664)
+	// check if folder exists, if it doesn't assume config doesn't exist either
+	// Check if the .cedana folder exists, if not, create it
+	_, err = os.Stat(filepath.Join(homedir, ".cedana"))
+	if os.IsNotExist(err) {
+		fmt.Println(".cedana folder doesn't exist, creating and populating with sample config...")
+		err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0o777)
+		if err != nil {
+			panic(fmt.Errorf("error creating .cedana folder: %v", err))
+		}
+		// folder belongs to user
+		os.Chown(filepath.Join(homedir, ".cedana"), uid, gid)
+		fmt.Println("creating sample config...")
+		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o666)
 		if err != nil {
 			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}
+		os.Chown(filepath.Join(homedir, ".cedana", "client_config.json"), uid, gid)
+
 	}
 
 	viper.AutomaticEnv()
