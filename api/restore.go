@@ -20,7 +20,6 @@ import (
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
-	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,7 +32,6 @@ import (
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, *task.ProcessState, error) {
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
-	// make temporary folder to decompress into
 	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
 		return nil, nil, err
@@ -72,15 +70,30 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	// TODO: We should be looking at the images instead
 	open_fds := checkpointState.ProcessInfo.OpenFds
 	var isShellJob bool
+	var inheritFds []*rpc.InheritFd
 	for _, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
 			break
 		}
-	}
-	opts.ShellJob = proto.Bool(isShellJob)
+		// if stdout or stderr, always redirect fds
+		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
+			// create a new logfile and pass the fd
+			logFile, err := os.Create("/var/log/cedana-output-restored.log")
+			if err != nil {
+				c.logger.Fatal().Err(err).Msg("error creating logfile")
+				return nil, nil, err
+			}
 
-	c.restoreFiles(&checkpointState, tmpdir)
+			inheritFds = append(inheritFds, &rpc.InheritFd{
+				Fd:  proto.Int32(int32(logFile.Fd())),
+				Key: proto.String(f.Path),
+			})
+		}
+	}
+
+	opts.ShellJob = proto.Bool(isShellJob)
+	opts.InheritFd = inheritFds
 
 	if err := chmodRecursive(tmpdir, 0755); err != nil {
 		c.logger.Fatal().Err(err).Msg("error changing permissions")
@@ -121,17 +134,17 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range ps.ProcessInfo.OpenWriteOnlyFilePaths {
-			if info.Name() == filepath.Base(f) {
+		for _, f := range ps.ProcessInfo.OpenFds {
+			if info.Name() == filepath.Base(f.Path) {
 				// copy file to path
-				err = os.MkdirAll(filepath.Dir(f), 0755)
+				err = os.MkdirAll(filepath.Dir(f.Path), 0755)
 				if err != nil {
 					return err
 				}
 
 				c.logger.Info().Msgf("copying file %s to %s", path, f)
 				// copyFile copies to folder, so grab folder path
-				err := utils.CopyFile(path, filepath.Dir(f))
+				err := utils.CopyFile(path, filepath.Dir(f.Path))
 				if err != nil {
 					return err
 				}
@@ -237,16 +250,6 @@ func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	}
 }
 
-func killRuncContainer(containerID string) error {
-	cmd := exec.Command("sudo", "/host/bin/runc", "--root", "/host/run/containerd/runc/k8s.io", "kill", containerID)
-
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func copyFiles(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -285,41 +288,6 @@ func copyFiles(src, dst string) error {
 		_, err = io.Copy(destFile, sourceFile)
 		return err
 	})
-}
-
-func dropLastDirectory(path string) (string, error) {
-	cleanPath := filepath.Clean(path)
-	parentDir := filepath.Dir(cleanPath)
-
-	// Check if the path is root directory
-	if parentDir == cleanPath {
-		return "", fmt.Errorf("cannot drop last directory of root directory")
-	}
-
-	return parentDir, nil
-}
-
-func mount(src, tgt string) error {
-	cmd := exec.Command("mount", "--bind", src, tgt)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-func umount(tgt string) error {
-	cmd := exec.Command("umount", tgt)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-func generateCustomID() string {
-	uuidObj := uuid.New()
-	// Extract specific segments from the generated UUID
-	id := fmt.Sprintf("cni-%s", uuidObj.String())
-	return id
 }
 
 type linkPairs struct {

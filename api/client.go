@@ -105,22 +105,13 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
+// TODO NR - customizable errors
 func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
-
 	if pid == 0 {
 		return nil, nil
 	}
 
 	var state task.ProcessState
-	oldState, err := c.db.GetStateFromPID(pid)
-	if err != nil {
-		return nil, err
-	}
-
-	if oldState != nil {
-		// set to oldState, and just update parts of it
-		state = *oldState
-	}
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
@@ -128,15 +119,33 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 	}
 
 	var openFiles []*task.OpenFilesStat
-	var writeOnlyFiles []string
 	var openConnections []*task.ConnectionStat
 
 	if p != nil {
-		openFilesOrig, err := p.OpenFiles()
-		for _, f := range openFilesOrig {
+		of, err := p.OpenFiles()
+		for _, f := range of {
+			var mode string
+			var stream task.OpenFilesStat_StreamType
+			file, err := os.Stat(f.Path)
+			if err == nil {
+				mode = file.Mode().Perm().String()
+				switch f.Fd {
+				case 0:
+					stream = task.OpenFilesStat_STDIN
+				case 1:
+					stream = task.OpenFilesStat_STDOUT
+				case 2:
+					stream = task.OpenFilesStat_STDERR
+				default:
+					stream = task.OpenFilesStat_NONE
+				}
+			}
+
 			openFiles = append(openFiles, &task.OpenFilesStat{
-				Fd:   f.Fd,
-				Path: f.Path,
+				Fd:     f.Fd,
+				Path:   f.Path,
+				Mode:   mode,
+				Stream: stream,
 			})
 		}
 
@@ -145,11 +154,11 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 			return nil, nil
 		}
 		// used for network barriers (TODO: NR)
-		openConnectionsOrig, err := p.Connections()
+		conns, err := p.Connections()
 		if err != nil {
 			return nil, nil
 		}
-		for _, conn := range openConnectionsOrig {
+		for _, conn := range conns {
 			Laddr := &task.Addr{
 				IP:   conn.Laddr.IP,
 				Port: conn.Laddr.Port,
@@ -169,8 +178,6 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 				Uids:   conn.Uids,
 			})
 		}
-
-		writeOnlyFiles = c.WriteOnlyFds(openFiles, pid)
 	}
 
 	memoryUsed, _ := p.MemoryPercent()
@@ -186,12 +193,11 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	// ignore sending network for now, little complicated
 	state.ProcessInfo = &task.ProcessInfo{
-		OpenFds:                openFiles,
-		OpenWriteOnlyFilePaths: writeOnlyFiles,
-		MemoryPercent:          memoryUsed,
-		IsRunning:              isRunning,
-		OpenConnections:        openConnections,
-		Status:                 strings.Join(status, ""),
+		OpenFds:         openFiles,
+		MemoryPercent:   memoryUsed,
+		IsRunning:       isRunning,
+		OpenConnections: openConnections,
+		Status:          strings.Join(status, ""),
 	}
 
 	return &state, nil
