@@ -160,7 +160,6 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 				return err
 			}
 			if pid == int(state.PID) {
-				fmt.Printf("putting state %s\n", string(marshaledState))
 				return job.Put(k, marshaledState)
 			}
 			return nil

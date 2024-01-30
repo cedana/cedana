@@ -79,14 +79,14 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		// if stdout or stderr, always redirect fds
 		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
 			// create a new logfile and pass the fd
-			logFile, err := os.Create("/var/log/cedana-output-restored.log")
+			_, err := os.Create("/var/log/cedana-output-restored.log")
 			if err != nil {
 				c.logger.Fatal().Err(err).Msg("error creating logfile")
 				return nil, nil, err
 			}
 
 			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(int32(logFile.Fd())),
+				Fd:  proto.Int32(5),
 				Key: proto.String(f.Path),
 			})
 		}
