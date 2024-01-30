@@ -81,7 +81,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		if err := os.MkdirAll(checkpointFolderPath, 0o664); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o777); err != nil {
 			return "", err
 		}
 	}
@@ -111,13 +111,15 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 
 	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
-	// TODO NR - switch to tar
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
 
-	c.db.UpdateProcessStateWithID(c.jobID, state)
+	err = c.db.UpdateProcessStateWithID(c.jobID, state)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
 	c.timers.Stop(utils.CompressOp)
 }
 

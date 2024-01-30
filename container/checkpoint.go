@@ -1259,7 +1259,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 
 	// Since a container can be C/R'ed multiple times,
 	// the checkpoint directory may already exist.
-	if err := os.Mkdir(criuOpts.ImagesDirectory, 0o700); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(criuOpts.ImagesDirectory, 0o777); err != nil && !os.IsExist(err) {
 		return err
 	}
 
@@ -1324,7 +1324,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	}
 	// if criuOpts.WorkDirectory is not set, criu default is used.
 	if criuOpts.WorkDirectory != "" {
-		if err := os.Mkdir(criuOpts.WorkDirectory, 0o700); err != nil && !os.IsExist(err) {
+		if err := os.Mkdir(criuOpts.WorkDirectory, 0o777); err != nil && !os.IsExist(err) {
 			return err
 		}
 		workDir, err := os.Open(criuOpts.WorkDirectory)
@@ -1447,7 +1447,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			return err
 		}
 
-		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o600)
+		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
 		if err != nil {
 			return err
 		}

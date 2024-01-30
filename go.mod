@@ -37,6 +37,8 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/Microsoft/hcsshim v0.11.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/br0xen/boltbrowser v0.0.0-20230531143731-fcc13603daaf // indirect
+	github.com/br0xen/termbox-util v0.0.0-20170904143325-de1d4c83380e // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cilium/ebpf v0.12.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
@@ -80,6 +82,7 @@ require (
 	github.com/moby/term v0.5.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
+	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/opencontainers/runc v1.1.9 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
