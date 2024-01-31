@@ -29,7 +29,7 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, *task.ProcessState, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extraFiles []*os.File) (*string, *task.ProcessState, error) {
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	err := os.Mkdir(tmpdir, 0755)
@@ -79,11 +79,13 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 		// if stdout or stderr, always redirect fds
 		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
 			// create a new logfile and pass the fd
-			_, err := os.Create("/var/log/cedana-output-restored.log")
+			file, err := os.Create("/var/log/cedana-output-restored.log")
 			if err != nil {
 				c.logger.Fatal().Err(err).Msg("error creating logfile")
 				return nil, nil, err
 			}
+
+			extraFiles = append(extraFiles, file)
 
 			inheritFds = append(inheritFds, &rpc.InheritFd{
 				Fd:  proto.Int32(5),
@@ -95,7 +97,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.InheritFd = inheritFds
 
-	if err := chmodRecursive(tmpdir, 0755); err != nil {
+	if err := chmodRecursive(tmpdir, 0o777); err != nil {
 		c.logger.Fatal().Err(err).Msg("error changing permissions")
 		return nil, nil, err
 	}
@@ -170,7 +172,7 @@ func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32, error) {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -180,7 +182,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	resp, err := c.CRIU.Restore(opts, &nfy)
+	resp, err := c.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
@@ -577,7 +579,8 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		Logger: c.logger,
 	}
 
-	dir, state, err := c.prepareRestore(opts, nil, args.CheckpointPath)
+	var extraFiles []*os.File
+	dir, state, err := c.prepareRestore(opts, args.CheckpointPath, extraFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +598,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
-	pid, err = c.criuRestore(opts, nfy, *dir)
+	pid, err = c.criuRestore(opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}

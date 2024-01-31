@@ -55,20 +55,6 @@ type ClientLogs struct {
 func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
-
-	criu := MakeCriu()
-	_, err := criu.GetCriuVersion()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error checking CRIU version")
-		return nil, err
-	}
-	// prepare client
-	err = criu.Prepare()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error preparing CRIU client")
-		return nil, err
-	}
-
 	config, err := utils.InitConfig()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not read config")
@@ -83,7 +69,7 @@ func InstantiateClient() (*Client, error) {
 	t := utils.NewTimings()
 
 	return &Client{
-		CRIU:   criu,
+		CRIU:   new(Criu),
 		logger: &logger,
 		config: config,
 		ctx:    context.Background(),
@@ -94,7 +80,6 @@ func InstantiateClient() (*Client, error) {
 }
 
 func (c *Client) cleanupClient() error {
-	c.CRIU.Cleanup()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
