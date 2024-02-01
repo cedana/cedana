@@ -72,7 +72,6 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	}
 
 	open_fds := checkpointState.ProcessInfo.OpenFds
-	var streamCount int32
 
 	// create logfile for redirection
 	file, err := os.Create("/var/log/cedana-output-restored.log")
@@ -87,12 +86,11 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		}
 		// if stdout or stderr, always redirect fds
 		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
-			streamCount += 1
 			// create a new logfile and pass the fd
 			extraFiles = append(extraFiles, file)
 			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(2 + streamCount),
-				Key: proto.String(f.Path),
+				Fd:  proto.Int32(3 + int32(len(extraFiles))),
+				Key: proto.String("var/log/cedana-output.log"),
 			})
 		}
 	}
