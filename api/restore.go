@@ -30,16 +30,17 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extraFiles []*os.File) (*string, *task.ProcessState, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, *[]*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
+	var extraFiles []*os.File
 
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	err := os.Mkdir(tmpdir, 0755)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
@@ -54,42 +55,43 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extra
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	open_fds := checkpointState.ProcessInfo.OpenFds
-	for i, f := range open_fds {
+	var streamCount int32
+
+	// create logfile for redirection
+	file, err := os.Create("/var/log/cedana-output-restored.log")
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error creating logfile")
+		return nil, nil, nil, err
+	}
+
+	for _, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
-			break
 		}
 		// if stdout or stderr, always redirect fds
 		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
+			streamCount += 1
 			// create a new logfile and pass the fd
-			file, err := os.Create("/var/log/cedana-output-restored.log")
-			if err != nil {
-				c.logger.Fatal().Err(err).Msg("error creating logfile")
-				return nil, nil, err
-			}
-
 			extraFiles = append(extraFiles, file)
-
 			inheritFds = append(inheritFds, &rpc.InheritFd{
-				// 0, 1, 2, 3 are taken up by stdin, stdout, stderr & the server
-				Fd:  proto.Int32(int32(i)),
+				Fd:  proto.Int32(2 + streamCount),
 				Key: proto.String(f.Path),
 			})
 		}
@@ -108,10 +110,10 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extra
 
 	if err := chmodRecursive(tmpdir, 0o777); err != nil {
 		c.logger.Fatal().Err(err).Msg("error changing permissions")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return &tmpdir, &checkpointState, nil
+	return &tmpdir, &checkpointState, &extraFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -200,11 +202,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFi
 
 	c.logger.Info().Msgf("process restored: %v", resp)
 
-	// clean up
-	err = os.RemoveAll(dir)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error removing directory")
-	}
 	c.cleanupClient()
 	return resp.Restore.Pid, nil
 }
@@ -587,8 +584,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		Logger: c.logger,
 	}
 
-	var extraFiles []*os.File
-	dir, state, err := c.prepareRestore(opts, args.CheckpointPath, extraFiles)
+	dir, state, extraFiles, err := c.prepareRestore(opts, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -606,7 +602,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
-	pid, err = c.criuRestore(opts, nfy, *dir, extraFiles)
+	pid, err = c.criuRestore(opts, nfy, *dir, *extraFiles)
 	if err != nil {
 		return nil, err
 	}
