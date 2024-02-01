@@ -111,7 +111,6 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 	defer srv.Close()
 
 	cmd := exec.Command("criu", "swrk", strconv.Itoa(fds[1]))
-	cmd.ExtraFiles = append(cmd.ExtraFiles, srv)
 
 	if extraFiles != nil {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, extraFiles...)

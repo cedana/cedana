@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/api/services/gpu"
@@ -30,6 +31,10 @@ import (
 )
 
 func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extraFiles []*os.File) (*string, *task.ProcessState, error) {
+	var isShellJob bool
+	var inheritFds []*rpc.InheritFd
+	var tcpEstablished bool
+
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
 	err := os.Mkdir(tmpdir, 0755)
@@ -65,13 +70,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extra
 		return nil, nil, err
 	}
 
-	// check open_fds. Useful for checking if process being restored
-	// is a pts slave and for determining how to handle files that were being written to.
-	// TODO: We should be looking at the images instead
 	open_fds := checkpointState.ProcessInfo.OpenFds
-	var isShellJob bool
-	var inheritFds []*rpc.InheritFd
-	for _, f := range open_fds {
+	for i, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
 			break
@@ -88,14 +88,23 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string, extra
 			extraFiles = append(extraFiles, file)
 
 			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(5),
+				// 0, 1, 2, 3 are taken up by stdin, stdout, stderr & the server
+				Fd:  proto.Int32(int32(i)),
 				Key: proto.String(f.Path),
 			})
 		}
 	}
 
+	// TODO NR - wtf?
+	for _, oc := range checkpointState.ProcessInfo.OpenConnections {
+		if oc.Type == syscall.SOCK_STREAM { // TCP
+			tcpEstablished = true
+		}
+	}
+
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.InheritFd = inheritFds
+	opts.TcpEstablished = proto.Bool(tcpEstablished)
 
 	if err := chmodRecursive(tmpdir, 0o777); err != nil {
 		c.logger.Fatal().Err(err).Msg("error changing permissions")
@@ -163,9 +172,8 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 
 func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(4),
-		LogFile:        proto.String("cedana-restore.log"),
-		TcpEstablished: proto.Bool(true),
+		LogLevel: proto.Int32(4),
+		LogFile:  proto.String("cedana-restore.log"),
 	}
 
 	return &opts

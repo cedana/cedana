@@ -34,6 +34,9 @@ type Bundle struct {
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
+	var hasTCP bool
+	var hasExtUnixSocket bool
+
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
 		c.logger.Fatal().Err(err)
@@ -45,10 +48,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", fmt.Errorf("could not get state")
 	}
 
-	// check network Connections
-	var hasTCP bool
-	var hasExtUnixSocket bool
-
 	for _, Conn := range state.ProcessInfo.OpenConnections {
 		if Conn.Type == syscall.SOCK_STREAM { // TCP
 			hasTCP = true
@@ -58,6 +57,7 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 			hasExtUnixSocket = true
 		}
 	}
+
 	opts.TcpEstablished = proto.Bool(hasTCP)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
@@ -129,7 +129,6 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 		LogFile:      proto.String("dump.log"),
 		LeaveRunning: proto.Bool(c.config.Client.LeaveRunning),
 		GhostLimit:   proto.Uint32(uint32(10000000)),
-		ExtMasters:   proto.Bool(true),
 	}
 	return &opts
 
