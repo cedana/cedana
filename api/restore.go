@@ -38,13 +38,27 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 
 	c.timers.Start(utils.DecompressOp)
 	tmpdir := "cedana_restore"
-	err := os.Mkdir(tmpdir, 0755)
-	if err != nil {
-		return nil, nil, nil, err
+
+	// check if tmpdir exists
+	if _, err := os.Stat(tmpdir); os.IsNotExist(err) {
+		err := os.Mkdir(tmpdir, 0755)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		// likely an old checkpoint hanging around, delete
+		err := os.RemoveAll(tmpdir)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		err = os.Mkdir(tmpdir, 0755)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err = utils.UntarFolder(checkpointPath, tmpdir)
+	err := utils.UntarFolder(checkpointPath, tmpdir)
 
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
