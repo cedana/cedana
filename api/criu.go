@@ -19,62 +19,16 @@ import (
 // Code for interfacing with CRIU. We could use go-criu, but there are certain limitations in the abstractions
 // presented. Most of the code found here is lifted from https://github.com/checkpoint-restore/go-criu/blob/master/main.go.
 type Criu struct {
-	swrkCmd  *exec.Cmd
-	swrkSk   *os.File
-	swrkPath string
 }
 
-func MakeCriu() *Criu {
-	return &Criu{
-		swrkPath: "criu",
-	}
-}
-
-func (c *Criu) SetCriuPath(path string) {
-	c.swrkPath = path
-}
-
-// Prepare sets up everything for the RPC communication to CRIU
-func (c *Criu) Prepare() error {
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
-	if err != nil {
-		return err
-	}
-
-	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
-	syscall.CloseOnExec(fds[0])
-	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
-	defer srv.Close()
-
-	args := []string{"swrk", strconv.Itoa(fds[1])}
-	// #nosec G204
-	cmd := exec.Command(c.swrkPath, args...)
-
-	c.swrkCmd = cmd
-	c.swrkSk = cln
-
-	return nil
-}
-
-// Cleanup cleans up
-func (c *Criu) Cleanup() {
-	if c.swrkCmd != nil {
-		c.swrkSk.Close()
-		c.swrkSk = nil
-		_ = c.swrkCmd.Wait()
-		c.swrkCmd = nil
-	}
-}
-
-func (c *Criu) sendAndRecv(reqB []byte) ([]byte, int, error) {
-	cln := c.swrkSk
-	_, err := cln.Write(reqB)
+func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
+	_, err := sk.Write(reqB)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	respB := make([]byte, 2*4096)
-	n, err := cln.Read(respB)
+	n, err := sk.Read(respB)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -145,20 +99,25 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 		req.Features = features
 	}
 
-	if c.swrkCmd == nil {
-		err := c.Prepare()
-		if err != nil {
-			return nil, err
-		}
-
-		defer c.Cleanup()
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
+	if err != nil {
+		return nil, err
 	}
+
+	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
+	syscall.CloseOnExec(fds[0])
+
+	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
+	defer srv.Close()
+
+	cmd := exec.Command("criu", "swrk", strconv.Itoa(fds[1]))
+	cmd.ExtraFiles = append(cmd.ExtraFiles, srv)
 
 	if extraFiles != nil {
-		c.swrkCmd.ExtraFiles = append(c.swrkCmd.ExtraFiles, extraFiles...)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, extraFiles...)
 	}
 
-	err := c.swrkCmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +128,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			return nil, err
 		}
 
-		respB, respS, err := c.sendAndRecv(reqB)
+		respB, respS, err := c.sendAndRecv(reqB, cln)
 		if err != nil {
 			return nil, err
 		}
@@ -227,6 +186,12 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
 		}
+	}
+
+	// cleanup
+	err = cmd.Wait()
+	if err != nil {
+		return nil, err
 	}
 
 	return resp, nil
