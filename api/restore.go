@@ -30,7 +30,7 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, *[]*os.File, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
@@ -89,7 +89,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 			// create a new logfile and pass the fd
 			extraFiles = append(extraFiles, file)
 			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(3 + int32(len(extraFiles))),
+				Fd:  proto.Int32(2 + int32(len(extraFiles))),
 				Key: proto.String("var/log/cedana-output.log"),
 			})
 		}
@@ -111,7 +111,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		return nil, nil, nil, err
 	}
 
-	return &tmpdir, &checkpointState, &extraFiles, nil
+	return &tmpdir, &checkpointState, extraFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -600,7 +600,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
-	pid, err = c.criuRestore(opts, nfy, *dir, *extraFiles)
+	pid, err = c.criuRestore(opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
