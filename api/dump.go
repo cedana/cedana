@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
@@ -283,6 +284,23 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 			return err
 		}
 	}
+
+	pid, err := runc.GetPidByContainerId(containerId, root)
+	if err != nil {
+		c.logger.Warn().Msgf("could not generate state: %v", err)
+		return err
+	}
+
+	state, err := c.generateState(int32(pid))
+	if err != nil {
+		c.logger.Warn().Msgf("could not generate state: %v", err)
+		return err
+	}
+
+	// CRIU ntfy hooks get run before this,
+	// so have to ensure that image files aren't tampered with
+	c.postDump(opts.ImagesDirectory, state)
+	c.cleanupClient()
 
 	return nil
 }
