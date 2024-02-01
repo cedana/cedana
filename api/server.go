@@ -264,8 +264,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 	}
 
-	cfg := utils.Config{}
-	store := utils.NewCedanaStore(&cfg)
+	cfg := s.Client.config
+	store := utils.NewCedanaStore(cfg)
 
 	err := s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
 	if err != nil {
