@@ -1320,11 +1320,10 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			// The <key> needs to be the same as during checkpointing.
 			// We are always using 'extRootNetNS' as the key in this.
 			netns, err := os.Open(nsPath)
-			defer netns.Close()
 			if err != nil {
-				logrus.Error("If a specific network namespace is defined it must exist: %s", err)
 				return fmt.Errorf("Requested network namespace %v does not exist", nsPath)
 			}
+			defer netns.Close()
 			inheritFd := new(criurpc.InheritFd)
 			inheritFd.Key = proto.String("extRootNetNS")
 			// The offset of four is necessary because 0, 1, 2 and 3 is already

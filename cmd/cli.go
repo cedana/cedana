@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,6 +39,7 @@ var tcpEstablished bool
 
 // working directory for execTask
 var wd string
+var execAsRoot bool
 
 type CLI struct {
 	cfg    *utils.Config
@@ -48,13 +48,11 @@ type CLI struct {
 }
 
 func NewCLI() (*CLI, error) {
-	ctx := context.Background()
-
 	cfg, err := utils.InitConfig()
 	if err != nil {
 		return nil, err
 	}
-	cts := services.NewClient("localhost:8080", ctx)
+	cts := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
 
@@ -121,9 +119,9 @@ var dumpProcessCmd = &cobra.Command{
 			} else {
 				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
+		} else {
+			cli.logger.Info().Msgf("Response: %v", resp.Message)
 		}
-
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
 
 		cli.cts.Close()
 
@@ -395,10 +393,20 @@ var execTaskCmd = &cobra.Command{
 			return err
 		}
 
+		var uid uint32
+		var gid uint32
+
+		if !execAsRoot {
+			uid = uint32(os.Getuid())
+			gid = uint32(os.Getgid())
+		}
+
 		taskArgs := &task.StartTaskArgs{
 			Task:       args[0],
 			Id:         args[1],
 			WorkingDir: wd,
+			UID:        uid,
+			GID:        gid,
 		}
 
 		resp, err := cli.cts.StartTask(taskArgs)
@@ -515,6 +523,7 @@ func init() {
 	restoreCmd.AddCommand(restoreJobCmd)
 
 	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
+	execTaskCmd.Flags().BoolVarP(&execAsRoot, "root", "r", false, "run as root")
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)

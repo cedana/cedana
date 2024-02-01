@@ -12,7 +12,6 @@ import (
 
 type Config struct {
 	Client        Client        `json:"client" mapstructure:"client"`
-	ActionScripts ActionScripts `json:"action_scripts" mapstructure:"action_scripts"`
 	Connection    Connection    `json:"connection" mapstructure:"connection"`
 	SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
 }
@@ -22,12 +21,6 @@ type Client struct {
 	Task         string `json:"task" mapstructure:"task"`
 	LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
 	ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
-}
-
-type ActionScripts struct {
-	PreDump    string `json:"pre_dump" mapstructure:"pre_dump"`
-	PostDump   string `json:"post_dump" mapstructure:"post_dump"`
-	PreRestore string `json:"pre_restore" mapstructure:"pre_restore"`
 }
 
 type Connection struct {

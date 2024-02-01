@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -213,7 +214,6 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, s
 	return &uploadResp, cid, nil
 }
 
-// expecting part size and part count from server, but not getting it..
 func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
 	binaryOfFile, err := os.ReadFile(checkpointPath)
 	if err != nil {
@@ -221,51 +221,76 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 		return err
 	}
 
-	chunkSize := uploadResp.PartSize
+	maxConcurrentUploads := 10
+	semaphore := make(chan struct{}, maxConcurrentUploads)
 
+	chunkSize := uploadResp.PartSize
 	numOfParts := uploadResp.PartCount
 
+	errChan := make(chan error, numOfParts)
+	var wg sync.WaitGroup
+
 	for i := 0; i < int(numOfParts); i++ {
-		start := i * int(chunkSize)
-		end := (i + 1) * int(chunkSize)
-		if end > len(binaryOfFile) {
-			end = len(binaryOfFile)
-		}
+		wg.Add(1)
 
-		partData := binaryOfFile[start:end]
+		semaphore <- struct{}{}
 
-		buffer := bytes.NewBuffer(partData)
+		go func(partNumber int) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
 
-		httpClient := &http.Client{}
-		url := cs.url + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/part/" + fmt.Sprintf("%d", i+1)
+			start := partNumber * int(chunkSize)
+			end := (partNumber + 1) * int(chunkSize)
+			if end > len(binaryOfFile) {
+				end = len(binaryOfFile)
+			}
 
-		req, err := http.NewRequest("PUT", url, buffer)
+			partData := binaryOfFile[start:end]
+			buffer := bytes.NewBuffer(partData)
+
+			httpClient := &http.Client{}
+			url := cs.url + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/part/" + fmt.Sprintf("%d", partNumber+1)
+
+			req, err := http.NewRequest("PUT", url, buffer)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			req.Header.Set("Content-Type", "application/octet-stream")
+			req.Header.Set("Transfer-Encoding", "chunked")
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if resp.StatusCode < 200 || resp.StatusCode > 299 {
+				errChan <- fmt.Errorf("unexpected status code: %v", resp.Status)
+				return
+			}
+
+			defer resp.Body.Close()
+
+			respBody, err := io.ReadAll(resp.Body)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			cs.logger.Info().Msgf("Part %d uploaded: %s", partNumber+1, string(respBody))
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// check for errs
+	// check for errors
+	for err := range errChan {
 		if err != nil {
 			return err
 		}
-
-		req.Header.Set("Content-Type", "application/octet-stream")
-		req.Header.Set("Transfer-Encoding", "chunked")
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
-
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			return err
-		}
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return fmt.Errorf("unexpected status code: %v", resp.Status)
-		}
-
-		defer resp.Body.Close()
-
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Response: %s\n", respBody)
-
-		cs.logger.Debug().Msgf("Part %d: Size = %d bytes\n", i+1, len(partData))
 	}
 
 	return nil

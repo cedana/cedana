@@ -10,13 +10,17 @@ service CedanaGPU {
     rpc Restore(RestoreRequest) returns (RestoreResponse) {};
 }
 
-message CheckpointRequest {}
+message CheckpointRequest {
+    string directory = 1;
+}
 
 message CheckpointResponse {
     bool success = 1;
 }
 
-message RestoreRequest {}
+message RestoreRequest {
+    string directory = 1;
+}
 
 message RestoreResponse {
     bool success = 1;

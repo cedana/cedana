@@ -18,6 +18,6 @@ WORKDIR /cedana
 ENV USER="root"
 RUN go build && ./cedana bootstrap 
 
-RUN apt-get install iptables
+RUN apt-get install -y iptables
 
 ENTRYPOINT /bin/bash
