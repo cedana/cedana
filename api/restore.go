@@ -88,7 +88,8 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	open_fds := checkpointState.ProcessInfo.OpenFds
 
 	// create logfile for redirection
-	file, err := os.Create("/var/log/cedana-output-restored.log")
+	filename := fmt.Sprintf("/var/log/cedana-output-%s.log", fmt.Sprint(time.Now().Unix()))
+	file, err := os.Create(filename)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error creating logfile")
 		return nil, nil, nil, err
