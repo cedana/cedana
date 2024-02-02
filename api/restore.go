@@ -100,11 +100,13 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 		}
 		// if stdout or stderr, always redirect fds
 		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
-			// create a new logfile and pass the fd
+			// strip leading slash from f
+			f.Path = strings.TrimPrefix(f.Path, "/")
+
 			extraFiles = append(extraFiles, file)
 			inheritFds = append(inheritFds, &rpc.InheritFd{
 				Fd:  proto.Int32(2 + int32(len(extraFiles))),
-				Key: proto.String("var/log/cedana-output.log"),
+				Key: proto.String(f.Path),
 			})
 		}
 	}

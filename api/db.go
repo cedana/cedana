@@ -147,8 +147,6 @@ func (db *DB) UpdateProcessStateWithID(id string, state *task.ProcessState) erro
 			return err
 		}
 
-		fmt.Println(string(marshaledState))
-
 		job := root.Bucket([]byte(id))
 		if job == nil {
 			return fmt.Errorf("could not find job")
