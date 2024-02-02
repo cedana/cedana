@@ -3,6 +3,8 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"syscall"
@@ -64,6 +66,18 @@ var startDaemonCmd = &cobra.Command{
 		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
 			logger.Info().Msg("profiling enabled, listening on 6060")
 			go startProfiler()
+		}
+
+		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+			err = pullGPUBinary("gpucontroller", "./gpu-controller")
+			if err != nil {
+				logger.Warn().Err(err).Msg("could not pull gpu controller")
+			}
+
+			err = pullGPUBinary("libcedana", "./libcedana-gpu.so")
+			if err != nil {
+				logger.Warn().Err(err).Msg("could not pull libcedana")
+			}
 		}
 
 		logger.Info().Msgf("daemon started at %s", time.Now().Local())
@@ -152,4 +166,48 @@ func init() {
 	rootCmd.AddCommand(clientDaemonCmd)
 	clientDaemonCmd.AddCommand(startDaemonCmd)
 	clientDaemonCmd.AddCommand(stopDaemonCmd)
+}
+
+func pullGPUBinary(binary string, filePath string) error {
+	logger := utils.GetLogger()
+
+	cfg, err := utils.InitConfig()
+	if err != nil {
+		logger.Err(err).Msg("could not init config")
+		return err
+	}
+	url := "https://" + cfg.Connection.CedanaUrl + "/checkpoint/gpu/" + binary
+	logger.Debug().Msgf("pulling gpu binary from %s", url)
+
+	httpClient := &http.Client{}
+
+	req, err := http.NewRequest("GET", url, nil)
+	var resp *http.Response
+	if err != nil {
+		logger.Err(err).Msg("could not create request")
+		return err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", "random-user-1234-uuid-think")) // TODO: change to JWT
+
+	resp, err = httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		logger.Err(err).Msg("gpu binary get request failed")
+	}
+	defer resp.Body.Close()
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		logger.Err(err).Msg("could not create file")
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		logger.Err(err).Msg("could not read file from response")
+		return err
+	}
+	logger.Debug().Msgf("gpu binary %s downloaded", binary)
+	return nil
 }
