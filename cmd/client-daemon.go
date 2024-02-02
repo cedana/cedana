@@ -177,7 +177,7 @@ func pullGPUBinary(binary string, filePath string) error {
 		return err
 	}
 	url := "https://" + cfg.Connection.CedanaUrl + "/checkpoint/gpu/" + binary
-	logger.Debug().Msgf("pulling gpu binary from %s", url)
+	logger.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
 
@@ -193,10 +193,14 @@ func pullGPUBinary(binary string, filePath string) error {
 	resp, err = httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		logger.Err(err).Msg("gpu binary get request failed")
+		return err
 	}
 	defer resp.Body.Close()
 
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err == nil {
+		err = os.Chmod(filePath, 0755)
+	}
 	if err != nil {
 		logger.Err(err).Msg("could not create file")
 		return err
@@ -208,6 +212,6 @@ func pullGPUBinary(binary string, filePath string) error {
 		logger.Err(err).Msg("could not read file from response")
 		return err
 	}
-	logger.Debug().Msgf("gpu binary %s downloaded", binary)
+	logger.Debug().Msgf("%s downloaded", binary)
 	return nil
 }
