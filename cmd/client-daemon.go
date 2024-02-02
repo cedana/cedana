@@ -20,7 +20,7 @@ var clientDaemonCmd = &cobra.Command{
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Starts the rpc server. To run as a daemon, use the provided script or use systemd/sysv/upstart.",
+	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger()
 
