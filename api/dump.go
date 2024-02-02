@@ -320,13 +320,6 @@ func (c *Client) Dump(dir string, pid int32) error {
 		Logger: c.logger,
 	}
 
-	nfy.PreDumpFunc = NotifyFunc{
-		Avail: true,
-		Callback: func() error {
-			return c.cleanFds()
-		},
-	}
-
 	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
 	state, err := c.generateState(pid)
 	if err != nil {
@@ -383,9 +376,5 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 		return fmt.Errorf("could not checkpoint gpu")
 	}
 
-	return nil
-}
-
-func (c *Client) cleanFds() error {
 	return nil
 }
