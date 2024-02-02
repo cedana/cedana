@@ -30,4 +30,4 @@ RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 ## start daemon and benchmark 
-CMD ["sh", "-c", "./cedana daemon start && python3 test/benchmarks/benchmark.py"]
+CMD ["sh", "-c", "./build-start-daemon.sh && python3 test/benchmarks/benchmark.py"]
