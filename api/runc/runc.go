@@ -112,7 +112,7 @@ func GetPausePid(bundlePath string) (int, error) {
 			if ns.Type == "network" {
 				path := ns.Path
 				splitPath := strings.Split(path, "/")
-				pid, err = strconv.Atoi(splitPath[1])
+				pid, err = strconv.Atoi(splitPath[2])
 				if err != nil {
 					return 0, err
 				}
