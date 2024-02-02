@@ -178,9 +178,17 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 	// ideally we want more than this, or some parsing to happen from this end
 	status, _ := p.Status()
 
+	// we need the cwd to ensure that it exists on the other side of the restore.
+	// if it doesn't - we inheritFd it?
+	cwd, err := p.Cwd()
+	if err != nil {
+		return nil, nil
+	}
+
 	// ignore sending network for now, little complicated
 	state.ProcessInfo = &task.ProcessInfo{
 		OpenFds:         openFiles,
+		WorkingDir:      cwd,
 		MemoryPercent:   memoryUsed,
 		IsRunning:       isRunning,
 		OpenConnections: openConnections,

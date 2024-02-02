@@ -102,6 +102,7 @@ message ProcessInfo {
   int32 PID = 1;
   bool AttachedToHardwareAccel = 2;
   repeated OpenFilesStat OpenFds = 3;
+  string WorkingDir = 4;
   repeated ConnectionStat OpenConnections = 5;
   float MemoryPercent = 6;
   bool IsRunning = 7;
