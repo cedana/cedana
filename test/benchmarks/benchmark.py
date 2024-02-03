@@ -24,13 +24,10 @@ def setup():
     # make folder for storing results
     os.makedirs(output_dir, exist_ok=True)
 
-    # get cedana daemon pid from pid file 
-    with open("/run/cedana.pid", "r") as file:
-        daemon_pid = int(file.read().strip())
+    with open('daemon-output.log', 'w') as outfile, open('error.log', 'w') as errfile:
+       daemon = subprocess.Popen(['./cedana daemon start'], stdout=outfile, stderr=errfile, shell=True, start_new_session=True)
 
-    print("found daemon running at pid {}".format(daemon_pid))
-
-    return daemon_pid
+    return daemon.pid 
 
 def cleanup():
     shutil.rmtree(benchmarking_dir)
