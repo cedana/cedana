@@ -7,6 +7,7 @@ SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
 GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
+CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 
 echo "Building $APP_NAME..."
 go build 
@@ -27,6 +28,7 @@ Description=Cedana Checkpointing Daemon
 Environment=USER=$USER
 Environment=CEDANA_GPU_ENABLED=$CEDANA_GPU_ENABLED
 Environment=GPU_CONTROLLER_PATH=$GPU_CONTROLLER_PATH
+Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 ExecStart=$APP_PATH daemon start 
 User=root
 Group=root

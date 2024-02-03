@@ -17,6 +17,7 @@ RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
 WORKDIR /cedana 
 
 ENV USER="root"
+RUN git checkout feat/no-daemon
 RUN go build && ./cedana bootstrap 
 
 ## set up bq env and run benchmarks
