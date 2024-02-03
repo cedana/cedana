@@ -6,7 +6,7 @@ APP_PATH="/usr/local/bin/$APP_NAME"
 SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
-GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
+GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 
 echo "Building $APP_NAME..."
@@ -17,6 +17,11 @@ sudo cp $APP_NAME $APP_PATH
 if [ $? -ne 0 ]; then
     echo "Build failed. Exiting."
     exit 1
+fi
+
+# if cedana_gpu_enabled=atrue, echo 
+if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
+    echo "Starting daemon with GPU support..."
 fi
 
 # create systemd file 

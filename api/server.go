@@ -29,8 +29,6 @@ import (
 const defaultLogPath string = "/var/log/cedana-output.log"
 const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
-// Unused for now...
-
 type GrpcService interface {
 	Register(*grpc.Server) error
 }
