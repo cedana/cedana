@@ -456,8 +456,6 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		return 0, err
 	}
 
-	os.Chown(logOutputFile, int(uid), int(gid))
-
 	cmd.Stdout = outputFile
 	cmd.Stderr = outputFile
 

@@ -100,10 +100,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 // This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
 // written to on network storage or something.
 func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
-	// HACK!!
-	utils.CopyFile("/var/log/cedana-output.log", dir)
-	utils.CopyFile("/run/cedana.pid", dir)
-
 	if len(state.ProcessInfo.OpenWriteOnlyFilePaths) == 0 {
 		return nil
 	}
