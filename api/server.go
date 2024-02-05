@@ -392,10 +392,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 	switch args.Type {
 	case task.RuncRestoreArgs_LOCAL:
-		if args.ImagePath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
-
 		err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
 		if err != nil {
 			err = status.Error(codes.InvalidArgument, "invalid argument")
