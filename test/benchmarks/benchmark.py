@@ -14,7 +14,13 @@ import psutil
 
 benchmarking_dir = "benchmarks"
 output_dir = "benchmark_results"
+cedana_version = subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
 
+def get_pid_by_name(process_name):
+    for proc in psutil.process_iter(['name']):
+        if proc.info['name'] == process_name:
+            return proc.pid
+    return None
 
 def setup():
     # download benchmarking repo
@@ -24,13 +30,9 @@ def setup():
     # make folder for storing results
     os.makedirs(output_dir, exist_ok=True)
 
-    # get cedana daemon pid from pid file 
-    with open("/run/cedana.pid", "r") as file:
-        daemon_pid = int(file.read().strip())
+    pid = get_pid_by_name("cedana")
+    return pid
 
-    print("found daemon running at pid {}".format(daemon_pid))
-
-    return daemon_pid
 
 def cleanup():
     shutil.rmtree(benchmarking_dir)
@@ -138,6 +140,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Operation Duration',
                 'Network Duration',
                 "Compression Duration",
+                "Cedana Version"
                 ])
         
         # Write the resource usage data

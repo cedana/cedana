@@ -17,8 +17,6 @@ RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
 WORKDIR /cedana 
 
 ENV USER="root"
-RUN go build && ./cedana bootstrap 
-
 ## set up bq env and run benchmarks
 ENV CEDANA_PROFILING_ENABLED=true 
 ENV CEDANA_REMOTE=true
@@ -29,5 +27,7 @@ RUN mkdir benchmark_results
 RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
-## start daemon and benchmark 
-CMD ["sh", "-c", "./cedana daemon start && python3 test/benchmarks/benchmark.py"]
+
+RUN go build && ./cedana bootstrap 
+
+CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo python3 test/benchmarks/benchmark.py"]

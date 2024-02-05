@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var once sync.Once
@@ -31,26 +30,13 @@ func GetLogger() zerolog.Logger {
 			TimeFormat: time.RFC3339,
 		}
 
-		if os.Getenv("APP_ENV") != "development" {
-			fileLogger := &lumberjack.Logger{
-				Filename:   "cedana.log",
-				MaxSize:    5, //
-				MaxBackups: 10,
-				MaxAge:     14,
-				Compress:   true,
-			}
-
-			output = zerolog.MultiLevelWriter(os.Stderr, fileLogger)
-		}
-
 		log = zerolog.New(output).
 			Level(zerolog.Level(logLevel)).
 			With().
 			Timestamp().
 			Logger().
-			Output(zerolog.ConsoleWriter{Out: os.Stderr})
+			Output(zerolog.ConsoleWriter{Out: os.Stdout})
 	})
 
 	return log
 }
-

@@ -65,7 +65,6 @@ require (
 	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/intel/goresctrl v0.5.0 // indirect
-	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
@@ -132,10 +131,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/rs/zerolog v1.31.0
-	github.com/sevlyar/go-daemon v0.1.6
 	github.com/shirou/gopsutil/v3 v3.23.9
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
 	github.com/tchap/go-patricia v2.3.0+incompatible
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
