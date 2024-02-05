@@ -102,7 +102,7 @@ message ProcessInfo {
   int32 PID = 1;
   bool AttachedToHardwareAccel = 2;
   repeated OpenFilesStat OpenFds = 3;
-  repeated string OpenWriteOnlyFilePaths = 4;
+  string WorkingDir = 4;
   repeated ConnectionStat OpenConnections = 5;
   float MemoryPercent = 6;
   bool IsRunning = 7;
@@ -112,6 +112,14 @@ message ProcessInfo {
 message OpenFilesStat {
   string Path = 1;
   uint64 Fd = 2;
+  string Mode = 3;
+  StreamType Stream = 5; 
+  enum StreamType {
+    STDIN = 0;
+    STDOUT = 1; 
+    STDERR = 2;
+    NONE = 3;
+  }
 }
 
 message ConnectionStat {

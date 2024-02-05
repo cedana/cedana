@@ -24,7 +24,7 @@ func LoadOverrides(cdir string) (*ConfigClient, error) {
 	// overrides are added during instance setup/creation/instantiation (?)
 	overridePath := filepath.Join(cdir, "server_overrides.json")
 	// do this all in an exists block
-	_, err := os.OpenFile(overridePath, 0, 0o644)
+	_, err := os.OpenFile(overridePath, 0, 0o777)
 	if errors.Is(err, os.ErrNotExist) {
 		// do nothing, drop and leave
 		return nil, err

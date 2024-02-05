@@ -558,6 +558,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 		},
 	}
 
+	// working dir needs to be consistent on the checkpoint and restore side
 	if workingDir != "" {
 		cmd.Dir = workingDir
 	}
@@ -576,6 +577,7 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 
 	cmd.Stdout = outputFile
 	cmd.Stderr = outputFile
+	cmd.ExtraFiles = nil
 
 	cmd.Env = os.Environ()
 
