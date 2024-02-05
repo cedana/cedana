@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strconv"
 
 	"github.com/spf13/viper"
 )
@@ -47,9 +46,6 @@ func InitConfig() (*Config, error) {
 		return nil, err
 	}
 
-	uid, _ := strconv.Atoi(u.Uid)
-	gid, _ := strconv.Atoi(u.Gid)
-
 	homedir := u.HomeDir
 	viper.AddConfigPath(filepath.Join(homedir, ".cedana/"))
 	viper.SetConfigType("json")
@@ -64,15 +60,10 @@ func InitConfig() (*Config, error) {
 		if err != nil {
 			panic(fmt.Errorf("error creating .cedana folder: %v", err))
 		}
-		// folder belongs to user
-		os.Chown(filepath.Join(homedir, ".cedana"), uid, gid)
-		fmt.Println("creating sample config...")
-		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o666)
+		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o777)
 		if err != nil {
 			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}
-		os.Chown(filepath.Join(homedir, ".cedana", "client_config.json"), uid, gid)
-
 	}
 
 	viper.AutomaticEnv()
@@ -103,7 +94,7 @@ func GenSampleConfig() string {
 	return `{
 	"client": {
 		"process_name": "",
-		"leave_running": true
+		"leave_running": false 
 	},
 	"shared_storage": {
 		"dump_storage_dir": "/tmp"

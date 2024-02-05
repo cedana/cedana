@@ -271,6 +271,58 @@ func (ProcessState_ContainerRuntimeOpts) EnumDescriptor() ([]byte, []int) {
 	return file_task_proto_rawDescGZIP(), []int{9, 0}
 }
 
+type OpenFilesStat_StreamType int32
+
+const (
+	OpenFilesStat_STDIN  OpenFilesStat_StreamType = 0
+	OpenFilesStat_STDOUT OpenFilesStat_StreamType = 1
+	OpenFilesStat_STDERR OpenFilesStat_StreamType = 2
+	OpenFilesStat_NONE   OpenFilesStat_StreamType = 3
+)
+
+// Enum value maps for OpenFilesStat_StreamType.
+var (
+	OpenFilesStat_StreamType_name = map[int32]string{
+		0: "STDIN",
+		1: "STDOUT",
+		2: "STDERR",
+		3: "NONE",
+	}
+	OpenFilesStat_StreamType_value = map[string]int32{
+		"STDIN":  0,
+		"STDOUT": 1,
+		"STDERR": 2,
+		"NONE":   3,
+	}
+)
+
+func (x OpenFilesStat_StreamType) Enum() *OpenFilesStat_StreamType {
+	p := new(OpenFilesStat_StreamType)
+	*p = x
+	return p
+}
+
+func (x OpenFilesStat_StreamType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OpenFilesStat_StreamType) Descriptor() protoreflect.EnumDescriptor {
+	return file_task_proto_enumTypes[5].Descriptor()
+}
+
+func (OpenFilesStat_StreamType) Type() protoreflect.EnumType {
+	return &file_task_proto_enumTypes[5]
+}
+
+func (x OpenFilesStat_StreamType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OpenFilesStat_StreamType.Descriptor instead.
+func (OpenFilesStat_StreamType) EnumDescriptor() ([]byte, []int) {
+	return file_task_proto_rawDescGZIP(), []int{13, 0}
+}
+
 type CheckpointReason_CheckpointReasonEnum int32
 
 const (
@@ -304,11 +356,11 @@ func (x CheckpointReason_CheckpointReasonEnum) String() string {
 }
 
 func (CheckpointReason_CheckpointReasonEnum) Descriptor() protoreflect.EnumDescriptor {
-	return file_task_proto_enumTypes[5].Descriptor()
+	return file_task_proto_enumTypes[6].Descriptor()
 }
 
 func (CheckpointReason_CheckpointReasonEnum) Type() protoreflect.EnumType {
-	return &file_task_proto_enumTypes[5]
+	return &file_task_proto_enumTypes[6]
 }
 
 func (x CheckpointReason_CheckpointReasonEnum) Number() protoreflect.EnumNumber {
@@ -1157,7 +1209,7 @@ type ProcessInfo struct {
 	PID                     int32             `protobuf:"varint,1,opt,name=PID,proto3" json:"PID,omitempty"`
 	AttachedToHardwareAccel bool              `protobuf:"varint,2,opt,name=AttachedToHardwareAccel,proto3" json:"AttachedToHardwareAccel,omitempty"`
 	OpenFds                 []*OpenFilesStat  `protobuf:"bytes,3,rep,name=OpenFds,proto3" json:"OpenFds,omitempty"`
-	OpenWriteOnlyFilePaths  []string          `protobuf:"bytes,4,rep,name=OpenWriteOnlyFilePaths,proto3" json:"OpenWriteOnlyFilePaths,omitempty"`
+	WorkingDir              string            `protobuf:"bytes,4,opt,name=WorkingDir,proto3" json:"WorkingDir,omitempty"`
 	OpenConnections         []*ConnectionStat `protobuf:"bytes,5,rep,name=OpenConnections,proto3" json:"OpenConnections,omitempty"`
 	MemoryPercent           float32           `protobuf:"fixed32,6,opt,name=MemoryPercent,proto3" json:"MemoryPercent,omitempty"`
 	IsRunning               bool              `protobuf:"varint,7,opt,name=IsRunning,proto3" json:"IsRunning,omitempty"`
@@ -1217,11 +1269,11 @@ func (x *ProcessInfo) GetOpenFds() []*OpenFilesStat {
 	return nil
 }
 
-func (x *ProcessInfo) GetOpenWriteOnlyFilePaths() []string {
+func (x *ProcessInfo) GetWorkingDir() string {
 	if x != nil {
-		return x.OpenWriteOnlyFilePaths
+		return x.WorkingDir
 	}
-	return nil
+	return ""
 }
 
 func (x *ProcessInfo) GetOpenConnections() []*ConnectionStat {
@@ -1257,8 +1309,10 @@ type OpenFilesStat struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Path string `protobuf:"bytes,1,opt,name=Path,proto3" json:"Path,omitempty"`
-	Fd   uint64 `protobuf:"varint,2,opt,name=Fd,proto3" json:"Fd,omitempty"`
+	Path   string                   `protobuf:"bytes,1,opt,name=Path,proto3" json:"Path,omitempty"`
+	Fd     uint64                   `protobuf:"varint,2,opt,name=Fd,proto3" json:"Fd,omitempty"`
+	Mode   string                   `protobuf:"bytes,3,opt,name=Mode,proto3" json:"Mode,omitempty"`
+	Stream OpenFilesStat_StreamType `protobuf:"varint,5,opt,name=Stream,proto3,enum=cedana.services.task.OpenFilesStat_StreamType" json:"Stream,omitempty"`
 }
 
 func (x *OpenFilesStat) Reset() {
@@ -1305,6 +1359,20 @@ func (x *OpenFilesStat) GetFd() uint64 {
 		return x.Fd
 	}
 	return 0
+}
+
+func (x *OpenFilesStat) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *OpenFilesStat) GetStream() OpenFilesStat_StreamType {
+	if x != nil {
+		return x.Stream
+	}
+	return OpenFilesStat_STDIN
 }
 
 type ConnectionStat struct {
@@ -2914,7 +2982,7 @@ var file_task_proto_rawDesc = []byte{
 	0x69, 0x6d, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x55, 0x70, 0x74, 0x69, 0x6d,
 	0x65, 0x12, 0x28, 0x0a, 0x0f, 0x52, 0x65, 0x6d, 0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x4d, 0x65,
 	0x6d, 0x6f, 0x72, 0x79, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0f, 0x52, 0x65, 0x6d, 0x61,
-	0x69, 0x6e, 0x69, 0x6e, 0x67, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x22, 0xfc, 0x02, 0x0a, 0x0b,
+	0x69, 0x6e, 0x69, 0x6e, 0x67, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x22, 0xe4, 0x02, 0x0a, 0x0b,
 	0x50, 0x72, 0x6f, 0x63, 0x65, 0x73, 0x73, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x10, 0x0a, 0x03, 0x50,
 	0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x50, 0x49, 0x44, 0x12, 0x38, 0x0a,
 	0x17, 0x41, 0x74, 0x74, 0x61, 0x63, 0x68, 0x65, 0x64, 0x54, 0x6f, 0x48, 0x61, 0x72, 0x64, 0x77,
@@ -2924,24 +2992,32 @@ var file_task_proto_rawDesc = []byte{
 	0x64, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e,
 	0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e,
 	0x4f, 0x70, 0x65, 0x6e, 0x46, 0x69, 0x6c, 0x65, 0x73, 0x53, 0x74, 0x61, 0x74, 0x52, 0x07, 0x4f,
-	0x70, 0x65, 0x6e, 0x46, 0x64, 0x73, 0x12, 0x36, 0x0a, 0x16, 0x4f, 0x70, 0x65, 0x6e, 0x57, 0x72,
-	0x69, 0x74, 0x65, 0x4f, 0x6e, 0x6c, 0x79, 0x46, 0x69, 0x6c, 0x65, 0x50, 0x61, 0x74, 0x68, 0x73,
-	0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x16, 0x4f, 0x70, 0x65, 0x6e, 0x57, 0x72, 0x69, 0x74,
-	0x65, 0x4f, 0x6e, 0x6c, 0x79, 0x46, 0x69, 0x6c, 0x65, 0x50, 0x61, 0x74, 0x68, 0x73, 0x12, 0x4e,
-	0x0a, 0x0f, 0x4f, 0x70, 0x65, 0x6e, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e,
-	0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61,
-	0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x43,
-	0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x52, 0x0f, 0x4f,
-	0x70, 0x65, 0x6e, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x24,
-	0x0a, 0x0d, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x18,
-	0x06, 0x20, 0x01, 0x28, 0x02, 0x52, 0x0d, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72,
-	0x63, 0x65, 0x6e, 0x74, 0x12, 0x1c, 0x0a, 0x09, 0x49, 0x73, 0x52, 0x75, 0x6e, 0x6e, 0x69, 0x6e,
-	0x67, 0x18, 0x07, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x49, 0x73, 0x52, 0x75, 0x6e, 0x6e, 0x69,
-	0x6e, 0x67, 0x12, 0x16, 0x0a, 0x06, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x08, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x06, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x33, 0x0a, 0x0d, 0x4f, 0x70,
-	0x65, 0x6e, 0x46, 0x69, 0x6c, 0x65, 0x73, 0x53, 0x74, 0x61, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x50,
-	0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x50, 0x61, 0x74, 0x68, 0x12,
-	0x0e, 0x0a, 0x02, 0x46, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x02, 0x46, 0x64, 0x22,
+	0x70, 0x65, 0x6e, 0x46, 0x64, 0x73, 0x12, 0x1e, 0x0a, 0x0a, 0x57, 0x6f, 0x72, 0x6b, 0x69, 0x6e,
+	0x67, 0x44, 0x69, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x57, 0x6f, 0x72, 0x6b,
+	0x69, 0x6e, 0x67, 0x44, 0x69, 0x72, 0x12, 0x4e, 0x0a, 0x0f, 0x4f, 0x70, 0x65, 0x6e, 0x43, 0x6f,
+	0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x24, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65,
+	0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f,
+	0x6e, 0x53, 0x74, 0x61, 0x74, 0x52, 0x0f, 0x4f, 0x70, 0x65, 0x6e, 0x43, 0x6f, 0x6e, 0x6e, 0x65,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x24, 0x0a, 0x0d, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79,
+	0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x18, 0x06, 0x20, 0x01, 0x28, 0x02, 0x52, 0x0d, 0x4d,
+	0x65, 0x6d, 0x6f, 0x72, 0x79, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x12, 0x1c, 0x0a, 0x09,
+	0x49, 0x73, 0x52, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x18, 0x07, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x09, 0x49, 0x73, 0x52, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x12, 0x16, 0x0a, 0x06, 0x53, 0x74,
+	0x61, 0x74, 0x75, 0x73, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x53, 0x74, 0x61, 0x74,
+	0x75, 0x73, 0x22, 0xca, 0x01, 0x0a, 0x0d, 0x4f, 0x70, 0x65, 0x6e, 0x46, 0x69, 0x6c, 0x65, 0x73,
+	0x53, 0x74, 0x61, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x50, 0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x50, 0x61, 0x74, 0x68, 0x12, 0x0e, 0x0a, 0x02, 0x46, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x02, 0x46, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x4d, 0x6f, 0x64, 0x65,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x4d, 0x6f, 0x64, 0x65, 0x12, 0x46, 0x0a, 0x06,
+	0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2e, 0x2e, 0x63,
+	0x65, 0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2e, 0x74,
+	0x61, 0x73, 0x6b, 0x2e, 0x4f, 0x70, 0x65, 0x6e, 0x46, 0x69, 0x6c, 0x65, 0x73, 0x53, 0x74, 0x61,
+	0x74, 0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x54, 0x79, 0x70, 0x65, 0x52, 0x06, 0x53, 0x74,
+	0x72, 0x65, 0x61, 0x6d, 0x22, 0x39, 0x0a, 0x0a, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x54, 0x79,
+	0x70, 0x65, 0x12, 0x09, 0x0a, 0x05, 0x53, 0x54, 0x44, 0x49, 0x4e, 0x10, 0x00, 0x12, 0x0a, 0x0a,
+	0x06, 0x53, 0x54, 0x44, 0x4f, 0x55, 0x54, 0x10, 0x01, 0x12, 0x0a, 0x0a, 0x06, 0x53, 0x54, 0x44,
+	0x45, 0x52, 0x52, 0x10, 0x02, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x03, 0x22,
 	0xee, 0x01, 0x0a, 0x0e, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74,
 	0x61, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x46, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02,
 	0x46, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x46, 0x61, 0x6d, 0x69, 0x6c, 0x79, 0x18, 0x02, 0x20, 0x01,
@@ -3238,7 +3314,7 @@ func file_task_proto_rawDescGZIP() []byte {
 	return file_task_proto_rawDescData
 }
 
-var file_task_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_task_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
 var file_task_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_task_proto_goTypes = []interface{}{
 	(FlagEnum)(0),                              // 0: cedana.services.task.FlagEnum
@@ -3246,93 +3322,95 @@ var file_task_proto_goTypes = []interface{}{
 	(DumpArgs_DumpType)(0),                     // 2: cedana.services.task.DumpArgs.DumpType
 	(RestoreArgs_RestoreType)(0),               // 3: cedana.services.task.RestoreArgs.RestoreType
 	(ProcessState_ContainerRuntimeOpts)(0),     // 4: cedana.services.task.ProcessState.ContainerRuntimeOpts
-	(CheckpointReason_CheckpointReasonEnum)(0), // 5: cedana.services.task.CheckpointReason.CheckpointReasonEnum
-	(*External)(nil),                           // 6: cedana.services.task.External
-	(*DumpArgs)(nil),                           // 7: cedana.services.task.DumpArgs
-	(*DumpResp)(nil),                           // 8: cedana.services.task.DumpResp
-	(*RestoreArgs)(nil),                        // 9: cedana.services.task.RestoreArgs
-	(*RestoreResp)(nil),                        // 10: cedana.services.task.RestoreResp
-	(*StartTaskArgs)(nil),                      // 11: cedana.services.task.StartTaskArgs
-	(*StartTaskResp)(nil),                      // 12: cedana.services.task.StartTaskResp
-	(*LogStreamingArgs)(nil),                   // 13: cedana.services.task.LogStreamingArgs
-	(*LogStreamingResp)(nil),                   // 14: cedana.services.task.LogStreamingResp
-	(*ProcessState)(nil),                       // 15: cedana.services.task.ProcessState
-	(*RemoteState)(nil),                        // 16: cedana.services.task.RemoteState
-	(*ClientInfo)(nil),                         // 17: cedana.services.task.ClientInfo
-	(*ProcessInfo)(nil),                        // 18: cedana.services.task.ProcessInfo
-	(*OpenFilesStat)(nil),                      // 19: cedana.services.task.OpenFilesStat
-	(*ConnectionStat)(nil),                     // 20: cedana.services.task.ConnectionStat
-	(*Addr)(nil),                               // 21: cedana.services.task.Addr
-	(*ClientStateStreamingResp)(nil),           // 22: cedana.services.task.ClientStateStreamingResp
-	(*MetaStateStreamingArgs)(nil),             // 23: cedana.services.task.MetaStateStreamingArgs
-	(*CheckpointReason)(nil),                   // 24: cedana.services.task.CheckpointReason
-	(*ProviderEvent)(nil),                      // 25: cedana.services.task.ProviderEvent
-	(*MetaStateStreamingResp)(nil),             // 26: cedana.services.task.MetaStateStreamingResp
-	(*PausePidArgs)(nil),                       // 27: cedana.services.task.PausePidArgs
-	(*PausePidResp)(nil),                       // 28: cedana.services.task.PausePidResp
-	(*CtrByNameArgs)(nil),                      // 29: cedana.services.task.CtrByNameArgs
-	(*CtrByNameResp)(nil),                      // 30: cedana.services.task.CtrByNameResp
-	(*RuncRoot)(nil),                           // 31: cedana.services.task.RuncRoot
-	(*RuncList)(nil),                           // 32: cedana.services.task.RuncList
-	(*ContainerDumpArgs)(nil),                  // 33: cedana.services.task.ContainerDumpArgs
-	(*ContainerDumpResp)(nil),                  // 34: cedana.services.task.ContainerDumpResp
-	(*ContainerRestoreArgs)(nil),               // 35: cedana.services.task.ContainerRestoreArgs
-	(*ContainerRestoreResp)(nil),               // 36: cedana.services.task.ContainerRestoreResp
-	(*RuncDumpArgs)(nil),                       // 37: cedana.services.task.RuncDumpArgs
-	(*RuncDumpResp)(nil),                       // 38: cedana.services.task.RuncDumpResp
-	(*CriuOpts)(nil),                           // 39: cedana.services.task.CriuOpts
-	(*RuncRestoreArgs)(nil),                    // 40: cedana.services.task.RuncRestoreArgs
-	(*RuncOpts)(nil),                           // 41: cedana.services.task.RuncOpts
-	(*RuncRestoreResp)(nil),                    // 42: cedana.services.task.RuncRestoreResp
+	(OpenFilesStat_StreamType)(0),              // 5: cedana.services.task.OpenFilesStat.StreamType
+	(CheckpointReason_CheckpointReasonEnum)(0), // 6: cedana.services.task.CheckpointReason.CheckpointReasonEnum
+	(*External)(nil),                           // 7: cedana.services.task.External
+	(*DumpArgs)(nil),                           // 8: cedana.services.task.DumpArgs
+	(*DumpResp)(nil),                           // 9: cedana.services.task.DumpResp
+	(*RestoreArgs)(nil),                        // 10: cedana.services.task.RestoreArgs
+	(*RestoreResp)(nil),                        // 11: cedana.services.task.RestoreResp
+	(*StartTaskArgs)(nil),                      // 12: cedana.services.task.StartTaskArgs
+	(*StartTaskResp)(nil),                      // 13: cedana.services.task.StartTaskResp
+	(*LogStreamingArgs)(nil),                   // 14: cedana.services.task.LogStreamingArgs
+	(*LogStreamingResp)(nil),                   // 15: cedana.services.task.LogStreamingResp
+	(*ProcessState)(nil),                       // 16: cedana.services.task.ProcessState
+	(*RemoteState)(nil),                        // 17: cedana.services.task.RemoteState
+	(*ClientInfo)(nil),                         // 18: cedana.services.task.ClientInfo
+	(*ProcessInfo)(nil),                        // 19: cedana.services.task.ProcessInfo
+	(*OpenFilesStat)(nil),                      // 20: cedana.services.task.OpenFilesStat
+	(*ConnectionStat)(nil),                     // 21: cedana.services.task.ConnectionStat
+	(*Addr)(nil),                               // 22: cedana.services.task.Addr
+	(*ClientStateStreamingResp)(nil),           // 23: cedana.services.task.ClientStateStreamingResp
+	(*MetaStateStreamingArgs)(nil),             // 24: cedana.services.task.MetaStateStreamingArgs
+	(*CheckpointReason)(nil),                   // 25: cedana.services.task.CheckpointReason
+	(*ProviderEvent)(nil),                      // 26: cedana.services.task.ProviderEvent
+	(*MetaStateStreamingResp)(nil),             // 27: cedana.services.task.MetaStateStreamingResp
+	(*PausePidArgs)(nil),                       // 28: cedana.services.task.PausePidArgs
+	(*PausePidResp)(nil),                       // 29: cedana.services.task.PausePidResp
+	(*CtrByNameArgs)(nil),                      // 30: cedana.services.task.CtrByNameArgs
+	(*CtrByNameResp)(nil),                      // 31: cedana.services.task.CtrByNameResp
+	(*RuncRoot)(nil),                           // 32: cedana.services.task.RuncRoot
+	(*RuncList)(nil),                           // 33: cedana.services.task.RuncList
+	(*ContainerDumpArgs)(nil),                  // 34: cedana.services.task.ContainerDumpArgs
+	(*ContainerDumpResp)(nil),                  // 35: cedana.services.task.ContainerDumpResp
+	(*ContainerRestoreArgs)(nil),               // 36: cedana.services.task.ContainerRestoreArgs
+	(*ContainerRestoreResp)(nil),               // 37: cedana.services.task.ContainerRestoreResp
+	(*RuncDumpArgs)(nil),                       // 38: cedana.services.task.RuncDumpArgs
+	(*RuncDumpResp)(nil),                       // 39: cedana.services.task.RuncDumpResp
+	(*CriuOpts)(nil),                           // 40: cedana.services.task.CriuOpts
+	(*RuncRestoreArgs)(nil),                    // 41: cedana.services.task.RuncRestoreArgs
+	(*RuncOpts)(nil),                           // 42: cedana.services.task.RuncOpts
+	(*RuncRestoreResp)(nil),                    // 43: cedana.services.task.RuncRestoreResp
 }
 var file_task_proto_depIdxs = []int32{
 	2,  // 0: cedana.services.task.DumpArgs.Type:type_name -> cedana.services.task.DumpArgs.DumpType
 	3,  // 1: cedana.services.task.RestoreArgs.Type:type_name -> cedana.services.task.RestoreArgs.RestoreType
 	4,  // 2: cedana.services.task.ProcessState.ContainerRuntime:type_name -> cedana.services.task.ProcessState.ContainerRuntimeOpts
-	18, // 3: cedana.services.task.ProcessState.ProcessInfo:type_name -> cedana.services.task.ProcessInfo
+	19, // 3: cedana.services.task.ProcessState.ProcessInfo:type_name -> cedana.services.task.ProcessInfo
 	1,  // 4: cedana.services.task.ProcessState.CheckpointState:type_name -> cedana.services.task.checkpointState
 	0,  // 5: cedana.services.task.ProcessState.Flag:type_name -> cedana.services.task.FlagEnum
-	16, // 6: cedana.services.task.ProcessState.RemoteState:type_name -> cedana.services.task.RemoteState
-	19, // 7: cedana.services.task.ProcessInfo.OpenFds:type_name -> cedana.services.task.OpenFilesStat
-	20, // 8: cedana.services.task.ProcessInfo.OpenConnections:type_name -> cedana.services.task.ConnectionStat
-	21, // 9: cedana.services.task.ConnectionStat.Laddr:type_name -> cedana.services.task.Addr
-	21, // 10: cedana.services.task.ConnectionStat.Raddr:type_name -> cedana.services.task.Addr
-	25, // 11: cedana.services.task.MetaStateStreamingArgs.Event:type_name -> cedana.services.task.ProviderEvent
-	24, // 12: cedana.services.task.MetaStateStreamingArgs.CheckpointReason:type_name -> cedana.services.task.CheckpointReason
-	5,  // 13: cedana.services.task.CheckpointReason.Reason:type_name -> cedana.services.task.CheckpointReason.CheckpointReasonEnum
-	39, // 14: cedana.services.task.RuncDumpArgs.CriuOpts:type_name -> cedana.services.task.CriuOpts
-	41, // 15: cedana.services.task.RuncRestoreArgs.Opts:type_name -> cedana.services.task.RuncOpts
-	7,  // 16: cedana.services.task.TaskService.Dump:input_type -> cedana.services.task.DumpArgs
-	9,  // 17: cedana.services.task.TaskService.Restore:input_type -> cedana.services.task.RestoreArgs
-	33, // 18: cedana.services.task.TaskService.ContainerDump:input_type -> cedana.services.task.ContainerDumpArgs
-	35, // 19: cedana.services.task.TaskService.ContainerRestore:input_type -> cedana.services.task.ContainerRestoreArgs
-	37, // 20: cedana.services.task.TaskService.RuncDump:input_type -> cedana.services.task.RuncDumpArgs
-	40, // 21: cedana.services.task.TaskService.RuncRestore:input_type -> cedana.services.task.RuncRestoreArgs
-	11, // 22: cedana.services.task.TaskService.StartTask:input_type -> cedana.services.task.StartTaskArgs
-	14, // 23: cedana.services.task.TaskService.LogStreaming:input_type -> cedana.services.task.LogStreamingResp
-	22, // 24: cedana.services.task.TaskService.ClientStateStreaming:input_type -> cedana.services.task.ClientStateStreamingResp
-	23, // 25: cedana.services.task.TaskService.MetaStateStreaming:input_type -> cedana.services.task.MetaStateStreamingArgs
-	31, // 26: cedana.services.task.TaskService.ListRuncContainers:input_type -> cedana.services.task.RuncRoot
-	29, // 27: cedana.services.task.TaskService.GetRuncContainerByName:input_type -> cedana.services.task.CtrByNameArgs
-	27, // 28: cedana.services.task.TaskService.GetPausePid:input_type -> cedana.services.task.PausePidArgs
-	8,  // 29: cedana.services.task.TaskService.Dump:output_type -> cedana.services.task.DumpResp
-	10, // 30: cedana.services.task.TaskService.Restore:output_type -> cedana.services.task.RestoreResp
-	34, // 31: cedana.services.task.TaskService.ContainerDump:output_type -> cedana.services.task.ContainerDumpResp
-	36, // 32: cedana.services.task.TaskService.ContainerRestore:output_type -> cedana.services.task.ContainerRestoreResp
-	38, // 33: cedana.services.task.TaskService.RuncDump:output_type -> cedana.services.task.RuncDumpResp
-	42, // 34: cedana.services.task.TaskService.RuncRestore:output_type -> cedana.services.task.RuncRestoreResp
-	12, // 35: cedana.services.task.TaskService.StartTask:output_type -> cedana.services.task.StartTaskResp
-	13, // 36: cedana.services.task.TaskService.LogStreaming:output_type -> cedana.services.task.LogStreamingArgs
-	15, // 37: cedana.services.task.TaskService.ClientStateStreaming:output_type -> cedana.services.task.ProcessState
-	26, // 38: cedana.services.task.TaskService.MetaStateStreaming:output_type -> cedana.services.task.MetaStateStreamingResp
-	32, // 39: cedana.services.task.TaskService.ListRuncContainers:output_type -> cedana.services.task.RuncList
-	30, // 40: cedana.services.task.TaskService.GetRuncContainerByName:output_type -> cedana.services.task.CtrByNameResp
-	28, // 41: cedana.services.task.TaskService.GetPausePid:output_type -> cedana.services.task.PausePidResp
-	29, // [29:42] is the sub-list for method output_type
-	16, // [16:29] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	17, // 6: cedana.services.task.ProcessState.RemoteState:type_name -> cedana.services.task.RemoteState
+	20, // 7: cedana.services.task.ProcessInfo.OpenFds:type_name -> cedana.services.task.OpenFilesStat
+	21, // 8: cedana.services.task.ProcessInfo.OpenConnections:type_name -> cedana.services.task.ConnectionStat
+	5,  // 9: cedana.services.task.OpenFilesStat.Stream:type_name -> cedana.services.task.OpenFilesStat.StreamType
+	22, // 10: cedana.services.task.ConnectionStat.Laddr:type_name -> cedana.services.task.Addr
+	22, // 11: cedana.services.task.ConnectionStat.Raddr:type_name -> cedana.services.task.Addr
+	26, // 12: cedana.services.task.MetaStateStreamingArgs.Event:type_name -> cedana.services.task.ProviderEvent
+	25, // 13: cedana.services.task.MetaStateStreamingArgs.CheckpointReason:type_name -> cedana.services.task.CheckpointReason
+	6,  // 14: cedana.services.task.CheckpointReason.Reason:type_name -> cedana.services.task.CheckpointReason.CheckpointReasonEnum
+	40, // 15: cedana.services.task.RuncDumpArgs.CriuOpts:type_name -> cedana.services.task.CriuOpts
+	42, // 16: cedana.services.task.RuncRestoreArgs.Opts:type_name -> cedana.services.task.RuncOpts
+	8,  // 17: cedana.services.task.TaskService.Dump:input_type -> cedana.services.task.DumpArgs
+	10, // 18: cedana.services.task.TaskService.Restore:input_type -> cedana.services.task.RestoreArgs
+	34, // 19: cedana.services.task.TaskService.ContainerDump:input_type -> cedana.services.task.ContainerDumpArgs
+	36, // 20: cedana.services.task.TaskService.ContainerRestore:input_type -> cedana.services.task.ContainerRestoreArgs
+	38, // 21: cedana.services.task.TaskService.RuncDump:input_type -> cedana.services.task.RuncDumpArgs
+	41, // 22: cedana.services.task.TaskService.RuncRestore:input_type -> cedana.services.task.RuncRestoreArgs
+	12, // 23: cedana.services.task.TaskService.StartTask:input_type -> cedana.services.task.StartTaskArgs
+	15, // 24: cedana.services.task.TaskService.LogStreaming:input_type -> cedana.services.task.LogStreamingResp
+	23, // 25: cedana.services.task.TaskService.ClientStateStreaming:input_type -> cedana.services.task.ClientStateStreamingResp
+	24, // 26: cedana.services.task.TaskService.MetaStateStreaming:input_type -> cedana.services.task.MetaStateStreamingArgs
+	32, // 27: cedana.services.task.TaskService.ListRuncContainers:input_type -> cedana.services.task.RuncRoot
+	30, // 28: cedana.services.task.TaskService.GetRuncContainerByName:input_type -> cedana.services.task.CtrByNameArgs
+	28, // 29: cedana.services.task.TaskService.GetPausePid:input_type -> cedana.services.task.PausePidArgs
+	9,  // 30: cedana.services.task.TaskService.Dump:output_type -> cedana.services.task.DumpResp
+	11, // 31: cedana.services.task.TaskService.Restore:output_type -> cedana.services.task.RestoreResp
+	35, // 32: cedana.services.task.TaskService.ContainerDump:output_type -> cedana.services.task.ContainerDumpResp
+	37, // 33: cedana.services.task.TaskService.ContainerRestore:output_type -> cedana.services.task.ContainerRestoreResp
+	39, // 34: cedana.services.task.TaskService.RuncDump:output_type -> cedana.services.task.RuncDumpResp
+	43, // 35: cedana.services.task.TaskService.RuncRestore:output_type -> cedana.services.task.RuncRestoreResp
+	13, // 36: cedana.services.task.TaskService.StartTask:output_type -> cedana.services.task.StartTaskResp
+	14, // 37: cedana.services.task.TaskService.LogStreaming:output_type -> cedana.services.task.LogStreamingArgs
+	16, // 38: cedana.services.task.TaskService.ClientStateStreaming:output_type -> cedana.services.task.ProcessState
+	27, // 39: cedana.services.task.TaskService.MetaStateStreaming:output_type -> cedana.services.task.MetaStateStreamingResp
+	33, // 40: cedana.services.task.TaskService.ListRuncContainers:output_type -> cedana.services.task.RuncList
+	31, // 41: cedana.services.task.TaskService.GetRuncContainerByName:output_type -> cedana.services.task.CtrByNameResp
+	29, // 42: cedana.services.task.TaskService.GetPausePid:output_type -> cedana.services.task.PausePidResp
+	30, // [30:43] is the sub-list for method output_type
+	17, // [17:30] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_task_proto_init() }
@@ -3791,7 +3869,7 @@ func file_task_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_task_proto_rawDesc,
-			NumEnums:      6,
+			NumEnums:      7,
 			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,

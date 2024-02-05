@@ -447,8 +447,6 @@ var execTaskCmd = &cobra.Command{
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
 		cli.cts.Close()
 		fmt.Print(resp.PID)
 		return nil

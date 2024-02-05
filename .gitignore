@@ -9,3 +9,5 @@ benchmarks
 benchmark_*
 *.csv
 tmp
+
+cedana_restore

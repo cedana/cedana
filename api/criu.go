@@ -19,68 +19,16 @@ import (
 // Code for interfacing with CRIU. We could use go-criu, but there are certain limitations in the abstractions
 // presented. Most of the code found here is lifted from https://github.com/checkpoint-restore/go-criu/blob/master/main.go.
 type Criu struct {
-	swrkCmd  *exec.Cmd
-	swrkSk   *os.File
-	swrkPath string
 }
 
-func MakeCriu() *Criu {
-	return &Criu{
-		swrkPath: "criu",
-	}
-}
-
-func (c *Criu) SetCriuPath(path string) {
-	c.swrkPath = path
-}
-
-// Prepare sets up everything for the RPC communication to CRIU
-func (c *Criu) Prepare() error {
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
-	if err != nil {
-		return err
-	}
-
-	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
-	syscall.CloseOnExec(fds[0])
-	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
-	defer srv.Close()
-
-	args := []string{"swrk", strconv.Itoa(fds[1])}
-	// #nosec G204
-	cmd := exec.Command(c.swrkPath, args...)
-
-	err = cmd.Start()
-	if err != nil {
-		cln.Close()
-		return err
-	}
-
-	c.swrkCmd = cmd
-	c.swrkSk = cln
-
-	return nil
-}
-
-// Cleanup cleans up
-func (c *Criu) Cleanup() {
-	if c.swrkCmd != nil {
-		c.swrkSk.Close()
-		c.swrkSk = nil
-		_ = c.swrkCmd.Wait()
-		c.swrkCmd = nil
-	}
-}
-
-func (c *Criu) sendAndRecv(reqB []byte) ([]byte, int, error) {
-	cln := c.swrkSk
-	_, err := cln.Write(reqB)
+func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
+	_, err := sk.Write(reqB)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	respB := make([]byte, 2*4096)
-	n, err := cln.Read(respB)
+	n, err := sk.Read(respB)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -88,8 +36,8 @@ func (c *Criu) sendAndRecv(reqB []byte) ([]byte, int, error) {
 	return respB, n, nil
 }
 
-func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify) (*rpc.CriuResp, error) {
-	resp, err := c.doSwrkWithResp(reqType, opts, nfy, nil)
+func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
+	resp, err := c.doSwrkWithResp(reqType, opts, nfy, extraFiles, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +83,7 @@ func SendFile(socket *os.File, file *os.File) error {
 	return err
 }
 
-func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, features *rpc.CriuFeatures) (*rpc.CriuResp, error) {
+func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File, features *rpc.CriuFeatures) (*rpc.CriuResp, error) {
 	var resp *rpc.CriuResp
 
 	req := rpc.CriuReq{
@@ -151,13 +99,26 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 		req.Features = features
 	}
 
-	if c.swrkCmd == nil {
-		err := c.Prepare()
-		if err != nil {
-			return nil, err
-		}
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
+	if err != nil {
+		return nil, err
+	}
 
-		defer c.Cleanup()
+	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
+	syscall.CloseOnExec(fds[0])
+
+	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
+	defer srv.Close()
+
+	cmd := exec.Command("criu", "swrk", strconv.Itoa(fds[1]))
+
+	if extraFiles != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, extraFiles...)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
 	}
 
 	for {
@@ -166,7 +127,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			return nil, err
 		}
 
-		respB, respS, err := c.sendAndRecv(reqB)
+		respB, respS, err := c.sendAndRecv(reqB, cln)
 		if err != nil {
 			return nil, err
 		}
@@ -226,26 +187,27 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 		}
 	}
 
+	// cleanup
+	err = cmd.Wait()
+	if err != nil {
+		return nil, err
+	}
+
 	return resp, nil
 }
 
 // Dump dumps a process
 func (c *Criu) Dump(opts *rpc.CriuOpts, nfy *Notify) (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy)
+	return c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy, nil)
 }
 
 // Restore restores a process
-func (c *Criu) Restore(opts *rpc.CriuOpts, nfy *Notify) (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy)
-}
-
-// PreDump does a pre-dump
-func (c *Criu) PreDump(opts *rpc.CriuOpts, nfy *Notify) (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_PRE_DUMP, opts, nfy)
+func (c *Criu) Restore(opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
+	return c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy, extraFiles)
 }
 
 func (c *Criu) GetCriuVersion() (int, error) {
-	resp, err := c.doSwrkWithResp(rpc.CriuReqType_VERSION, nil, nil, nil)
+	resp, err := c.doSwrkWithResp(rpc.CriuReqType_VERSION, nil, nil, nil, nil)
 	if err != nil {
 		return 0, err
 	}

@@ -55,20 +55,6 @@ type ClientLogs struct {
 func InstantiateClient() (*Client, error) {
 	// instantiate logger
 	logger := utils.GetLogger()
-
-	criu := MakeCriu()
-	_, err := criu.GetCriuVersion()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error checking CRIU version")
-		return nil, err
-	}
-	// prepare client
-	err = criu.Prepare()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error preparing CRIU client")
-		return nil, err
-	}
-
 	config, err := utils.InitConfig()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not read config")
@@ -83,7 +69,7 @@ func InstantiateClient() (*Client, error) {
 	t := utils.NewTimings()
 
 	return &Client{
-		CRIU:   criu,
+		CRIU:   new(Criu),
 		logger: &logger,
 		config: config,
 		ctx:    context.Background(),
@@ -94,7 +80,6 @@ func InstantiateClient() (*Client, error) {
 }
 
 func (c *Client) cleanupClient() error {
-	c.CRIU.Cleanup()
 	c.logger.Info().Msg("cleaning up client")
 	return nil
 }
@@ -105,38 +90,49 @@ func (c *Client) timeTrack(start time.Time, name string) {
 	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
+// TODO NR - customizable errors
 func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
-
 	if pid == 0 {
 		return nil, nil
 	}
 
 	var state task.ProcessState
-	oldState, err := c.db.GetStateFromPID(pid)
-	if err != nil {
-		return nil, err
-	}
-
-	if oldState != nil {
-		// set to oldState, and just update parts of it
-		state = *oldState
-	}
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
 		c.logger.Info().Msgf("Could not instantiate new gopsutil process for pid %d with error: %v", pid, err)
 	}
 
+	state.PID = pid
+
 	var openFiles []*task.OpenFilesStat
-	var writeOnlyFiles []string
 	var openConnections []*task.ConnectionStat
 
 	if p != nil {
-		openFilesOrig, err := p.OpenFiles()
-		for _, f := range openFilesOrig {
+		of, err := p.OpenFiles()
+		for _, f := range of {
+			var mode string
+			var stream task.OpenFilesStat_StreamType
+			file, err := os.Stat(f.Path)
+			if err == nil {
+				mode = file.Mode().Perm().String()
+				switch f.Fd {
+				case 0:
+					stream = task.OpenFilesStat_STDIN
+				case 1:
+					stream = task.OpenFilesStat_STDOUT
+				case 2:
+					stream = task.OpenFilesStat_STDERR
+				default:
+					stream = task.OpenFilesStat_NONE
+				}
+			}
+
 			openFiles = append(openFiles, &task.OpenFilesStat{
-				Fd:   f.Fd,
-				Path: f.Path,
+				Fd:     f.Fd,
+				Path:   f.Path,
+				Mode:   mode,
+				Stream: stream,
 			})
 		}
 
@@ -145,11 +141,11 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 			return nil, nil
 		}
 		// used for network barriers (TODO: NR)
-		openConnectionsOrig, err := p.Connections()
+		conns, err := p.Connections()
 		if err != nil {
 			return nil, nil
 		}
-		for _, conn := range openConnectionsOrig {
+		for _, conn := range conns {
 			Laddr := &task.Addr{
 				IP:   conn.Laddr.IP,
 				Port: conn.Laddr.Port,
@@ -169,8 +165,6 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 				Uids:   conn.Uids,
 			})
 		}
-
-		writeOnlyFiles = c.WriteOnlyFds(openFiles, pid)
 	}
 
 	memoryUsed, _ := p.MemoryPercent()
@@ -184,14 +178,21 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 	// ideally we want more than this, or some parsing to happen from this end
 	status, _ := p.Status()
 
+	// we need the cwd to ensure that it exists on the other side of the restore.
+	// if it doesn't - we inheritFd it?
+	cwd, err := p.Cwd()
+	if err != nil {
+		return nil, nil
+	}
+
 	// ignore sending network for now, little complicated
 	state.ProcessInfo = &task.ProcessInfo{
-		OpenFds:                openFiles,
-		OpenWriteOnlyFilePaths: writeOnlyFiles,
-		MemoryPercent:          memoryUsed,
-		IsRunning:              isRunning,
-		OpenConnections:        openConnections,
-		Status:                 strings.Join(status, ""),
+		OpenFds:         openFiles,
+		WorkingDir:      cwd,
+		MemoryPercent:   memoryUsed,
+		IsRunning:       isRunning,
+		OpenConnections: openConnections,
+		Status:          strings.Join(status, ""),
 	}
 
 	return &state, nil

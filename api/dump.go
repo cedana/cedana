@@ -22,12 +22,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	sys_pidfd_send_signal = 424
-	sys_pidfd_open        = 434
-	sys_pidfd_getfd       = 438
-)
-
 // The bundle includes path to bundle and the runc/podman container id of the bundle. The bundle is a folder that includes the oci spec config.json
 // as well as the rootfs used for setting up the container. Sometimes rootfs can be defined elsewhere. Podman adds extra directories and files in their
 // bundle including a file called attach which is a unix socket for attaching stdin, stdout to the terminal
@@ -36,7 +30,13 @@ type Bundle struct {
 	Bundle      string
 }
 
+// prepareDump =/= preDump.
+// prepareDump sets up the folders to dump into, and sets the criu options.
+// preDump on the other hand does any process cleanup right before the checkpoint.
 func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
+	var hasTCP bool
+	var hasExtUnixSocket bool
+
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
 		c.logger.Fatal().Err(err)
@@ -48,10 +48,6 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		return "", fmt.Errorf("could not get state")
 	}
 
-	// check network Connections
-	var hasTCP bool
-	var hasExtUnixSocket bool
-
 	for _, Conn := range state.ProcessInfo.OpenConnections {
 		if Conn.Type == syscall.SOCK_STREAM { // TCP
 			hasTCP = true
@@ -61,9 +57,9 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 			hasExtUnixSocket = true
 		}
 	}
+
 	opts.TcpEstablished = proto.Bool(hasTCP)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
-
 	opts.FileLocks = proto.Bool(true)
 
 	// check tty state
@@ -85,64 +81,50 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
-		if err := os.MkdirAll(checkpointFolderPath, 0o664); err != nil {
+		if err := os.MkdirAll(checkpointFolderPath, 0o777); err != nil {
 			return "", err
 		}
 	}
 
-	c.copyOpenFiles(checkpointFolderPath, state)
+	err = chmodRecursive(checkpointFolderPath, 0o777)
+	if err != nil {
+		return "", err
+	}
+
+	// close common fds
+	err = closeCommonFds(int32(os.Getpid()), pid)
+	if err != nil {
+		return "", err
+	}
+
+	// c.copyOpenFiles(checkpointFolderPath, state)
 
 	return checkpointFolderPath, nil
 }
 
-// Copies open writeonly files to dumpdir to ensure consistency on restore.
-// TODO NR: should we add a check for filesize here? Worried about dealing with massive files.
-// This can be potentially fixed with barriers, which also assumes that massive (>10G) files are being
-// written to on network storage or something.
-func (c *Client) copyOpenFiles(dir string, state *task.ProcessState) error {
-	if len(state.ProcessInfo.OpenWriteOnlyFilePaths) == 0 {
-		return nil
-	}
-	for _, f := range state.ProcessInfo.OpenWriteOnlyFilePaths {
-		if err := utils.CopyFile(f, dir); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// we pass a final state to postDump so we can serialize at the exact point
-// the checkpoint was written.
 func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	c.timers.Start(utils.CompressOp)
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
-	// copy open writeonly fds one more time
-	// TODO NR - this is a wasted operation - should check if bytes have been written
-	// post checkpoint
-	err := c.copyOpenFiles(dumpdir, state)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-	}
-
 	state.CheckpointPath = compressedCheckpointPath
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 	// sneak in a serialized state obj
-	err = c.SerializeStateToDir(dumpdir, state)
+	err := c.SerializeStateToDir(dumpdir, state)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
 
 	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
-	// TODO NR - switch to tar
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 	}
 
-	c.db.UpdateProcessStateWithID(c.jobID, state)
+	err = c.db.UpdateProcessStateWithID(c.jobID, state)
+	if err != nil {
+		c.logger.Fatal().Err(err)
+	}
 	c.timers.Stop(utils.CompressOp)
 }
 
@@ -152,7 +134,6 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 		LogFile:      proto.String("dump.log"),
 		LeaveRunning: proto.Bool(c.config.Client.LeaveRunning),
 		GhostLimit:   proto.Uint32(uint32(10000000)),
-		ExtMasters:   proto.Bool(true),
 	}
 	return &opts
 
@@ -308,13 +289,13 @@ func (c *Client) Dump(dir string, pid int32) error {
 	// TODO NR:add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		err = c.gpuCheckpoint(dir)
+		err = c.gpuCheckpoint(dumpdir)
 		if err != nil {
 			return err
 		}
 		GPUCheckpointed = true
 		c.logger.Info().Msgf("gpu checkpointed, copying checkpoints...")
-		// hack for now, grab file that starts w/ gpuckpt and move it to dumpdir
+		// move gpu checkpoint files into workdir
 		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if strings.Contains(path, "gpuckpt") || strings.Contains(path, "mem") {
 				c.logger.Info().Msgf("copying file %s to %s", path, dumpdir)

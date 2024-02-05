@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/api/services/gpu"
@@ -20,7 +21,6 @@ import (
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
-	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -30,17 +30,35 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, checkpointPath string) (*string, *task.ProcessState, error) {
+func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
+	var isShellJob bool
+	var inheritFds []*rpc.InheritFd
+	var tcpEstablished bool
+	var extraFiles []*os.File
+
 	c.timers.Start(utils.DecompressOp)
-	tmpdir := "cedana_restore"
-	// make temporary folder to decompress into
-	err := os.Mkdir(tmpdir, 0755)
-	if err != nil {
-		return nil, nil, err
+	tmpdir := "/tmp/cedana_restore"
+
+	// check if tmpdir exists
+	if _, err := os.Stat(tmpdir); os.IsNotExist(err) {
+		err := os.Mkdir(tmpdir, 0755)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		// likely an old checkpoint hanging around, delete
+		err := os.RemoveAll(tmpdir)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		err = os.Mkdir(tmpdir, 0755)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err = utils.UntarFolder(checkpointPath, tmpdir)
+	err := utils.UntarFolder(checkpointPath, tmpdir)
 
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
@@ -51,43 +69,66 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, args *task.RestoreArgs, chec
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	// check open_fds. Useful for checking if process being restored
-	// is a pts slave and for determining how to handle files that were being written to.
-	// TODO: We should be looking at the images instead
 	open_fds := checkpointState.ProcessInfo.OpenFds
-	var isShellJob bool
+
+	// create logfile for redirection
+	filename := fmt.Sprintf("/var/log/cedana-output-%s.log", fmt.Sprint(time.Now().Unix()))
+	file, err := os.Create(filename)
+	if err != nil {
+		c.logger.Fatal().Err(err).Msg("error creating logfile")
+		return nil, nil, nil, err
+	}
+
 	for _, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
-			break
+		}
+		// if stdout or stderr, always redirect fds
+		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
+			// strip leading slash from f
+			f.Path = strings.TrimPrefix(f.Path, "/")
+
+			extraFiles = append(extraFiles, file)
+			inheritFds = append(inheritFds, &rpc.InheritFd{
+				Fd:  proto.Int32(2 + int32(len(extraFiles))),
+				Key: proto.String(f.Path),
+			})
 		}
 	}
-	opts.ShellJob = proto.Bool(isShellJob)
 
-	c.restoreFiles(&checkpointState, tmpdir)
-
-	if err := chmodRecursive(tmpdir, 0755); err != nil {
-		c.logger.Fatal().Err(err).Msg("error changing permissions")
-		return nil, nil, err
+	// TODO NR - wtf?
+	for _, oc := range checkpointState.ProcessInfo.OpenConnections {
+		if oc.Type == syscall.SOCK_STREAM { // TCP
+			tcpEstablished = true
+		}
 	}
 
-	return &tmpdir, &checkpointState, nil
+	opts.ShellJob = proto.Bool(isShellJob)
+	opts.InheritFd = inheritFds
+	opts.TcpEstablished = proto.Bool(tcpEstablished)
+
+	if err := chmodRecursive(tmpdir, 0o777); err != nil {
+		c.logger.Fatal().Err(err).Msg("error changing permissions")
+		return nil, nil, nil, err
+	}
+
+	return &tmpdir, &checkpointState, extraFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -121,17 +162,17 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, f := range ps.ProcessInfo.OpenWriteOnlyFilePaths {
-			if info.Name() == filepath.Base(f) {
+		for _, f := range ps.ProcessInfo.OpenFds {
+			if info.Name() == filepath.Base(f.Path) {
 				// copy file to path
-				err = os.MkdirAll(filepath.Dir(f), 0755)
+				err = os.MkdirAll(filepath.Dir(f.Path), 0755)
 				if err != nil {
 					return err
 				}
 
 				c.logger.Info().Msgf("copying file %s to %s", path, f)
 				// copyFile copies to folder, so grab folder path
-				err := utils.CopyFile(path, filepath.Dir(f))
+				err := utils.CopyFile(path, filepath.Dir(f.Path))
 				if err != nil {
 					return err
 				}
@@ -148,16 +189,15 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 
 func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:       proto.Int32(4),
-		LogFile:        proto.String("cedana-restore.log"),
-		TcpEstablished: proto.Bool(true),
+		LogLevel: proto.Int32(4),
+		LogFile:  proto.String("cedana-restore.log"),
 	}
 
 	return &opts
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32, error) {
+func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -167,7 +207,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	resp, err := c.CRIU.Restore(opts, &nfy)
+	resp, err := c.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
@@ -177,11 +217,6 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string) (*int32
 
 	c.logger.Info().Msgf("process restored: %v", resp)
 
-	// clean up
-	err = os.RemoveAll(dir)
-	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error removing directory")
-	}
 	c.cleanupClient()
 	return resp.Restore.Pid, nil
 }
@@ -237,16 +272,6 @@ func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	}
 }
 
-func killRuncContainer(containerID string) error {
-	cmd := exec.Command("sudo", "/host/bin/runc", "--root", "/host/run/containerd/runc/k8s.io", "kill", containerID)
-
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func copyFiles(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -285,41 +310,6 @@ func copyFiles(src, dst string) error {
 		_, err = io.Copy(destFile, sourceFile)
 		return err
 	})
-}
-
-func dropLastDirectory(path string) (string, error) {
-	cleanPath := filepath.Clean(path)
-	parentDir := filepath.Dir(cleanPath)
-
-	// Check if the path is root directory
-	if parentDir == cleanPath {
-		return "", fmt.Errorf("cannot drop last directory of root directory")
-	}
-
-	return parentDir, nil
-}
-
-func mount(src, tgt string) error {
-	cmd := exec.Command("mount", "--bind", src, tgt)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-func umount(tgt string) error {
-	cmd := exec.Command("umount", tgt)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-func generateCustomID() string {
-	uuidObj := uuid.New()
-	// Extract specific segments from the generated UUID
-	id := fmt.Sprintf("cni-%s", uuidObj.String())
-	return id
 }
 
 type linkPairs struct {
@@ -609,7 +599,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		Logger: c.logger,
 	}
 
-	dir, state, err := c.prepareRestore(opts, nil, args.CheckpointPath)
+	dir, state, extraFiles, err := c.prepareRestore(opts, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -627,7 +617,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	}
 
 	c.timers.Start(utils.CriuRestoreOp)
-	pid, err = c.criuRestore(opts, nfy, *dir)
+	pid, err = c.criuRestore(opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -657,7 +647,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 
 func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 	// TODO NR - propagate uid/guid too
-	gpuCmd, err := StartGPUController(1000, 1000, c.logger)
+	gpuCmd, err := StartGPUController(1001, 1001, c.logger)
 	if err != nil {
 		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err
@@ -665,6 +655,9 @@ func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	// sleep a little to let the gpu controller start
+	time.Sleep(10 * time.Millisecond)
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {
