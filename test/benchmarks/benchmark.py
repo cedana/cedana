@@ -14,6 +14,7 @@ import psutil
 
 benchmarking_dir = "benchmarks"
 output_dir = "benchmark_results"
+cedana_version = subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
 
 def get_pid_by_name(process_name):
     for proc in psutil.process_iter(['name']):
@@ -139,6 +140,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Operation Duration',
                 'Network Duration',
                 "Compression Duration",
+                "Cedana Version"
                 ])
         
         # Write the resource usage data
