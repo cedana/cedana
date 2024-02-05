@@ -15,6 +15,11 @@ import psutil
 benchmarking_dir = "benchmarks"
 output_dir = "benchmark_results"
 
+def get_pid_by_name(process_name):
+    for proc in psutil.process_iter(['name']):
+        if proc.info['name'] == process_name:
+            return proc.pid
+    return None
 
 def setup():
     # download benchmarking repo
@@ -24,10 +29,9 @@ def setup():
     # make folder for storing results
     os.makedirs(output_dir, exist_ok=True)
 
-    with open('daemon-output.log', 'w') as outfile, open('error.log', 'w') as errfile:
-       daemon = subprocess.Popen(['sudo -E ./cedana daemon start'], stdout=outfile, stderr=errfile, shell=True, start_new_session=True)
+    pid = get_pid_by_name("cedana")
+    return pid
 
-    return daemon.pid 
 
 def cleanup():
     shutil.rmtree(benchmarking_dir)
