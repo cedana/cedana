@@ -87,6 +87,11 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 		}
 	}
 
+	err = chmodRecursive(checkpointFolderPath, 0o777)
+	if err != nil {
+		return "", err
+	}
+
 	// close common fds
 	err = closeCommonFds(int32(os.Getpid()), pid)
 	if err != nil {
@@ -302,7 +307,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 	// TODO NR:add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		err = c.gpuCheckpoint(dir)
+		err = c.gpuCheckpoint(dumpdir)
 		if err != nil {
 			return err
 		}

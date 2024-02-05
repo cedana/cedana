@@ -37,7 +37,7 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	var extraFiles []*os.File
 
 	c.timers.Start(utils.DecompressOp)
-	tmpdir := "cedana_restore"
+	tmpdir := "/tmp/cedana_restore"
 
 	// check if tmpdir exists
 	if _, err := os.Stat(tmpdir); os.IsNotExist(err) {
@@ -647,7 +647,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 
 func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 	// TODO NR - propagate uid/guid too
-	gpuCmd, err := StartGPUController(1000, 1000, c.logger)
+	gpuCmd, err := StartGPUController(1001, 1001, c.logger)
 	if err != nil {
 		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err
@@ -655,6 +655,9 @@ func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	// sleep a little to let the gpu controller start
+	time.Sleep(10 * time.Millisecond)
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {

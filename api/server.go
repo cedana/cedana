@@ -29,8 +29,6 @@ import (
 const defaultLogPath string = "/var/log/cedana-output.log"
 const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
-// Unused for now...
-
 type GrpcService interface {
 	Register(*grpc.Server) error
 }
@@ -570,14 +568,13 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 	}
 
 	// is this non-performant? do we need to flush at intervals instead of writing?
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return 0, err
 	}
 
 	cmd.Stdout = outputFile
 	cmd.Stderr = outputFile
-	cmd.ExtraFiles = nil
 
 	cmd.Env = os.Environ()
 
@@ -626,7 +623,7 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 	}
 
-	gpuLogFile, err := os.OpenFile(gpuDefaultLogPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	gpuLogFile, err := os.OpenFile(gpuDefaultLogPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return nil, err
 	}

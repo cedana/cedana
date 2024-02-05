@@ -90,7 +90,7 @@ func GenSampleConfig() string {
 	return `{
 	"client": {
 		"process_name": "",
-		"leave_running": true
+		"leave_running": false 
 	},
 	"shared_storage": {
 		"dump_storage_dir": "/tmp"
