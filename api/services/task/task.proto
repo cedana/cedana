@@ -4,6 +4,26 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+service TaskService {
+    rpc Dump(DumpArgs) returns (DumpResp);
+    rpc Restore(RestoreArgs) returns (RestoreResp);
+
+    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
+    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
+
+    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
+    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
+    
+    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
+    
+    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
+    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
+    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+    rpc ListRuncContainers(RuncRoot) returns (RuncList);
+    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
+    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
+}
+
 message External {
     repeated string String = 1;
 }
@@ -188,25 +208,7 @@ enum checkpointState {
   RESTORE_FAILED = 3;
 }
 
-service TaskService {
-    rpc Dump(DumpArgs) returns (DumpResp);
-    rpc Restore(RestoreArgs) returns (RestoreResp);
 
-    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
-    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
-
-    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
-    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
-    
-    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
-    
-    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
-    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
-    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
-    rpc ListRuncContainers(RuncRoot) returns (RuncList);
-    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
-    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
-}
 
 message PausePidArgs {
     string BundlePath = 1;
