@@ -28,7 +28,6 @@ func List(root string) error {
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() {
 			runcContainers = append(runcContainers, fileInfo.Name())
-			fmt.Println(fileInfo.Name())
 		}
 	}
 	return nil

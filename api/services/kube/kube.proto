@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package cedana.services.kube;
+
+option go_package = "github.com/cedana/cedana/api/services/kube";
+
+service KubeService {
+    rpc ListContainers(ListArgs) returns (ListResp);
+}
+
+message ListArgs {
+    string Root = 1;
+}
+
+message ListResp {
+    repeated Annotation Annotation= 1;
+}
+
+message Annotation {
+    map<string, string> Annotations = 1;
+}

@@ -12,7 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	kube "github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
+	kubeService "github.com/cedana/cedana/api/services/kube"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
@@ -303,6 +305,17 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
+}
+
+func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeService.ListResp, error) {
+	annotations, err := kube.StateList(args.Root)
+	if err != nil {
+		return nil, err
+	}
+	resp := &kubeService.ListResp{
+		Annotation: annotations,
+	}
+	return resp, nil
 }
 
 func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
