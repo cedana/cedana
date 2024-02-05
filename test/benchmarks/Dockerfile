@@ -28,11 +28,11 @@ RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 
-RUN echo "cachebuster1"
+RUN echo "cachebuster2"
 
 RUN git fetch && git checkout feat/no-daemon
 RUN go build && ./cedana bootstrap 
 
 RUN apt-get update && apt-get install -y vim
 
-CMD ["sh", "-c", "python3 test/benchmarks/benchmark.py"]
+CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo python3 test/benchmarks/benchmark.py"]
