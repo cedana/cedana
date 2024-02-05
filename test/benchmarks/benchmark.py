@@ -159,7 +159,8 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             completed_at - started_at,
             op_duration,
             network_duration,
-            compress_duration
+            compress_duration,
+            cedana_version
         ])
 
         # delete profile file after
