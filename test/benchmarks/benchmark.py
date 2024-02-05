@@ -25,7 +25,7 @@ def setup():
     os.makedirs(output_dir, exist_ok=True)
 
     with open('daemon-output.log', 'w') as outfile, open('error.log', 'w') as errfile:
-       daemon = subprocess.Popen(['./cedana daemon start'], stdout=outfile, stderr=errfile, shell=True, start_new_session=True)
+       daemon = subprocess.Popen(['sudo -E ./cedana daemon start'], stdout=outfile, stderr=errfile, shell=True, start_new_session=True)
 
     return daemon.pid 
 
@@ -252,11 +252,13 @@ def push_to_bigquery():
 def main(): 
     daemon_pid = setup()
     jobIDs = [
+        "server",
         "loop",
         "regression",
         "nn-1gb"
     ]
     cmds = [
+        "./benchmarks/server",
         "./benchmarks/test.sh",
         "'python3 benchmarks/regression/main.py'",
         "'python3 benchmarks/1gb_pytorch.py'"

@@ -33,4 +33,6 @@ RUN echo "cachebuster"
 RUN git fetch && git checkout feat/no-daemon
 RUN go build && ./cedana bootstrap 
 
+RUN apt-get update && apt-get install -y vim
+
 CMD ["sh", "-c", "python3 test/benchmarks/benchmark.py"]
