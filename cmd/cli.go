@@ -261,12 +261,13 @@ var restoreJobCmd = &cobra.Command{
 				return fmt.Errorf("no remote state found for id %s", args[0])
 			}
 
-			if remoteState.CheckpointID == "" {
+			//For now just grab latest checkpoint
+			if remoteState[len(remoteState)-1].CheckpointID == "" {
 				return fmt.Errorf("no checkpoint found for id %s", args[0])
 			}
 
 			restoreArgs = task.RestoreArgs{
-				CheckpointId:   remoteState.CheckpointID,
+				CheckpointId:   remoteState[len(remoteState)-1].CheckpointID,
 				CheckpointPath: "",
 				Type:           task.RestoreArgs_REMOTE,
 			}
@@ -464,7 +465,8 @@ var psCmd = &cobra.Command{
 					}
 
 					if state.RemoteState != nil {
-						remoteCheckpointID = state.RemoteState.CheckpointID
+						//For now just grab latest checkpoint
+						remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
 					}
 
 					if state.ProcessInfo != nil {
