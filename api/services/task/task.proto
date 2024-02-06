@@ -4,6 +4,26 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+service TaskService {
+    rpc Dump(DumpArgs) returns (DumpResp);
+    rpc Restore(RestoreArgs) returns (RestoreResp);
+
+    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
+    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
+
+    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
+    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
+    
+    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
+    
+    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
+    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
+    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+    rpc ListRuncContainers(RuncRoot) returns (RuncList);
+    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
+    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
+}
+
 message External {
     repeated string String = 1;
 }
@@ -188,25 +208,7 @@ enum checkpointState {
   RESTORE_FAILED = 3;
 }
 
-service TaskService {
-    rpc Dump(DumpArgs) returns (DumpResp);
-    rpc Restore(RestoreArgs) returns (RestoreResp);
 
-    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
-    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
-
-    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
-    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
-    
-    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
-    
-    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
-    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
-    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
-    rpc ListRuncContainers(RuncRoot) returns (RuncList);
-    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
-    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
-}
 
 message PausePidArgs {
     string BundlePath = 1;
@@ -257,10 +259,18 @@ message RuncDumpArgs {
   string CheckpointPath = 2;
   string ContainerId = 3;
   CriuOpts CriuOpts = 4;
+  enum DumpType {
+    LOCAL = 0;
+    REMOTE = 1;
+  }
+  DumpType Type = 5;
+  string JobID = 6;
+
 }
 
 message RuncDumpResp {
   string Message = 1;
+  string CheckpointId = 2;
 }
 
 message CriuOpts {
@@ -286,6 +296,12 @@ message RuncRestoreArgs {
   string ImagePath = 2;
   bool IsK3s = 3;
   RuncOpts Opts = 4;
+  enum RestoreType {
+    LOCAL = 0; 
+    REMOTE = 1;
+  }
+  RestoreType Type = 5;
+  string CheckpointId = 6;
 }
 
 message RuncOpts {

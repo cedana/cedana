@@ -17,7 +17,7 @@ jobs:
       packages: 'read'
       id-token: 'write'
 
-    runs-on: ubicloud
+    runs-on: ubicloud-standard-8
     
     steps:
     - name: Checkout cedana
