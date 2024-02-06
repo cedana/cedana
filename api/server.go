@@ -309,10 +309,12 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeService.ListResp, error) {
 	var containers []*kubeService.Container
+
 	annotations, err := kube.StateList(args.Root)
 	if err != nil {
 		return nil, err
 	}
+
 	for _, sandbox := range annotations {
 		var container kubeService.Container
 
@@ -324,7 +326,10 @@ func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeSe
 			container.SandboxUid = sandbox[kube.SANDBOX_UID]
 			container.SandboxNamespace = sandbox[kube.SANDBOX_NAMESPACE]
 		}
-		containers = append(containers, &container)
+
+		if sandbox[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" {
+			containers = append(containers, &container)
+		}
 	}
 
 	return &kubeService.ListResp{

@@ -10,6 +10,7 @@ service KubeService {
 
 message ListArgs {
     string Root = 1;
+    string Namespace = 2;
 }
 
 message ListResp {
