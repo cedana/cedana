@@ -96,7 +96,7 @@ message ProcessState {
   string CheckpointPath = 7;
   checkpointState CheckpointState = 8;
   FlagEnum Flag = 9;
-  RemoteState RemoteState = 10;
+  repeated RemoteState RemoteState = 10;
   bool GPUCheckpointed = 11;
   enum ContainerRuntimeOpts {
     CONTAINERD = 0;
@@ -107,6 +107,7 @@ message ProcessState {
 message RemoteState {
   string CheckpointID = 1;
   string UploadID = 2;
+  int64 Timestamp = 3;
 }
 
 message ClientInfo {

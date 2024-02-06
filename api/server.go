@@ -158,13 +158,9 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		s.Client.timers.Stop(utils.UploadOp)
 
-		// initialize remoteState if nil
-		if state.RemoteState == nil {
-			state.RemoteState = &task.RemoteState{}
-		}
+		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
-		state.RemoteState.CheckpointID = cid
-		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+		state.RemoteState = append(state.RemoteState, remoteState)
 
 		s.Client.db.UpdateProcessStateWithID(args.JobID, state)
 
@@ -365,13 +361,9 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 		s.Client.timers.Stop(utils.UploadOp)
 
-		// initialize remoteState if nil
-		if state.RemoteState == nil {
-			state.RemoteState = &task.RemoteState{}
-		}
+		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
-		state.RemoteState.CheckpointID = cid
-		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+		state.RemoteState = append(state.RemoteState, remoteState)
 
 		uploadID = multipartCheckpointResp.UploadID
 
