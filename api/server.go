@@ -308,14 +308,28 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 }
 
 func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeService.ListResp, error) {
+	var containers []*kubeService.Container
 	annotations, err := kube.StateList(args.Root)
 	if err != nil {
 		return nil, err
 	}
-	resp := &kubeService.ListResp{
-		Annotation: annotations,
+	for _, sandbox := range annotations {
+		var container kubeService.Container
+
+		if sandbox[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
+			container.ContainerName = sandbox[kube.CONTAINER_NAME]
+			container.ImageName = sandbox[kube.IMAGE_NAME]
+			container.SandboxId = sandbox[kube.SANDBOX_ID]
+			container.SandboxName = sandbox[kube.SANDBOX_NAME]
+			container.SandboxUid = sandbox[kube.SANDBOX_UID]
+			container.SandboxNamespace = sandbox[kube.SANDBOX_NAMESPACE]
+		}
+		containers = append(containers, &container)
 	}
-	return resp, nil
+
+	return &kubeService.ListResp{
+		Containers: containers,
+	}, nil
 }
 
 func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {

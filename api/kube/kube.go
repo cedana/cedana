@@ -24,6 +24,10 @@ const (
 	IMAGE_NAME     = "io.kubernetes.cri.image-name"
 )
 
+const CONTAINER_TYPE_CONTAINER = "container"
+
+const CONTAINER_TYPE_SANDBOX = "sandbox"
+
 type Container struct {
 	containerName string
 	sandboxId     string
