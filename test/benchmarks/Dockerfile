@@ -29,5 +29,6 @@ RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 
 RUN go build && ./cedana bootstrap 
+RUN apt-get update && apt-get install -y vim 
 
-CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo python3 test/benchmarks/benchmark.py"]
+CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo -E python3 test/benchmarks/benchmark.py"]
