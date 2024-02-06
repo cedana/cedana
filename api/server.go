@@ -49,6 +49,7 @@ type service struct {
 	r                 *os.File
 	w                 *os.File
 	task.UnimplementedTaskServiceServer
+	kubeService.UnimplementedKubeServiceServer
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
@@ -623,6 +624,7 @@ func (s *Server) New() (*grpc.Server, error) {
 	}
 
 	task.RegisterTaskServiceServer(grpcServer, service)
+	kubeService.RegisterKubeServiceServer(grpcServer, service)
 
 	reflection.Register(grpcServer)
 
