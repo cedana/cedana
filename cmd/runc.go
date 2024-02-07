@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -58,11 +56,7 @@ var runcDumpCmd = &cobra.Command{
 			return err
 		}
 
-		root = "/var/run/runc"
-
-		if _, err := os.Stat(root); err != nil {
-			root = "/host/run/containerd/runc/k8s.io"
-		}
+		root = "/run/containerd/runc/k8s.io"
 
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: runcPath,
