@@ -416,7 +416,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
-func (s *service) List(ctx context.Context, args *task.ListArgs) (*task.ListResp, error) {
+func (s *service) ListContainers(ctx context.Context, args *task.ListArgs) (*task.ListResp, error) {
 	var containers []*task.Container
 
 	annotations, err := kube.StateList(args.Root)
