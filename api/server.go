@@ -436,7 +436,7 @@ func (s *service) ListContainers(ctx context.Context, args *task.ListArgs) (*tas
 			container.SandboxNamespace = sandbox[kube.SANDBOX_NAMESPACE]
 		}
 
-		if sandbox[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" {
+		if sandbox[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" && container.ImageName != "" {
 			containers = append(containers, &container)
 		}
 	}
