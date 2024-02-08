@@ -300,16 +300,16 @@ def main():
     jobIDs = [
         "server",
         "loop",
+        "vscode-server",
         "regression",
         "nn-1gb",
-        "vscode-server"
     ]
     cmds = [
         "./benchmarks/server",
         "./benchmarks/test.sh",
+        "'code-server --bind-addr localhost:1234'",
         "'python3 benchmarks/regression/main.py'",
         "'python3 benchmarks/1gb_pytorch.py'",
-        "code-server"
     ]
 
     # run in a loop 
