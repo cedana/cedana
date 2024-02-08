@@ -22,6 +22,29 @@ service TaskService {
     rpc ListRuncContainers(RuncRoot) returns (RuncList);
     rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
     rpc GetPausePid(PausePidArgs) returns (PausePidResp);
+    rpc ListContainers(ListArgs) returns (ListResp);
+}
+
+message ListArgs {
+    string Root = 1;
+    string Namespace = 2;
+}
+
+message ListResp {
+    repeated Container containers = 1;
+}
+
+message Container {
+    string ContainerName = 1;
+    string ImageName = 2;
+    string SandboxId = 3;
+    string SandboxName = 4;
+    string SandboxNamespace = 5;
+    string SandboxUid = 6;
+}
+
+message Annotation {
+    map<string, string> Annotations = 1;
 }
 
 message External {

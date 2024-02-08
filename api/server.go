@@ -14,7 +14,6 @@ import (
 
 	kube "github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
-	kubeService "github.com/cedana/cedana/api/services/kube"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
@@ -49,7 +48,6 @@ type service struct {
 	r                 *os.File
 	w                 *os.File
 	task.UnimplementedTaskServiceServer
-	kubeService.UnimplementedKubeServiceServer
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
@@ -418,8 +416,8 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
 
-func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeService.ListResp, error) {
-	var containers []*kubeService.Container
+func (s *service) List(ctx context.Context, args *task.ListArgs) (*task.ListResp, error) {
+	var containers []*task.Container
 
 	annotations, err := kube.StateList(args.Root)
 	if err != nil {
@@ -427,7 +425,7 @@ func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeSe
 	}
 
 	for _, sandbox := range annotations {
-		var container kubeService.Container
+		var container task.Container
 
 		if sandbox[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
 			container.ContainerName = sandbox[kube.CONTAINER_NAME]
@@ -443,7 +441,7 @@ func (s *service) List(ctx context.Context, args *kubeService.ListArgs) (*kubeSe
 		}
 	}
 
-	return &kubeService.ListResp{
+	return &task.ListResp{
 		Containers: containers,
 	}, nil
 }
@@ -734,7 +732,6 @@ func (s *Server) New() (*grpc.Server, error) {
 	}
 
 	task.RegisterTaskServiceServer(grpcServer, service)
-	kubeService.RegisterKubeServiceServer(grpcServer, service)
 
 	reflection.Register(grpcServer)
 
@@ -746,7 +743,7 @@ func (s *Server) serveGRPC(l net.Listener) error {
 }
 
 func (s *Server) start() {
-	lis, err := net.Listen("tcp", ":1326")
+	lis, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		panic(err)
 	}
