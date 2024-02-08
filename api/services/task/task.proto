@@ -22,6 +22,29 @@ service TaskService {
     rpc ListRuncContainers(RuncRoot) returns (RuncList);
     rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
     rpc GetPausePid(PausePidArgs) returns (PausePidResp);
+    rpc ListContainers(ListArgs) returns (ListResp);
+}
+
+message ListArgs {
+    string Root = 1;
+    string Namespace = 2;
+}
+
+message ListResp {
+    repeated Container containers = 1;
+}
+
+message Container {
+    string ContainerName = 1;
+    string ImageName = 2;
+    string SandboxId = 3;
+    string SandboxName = 4;
+    string SandboxNamespace = 5;
+    string SandboxUid = 6;
+}
+
+message Annotation {
+    map<string, string> Annotations = 1;
 }
 
 message External {
@@ -96,7 +119,7 @@ message ProcessState {
   string CheckpointPath = 7;
   checkpointState CheckpointState = 8;
   FlagEnum Flag = 9;
-  RemoteState RemoteState = 10;
+  repeated RemoteState RemoteState = 10;
   bool GPUCheckpointed = 11;
   enum ContainerRuntimeOpts {
     CONTAINERD = 0;
@@ -107,6 +130,7 @@ message ProcessState {
 message RemoteState {
   string CheckpointID = 1;
   string UploadID = 2;
+  int64 Timestamp = 3;
 }
 
 message ClientInfo {

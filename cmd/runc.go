@@ -9,6 +9,7 @@ import (
 )
 
 var containerName string
+var checkpointId string
 
 var runcRoot = &cobra.Command{
 	Use:   "runc",
@@ -116,11 +117,12 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   runcPath,
-			ContainerId: containerId,
-			IsK3S:       isK3s,
-			Opts:        opts,
-			Type:        task.RuncRestoreArgs_REMOTE,
+			ImagePath:    runcPath,
+			ContainerId:  containerId,
+			IsK3S:        isK3s,
+			Opts:         opts,
+			Type:         task.RuncRestoreArgs_REMOTE,
+			CheckpointId: checkpointId,
 		}
 
 		resp, err := cli.cts.RuncRestore(restoreArgs)

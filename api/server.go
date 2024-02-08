@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	kube "github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
@@ -155,13 +156,9 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 		s.Client.timers.Stop(utils.UploadOp)
 
-		// initialize remoteState if nil
-		if state.RemoteState == nil {
-			state.RemoteState = &task.RemoteState{}
-		}
+		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
-		state.RemoteState.CheckpointID = cid
-		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+		state.RemoteState = append(state.RemoteState, remoteState)
 
 		s.Client.db.UpdateProcessStateWithID(args.JobID, state)
 
@@ -362,13 +359,9 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 		s.Client.timers.Stop(utils.UploadOp)
 
-		// initialize remoteState if nil
-		if state.RemoteState == nil {
-			state.RemoteState = &task.RemoteState{}
-		}
+		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
-		state.RemoteState.CheckpointID = cid
-		state.RemoteState.UploadID = multipartCheckpointResp.UploadID
+		state.RemoteState = append(state.RemoteState, remoteState)
 
 		uploadID = multipartCheckpointResp.UploadID
 
@@ -421,6 +414,36 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	s.Client.timers.Flush()
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
+}
+
+func (s *service) ListContainers(ctx context.Context, args *task.ListArgs) (*task.ListResp, error) {
+	var containers []*task.Container
+
+	annotations, err := kube.StateList(args.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sandbox := range annotations {
+		var container task.Container
+
+		if sandbox[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
+			container.ContainerName = sandbox[kube.CONTAINER_NAME]
+			container.ImageName = sandbox[kube.IMAGE_NAME]
+			container.SandboxId = sandbox[kube.SANDBOX_ID]
+			container.SandboxName = sandbox[kube.SANDBOX_NAME]
+			container.SandboxUid = sandbox[kube.SANDBOX_UID]
+			container.SandboxNamespace = sandbox[kube.SANDBOX_NAMESPACE]
+
+			if sandbox[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" && container.ImageName != "" {
+				containers = append(containers, &container)
+			}
+		}
+	}
+
+	return &task.ListResp{
+		Containers: containers,
+	}, nil
 }
 
 func (s *service) GetRuncContainerByName(ctx context.Context, args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {
