@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,6 +41,7 @@ var tcpEstablished bool
 // working directory for execTask
 var wd string
 var execAsRoot bool
+var execWithEnv string
 
 type CLI struct {
 	cfg    *utils.Config
@@ -396,14 +398,40 @@ var execTaskCmd = &cobra.Command{
 
 		var uid uint32
 		var gid uint32
+		var taskToExec string = args[0]
 
 		if !execAsRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
 		}
 
+		if execWithEnv != "" {
+			var lines []string
+			// read file, prepend task w/ environment variables
+			file, err := os.Open(execWithEnv)
+			if err != nil {
+				return fmt.Errorf("failed to open file: %v", err)
+			}
+			defer file.Close()
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text())
+			}
+
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("failed to read file: %v", err)
+			}
+
+			for _, line := range lines {
+				taskToExec = line + " " + taskToExec
+			}
+
+			cli.logger.Info().Msgf("read environment variable file and prepended task: %s", taskToExec)
+		}
+
 		taskArgs := &task.StartTaskArgs{
-			Task:       args[0],
+			Task:       taskToExec,
 			Id:         args[1],
 			WorkingDir: wd,
 			UID:        uid,
@@ -524,6 +552,7 @@ func init() {
 
 	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
 	execTaskCmd.Flags().BoolVarP(&execAsRoot, "root", "r", false, "run as root")
+	execTaskCmd.Flags().StringVarP(&execWithEnv, "env", "e", "", "file w/ environment variables")
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
