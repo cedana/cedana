@@ -32,12 +32,12 @@ var startDaemonCmd = &cobra.Command{
 		}
 
 		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-			err = pullGPUBinary("gpucontroller", "./gpu-controller")
+			err := pullGPUBinary("gpucontroller", "/usr/local/bin/cedana-gpu-controller")
 			if err != nil {
 				logger.Warn().Err(err).Msg("could not pull gpu controller")
 			}
 
-			err = pullGPUBinary("libcedana", "./libcedana-gpu.so")
+			err = pullGPUBinary("libcedana", "/usr/local/lib/libcedana-gpu.so")
 			if err != nil {
 				logger.Warn().Err(err).Msg("could not pull libcedana")
 			}
