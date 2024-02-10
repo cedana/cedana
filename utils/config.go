@@ -51,21 +51,25 @@ func InitConfig() (*Config, error) {
 	viper.SetConfigType("json")
 	viper.SetConfigName("client_config")
 
-	// check if folder exists, if it doesn't assume config doesn't exist either
-	// Check if the .cedana folder exists, if not, create it
-	_, err = os.Stat(filepath.Join(homedir, ".cedana"))
+	configFilePath := filepath.Join(homedir, ".cedana", "client_config.json")
+
+	_, err = os.Stat(configFilePath)
 	if os.IsNotExist(err) {
-		fmt.Println(".cedana folder doesn't exist, creating and populating with sample config...")
-		err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0o777)
-		if err != nil {
-			panic(fmt.Errorf("error creating .cedana folder: %v", err))
+		_, err = os.Stat(filepath.Join(homedir, ".cedana"))
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0o664)
+			if err != nil {
+				panic(fmt.Errorf("error creating .cedana folder: %v", err))
+			}
 		}
-		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o777)
+
+		err = os.WriteFile(configFilePath, []byte(GenSampleConfig()), 0o664)
 		if err != nil {
 			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}
 	}
 
+	viper.SetConfigFile(configFilePath)
 	viper.AutomaticEnv()
 
 	var config Config
