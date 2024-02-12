@@ -1,9 +1,11 @@
 import csv
 import os
 import shutil
+import signal
 import subprocess
 import time
 import requests 
+import platform 
 import profile_pb2
 from google.cloud import bigquery
 from google.cloud.bigquery import LoadJobConfig, SourceFormat
@@ -21,6 +23,7 @@ def get_pid_by_name(process_name):
         if proc.info['name'] == process_name:
             return proc.pid
     return None
+
 
 def setup():
     # download benchmarking repo
@@ -104,6 +107,12 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     read_bytes_diff = current_disk_io.read_bytes - initial_data['disk_io'].read_bytes
     write_bytes_diff = current_disk_io.write_bytes - initial_data['disk_io'].write_bytes
 
+    # Machine specs 
+    processor = platform.processor()
+    physical_cores = psutil.cpu_count(logical=False)
+    cpu_count = psutil.cpu_count(logical=True)
+    memory = psutil.virtual_memory().total / (1024**3)
+
     # read from profiling json 
     network_op = ""
     compress_op = ""
@@ -140,7 +149,11 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Operation Duration',
                 'Network Duration',
                 "Compression Duration",
-                "Cedana Version"
+                "Cedana Version",
+                "Processor",
+                "Physical Cores",
+                "CPU Cores",
+                "Memory (GB)"
                 ])
         
         # Write the resource usage data
@@ -160,7 +173,11 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             op_duration,
             network_duration,
             compress_duration,
-            cedana_version
+            cedana_version,
+            processor,
+            physical_cores,
+            cpu_count,
+            memory
         ])
 
         # delete profile file after
@@ -219,6 +236,28 @@ def run_exec(cmd, jobID):
 
     return process_stats 
 
+
+def terminate_process(pid, timeout=3):
+    try:
+        # Send SIGTERM
+        os.kill(pid, signal.SIGTERM)
+        
+        # Wait for the process to terminate
+        start_time = time.time()
+        while os.path.exists(f'/proc/{pid}') and time.time() - start_time < timeout:
+            time.sleep(0.1)  # Sleep briefly to avoid a busy wait
+        
+        if os.path.exists(f'/proc/{pid}'):
+            # If the process is still alive after the timeout, send SIGKILL
+            os.kill(pid, signal.SIGKILL)
+            print(f"Process {pid} forcefully terminated.")
+        else:
+            print(f"Process {pid} terminated gracefully.")
+    except ProcessLookupError:
+        print(f"Process {pid} does not exist.")
+    except PermissionError:
+        print(f"No permission to terminate process {pid}.")
+
 def push_to_bigquery():
     client = bigquery.Client()
 
@@ -261,14 +300,16 @@ def main():
     jobIDs = [
         "server",
         "loop",
+        "vscode-server",
         "regression",
-        "nn-1gb"
+        "nn-1gb",
     ]
     cmds = [
         "./benchmarks/server",
         "./benchmarks/test.sh",
+        "'code-server --bind-addr localhost:1234'",
         "'python3 benchmarks/regression/main.py'",
-        "'python3 benchmarks/1gb_pytorch.py'"
+        "'python3 benchmarks/1gb_pytorch.py'",
     ]
 
     # run in a loop 
@@ -291,6 +332,8 @@ def main():
             run_restore(daemon_pid, jobID, y, output_dir)
             time.sleep(1)
 
+            terminate_process(process_stats['pid'])
+            
     push_to_bigquery()
 
     # delete benchmarking folder

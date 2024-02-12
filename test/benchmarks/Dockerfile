@@ -27,8 +27,9 @@ RUN mkdir benchmark_results
 RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
-
 RUN go build && ./cedana bootstrap 
-RUN apt-get update && apt-get install -y vim 
+RUN apt-get update && apt-get install -y vim wget curl
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+
 
 CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo -E python3 test/benchmarks/benchmark.py"]

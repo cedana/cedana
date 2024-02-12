@@ -6,7 +6,7 @@ APP_PATH="/usr/local/bin/$APP_NAME"
 SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
-GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
+GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 
 echo "Building $APP_NAME..."

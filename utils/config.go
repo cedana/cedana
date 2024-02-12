@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -52,16 +51,25 @@ func InitConfig() (*Config, error) {
 	viper.SetConfigType("json")
 	viper.SetConfigName("client_config")
 
-	// InitConfig should do the testing for path
-	_, err = os.OpenFile(filepath.Join(homedir, ".cedana", "client_config.json"), 0, 0o777)
-	if errors.Is(err, os.ErrNotExist) {
-		fmt.Println("client_config.json does not exist, creating sample config...")
-		err = os.WriteFile(filepath.Join(homedir, ".cedana", "client_config.json"), []byte(GenSampleConfig()), 0o777)
+	configFilePath := filepath.Join(homedir, ".cedana", "client_config.json")
+
+	_, err = os.Stat(configFilePath)
+	if os.IsNotExist(err) {
+		_, err = os.Stat(filepath.Join(homedir, ".cedana"))
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0o664)
+			if err != nil {
+				panic(fmt.Errorf("error creating .cedana folder: %v", err))
+			}
+		}
+
+		err = os.WriteFile(configFilePath, []byte(GenSampleConfig()), 0o664)
 		if err != nil {
 			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}
 	}
 
+	viper.SetConfigFile(configFilePath)
 	viper.AutomaticEnv()
 
 	var config Config

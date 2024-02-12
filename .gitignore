@@ -1,8 +1,9 @@
 cedana
 client_config.yaml
 
-*.vhs
 .gitconfig
+.vscode/*
+*.log
 
 benchmarks
 benchmark_*
