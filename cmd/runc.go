@@ -115,7 +115,7 @@ var runcRestoreCmd = &cobra.Command{
 			ContainerId:  containerId,
 			IsK3S:        isK3s,
 			Opts:         opts,
-			Type:         task.RuncRestoreArgs_REMOTE,
+			Type:         task.RuncRestoreArgs_LOCAL,
 			CheckpointId: checkpointId,
 		}
 
