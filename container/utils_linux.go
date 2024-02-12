@@ -1280,7 +1280,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			LogFile:         proto.String(logFile),
 			RstSibling:      proto.Bool(true),
 			Root:            proto.String(root),
-			ManageCgroups:   proto.Bool(true),
+			ManageCgroups:   proto.Bool(false),
 			NotifyScripts:   proto.Bool(true),
 			ShellJob:        proto.Bool(criuOpts.ShellJob),
 			ExtUnixSk:       proto.Bool(criuOpts.ExternalUnixConnections),
