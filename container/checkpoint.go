@@ -922,9 +922,10 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	root := "/run/containerd/runc/default"
 
+	// EKS
 	_, err = os.Stat(root)
 	if err != nil {
-		root = "/host/run/containerd/runc/k8s.io"
+		root = "/run/containerd/runc/k8s.io"
 	}
 
 	c := GetContainerFromRunc(container.ID, root)
@@ -1307,7 +1308,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	c.M.Lock()
 	defer c.M.Unlock()
 
-	snapshotOpts(c.Id)
+	//snapshotOpts(c.Id)
 	// Checkpoint is unlikely to work if os.Geteuid() != 0 || system.RunningInUserNS().
 	// (CLI prints a warning)
 	// TODO(avagin): Figure out how to make this work nicely. CRIU 2.0 has

@@ -232,7 +232,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
 	err := s.Client.ContainerDump(args.Ref, args.ContainerId)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
+		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 	return &task.ContainerDumpResp{}, nil
