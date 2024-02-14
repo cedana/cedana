@@ -358,7 +358,7 @@ var containerdRestoreCmd = &cobra.Command{
 		}
 
 		restoreArgs := &task.ContainerRestoreArgs{
-			ImgPath:     imgPath,
+			ImgPath:     ref,
 			ContainerId: containerId,
 		}
 
