@@ -25,7 +25,6 @@ type Client struct {
 type Connection struct {
 	// for cedana managed systems
 	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
-	CedanaUser      string `json:"cedana_user" mapstructure:"cedana_user"`
 	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 }
 

@@ -129,7 +129,7 @@ func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -185,7 +185,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, s
 
 	req.Header.Set("Content-Type", "application/json")
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -259,7 +259,7 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 			req.Header.Set("Content-Type", "application/octet-stream")
 			req.Header.Set("Transfer-Encoding", "chunked")
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 			resp, err := httpClient.Do(req)
 			if err != nil {
@@ -304,7 +304,7 @@ func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid st
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
