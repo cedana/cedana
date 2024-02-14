@@ -2,6 +2,7 @@ package container
 
 import (
 	"bytes"
+	"context"
 	gocontext "context"
 	"encoding/json"
 	"errors"
@@ -49,9 +50,11 @@ import (
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	dockercli "github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
+
+	errdefs "github.com/containerd/errdefs"
 	"github.com/opencontainers/go-digest"
 	is "github.com/opencontainers/image-spec/specs-go"
+	ver "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
@@ -741,9 +744,9 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 }
 
 // Gotta figure out containerID discovery - TODO NR
-func Dump(dir string, containerID string) error {
-	dir = "containerd.io/checkpoint/countup:09-18-2023-19:12:56"
-	err := containerdCheckpoint(containerID, dir)
+func Dump(imagePath, containerID string) error {
+
+	err := containerdCheckpoint(imagePath, containerID)
 	if err != nil {
 		return err
 	}
@@ -778,7 +781,7 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 	return ctx, cancel
 }
 
-func containerdCheckpoint(id string, ref string) error {
+func containerdCheckpoint(imagePath, id string) error {
 	logger := utils.GetLogger()
 
 	ctx := gocontext.Background()
@@ -841,8 +844,6 @@ func containerdCheckpoint(id string, ref string) error {
 		}()
 	}
 
-	// create image path store criu image files
-	imagePath := ""
 	// checkpoint task
 	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
 	// 	return err
@@ -1238,10 +1239,75 @@ func isCheckpointPathExist(runtime string, v interface{}) bool {
 	return false
 }
 
+func snapshotOpts(id string) error {
+	ctx := context.Background()
+
+	copts := &options.CheckpointOptions{
+		Exit:                false,
+		OpenTcp:             false,
+		ExternalUnixSockets: false,
+		Terminal:            false,
+		FileLocks:           true,
+		EmptyNamespaces:     nil,
+	}
+
+	opts := []containerd.CheckpointOpts{
+		containerd.WithCheckpointRuntime,
+		containerd.WithCheckpointImage,
+		containerd.WithCheckpointRW,
+		containerd.WithCheckpointTask,
+	}
+
+	containerdClient, err := containerd.New("/run/containerd/containerd.sock")
+	if err != nil {
+		return err
+	}
+
+	index := &ocispec.Index{
+		Versioned: ver.Versioned{
+			SchemaVersion: 2,
+		},
+		Annotations: make(map[string]string),
+	}
+	container, err := containerdClient.LoadContainer(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	info, err := container.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	img, err := container.Image(ctx)
+	if err != nil {
+		return err
+	}
+
+	// add image name to manifest
+	index.Annotations[checkpointImageNameLabel] = img.Name()
+	// add runtime info to index
+	index.Annotations[checkpointRuntimeNameLabel] = info.Runtime.Name
+	// add snapshotter info to index
+	index.Annotations[checkpointSnapshotterNameLabel] = info.Snapshotter
+
+	for _, o := range opts {
+		if err := o(ctx, containerdClient, &info, index, copts); err != nil {
+			err = errdefs.FromGRPC(err)
+			if !errdefs.IsAlreadyExists(err) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot string, pauseConfig *configs.Config) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 
+	snapshotOpts(c.Id)
 	// Checkpoint is unlikely to work if os.Geteuid() != 0 || system.RunningInUserNS().
 	// (CLI prints a warning)
 	// TODO(avagin): Figure out how to make this work nicely. CRIU 2.0 has
