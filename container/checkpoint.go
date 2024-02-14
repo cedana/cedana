@@ -775,6 +775,8 @@ func ContainerdCheckpoint(imagePath, id string) error {
 
 	ctx := gocontext.Background()
 
+	ctx = namespaces.WithNamespace(ctx, "k8s.io")
+
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
 		logger.Fatal().Err(err)
@@ -787,8 +789,6 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	if ctx == nil {
 		ctx = gocontext.Background()
 	}
-
-	ctx = namespaces.WithNamespace(ctx, "k8s.io")
 
 	if ctx == nil {
 		ctx = gocontext.Background()
