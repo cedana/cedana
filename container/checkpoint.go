@@ -802,6 +802,13 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	for _, container := range containers {
 		fmt.Println(container.ID())
 	}
+	opts := []containerd.CheckpointOpts{
+		containerd.WithCheckpointRuntime,
+	}
+
+	opts = append(opts, containerd.WithCheckpointImage)
+	opts = append(opts, containerd.WithCheckpointRW)
+	opts = append(opts, containerd.WithCheckpointTask)
 
 	container, err := containerdClient.LoadContainer(ctx, id)
 	if err != nil {
@@ -814,13 +821,21 @@ func ContainerdCheckpoint(imagePath, id string) error {
 			return err
 		}
 	}
+	// pause if running
+	if task != nil {
+		if err := task.Pause(ctx); err != nil {
+			return err
+		}
+		defer func() {
+			if err := task.Resume(ctx); err != nil {
+				fmt.Println(fmt.Errorf("error resuming task: %w", err))
+			}
+		}()
+	}
 
 	// checkpoint task
-	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
-	// 	return err
-	// }
-	checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(""))
-
+	//checkpoint, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)) //checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(""))
+	checkpoint, err := container.Checkpoint(ctx, "test123", opts...)
 	if err != nil {
 		return err
 	}
