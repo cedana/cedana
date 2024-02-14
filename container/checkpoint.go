@@ -819,7 +819,7 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	// if _, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)); err != nil {
 	// 	return err
 	// }
-	checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(imagePath))
+	checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(""))
 
 	if err != nil {
 		return err

@@ -13,6 +13,7 @@ import (
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/log"
+	namespaces "github.com/containerd/containerd/namespaces"
 	"github.com/docker/docker/errdefs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -52,6 +53,8 @@ func containerdRestore(id string, ref string) error {
 	ctx := gocontext.Background()
 	logger := utils.GetLogger()
 	logger.Info().Msgf("restoring container %s from %s", id, ref)
+	ctx = namespaces.WithNamespace(ctx, "k8s.io")
+
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
 		return err
