@@ -289,7 +289,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 func (c *Client) ContainerDump(imagePath, containerId string) error {
 	root := "/run/containerd/runc/k8s.io"
 
-	err := container.Dump(imagePath, containerId)
+	err := container.ContainerdCheckpoint(imagePath, containerId)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 		return err

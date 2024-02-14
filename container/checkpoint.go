@@ -743,17 +743,6 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 	return c
 }
 
-// Gotta figure out containerID discovery - TODO NR
-func Dump(imagePath, containerID string) error {
-
-	err := containerdCheckpoint(imagePath, containerID)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // AppContext returns the context for a command. Should only be called once per
 // command, near the start.
 //
@@ -781,7 +770,7 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 	return ctx, cancel
 }
 
-func containerdCheckpoint(imagePath, id string) error {
+func ContainerdCheckpoint(imagePath, id string) error {
 	logger := utils.GetLogger()
 
 	ctx := gocontext.Background()
@@ -824,19 +813,6 @@ func containerdCheckpoint(imagePath, id string) error {
 		if !errdefs.IsNotFound(err) {
 			return err
 		}
-	}
-
-	// pause if running
-	if task != nil {
-		if err := task.Pause(ctx); err != nil {
-			return err
-		}
-		// TODO BS base this off of -leaverunning flag
-		defer func() {
-			if err := task.Resume(ctx); err != nil {
-				fmt.Println(fmt.Errorf("error resuming task: %w", err))
-			}
-		}()
 	}
 
 	// checkpoint task

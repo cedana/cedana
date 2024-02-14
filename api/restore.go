@@ -146,7 +146,7 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		return err
 	}
 	return nil
 }
