@@ -826,11 +826,6 @@ func containerdCheckpoint(imagePath, id string) error {
 		}
 	}
 
-	// info, err := container.Info(ctx)
-	if err != nil {
-		return err
-	}
-
 	// pause if running
 	if task != nil {
 		if err := task.Pause(ctx); err != nil {
@@ -930,7 +925,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	c := GetContainerFromRunc(container.ID, root)
 
-	err = c.RuncCheckpoint(criuOpts, c.Pid, root, nil)
+	err = c.RuncCheckpoint(criuOpts, c.Pid, root, c.Config)
 	if err != nil {
 		return nil, err
 	}
