@@ -752,7 +752,7 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 	var (
 		ctx       = gocontext.Background()
 		timeout   = 0
-		namespace = "default"
+		namespace = "k8s.io"
 		cancel    gocontext.CancelFunc
 	)
 	ctx = namespaces.WithNamespace(ctx, namespace)
@@ -781,27 +781,15 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	}
 	defer cancel()
 
-	// containerdOpts := []containerd.CheckpointOpts{
-	// 	containerd.WithCheckpointRuntime,
-	// }
-	if ctx == nil {
-		ctx = gocontext.Background()
-	}
-
-	ctx = namespaces.WithNamespace(ctx, "k8s.io")
-
-	if ctx == nil {
-		ctx = gocontext.Background()
-	}
-
-	// Testing purposes
 	containers, err := containerdClient.Containers(ctx)
 	if err != nil {
 		return err
 	}
+
 	for _, container := range containers {
 		fmt.Println(container.ID())
 	}
+
 	opts := []containerd.CheckpointOpts{
 		containerd.WithCheckpointRuntime,
 	}
