@@ -26,15 +26,11 @@ var startDaemonCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger()
 
-		stopOtel, err := utils.InitOtel(cmd.Context())
+		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to initialize otel")
 		}
 		defer stopOtel(cmd.Context())
-		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
-			logger.Info().Msg("profiling enabled, listening on 6060")
-			go startProfiler()
-		}
 
 		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
 			err := pullGPUBinary("gpucontroller", "/usr/local/bin/cedana-gpu-controller")
@@ -48,7 +44,7 @@ var startDaemonCmd = &cobra.Command{
 			}
 		}
 
-		logger.Info().Msgf("daemon started at %s", time.Now().Local())
+		logger.Info().Msgf("daemon version %s started at %s", cmd.Parent().Version, time.Now().Local())
 
 		startgRPCServer()
 	},

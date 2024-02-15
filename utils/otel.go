@@ -4,18 +4,20 @@ import (
 	"context"
 	"errors"
 	"os"
-	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func InitOtel(ctx context.Context) (shutdown func(context.Context) error, err error) {
+func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
 	telemetryOn := os.Getenv("CEDANA_OTEL_ENABLED") == "true"
 	if !telemetryOn {
 		otel.SetTracerProvider(noop.NewTracerProvider())
@@ -45,7 +47,7 @@ func InitOtel(ctx context.Context) (shutdown func(context.Context) error, err er
 	otel.SetTextMapPropagator(prop)
 
 	// Set up trace provider.
-	tracerProvider, err := newTraceProvider()
+	tracerProvider, err := newTraceProvider(ctx, version)
 	if err != nil {
 		handleErr(err)
 		return
@@ -63,17 +65,32 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTraceProvider() (*trace.TracerProvider, error) {
-	traceExporter, err := stdouttrace.New(
-		stdouttrace.WithPrettyPrint())
+func newTraceProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
+	// Assuming the OTel Collector is running locally and listening for gRPC on port 4317,
+	// adjust the endpoint as necessary.
+	client := otlptracegrpc.NewClient(
+		otlptracegrpc.WithEndpoint("localhost:4317"),
+		otlptracegrpc.WithInsecure(), // Use WithInsecure for non-TLS, remove for production!
+	)
+	traceExporter, err := otlptrace.New(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	resource, err := resource.New(ctx,
+		resource.WithAttributes(
+			// Adjust or add additional attributes as needed
+			semconv.ServiceNameKey.String("cedana-daemon"),
+			semconv.ServiceVersionKey.String(version),
+		),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	traceProvider := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter,
-			// Default is 5s. Set to 1s for demonstrative purposes.
-			trace.WithBatchTimeout(time.Second)),
+		trace.WithBatcher(traceExporter),
+		trace.WithResource(resource),
 	)
 	return traceProvider, nil
 }
