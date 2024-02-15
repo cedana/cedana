@@ -19,6 +19,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/time/rate"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
@@ -29,6 +30,10 @@ import (
 
 const defaultLogPath string = "/var/log/cedana-output.log"
 const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
+
+var (
+	tracer = otel.Tracer("daemon-api")
+)
 
 type GrpcService interface {
 	Register(*grpc.Server) error
@@ -551,6 +556,8 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 }
 
 func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
+	ctx, span := tracer.Start(s.Client.ctx, "exec")
+	defer span.End()
 	var pid int32
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
@@ -559,10 +566,12 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 	var gpuCmd *exec.Cmd
 	var err error
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		_, gpuStartSpan := tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = StartGPUController(uid, gid, s.logger)
 		if err != nil {
 			return 0, err
 		}
+		gpuStartSpan.End()
 	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)

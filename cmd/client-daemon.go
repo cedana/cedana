@@ -26,6 +26,11 @@ var startDaemonCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger()
 
+		stopOtel, err := utils.InitOtel(cmd.Context())
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to initialize otel")
+		}
+		defer stopOtel(cmd.Context())
 		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
 			logger.Info().Msg("profiling enabled, listening on 6060")
 			go startProfiler()
@@ -69,6 +74,13 @@ func init() {
 }
 
 func pullGPUBinary(binary string, filePath string) error {
+	_, err := os.Stat(filePath)
+	if err == nil {
+		// file exists, do nothing.
+		// TODO NR - check version of binary
+		return nil
+	}
+
 	logger := utils.GetLogger()
 
 	cfg, err := utils.InitConfig()
@@ -88,7 +100,7 @@ func pullGPUBinary(binary string, filePath string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", "random-user-1234-uuid-think")) // TODO: change to JWT
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.Connection.CedanaAuthToken))
 
 	resp, err = httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
