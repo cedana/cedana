@@ -641,12 +641,10 @@ func loadState(root string) (*State, error) {
 }
 
 func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
-	timeoutOpt := containerd.WithTimeout(300)
 	containerdEndpoint := "/run/containerd/containerd.sock"
 	if _, err := os.Stat(containerdEndpoint); err != nil {
 		containerdEndpoint = "/host/run/k3s/containerd/containerd.sock"
 	}
-	opts = append(opts, timeoutOpt)
 
 	client, err := containerd.New(containerdEndpoint, opts...)
 	if err != nil {
