@@ -78,8 +78,8 @@ func containerdRestore(id string, ref string) error {
 		containerd.WithRestoreImage,
 		containerd.WithRestoreSpec,
 		containerd.WithRestoreRuntime,
+		containerd.WithRestoreRW,
 	}
-	opts = append(opts, containerd.WithRestoreRW)
 
 	ctr, err := containerdClient.Restore(ctx, id, checkpoint, opts...)
 	if err != nil {
@@ -104,7 +104,7 @@ func containerdRestore(id string, ref string) error {
 		}
 	}
 
-	task, err := tasks.NewTask(ctx, containerdClient, ctr, ref, con, false, "", []cio.Opt{}, topts...)
+	task, err := tasks.NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
 	if err != nil {
 		return err
 	}
