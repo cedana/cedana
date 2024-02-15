@@ -749,7 +749,7 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelFunc) {
 	var (
 		ctx       = gocontext.Background()
-		timeout   = 0
+		timeout   = 300
 		namespace = "k8s.io"
 		cancel    gocontext.CancelFunc
 	)
