@@ -186,8 +186,8 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
 
     # these values have an error range in 35ms! I blame Python?
     checkpoint_completed_at = time.monotonic_ns()  
-    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
 
 def run_restore(daemonPID, jobID, iteration, output_dir):
     restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
@@ -205,8 +205,8 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     # nil value here
     process_stats = {}
     process_stats["memory_kb"] = 0
-    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
+    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
 
 def run_exec(cmd, jobID): 
     process_stats = {}
