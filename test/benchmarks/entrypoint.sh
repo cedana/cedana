@@ -1,7 +1,7 @@
 # entrypoint for benchmarking docker script 
 
 # start otelcol polling 
-otelcol-contrib --config otelcol-config.yaml &
+otelcol-contrib --config test/benchmarks/otelcol-config.yaml &
 
 # start daemon 
 sudo -E ./cedana daemon start & 
