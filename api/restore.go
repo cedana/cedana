@@ -216,6 +216,7 @@ func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify
 		// cleanup along the way
 		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
+		restoreSpan.RecordError(err)
 		return nil, err
 	}
 

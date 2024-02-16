@@ -32,6 +32,10 @@ var startDaemonCmd = &cobra.Command{
 		}
 		defer stopOtel(cmd.Context())
 
+		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
+			go startProfiler()
+		}
+
 		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
 			err := pullGPUBinary("gpucontroller", "/usr/local/bin/cedana-gpu-controller")
 			if err != nil {

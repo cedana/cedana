@@ -113,22 +113,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     cpu_count = psutil.cpu_count(logical=True)
     memory = psutil.virtual_memory().total / (1024**3)
 
-    # read from profiling json 
-    network_op = ""
-    compress_op = ""
-    if operation_type == "checkpoint":
-        network_op = "upload"
-        compress_op = "compress"
-    else: 
-        network_op = "download"
-        compress_op = "decompress"
-
-    with open("/var/log/cedana-profile.json", 'r') as f:
-        profiling_data = json.load(f)
-        op_duration = profiling_data[operation_type]
-        network_duration = profiling_data[network_op]
-        compress_duration = profiling_data[compress_op]
-
+    # read from otelcol json 
     with open("benchmark_output.csv", mode='a', newline='') as file:
         writer = csv.writer(file)
         # Write the headers if the file is new

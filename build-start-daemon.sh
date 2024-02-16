@@ -43,6 +43,11 @@ Restart=no
 
 [Install]
 WantedBy=multi-user.target
+
+[Service]
+StandardOutput=append:/var/log/cedana-daemon.log
+StandardError=append:/var/log/cedana-daemon.log
+
 EOF
 
 echo "Reloading systemd..."

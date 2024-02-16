@@ -119,6 +119,7 @@ func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.Proce
 	// sneak in a serialized state obj
 	err := c.SerializeStateToDir(dumpdir, state)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
 
@@ -126,11 +127,13 @@ func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.Proce
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
 
 	err = c.db.UpdateProcessStateWithID(c.jobID, state)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
 }
@@ -235,9 +238,8 @@ func patchPodmanDump(containerId, imgPath string) error {
 }
 
 func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *container.CriuOpts) error {
-	ctx, dumpSpan := c.tracer.Start(ctx, "dump")
+	_, dumpSpan := c.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", true))
-	defer dumpSpan.End()
 
 	links := []linkPairs{
 		{"/host/var/run/netns", "/var/run/netns"},
@@ -267,8 +269,10 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
+		dumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
+	dumpSpan.End()
 
 	if checkIfPodman(bundle) {
 		if err := patchPodmanDump(containerId, opts.ImagesDirectory); err != nil {
@@ -306,12 +310,6 @@ func (c *Client) ContainerDump(dir string, containerId string) error {
 }
 
 func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
-	ctx, dumpSpan := c.tracer.Start(ctx, "dump")
-	dumpSpan.SetAttributes(attribute.Bool("container", false))
-	defer dumpSpan.End()
-
-	defer c.timeTrack(time.Now(), "dump")
-
 	opts := c.prepareCheckpointOpts()
 	dumpdir, err := c.prepareDump(ctx, pid, dir, opts)
 	if err != nil {
@@ -364,6 +362,8 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 		return err
 	}
 
+	_, dumpSpan := c.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", false))
 	_, err = c.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
@@ -372,9 +372,12 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 			return err
 		}
 
+		dumpSpan.RecordError(err)
 		c.logger.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
+
+	dumpSpan.End()
 
 	state.GPUCheckpointed = GPUCheckpointed
 	c.postDump(ctx, dumpdir, state)

@@ -127,5 +127,5 @@ func setupProfilerHandlers() {
 
 func StartPprofServer() {
 	setupProfilerHandlers()
-	go http.ListenAndServe("localhost:6060", nil)
+	http.ListenAndServe("localhost:6060", nil)
 }

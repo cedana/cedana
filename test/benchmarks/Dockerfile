@@ -7,7 +7,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install everything else 
 RUN apt-get update && \
-    apt-get install -y software-properties-common git zip protobuf-compiler && \
+    apt-get install -y software-properties-common git zip protobuf-compiler vim wget curl && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository ppa:criu/ppa
@@ -18,8 +18,9 @@ WORKDIR /cedana
 
 ENV USER="root"
 ## set up bq env and run benchmarks
-ENV CEDANA_PROFILING_ENABLED=true 
+ENV CEDANA_OTEL_ENABLED=true 
 ENV CEDANA_REMOTE=true
+ENV SIGNOZ_ACCESS_TOKEN=""
 RUN cd test/benchmarks pip install -r requirements 
 
 RUN mkdir benchmark_results
@@ -28,8 +29,8 @@ RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 RUN go build && ./cedana bootstrap 
-RUN apt-get update && apt-get install -y vim wget curl
 RUN curl -fsSL https://code-server.dev/install.sh | sh
+RUN wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb | sudo dpkg -i
+ 
 
-
-CMD ["sh", "-c", "sudo -E ./cedana daemon start & sudo -E python3 test/benchmarks/benchmark.py"]
+CMD ["./entrypoint.sh"]
