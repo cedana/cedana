@@ -76,7 +76,7 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 			}
 		}
 
-		configPath := filepath.Join("/host", bundle, "config.json")
+		configPath := filepath.Join(bundle, "config.json")
 		if _, err := os.Stat(configPath); err == nil {
 			configFile, err := os.ReadFile(configPath)
 			if err != nil {
@@ -98,7 +98,7 @@ func GetPausePid(bundlePath string) (int, error) {
 	var spec rspec.Spec
 	var pid int
 
-	configPath := filepath.Join("/host", bundlePath, "config.json")
+	configPath := filepath.Join(bundlePath, "config.json")
 	if _, err := os.Stat(configPath); err == nil {
 		configFile, err := os.ReadFile(configPath)
 		if err != nil {

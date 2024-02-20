@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"golang.org/x/sys/unix"
 	"golang.org/x/time/rate"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
@@ -782,6 +784,26 @@ func StartGRPCServer() (*grpc.Server, error) {
 
 	go func() {
 		<-startCh // Wait for the server to start
+		// Here join netns
+		pausePid, err := runc.GetPausePid("/run/containerd/io.containerd.runtime.v2.task/k8s.io/92d29213db7d1c7b2ed4bb0502823e3db1ef310d04e617b6a3a8bc96b8d0d535")
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+		nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
+		if err != nil {
+			fmt.Println("Error opening network namespace:", err)
+			os.Exit(1)
+		}
+		defer unix.Close(nsFd)
+
+		// Join the network namespace of the target process
+		err = unix.Setns(nsFd, unix.CLONE_NEWNET)
+		if err != nil {
+			fmt.Println("Error setting network namespace:", err)
+			os.Exit(1)
+		}
+
 		srv.serveGRPC(srv.Lis)
 	}()
 

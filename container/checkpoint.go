@@ -641,10 +641,12 @@ func loadState(root string) (*State, error) {
 }
 
 func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
+	timeoutOpt := containerd.WithTimeout(0)
 	containerdEndpoint := "/run/containerd/containerd.sock"
 	if _, err := os.Stat(containerdEndpoint); err != nil {
 		containerdEndpoint = "/host/run/k3s/containerd/containerd.sock"
 	}
+	opts = append(opts, timeoutOpt)
 
 	client, err := containerd.New(containerdEndpoint, opts...)
 	if err != nil {
@@ -749,7 +751,7 @@ func getContainerFromDocker(containerID string) *RuncContainer {
 func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelFunc) {
 	var (
 		ctx       = gocontext.Background()
-		timeout   = 300
+		timeout   = 0
 		namespace = "k8s.io"
 		cancel    gocontext.CancelFunc
 	)
@@ -783,7 +785,6 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	if err != nil {
 		return err
 	}
-
 	for _, container := range containers {
 		fmt.Println(container.ID())
 	}
