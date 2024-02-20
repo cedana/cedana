@@ -785,7 +785,7 @@ func StartGRPCServer() (*grpc.Server, error) {
 	go func() {
 		<-startCh // Wait for the server to start
 		// Here join netns
-		pausePid, err := runc.GetPausePid("/run/containerd/io.containerd.runtime.v2.task/k8s.io/92d29213db7d1c7b2ed4bb0502823e3db1ef310d04e617b6a3a8bc96b8d0d535")
+		pausePid, err := runc.GetPausePid("/run/containerd/io.containerd.runtime.v2.task/k8s.io/adf7f73e2b71edca3ff5c48ea5746b9f15f5e31bbfeb1cf597691fa4dfe52d5d")
 		if err != nil {
 			fmt.Println(err.Error())
 		}
