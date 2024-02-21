@@ -25,9 +25,6 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	}
 	var shutdownFuncs []func(context.Context) error
 
-	// shutdown calls cleanup functions registered via shutdownFuncs.
-	// The errors from the calls are joined.
-	// Each registered cleanup will be invoked once.
 	shutdown = func(ctx context.Context) error {
 		var err error
 		for _, fn := range shutdownFuncs {
@@ -37,16 +34,13 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 		return err
 	}
 
-	// handleErr calls shutdown for cleanup and makes sure that all errors are returned.
 	handleErr := func(inErr error) {
 		err = errors.Join(inErr, shutdown(ctx))
 	}
 
-	// Set up propagator.
 	prop := newPropagator()
 	otel.SetTextMapPropagator(prop)
 
-	// Set up trace provider.
 	tracerProvider, err := newTraceProvider(ctx, version)
 	if err != nil {
 		handleErr(err)

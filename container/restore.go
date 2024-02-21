@@ -63,7 +63,6 @@ func containerdRestore(id string, ref string) error {
 		if !errdefs.IsNotFound(err) {
 			return err
 		}
-		// TODO (ehazlett): consider other options (always/never fetch)
 		ck, err := containerdClient.Fetch(ctx, ref)
 		if err != nil {
 			return err

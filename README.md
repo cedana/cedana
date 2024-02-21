@@ -69,7 +69,7 @@ See the configuration section for more toggles.
 cedana client restore job JOBID
 ```
 
-Currently, we also support `runc` and by extension, `containerd` checkpointing, with more container runtime support planned in the future. Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
+Currently, we also support `runc` and by extension Docker, `containerd` checkpointing and more container runtime support planned in the future. Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
 
 ```sh 
 sudo cedana dump containerd -i test -p test 
@@ -77,18 +77,17 @@ sudo cedana dump containerd -i test -p test
 
 where `i` is the imageRef and `p` is the containerID. 
 
-## Gotchas
-If running just a PID, you need to wrap your process with `setsid` and redirect the output. So if you're running (and then trying to checkpoint) a jupyter notebook, you would run: 
+For a Docker container (which generally wraps a runc runtime): 
+
 ```sh
-setsid jupyter notebook --port 8000 < /dev/null &> output.log & 
+sudo cedana dump runc -i runcID -d DIRECTORY
 ```
-which redirects `stdin` to `/dev/null` and `stdout & stderr` to `output.log`. 
 
-Alternatively, you can execute a task from `cedana` itself, using: 
+where `runcID` is the ID of the runc container (separate from what Docker daemon uses) which you can grab from `runc ps`. To restore, you'll need the container bundle, which you can pass to restore with `--bundle`. You can make a copy from a running container using `docker export CONTAINER_ID -o container_bundle.tar` and then: 
 
-```cedana start jupyter notebook --port 8000```
-
-which handles the redirects and sets the process as a session leader. 
+```sh
+sudo cedana restore --bundle container_bundle.tar -i new_runc_id -d DIRECTORY
+```
 
 ## Contributing
 See CONTRIBUTING.md for guidelines. 

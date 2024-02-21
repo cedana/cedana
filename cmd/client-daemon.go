@@ -37,7 +37,7 @@ var startDaemonCmd = &cobra.Command{
 		}
 
 		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-			err := pullGPUBinary("gpucontroller", "/usr/local/bin/cedana-gpu-controller")
+			err := pullGPUBinary("gpucontroller", "/usr/local/bin/gpu-controller")
 			if err != nil {
 				logger.Warn().Err(err).Msg("could not pull gpu controller")
 			}
@@ -74,14 +74,15 @@ func init() {
 }
 
 func pullGPUBinary(binary string, filePath string) error {
+	logger := utils.GetLogger()
+
 	_, err := os.Stat(filePath)
 	if err == nil {
+		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)
 		// file exists, do nothing.
 		// TODO NR - check version of binary
 		return nil
 	}
-
-	logger := utils.GetLogger()
 
 	cfg, err := utils.InitConfig()
 	if err != nil {

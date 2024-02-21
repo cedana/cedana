@@ -65,7 +65,7 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		criuOpts := &task.CriuOpts{
-			ImagesDirectory: runcPath,
+			ImagesDirectory: dir,
 			WorkDirectory:   workPath,
 			LeaveRunning:    true,
 			TcpEstablished:  tcpEstablished,
@@ -117,7 +117,7 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:    runcPath,
+			ImagePath:    dir,
 			ContainerId:  containerId,
 			IsK3S:        isK3s,
 			Opts:         opts,
@@ -144,8 +144,8 @@ var runcRestoreCmd = &cobra.Command{
 }
 
 func initRuncCommands() {
-	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcRestoreCmd.MarkFlagRequired("image")
+	runcRestoreCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to restore from")
+	runcRestoreCmd.MarkFlagRequired("dir")
 	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	runcRestoreCmd.MarkFlagRequired("id")
 	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
@@ -158,9 +158,9 @@ func initRuncCommands() {
 
 	restoreCmd.AddCommand(runcRestoreCmd)
 
-	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcDumpCmd.MarkFlagRequired("image")
-	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	runcDumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	runcDumpCmd.MarkFlagRequired("dir")
+	runcDumpCmd.Flags().StringVarP(&containerId, "id", "i", "", "container id")
 	runcDumpCmd.MarkFlagRequired("id")
 	runcDumpCmd.Flags().BoolVarP(&tcpEstablished, "tcp-established", "t", false, "tcp established")
 

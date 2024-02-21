@@ -136,6 +136,14 @@ func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.Proce
 		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
+	// get size of compressed checkpoint
+	info, err := os.Stat(compressedCheckpointPath)
+	if err != nil {
+		postDumpSpan.RecordError(err)
+		c.logger.Fatal().Err(err)
+	}
+
+	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {

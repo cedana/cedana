@@ -206,6 +206,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
 			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+
 			continue
 		}
 
@@ -216,7 +217,6 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 				// so converting flags: 0100002 -> 32770
 				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
 				if err != nil {
-					c.logger.Debug().Msgf("could not parse flags: %v", err)
 					continue
 				}
 
