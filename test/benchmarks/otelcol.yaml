@@ -34,8 +34,9 @@ receivers:
               # - localhost:8888
 processors:
   batch:
-    send_batch_size: 1000
-    timeout: 2s
+    # faster batch for benchmarking 
+    send_batch_size: 500
+    timeout: 1s
   # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/resourcedetectionprocessor/README.md
   resourcedetection:
     detectors: [env, system] # Before system detector, include ec2 for AWS, gcp for GCP and azure for Azure.

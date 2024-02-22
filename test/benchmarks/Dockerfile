@@ -28,10 +28,12 @@ RUN mkdir benchmark_results
 RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
-RUN git checkout feat/ced-239
+RUN git fetch && git checkout feat/ced-239
 RUN go build && ./cedana bootstrap 
 RUN curl -fsSL https://code-server.dev/install.sh | sh
-RUN wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb | sudo dpkg -i
- 
 
-CMD ["./entrypoint.sh"]
+RUN wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb 
+## want to bypass systemd init scripts
+RUN dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
+
+ENTRYPOINT ["./entrypoint.sh"]
