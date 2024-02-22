@@ -69,7 +69,9 @@ See the configuration section for more toggles.
 cedana client restore job JOBID
 ```
 
-Currently, we also support `runc` and by extension Docker, `containerd` checkpointing and more container runtime support planned in the future. Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
+Currently, we also support `runc` and by extension Docker, `containerd` checkpointing and more container runtime support planned in the future. It should be noted that container checkpointing is generally orchestrated externally, leading the CLI options to be a little janky.
+
+Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container: 
 
 ```sh 
 sudo cedana dump containerd -i test -p test 
