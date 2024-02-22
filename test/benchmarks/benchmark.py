@@ -79,7 +79,47 @@ def start_recording(pid):
 
     return initial_data
 
-def stop_recording(operation_type, pid, initial_data, jobID, completed_at, started_at, process_stats):
+def clear_otel_data(): 
+    open("data.json", "w").close()
+
+def process_otel_data():
+    # Read the JSON data from a file
+    with open("data.json", 'r') as file:
+        data = json.load(file)
+    
+    # Initialize a list to hold the operation durations
+    operation_details = {} 
+    
+    # Parse the JSON data
+    for resourceSpan in data['resourceSpans']:
+        for scopeSpan in resourceSpan['scopeSpans']:
+            for span in scopeSpan['spans']:
+                # Extract the necessary information
+                operation_name = span['name']
+                start_time = int(span['startTimeUnixNano'])
+                end_time = int(span['endTimeUnixNano'])
+                duration_ns = end_time - start_time  # Duration in nanoseconds
+                duration_ms = duration_ns / 1e6  # Convert duration to milliseconds
+                
+                attributes = {}
+                for attr in span.get('attributes', []):
+                    key = attr['key']
+                    value = attr['value'].get('stringValue', attr['value'].get('boolValue', attr['value'].get('intValue', '')))
+                    attributes[key] = value
+
+                operation_details[operation_name] = {
+                    "duration_ms": duration_ms,
+                    "attributes": attributes
+                }
+
+                details_json = json.dumps(operation_details, indent=4)
+                print(details_json)
+
+    # clear out file 
+    clear_otel_data()
+    return details_json
+
+def stop_recording(operation_type, pid, initial_data, jobID, process_stats, operation_details):
     p = psutil.Process(pid)
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data['cpu_times'].user
@@ -113,22 +153,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     cpu_count = psutil.cpu_count(logical=True)
     memory = psutil.virtual_memory().total / (1024**3)
 
-    # read from profiling json 
-    network_op = ""
-    compress_op = ""
-    if operation_type == "checkpoint":
-        network_op = "upload"
-        compress_op = "compress"
-    else: 
-        network_op = "download"
-        compress_op = "decompress"
-
-    with open("/var/log/cedana-profile.json", 'r') as f:
-        profiling_data = json.load(f)
-        op_duration = profiling_data[operation_type]
-        network_duration = profiling_data[network_op]
-        compress_duration = profiling_data[compress_op]
-
+    # read from otelcol json 
     with open("benchmark_output.csv", mode='a', newline='') as file:
         writer = csv.writer(file)
         # Write the headers if the file is new
@@ -145,10 +170,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
-                'Total Duration',
-                'Operation Duration',
-                'Network Duration',
-                "Compression Duration",
+                'Raw Durations'
                 "Cedana Version",
                 "Processor",
                 "Physical Cores",
@@ -169,10 +191,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             read_bytes_diff / (1024 * 1024), # convert to MB
             cpu_utilization,
             cpu_percent,
-            completed_at - started_at,
-            op_duration,
-            network_duration,
-            compress_duration,
+            operation_details,
             cedana_version,
             processor,
             physical_cores,
@@ -194,15 +213,14 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
 
-    checkpoint_started_at = time.monotonic_ns() 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
     p.wait()
 
-    # these values have an error range in 35ms! I blame Python?
-    checkpoint_completed_at = time.monotonic_ns()  
-    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
     stop_pprof(cpu_profile_filename)
+    time.sleep(1)
+    otel_data = process_otel_data()
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data)
 
 def run_restore(daemonPID, jobID, iteration, output_dir):
     restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
@@ -211,17 +229,17 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
     start_pprof(cpu_profile_filename)
 
-    restore_started_at = time.monotonic_ns() 
     p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
-
-    restore_completed_at = time.monotonic_ns()
 
     # nil value here
     process_stats = {}
     process_stats["memory_kb"] = 0
-    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
+    
     stop_pprof(cpu_profile_filename)
+    time.sleep(1)
+    otel_data = process_otel_data()
+    stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
 
 def run_exec(cmd, jobID): 
     process_stats = {}
@@ -324,13 +342,15 @@ def main():
             process_stats = run_exec(cmds[x], jobID+"-"+str(y))
             # wait a few seconds for memory to allocate 
             time.sleep(5)
+            # remove exec data 
+            clear_otel_data()
 
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
-            time.sleep(1)
+            time.sleep(3)
 
             run_restore(daemon_pid, jobID, y, output_dir)
-            time.sleep(1)
+            time.sleep(3)
 
             terminate_process(process_stats['pid'])
             

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,6 +15,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // wrapper over filesystem, useful for mocking in tests
@@ -25,7 +26,6 @@ type Client struct {
 	CRIU   *Criu
 	logger *zerolog.Logger
 	config *utils.Config
-	ctx    context.Context
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
@@ -41,8 +41,8 @@ type Client struct {
 	// InstantiateClient() to set the jobID correctly.
 	jobID string
 
-	// used for perf, CEDANA_PROFILING_ENABLED needs to be set
-	timers *utils.Timings
+	// used for perf, CEDANA_OTEL_ENABLED needs to be set
+	tracer trace.Tracer
 }
 
 type ClientLogs struct {
@@ -66,16 +66,13 @@ func InstantiateClient() (*Client, error) {
 
 	db := &DB{}
 
-	t := utils.NewTimings()
-
 	return &Client{
 		CRIU:   new(Criu),
 		logger: &logger,
 		config: config,
-		ctx:    context.Background(),
 		fs:     fs,
 		db:     db,
-		timers: t,
+		tracer: otel.Tracer("cedana-daemon"),
 	}, nil
 }
 
@@ -209,6 +206,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
 			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+
 			continue
 		}
 
@@ -219,7 +217,6 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 				// so converting flags: 0100002 -> 32770
 				flags, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 8, 0)
 				if err != nil {
-					c.logger.Debug().Msgf("could not parse flags: %v", err)
 					continue
 				}
 

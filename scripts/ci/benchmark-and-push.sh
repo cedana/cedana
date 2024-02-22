@@ -32,7 +32,7 @@ fi
 
 CONTAINER_CREDENTIAL_PATH=/tmp/creds.json 
 
-echo '{"client":{"leave_running":false,"signal_process_pre_dump":false,"signal_process_timeout":0,"task":""}, "connection": {"cedana_auth_token": "random-token", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
+echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "random-token", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
 cat client_config.json
 
 # TODO NR - fix the path and config
@@ -43,6 +43,7 @@ sudo docker run \
  -e PROJECT_ID=cedana-benchmarking \
  -e GCLOUD_PROJECT=cedana-benchmarking \
  -e GOOGLE_CLOUD_PROJECT=cedana-benchmarking \
+ -e SIGNOZ_ACCESS_TOKEN=$SIGNOZ_ACCESS_TOKEN \
   --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
 
 # delete bucket from minio after benchmarking 
