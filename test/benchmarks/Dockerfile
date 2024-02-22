@@ -28,7 +28,7 @@ RUN mkdir benchmark_results
 RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
-RUN git fetch && git checkout feat/ced-239
+RUN git fetch 
 
 RUN go build && ./cedana bootstrap 
 RUN curl -fsSL https://code-server.dev/install.sh | sh
