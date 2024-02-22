@@ -152,7 +152,7 @@ func initRuncCommands() {
 	runcRestoreCmd.MarkFlagRequired("bundle")
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
-	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
+	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().BoolVar(&isK3s, "isK3s", false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32VarP(&netPid, "netPid", "n", 0, "provide the network pid to restore to in k3s")
 
