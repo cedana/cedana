@@ -126,22 +126,29 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 	url := cs.url + "/checkpoint/" + cid
 	downloadPath := "checkpoint.tar"
 	file, err := os.Create(downloadPath)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
+
 	defer file.Close()
 
 	httpClient := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -153,6 +160,7 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 

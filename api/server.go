@@ -85,6 +85,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	err = s.client.Dump(ctx, args.Dir, args.PID)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
+		dumpTracer.RecordError(st.Err())
 		return nil, st.Err()
 	}
 
@@ -142,18 +143,21 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(ctx, checkpointFullSize)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
 
 		err = store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
 
 		err = store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
 		uploadSpan.End()
@@ -189,6 +193,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		pid, err := s.client.Restore(ctx, args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
@@ -215,6 +220,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
