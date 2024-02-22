@@ -272,6 +272,7 @@ var restoreJobCmd = &cobra.Command{
 				CheckpointId:   remoteState[len(remoteState)-1].CheckpointID,
 				CheckpointPath: "",
 				Type:           task.RestoreArgs_REMOTE,
+				JobID:          args[0],
 			}
 		} else {
 			paths, err := db.GetLatestLocalCheckpoints(args[0])

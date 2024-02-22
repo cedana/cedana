@@ -53,6 +53,7 @@ type service struct {
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	ctx, dumpTracer := s.client.tracer.Start(ctx, "dump-ckpt")
+	dumpTracer.SetAttributes(attribute.String("jobID", args.JobID))
 	defer dumpTracer.End()
 	s.client.jobID = args.JobID
 
@@ -175,6 +176,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	ctx, restoreTracer := s.client.tracer.Start(ctx, "restore-ckpt")
+	restoreTracer.SetAttributes(attribute.String("jobID", args.JobID))
 	defer restoreTracer.End()
 	var resp task.RestoreResp
 
