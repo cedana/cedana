@@ -1,3 +1,5 @@
+#!/bin/bash 
+
 # entrypoint for benchmarking docker script 
 
 # start otelcol polling 
