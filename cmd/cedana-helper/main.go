@@ -101,10 +101,12 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
+	// TODO check whether already installed
 	if err := runCommand("apt-get", "install", "-y", "git"); err != nil {
 		return -1, err
 	}
 
+	// TODO check whether already installed
 	if err := runCommand("./cmd/cedana-helper/install-go.sh"); err != nil {
 		return -1, err
 	}
@@ -129,6 +131,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
+	// TODO check whether already installed
 	if err := runCommand("cp", "criu/criu", "/usr/local/bin"); err != nil {
 		return -1, err
 	}
@@ -141,6 +144,8 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
+	// TODO copy to /usr/local/bin
+	// TODO check whether already installed
 	if err := runCommand("go", "build", "-o", "/cedana", "cedana"); err != nil {
 		return -1, err
 	}
