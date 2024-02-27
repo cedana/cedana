@@ -8,15 +8,15 @@ add-apt-repository \
 
 ./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-if [ -z "$GITHUB_TOKEN" ]
+if [ -z "$DOCKERHUB_TOKEN" ]
 then
-    echo "GITHUB_TOKEN is not set"
+    echo "DOCKERHUB_TOKEN is not set"
     exit 1
 fi 
 
 # docker sign in to ghcr 
-echo $GITHUB_TOKEN | sudo docker login ghcr.io -u cedana --password-stdin
-sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
+echo $DOCKERHUB_TOKEN | sudo docker login ghcr.io -u nravic2 --password-stdin
+sudo docker pull cedana/cedana-benchmarking:latest 
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]
 then
