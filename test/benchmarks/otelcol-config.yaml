@@ -5,9 +5,6 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
-  filelog:
-    include:
-      - /var/log/cedana-daemon.log
   hostmetrics:
     collection_interval: 60s
     scrapers:
@@ -55,7 +52,7 @@ exporters:
     headers:
       "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
   file:
-    path: "./data.json"
+    path: "/cedana/data.json"
   logging:
     verbosity: normal
 service:
@@ -77,6 +74,6 @@ service:
       processors: [batch]
       exporters: [otlp, file]
     logs:
-      receivers: [otlp, filelog]
+      receivers: [otlp]
       processors: [batch]
       exporters: [otlp]

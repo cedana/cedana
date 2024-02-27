@@ -181,8 +181,8 @@ def stop_recording(operation_type, pid, initial_data, jobID, process_stats, oper
                 'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
-                'Raw Durations'
-                "Cedana Version",
+                'Raw Durations',
+                'Cedana Version',
                 "Processor",
                 "Physical Cores",
                 "CPU Cores",
