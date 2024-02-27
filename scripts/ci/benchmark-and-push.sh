@@ -30,6 +30,12 @@ then
     exit 1
 fi
 
+if [ -z "$SIGNOZ_ACCESS_TOKEN" ]
+then
+    echo "SIGNOZ_ACCESS_TOKEN is not set"
+    exit 1
+fi
+
 CONTAINER_CREDENTIAL_PATH=/tmp/creds.json 
 
 echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "random-token", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
