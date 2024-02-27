@@ -39,4 +39,6 @@ jobs:
         GOOGLE_CLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         CHECKPOINTSVC_URL: ${{ secrets.CHECKPOINTSVC_URL }}
+        SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
