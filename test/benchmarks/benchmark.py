@@ -52,17 +52,17 @@ def measure_disk_usage(checkpoint_dir):
     return sum(os.path.getsize(os.path.join(dirpath, filename)) for dirpath, dirnames, filenames in os.walk(checkpoint_dir) for filename in filenames)
 
 
-def start_pprof(filename): 
-    pprof_base_url = "http://localhost:6060"
-    resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
-    if resp.status_code != 200:
-        print("error from profiler: {}".format(resp.text))
+## def start_pprof(filename): 
+    ## pprof_base_url = "http://localhost:6060"
+    ## resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
+    ## if resp.status_code != 200:
+        ## print("error from profiler: {}".format(resp.text))
 
-def stop_pprof(filename):
-    pprof_base_url = "http://localhost:6060"
-    resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
-    if resp.status_code != 200:
-        print("error from profiler: {}".format(resp.text))
+## def stop_pprof(filename):
+    ## pprof_base_url = "http://localhost:6060"
+    ## resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
+    ## if resp.status_code != 200:
+        ## print("error from profiler: {}".format(resp.text))
 
 
 def start_recording(pid):
@@ -211,13 +211,11 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     # initial data here is fine - we want to measure impact of daemon on system 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
-    start_pprof(cpu_profile_filename)
 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
     p.wait()
 
-    stop_pprof(cpu_profile_filename)
     time.sleep(1)
     otel_data = process_otel_data()
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data)
@@ -227,7 +225,6 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
-    start_pprof(cpu_profile_filename)
 
     p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
@@ -236,7 +233,6 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     process_stats = {}
     process_stats["memory_kb"] = 0
     
-    stop_pprof(cpu_profile_filename)
     time.sleep(1)
     otel_data = process_otel_data()
     stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
