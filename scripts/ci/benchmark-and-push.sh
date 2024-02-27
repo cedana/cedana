@@ -14,7 +14,6 @@ then
     exit 1
 fi 
 
-# docker sign in to ghcr 
 sudo docker pull cedana/cedana-benchmarking:latest 
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]

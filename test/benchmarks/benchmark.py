@@ -80,44 +80,55 @@ def start_recording(pid):
     return initial_data
 
 def clear_otel_data(): 
-    open("data.json", "w").close()
+    open("/cedana/data.json", "w").close()
 
 def process_otel_data():
-    # Read the JSON data from a file
-    with open("data.json", 'r') as file:
-        data = json.load(file)
-    
-    # Initialize a list to hold the operation durations
-    operation_details = {} 
-    
-    # Parse the JSON data
-    for resourceSpan in data['resourceSpans']:
-        for scopeSpan in resourceSpan['scopeSpans']:
-            for span in scopeSpan['spans']:
-                # Extract the necessary information
-                operation_name = span['name']
-                start_time = int(span['startTimeUnixNano'])
-                end_time = int(span['endTimeUnixNano'])
-                duration_ns = end_time - start_time  # Duration in nanoseconds
-                duration_ms = duration_ns / 1e6  # Convert duration to milliseconds
-                
-                attributes = {}
-                for attr in span.get('attributes', []):
-                    key = attr['key']
-                    value = attr['value'].get('stringValue', attr['value'].get('boolValue', attr['value'].get('intValue', '')))
-                    attributes[key] = value
+    with open("/cedana/data.json", 'r', encoding='utf-8') as file:
+        content = file.read()
 
-                operation_details[operation_name] = {
-                    "duration_ms": duration_ms,
-                    "attributes": attributes
-                }
 
-                details_json = json.dumps(operation_details, indent=4)
-                print(details_json)
+    # HACK
+    cleaned_content = content.replace('\x00', "") 
+    try: 
+        data = json.loads(cleaned_content)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
 
-    # clear out file 
+    operation_details = {}
+
+    try:
+        for resourceSpan in data['resourceSpans']:
+            for scopeSpan in resourceSpan['scopeSpans']:
+                for span in scopeSpan['spans']:
+                    operation_name = span['name']
+                    start_time = int(span['startTimeUnixNano'])
+                    end_time = int(span['endTimeUnixNano'])
+                    duration_ns = end_time - start_time
+                    duration_ms = duration_ns / 1e6
+
+                    attributes = {}
+                    for attr in span.get('attributes', []):
+                        key = attr['key']
+                        # Simplified value extraction for brevity
+                        value = attr['value'].get('stringValue', attr['value'].get('boolValue', attr['value'].get('intValue', '')))
+                        attributes[key] = value
+
+                    operation_details[operation_name] = {
+                        "duration_ms": duration_ms,
+                        "attributes": attributes
+                    }
+
+        details_json = json.dumps(operation_details, indent=4)
+        print(details_json)
+    except Exception as e:
+        print(f"Error processing data: {e}")
+        return {}
+
+    # Assuming clear_otel_data() clears the data.json file
     clear_otel_data()
     return details_json
+
+
 
 def stop_recording(operation_type, pid, initial_data, jobID, process_stats, operation_details):
     p = psutil.Process(pid)
@@ -200,7 +211,6 @@ def stop_recording(operation_type, pid, initial_data, jobID, process_stats, oper
         ])
 
         # delete profile file after
-        os.remove("/var/log/cedana-profile.json")
 
 def analyze_pprof(filename):
     pass 
@@ -216,7 +226,7 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     # used for capturing full time instead of directly exiting
     p.wait()
 
-    time.sleep(1)
+    time.sleep(5)
     otel_data = process_otel_data()
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data)
 
@@ -233,7 +243,7 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     process_stats = {}
     process_stats["memory_kb"] = 0
     
-    time.sleep(1)
+    time.sleep(5)
     otel_data = process_otel_data()
     stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
 
@@ -338,7 +348,7 @@ def main():
             process_stats = run_exec(cmds[x], jobID+"-"+str(y))
             # wait a few seconds for memory to allocate 
             time.sleep(5)
-            # remove exec data 
+
             clear_otel_data()
 
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
