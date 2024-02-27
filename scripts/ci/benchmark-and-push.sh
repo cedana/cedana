@@ -28,7 +28,7 @@ then
     exit 1
 fi
 
-if [-z "$CHECKPOINT_SVC_TOKEN"]
+if [-z "$CHECKPOINTSVC_TOKEN"]
 then 
     echo "CHECKPOINT_SVC_TOKEN is not set"
     exit 1
@@ -41,7 +41,7 @@ fi
 
 CONTAINER_CREDENTIAL_PATH=/tmp/creds.json 
 
-echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINT_SVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
+echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINTSVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
 cat client_config.json
 
 # TODO NR - fix the path and config
