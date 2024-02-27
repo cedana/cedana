@@ -15,7 +15,6 @@ then
 fi 
 
 # docker sign in to ghcr 
-echo $DOCKERHUB_TOKEN | sudo docker login ghcr.io -u nravic2 --password-stdin
 sudo docker pull cedana/cedana-benchmarking:latest 
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]
@@ -50,6 +49,6 @@ sudo docker run \
  -e GCLOUD_PROJECT=cedana-benchmarking \
  -e GOOGLE_CLOUD_PROJECT=cedana-benchmarking \
  -e SIGNOZ_ACCESS_TOKEN=$SIGNOZ_ACCESS_TOKEN \
-  --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
+  --privileged --tmpfs /run cedana/cedana-benchmarking:latest
 
 # delete bucket from minio after benchmarking 
