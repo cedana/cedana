@@ -105,7 +105,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := runCommand("/path/to/install-golang.sh"); err != nil {
+	if err := runCommand("./cmd/cedana-helper/install-go.sh"); err != nil {
 		return -1, err
 	}
 

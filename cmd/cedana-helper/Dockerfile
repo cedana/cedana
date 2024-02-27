@@ -15,4 +15,4 @@ WORKDIR /cedana/cmd/cedana-helper
 RUN go build
 
 ENV USER="root"
-CMD ["cedana-helper"]
+CMD ["/cedana/cmd/cedana-helper/cedana-helper"]
