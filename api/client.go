@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
@@ -29,9 +28,6 @@ type Client struct {
 
 	// for dependency-injection of filesystems (useful for testing)
 	fs *afero.Afero
-
-	// external checkpoint remoteStore
-	remoteStore utils.Store
 
 	// db meta/state store
 	db *DB
@@ -79,12 +75,6 @@ func InstantiateClient() (*Client, error) {
 func (c *Client) cleanupClient() error {
 	c.logger.Info().Msg("cleaning up client")
 	return nil
-}
-
-// sets up subscribers for dump and restore commands
-func (c *Client) timeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	c.logger.Debug().Msgf("%s took %s", name, elapsed)
 }
 
 // TODO NR - customizable errors

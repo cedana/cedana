@@ -207,7 +207,15 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 
-		zipFile, err := s.client.remoteStore.GetCheckpoint(ctx, args.CheckpointId)
+		cfg, err := utils.InitConfig()
+		if err != nil {
+			err = status.Error(codes.Internal, err.Error())
+			return nil, err
+		}
+
+		store := utils.NewCedanaStore(cfg, s.client.tracer)
+
+		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
@@ -393,9 +401,16 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
-		s.client.remoteStore = utils.NewCedanaStore(s.client.config, s.client.tracer)
 
-		zipFile, err := s.client.remoteStore.GetCheckpoint(ctx, args.CheckpointId)
+		cfg, err := utils.InitConfig()
+		if err != nil {
+			err = status.Error(codes.Internal, err.Error())
+			return nil, err
+		}
+
+		store := utils.NewCedanaStore(cfg, s.client.tracer)
+
+		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
