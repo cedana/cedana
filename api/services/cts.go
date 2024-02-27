@@ -4,7 +4,6 @@ package services
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -17,12 +16,12 @@ type ServiceClient struct {
 	taskConn    *grpc.ClientConn
 }
 
-func NewClient(addr string) *ServiceClient {
+func NewClient(addr string) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	taskConn, err := grpc.Dial(addr, opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		return nil, err
 	}
 
 	taskClient := task.NewTaskServiceClient(taskConn)
@@ -31,7 +30,7 @@ func NewClient(addr string) *ServiceClient {
 		taskService: taskClient,
 		taskConn:    taskConn,
 	}
-	return client
+	return client, nil
 }
 
 func (c *ServiceClient) GetRuncIdByName(args *task.CtrByNameArgs) (*task.CtrByNameResp, error) {

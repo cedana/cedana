@@ -54,6 +54,7 @@ func NewCLI() (*CLI, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	cts := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
