@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"os/user"
 	"syscall"
 	"time"
 
@@ -102,87 +101,15 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	// TODO check whether already installed
-	if err := runCommand("yum", "install", "-y", "git"); err != nil {
+	// Copy the Bash script into /host
+	if err := copyScript("./install.sh", "/host/install.sh"); err != nil {
 		return -1, err
 	}
 
-	// TODO check whether already installed
-
-	if err := runCommand("wget", "https://go.dev/dl/go1.22.0.linux-arm64.tar.gz"); err != nil {
+	// Execute the Bash script
+	if err := runCommand("/bin/bash", "/install.sh"); err != nil {
 		return -1, err
 	}
-
-	if err := runCommand("rm", "-rf", "/usr/local/go"); err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("tar", "-C", "/usr/local", "-xzf", "go1.22.0.linux-arm64.tar.gz"); err != nil {
-		return -1, err
-	}
-
-	usr, err := user.Current()
-	if err != nil {
-		return -1, err
-	}
-
-	exportStatement := "export PATH=$PATH:/usr/local/go/bin"
-
-	bashrcFilePath := usr.HomeDir + "/.bashrc"
-	file, err := os.OpenFile(bashrcFilePath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return -1, err
-
-	}
-	defer file.Close()
-
-	_, err = file.WriteString("\n" + exportStatement + "\n")
-	if err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("yum", "install", "-y", "libnet-devel", "protobuf", "protobuf-c", "protobuf-c-devel", "protobuf-compiler", "protobuf-devel", "protobuf-python", "libnl3-devel", "libcap-devel"); err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("yum", "group", "install", "-y", "Development Tools"); err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("git", "clone", "https://github.com/checkpoint-restore/criu.git"); err != nil {
-		return -1, err
-	}
-
-	if err := os.Chdir("./criu"); err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("make"); err != nil {
-		return -1, err
-	}
-
-	// TODO check whether already installed
-	if err := runCommand("cp", "criu/criu", "/usr/local/bin"); err != nil {
-		return -1, err
-	}
-
-	if err := os.Chdir("/"); err != nil {
-		return -1, err
-	}
-
-	if err := runCommand("git", "clone", "https://github.com/cedana/cedana.git"); err != nil {
-		return -1, err
-	}
-
-	// TODO copy to /usr/local/bin
-	// TODO check whether already installed
-	if err := runCommand("go", "build", "-o", "/cedana", "cedana"); err != nil {
-		return -1, err
-	}
-
-	// TODO
-	// Create /.cedana
-	// Bootstrap
 
 	pid, err := startDaemon()
 	if err != nil {
@@ -190,6 +117,11 @@ func initialize() (int, error) {
 	}
 
 	return pid, nil
+}
+
+func copyScript(src, dest string) error {
+	cmd := exec.Command("cp", src, dest)
+	return cmd.Run()
 }
 
 func runCommand(command string, args ...string) error {
