@@ -128,8 +128,8 @@ func initialize() (int, error) {
 
 	exportStatement := "export PATH=$PATH:/usr/local/go/bin"
 
-	filePath := usr.HomeDir + "/.bashrc"
-	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+	bashrcFilePath := usr.HomeDir + "/.bashrc"
+	file, err := os.OpenFile(bashrcFilePath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return -1, err
 
@@ -141,7 +141,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := runCommand("bash", "-c", "source", "~/.bashrc"); err != nil {
+	if err := runCommand("bash", "-c", fmt.Sprintf("source %s", bashrcFilePath)); err != nil {
 		return -1, err
 	}
 
