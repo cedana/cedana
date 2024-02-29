@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"syscall"
 	"time"
 
@@ -120,7 +121,27 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := runCommand("export", "PATH=$PATH:/usr/local/go/bin"); err != nil {
+	usr, err := user.Current()
+	if err != nil {
+		return -1, err
+	}
+
+	exportStatement := "export PATH=$PATH:/usr/local/go/bin"
+
+	filePath := usr.HomeDir + "/.bashrc"
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return -1, err
+
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("\n" + exportStatement + "\n")
+	if err != nil {
+		return -1, err
+	}
+
+	if err := runCommand("source", "~/.bashrc"); err != nil {
 		return -1, err
 	}
 
