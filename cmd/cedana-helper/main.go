@@ -141,7 +141,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := runCommand("source", "~/.bashrc"); err != nil {
+	if err := runCommand("bash", "-c", "source", "~/.bashrc"); err != nil {
 		return -1, err
 	}
 
