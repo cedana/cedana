@@ -141,10 +141,6 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := runCommand("bash", "-c", fmt.Sprintf("source %s", bashrcFilePath)); err != nil {
-		return -1, err
-	}
-
 	if err := runCommand("yum", "install", "-y", "libnet-devel", "protobuf", "protobuf-c", "protobuf-c-devel", "protobuf-compiler", "protobuf-devel", "protobuf-python", "libnl3-devel", "libcap-devel"); err != nil {
 		return -1, err
 	}
