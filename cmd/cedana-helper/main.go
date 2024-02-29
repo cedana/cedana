@@ -107,7 +107,7 @@ func initialize() (int, error) {
 	}
 
 	// TODO check whether already installed
-	if err := runCommand("./cmd/cedana-helper/install-go.sh"); err != nil {
+	if err := runCommand("./install-go.sh"); err != nil {
 		return -1, err
 	}
 
