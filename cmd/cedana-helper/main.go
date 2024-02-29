@@ -107,7 +107,20 @@ func initialize() (int, error) {
 	}
 
 	// TODO check whether already installed
-	if err := runCommand("./install-go.sh"); err != nil {
+
+	if err := runCommand("wget", "https://go.dev/dl/go1.22.0.linux-arm64.tar.gz"); err != nil {
+		return -1, err
+	}
+
+	if err := runCommand("rm", "-rf", "/usr/local/go"); err != nil {
+		return -1, err
+	}
+
+	if err := runCommand("tar", "-C", "/usr/local", "-xzf", "go1.22.0.linux-arm64.tar.gz"); err != nil {
+		return -1, err
+	}
+
+	if err := runCommand("export", "PATH=$PATH:/usr/local/go/bin"); err != nil {
 		return -1, err
 	}
 
