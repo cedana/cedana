@@ -102,7 +102,7 @@ func initialize() (int, error) {
 	}
 
 	// TODO check whether already installed
-	if err := runCommand("apt-get", "install", "-y", "git"); err != nil {
+	if err := runCommand("yum", "install", "-y", "git"); err != nil {
 		return -1, err
 	}
 

@@ -1,0 +1,113 @@
+version: '2.3'
+
+services:
+  redis:
+    container_name: redis
+    image: redis:7.2.3-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 5s
+      retries: 100
+    restart: always
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+  sqs:
+    container_name: mesocast-sqs
+    image: registry.mesocast.net/backend-go:dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    command: ["/usr/local/bin/mesocast-sqs"]
+    volumes:
+      - ./env:/app/.env
+    links:
+      - redis
+  nexrad2:
+    container_name: mesocast-nexrad2
+    image: registry.mesocast.net/backend-go:dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    command: ["/usr/local/bin/mesocast-nexrad2" ]
+    volumes:
+      - ./env:/app/.env
+    links:
+      - redis
+  nexrad3:
+    container_name: mesocast-nexrad3
+    image: registry.mesocast.net/backend-go:dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    command: ["/usr/local/bin/mesocast-nexrad3", "-m", "nexrad3"]
+    volumes:
+      - ./env:/app/.env
+    links:
+      - redis
+  sat:
+    container_name: mesocast-satellite
+    image: registry.mesocast.net/satellite-images:prod-latest
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    links:
+      - redis
+  socket:
+    container_name: mesocast-socket
+    image: registry.mesocast.net/socket-server:prod-latest
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    volumes:
+      - ./env.production:/app/.env.production
+    links:
+      - redis
+  webserver:
+    container_name: caddy
+    image: caddy
+    restart: always
+    volumes:
+      - /opt/caddy/Caddyfile/Caddyfile:/etc/caddy/Caddyfile
+      - /opt/caddy/config:/config
+      - /opt/caddy/data:/data
+    ports:
+      - "80:80"
+      - "443:443"
+    links:
+      - socket
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - ~/apps/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=mesocast
+      - POSTGRES_USER=mesocast
+      - POSTGRES_DB=mesocast
+  rtirl:
+    container_name: mesocast-rtirl
+    image: registry.mesocast.net/backend-go:dev
+    restart: always
+    command: [ "/usr/local/bin/mesocast-rtirl" ]
+    volumes:
+      - ./env:/app/.env
+    links:
+      - postgres
+  api:
+    container_name: mesocast-api
+    image: registry.mesocast.net/backend-go:dev
+    restart: always
+    command: [ "/usr/local/bin/mesocast-api" ]
+    volumes:
+      - ./env:/app/.env
+    links:
+      - postgres
