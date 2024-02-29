@@ -123,7 +123,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	if err := os.Chdir("/criu"); err != nil {
+	if err := os.Chdir("./criu"); err != nil {
 		return -1, err
 	}
 
