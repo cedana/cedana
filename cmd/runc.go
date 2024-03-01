@@ -59,7 +59,7 @@ var runcDumpCmd = &cobra.Command{
 		root = "/run/containerd/runc/k8s.io"
 
 		criuOpts := &task.CriuOpts{
-			ImagesDirectory: runcPath,
+			ImagesDirectory: dir,
 			WorkDirectory:   workPath,
 			LeaveRunning:    true,
 			TcpEstablished:  tcpEstablished,
@@ -111,7 +111,7 @@ var runcRestoreCmd = &cobra.Command{
 		}
 
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:    runcPath,
+			ImagePath:    dir,
 			ContainerId:  containerId,
 			IsK3S:        isK3s,
 			Opts:         opts,
@@ -138,23 +138,23 @@ var runcRestoreCmd = &cobra.Command{
 }
 
 func initRuncCommands() {
-	runcRestoreCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcRestoreCmd.MarkFlagRequired("image")
+	runcRestoreCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to restore from")
+	runcRestoreCmd.MarkFlagRequired("dir")
 	runcRestoreCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
 	runcRestoreCmd.MarkFlagRequired("id")
 	runcRestoreCmd.Flags().StringVarP(&bundle, "bundle", "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired("bundle")
 	runcRestoreCmd.Flags().StringVarP(&consoleSocket, "console-socket", "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringVarP(&root, "root", "r", "/var/run/runc", "runc root directory")
-	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "d", false, "run runc container in detached mode")
+	runcRestoreCmd.Flags().BoolVarP(&detach, "detach", "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().BoolVar(&isK3s, "isK3s", false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32VarP(&netPid, "netPid", "n", 0, "provide the network pid to restore to in k3s")
 
 	restoreCmd.AddCommand(runcRestoreCmd)
 
-	runcDumpCmd.Flags().StringVarP(&runcPath, "image", "i", "", "image path")
-	runcDumpCmd.MarkFlagRequired("image")
-	runcDumpCmd.Flags().StringVarP(&containerId, "id", "p", "", "container id")
+	runcDumpCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
+	runcDumpCmd.MarkFlagRequired("dir")
+	runcDumpCmd.Flags().StringVarP(&containerId, "id", "i", "", "container id")
 	runcDumpCmd.MarkFlagRequired("id")
 	runcDumpCmd.Flags().BoolVarP(&tcpEstablished, "tcp-established", "t", false, "tcp established")
 

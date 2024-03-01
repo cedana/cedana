@@ -41,7 +41,7 @@ func setup(t *testing.T) (task.TaskServiceClient, error) {
 
 	logger := utils.GetLogger()
 
-	svc := service{Client: c, logger: &logger}
+	svc := service{client: c, logger: &logger}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {

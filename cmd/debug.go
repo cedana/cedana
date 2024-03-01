@@ -90,7 +90,7 @@ var debugRuncRestoreCmd = &cobra.Command{
 
 		client := api.Client{}
 
-		err := client.RuncRestore(imgPath, containerId, false, []string{}, opts)
+		err := client.RuncRestore(cmd.Context(), imgPath, containerId, false, []string{}, opts)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ var debugRuncDumpCmd = &cobra.Command{
 			TcpEstablished:  false,
 		}
 
-		client.RuncDump(root, containerId, criuOpts)
+		client.RuncDump(cmd.Context(), root, containerId, criuOpts)
 
 		return nil
 	},

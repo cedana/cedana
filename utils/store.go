@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,15 +14,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Abstraction for storing and retreiving checkpoints
 type Store interface {
-	GetCheckpoint(string) (*string, error) // returns filepath to downloaded chekcpoint
-	PushCheckpoint(filepath string) error
-	ListCheckpoints() (*[]CheckpointMeta, error) // fix
+	GetCheckpoint(ctx context.Context, cid string) (*string, error) // returns filepath to downloaded chekcpoint
+	PushCheckpoint(ctx context.Context, filepath string) error
+	ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, error) // fix
 }
 
 type CheckpointMeta struct {
@@ -34,7 +36,6 @@ type CheckpointMeta struct {
 }
 
 type S3Store struct {
-	logger *zerolog.Logger
 }
 
 func (s *S3Store) GetCheckpoint() (*string, error) {
@@ -56,24 +57,30 @@ type CedanaStore struct {
 	logger *zerolog.Logger
 	cfg    *Config
 	url    string
+
+	tracer trace.Tracer
 }
 
-func NewCedanaStore(cfg *Config) *CedanaStore {
+func NewCedanaStore(cfg *Config, tracer trace.Tracer) *CedanaStore {
 	logger := GetLogger()
 	url := "https://" + cfg.Connection.CedanaUrl
 	return &CedanaStore{
 		logger: &logger,
 		cfg:    cfg,
 		url:    url,
+		tracer: tracer,
 	}
 }
 
 // TODO NR - unimplemented stubs for now
-func (cs *CedanaStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+func (cs *CedanaStore) ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, error) {
 	return nil, nil
 }
 
-func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadResponse, error) {
+func (cs *CedanaStore) FullMultipartUpload(ctx context.Context, checkpointPath string) (*UploadResponse, error) {
+	ctx, mpuSpan := cs.tracer.Start(ctx, "FullMultipartUpload")
+	defer mpuSpan.End()
+
 	file, err := os.Open(checkpointPath)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
@@ -93,19 +100,19 @@ func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadRespon
 
 	checkpointFullSize := int64(size)
 
-	multipartCheckpointResp, cid, err := cs.CreateMultiPartUpload(checkpointFullSize)
+	multipartCheckpointResp, cid, err := cs.CreateMultiPartUpload(ctx, checkpointFullSize)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "CreateMultiPartUpload failed")
 		return &UploadResponse{}, err
 	}
 
-	err = cs.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
+	err = cs.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, checkpointPath)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
 		return &UploadResponse{}, err
 	}
 
-	err = cs.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
+	err = cs.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "CompleteMultiPartUpload failed")
 		return &UploadResponse{}, err
@@ -113,26 +120,35 @@ func (cs *CedanaStore) FullMultipartUpload(checkpointPath string) (*UploadRespon
 	return multipartCheckpointResp, nil
 }
 
-func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
+func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, error) {
+	_, getSpan := cs.tracer.Start(ctx, "GetCheckpoint")
+	defer getSpan.End()
 	url := cs.url + "/checkpoint/" + cid
 	downloadPath := "checkpoint.tar"
 	file, err := os.Create(downloadPath)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
+
 	defer file.Close()
 
 	httpClient := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
+
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -144,17 +160,20 @@ func (cs *CedanaStore) GetCheckpoint(cid string) (*string, error) {
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
+		getSpan.RecordError(err)
 		return nil, err
 	}
 
 	return &downloadPath, nil
 }
 
-func (cs *CedanaStore) PushCheckpoint(filepath string) error {
+func (cs *CedanaStore) PushCheckpoint(ctx context.Context, filepath string) error {
 	return nil
 }
 
-func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, string, error) {
+func (cs *CedanaStore) CreateMultiPartUpload(ctx context.Context, fullSize int64) (*UploadResponse, string, error) {
+	_, cmpSpan := cs.tracer.Start(ctx, "CreateMultiPartUpload")
+	defer cmpSpan.End()
 	var uploadResp UploadResponse
 
 	cid := uuid.New().String()
@@ -185,7 +204,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, s
 
 	req.Header.Set("Content-Type", "application/json")
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -214,7 +233,9 @@ func (cs *CedanaStore) CreateMultiPartUpload(fullSize int64) (*UploadResponse, s
 	return &uploadResp, cid, nil
 }
 
-func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadResponse, checkpointPath string) error {
+func (cs *CedanaStore) StartMultiPartUpload(ctx context.Context, cid string, uploadResp *UploadResponse, checkpointPath string) error {
+	_, smpSpan := cs.tracer.Start(ctx, "StartMultiPartUpload")
+	defer smpSpan.End()
 	binaryOfFile, err := os.ReadFile(checkpointPath)
 	if err != nil {
 		fmt.Println("Error reading zip file:", err)
@@ -259,7 +280,7 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 			req.Header.Set("Content-Type", "application/octet-stream")
 			req.Header.Set("Transfer-Encoding", "chunked")
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 			resp, err := httpClient.Do(req)
 			if err != nil {
@@ -295,7 +316,9 @@ func (cs *CedanaStore) StartMultiPartUpload(cid string, uploadResp *UploadRespon
 
 	return nil
 }
-func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid string) error {
+func (cs *CedanaStore) CompleteMultiPartUpload(ctx context.Context, uploadResp UploadResponse, cid string) error {
+	_, cmpuSpan := cs.tracer.Start(ctx, "CompleteMultiPartUpload")
+	defer cmpuSpan.End()
 	httpClient := &http.Client{}
 	url := cs.url + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/complete"
 
@@ -304,7 +327,7 @@ func (cs *CedanaStore) CompleteMultiPartUpload(uploadResp UploadResponse, cid st
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaUser))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -333,6 +356,6 @@ func (ms *MockStore) PushCheckpoint(filepath string) error {
 	return nil
 }
 
-func (ms *MockStore) ListCheckpoints() (*[]CheckpointMeta, error) {
+func (ms *MockStore) ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, error) {
 	return nil, nil
 }

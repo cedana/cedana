@@ -20,6 +20,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sys/unix"
 	"golang.org/x/time/rate"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -48,7 +49,7 @@ type UploadResponse struct {
 }
 
 type service struct {
-	Client            *Client
+	client            *Client
 	logger            *zerolog.Logger
 	ClientLogStream   task.TaskService_LogStreamingServer
 	ClientStateStream task.TaskService_ClientStateStreamingServer
@@ -58,9 +59,11 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-	s.Client.jobID = args.JobID
-	s.Client.ctx = ctx
-	// Close before dumping
+	ctx, dumpTracer := s.client.tracer.Start(ctx, "dump-ckpt")
+	dumpTracer.SetAttributes(attribute.String("jobID", args.JobID))
+	defer dumpTracer.End()
+	s.client.jobID = args.JobID
+
 	s.r.Close()
 	s.w.Close()
 
@@ -69,25 +72,27 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
-	store := utils.NewCedanaStore(cfg)
+
+	store := utils.NewCedanaStore(cfg, s.client.tracer)
 
 	pid := args.PID
 
-	s.Client.generateState(args.PID)
+	s.client.generateState(args.PID)
 	var state task.ProcessState
 
 	state.Flag = task.FlagEnum_JOB_RUNNING
 	state.PID = pid
 
-	err = s.Client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
+	err = s.client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 
-	err = s.Client.Dump(args.Dir, args.PID)
+	err = s.client.Dump(ctx, args.Dir, args.PID)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
+		dumpTracer.RecordError(st.Err())
 		return nil, st.Err()
 	}
 
@@ -100,7 +105,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 
 	case task.DumpArgs_REMOTE:
-		state, err := s.Client.db.GetStateFromID(args.JobID)
+		state, err := s.client.db.GetStateFromID(args.JobID)
 		if err != nil {
 			st := status.New(codes.Internal, err.Error())
 			return nil, st.Err()
@@ -141,33 +146,34 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		// zipFileSize += 4096
 		checkpointFullSize := int64(size)
 
-		s.Client.timers.Start(utils.UploadOp)
-
-		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
+		ctx, uploadSpan := s.client.tracer.Start(ctx, "upload-ckpt")
+		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(ctx, checkpointFullSize)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
 
-		err = store.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
+		err = store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
 
-		err = store.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
+		err = store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
+			uploadSpan.RecordError(st.Err())
 			return nil, st.Err()
 		}
-
-		s.Client.timers.Stop(utils.UploadOp)
+		uploadSpan.End()
 
 		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
 		state.RemoteState = append(state.RemoteState, remoteState)
 
-		s.Client.db.UpdateProcessStateWithID(args.JobID, state)
+		s.client.db.UpdateProcessStateWithID(args.JobID, state)
 
 		resp = task.DumpResp{
 			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
@@ -176,14 +182,14 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
-	s.Client.timers.Flush()
-
 	return &resp, nil
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
+	ctx, restoreTracer := s.client.tracer.Start(ctx, "restore-ckpt")
+	restoreTracer.SetAttributes(attribute.String("jobID", args.JobID))
+	defer restoreTracer.End()
 	var resp task.RestoreResp
-	s.Client.ctx = ctx
 
 	switch args.Type {
 	case task.RestoreArgs_LOCAL:
@@ -191,9 +197,10 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 		}
 		// assume a suitable file has been passed to args
-		pid, err := s.Client.Restore(args)
+		pid, err := s.client.Restore(ctx, args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
@@ -206,16 +213,21 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
-		s.Client.remoteStore = utils.NewCedanaStore(s.Client.config)
 
-		s.Client.timers.Start(utils.DownloadOp)
-		zipFile, err := s.Client.remoteStore.GetCheckpoint(args.CheckpointId)
+		cfg, err := utils.InitConfig()
+		if err != nil {
+			err = status.Error(codes.Internal, err.Error())
+			return nil, err
+		}
+
+		store := utils.NewCedanaStore(cfg, s.client.tracer)
+
+		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
-		s.Client.timers.Stop(utils.DownloadOp)
 
-		pid, err := s.Client.Restore(&task.RestoreArgs{
+		pid, err := s.client.Restore(ctx, &task.RestoreArgs{
 			Type:           task.RestoreArgs_REMOTE,
 			CheckpointId:   args.CheckpointId,
 			CheckpointPath: *zipFile,
@@ -223,6 +235,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
@@ -232,12 +245,11 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		}
 	}
 
-	s.Client.timers.Flush()
 	return &resp, nil
 }
 
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
-	err := s.Client.ContainerDump(args.Ref, args.ContainerId)
+	err := s.client.ContainerDump(args.Ref, args.ContainerId)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -246,7 +258,7 @@ func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArg
 }
 
 func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRestoreArgs) (*task.ContainerRestoreResp, error) {
-	err := s.Client.ContainerRestore(args.ImgPath, args.ContainerId)
+	err := s.client.ContainerRestore(args.ImgPath, args.ContainerId)
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
 		return nil, err
@@ -264,19 +276,19 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
-	s.Client.generateState(int32(pid))
+	s.client.generateState(int32(pid))
 	var state task.ProcessState
 
 	state.Flag = task.FlagEnum_JOB_RUNNING
 	state.PID = int32(pid)
 
-	err = s.Client.db.CreateOrUpdateCedanaProcess(jobId, &state)
+	err = s.client.db.CreateOrUpdateCedanaProcess(jobId, &state)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 
-	s.Client.jobID = jobId
+	s.client.jobID = jobId
 
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
@@ -289,9 +301,9 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
-	store := utils.NewCedanaStore(cfg)
+	store := utils.NewCedanaStore(cfg, s.client.tracer)
 
-	err = s.Client.RuncDump(args.Root, args.ContainerId, criuOpts)
+	err = s.client.RuncDump(ctx, args.Root, args.ContainerId, criuOpts)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
@@ -299,9 +311,9 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		})
 		return nil, st.Err()
 	}
-	//if remote
+
 	if args.Type == task.RuncDumpArgs_REMOTE {
-		state, err := s.Client.db.GetStateFromID(jobId)
+		state, err := s.client.db.GetStateFromID(jobId)
 		if err != nil {
 			st := status.New(codes.Internal, err.Error())
 			return nil, st.Err()
@@ -342,9 +354,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		// zipFileSize += 4096
 		checkpointFullSize := int64(size)
 
-		s.Client.timers.Start(utils.UploadOp)
-
-		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(checkpointFullSize)
+		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(ctx, checkpointFullSize)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
@@ -352,19 +362,17 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 		checkpointId = cid
 
-		err = store.StartMultiPartUpload(cid, multipartCheckpointResp, checkpointPath)
+		err = store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
 
-		err = store.CompleteMultiPartUpload(*multipartCheckpointResp, cid)
+		err = store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
 			return nil, st.Err()
 		}
-
-		s.Client.timers.Stop(utils.UploadOp)
 
 		remoteState := &task.RemoteState{CheckpointID: cid, UploadID: multipartCheckpointResp.UploadID, Timestamp: time.Now().Unix()}
 
@@ -372,7 +380,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 		uploadID = multipartCheckpointResp.UploadID
 
-		s.Client.db.UpdateProcessStateWithID(jobId, state)
+		s.client.db.UpdateProcessStateWithID(jobId, state)
 
 	}
 
@@ -390,7 +398,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 	switch args.Type {
 	case task.RuncRestoreArgs_LOCAL:
-		err := s.Client.RuncRestore(args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
+		err := s.client.RuncRestore(ctx, args.ImagePath, args.ContainerId, args.IsK3S, []string{}, opts)
 		if err != nil {
 			err = status.Error(codes.InvalidArgument, "invalid argument")
 			return nil, err
@@ -400,16 +408,21 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		if args.CheckpointId == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
-		s.Client.remoteStore = utils.NewCedanaStore(s.Client.config)
 
-		s.Client.timers.Start(utils.DownloadOp)
-		zipFile, err := s.Client.remoteStore.GetCheckpoint(args.CheckpointId)
+		cfg, err := utils.InitConfig()
+		if err != nil {
+			err = status.Error(codes.Internal, err.Error())
+			return nil, err
+		}
+
+		store := utils.NewCedanaStore(cfg, s.client.tracer)
+
+		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
 			return nil, err
 		}
-		s.Client.timers.Stop(utils.DownloadOp)
 
-		err = s.Client.RuncRestore(*zipFile, args.ContainerId, args.IsK3S, []string{}, opts)
+		err = s.client.RuncRestore(ctx, *zipFile, args.ContainerId, args.IsK3S, []string{}, opts)
 
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
@@ -417,8 +430,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		}
 
 	}
-
-	s.Client.timers.Flush()
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerId)}, nil
 }
@@ -478,7 +489,7 @@ func (s *service) GetPausePid(ctx context.Context, args *task.PausePidArgs) (*ta
 
 func (s *service) publishStateContinous(rate int) {
 	// get PID from id
-	pid, err := s.Client.db.GetPID(s.Client.jobID)
+	pid, err := s.client.db.GetPID(s.client.jobID)
 	if err != nil {
 		s.logger.Warn().Msgf("could not get pid: %v", err)
 	}
@@ -557,7 +568,11 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
+func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
+	ctx, span := s.client.tracer.Start(ctx, "exec")
+	span.SetAttributes(attribute.String("task", task))
+	defer span.End()
+
 	var pid int32
 	if task == "" {
 		return 0, fmt.Errorf("could not find task in config")
@@ -566,10 +581,12 @@ func (s *service) runTask(task, workingDir, logOutputFile string, uid, gid uint3
 	var gpuCmd *exec.Cmd
 	var err error
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+		_, gpuStartSpan := s.client.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = StartGPUController(uid, gid, s.logger)
 		if err != nil {
 			return 0, err
 		}
+		gpuStartSpan.End()
 	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -677,30 +694,29 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 }
 
 func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*task.StartTaskResp, error) {
-
 	var state task.ProcessState
 	var taskToRun string
 
 	if args.Task == "" {
-		taskToRun = s.Client.config.Client.Task
+		taskToRun = s.client.config.Client.Task
 	} else {
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
+	pid, err := s.runTask(ctx, taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
 
 	if err == nil {
-		s.Client.logger.Info().Msgf("managing process with pid %d", pid)
+		s.client.logger.Info().Msgf("managing process with pid %d", pid)
 
 		state.Flag = task.FlagEnum_JOB_RUNNING
 		state.PID = pid
 	} else {
 		// TODO BS: this should be at market level
-		s.Client.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
+		s.client.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
 		state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
 		// TODO BS: replace doom loop with just retrying from market
 	}
-	err = s.Client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
+	err = s.client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
 
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "invalid argument")
@@ -734,7 +750,7 @@ func (s *Server) New() (*grpc.Server, error) {
 	logger := utils.GetLogger()
 
 	service := &service{
-		Client: client,
+		client: client,
 		logger: &logger,
 	}
 

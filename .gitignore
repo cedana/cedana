@@ -5,8 +5,6 @@ client_config.yaml
 .vscode/*
 *.log
 
-benchmarks
-benchmark_*
 *.csv
 tmp
 

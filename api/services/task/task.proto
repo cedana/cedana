@@ -76,6 +76,7 @@ message RestoreArgs {
   RestoreType Type = 1;
   string CheckpointId = 2;
   string CheckpointPath = 3;
+  string JobID = 4;
 }
 
 message RestoreResp {

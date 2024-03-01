@@ -52,17 +52,17 @@ def measure_disk_usage(checkpoint_dir):
     return sum(os.path.getsize(os.path.join(dirpath, filename)) for dirpath, dirnames, filenames in os.walk(checkpoint_dir) for filename in filenames)
 
 
-def start_pprof(filename): 
-    pprof_base_url = "http://localhost:6060"
-    resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
-    if resp.status_code != 200:
-        print("error from profiler: {}".format(resp.text))
+## def start_pprof(filename): 
+    ## pprof_base_url = "http://localhost:6060"
+    ## resp = requests.get(f"{pprof_base_url}/start-profiling?prefix={filename}")
+    ## if resp.status_code != 200:
+        ## print("error from profiler: {}".format(resp.text))
 
-def stop_pprof(filename):
-    pprof_base_url = "http://localhost:6060"
-    resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
-    if resp.status_code != 200:
-        print("error from profiler: {}".format(resp.text))
+## def stop_pprof(filename):
+    ## pprof_base_url = "http://localhost:6060"
+    ## resp = requests.get(f"{pprof_base_url}/stop-profiling?filename={filename}")
+    ## if resp.status_code != 200:
+        ## print("error from profiler: {}".format(resp.text))
 
 
 def start_recording(pid):
@@ -79,7 +79,58 @@ def start_recording(pid):
 
     return initial_data
 
-def stop_recording(operation_type, pid, initial_data, jobID, completed_at, started_at, process_stats):
+def clear_otel_data(): 
+    open("/cedana/data.json", "w").close()
+
+def process_otel_data():
+    with open("/cedana/data.json", 'r', encoding='utf-8') as file:
+        content = file.read()
+
+
+    # HACK
+    cleaned_content = content.replace('\x00', "") 
+    try: 
+        data = json.loads(cleaned_content)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+
+    operation_details = {}
+
+    try:
+        for resourceSpan in data['resourceSpans']:
+            for scopeSpan in resourceSpan['scopeSpans']:
+                for span in scopeSpan['spans']:
+                    operation_name = span['name']
+                    start_time = int(span['startTimeUnixNano'])
+                    end_time = int(span['endTimeUnixNano'])
+                    duration_ns = end_time - start_time
+                    duration_ms = duration_ns / 1e6
+
+                    attributes = {}
+                    for attr in span.get('attributes', []):
+                        key = attr['key']
+                        # Simplified value extraction for brevity
+                        value = attr['value'].get('stringValue', attr['value'].get('boolValue', attr['value'].get('intValue', '')))
+                        attributes[key] = value
+
+                    operation_details[operation_name] = {
+                        "duration_ms": duration_ms,
+                        "attributes": attributes
+                    }
+
+        details_json = json.dumps(operation_details, indent=4)
+        print(details_json)
+    except Exception as e:
+        print(f"Error processing data: {e}")
+        return {}
+
+    # Assuming clear_otel_data() clears the data.json file
+    clear_otel_data()
+    return details_json
+
+
+
+def stop_recording(operation_type, pid, initial_data, jobID, process_stats, operation_details):
     p = psutil.Process(pid)
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data['cpu_times'].user
@@ -113,22 +164,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
     cpu_count = psutil.cpu_count(logical=True)
     memory = psutil.virtual_memory().total / (1024**3)
 
-    # read from profiling json 
-    network_op = ""
-    compress_op = ""
-    if operation_type == "checkpoint":
-        network_op = "upload"
-        compress_op = "compress"
-    else: 
-        network_op = "download"
-        compress_op = "decompress"
-
-    with open("/var/log/cedana-profile.json", 'r') as f:
-        profiling_data = json.load(f)
-        op_duration = profiling_data[operation_type]
-        network_duration = profiling_data[network_op]
-        compress_duration = profiling_data[compress_op]
-
+    # read from otelcol json 
     with open("benchmark_output.csv", mode='a', newline='') as file:
         writer = csv.writer(file)
         # Write the headers if the file is new
@@ -145,11 +181,8 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
                 'Read Bytes (MB)', 
                 'CPU Utilization (Secs)', 
                 'CPU Used (Percent)', 
-                'Total Duration',
-                'Operation Duration',
-                'Network Duration',
-                "Compression Duration",
-                "Cedana Version",
+                'Raw Durations',
+                'Cedana Version',
                 "Processor",
                 "Physical Cores",
                 "CPU Cores",
@@ -169,10 +202,7 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
             read_bytes_diff / (1024 * 1024), # convert to MB
             cpu_utilization,
             cpu_percent,
-            completed_at - started_at,
-            op_duration,
-            network_duration,
-            compress_duration,
+            operation_details,
             cedana_version,
             processor,
             physical_cores,
@@ -181,7 +211,6 @@ def stop_recording(operation_type, pid, initial_data, jobID, completed_at, start
         ])
 
         # delete profile file after
-        os.remove("/var/log/cedana-profile.json")
 
 def analyze_pprof(filename):
     pass 
@@ -192,36 +221,31 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     # initial data here is fine - we want to measure impact of daemon on system 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(output_dir, jobID, iteration)
-    start_pprof(cpu_profile_filename)
 
-    checkpoint_started_at = time.monotonic_ns() 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
     p.wait()
 
-    # these values have an error range in 35ms! I blame Python?
-    checkpoint_completed_at = time.monotonic_ns()  
-    stop_recording("checkpoint", daemonPID, initial_data, jobID, checkpoint_completed_at, checkpoint_started_at, process_stats)
-    stop_pprof(cpu_profile_filename)
+    time.sleep(5)
+    otel_data = process_otel_data()
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data)
 
 def run_restore(daemonPID, jobID, iteration, output_dir):
     restore_cmd = "sudo -E ./cedana restore job {}".format(jobID+"-"+str(iteration))
 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
-    start_pprof(cpu_profile_filename)
 
-    restore_started_at = time.monotonic_ns() 
     p =subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
-
-    restore_completed_at = time.monotonic_ns()
 
     # nil value here
     process_stats = {}
     process_stats["memory_kb"] = 0
-    stop_recording("restore", daemonPID, initial_data, jobID, restore_completed_at, restore_started_at, process_stats)
-    stop_pprof(cpu_profile_filename)
+    
+    time.sleep(5)
+    otel_data = process_otel_data()
+    stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
 
 def run_exec(cmd, jobID): 
     process_stats = {}
@@ -325,12 +349,14 @@ def main():
             # wait a few seconds for memory to allocate 
             time.sleep(5)
 
+            clear_otel_data()
+
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv  
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
-            time.sleep(1)
+            time.sleep(3)
 
             run_restore(daemon_pid, jobID, y, output_dir)
-            time.sleep(1)
+            time.sleep(3)
 
             terminate_process(process_stats['pid'])
             

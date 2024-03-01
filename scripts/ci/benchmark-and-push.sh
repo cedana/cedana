@@ -8,15 +8,13 @@ add-apt-repository \
 
 ./apt-install.sh docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-if [ -z "$GITHUB_TOKEN" ]
+if [ -z "$DOCKERHUB_TOKEN" ]
 then
-    echo "GITHUB_TOKEN is not set"
+    echo "DOCKERHUB_TOKEN is not set"
     exit 1
 fi 
 
-# docker sign in to ghcr 
-echo $GITHUB_TOKEN | sudo docker login ghcr.io -u cedana --password-stdin
-sudo docker pull ghcr.io/cedana/cedana-benchmarking:latest 
+sudo docker pull cedana/cedana-benchmarking:latest 
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]
 then
@@ -30,9 +28,21 @@ then
     exit 1
 fi
 
+if [-z "$CHECKPOINTSVC_TOKEN"]
+then 
+    echo "CHECKPOINT_SVC_TOKEN is not set"
+    exit 1
+fi
+
+if [ -z "$SIGNOZ_ACCESS_TOKEN" ]
+then
+    echo "SIGNOZ_ACCESS_TOKEN is not set"
+    exit 1
+fi
+
 CONTAINER_CREDENTIAL_PATH=/tmp/creds.json 
 
-echo '{"client":{"leave_running":false,"signal_process_pre_dump":false,"signal_process_timeout":0,"task":""}, "connection": {"cedana_auth_token": "random-token", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
+echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINTSVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
 cat client_config.json
 
 # TODO NR - fix the path and config
@@ -43,6 +53,7 @@ sudo docker run \
  -e PROJECT_ID=cedana-benchmarking \
  -e GCLOUD_PROJECT=cedana-benchmarking \
  -e GOOGLE_CLOUD_PROJECT=cedana-benchmarking \
-  --privileged --tmpfs /run  ghcr.io/cedana/cedana-benchmarking:latest
+ -e SIGNOZ_ACCESS_TOKEN=$SIGNOZ_ACCESS_TOKEN \
+  --privileged --tmpfs /run cedana/cedana-benchmarking:latest
 
 # delete bucket from minio after benchmarking 

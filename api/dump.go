@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
 	bolt "go.etcd.io/bbolt"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -34,7 +36,11 @@ type Bundle struct {
 // prepareDump =/= preDump.
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
+func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
+	_, dumpSpan := c.tracer.Start(ctx, "prepareDump")
+	dumpSpan.SetAttributes(attribute.Bool("container", false))
+	defer dumpSpan.End()
+
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
@@ -103,8 +109,9 @@ func (c *Client) prepareDump(pid int32, dir string, opts *rpc.CriuOpts) (string,
 	return checkpointFolderPath, nil
 }
 
-func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
-	c.timers.Start(utils.CompressOp)
+func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
+	_, postDumpSpan := c.tracer.Start(ctx, "post-dump")
+	defer postDumpSpan.End()
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	state.CheckpointPath = compressedCheckpointPath
@@ -112,6 +119,7 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 	// sneak in a serialized state obj
 	err := c.SerializeStateToDir(dumpdir, state)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
 
@@ -119,14 +127,23 @@ func (c *Client) postDump(dumpdir string, state *task.ProcessState) {
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
 
 	err = c.db.UpdateProcessStateWithID(c.jobID, state)
 	if err != nil {
+		postDumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
-	c.timers.Stop(utils.CompressOp)
+	// get size of compressed checkpoint
+	info, err := os.Stat(compressedCheckpointPath)
+	if err != nil {
+		postDumpSpan.RecordError(err)
+		c.logger.Fatal().Err(err)
+	}
+
+	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -228,7 +245,10 @@ func patchPodmanDump(containerId, imgPath string) error {
 
 }
 
-func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) error {
+func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *container.CriuOpts) error {
+	_, dumpSpan := c.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", true))
+
 	links := []linkPairs{
 		{"/host/var/run/netns", "/var/run/netns"},
 		{"/host/run/containerd", "/run/containerd"},
@@ -257,8 +277,10 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 	runcContainer := container.GetContainerFromRunc(containerId, root)
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
+		dumpSpan.RecordError(err)
 		c.logger.Fatal().Err(err)
 	}
+	dumpSpan.End()
 
 	if checkIfPodman(bundle) {
 		if err := patchPodmanDump(containerId, opts.ImagesDirectory); err != nil {
@@ -280,7 +302,7 @@ func (c *Client) RuncDump(root, containerId string, opts *container.CriuOpts) er
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	c.postDump(opts.ImagesDirectory, state)
+	c.postDump(ctx, opts.ImagesDirectory, state)
 	c.cleanupClient()
 
 	return nil
@@ -315,11 +337,9 @@ func (c *Client) ContainerDump(imagePath, containerId string) error {
 	return nil
 }
 
-func (c *Client) Dump(dir string, pid int32) error {
-	defer c.timeTrack(time.Now(), "dump")
-
+func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(pid, dir, opts)
+	dumpdir, err := c.prepareDump(ctx, pid, dir, opts)
 	if err != nil {
 		return err
 	}
@@ -327,7 +347,7 @@ func (c *Client) Dump(dir string, pid int32) error {
 	// TODO NR:add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		err = c.gpuCheckpoint(dumpdir)
+		err = c.gpuCheckpoint(ctx, dumpdir)
 		if err != nil {
 			return err
 		}
@@ -370,7 +390,8 @@ func (c *Client) Dump(dir string, pid int32) error {
 		return err
 	}
 
-	c.timers.Start(utils.CriuCheckpointOp)
+	_, dumpSpan := c.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", false))
 	_, err = c.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
@@ -379,19 +400,23 @@ func (c *Client) Dump(dir string, pid int32) error {
 			return err
 		}
 
+		dumpSpan.RecordError(err)
 		c.logger.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
-	c.timers.Stop(utils.CriuCheckpointOp)
+
+	dumpSpan.End()
 
 	state.GPUCheckpointed = GPUCheckpointed
-	c.postDump(dumpdir, state)
+	c.postDump(ctx, dumpdir, state)
 	c.cleanupClient()
 
 	return nil
 }
 
-func (c *Client) gpuCheckpoint(dumpdir string) error {
+func (c *Client) gpuCheckpoint(ctx context.Context, dumpdir string) error {
+	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-ckpt")
+	defer gpuSpan.End()
 	// TODO NR - these should move out of here and be part of the Client lifecycle
 	// setting up a connection could be a source of slowdown for checkpointing
 	var opts []grpc.DialOption
@@ -410,7 +435,7 @@ func (c *Client) gpuCheckpoint(dumpdir string) error {
 		Directory: dumpdir,
 	}
 
-	resp, err := gpuServiceConn.Checkpoint(c.ctx, &args)
+	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
 	if err != nil {
 		return err
 	}

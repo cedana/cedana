@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
 	"github.com/shirou/gopsutil/v3/process"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -30,13 +31,14 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
+func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
 
-	c.timers.Start(utils.DecompressOp)
+	_, prepareRestoreSpan := c.tracer.Start(ctx, "prepare_restore")
+	defer prepareRestoreSpan.End()
 	tmpdir := "/tmp/cedana_restore"
 
 	// check if tmpdir exists
@@ -63,7 +65,6 @@ func (c *Client) prepareRestore(opts *rpc.CriuOpts, checkpointPath string) (*str
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
 	}
-	c.timers.Stop(utils.DecompressOp)
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
@@ -197,7 +198,10 @@ func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 
 }
 
-func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
+func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
+	_, restoreSpan := c.tracer.Start(ctx, "restore")
+	restoreSpan.SetAttributes(attribute.Bool("container", false))
+	defer restoreSpan.End()
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -212,6 +216,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFi
 		// cleanup along the way
 		os.RemoveAll(dir)
 		c.logger.Warn().Msgf("error restoring process: %v", err)
+		restoreSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -221,9 +226,7 @@ func (c *Client) criuRestore(opts *rpc.CriuOpts, nfy Notify, dir string, extraFi
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(opts *container.RuncOpts, containerId, imgPath string) error {
-	ctx := context.Background()
-
+func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
 	// Podman run -d state
 	if !opts.Detatch {
 		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
@@ -247,7 +250,7 @@ func patchPodmanRestore(opts *container.RuncOpts, containerId, imgPath string) e
 		}
 	}
 
-	// Here is the podman patch
+	// Here lie the podman patch! :brandon-pirate:
 	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
 		return err
 	}
@@ -317,7 +320,10 @@ type linkPairs struct {
 	Value string
 }
 
-func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
+func (c *Client) RuncRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
+	ctx, restoreSpan := c.tracer.Start(ctx, "restore")
+	restoreSpan.SetAttributes(attribute.Bool("container", true))
+	defer restoreSpan.End()
 
 	bundle := Bundle{Bundle: opts.Bundle}
 
@@ -432,7 +438,7 @@ func (c *Client) RuncRestore(imgPath, containerId string, isK3s bool, sources []
 
 	go func() {
 		if isPodman {
-			if err := patchPodmanRestore(opts, containerId, imgPath); err != nil {
+			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -589,8 +595,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
-	defer c.timeTrack(time.Now(), "restore")
+func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
 	var dir *string
 	var pid *int32
 
@@ -599,7 +604,7 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 		Logger: c.logger,
 	}
 
-	dir, state, extraFiles, err := c.prepareRestore(opts, args.CheckpointPath)
+	dir, state, extraFiles, err := c.prepareRestore(ctx, opts, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -610,18 +615,16 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = c.gpuRestore(*dir)
+				gpuCmd, err = c.gpuRestore(ctx, *dir)
 				return err
 			},
 		}
 	}
 
-	c.timers.Start(utils.CriuRestoreOp)
-	pid, err = c.criuRestore(opts, nfy, *dir, extraFiles)
+	pid, err = c.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
-	c.timers.Stop(utils.CriuRestoreOp)
 
 	if state.GPUCheckpointed {
 		go func() {
@@ -645,7 +648,9 @@ func (c *Client) Restore(args *task.RestoreArgs) (*int32, error) {
 	return pid, nil
 }
 
-func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
+func (c *Client) gpuRestore(ctx context.Context, dir string) (*exec.Cmd, error) {
+	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-restore")
+	defer gpuSpan.End()
 	// TODO NR - propagate uid/guid too
 	gpuCmd, err := StartGPUController(1001, 1001, c.logger)
 	if err != nil {
@@ -670,7 +675,7 @@ func (c *Client) gpuRestore(dir string) (*exec.Cmd, error) {
 	args := gpu.RestoreRequest{
 		Directory: dir,
 	}
-	resp, err := gpuServiceConn.Restore(c.ctx, &args)
+	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {
 		c.logger.Warn().Msgf("could not restore gpu: %v", err)
 		return nil, err

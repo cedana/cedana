@@ -28,13 +28,18 @@ var startDaemonCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger()
 
+		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to initialize otel")
+		}
+		defer stopOtel(cmd.Context())
+
 		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
-			logger.Info().Msg("profiling enabled, listening on 6060")
 			go startProfiler()
 		}
 
 		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-			err := pullGPUBinary("gpucontroller", "/usr/local/bin/cedana-gpu-controller")
+			err := pullGPUBinary("gpucontroller", "/usr/local/bin/gpu-controller")
 			if err != nil {
 				logger.Warn().Err(err).Msg("could not pull gpu controller")
 			}
@@ -45,7 +50,7 @@ var startDaemonCmd = &cobra.Command{
 			}
 		}
 
-		logger.Info().Msgf("daemon started at %s", time.Now().Local())
+		logger.Info().Msgf("daemon version %s started at %s", cmd.Parent().Version, time.Now().Local())
 
 		startgRPCServer(isK8s)
 	},
@@ -74,6 +79,14 @@ func init() {
 func pullGPUBinary(binary string, filePath string) error {
 	logger := utils.GetLogger()
 
+	_, err := os.Stat(filePath)
+	if err == nil {
+		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)
+		// file exists, do nothing.
+		// TODO NR - check version of binary
+		return nil
+	}
+
 	cfg, err := utils.InitConfig()
 	if err != nil {
 		logger.Err(err).Msg("could not init config")
@@ -91,7 +104,7 @@ func pullGPUBinary(binary string, filePath string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", "random-user-1234-uuid-think")) // TODO: change to JWT
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.Connection.CedanaAuthToken))
 
 	resp, err = httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
