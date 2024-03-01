@@ -308,12 +308,32 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 	return nil
 }
 
-func (c *Client) ContainerDump(dir string, containerId string) error {
-	err := container.Dump(dir, containerId)
+func (c *Client) ContainerDump(imagePath, containerId string) error {
+	root := "/run/containerd/runc/k8s.io"
+
+	err := container.ContainerdCheckpoint(imagePath, containerId)
 	if err != nil {
 		c.logger.Fatal().Err(err)
 		return err
 	}
+
+	pid, err := runc.GetPidByContainerId(containerId, root)
+	if err != nil {
+		c.logger.Warn().Msgf("could not generate state: %v", err)
+		return err
+	}
+
+	state, err := c.generateState(int32(pid))
+	if err != nil {
+		c.logger.Warn().Msgf("could not generate state: %v", err)
+		return err
+	}
+
+	// CRIU ntfy hooks get run before this,
+	// so have to ensure that image files aren't tampered with
+	c.postDump(context.Background(), imagePath, state)
+	c.cleanupClient()
+
 	return nil
 }
 

@@ -54,7 +54,8 @@ func NewCLI() (*CLI, error) {
 	if err != nil {
 		return nil, err
 	}
-	cts := services.NewClient("localhost:8080")
+
+	cts, _ := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
 
@@ -359,7 +360,7 @@ var containerdRestoreCmd = &cobra.Command{
 		}
 
 		restoreArgs := &task.ContainerRestoreArgs{
-			ImgPath:     imgPath,
+			ImgPath:     ref,
 			ContainerId: containerId,
 		}
 

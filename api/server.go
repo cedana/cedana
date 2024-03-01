@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
+	"golang.org/x/sys/unix"
 	"golang.org/x/time/rate"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
@@ -30,6 +32,11 @@ import (
 
 const defaultLogPath string = "/var/log/cedana-output.log"
 const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
+
+const (
+	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
+	cedanaContainerName = "cedana-binary-container"
+)
 
 type GrpcService interface {
 	Register(*grpc.Server) error
@@ -244,7 +251,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 func (s *service) ContainerDump(ctx context.Context, args *task.ContainerDumpArgs) (*task.ContainerDumpResp, error) {
 	err := s.client.ContainerDump(args.Ref, args.ContainerId)
 	if err != nil {
-		err = status.Error(codes.InvalidArgument, "arguments are invalid, container not found")
+		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 	return &task.ContainerDumpResp{}, nil
@@ -776,7 +783,7 @@ func addGRPC() (*Server, error) {
 	return server, nil
 }
 
-func StartGRPCServer() (*grpc.Server, error) {
+func StartGRPCServer(isK8s bool) (*grpc.Server, error) {
 	var wg sync.WaitGroup
 
 	// Create a context with a cancel function
@@ -798,6 +805,36 @@ func StartGRPCServer() (*grpc.Server, error) {
 
 	go func() {
 		<-startCh // Wait for the server to start
+		// Here join netns
+		//TODO find pause bundle path
+		if isK8s {
+			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, k8sDefaultRuncRoot)
+			if err != nil {
+				fmt.Println(err.Error())
+				os.Exit(1)
+			}
+
+			pausePid, err := runc.GetPausePid(bundle)
+			if err != nil {
+				fmt.Println(err.Error())
+				os.Exit(1)
+			}
+
+			nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
+			if err != nil {
+				fmt.Println("Error opening network namespace:", err)
+				os.Exit(1)
+			}
+			defer unix.Close(nsFd)
+
+			// Join the network namespace of the target process
+			err = unix.Setns(nsFd, unix.CLONE_NEWNET)
+			if err != nil {
+				fmt.Println("Error setting network namespace:", err)
+				os.Exit(1)
+			}
+		}
+
 		srv.serveGRPC(srv.Lis)
 	}()
 
