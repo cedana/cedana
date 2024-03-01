@@ -331,7 +331,7 @@ func (c *Client) ContainerDump(imagePath, containerId string) error {
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	c.postDump(imagePath, state)
+	c.postDump(context.Background(), imagePath, state)
 	c.cleanupClient()
 
 	return nil

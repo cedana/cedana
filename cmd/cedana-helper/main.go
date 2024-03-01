@@ -107,7 +107,7 @@ func initialize() (int, error) {
 	}
 
 	// Execute the Bash script
-	if err := runCommand("/bin/bash", "/install.sh"); err != nil {
+	if err := runCommand("bash", "/install.sh"); err != nil {
 		return -1, err
 	}
 
