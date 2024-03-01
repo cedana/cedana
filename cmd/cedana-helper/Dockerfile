@@ -6,11 +6,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN apt-get update && \
     apt-get install -y software-properties-common git zip
 
-RUN git clone https://github.com/cedana/cedana.git
-WORKDIR /cedana
-
-RUN git fetch
-RUN git checkout feat/gce-99
+RUN git clone --depth=1 https://github.com/cedana/cedana.git
 WORKDIR /cedana/cmd/cedana-helper
 RUN go build
 
