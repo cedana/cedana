@@ -640,6 +640,8 @@ func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*
 		return nil, err
 	}
 
+	c.logger.Info().Msgf("gpu controller returned %v", resp)
+
 	if !resp.Success {
 		return nil, fmt.Errorf("could not restore gpu")
 	}

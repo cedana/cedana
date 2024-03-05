@@ -31,7 +31,6 @@ import (
 )
 
 const defaultLogPath string = "/var/log/cedana-output.log"
-const gpuDefaultLogPath string = "/var/log/cedana-gpu.log"
 
 const (
 	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
@@ -680,14 +679,11 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 	}
 
-	gpuLogFile, err := os.OpenFile(gpuDefaultLogPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
-	if err != nil {
-		return nil, err
-	}
-	gpuCmd.Stdout = gpuLogFile
-	gpuCmd.Stderr = gpuLogFile
+	// stdout and stderr are going to /tmp/cedana-gpucontroller.log - no need to capture or flush
+	gpuCmd.Stderr = nil
+	gpuCmd.Stdout = nil
 
-	err = gpuCmd.Start()
+	err := gpuCmd.Start()
 	go func() {
 		err := gpuCmd.Wait()
 		if err != nil {
@@ -697,9 +693,7 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 	if err != nil {
 		logger.Fatal().Err(err)
 	}
-	logger.Info().Msgf("GPU controller started with pid: %d, logging to: %s", gpuCmd.Process.Pid, gpuDefaultLogPath)
-	time.Sleep(50 * time.Millisecond)
-
+	logger.Info().Msgf("GPU controller started with pid: %d, logging to: /tmp/cedana-gpucontroller.log", gpuCmd.Process.Pid)
 	return gpuCmd, nil
 }
 
