@@ -40,7 +40,7 @@ var tcpEstablished bool
 
 // working directory for execTask
 var wd string
-var execAsRoot bool
+var asRoot bool
 var execWithEnv string
 
 type CLI struct {
@@ -194,19 +194,6 @@ var dumpJobCmd = &cobra.Command{
 			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
 
-		// get PID of running job
-		// TODO NR - we should be querying the API for this instead of
-		// directly opening the db. Permissions issue
-		db := api.NewDB()
-		pid, err := db.GetPID(id)
-		if err != nil {
-			return err
-		}
-
-		if pid == 0 {
-			return fmt.Errorf("pid 0 returned from state - is process running?")
-		}
-
 		var taskType task.DumpArgs_DumpType
 		if os.Getenv("CEDANA_REMOTE") == "true" {
 			taskType = task.DumpArgs_REMOTE
@@ -215,7 +202,6 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.DumpArgs{
-			PID:   pid,
 			JobID: id,
 			Dir:   dir,
 			Type:  taskType,
@@ -250,7 +236,16 @@ var restoreJobCmd = &cobra.Command{
 			return err
 		}
 
+		// TODO NR: we shouldn't even be reading the db here!!
 		db := api.NewDB()
+
+		var uid uint32
+		var gid uint32
+
+		if !asRoot {
+			uid = uint32(os.Getuid())
+			gid = uint32(os.Getgid())
+		}
 
 		var restoreArgs task.RestoreArgs
 		if os.Getenv("CEDANA_REMOTE") == "true" {
@@ -274,6 +269,8 @@ var restoreJobCmd = &cobra.Command{
 				CheckpointPath: "",
 				Type:           task.RestoreArgs_REMOTE,
 				JobID:          args[0],
+				UID:            uid,
+				GID:            gid,
 			}
 		} else {
 			paths, err := db.GetLatestLocalCheckpoints(args[0])
@@ -292,6 +289,9 @@ var restoreJobCmd = &cobra.Command{
 				CheckpointId:   "",
 				CheckpointPath: checkpointPath,
 				Type:           task.RestoreArgs_LOCAL,
+				JobID:          args[0],
+				UID:            uid,
+				GID:            gid,
 			}
 		}
 		// pass path to restore task
@@ -402,7 +402,7 @@ var execTaskCmd = &cobra.Command{
 		var gid uint32
 		var taskToExec string = args[0]
 
-		if !execAsRoot {
+		if !asRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
 		}
@@ -551,9 +551,10 @@ func init() {
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
+	restoreJobCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "restore as root")
 
 	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
-	execTaskCmd.Flags().BoolVarP(&execAsRoot, "root", "r", false, "run as root")
+	execTaskCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "run as root")
 	execTaskCmd.Flags().StringVarP(&execWithEnv, "env", "e", "", "file w/ environment variables")
 
 	rootCmd.AddCommand(dumpCmd)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -273,46 +272,6 @@ func recursivelyReplace(data interface{}, oldValue, newValue string) {
 			recursivelyReplace(value, oldValue, newValue)
 		}
 	}
-}
-
-func copyFiles(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Construct the destination path by joining the destination directory
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		destPath := filepath.Join(dst, relPath)
-
-		// If it's a directory, create it in the destination
-		if info.IsDir() {
-			return os.MkdirAll(destPath, os.ModePerm)
-		}
-
-		// If it's a file, copy it to the destination
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-
-		sourceFile, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer sourceFile.Close()
-
-		destFile, err := os.Create(destPath)
-		if err != nil {
-			return err
-		}
-		defer destFile.Close()
-
-		_, err = io.Copy(destFile, sourceFile)
-		return err
-	})
 }
 
 type linkPairs struct {
@@ -615,7 +574,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = c.gpuRestore(ctx, *dir)
+				gpuCmd, err = c.gpuRestore(ctx, *dir, args.UID, args.GID)
 				return err
 			},
 		}
@@ -648,11 +607,11 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 	return pid, nil
 }
 
-func (c *Client) gpuRestore(ctx context.Context, dir string) (*exec.Cmd, error) {
+func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
 	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
-	// TODO NR - propagate uid/guid too
-	gpuCmd, err := StartGPUController(1001, 1001, c.logger)
+
+	gpuCmd, err := StartGPUController(uid, gid, c.logger)
 	if err != nil {
 		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err

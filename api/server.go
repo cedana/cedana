@@ -59,6 +59,8 @@ type service struct {
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+	var pid int32
+
 	ctx, dumpTracer := s.client.tracer.Start(ctx, "dump-ckpt")
 	dumpTracer.SetAttributes(attribute.String("jobID", args.JobID))
 	defer dumpTracer.End()
@@ -75,9 +77,18 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	store := utils.NewCedanaStore(cfg, s.client.tracer)
 
-	pid := args.PID
+	// job vs process checkpointing, where a PID is provided directly
+	if args.PID != 0 {
+		pid = args.PID
+	} else {
+		pid, err = s.client.db.GetPID(args.JobID)
+		if err != nil {
+			err = status.Error(codes.Internal, err.Error())
+			return nil, err
+		}
+	}
 
-	s.client.generateState(args.PID)
+	s.client.generateState(pid)
 	var state task.ProcessState
 
 	state.Flag = task.FlagEnum_JOB_RUNNING
@@ -89,7 +100,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	err = s.client.Dump(ctx, args.Dir, args.PID)
+	err = s.client.Dump(ctx, args.Dir, pid)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
 		dumpTracer.RecordError(st.Err())
@@ -101,7 +112,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	switch args.Type {
 	case task.DumpArgs_LOCAL:
 		resp = task.DumpResp{
-			Message: fmt.Sprintf("Dumped process %d to %s", args.PID, args.Dir),
+			Message: fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
 		}
 
 	case task.DumpArgs_REMOTE:
@@ -176,7 +187,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		s.client.db.UpdateProcessStateWithID(args.JobID, state)
 
 		resp = task.DumpResp{
-			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", args.PID, args.Dir, multipartCheckpointResp.UploadID),
+			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", pid, args.Dir, multipartCheckpointResp.UploadID),
 			CheckpointID: cid,
 			UploadID:     multipartCheckpointResp.UploadID,
 		}
@@ -192,10 +203,9 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	var resp task.RestoreResp
 
 	switch args.Type {
+
 	case task.RestoreArgs_LOCAL:
-		if args.CheckpointPath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
+		// get checkpointPath from db
 		// assume a suitable file has been passed to args
 		pid, err := s.client.Restore(ctx, args)
 		if err != nil {
