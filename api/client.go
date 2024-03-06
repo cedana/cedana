@@ -62,8 +62,15 @@ func InstantiateClient() (*Client, error) {
 
 	db := &DB{}
 
+	// criu needs to be at least 317
+	criu := new(Criu)
+	valid, _ := criu.IsCriuAtLeast(31700)
+	if !valid {
+		logger.Fatal().Msg("CRIU version is too old, please upgrade to at least 3.17")
+	}
+
 	return &Client{
-		CRIU:   new(Criu),
+		CRIU:   criu,
 		logger: &logger,
 		config: config,
 		fs:     fs,
