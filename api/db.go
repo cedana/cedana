@@ -25,6 +25,16 @@ func NewBoltConn() (*bolt.DB, error) {
 	return conn, nil
 }
 
+func NewROnlyBoltConn() (*bolt.DB, error) {
+	// open db in read-only mode
+	conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
 // KISS for now - but we may want to separate out into subbuckets as we add more
 // checkpointing functionality (like incremental checkpointing or GPU checkpointing)
 // structure is default -> xid, xid -> pid: state (arrows denote buckets)
@@ -70,7 +80,8 @@ func (db *DB) CreateOrUpdateCedanaProcess(id string, state *task.ProcessState) e
 func (db *DB) GetStateFromID(id string) (*task.ProcessState, error) {
 	var state task.ProcessState
 
-	conn, err := NewBoltConn()
+	// readonly op
+	conn, err := NewROnlyBoltConn()
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +254,7 @@ func (db *DB) GetPID(id string) (int32, error) {
 func (db *DB) GetLatestLocalCheckpoints(id string) ([]*string, error) {
 	var checkpoints []*string
 
-	conn, err := NewBoltConn()
+	conn, err := NewROnlyBoltConn()
 	if err != nil {
 		return nil, err
 	}

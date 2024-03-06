@@ -19,6 +19,7 @@ service TaskService {
     rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
     rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
     rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+
     rpc ListRuncContainers(RuncRoot) returns (RuncList);
     rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
     rpc GetPausePid(PausePidArgs) returns (PausePidResp);
@@ -77,6 +78,8 @@ message RestoreArgs {
   string CheckpointId = 2;
   string CheckpointPath = 3;
   string JobID = 4;
+  uint32 UID = 5; 
+  uint32 GID = 6;
 }
 
 message RestoreResp {
@@ -233,8 +236,6 @@ enum checkpointState {
   RESTORE_FAILED = 3;
 }
 
-
-
 message PausePidArgs {
     string BundlePath = 1;
 }
@@ -260,6 +261,7 @@ message RuncRoot {
 message RuncList {
     repeated string Containers = 1;
 }
+
 message ContainerDumpArgs {
   string ContainerId = 1;
   string Ref = 2;

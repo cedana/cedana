@@ -40,7 +40,7 @@ var tcpEstablished bool
 
 // working directory for execTask
 var wd string
-var execAsRoot bool
+var asRoot bool
 var execWithEnv string
 
 type CLI struct {
@@ -170,8 +170,13 @@ var restoreProcessCmd = &cobra.Command{
 // -----------------
 
 var dumpJobCmd = &cobra.Command{
-	Use:   "job",
-	Args:  cobra.ExactArgs(1),
+	Use: "job",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("requires a job id argument, use cedana ps to see available jobs")
+		}
+		return nil
+	},
 	Short: "Manually checkpoint a running job to a directory",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// TODO NR - this needs to be extended to include container checkpoints
@@ -194,19 +199,6 @@ var dumpJobCmd = &cobra.Command{
 			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
 		}
 
-		// get PID of running job
-		// TODO NR - we should be querying the API for this instead of
-		// directly opening the db. Permissions issue
-		db := api.NewDB()
-		pid, err := db.GetPID(id)
-		if err != nil {
-			return err
-		}
-
-		if pid == 0 {
-			return fmt.Errorf("pid 0 returned from state - is process running?")
-		}
-
 		var taskType task.DumpArgs_DumpType
 		if os.Getenv("CEDANA_REMOTE") == "true" {
 			taskType = task.DumpArgs_REMOTE
@@ -215,7 +207,6 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.DumpArgs{
-			PID:   pid,
 			JobID: id,
 			Dir:   dir,
 			Type:  taskType,
@@ -241,8 +232,13 @@ var dumpJobCmd = &cobra.Command{
 
 var restoreJobCmd = &cobra.Command{
 	Use:   "job",
-	Short: "Manually restore a process or container from an input id",
-	Args:  cobra.ExactArgs(1),
+	Short: "Manually restore a previously dumped process or container from an input id",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("requires a job id argument, use cedana ps to see available jobs")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// TODO NR - add support for containers, currently supports only process
 		cli, err := NewCLI()
@@ -250,7 +246,16 @@ var restoreJobCmd = &cobra.Command{
 			return err
 		}
 
+		// TODO NR: we shouldn't even be reading the db here!!
 		db := api.NewDB()
+
+		var uid uint32
+		var gid uint32
+
+		if !asRoot {
+			uid = uint32(os.Getuid())
+			gid = uint32(os.Getgid())
+		}
 
 		var restoreArgs task.RestoreArgs
 		if os.Getenv("CEDANA_REMOTE") == "true" {
@@ -274,6 +279,8 @@ var restoreJobCmd = &cobra.Command{
 				CheckpointPath: "",
 				Type:           task.RestoreArgs_REMOTE,
 				JobID:          args[0],
+				UID:            uid,
+				GID:            gid,
 			}
 		} else {
 			paths, err := db.GetLatestLocalCheckpoints(args[0])
@@ -292,6 +299,9 @@ var restoreJobCmd = &cobra.Command{
 				CheckpointId:   "",
 				CheckpointPath: checkpointPath,
 				Type:           task.RestoreArgs_LOCAL,
+				JobID:          args[0],
+				UID:            uid,
+				GID:            gid,
 			}
 		}
 		// pass path to restore task
@@ -391,7 +401,12 @@ var execTaskCmd = &cobra.Command{
 	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
 	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
-	Args:  cobra.ExactArgs(2),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return fmt.Errorf("requires a task and id argument")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
 		if err != nil {
@@ -402,7 +417,7 @@ var execTaskCmd = &cobra.Command{
 		var gid uint32
 		var taskToExec string = args[0]
 
-		if !execAsRoot {
+		if !asRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
 		}
@@ -551,9 +566,10 @@ func init() {
 
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
+	restoreJobCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "restore as root")
 
 	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
-	execTaskCmd.Flags().BoolVarP(&execAsRoot, "root", "r", false, "run as root")
+	execTaskCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "run as root")
 	execTaskCmd.Flags().StringVarP(&execWithEnv, "env", "e", "", "file w/ environment variables")
 
 	rootCmd.AddCommand(dumpCmd)

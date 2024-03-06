@@ -62,8 +62,10 @@ func InstantiateClient() (*Client, error) {
 
 	db := &DB{}
 
+	criu := new(Criu)
+
 	return &Client{
-		CRIU:   new(Criu),
+		CRIU:   criu,
 		logger: &logger,
 		config: config,
 		fs:     fs,

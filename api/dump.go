@@ -352,18 +352,6 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 			return err
 		}
 		GPUCheckpointed = true
-		c.logger.Info().Msgf("gpu checkpointed, copying checkpoints...")
-		// move gpu checkpoint files into workdir
-		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if strings.Contains(path, "gpuckpt") || strings.Contains(path, "mem") {
-				c.logger.Info().Msgf("copying file %s to %s", path, dumpdir)
-				err := utils.CopyFile(path, dumpdir)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		})
 		if err != nil {
 			return err
 		}
