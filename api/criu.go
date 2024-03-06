@@ -37,6 +37,11 @@ func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
 }
 
 func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
+	valid, _ := c.IsCriuAtLeast(31700)
+	if !valid {
+		return nil, errors.New("CRIU version is too old, please upgrade to at least 3.17")
+	}
+
 	resp, err := c.doSwrkWithResp(reqType, opts, nfy, extraFiles, nil)
 	if err != nil {
 		return nil, err
