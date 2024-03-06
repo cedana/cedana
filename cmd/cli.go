@@ -170,8 +170,13 @@ var restoreProcessCmd = &cobra.Command{
 // -----------------
 
 var dumpJobCmd = &cobra.Command{
-	Use:   "job",
-	Args:  cobra.ExactArgs(1),
+	Use: "job",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("requires a job id argument, use cedana ps to see available jobs")
+		}
+		return nil
+	},
 	Short: "Manually checkpoint a running job to a directory",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// TODO NR - this needs to be extended to include container checkpoints
@@ -227,8 +232,13 @@ var dumpJobCmd = &cobra.Command{
 
 var restoreJobCmd = &cobra.Command{
 	Use:   "job",
-	Short: "Manually restore a process or container from an input id",
-	Args:  cobra.ExactArgs(1),
+	Short: "Manually restore a previously dumped process or container from an input id",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("requires a job id argument, use cedana ps to see available jobs")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// TODO NR - add support for containers, currently supports only process
 		cli, err := NewCLI()
@@ -391,7 +401,12 @@ var execTaskCmd = &cobra.Command{
 	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
 	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
-	Args:  cobra.ExactArgs(2),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return fmt.Errorf("requires a task and id argument")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cli, err := NewCLI()
 		if err != nil {
