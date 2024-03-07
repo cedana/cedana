@@ -671,6 +671,17 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		return nil, err
 	}
 
+	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
+		controllerPath = strings.Join([]string{
+			"compute-sanitizer",
+			"--log-file /tmp/cedana-sanitizer.log",
+			"--print-level info",
+			"--leak-check=full",
+			controllerPath},
+			" ")
+		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
+	}
+
 	gpuCmd = exec.Command("bash", "-c", controllerPath)
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
@@ -678,17 +689,6 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 			Uid: uid,
 			Gid: gid,
 		},
-	}
-
-	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
-		gpuCmd.Args[0] = strings.Join([]string{
-			"compute-sanitizer",
-			"--log-file /tmp/cedana-sanitizer.log",
-			"--print-level info",
-			"--leak-check=full",
-			gpuCmd.Args[0]},
-			" ")
-		logger.Info().Msgf("GPU controller started with args: %v", gpuCmd.Args)
 	}
 
 	gpuCmd.Stderr = nil
