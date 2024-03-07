@@ -680,7 +680,6 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 			controllerPath},
 			" ")
 		// wrap controller path in a string
-		controllerPath = fmt.Sprintf("'%s'", controllerPath)
 		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
 	}
 
