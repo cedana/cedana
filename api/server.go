@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -679,7 +680,17 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 	}
 
-	// stdout and stderr are going to /tmp/cedana-gpucontroller.log - no need to capture or flush
+	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
+		gpuCmd.Args[0] = strings.Join([]string{
+			"compute-sanitizer",
+			"--log-file /tmp/cedana-sanitizer.log",
+			"--print-level info",
+			"--leak-check=full",
+			gpuCmd.Args[0]},
+			" ")
+		logger.Info().Msgf("GPU controller started with args: %v", gpuCmd.Args)
+	}
+
 	gpuCmd.Stderr = nil
 	gpuCmd.Stdout = nil
 

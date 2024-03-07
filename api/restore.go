@@ -607,7 +607,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 	return pid, nil
 }
 
-func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
+func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32, debug bool) (*exec.Cmd, error) {
 	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
