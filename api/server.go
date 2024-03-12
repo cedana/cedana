@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -630,8 +631,12 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 		return 0, err
 	}
 
+	var stderrbuf bytes.Buffer
+	var gpuerrbuf bytes.Buffer
+
 	cmd.Stdout = outputFile
-	cmd.Stderr = outputFile
+	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
+	gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 
 	cmd.Env = os.Environ()
 
@@ -648,8 +653,11 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 				s.logger.Fatal().Err(err)
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+			// read last bit of data from /tmp/cedana-gpucontroller.log and print
+			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
+			s.logger.Warn().Msgf("task terminated with error: %v", stderrbuf.String())
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
