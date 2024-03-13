@@ -35,7 +35,5 @@ cd /
 # Clone Cedana repository and build
 git clone https://github.com/cedana/cedana.git
 cd cedana
-go build -o /cedana
-./cedana daemon start&
-cd /
+./build-start-daemon.sh&
 EOT

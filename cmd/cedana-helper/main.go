@@ -101,12 +101,7 @@ func initialize() (int, error) {
 		return -1, err
 	}
 
-	pid, err := startDaemon()
-	if err != nil {
-		return -1, err
-	}
-
-	return pid, nil
+	return 0, nil
 }
 
 func copyScript(src, dest string) error {
