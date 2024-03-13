@@ -41,4 +41,4 @@ nfpms:
       - criu 
 
 archives:
-    id: cedana
+  - id: cedana
