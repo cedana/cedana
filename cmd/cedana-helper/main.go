@@ -96,18 +96,8 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 }
 
 func initialize() (int, error) {
-	// Change root directory to /host
-	if err := syscall.Chroot("/host"); err != nil {
-		return -1, err
-	}
 
-	// Copy the Bash script into /host
-	if err := copyScript("./install.sh", "/host/install.sh"); err != nil {
-		return -1, err
-	}
-
-	// Execute the Bash script
-	if err := runCommand("bash", "/install.sh"); err != nil {
+	if err := runCommand("bash", "./install.sh"); err != nil {
 		return -1, err
 	}
 
@@ -132,7 +122,7 @@ func runCommand(command string, args ...string) error {
 }
 
 func startDaemon() (int, error) {
-	cmd := exec.Command(daemonCommand, "daemon", "start&")
+	cmd := exec.Command("./start-daemon.sh")
 	err := cmd.Start()
 	if err != nil {
 		return -1, err
