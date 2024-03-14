@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var isK8s bool
-
 var clientDaemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
@@ -52,14 +50,14 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("daemon version %s started at %s", cmd.Parent().Version, time.Now().Local())
 
-		startgRPCServer(isK8s)
+		startgRPCServer()
 	},
 }
 
-func startgRPCServer(isK8s bool) {
+func startgRPCServer() {
 	logger := utils.GetLogger()
 
-	if _, err := api.StartGRPCServer(isK8s); err != nil {
+	if _, err := api.StartGRPCServer(); err != nil {
 		logger.Error().Err(err).Msg("Failed to start gRPC server")
 	}
 
@@ -73,7 +71,6 @@ func startProfiler() {
 func init() {
 	rootCmd.AddCommand(clientDaemonCmd)
 	clientDaemonCmd.AddCommand(startDaemonCmd)
-	startDaemonCmd.Flags().BoolVar(&isK8s, "isK8s", false, "Pass true if Cedana is running within a kubernetes worker node.")
 }
 
 func pullGPUBinary(binary string, filePath string) error {

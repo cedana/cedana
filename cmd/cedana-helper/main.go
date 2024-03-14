@@ -16,7 +16,6 @@ import (
 const (
 	maxRetries        = 5
 	clientRetryPeriod = time.Second
-	daemonCommand     = "./cedana/cedana"
 )
 
 func main() {
@@ -41,6 +40,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
+				// TODO: Need to implement
 				isRunning, err := isProcessRunning(daemonPid)
 				if err != nil {
 					log.Printf("Issue checking if daemon is running")
@@ -96,27 +96,12 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 }
 
 func initialize() (int, error) {
-	// Change root directory to /host
-	if err := syscall.Chroot("/host"); err != nil {
+
+	if err := runCommand("bash", "./install.sh"); err != nil {
 		return -1, err
 	}
 
-	// Copy the Bash script into /host
-	if err := copyScript("./install.sh", "/host/install.sh"); err != nil {
-		return -1, err
-	}
-
-	// Execute the Bash script
-	if err := runCommand("bash", "/install.sh"); err != nil {
-		return -1, err
-	}
-
-	pid, err := startDaemon()
-	if err != nil {
-		return -1, err
-	}
-
-	return pid, nil
+	return 0, nil
 }
 
 func copyScript(src, dest string) error {
@@ -132,7 +117,7 @@ func runCommand(command string, args ...string) error {
 }
 
 func startDaemon() (int, error) {
-	cmd := exec.Command(daemonCommand, "daemon", "start&")
+	cmd := exec.Command("../../build-start-daemon.sh")
 	err := cmd.Start()
 	if err != nil {
 		return -1, err
@@ -150,12 +135,6 @@ func startDaemon() (int, error) {
 }
 
 func isProcessRunning(pid int) (bool, error) {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false, err
-	}
-
-	// Signal 0 checks if process is running
-	err = process.Signal(syscall.Signal(0))
-	return err == nil, nil
+	//TODO Needs implemented
+	return true, nil
 }
