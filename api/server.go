@@ -811,7 +811,7 @@ func StartGRPCServer() (*grpc.Server, error) {
 		<-startCh // Wait for the server to start
 		// Here join netns
 		//TODO find pause bundle path
-		if os.Getenv("IS_K8S") == "true" {
+		if os.Getenv("IS_K8S") == "1" {
 			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, k8sDefaultRuncRoot)
 			if err != nil {
 				fmt.Println(err.Error())

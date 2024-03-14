@@ -34,6 +34,14 @@ cd /
 
 # Clone Cedana repository and build
 git clone https://github.com/cedana/cedana.git
+
+LINE="export IS_K8S=1"
+
+# Add the line to the .bashrc file
+echo "$LINE" >> ~/.bashrc
+
+source ~/.bashrc
+
 cd cedana
 ./build-start-daemon.sh&
 EOT
