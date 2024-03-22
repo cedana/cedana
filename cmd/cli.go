@@ -40,7 +40,6 @@ var tcpEstablished bool
 // working directory for execTask
 var wd string
 var asRoot bool
-var execWithEnv bool
 
 type CLI struct {
 	cfg    *utils.Config
@@ -422,9 +421,8 @@ var execTaskCmd = &cobra.Command{
 			gid = uint32(os.Getgid())
 		}
 
-		if execWithEnv {
-			env = os.Environ()
-		}
+		// should this be gated w/ a flag?
+		env = os.Environ()
 
 		taskArgs := &task.StartTaskArgs{
 			Task:       taskToExec,
@@ -550,7 +548,6 @@ func init() {
 
 	execTaskCmd.Flags().StringVarP(&wd, "working-dir", "w", "", "working directory")
 	execTaskCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "run as root")
-	execTaskCmd.Flags().BoolVarP(&execWithEnv, "env", "e", false, "run with user's environment variables")
 
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
