@@ -619,7 +619,6 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 
 	cmd.Stdin = nullFile
 	if logOutputFile == "" {
-		// default to /var/log/cedana-output.log
 		logOutputFile = defaultLogPath
 	}
 
