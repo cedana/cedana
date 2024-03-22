@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -628,8 +630,12 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 		return 0, err
 	}
 
+	var stderrbuf bytes.Buffer
+	var gpuerrbuf bytes.Buffer
+
 	cmd.Stdout = outputFile
-	cmd.Stderr = outputFile
+	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
+	gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 
 	cmd.Env = args.Env
 	err = cmd.Start()
@@ -645,8 +651,11 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 				s.logger.Fatal().Err(err)
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+			// read last bit of data from /tmp/cedana-gpucontroller.log and print
+			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
+			s.logger.Warn().Msgf("task terminated with error: %v", stderrbuf.String())
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
@@ -668,6 +677,18 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		return nil, err
 	}
 
+	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
+		controllerPath = strings.Join([]string{
+			"compute-sanitizer",
+			"--log-file /tmp/cedana-sanitizer.log",
+			"--print-level info",
+			"--leak-check=full",
+			controllerPath},
+			" ")
+		// wrap controller path in a string
+		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
+	}
+
 	gpuCmd = exec.Command("bash", "-c", controllerPath)
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
@@ -677,7 +698,6 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 	}
 
-	// stdout and stderr are going to /tmp/cedana-gpucontroller.log - no need to capture or flush
 	gpuCmd.Stderr = nil
 	gpuCmd.Stdout = nil
 
