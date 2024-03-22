@@ -579,7 +579,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
+func (s *service) runTask(ctx context.Context, task string, args *task.StartTaskArgs) (int32, error) {
 	ctx, span := s.client.tracer.Start(ctx, "exec")
 	span.SetAttributes(attribute.String("task", task))
 	defer span.End()
@@ -593,7 +593,7 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 	var err error
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
 		_, gpuStartSpan := s.client.tracer.Start(ctx, "start-gpu-controller")
-		gpuCmd, err = StartGPUController(uid, gid, s.logger)
+		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
 		if err != nil {
 			return 0, err
 		}
@@ -609,24 +609,23 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid: uid,
-			Gid: gid,
+			Uid: args.UID,
+			Gid: args.GID,
 		},
 	}
 
 	// working dir needs to be consistent on the checkpoint and restore side
-	if workingDir != "" {
-		cmd.Dir = workingDir
+	if args.WorkingDir != "" {
+		cmd.Dir = args.WorkingDir
 	}
 
 	cmd.Stdin = nullFile
-	if logOutputFile == "" {
-		// default to /var/log/cedana-output.log
-		logOutputFile = defaultLogPath
+	if args.LogOutputFile == "" {
+		args.LogOutputFile = defaultLogPath
 	}
 
 	// is this non-performant? do we need to flush at intervals instead of writing?
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
+	outputFile, err := os.OpenFile(args.LogOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return 0, err
 	}
@@ -638,8 +637,7 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
 	gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 
-	cmd.Env = os.Environ()
-
+	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
 		return 0, err
@@ -727,7 +725,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(ctx, taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
+	pid, err := s.runTask(ctx, taskToRun, args)
 
 	if err == nil {
 		s.client.logger.Info().Msgf("managing process with pid %d", pid)

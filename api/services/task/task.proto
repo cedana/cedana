@@ -91,9 +91,10 @@ message StartTaskArgs {
   string Task = 1;
   string Id = 2;
   string WorkingDir = 3;
-  string LogOutputFile = 4;
-  uint32 UID = 5;
-  uint32 GID = 6;
+  repeated string Env = 4;
+  string LogOutputFile = 5;
+  uint32 UID = 6;
+  uint32 GID = 7;
 }
 
 message StartTaskResp {
