@@ -621,7 +621,7 @@ func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	// sleep a little to let the gpu controller start
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {
