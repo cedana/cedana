@@ -146,6 +146,10 @@ func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.Proce
 	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
+func (c *Client) discardParentFds() {
+
+}
+
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
 		LogLevel:     proto.Int32(4),

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -8,6 +10,7 @@ import (
 
 var containerName string
 var checkpointId string
+var containerRoot string
 
 var runcRoot = &cobra.Command{
 	Use:   "runc",
@@ -56,7 +59,14 @@ var runcDumpCmd = &cobra.Command{
 			return err
 		}
 
-		root = "/run/containerd/runc/k8s.io"
+		rootMap := map[string]string{
+			"k8s":    "/run/containerd/runc/k8s.io",
+			"docker": "/run/docker/runtime-runc/moby",
+		}
+
+		if rootMap[containerRoot] == "" {
+			return fmt.Errorf("container root %s not supported", containerRoot)
+		}
 
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
@@ -66,12 +76,12 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root:           root,
+			Root:           "/run/docker/runtime-runc/moby",
 			CheckpointPath: checkpointPath,
 			ContainerId:    containerId,
 			CriuOpts:       criuOpts,
 			//TODO BS: hard coded for now
-			Type: task.RuncDumpArgs_REMOTE,
+			Type: task.RuncDumpArgs_LOCAL,
 		}
 
 		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
@@ -157,6 +167,7 @@ func initRuncCommands() {
 	runcDumpCmd.Flags().StringVarP(&containerId, "id", "i", "", "container id")
 	runcDumpCmd.MarkFlagRequired("id")
 	runcDumpCmd.Flags().BoolVarP(&tcpEstablished, "tcp-established", "t", false, "tcp established")
+	runcDumpCmd.Flags().StringVarP(&containerRoot, "container-root", "r", "k8s", "container root")
 
 	dumpCmd.AddCommand(runcDumpCmd)
 
