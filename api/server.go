@@ -635,7 +635,10 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 
 	cmd.Stdout = outputFile
 	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
-	gpuCmd.Stderr = io.Writer(&gpuerrbuf)
+
+	if gpuCmd != nil {
+		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
+	}
 
 	cmd.Env = args.Env
 	err = cmd.Start()
