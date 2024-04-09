@@ -36,7 +36,7 @@ const defaultLogPath string = "/var/log/cedana-output.log"
 
 const (
 	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
-	cedanaContainerName = "cedana-binary-container"
+	cedanaContainerName = "binary-container"
 )
 
 type GrpcService interface {
@@ -808,7 +808,7 @@ func addGRPC() (*Server, error) {
 	return server, nil
 }
 
-func StartGRPCServer(isK8s bool) (*grpc.Server, error) {
+func StartGRPCServer() (*grpc.Server, error) {
 	var wg sync.WaitGroup
 
 	// Create a context with a cancel function
@@ -832,7 +832,7 @@ func StartGRPCServer(isK8s bool) (*grpc.Server, error) {
 		<-startCh // Wait for the server to start
 		// Here join netns
 		//TODO find pause bundle path
-		if isK8s {
+		if os.Getenv("IS_K8S") == "1" {
 			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, k8sDefaultRuncRoot)
 			if err != nil {
 				fmt.Println(err.Error())

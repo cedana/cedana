@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
+	github.com/checkpoint-restore/go-criu/v7 v7.1.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.7
 	github.com/containerd/errdefs v0.1.0
@@ -23,12 +24,12 @@ require (
 	github.com/rs/xid v1.5.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.10.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	go.etcd.io/bbolt v1.3.7
 	go.opentelemetry.io/otel v1.23.1
 	go.opentelemetry.io/otel/sdk v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
-	golang.org/x/sys v0.16.0
+	golang.org/x/sys v0.18.0
 	golang.org/x/time v0.3.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/grpc v1.61.0
