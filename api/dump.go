@@ -435,6 +435,12 @@ func (c *Client) gpuCheckpoint(ctx context.Context, dumpdir string) error {
 	if !resp.Success {
 		return fmt.Errorf("could not checkpoint gpu")
 	}
+	if resp.MemPath == "" {
+		return fmt.Errorf("gpu checkpoint did not return mempath")
+	}
+	if resp.CkptPath == "" {
+		return fmt.Errorf("gpu checkpoint did not return ckptpath")
+	}
 
 	return nil
 }
