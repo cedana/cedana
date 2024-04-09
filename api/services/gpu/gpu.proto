@@ -16,6 +16,8 @@ message CheckpointRequest {
 
 message CheckpointResponse {
     bool success = 1;
+    string memPath = 2;
+    string ckptPath = 3;
 }
 
 message RestoreRequest {
