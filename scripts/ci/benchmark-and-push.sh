@@ -28,7 +28,7 @@ then
     exit 1
 fi
 
-if [-z "$CHECKPOINTSVC_TOKEN"]
+if [ -z "$CHECKPOINTSVC_TOKEN" ]
 then 
     echo "CHECKPOINT_SVC_TOKEN is not set"
     exit 1

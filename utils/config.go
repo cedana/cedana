@@ -56,13 +56,13 @@ func InitConfig() (*Config, error) {
 	if os.IsNotExist(err) {
 		_, err = os.Stat(filepath.Join(homedir, ".cedana"))
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0o664)
+			err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0755)
 			if err != nil {
 				panic(fmt.Errorf("error creating .cedana folder: %v", err))
 			}
 		}
 
-		err = os.WriteFile(configFilePath, []byte(GenSampleConfig()), 0o664)
+		err = os.WriteFile(configFilePath, []byte(GenSampleConfig()), 0664)
 		if err != nil {
 			panic(fmt.Errorf("error writing sample to config file: %v", err))
 		}

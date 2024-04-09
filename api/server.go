@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -160,21 +162,21 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(ctx, checkpointFullSize)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
-			uploadSpan.RecordError(st.Err())
+			uploadSpan.RecordError(err)
 			return nil, st.Err()
 		}
 
 		err = store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, checkpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
-			uploadSpan.RecordError(st.Err())
+			uploadSpan.RecordError(err)
 			return nil, st.Err()
 		}
 
 		err = store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
-			uploadSpan.RecordError(st.Err())
+			uploadSpan.RecordError(err)
 			return nil, st.Err()
 		}
 		uploadSpan.End()
@@ -577,7 +579,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 	return nil
 }
 
-func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile string, uid, gid uint32) (int32, error) {
+func (s *service) runTask(ctx context.Context, task string, args *task.StartTaskArgs) (int32, error) {
 	ctx, span := s.client.tracer.Start(ctx, "exec")
 	span.SetAttributes(attribute.String("task", task))
 	defer span.End()
@@ -591,7 +593,7 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 	var err error
 	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
 		_, gpuStartSpan := s.client.tracer.Start(ctx, "start-gpu-controller")
-		gpuCmd, err = StartGPUController(uid, gid, s.logger)
+		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
 		if err != nil {
 			return 0, err
 		}
@@ -607,33 +609,38 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid: uid,
-			Gid: gid,
+			Uid: args.UID,
+			Gid: args.GID,
 		},
 	}
 
 	// working dir needs to be consistent on the checkpoint and restore side
-	if workingDir != "" {
-		cmd.Dir = workingDir
+	if args.WorkingDir != "" {
+		cmd.Dir = args.WorkingDir
 	}
 
 	cmd.Stdin = nullFile
-	if logOutputFile == "" {
-		// default to /var/log/cedana-output.log
-		logOutputFile = defaultLogPath
+	if args.LogOutputFile == "" {
+		args.LogOutputFile = defaultLogPath
 	}
 
 	// is this non-performant? do we need to flush at intervals instead of writing?
-	outputFile, err := os.OpenFile(logOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
+	outputFile, err := os.OpenFile(args.LogOutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return 0, err
 	}
 
+	var stderrbuf bytes.Buffer
+	var gpuerrbuf bytes.Buffer
+
 	cmd.Stdout = outputFile
-	cmd.Stderr = outputFile
+	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
 
-	cmd.Env = os.Environ()
+	if gpuCmd != nil {
+		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
+	}
 
+	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
 		return 0, err
@@ -647,8 +654,11 @@ func (s *service) runTask(ctx context.Context, task, workingDir, logOutputFile s
 				s.logger.Fatal().Err(err)
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+			// read last bit of data from /tmp/cedana-gpucontroller.log and print
+			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
+			s.logger.Warn().Msgf("task terminated with error: %v", stderrbuf.String())
 			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
@@ -670,6 +680,18 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		return nil, err
 	}
 
+	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
+		controllerPath = strings.Join([]string{
+			"compute-sanitizer",
+			"--log-file /tmp/cedana-sanitizer.log",
+			"--print-level info",
+			"--leak-check=full",
+			controllerPath},
+			" ")
+		// wrap controller path in a string
+		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
+	}
+
 	gpuCmd = exec.Command("bash", "-c", controllerPath)
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
@@ -679,7 +701,6 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 	}
 
-	// stdout and stderr are going to /tmp/cedana-gpucontroller.log - no need to capture or flush
 	gpuCmd.Stderr = nil
 	gpuCmd.Stdout = nil
 
@@ -707,7 +728,7 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		taskToRun = args.Task
 	}
 
-	pid, err := s.runTask(ctx, taskToRun, args.WorkingDir, args.LogOutputFile, args.UID, args.GID)
+	pid, err := s.runTask(ctx, taskToRun, args)
 
 	if err == nil {
 		s.client.logger.Info().Msgf("managing process with pid %d", pid)
