@@ -36,7 +36,7 @@ const defaultLogPath string = "/var/log/cedana-output.log"
 
 const (
 	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
-	cedanaContainerName = "cedana-binary-container"
+	cedanaContainerName = "binary-container"
 )
 
 type GrpcService interface {
