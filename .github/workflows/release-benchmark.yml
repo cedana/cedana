@@ -8,7 +8,6 @@ permissions:
 jobs:
   build-and-push-benchmarking-image-to-ghcr:
     runs-on: ubuntu-latest
-    needs: release
 
     permissions:
       contents: read
@@ -45,7 +44,6 @@ jobs:
 
   build-and-push-benchmarking-image-to-dockerhub:
     runs-on: ubuntu-latest
-    needs: release
 
     permissions:
       contents: read
