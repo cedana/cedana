@@ -38,7 +38,7 @@ jobs:
         with:
           context: "{{defaultContext}}:test/benchmarks"
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: cedana/cedana-benchmarking:latest
           labels: ${{ steps.meta.outputs.labels }}
 
 
@@ -70,5 +70,5 @@ jobs:
         with:
           context: "{{defaultContext}}:test/benchmarks"
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: cedana/cedana-benchmarking:latest
           labels: ${{ steps.meta.outputs.labels }}
