@@ -330,7 +330,7 @@ def push_to_bigquery():
 
 def main():
     daemon_pid = setup()
-    jobIDs = [
+    jobs = [
         "server",
         "loop",
         "vscode-server",
@@ -347,16 +347,15 @@ def main():
 
     # run in a loop
     num_samples = 5
-    for x in range(len(jobIDs)):
-        print(
-            "Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x])
-        )
-        jobID = jobIDs[x]
+    for x in range(len(jobs)):
+        print("Starting benchmarks for job {} with command {}".format(jobs[x], cmds[x]))
+        job = jobs[x]
         for y in range(num_samples):
+            jobID = job + "-" + str(y)
             # we pass a job ID + iteration to generate a unique one every time.
             # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and
             # we end up getting a killed PID.
-            process_stats = run_exec(cmds[x], jobID + "-" + str(y))
+            process_stats = run_exec(cmds[x], jobID)
             # wait a few seconds for memory to allocate
             time.sleep(5)
 
