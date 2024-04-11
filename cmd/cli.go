@@ -41,6 +41,8 @@ var tcpEstablished bool
 var wd string
 var asRoot bool
 
+var statPID int32
+
 type CLI struct {
 	cfg    *utils.Config
 	cts    *services.ServiceClient
@@ -518,6 +520,28 @@ var psCmd = &cobra.Command{
 	},
 }
 
+var perfCmd = &cobra.Command{
+	Use:   "perf",
+	Short: "Profile Cedana with performance counters",
+}
+
+var perfStatCmd = &cobra.Command{
+	Use:   "stat",
+	Short: "Run a command and gather performance counter statistics",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+		if statPID != 0 { // sudo perf stat -p PID
+			cli.logger.Info().Msgf("PID = %d", statPID)
+		} else { // sudo perf stat <arg>
+			cli.logger.Info().Msgf("no PID provided")
+		}
+		return nil
+	},
+}
+
 func initContainerdCommands() {
 	containerdDumpCmd.Flags().StringVarP(&ref, "image", "i", "", "image checkpoint path")
 	containerdDumpCmd.MarkFlagRequired("image")
@@ -542,6 +566,9 @@ func init() {
 	dumpCmd.AddCommand(dumpJobCmd)
 	dumpJobCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 
+	perfStatCmd.Flags().Int32VarP(&statPID, "pid <pid>", "p", 0, "stat events on existing process id")
+	perfCmd.AddCommand(perfStatCmd)
+
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolVarP(&asRoot, "root", "r", false, "restore as root")
@@ -554,6 +581,7 @@ func init() {
 	rootCmd.AddCommand(execTaskCmd)
 	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(runcRoot)
+	rootCmd.AddCommand(perfCmd)
 	initRuncCommands()
 
 	initContainerdCommands()
