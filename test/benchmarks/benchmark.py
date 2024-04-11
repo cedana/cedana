@@ -8,6 +8,7 @@ import requests
 import platform
 import profile_pb2
 from google.cloud import bigquery
+from google.cloud import storage
 from google.cloud.bigquery import LoadJobConfig, SourceFormat
 import json
 
@@ -89,63 +90,12 @@ def start_recording(pid):
     return initial_data
 
 
-def clear_otel_data():
-    open("/cedana/data.json", "w").close()
-
-
-def process_otel_data():
-    with open("/cedana/data.json", "r", encoding="utf-8") as file:
-        content = file.read()
-
-    # HACK
-    cleaned_content = content.replace("\x00", "")
-    try:
-        data = json.loads(cleaned_content)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-
-    operation_details = {}
-
-    try:
-        for resourceSpan in data["resourceSpans"]:
-            for scopeSpan in resourceSpan["scopeSpans"]:
-                for span in scopeSpan["spans"]:
-                    operation_name = span["name"]
-                    start_time = int(span["startTimeUnixNano"])
-                    end_time = int(span["endTimeUnixNano"])
-                    duration_ns = end_time - start_time
-                    duration_ms = duration_ns / 1e6
-
-                    attributes = {}
-                    for attr in span.get("attributes", []):
-                        key = attr["key"]
-                        # Simplified value extraction for brevity
-                        value = attr["value"].get(
-                            "stringValue",
-                            attr["value"].get(
-                                "boolValue", attr["value"].get("intValue", "")
-                            ),
-                        )
-                        attributes[key] = value
-
-                    operation_details[operation_name] = {
-                        "duration_ms": duration_ms,
-                        "attributes": attributes,
-                    }
-
-        details_json = json.dumps(operation_details, indent=4)
-        print(details_json)
-    except Exception as e:
-        print(f"Error processing data: {e}")
-        return {}
-
-    # Assuming clear_otel_data() clears the data.json file
-    clear_otel_data()
-    return details_json
-
-
 def stop_recording(
-    operation_type, pid, initial_data, jobID, process_stats, operation_details
+    operation_type,
+    pid,
+    initial_data,
+    jobID,
+    process_stats,
 ):
     p = psutil.Process(pid)
     current_cpu_times = p.cpu_times()
@@ -202,12 +152,12 @@ def stop_recording(
                     "Read Bytes (MB)",
                     "CPU Utilization (Secs)",
                     "CPU Used (Percent)",
-                    "Raw Durations",
                     "Cedana Version",
                     "Processor",
                     "Physical Cores",
                     "CPU Cores",
                     "Memory (GB)",
+                    "blob_id",
                 ]
             )
 
@@ -225,12 +175,12 @@ def stop_recording(
                 read_bytes_diff / (1024 * 1024),  # convert to MB
                 cpu_utilization,
                 cpu_percent,
-                operation_details,
                 cedana_version,
                 processor,
                 physical_cores,
                 cpu_count,
                 memory,
+                "",
             ]
         )
 
@@ -257,10 +207,7 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     p.wait()
 
     time.sleep(5)
-    otel_data = process_otel_data()
-    stop_recording(
-        "checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data
-    )
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)
 
 
 def run_restore(daemonPID, jobID, iteration, output_dir):
@@ -277,8 +224,7 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     process_stats["memory_kb"] = 0
 
     time.sleep(5)
-    otel_data = process_otel_data()
-    stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
+    stop_recording("restore", daemonPID, initial_data, jobID, process_stats)
 
 
 def run_exec(cmd, jobID):
@@ -317,6 +263,33 @@ def terminate_process(pid, timeout=3):
         print(f"Process {pid} does not exist.")
     except PermissionError:
         print(f"No permission to terminate process {pid}.")
+
+
+def push_otel_to_bucket(filename, blob_id):
+    client = storage.Client()
+    bucket = client.bucket("benchmark-otel-data")
+    blob = bucket.blob(blob_id)
+    blob.upload_from_filename(filename)
+
+
+def attach_bucket_id(csv_file, blob_id):
+    # read csv file
+    with open(csv_file, mode="r") as file:
+        csv_reader = csv.reader(file)
+        rows = list(csv_reader)
+
+        # assuming the first row is the header containing column names
+    header = rows[0]
+    blob_id_column_index = header.index("blob_id")
+
+    # update blob_id for each row
+    for row in rows[1:]:  # skip header row
+        row[blob_id_column_index] = blob_id
+
+    # write csv file
+    with open(csv_file, mode="w", newline="") as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerows(rows)
 
 
 def push_to_bigquery():
@@ -373,7 +346,7 @@ def main():
     ]
 
     # run in a loop
-    num_samples = 10
+    num_samples = 5
     for x in range(len(jobIDs)):
         print(
             "Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x])
@@ -387,8 +360,6 @@ def main():
             # wait a few seconds for memory to allocate
             time.sleep(5)
 
-            clear_otel_data()
-
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv
             run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
             time.sleep(3)
@@ -398,8 +369,11 @@ def main():
 
             terminate_process(process_stats["pid"])
 
+    # unique uuid for blob id
+    blob_id = "benchmark-data-" + str(time.time())
+    push_otel_to_bucket("/cedana/data.json", blob_id)
+    attach_bucket_id("benchmark_output.csv", blob_id)
     push_to_bigquery()
-
     # delete benchmarking folder
     cleanup()
 
