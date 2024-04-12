@@ -43,5 +43,6 @@ echo "$LINE" >> ~/.bashrc
 source ~/.bashrc
 
 cd cedana
+git checkout hotfix/arch
 ./build-start-daemon.sh&
 EOT

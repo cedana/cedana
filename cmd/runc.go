@@ -68,6 +68,12 @@ var runcDumpCmd = &cobra.Command{
 			return fmt.Errorf("container root %s not supported", containerRoot)
 		}
 
+		if containerRoot == "" {
+			root = rootMap["k8s"]
+		} else {
+			root = rootMap[containerRoot]
+		}
+
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   workPath,
@@ -76,7 +82,7 @@ var runcDumpCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root:           "/run/docker/runtime-runc/moby",
+			Root:           root,
 			CheckpointPath: checkpointPath,
 			ContainerId:    containerId,
 			CriuOpts:       criuOpts,
