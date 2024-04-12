@@ -13,6 +13,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/docker v24.0.6+incompatible
+	github.com/google/go-containerregistry v0.14.0
 	github.com/google/uuid v1.6.0
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/moby/sys/user v0.1.0
@@ -84,7 +85,6 @@ require (
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
-	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
 	github.com/opencontainers/runc v1.1.9 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect

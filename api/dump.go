@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	containerdhelper "github.com/cedana/cedana/api/containerdhelper"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
@@ -17,7 +18,11 @@ import (
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/docker/pkg/namesgenerator"
+	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	bolt "go.etcd.io/bbolt"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
@@ -250,6 +255,8 @@ func patchPodmanDump(containerId, imgPath string) error {
 }
 
 func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *container.CriuOpts) error {
+	ref := fmt.Sprintf("test-checkpoint-%s", time.Now())
+
 	_, dumpSpan := c.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", true))
 
@@ -277,12 +284,37 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 			// Handle the error or log it as needed
 		}
 	}
+
 	bundle := Bundle{ContainerId: containerId}
+
 	runcContainer := container.GetContainerFromRunc(containerId, root)
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
+
+	containerdClient, ctx, cancel, err := containerdhelper.NewContainerdClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	containerdContainer, err := containerdClient.LoadContainer(ctx, containerId)
+	if err != nil {
+		return err
+	}
+
+	containerdContainerInfo, err := containerdClient.ContainerService().Get(ctx, containerId)
+	if err != nil {
+		return err
+	}
+
+	// TODO add rw layer checkpoint here
+	index, err := containerdhelper.PrepareIndex(ctx, containerdContainer, containerdClient, fmt.Sprintf("cedana-checkpoint:%s", time.Now()))
+	if err != nil {
+		return err
+	}
+
+	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
 		dumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		c.logger.Error().Err(err)
 	}
 	dumpSpan.End()
 
@@ -290,6 +322,48 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 		if err := patchPodmanDump(containerId, opts.ImagesDirectory); err != nil {
 			return err
 		}
+	}
+
+	cp, err := containerdhelper.WriteImageToContentStore(ctx, opts.ImagesDirectory, containerdClient)
+	if err != nil {
+		return err
+	}
+
+	specD, err := containerdhelper.WriteSpecToContentStore(ctx, containerdContainerInfo.Spec, opts.ImagesDirectory, containerdClient)
+	if err != nil {
+		return err
+	}
+
+	descriptors := []v1.Descriptor{
+		cp,
+		specD,
+	}
+
+	for _, d := range descriptors {
+		platformSpec := platforms.DefaultSpec()
+		index.Manifests = append(index.Manifests, v1.Descriptor{
+			MediaType:   d.MediaType,
+			Size:        d.Size,
+			Digest:      digest.Digest(d.Digest),
+			Platform:    &platformSpec,
+			Annotations: d.Annotations,
+		})
+	}
+
+	desc, err := containerdhelper.WriteIndex(ctx, index, containerdClient, containerdContainerInfo.ID+"index")
+	if err != nil {
+		return err
+	}
+
+	// TODO add checkpoint args and os arch to image
+
+	i := images.Image{
+		Name:   ref,
+		Target: desc,
+	}
+	_, err = containerdClient.ImageService().Create(ctx, i)
+	if err != nil {
+		return err
 	}
 
 	pid, err := runc.GetPidByContainerId(containerId, root)
