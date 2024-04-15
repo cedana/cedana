@@ -3,13 +3,11 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import requests
 import platform
 import profile_pb2
-from google.cloud import bigquery
-from google.cloud import storage
-from google.cloud.bigquery import LoadJobConfig, SourceFormat
 import json
 
 
@@ -192,7 +190,7 @@ def analyze_pprof(filename):
 
 
 def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
-    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(
+    chkpt_cmd = "cedana dump job {} -d tmp".format(
         jobID + "-" + str(iteration)
     )
 
@@ -211,7 +209,7 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
 
 
 def run_restore(daemonPID, jobID, iteration, output_dir):
-    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID + "-" + str(iteration))
+    restore_cmd = "cedana restore job {}".format(jobID + "-" + str(iteration))
 
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
@@ -229,7 +227,7 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
 
 def run_exec(cmd, jobID):
     process_stats = {}
-    exec_cmd = "./cedana exec {} {}".format(cmd, jobID)
+    exec_cmd = "cedana exec -w $PWD/benchmarks {} {}".format(cmd, jobID)
 
     process = subprocess.Popen(["sh", "-c", exec_cmd], stdout=subprocess.PIPE)
     pid = int(process.communicate()[0].decode().strip())
@@ -328,7 +326,13 @@ def push_to_bigquery():
     print("Loaded {} rows to {}".format(table.num_rows, table_id))
 
 
-def main():
+def main(args):
+    if "--local" in args:
+        local = True
+    else:   
+        from google.cloud import bigquery
+        from google.cloud import storage
+        from google.cloud.bigquery import LoadJobConfig, SourceFormat
     daemon_pid = setup()
     jobIDs = [
         "server",
@@ -338,11 +342,11 @@ def main():
         "nn-1gb",
     ]
     cmds = [
-        "./benchmarks/server",
-        "./benchmarks/test.sh",
+        "./server",
+        "./test.sh",
         "'code-server --bind-addr localhost:1234'",
-        "'python3 benchmarks/regression/main.py'",
-        "'python3 benchmarks/1gb_pytorch.py'",
+        "'python3 regression/main.py'",
+        "'python3 1gb_pytorch.py'",
     ]
 
     # run in a loop
@@ -369,6 +373,8 @@ def main():
 
             terminate_process(process_stats["pid"])
 
+    if local:
+        return
     # unique uuid for blob id
     blob_id = "benchmark-data-" + str(time.time())
     push_otel_to_bucket("/cedana/data.json", blob_id)
@@ -378,4 +384,5 @@ def main():
     cleanup()
 
 
-main()
+if __name__ == "__main__":
+    main(sys.argv)
