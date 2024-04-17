@@ -189,16 +189,11 @@ def analyze_pprof(filename):
     pass
 
 
-def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
-    chkpt_cmd = "cedana dump job {} -d tmp".format(
-        jobID + "-" + str(iteration)
-    )
-
+def run_checkpoint(daemonPID, jobID, output_dir, process_stats):
+    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID)
     # initial data here is fine - we want to measure impact of daemon on system
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(
-        output_dir, jobID, iteration
-    )
+    cpu_profile_filename = "{}/cpu_{}_checkpoint".format(output_dir, jobID)
 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
@@ -208,11 +203,10 @@ def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)
 
 
-def run_restore(daemonPID, jobID, iteration, output_dir):
-    restore_cmd = "cedana restore job {}".format(jobID + "-" + str(iteration))
-
+def run_restore(daemonPID, jobID, output_dir):
+    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID)
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
+    cpu_profile_filename = "{}/cpu_{}_restore".format(output_dir, jobID)
 
     p = subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
@@ -334,7 +328,7 @@ def main(args):
         from google.cloud import storage
         from google.cloud.bigquery import LoadJobConfig, SourceFormat
     daemon_pid = setup()
-    jobIDs = [
+    jobs = [
         "server",
         "loop",
         "vscode-server",
@@ -351,24 +345,20 @@ def main(args):
 
     # run in a loop
     num_samples = 5
-    for x in range(len(jobIDs)):
-        print(
-            "Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x])
-        )
-        jobID = jobIDs[x]
+    for x in range(len(jobs)):
+        print("Starting benchmarks for job {} with command {}".format(jobs[x], cmds[x]))
+        job = jobs[x]
         for y in range(num_samples):
-            # we pass a job ID + iteration to generate a unique one every time.
-            # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and
-            # we end up getting a killed PID.
-            process_stats = run_exec(cmds[x], jobID + "-" + str(y))
+            jobID = job + "-" + str(y)
+            process_stats = run_exec(cmds[x], jobID)
             # wait a few seconds for memory to allocate
             time.sleep(5)
 
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv
-            run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
+            run_checkpoint(daemon_pid, jobID, output_dir, process_stats)
             time.sleep(3)
 
-            run_restore(daemon_pid, jobID, y, output_dir)
+            run_restore(daemon_pid, jobID, output_dir)
             time.sleep(3)
 
             terminate_process(process_stats["pid"])
