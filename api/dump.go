@@ -44,14 +44,9 @@ func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *r
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	pname, err := utils.GetProcessName(pid)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-		return "", err
-	}
-
 	state, err := c.getState(pid)
 	if state == nil || err != nil {
+		dumpSpan.RecordError(err)
 		return "", fmt.Errorf("could not get state")
 	}
 
@@ -80,11 +75,12 @@ func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *r
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	// processname + datetime
-	// strip out non posix-compliant characters from the processname
-	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
+	// jobID + UTC time (nanoseconds)
+	// strip out non posix-compliant characters from the jobID
+	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(c.jobID, "_")
 	formattedProcessName = strings.ReplaceAll(formattedProcessName, ".", "_")
-	processCheckpointDir := strings.Join([]string{formattedProcessName, time.Now().Format("02_01_2006_1504")}, "_")
+	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	processCheckpointDir := strings.Join([]string{formattedProcessName, timeString}, "_")
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
