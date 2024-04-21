@@ -69,15 +69,24 @@ func InitConfig() error {
 		}
 	}
 
-	setDefaults()
+	setDefaults() // Only sets defaults for when no value is found in config
 	bindEnvVars()
 
 	err = viper.SafeWriteConfig() // Will only overwrite if file does not exist
 	if err != nil {
-		return err
+		logger.Debug().Msg(err.Error()) // Likely due to file already existing
 	}
 
 	return viper.ReadInConfig()
+}
+
+func GetConfig() (*Config, error) {
+	var config Config
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		return nil, err
+	}
+	return &config, err
 }
 
 // Set defaults that are used when no value is found in config/env vars
@@ -92,9 +101,25 @@ func setDefaults() {
 	viper.SetDefault("connection.cedana_auth_token", "random-token")
 }
 
-// TODO: Add bindings for env vars so env vars can be used as backup
-// when a value is not found in config
+// Add bindings for env vars so env vars can be used as backup
+// when a value is not found in config when using viper.Get~()
 func bindEnvVars() {
+	// Related to the config file
+	viper.BindEnv("client.task", "CEDANA_CLIENT_TASK")
+	viper.BindEnv("client.leave_running", "CEDANA_CLIENT_LEAVE_RUNNING")
+	viper.BindEnv("client.forward_logs", "CEDANA_CLIENT_FORWARD_LOGS")
+	viper.BindEnv("shared_storage.dump_storage_dir", "CEDANA_DUMP_STORAGE_DIR")
+	viper.BindEnv("connection.cedana_url", "CEDANA_URL")
+	viper.BindEnv("connection.cedana_user", "CEDANA_USER")
+	viper.BindEnv("connection.cedana_auth_token", "CEDANA_AUTH_TOKEN")
+
+	// Others used across the codebase
+	viper.BindEnv("log_level", "CEDANA_LOG_LEVEL")
+	viper.BindEnv("otel_enabled", "CEDANA_OTEL_ENABLED")
+	viper.BindEnv("gpu_enabled", "CEDANA_GPU_ENABLED")
+	viper.BindEnv("gpu_debugging_enabled", "CEDANA_GPU_DEBUGGING_ENABLED")
+	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
+	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 }
 
 func getUser() (*user.User, error) {

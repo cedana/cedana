@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sys/unix"
 	"golang.org/x/time/rate"
@@ -37,6 +37,8 @@ const defaultLogPath string = "/var/log/cedana-output.log"
 const (
 	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
 	cedanaContainerName = "binary-container"
+	defaultAddress      = ":8080"
+	defaultProtocol     = "tcp"
 )
 
 type GrpcService interface {
@@ -70,7 +72,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	s.r.Close()
 	s.w.Close()
 
-	cfg, err := utils.InitConfig()
+	cfg, err := utils.GetConfig()
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -225,7 +227,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 
-		cfg, err := utils.InitConfig()
+		cfg, err := utils.GetConfig()
 		if err != nil {
 			err = status.Error(codes.Internal, err.Error())
 			return nil, err
@@ -243,7 +245,6 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			CheckpointId:   args.CheckpointId,
 			CheckpointPath: *zipFile,
 		})
-
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			restoreTracer.RecordError(staterr)
@@ -280,7 +281,7 @@ func (s *service) ContainerRestore(ctx context.Context, args *task.ContainerRest
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
 	var uploadID string
 	var checkpointId string
-	//TODO BS: This will be done at controller level, just doing it here for now...
+	// TODO BS: This will be done at controller level, just doing it here for now...
 	jobId := uuid.New().String()
 	pid, err := runc.GetPidByContainerId(args.ContainerId, args.Root)
 	if err != nil {
@@ -308,7 +309,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 		MntnsCompatMode: true,
 	}
-	cfg, err := utils.InitConfig()
+	cfg, err := utils.GetConfig()
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -400,7 +401,6 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
-
 	opts := &container.RuncOpts{
 		Root:          args.Opts.Root,
 		Bundle:        args.Opts.Bundle,
@@ -421,7 +421,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 
-		cfg, err := utils.InitConfig()
+		cfg, err := utils.GetConfig()
 		if err != nil {
 			err = status.Error(codes.Internal, err.Error())
 			return nil, err
@@ -435,7 +435,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		}
 
 		err = s.client.RuncRestore(ctx, *zipFile, args.ContainerId, args.IsK3S, []string{}, opts)
-
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			return nil, staterr
@@ -592,7 +591,7 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 
 	var gpuCmd *exec.Cmd
 	var err error
-	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
+	if viper.GetBool("gpu_enabled") {
 		_, gpuStartSpan := s.client.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
 		if err != nil {
@@ -681,13 +680,14 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		return nil, err
 	}
 
-	if os.Getenv("CEDANA_GPU_DEBUGGING_ENABLED") == "true" {
+	if viper.GetBool("gpu_debugging_enabled") {
 		controllerPath = strings.Join([]string{
 			"compute-sanitizer",
 			"--log-file /tmp/cedana-sanitizer.log",
 			"--print-level info",
 			"--leak-check=full",
-			controllerPath},
+			controllerPath,
+		},
 			" ")
 		// wrap controller path in a string
 		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
@@ -743,7 +743,6 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 		// TODO BS: replace doom loop with just retrying from market
 	}
 	err = s.client.db.CreateOrUpdateCedanaProcess(args.Id, &state)
-
 	if err != nil {
 		err = status.Error(codes.InvalidArgument, "invalid argument")
 		return nil, err
@@ -762,119 +761,99 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 
 type Server struct {
 	grpcServer *grpc.Server
-	Lis        net.Listener
+	listener   net.Listener
 }
 
-func (s *Server) New() (*grpc.Server, error) {
-	grpcServer := grpc.NewServer()
-
+func NewServer() (*Server, error) {
+	server := &Server{
+		grpcServer: grpc.NewServer(),
+	}
 	client, err := InstantiateClient()
 	if err != nil {
 		return nil, err
 	}
-
-	logger := utils.GetLogger()
-
 	service := &service{
 		client: client,
-		logger: &logger,
+		logger: logger,
 	}
+	task.RegisterTaskServiceServer(server.grpcServer, service)
+	reflection.Register(server.grpcServer)
 
-	task.RegisterTaskServiceServer(grpcServer, service)
-
-	reflection.Register(grpcServer)
-
-	return grpcServer, nil
-}
-
-func (s *Server) serveGRPC(l net.Listener) error {
-	return s.grpcServer.Serve(l)
-}
-
-func (s *Server) start() {
-	lis, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		panic(err)
-	}
-	s.Lis = lis
-}
-
-func addGRPC() (*Server, error) {
-	server := &Server{}
-	srv, err := server.New()
-	server.grpcServer = srv
+	listener, err := net.Listen(defaultProtocol, defaultAddress)
 	if err != nil {
 		return nil, err
 	}
-	return server, nil
+	server.listener = listener
+
+	return server, err
 }
 
-func StartGRPCServer() (*grpc.Server, error) {
-	var wg sync.WaitGroup // XXX: Can use context alone for graceful cancellation/cleanup
+func (s *Server) start() error {
+	return s.grpcServer.Serve(s.listener)
+}
 
-	// Create a context with a cancel function
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func (s *Server) stop() error {
+	s.grpcServer.GracefulStop()
+	return s.listener.Close()
+}
 
-	srv, err := addGRPC()
+// Takes in a context that allows for cancellation from the cmdline
+func StartServer(cmdCtx context.Context) error {
+	// Create a child context for the server
+	srvCtx, cancel := context.WithCancelCause(cmdCtx)
+	defer cancel(nil)
+
+	server, err := NewServer()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	startCh := make(chan struct{})
-	wg.Add(2)
 	go func() {
-		defer wg.Done()
-		srv.start()
-		close(startCh) // Signal that the server has started
-	}()
-
-	go func() {
-		<-startCh // Wait for the server to start
 		// Here join netns
-		//TODO find pause bundle path
-		if os.Getenv("IS_K8S") == "1" {
+		// TODO find pause bundle path
+		if viper.GetBool("is_k8s") {
 			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, k8sDefaultRuncRoot)
 			if err != nil {
-				fmt.Println(err.Error())
-				os.Exit(1)
+				cancel(err)
+				return
 			}
 
 			pausePid, err := runc.GetPausePid(bundle)
 			if err != nil {
-				fmt.Println(err.Error())
-				os.Exit(1)
+				cancel(err)
+				return
 			}
 
 			nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
 			if err != nil {
-				fmt.Println("Error opening network namespace:", err)
-				os.Exit(1)
+				cancel(fmt.Errorf("Error opening network namespace: %v", err))
+				return
 			}
 			defer unix.Close(nsFd)
 
 			// Join the network namespace of the target process
 			err = unix.Setns(nsFd, unix.CLONE_NEWNET)
 			if err != nil {
-				fmt.Println("Error setting network namespace:", err)
-				os.Exit(1)
+				cancel(fmt.Errorf("Error setting network namespace: %v", err))
 			}
 		}
 
-		srv.serveGRPC(srv.Lis)
+		logger.Debug().Msgf("started RPC server at %s", defaultAddress)
+		err := server.start()
+		if err != nil {
+			cancel(err)
+		}
 	}()
 
-	interrupt := make(chan os.Signal, 1)
-	// signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-
 	select {
-	case <-interrupt:
-	case <-ctx.Done():
+	case <-srvCtx.Done():
+		err = srvCtx.Err()
+	case <-cmdCtx.Done():
+		err = cmdCtx.Err()
+		server.stop()
 	}
 
-	wg.Wait()
+	logger.Debug().Msg("stopped RPC server gracefully")
 
-	// Cleanup here
-
-	return srv.grpcServer, nil
+	return err
 }

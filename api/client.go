@@ -50,8 +50,7 @@ type ClientLogs struct {
 
 func InstantiateClient() (*Client, error) {
 	// instantiate logger
-	logger := utils.GetLogger()
-	config, err := utils.InitConfig()
+	config, err := utils.GetConfig()
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not read config")
 		return nil, err
@@ -66,7 +65,7 @@ func InstantiateClient() (*Client, error) {
 
 	return &Client{
 		CRIU:   criu,
-		logger: &logger,
+		logger: logger,
 		config: config,
 		fs:     fs,
 		db:     db,

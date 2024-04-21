@@ -23,7 +23,7 @@ var debugCmd = &cobra.Command{
 var cfgCmd = &cobra.Command{
 	Use: "config",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := utils.InitConfig()
+		cfg, err := utils.GetConfig()
 		if err != nil {
 			return err
 		}

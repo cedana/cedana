@@ -10,39 +10,32 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "manage configuration",
+	Short: "Manage configuration",
 }
 
 var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "show currently set configuration",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := utils.InitConfig()
+	RunE: func(_ *cobra.Command, _ []string) error {
+		config, err := utils.GetConfig()
 		if err != nil {
+			logger.Error().Err(err).Msg("failed to get config")
 			return err
 		}
-		prettycfg, err := json.MarshalIndent(cfg, "", "  ")
+
+		prettycfg, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
+			logger.Error().Err(err).Msg("failed to parse json")
 			return err
 		}
 		fmt.Printf("config: %v\n", string(prettycfg))
-		return nil
-	},
-}
 
-var generateCmd = &cobra.Command{
-	Use:   "generate",
-	Short: "generate configuration",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := utils.GenSampleConfig()
-
-		fmt.Printf("config: %v\n", string(cfg))
 		return nil
 	},
 }
 
 func init() {
+	logger = utils.GetLogger()
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(showCmd)
-	configCmd.AddCommand(generateCmd)
 }

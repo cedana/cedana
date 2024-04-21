@@ -54,7 +54,7 @@ var (
 type CLI struct {
 	cfg    *utils.Config
 	cts    *services.ServiceClient
-	logger zerolog.Logger
+	logger *zerolog.Logger
 }
 
 func NewCLI() (*CLI, error) {

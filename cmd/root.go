@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +25,17 @@ ________  _______   ________  ________  ________   ________
 		"\n Property of Cedana, Corp.",
 }
 
-func Execute() error {
-	utils.InitConfig() // Will only load if it already exists
-	return rootCmd.Execute()
+var logger *zerolog.Logger
+
+func Execute(ctx context.Context) error {
+	if err := utils.InitConfig(); err != nil {
+		logger.Error().Err(err).Msg("failed to initialize config")
+		return err
+	}
+	return rootCmd.ExecuteContext(ctx)
+}
+
+func init() {
+	rootCmd.Version = GetVersion()
+	logger = utils.GetLogger()
 }

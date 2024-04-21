@@ -1,14 +1,19 @@
 package main
 
-import "github.com/cedana/cedana/cmd"
+import (
+	"context"
+	"os"
+	"os/signal"
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	"github.com/cedana/cedana/cmd"
 )
 
+const EXIT_ERR_CODE = 1
+
 func main() {
-	cmd.SetVersionInfo(version, commit, date)
-	cmd.Execute()
+	// Grandparent context to deal with OS interrupts
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	cmd.Execute(ctx)
 }
