@@ -15,9 +15,6 @@ var debugCmd = &cobra.Command{
 	Use:    "debug",
 	Short:  "Functions/tools for debugging instances or testing new components",
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("run debug with one of its subcommands")
-	},
 }
 
 var cfgCmd = &cobra.Command{

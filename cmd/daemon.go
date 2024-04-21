@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains all the daemon commands
+
 import (
 	"context"
 	"fmt"

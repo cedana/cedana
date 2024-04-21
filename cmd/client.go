@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains all the client commands for interacting with the daemon
+
 import (
 	"encoding/json"
 	"fmt"
@@ -9,11 +11,10 @@ import (
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
 	"github.com/olekukonko/tablewriter"
 	"github.com/rs/xid"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 
 	bolt "go.etcd.io/bbolt"
@@ -51,23 +52,6 @@ var (
 	asRoot bool
 )
 
-type CLI struct {
-	cfg    *utils.Config
-	cts    *services.ServiceClient
-	logger *zerolog.Logger
-}
-
-func NewCLI() (*CLI, error) {
-	cts, _ := services.NewClient("localhost:8080")
-
-	logger := utils.GetLogger()
-
-	return &CLI{
-		cts:    cts,
-		logger: logger,
-	}, nil
-}
-
 // --------------------
 // Top-level Dump/Restore CLI commands
 // --------------------
@@ -75,6 +59,11 @@ func NewCLI() (*CLI, error) {
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
+}
+
+var restoreCmd = &cobra.Command{
+	Use:   "restore",
+	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
 }
 
 // ---------------
@@ -85,27 +74,31 @@ var dumpProcessCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Manually checkpoint a running process [pid] to a directory [-d]",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error parsing pid: %v", err)
+			return
 		}
 
 		id := xid.New().String()
-		cli.logger.Info().Msgf("no id specified, defaulting to %s", id)
+		logger.Info().Msgf("no id specified, defaulting to %s", id)
 
 		if dir == "" {
 			// TODO NR - should we default to /tmp?
-			if cli.cfg.SharedStorage.DumpStorageDir == "" {
-				return fmt.Errorf("no dump directory specified")
+			dir = viper.GetString("shared_storage.dump_storage_dir")
+			if dir == "" {
+				logger.Error().Msgf("no dump directory specified")
+				return
 			}
-			dir = cli.cfg.SharedStorage.DumpStorageDir
-			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
+			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
 		}
 
 		// always self serve when invoked from CLI
@@ -116,21 +109,17 @@ var dumpProcessCmd = &cobra.Command{
 			Type:  task.DumpArgs_LOCAL,
 		}
 
-		resp, err := cli.cts.CheckpointTask(&cpuDumpArgs)
+		resp, err := cts.CheckpointTask(&cpuDumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
 			} else {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 		} else {
-			cli.logger.Info().Msgf("Response: %v", resp.Message)
+			logger.Info().Msgf("Response: %v", resp.Message)
 		}
-
-		cli.cts.Close()
-
-		return nil
 	},
 }
 
@@ -138,32 +127,30 @@ var restoreProcessCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Manually restore a process from a checkpoint located at input path",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		restoreArgs := task.RestoreArgs{
 			CheckpointId:   "Not Implemented",
 			CheckpointPath: args[0],
 		}
 
-		resp, err := cli.cts.RestoreTask(&restoreArgs)
+		resp, err := cts.RestoreTask(&restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
 			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Msgf("Restore task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -180,29 +167,32 @@ var dumpJobCmd = &cobra.Command{
 		return nil
 	},
 	Short: "Manually checkpoint a running job to a directory",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		// TODO NR - this needs to be extended to include container checkpoints
-		cli, err := NewCLI()
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		if args[0] == "" {
-			return fmt.Errorf("no job id specified")
+			logger.Error().Msgf("no job id specified")
 		}
 
 		id := args[0]
 
 		if dir == "" {
-			if cli.cfg.SharedStorage.DumpStorageDir == "" {
-				return fmt.Errorf("no dump directory specified")
+			dir = viper.GetString("shared_storage.dump_storage_dir")
+			if dir == "" {
+				logger.Error().Msgf("no dump directory specified")
+				return
 			}
-			dir = cli.cfg.SharedStorage.DumpStorageDir
-			cli.logger.Info().Msgf("no directory specified as input, defaulting to %s", dir)
+			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
 		}
 
 		var taskType task.DumpArgs_DumpType
-		if os.Getenv("CEDANA_REMOTE") == "true" {
+		if viper.GetBool("remote") {
 			taskType = task.DumpArgs_REMOTE
 		} else {
 			taskType = task.DumpArgs_LOCAL
@@ -214,21 +204,17 @@ var dumpJobCmd = &cobra.Command{
 			Type:  taskType,
 		}
 
-		resp, err := cli.cts.CheckpointTask(&dumpArgs)
+		resp, err := cts.CheckpointTask(&dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Msgf("Checkpoint task failed: %v: %v", st.Code(), st.Message())
 			} else {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return err
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -241,12 +227,13 @@ var restoreJobCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO NR - add support for containers, currently supports only process
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		// TODO NR: we shouldn't even be reading the db here!!
 		db := api.NewDB()
@@ -260,20 +247,23 @@ var restoreJobCmd = &cobra.Command{
 		}
 
 		var restoreArgs task.RestoreArgs
-		if os.Getenv("CEDANA_REMOTE") == "true" {
+		if viper.GetBool("remote") {
 			jobState, err := db.GetStateFromID(args[0])
 			if err != nil {
-				return err
+				logger.Error().Msgf("Error getting state from id: %v", err)
+				return
 			}
 
 			remoteState := jobState.GetRemoteState()
 			if remoteState == nil {
-				return fmt.Errorf("no remote state found for id %s", args[0])
+				logger.Error().Msgf("No remote state found for id %s", args[0])
+				return
 			}
 
 			// For now just grab latest checkpoint
 			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				return fmt.Errorf("no checkpoint found for id %s", args[0])
+				logger.Error().Msgf("No checkpoint found for id %s", args[0])
+				return
 			}
 
 			restoreArgs = task.RestoreArgs{
@@ -287,11 +277,13 @@ var restoreJobCmd = &cobra.Command{
 		} else {
 			paths, err := db.GetLatestLocalCheckpoints(args[0])
 			if err != nil {
-				return err
+				logger.Error().Msgf("Error getting latest local checkpoints: %v", err)
+				return
 			}
 
 			if len(paths) == 0 {
-				return fmt.Errorf("no checkpoint found for id %s", args[0])
+				logger.Error().Msgf("no checkpoint found for id %s", args[0])
+				return
 			}
 
 			fmt.Printf("paths: %v\n", paths)
@@ -307,21 +299,17 @@ var restoreJobCmd = &cobra.Command{
 			}
 		}
 		// pass path to restore task
-		resp, err := cli.cts.RestoreTask(&restoreArgs)
+		resp, err := cts.RestoreTask(&restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Msgf("Restore task failed: %v: %v", st.Code(), st.Message())
 			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Msgf("Restore task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -333,31 +321,29 @@ var containerdDumpCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		dumpArgs := task.ContainerDumpArgs{
 			ContainerId: containerId,
 			Ref:         ref,
 		}
-		resp, err := cli.cts.CheckpointContainer(&dumpArgs)
+		resp, err := cts.CheckpointContainer(&dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -365,38 +351,31 @@ var containerdRestoreCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		restoreArgs := &task.ContainerRestoreArgs{
 			ImgPath:     ref,
 			ContainerId: containerId,
 		}
 
-		resp, err := cli.cts.RestoreContainer(restoreArgs)
+		resp, err := cts.RestoreContainer(restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Msgf("Restore task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
-}
-
-var restoreCmd = &cobra.Command{
-	Use:   "restore",
-	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
 }
 
 var execTaskCmd = &cobra.Command{
@@ -409,11 +388,13 @@ var execTaskCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		var env []string
 		var uid uint32
@@ -437,38 +418,37 @@ var execTaskCmd = &cobra.Command{
 			GID:        gid,
 		}
 
-		resp, err := cli.cts.StartTask(taskArgs)
+		resp, err := cts.StartTask(taskArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Start task failed: %v", err)
+				logger.Error().Msgf("Start task failed: %v", err)
 			}
 		}
 
-		cli.cts.Close()
 		fmt.Print(resp.PID)
-		return nil
 	},
 }
 
 var psCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List managed processes",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		// open db in read-only mode
 		conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
 		if err != nil {
-			cli.logger.Fatal().Err(err).Msg("Could not open or create db")
-			return err
+			logger.Fatal().Err(err).Msg("Could not open or create db")
+			return
 		}
-
 		defer conn.Close()
 
 		// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
@@ -506,7 +486,8 @@ var psCmd = &cobra.Command{
 			})
 		})
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error getting job data: %v", err)
+			return
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
@@ -517,7 +498,6 @@ var psCmd = &cobra.Command{
 		}
 
 		table.Render() // Send output
-		return nil
 	},
 }
 
@@ -557,7 +537,7 @@ func init() {
 	rootCmd.AddCommand(execTaskCmd)
 	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(runcRoot)
-	initRuncCommands()
 
+	initRuncCommands()
 	initContainerdCommands()
 }

@@ -1,16 +1,18 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 )
 
-var containerName string
-var checkpointId string
-var containerRoot string
+var (
+	containerName string
+	checkpointId  string
+	containerRoot string
+)
 
 var runcRoot = &cobra.Command{
 	Use:   "runc",
@@ -21,27 +23,25 @@ var runcGetRuncIdByName = &cobra.Command{
 	Use:   "get",
 	Short: "",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		runcArgs := &task.CtrByNameArgs{
 			Root:          root,
 			ContainerName: containerName,
 		}
 
-		resp, err := cli.cts.GetRuncIdByName(runcArgs)
+		resp, err := cts.GetRuncIdByName(runcArgs)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error getting runc id from container name: %v", err)
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp)
 	},
 }
 
@@ -53,20 +53,23 @@ var runcDumpCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually checkpoint a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
-    // XXX: Constants/magic numbers can be hoisted to a config/constants file
+		// XXX: Constants/magic numbers can be hoisted to a config/constants file
 		rootMap := map[string]string{
 			"k8s":    "/run/containerd/runc/k8s.io",
 			"docker": "/run/docker/runtime-runc/moby",
 		}
 
 		if rootMap[containerRoot] == "" {
-			return fmt.Errorf("container root %s not supported", containerRoot)
+			logger.Error().Msgf("container root %s not supported", containerRoot)
+			return
 		}
 
 		if containerRoot == "" {
@@ -87,37 +90,35 @@ var runcDumpCmd = &cobra.Command{
 			CheckpointPath: checkpointPath,
 			ContainerId:    containerId,
 			CriuOpts:       criuOpts,
-			//TODO BS: hard coded for now
+			// TODO BS: hard coded for now
 			Type: task.RuncDumpArgs_LOCAL,
 		}
 
-		resp, err := cli.cts.CheckpointRunc(&dumpArgs)
-
+		resp, err := cts.CheckpointRunc(&dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
+
 var runcRestoreCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually restore a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cli, err := NewCLI()
+	Run: func(cmd *cobra.Command, args []string) {
+		cts, err := services.NewClient(api.Address)
 		if err != nil {
-			return err
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
 		}
+		defer cts.Close()
 
 		opts := &task.RuncOpts{
 			Root:          root,
@@ -136,21 +137,17 @@ var runcRestoreCmd = &cobra.Command{
 			CheckpointId: checkpointId,
 		}
 
-		resp, err := cli.cts.RuncRestore(restoreArgs)
+		resp, err := cts.RuncRestore(restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				cli.logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				cli.logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Msgf("Restore task failed: %v", err)
 			}
 		}
 
-		cli.logger.Info().Msgf("Response: %v", resp.Message)
-
-		cli.cts.Close()
-
-		return nil
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 

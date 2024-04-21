@@ -58,30 +58,29 @@ func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpo
 		}
 	}
 
-	c.logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
+	logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
 	err := utils.UntarFolder(checkpointPath, tmpdir)
-
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error decompressing checkpoint")
+		logger.Fatal().Err(err).Msg("error decompressing checkpoint")
 	}
 
 	// read serialized cedanaCheckpoint
 	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
 		return nil, nil, nil, err
 	}
 
 	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
+		logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
 		return nil, nil, nil, err
 	}
 
 	var checkpointState task.ProcessState
 	err = json.Unmarshal(data, &checkpointState)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
 		return nil, nil, nil, err
 	}
 
@@ -91,7 +90,7 @@ func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpo
 	filename := fmt.Sprintf("/var/log/cedana-output-%s.log", fmt.Sprint(time.Now().Unix()))
 	file, err := os.Create(filename)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error creating logfile")
+		logger.Fatal().Err(err).Msg("error creating logfile")
 		return nil, nil, nil, err
 	}
 
@@ -124,7 +123,7 @@ func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpo
 	opts.TcpEstablished = proto.Bool(tcpEstablished)
 
 	if err := chmodRecursive(tmpdir, 0o777); err != nil {
-		c.logger.Fatal().Err(err).Msg("error changing permissions")
+		logger.Fatal().Err(err).Msg("error changing permissions")
 		return nil, nil, nil, err
 	}
 
@@ -170,7 +169,7 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 					return err
 				}
 
-				c.logger.Info().Msgf("copying file %s to %s", path, f)
+				logger.Info().Msgf("copying file %s to %s", path, f)
 				// copyFile copies to folder, so grab folder path
 				err := utils.CopyFile(path, filepath.Dir(f.Path))
 				if err != nil {
@@ -181,9 +180,8 @@ func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
 		}
 		return nil
 	})
-
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("error copying files")
+		logger.Fatal().Err(err).Msg("error copying files")
 	}
 }
 
@@ -194,7 +192,6 @@ func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
 	}
 
 	return &opts
-
 }
 
 func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
@@ -204,7 +201,7 @@ func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify
 
 	img, err := os.Open(dir)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msg("could not open directory")
+		logger.Fatal().Err(err).Msg("could not open directory")
 	}
 	defer img.Close()
 
@@ -214,12 +211,12 @@ func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
-		c.logger.Warn().Msgf("error restoring process: %v", err)
+		logger.Warn().Msgf("error restoring process: %v", err)
 		restoreSpan.RecordError(err)
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("process restored: %v", resp)
+	logger.Info().Msgf("process restored: %v", resp)
 
 	c.cleanupClient()
 	return resp.Restore.Pid, nil
@@ -372,7 +369,7 @@ func (c *Client) RuncRestore(ctx context.Context, imgPath, containerId string, i
 				// Handle the error or log it as needed
 			}
 		}
-		//ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
+		// ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
 		// parts := strings.Split(opts.Bundle, "/")
 		// oldContainerID := parts[7]
 		configPath := opts.Bundle + "/config.json" // Replace with your actual path
@@ -560,7 +557,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 
 	opts := c.prepareRestoreOpts()
 	nfy := Notify{
-		Logger: c.logger,
+		Logger: logger,
 	}
 
 	dir, state, extraFiles, err := c.prepareRestore(ctx, opts, args.CheckpointPath)
@@ -589,7 +586,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 		go func() {
 			proc, err := process.NewProcess(*pid)
 			if err != nil {
-				c.logger.Error().Msgf("could not find process: %v", err)
+				logger.Error().Msgf("could not find process: %v", err)
 				return
 			}
 			for {
@@ -599,7 +596,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 				}
 				time.Sleep(1 * time.Second)
 			}
-			c.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
+			logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
 			gpuCmd.Process.Kill()
 		}()
 	}
@@ -611,9 +608,9 @@ func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*
 	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(uid, gid, c.logger)
+	gpuCmd, err := StartGPUController(uid, gid, logger)
 	if err != nil {
-		c.logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err
 	}
 
@@ -636,11 +633,11 @@ func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*
 	}
 	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {
-		c.logger.Warn().Msgf("could not restore gpu: %v", err)
+		logger.Warn().Msgf("could not restore gpu: %v", err)
 		return nil, err
 	}
 
-	c.logger.Info().Msgf("gpu controller returned %v", resp)
+	logger.Info().Msgf("gpu controller returned %v", resp)
 
 	if !resp.Success {
 		return nil, fmt.Errorf("could not restore gpu")

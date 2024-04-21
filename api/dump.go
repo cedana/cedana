@@ -46,7 +46,7 @@ func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *r
 
 	pname, err := utils.GetProcessName(pid)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 		return "", err
 	}
 
@@ -120,34 +120,33 @@ func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.Proce
 	err := c.SerializeStateToDir(dumpdir, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
 
-	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+	logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
 
 	err = c.db.UpdateProcessStateWithID(c.jobID, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
 
 	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
 func (c *Client) discardParentFds() {
-
 }
 
 func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
@@ -158,7 +157,6 @@ func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
 		GhostLimit:   proto.Uint32(uint32(10000000)),
 	}
 	return &opts
-
 }
 
 func checkIfPodman(b Bundle) bool {
@@ -192,7 +190,6 @@ func patchPodmanDump(containerId, imgPath string) error {
 	defer db.Conn.Close()
 
 	err := db.Conn.View(func(tx *bolt.Tx) error {
-
 		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
@@ -246,7 +243,6 @@ func patchPodmanDump(containerId, imgPath string) error {
 		return err
 	}
 	return nil
-
 }
 
 func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *container.CriuOpts) error {
@@ -282,7 +278,7 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
 		dumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 	}
 	dumpSpan.End()
 
@@ -294,13 +290,13 @@ func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *c
 
 	pid, err := runc.GetPidByContainerId(containerId, root)
 	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
+		logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
 
 	state, err := c.generateState(int32(pid))
 	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
+		logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
 
@@ -317,19 +313,19 @@ func (c *Client) ContainerDump(imagePath, containerId string) error {
 
 	err := container.ContainerdCheckpoint(imagePath, containerId)
 	if err != nil {
-		c.logger.Fatal().Err(err)
+		logger.Fatal().Err(err)
 		return err
 	}
 
 	pid, err := runc.GetPidByContainerId(containerId, root)
 	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
+		logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
 
 	state, err := c.generateState(int32(pid))
 	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
+		logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
 
@@ -363,7 +359,7 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
+		logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
 		return err
 	}
 	defer img.Close()
@@ -372,13 +368,13 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 	opts.Pid = proto.Int32(pid)
 
 	nfy := Notify{
-		Logger: c.logger,
+		Logger: logger,
 	}
 
-	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
+	logger.Info().Msgf(`beginning dump of pid %d`, pid)
 	state, err := c.generateState(pid)
 	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
+		logger.Warn().Msgf("could not generate state: %v", err)
 		return err
 	}
 
@@ -388,12 +384,12 @@ func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
 	if err != nil {
 		// check for sudo error
 		if strings.Contains(err.Error(), "errno 0") {
-			c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+			logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 			return err
 		}
 
 		dumpSpan.RecordError(err)
-		c.logger.Warn().Msgf("error dumping process: %v", err)
+		logger.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
 
@@ -416,7 +412,7 @@ func (c *Client) gpuCheckpoint(ctx context.Context, dumpdir string) error {
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {
-		c.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
+		logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
 		return err
 	}
 	defer gpuConn.Close()

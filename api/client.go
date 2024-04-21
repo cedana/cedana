@@ -11,7 +11,6 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
-	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/afero"
 	"go.opentelemetry.io/otel"
@@ -23,7 +22,6 @@ var AppFs = afero.NewOsFs()
 
 type Client struct {
 	CRIU   *Criu
-	logger *zerolog.Logger
 	config *utils.Config
 
 	// for dependency-injection of filesystems (useful for testing)
@@ -33,7 +31,7 @@ type Client struct {
 	db *DB
 
 	// a separate client is created for each connection to the gRPC client,
-	// and the jobID is set at instantiation time. We rely on whatever is callig
+	// and the jobID is set at instantiation time. We rely on whatever is calling
 	// InstantiateClient() to set the jobID correctly.
 	jobID string
 
@@ -65,7 +63,6 @@ func InstantiateClient() (*Client, error) {
 
 	return &Client{
 		CRIU:   criu,
-		logger: logger,
 		config: config,
 		fs:     fs,
 		db:     db,
@@ -74,7 +71,7 @@ func InstantiateClient() (*Client, error) {
 }
 
 func (c *Client) cleanupClient() error {
-	c.logger.Info().Msg("cleaning up client")
+	logger.Info().Msg("cleaning up client")
 	return nil
 }
 
@@ -88,7 +85,7 @@ func (c *Client) generateState(pid int32) (*task.ProcessState, error) {
 
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		c.logger.Info().Msgf("Could not instantiate new gopsutil process for pid %d with error: %v", pid, err)
+		logger.Info().Msgf("Could not instantiate new gopsutil process for pid %d with error: %v", pid, err)
 	}
 
 	state.PID = pid
@@ -196,7 +193,7 @@ func (c *Client) WriteOnlyFds(openFds []*task.OpenFilesStat, pid int32) []string
 	for _, fd := range openFds {
 		info, err := c.fs.ReadFile(fmt.Sprintf("/proc/%s/fdinfo/%s", strconv.Itoa(int(pid)), strconv.FormatUint(fd.Fd, 10)))
 		if err != nil {
-			c.logger.Debug().Msgf("could not read fdinfo: %v", err)
+			logger.Debug().Msgf("could not read fdinfo: %v", err)
 
 			continue
 		}

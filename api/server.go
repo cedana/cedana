@@ -35,10 +35,11 @@ import (
 const defaultLogPath string = "/var/log/cedana-output.log"
 
 const (
+	Address  = "localhost:8080"
+	Protocol = "tcp"
+
 	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
 	cedanaContainerName = "binary-container"
-	defaultAddress      = ":8080"
-	defaultProtocol     = "tcp"
 )
 
 type GrpcService interface {
@@ -53,7 +54,6 @@ type UploadResponse struct {
 
 type service struct {
 	client            *Client
-	logger            *zerolog.Logger
 	ClientLogStream   task.TaskService_LogStreamingServer
 	ClientStateStream task.TaskService_ClientStateStreamingServer
 	r                 *os.File
@@ -63,6 +63,7 @@ type service struct {
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var pid int32
+	var err error
 
 	ctx, dumpTracer := s.client.tracer.Start(ctx, "dump-ckpt")
 	dumpTracer.SetAttributes(attribute.String("jobID", args.JobID))
@@ -72,13 +73,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	s.r.Close()
 	s.w.Close()
 
-	cfg, err := utils.GetConfig()
-	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
-		return nil, err
-	}
-
-	store := utils.NewCedanaStore(cfg, s.client.tracer)
+	store := utils.NewCedanaStore(s.client.tracer)
 
 	// job vs process checkpointing, where a PID is provided directly
 	if args.PID != 0 {
@@ -227,13 +222,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 
-		cfg, err := utils.GetConfig()
-		if err != nil {
-			err = status.Error(codes.Internal, err.Error())
-			return nil, err
-		}
-
-		store := utils.NewCedanaStore(cfg, s.client.tracer)
+		store := utils.NewCedanaStore(s.client.tracer)
 
 		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
@@ -309,12 +298,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 		MntnsCompatMode: true,
 	}
-	cfg, err := utils.GetConfig()
-	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
-		return nil, err
-	}
-	store := utils.NewCedanaStore(cfg, s.client.tracer)
+	store := utils.NewCedanaStore(s.client.tracer)
 
 	err = s.client.RuncDump(ctx, args.Root, args.ContainerId, criuOpts)
 	if err != nil {
@@ -421,13 +405,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
 
-		cfg, err := utils.GetConfig()
-		if err != nil {
-			err = status.Error(codes.Internal, err.Error())
-			return nil, err
-		}
-
-		store := utils.NewCedanaStore(cfg, s.client.tracer)
+		store := utils.NewCedanaStore(s.client.tracer)
 
 		zipFile, err := store.GetCheckpoint(ctx, args.CheckpointId)
 		if err != nil {
@@ -502,9 +480,9 @@ func (s *service) publishStateContinous(rate int) {
 	// get PID from id
 	pid, err := s.client.db.GetPID(s.client.jobID)
 	if err != nil {
-		s.logger.Warn().Msgf("could not get pid: %v", err)
+		logger.Warn().Msgf("could not get pid: %v", err)
 	}
-	s.logger.Info().Msgf("pid: %d", pid)
+	logger.Info().Msgf("pid: %d", pid)
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 	for range ticker.C {
 		if pid != 0 {
@@ -559,11 +537,11 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 		// Here we can do something with LogStreamingResp
 		_, err := stream.Recv()
 		if err == io.EOF {
-			s.logger.Debug().Msgf("Client has closed connection")
+			logger.Debug().Msgf("Client has closed connection")
 			break
 		}
 		if err != nil {
-			s.logger.Debug().Msgf("Unable to read from client, %v", err)
+			logger.Debug().Msgf("Unable to read from client, %v", err)
 			return err
 		}
 
@@ -571,7 +549,7 @@ func (s *service) ClientStateStreaming(stream task.TaskService_ClientStateStream
 
 			args := &task.ProcessState{}
 			if err := s.ClientStateStream.Send(args); err != nil {
-				s.logger.Debug().Msgf("Issue sending process state")
+				logger.Debug().Msgf("Issue sending process state")
 				break
 			}
 		}
@@ -593,7 +571,7 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 	var err error
 	if viper.GetBool("gpu_enabled") {
 		_, gpuStartSpan := s.client.tracer.Start(ctx, "start-gpu-controller")
-		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
+		gpuCmd, err = StartGPUController(args.UID, args.GID, logger)
 		if err != nil {
 			return 0, err
 		}
@@ -651,15 +629,15 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
 			if err != nil {
-				s.logger.Fatal().Err(err)
+				logger.Fatal().Err(err)
 			}
-			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+			logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
+			logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
-			s.logger.Warn().Msgf("task terminated with error: %v", stderrbuf.String())
-			s.logger.Error().Err(err).Msgf("task terminated with: %v", err)
+			logger.Warn().Msgf("task terminated with error: %v", stderrbuf.String())
+			logger.Error().Err(err).Msgf("task terminated with: %v", err)
 		}
 	}()
 
@@ -732,13 +710,13 @@ func (s *service) StartTask(ctx context.Context, args *task.StartTaskArgs) (*tas
 	pid, err := s.runTask(ctx, taskToRun, args)
 
 	if err == nil {
-		s.client.logger.Info().Msgf("managing process with pid %d", pid)
+		logger.Info().Msgf("managing process with pid %d", pid)
 
 		state.Flag = task.FlagEnum_JOB_RUNNING
 		state.PID = pid
 	} else {
 		// TODO BS: this should be at market level
-		s.client.logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
+		logger.Info().Msgf("failed to run task with error: %v, attempt %d", err, 1)
 		state.Flag = task.FlagEnum_JOB_STARTUP_FAILED
 		// TODO BS: replace doom loop with just retrying from market
 	}
@@ -774,12 +752,11 @@ func NewServer() (*Server, error) {
 	}
 	service := &service{
 		client: client,
-		logger: logger,
 	}
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
-	listener, err := net.Listen(defaultProtocol, defaultAddress)
+	listener, err := net.Listen(Protocol, Address)
 	if err != nil {
 		return nil, err
 	}
@@ -838,7 +815,7 @@ func StartServer(cmdCtx context.Context) error {
 			}
 		}
 
-		logger.Debug().Msgf("started RPC server at %s", defaultAddress)
+		logger.Debug().Msgf("started RPC server at %s", Address)
 		err := server.start()
 		if err != nil {
 			cancel(err)

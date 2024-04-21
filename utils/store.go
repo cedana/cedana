@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -54,18 +55,16 @@ type UploadResponse struct {
 // For pushing and pulling from a cedana managed endpoint
 type CedanaStore struct {
 	logger *zerolog.Logger
-	cfg    *Config
 	url    string
 
 	tracer trace.Tracer
 }
 
-func NewCedanaStore(cfg *Config, tracer trace.Tracer) *CedanaStore {
+func NewCedanaStore(tracer trace.Tracer) *CedanaStore {
 	logger := GetLogger()
-	url := "https://" + cfg.Connection.CedanaUrl
+	url := "https://" + viper.GetString("connection.cedana_url")
 	return &CedanaStore{
 		logger: logger,
-		cfg:    cfg,
 		url:    url,
 		tracer: tracer,
 	}
@@ -140,7 +139,7 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -200,7 +199,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(ctx context.Context, fullSize int64
 
 	req.Header.Set("Content-Type", "application/json")
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -276,7 +275,7 @@ func (cs *CedanaStore) StartMultiPartUpload(ctx context.Context, cid string, upl
 
 			req.Header.Set("Content-Type", "application/octet-stream")
 			req.Header.Set("Transfer-Encoding", "chunked")
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 			resp, err := httpClient.Do(req)
 			if err != nil {
@@ -324,7 +323,7 @@ func (cs *CedanaStore) CompleteMultiPartUpload(ctx context.Context, uploadResp U
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cs.cfg.Connection.CedanaAuthToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
