@@ -810,7 +810,7 @@ func addGRPC() (*Server, error) {
 }
 
 func StartGRPCServer() (*grpc.Server, error) {
-	var wg sync.WaitGroup
+	var wg sync.WaitGroup // XXX: Can use context alone for graceful cancellation/cleanup
 
 	// Create a context with a cancel function
 	ctx, cancel := context.WithCancel(context.Background())

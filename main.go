@@ -1,8 +1,6 @@
 package main
 
-import (
-	"github.com/cedana/cedana/cmd"
-)
+import "github.com/cedana/cedana/cmd"
 
 var (
 	version = "dev"

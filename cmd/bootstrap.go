@@ -7,10 +7,13 @@ import (
 )
 
 type Bootstrap struct {
-	l *zerolog.Logger
+	logger *zerolog.Logger
 }
 
 // bootstrap the cedana client and load config overrides if they exist
+// XXX: This cmd should be deprecated if not doing anything useful apart from loading config
+// as it can be loaded on each execution - a simply *if* check is already creating the
+// default config if it doesn't exist
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap",
 	Short: "Setup host for cedana usage",
@@ -18,7 +21,7 @@ var bootstrapCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := utils.GetLogger()
 		b := &Bootstrap{
-			l: &logger,
+			logger: &logger,
 		}
 		b.bootstrap()
 
@@ -27,9 +30,9 @@ var bootstrapCmd = &cobra.Command{
 }
 
 func (b *Bootstrap) bootstrap() {
-	_, err := utils.InitConfig()
+	err := utils.InitConfig()
 	if err != nil {
-		b.l.Fatal().Err(err).Msg("could not initiate generated config")
+		b.logger.Fatal().Err(err).Msg("could not initiate generated config")
 	}
 }
 

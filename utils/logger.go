@@ -3,7 +3,6 @@ package utils
 import (
 	"io"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -11,18 +10,22 @@ import (
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-var once sync.Once
+const DefaultLogLevel = zerolog.DebugLevel
 
-var log zerolog.Logger
+var (
+	once   sync.Once
+	logger zerolog.Logger
+)
 
 func GetLogger() zerolog.Logger {
 	once.Do(func() {
 		zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 		zerolog.TimeFieldFormat = time.RFC3339Nano
 
-		logLevel, err := strconv.Atoi(os.Getenv("LOG_LEVEL"))
-		if err != nil {
-			logLevel = int(zerolog.DebugLevel)
+		logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
+		logLevel, err := zerolog.ParseLevel(logLevelStr)
+		if err != nil || logLevelStr == "" { // allow turning off logging
+			logLevel = DefaultLogLevel
 		}
 
 		var output io.Writer = zerolog.ConsoleWriter{
@@ -30,13 +33,12 @@ func GetLogger() zerolog.Logger {
 			TimeFormat: time.RFC3339,
 		}
 
-		log = zerolog.New(output).
-			Level(zerolog.Level(logLevel)).
+		logger = zerolog.New(output).
+			Level(logLevel).
 			With().
 			Timestamp().
-			Logger().
-			Output(zerolog.ConsoleWriter{Out: os.Stdout})
+			Logger()
 	})
 
-	return log
+	return logger
 }

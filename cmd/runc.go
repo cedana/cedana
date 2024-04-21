@@ -59,6 +59,7 @@ var runcDumpCmd = &cobra.Command{
 			return err
 		}
 
+    // XXX: Constants/magic numbers can be hoisted to a config/constants file
 		rootMap := map[string]string{
 			"k8s":    "/run/containerd/runc/k8s.io",
 			"docker": "/run/docker/runtime-runc/moby",

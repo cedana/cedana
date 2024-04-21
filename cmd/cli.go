@@ -19,27 +19,37 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var dir string
-var ref string
+var (
+	dir string
+	ref string
+)
 
-var containerId string
-var imgPath string
-var runcPath string
-var root string
-var checkpointPath string
-var workPath string
+var (
+	containerId    string
+	imgPath        string
+	runcPath       string
+	root           string
+	checkpointPath string
+	workPath       string
+)
 
-var bundle string
-var consoleSocket string
-var detach bool
-var netPid int32
+var (
+	bundle        string
+	consoleSocket string
+	detach        bool
+	netPid        int32
+)
 
-var isK3s bool
-var tcpEstablished bool
+var (
+	isK3s          bool
+	tcpEstablished bool
+)
 
 // working directory for execTask
-var wd string
-var asRoot bool
+var (
+	wd     string
+	asRoot bool
+)
 
 type CLI struct {
 	cfg    *utils.Config
@@ -48,17 +58,11 @@ type CLI struct {
 }
 
 func NewCLI() (*CLI, error) {
-	cfg, err := utils.InitConfig()
-	if err != nil {
-		return nil, err
-	}
-
 	cts, _ := services.NewClient("localhost:8080")
 
 	logger := utils.GetLogger()
 
 	return &CLI{
-		cfg:    cfg,
 		cts:    cts,
 		logger: logger,
 	}, nil
@@ -267,7 +271,7 @@ var restoreJobCmd = &cobra.Command{
 				return fmt.Errorf("no remote state found for id %s", args[0])
 			}
 
-			//For now just grab latest checkpoint
+			// For now just grab latest checkpoint
 			if remoteState[len(remoteState)-1].CheckpointID == "" {
 				return fmt.Errorf("no checkpoint found for id %s", args[0])
 			}
@@ -488,7 +492,7 @@ var psCmd = &cobra.Command{
 					}
 
 					if state.RemoteState != nil {
-						//For now just grab latest checkpoint
+						// For now just grab latest checkpoint
 						remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
 					}
 
@@ -501,7 +505,6 @@ var psCmd = &cobra.Command{
 				})
 			})
 		})
-
 		if err != nil {
 			return err
 		}

@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -9,103 +8,99 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config struct {
-	Client        Client        `json:"client" mapstructure:"client"`
-	Connection    Connection    `json:"connection" mapstructure:"connection"`
-	SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
+const (
+	configDirName  = ".cedana"
+	configFileName = "client_config"
+	configFileType = "json"
+	envVarPrefix   = "CEDANA"
+	configDirPerm  = 0755
+	configFilePerm = 0644
+)
+
+// XXX: Config file should have a version field to manage future changes to schema
+type (
+	Config struct {
+		Client        Client        `json:"client" mapstructure:"client"`
+		Connection    Connection    `json:"connection" mapstructure:"connection"`
+		SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
+	}
+	Client struct {
+		// job to run
+		Task         string `json:"task" mapstructure:"task"`
+		LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
+		ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
+	}
+	Connection struct {
+		// for cedana managed systems
+		CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
+		CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
+	}
+	SharedStorage struct {
+		DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
+	}
+)
+
+func InitConfig() error {
+	user, err := getUser()
+	if err != nil {
+		return err
+	}
+
+	homeDir := user.HomeDir
+	configDir := filepath.Join(homeDir, configDirName)
+
+	viper.AddConfigPath(configDir)
+	viper.SetConfigPermissions(configFilePerm)
+	viper.SetConfigType(configFileType)
+	viper.SetConfigName(configFileName)
+	viper.SetEnvPrefix(envVarPrefix)
+
+	// Allow environment variables to be accesses through viper *if* bound.
+	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
+	// However, viper.Get() always first checks the config file
+	viper.AutomaticEnv()
+
+	// Create config directory if it does not exist
+	_, err = os.Stat(configDir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(configDir, configDirPerm)
+		if err != nil {
+			return err
+		}
+	}
+
+	setDefaults()
+	bindEnvVars()
+
+	err = viper.SafeWriteConfig() // Will only overwrite if file does not exist
+	if err != nil {
+		return err
+	}
+
+	return viper.ReadInConfig()
 }
 
-type Client struct {
-	// job to run
-	Task         string `json:"task" mapstructure:"task"`
-	LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
-	ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
+// Set defaults that are used when no value is found in config/env vars
+func setDefaults() {
+	viper.SetDefault("client.process_name", "")
+	viper.SetDefault("client.leave_running", "")
+
+	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
+
+	viper.SetDefault("connection.cedana_url", "0.0.0.0")
+	viper.SetDefault("connection.cedana_user", "random-user")
+	viper.SetDefault("connection.cedana_auth_token", "random-token")
 }
 
-type Connection struct {
-	// for cedana managed systems
-	CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
-	CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
+// TODO: Add bindings for env vars so env vars can be used as backup
+// when a value is not found in config
+func bindEnvVars() {
 }
 
-type SharedStorage struct {
-	DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
-}
-
-func InitConfig() (*Config, error) {
-	var username string
-	// have to run cedana as root, but it overrides os.UserHomeDir w/ /root
-	username = os.Getenv("SUDO_USER")
+func getUser() (*user.User, error) {
+	username := os.Getenv("SUDO_USER")
 	if username == "" {
 		username = os.Getenv("USER")
 	}
-
-	u, err := user.Lookup(username)
-	if err != nil {
-		return nil, err
-	}
-
-	homedir := u.HomeDir
-	viper.AddConfigPath(filepath.Join(homedir, ".cedana/"))
-	viper.SetConfigType("json")
-	viper.SetConfigName("client_config")
-
-	configFilePath := filepath.Join(homedir, ".cedana", "client_config.json")
-
-	_, err = os.Stat(configFilePath)
-	if os.IsNotExist(err) {
-		_, err = os.Stat(filepath.Join(homedir, ".cedana"))
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(filepath.Join(homedir, ".cedana"), 0755)
-			if err != nil {
-				panic(fmt.Errorf("error creating .cedana folder: %v", err))
-			}
-		}
-
-		err = os.WriteFile(configFilePath, []byte(GenSampleConfig()), 0664)
-		if err != nil {
-			panic(fmt.Errorf("error writing sample to config file: %v", err))
-		}
-	}
-
-	viper.SetConfigFile(configFilePath)
-	viper.AutomaticEnv()
-
-	var config Config
-	err = viper.ReadInConfig()
-	if err != nil {
-		panic(fmt.Errorf("error: %v, have you run bootstrap?, ", err))
-	}
-
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	so, err := LoadOverrides(filepath.Join(homedir, ".cedana"))
-
-	// override setting is ugly, need to abstract this away somehow
-	if err == nil && so != nil {
-		viper.Set("shared_storage.dump_storage_dir", so.SharedStorage.DumpStorageDir)
-		viper.Set("client.task", so.Client.Task)
-	}
-
-	viper.WriteConfig()
-	return &config, nil
-}
-
-func GenSampleConfig() string {
-	return `{
-	"client": {
-		"process_name": "",
-		"leave_running": false 
-	},
-	"shared_storage": {
-		"dump_storage_dir": "/tmp"
-	},
-	"connection": {
-		"cedana_url": "0.0.0.0",
-		"cedana_user": "random-user",
-		"cedana_auth_token": "random-token"
-	}
-}`
+	return user.Lookup(username)
 }
