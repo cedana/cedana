@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains all the debug-related commands when starting `cedana debug ...`
+
 import (
 	"encoding/json"
 	"fmt"

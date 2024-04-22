@@ -32,14 +32,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const defaultLogPath string = "/var/log/cedana-output.log"
+const outputLogPath string = "/var/log/cedana-output.log"
 
 const (
 	Address  = "localhost:8080"
 	Protocol = "tcp"
 
-	k8sDefaultRuncRoot  = "/run/containerd/runc/k8s.io"
-	cedanaContainerName = "binary-container"
+	K8sDefaultRuncRoot    = "/run/containerd/runc/k8s.io"
+	DockerDefaultRuncRoot = "/run/docker/runtime-runc/moby"
+	cedanaContainerName   = "binary-container"
 )
 
 type GrpcService interface {
@@ -599,7 +600,7 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 
 	cmd.Stdin = nullFile
 	if args.LogOutputFile == "" {
-		args.LogOutputFile = defaultLogPath
+		args.LogOutputFile = outputLogPath
 	}
 
 	// is this non-performant? do we need to flush at intervals instead of writing?
@@ -651,7 +652,7 @@ func (s *service) runTask(ctx context.Context, task string, args *task.StartTask
 func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
 	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d", uid, gid)
 	var gpuCmd *exec.Cmd
-	controllerPath := os.Getenv("GPU_CONTROLLER_PATH")
+	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
 		err := fmt.Errorf("gpu controller path not set")
 		logger.Fatal().Err(err)
@@ -789,7 +790,7 @@ func StartServer(cmdCtx context.Context) error {
 		// Here join netns
 		// TODO find pause bundle path
 		if viper.GetBool("is_k8s") {
-			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, k8sDefaultRuncRoot)
+			_, bundle, err := runc.GetContainerIdByName(cedanaContainerName, K8sDefaultRuncRoot)
 			if err != nil {
 				cancel(err)
 				return
@@ -825,12 +826,12 @@ func StartServer(cmdCtx context.Context) error {
 	select {
 	case <-srvCtx.Done():
 		err = srvCtx.Err()
+		logger.Debug().Msg("stopped RPC server unexpectedly")
 	case <-cmdCtx.Done():
 		err = cmdCtx.Err()
 		server.stop()
+		logger.Debug().Msg("stopped RPC server gracefully")
 	}
-
-	logger.Debug().Msg("stopped RPC server gracefully")
 
 	return err
 }

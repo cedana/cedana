@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains all the bootstrap-related commands when starting `cedana bootstrap ...`
+
 import (
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"

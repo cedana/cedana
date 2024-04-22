@@ -1,6 +1,6 @@
 package cmd
 
-// This file contains all the daemon commands
+// This file contains all the daemon-related commands when starting `cedana daemon ...`
 
 import (
 	"context"

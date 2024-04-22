@@ -71,6 +71,7 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 					splitLabel := strings.Split(label, "=")
 					if splitLabel[0] == "bundle" {
 						bundle = splitLabel[1]
+						break
 					}
 				}
 			}

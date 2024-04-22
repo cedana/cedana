@@ -72,10 +72,7 @@ func InitConfig() error {
 	setDefaults() // Only sets defaults for when no value is found in config
 	bindEnvVars()
 
-	err = viper.SafeWriteConfig() // Will only overwrite if file does not exist
-	if err != nil {
-		logger.Debug().Msg(err.Error()) // Likely due to file already existing
-	}
+	viper.SafeWriteConfig() // Will only overwrite if file does not exist
 
 	return viper.ReadInConfig()
 }
@@ -117,6 +114,7 @@ func bindEnvVars() {
 	viper.BindEnv("log_level", "CEDANA_LOG_LEVEL")
 	viper.BindEnv("otel_enabled", "CEDANA_OTEL_ENABLED")
 	viper.BindEnv("gpu_enabled", "CEDANA_GPU_ENABLED")
+	viper.BindEnv("gpu_controller_path", "CEDANA_GPU_CONTROLLER_PATH")
 	viper.BindEnv("gpu_debugging_enabled", "CEDANA_GPU_DEBUGGING_ENABLED")
 	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
 	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")

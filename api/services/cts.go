@@ -94,7 +94,7 @@ func (c *ServiceClient) CheckpointRunc(args *task.RuncDumpArgs) (*task.RuncDumpR
 	return resp, nil
 }
 
-func (c *ServiceClient) RuncRestore(args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
+func (c *ServiceClient) RestoreRunc(args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	resp, err := c.taskService.RuncRestore(ctx, args)

@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains all the config-related commands when starting `cedana config ...`
+
 import (
 	"encoding/json"
 	"fmt"

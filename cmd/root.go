@@ -1,5 +1,7 @@
 package cmd
 
+// This file contains the root commands when starting `cedana ...`
+
 import (
 	"context"
 

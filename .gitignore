@@ -4,6 +4,7 @@ client_config.yaml
 .gitconfig
 .vscode/*
 *.log
+notes.md
 
 *.csv
 tmp
