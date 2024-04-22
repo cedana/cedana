@@ -77,10 +77,8 @@ func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *r
 
 	// jobID + UTC time (nanoseconds)
 	// strip out non posix-compliant characters from the jobID
-	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(c.jobID, "_")
-	formattedProcessName = strings.ReplaceAll(formattedProcessName, ".", "_")
 	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	processCheckpointDir := strings.Join([]string{formattedProcessName, timeString}, "_")
+	processCheckpointDir := strings.Join([]string{c.jobID, timeString}, "_")
 	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
 	_, err = os.Stat(filepath.Join(checkpointFolderPath))
 	if err != nil {
