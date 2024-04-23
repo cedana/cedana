@@ -17,6 +17,8 @@ func GetLogger() *zerolog.Logger {
 	return &logger
 }
 
+// TODO add logging line and file numbers
+
 func init() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = time.RFC3339Nano
