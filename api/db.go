@@ -9,8 +9,9 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-type DB struct {
-}
+const DBPath = "/tmp/cedana.db"
+
+type DB struct{}
 
 func NewDB() *DB {
 	return &DB{}
@@ -18,7 +19,7 @@ func NewDB() *DB {
 
 func NewBoltConn() (*bolt.DB, error) {
 	// set up embedded key-value db
-	conn, err := bolt.Open("/tmp/cedana.db", 0o777, nil)
+	conn, err := bolt.Open(DBPath, 0o777, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +28,7 @@ func NewBoltConn() (*bolt.DB, error) {
 
 func NewROnlyBoltConn() (*bolt.DB, error) {
 	// open db in read-only mode
-	conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+	conn, err := bolt.Open(DBPath, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +252,7 @@ func (db *DB) GetPID(id string) (int32, error) {
 	})
 	return pid, err
 }
+
 func (db *DB) GetLatestLocalCheckpoints(id string) ([]*string, error) {
 	var checkpoints []*string
 

@@ -61,11 +61,11 @@ var execTaskCmd = &cobra.Command{
 			if ok {
 				logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				logger.Error().Msgf("Start task failed: %v", err)
+				logger.Error().Err(err).Msgf("Start task failed")
 			}
+		} else {
+			fmt.Print(resp)
 		}
-
-		fmt.Print(resp.PID)
 	},
 }
 

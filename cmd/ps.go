@@ -28,7 +28,7 @@ var psCmd = &cobra.Command{
 
 		// open db in read-only mode
 		// FIXME YA: permissions not working
-		conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+		conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
 		if err != nil {
 			logger.Fatal().Err(err).Msg("Could not open or create db")
 			return
