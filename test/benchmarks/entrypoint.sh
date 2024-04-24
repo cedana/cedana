@@ -1,34 +1,14 @@
 #!/bin/bash 
 
-# entrypoint for benchmarking docker script 
+# entrypoint for benchmarking docker script
+./reset.sh
 
-# parse args
-is_local=false
-while [[ $# -gt 0 ]]; do
-  case "$1" in 
-    --local)
-      is_local=true
-      shift
-      ;;
-    *)
-      echo "Unknown arg: $1"
-      exit 1
-      ;;
-  esac
-done
+# start otelcol polling
+otelcol-contrib --config test/benchmarks/local-otelcol-config.yaml &
 
-if [ "$is_local" = true ]; then
-  otelcol-contrib --config test/benchmarks/local-otelcol-config.yaml &
-  ./reset.sh
-  ./build-start-daemon.sh
-  sudo -E python3 test/benchmarks/benchmark.py --local
-else
-  # start otelcol polling 
-  otelcol-contrib --config test/benchmarks/otelcol-config.yaml &
+# start daemon
+./build-start-daemon.sh
 
-  # start daemon 
-  sudo -E ./cedana daemon start & 
+# start benchmarking, pass all args
+sudo -E python3 test/benchmarks/benchmark.py "$@"
 
-  # start benchmarking
-  sudo -E python3 test/benchmarks/benchmark.py
-fi
