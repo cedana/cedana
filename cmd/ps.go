@@ -26,59 +26,60 @@ var psCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		// open db in read-only mode
-		// FIXME YA: permissions not working
-		conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
-		if err != nil {
-			logger.Fatal().Err(err).Msg("Could not open or create db")
-			return
-		}
-		defer conn.Close()
-
-		// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
-		var data [][]string
-		err = conn.View(func(tx *bolt.Tx) error {
-			root := tx.Bucket([]byte("default"))
-			if root == nil {
-				return fmt.Errorf("could not find bucket")
-			}
-
-			return root.ForEachBucket(func(k []byte) error {
-				job := root.Bucket(k)
-				jobId := string(k)
-				return job.ForEach(func(k, v []byte) error {
-					var state task.ProcessState
-					var remoteCheckpointID string
-					var status string
-					err := json.Unmarshal(v, &state)
-					if err != nil {
-						return err
-					}
-
-					if state.RemoteState != nil {
-						// For now just grab latest checkpoint
-						remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
-					}
-
-					if state.ProcessInfo != nil {
-						status = state.ProcessInfo.Status
-					}
-
-					data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
-					return nil
-				})
-			})
-		})
-		if err != nil {
-			logger.Error().Msgf("Error getting job data: %v", err)
-			return
-		}
-
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"Job ID", "PID", "Status", "Local Checkpoint Path", "Remote Checkpoint ID"})
 
-		for _, v := range data {
-			table.Append(v)
+		if _, err := os.Stat(api.DBPath); err == nil {
+			// open db in read-only mode
+			conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
+			if err != nil {
+				logger.Fatal().Err(err).Msg("Could not open or create db")
+				return
+			}
+
+			defer conn.Close()
+
+			// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
+			var data [][]string
+			err = conn.View(func(tx *bolt.Tx) error {
+				root := tx.Bucket([]byte("default"))
+				if root == nil {
+					return fmt.Errorf("could not find bucket")
+				}
+
+				return root.ForEachBucket(func(k []byte) error {
+					job := root.Bucket(k)
+					jobId := string(k)
+					return job.ForEach(func(k, v []byte) error {
+						var state task.ProcessState
+						var remoteCheckpointID string
+						var status string
+						err := json.Unmarshal(v, &state)
+						if err != nil {
+							return err
+						}
+
+						if state.RemoteState != nil {
+							// For now just grab latest checkpoint
+							remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
+						}
+
+						if state.ProcessInfo != nil {
+							status = state.ProcessInfo.Status
+						}
+
+						data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
+						return nil
+					})
+				})
+			})
+			if err != nil {
+				return
+			}
+
+			for _, v := range data {
+				table.Append(v)
+			}
 		}
 
 		table.Render() // Send output
