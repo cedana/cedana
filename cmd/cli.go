@@ -411,6 +411,28 @@ var execTaskCmd = &cobra.Command{
 			return err
 		}
 
+		if _, err := os.Stat("/tmp/cedana.db"); err == nil {
+			conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+		  if err != nil {
+			  cli.logger.Fatal().Err(err).Msg("Could not open or create db")
+			  return err
+		  }
+		  err = conn.View(func (tx *bolt.Tx) error {
+		    b := tx.Bucket([]byte("default"))
+		    c := b.Cursor()
+		    for k, _ := c.First(); k != nil; k, _ = c.Next() {
+				  if args[1] == string(k) {
+			    	return fmt.Errorf("A job with this ID is currently running. Please use a unique ID.\n")
+			    }
+			  }
+			  return nil
+		  })
+		  if err != nil {
+			  return err
+		  }
+		  conn.Close()
+		}
+
 		var env []string
 		var uid uint32
 		var gid uint32
