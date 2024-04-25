@@ -15,12 +15,12 @@ CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 echo "Building $APP_NAME..."
 go build 
 
-sudo cp $APP_NAME $APP_PATH
-
 if [ $? -ne 0 ]; then
     echo "Build failed. Exiting."
     exit 1
 fi
+
+sudo cp $APP_NAME $APP_PATH
 
 # if cedana_gpu_enabled=atrue, echo 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
