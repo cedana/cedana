@@ -413,24 +413,24 @@ var execTaskCmd = &cobra.Command{
 
 		if _, err := os.Stat("/tmp/cedana.db"); err == nil {
 			conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
-		  if err != nil {
-			  cli.logger.Fatal().Err(err).Msg("Could not open or create db")
-			  return err
-		  }
-		  err = conn.View(func (tx *bolt.Tx) error {
-		    b := tx.Bucket([]byte("default"))
-		    c := b.Cursor()
-		    for k, _ := c.First(); k != nil; k, _ = c.Next() {
-				  if args[1] == string(k) {
-			    	return fmt.Errorf("A job with this ID is currently running. Please use a unique ID.\n")
-			    }
-			  }
-			  return nil
-		  })
-		  if err != nil {
-			  return err
-		  }
-		  conn.Close()
+			if err != nil {
+				cli.logger.Fatal().Err(err).Msg("Could not open or create db")
+				return err
+			}
+			err = conn.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("default"))
+				c := b.Cursor()
+				for k, _ := c.First(); k != nil; k, _ = c.Next() {
+					if args[1] == string(k) {
+						return fmt.Errorf("A job with this ID is currently running. Please use a unique ID.\n")
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			conn.Close()
 		}
 
 		var env []string
@@ -484,58 +484,58 @@ var psCmd = &cobra.Command{
 		table.SetHeader([]string{"Job ID", "PID", "Status", "Local Checkpoint Path", "Remote Checkpoint ID"})
 
 		if _, err := os.Stat("/tmp/cedana.db"); err == nil {
-		    // open db in read-only mode
-		    conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
-		    if err != nil {
-			    cli.logger.Fatal().Err(err).Msg("Could not open or create db")
-			    return err
-		    }
+			// open db in read-only mode
+			conn, err := bolt.Open("/tmp/cedana.db", 0600, &bolt.Options{ReadOnly: true})
+			if err != nil {
+				cli.logger.Fatal().Err(err).Msg("Could not open or create db")
+				return err
+			}
 
-		    defer conn.Close()
+			defer conn.Close()
 
-		    // job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
-		    var data [][]string
-		    err = conn.View(func(tx *bolt.Tx) error {
-			    root := tx.Bucket([]byte("default"))
-			    if root == nil {
-				    return fmt.Errorf("could not find bucket")
-			    }
+			// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
+			var data [][]string
+			err = conn.View(func(tx *bolt.Tx) error {
+				root := tx.Bucket([]byte("default"))
+				if root == nil {
+					return fmt.Errorf("could not find bucket")
+				}
 
-			    return root.ForEachBucket(func(k []byte) error {
-				    job := root.Bucket(k)
-				    jobId := string(k)
-				    return job.ForEach(func(k, v []byte) error {
-					    var state task.ProcessState
-					    var remoteCheckpointID string
-					    var status string
-					    err := json.Unmarshal(v, &state)
-					    if err != nil {
-						    return err
-					    }
+				return root.ForEachBucket(func(k []byte) error {
+					job := root.Bucket(k)
+					jobId := string(k)
+					return job.ForEach(func(k, v []byte) error {
+						var state task.ProcessState
+						var remoteCheckpointID string
+						var status string
+						err := json.Unmarshal(v, &state)
+						if err != nil {
+							return err
+						}
 
-					    if state.RemoteState != nil {
-						    //For now just grab latest checkpoint
-						    remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
-					    }
+						if state.RemoteState != nil {
+							//For now just grab latest checkpoint
+							remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
+						}
 
-					    if state.ProcessInfo != nil {
-						    status = state.ProcessInfo.Status
-					    }
+						if state.ProcessInfo != nil {
+							status = state.ProcessInfo.Status
+						}
 
-					    data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
-					    return nil
-				    })
-			    })
-		    })
+						data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
+						return nil
+					})
+				})
+			})
 
-		    if err != nil {
-			    return err
-		    }
+			if err != nil {
+				return err
+			}
 
-		    for _, v := range data {
-			    table.Append(v)
-		    }
-        }
+			for _, v := range data {
+				table.Append(v)
+			}
+		}
 
 		table.Render() // Send output
 		return nil
