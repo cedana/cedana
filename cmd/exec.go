@@ -10,13 +10,14 @@ import (
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/cobra"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc/status"
 )
 
 var execTaskCmd = &cobra.Command{
 	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
-	Long:  "Start and register a process by passing a task + id pair (cedana start <task> <id>)",
+	Long:  "Start and register a process by passing a task + id pair (cedana exec <task> <id>)",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("requires a task and id argument")
@@ -30,6 +31,28 @@ var execTaskCmd = &cobra.Command{
 			return
 		}
 		defer cts.Close()
+
+		if _, err := os.Stat(api.DBPath); err == nil {
+			conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
+			if err != nil {
+				logger.Fatal().Err(err).Msg("Could not open or create db")
+				return
+			}
+			err = conn.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("default"))
+				c := b.Cursor()
+				for k, _ := c.First(); k != nil; k, _ = c.Next() {
+					if args[1] == string(k) {
+						return fmt.Errorf("A job with this ID is currently running. Please use a unique ID.\n")
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
 
 		var env []string
 		var uid uint32
