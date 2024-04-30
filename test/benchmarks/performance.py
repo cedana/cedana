@@ -92,7 +92,8 @@ def push_to_bigquery():
 def main(args):
     daemon_pid = setup()
     if daemon_pid == -1:
-        print("ERROR: process name not found in active PIDs")
+        print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
+        return
 
     if "--correctness" in args:
         blob_id = correctness.main(daemon_pid)
