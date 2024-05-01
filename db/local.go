@@ -14,23 +14,26 @@ import (
 )
 
 const (
-	path        = "/tmp/cedana.db"
-	openROPerms = 0o600
-	openRWPerms = 0o400
+	OPEN_RO_PERMS = 0o600
+	OPEN_RW_PERMS = 0o400
 )
 
-type LocalDB struct{}
-
-func NewLocalDB() DB {
-	return &LocalDB{}
+type LocalDB struct {
+	path string
 }
 
-func openRO() (*bolt.DB, error) {
-	return bolt.Open(path, openROPerms, &bolt.Options{ReadOnly: true})
+func NewLocalDB(path string) DB {
+	return &LocalDB{
+		path: path,
+	}
 }
 
-func openRW() (*bolt.DB, error) {
-	return bolt.Open(path, openRWPerms, nil)
+func (db *LocalDB) openRO() (*bolt.DB, error) {
+	return bolt.Open(db.path, OPEN_RO_PERMS, &bolt.Options{ReadOnly: true})
+}
+
+func (db *LocalDB) openRW() (*bolt.DB, error) {
+	return bolt.Open(db.path, OPEN_RW_PERMS, nil)
 }
 
 /////////////
@@ -38,7 +41,7 @@ func openRW() (*bolt.DB, error) {
 /////////////
 
 func (db *LocalDB) Get(path [][]byte, key []byte) ([]byte, error) {
-	conn, err := openRO()
+	conn, err := db.openRO()
 	if err != nil {
 		return nil, fmt.Errorf("could not open db: %v", err)
 	}
@@ -116,7 +119,7 @@ func (db *LocalDB) GetAny(path [][]byte, key []byte) (any, error) {
 // Recursively create buckets if they don't exist
 
 func (db *LocalDB) Put(path [][]byte, key []byte, value []byte) error {
-	conn, err := openRW()
+	conn, err := db.openRW()
 	if err != nil {
 		return fmt.Errorf("could not open db: %v", err)
 	}
@@ -161,7 +164,7 @@ func (db *LocalDB) PutBool(path [][]byte, key []byte, value bool) error {
 /////////////
 
 func (db *LocalDB) List(path [][]byte) ([][]byte, error) {
-	conn, err := openRO()
+	conn, err := db.openRO()
 	if err != nil {
 		return nil, fmt.Errorf("could not open db: %v", err)
 	}
@@ -195,7 +198,7 @@ func (db *LocalDB) List(path [][]byte) ([][]byte, error) {
 }
 
 func (db *LocalDB) ListKeys(path [][]byte) ([][]byte, error) {
-	conn, err := openRO()
+	conn, err := db.openRO()
 	if err != nil {
 		return nil, fmt.Errorf("could not open db: %v", err)
 	}

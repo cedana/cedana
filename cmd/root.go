@@ -5,7 +5,6 @@ package cmd
 import (
 	"context"
 
-	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +28,8 @@ ________  _______   ________  ________  ________   ________
 
 func Execute(ctx context.Context) error {
 	logger := utils.GetLogger()
-	db := db.NewLocalDB()
 
 	ctx = context.WithValue(ctx, "logger", logger)
-	ctx = context.WithValue(ctx, "db", db)
 
 	if err := utils.InitConfig(); err != nil {
 		logger.Error().Err(err).Msg("failed to initialize config")

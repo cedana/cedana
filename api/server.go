@@ -32,6 +32,7 @@ const (
 	SERVER_LOG_PATH       = "/var/log/cedana-daemon.log"
 	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS      = 0o644
+	SERVER_DB_PATH        = "/tmp/cedana.db"
 )
 
 type service struct {
@@ -74,7 +75,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	service := &service{
 		CRIU:    &Criu{},
 		fs:      &afero.Afero{Fs: afero.NewOsFs()},
-		db:      DB.NewLocalDB(),
+		db:      DB.NewLocalDB(SERVER_DB_PATH),
 		logger:  &newLogger,
 		tracer:  tracer,
 		store:   utils.NewCedanaStore(tracer, logger),

@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
+	DB "github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
-	bolt "go.etcd.io/bbolt"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,18 +27,12 @@ func setup(t *testing.T) (task.TaskServiceClient, error) {
 		srv.Stop()
 	})
 
-	mockDB, err := bolt.Open("test.db", 0600, nil)
-	t.Cleanup(func() {
-		mockDB.Close()
-	})
-	if err != nil {
-		t.Error(err)
-	}
+	mockDB := DB.NewLocalDB("test.db")
 
 	logger := utils.GetLogger()
 	tracer := otel.GetTracerProvider().Tracer("server-test")
 
-	svc := service{logger: logger, tracer: tracer}
+	svc := service{logger: logger, tracer: tracer, db: mockDB}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {
