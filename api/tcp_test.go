@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
+	DB "github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -71,17 +71,11 @@ func Test_MultiConn(t *testing.T) {
 		srv.Stop()
 	})
 
-	mockDB, err := bolt.Open("test.db", 0600, nil)
-	t.Cleanup(func() {
-		mockDB.Close()
-	})
-	if err != nil {
-		t.Error(err)
-	}
+	mockDB := DB.NewLocalDB("test.db")
 
 	logger := utils.GetLogger()
 
-	svc := service{logger: logger}
+	svc := service{logger: logger, db: mockDB}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {
