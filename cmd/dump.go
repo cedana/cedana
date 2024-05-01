@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
@@ -25,7 +26,9 @@ var dumpProcessCmd = &cobra.Command{
 	Short: "Manually checkpoint a running process [pid] to a directory [-d]",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -54,13 +57,13 @@ var dumpProcessCmd = &cobra.Command{
 
 		// always self serve when invoked from CLI
 		cpuDumpArgs := task.DumpArgs{
-			PID:   int32(pid),
-			Dir:   dir,
-			JobID: id,
-			Type:  task.DumpArgs_LOCAL,
+			PID:  int32(pid),
+			Dir:  dir,
+			JID:  id,
+			Type: task.CRType_LOCAL,
 		}
 
-		resp, err := cts.CheckpointTask(&cpuDumpArgs)
+		resp, err := cts.Dump(ctx, &cpuDumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -68,9 +71,9 @@ var dumpProcessCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -84,8 +87,10 @@ var dumpJobCmd = &cobra.Command{
 	},
 	Short: "Manually checkpoint a running job to a directory [-d]",
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
 		// TODO NR - this needs to be extended to include container checkpoints
-		cts, err := services.NewClient(api.Address)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -96,6 +101,7 @@ var dumpJobCmd = &cobra.Command{
 
 		if id == "" {
 			logger.Error().Msgf("no job id specified")
+			return
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
@@ -108,30 +114,30 @@ var dumpJobCmd = &cobra.Command{
 			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
 		}
 
-		var taskType task.DumpArgs_DumpType
+		var taskType task.CRType
 		if viper.GetBool("remote") {
-			taskType = task.DumpArgs_REMOTE
+			taskType = task.CRType_REMOTE
 		} else {
-			taskType = task.DumpArgs_LOCAL
+			taskType = task.CRType_LOCAL
 		}
 
 		dumpArgs := task.DumpArgs{
-			JobID: id,
-			Dir:   dir,
-			Type:  taskType,
+			JID:  id,
+			Dir:  dir,
+			Type: taskType,
 		}
 
-		resp, err := cts.CheckpointTask(&dumpArgs)
+		resp, err := cts.Dump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Msgf("checkpoint task failed: %v: %v", st.Code(), st.Message())
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Err(err).Msgf("checkpoint task failed")
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -140,7 +146,9 @@ var dumpContainerdCmd = &cobra.Command{
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -149,11 +157,11 @@ var dumpContainerdCmd = &cobra.Command{
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
-		dumpArgs := task.ContainerDumpArgs{
-			ContainerId: id,
+		dumpArgs := task.ContainerdDumpArgs{
+			ContainerID: id,
 			Ref:         ref,
 		}
-		resp, err := cts.CheckpointContainer(&dumpArgs)
+		resp, err := cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -161,9 +169,9 @@ var dumpContainerdCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -172,7 +180,9 @@ var dumpRuncCmd = &cobra.Command{
 	Short: "Manually checkpoint a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -180,20 +190,14 @@ var dumpRuncCmd = &cobra.Command{
 		defer cts.Close()
 
 		rootPath := map[string]string{
-			"k8s":    api.K8sDefaultRuncRoot,
-			"docker": api.DockerDefaultRuncRoot,
+			"k8s":    api.K8S_RUNC_ROOT,
+			"docker": api.DOCKER_RUNC_ROOT,
 		}
 
 		root, _ := cmd.Flags().GetString(containerRootFlag)
 		if rootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
 			return
-		}
-
-		if root == "" {
-			root = rootPath["k8s"]
-		} else {
-			root = rootPath[root]
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
@@ -207,19 +211,22 @@ var dumpRuncCmd = &cobra.Command{
 			TcpEstablished:  tcpEstablished,
 		}
 
-		id, _ := cmd.Flags().GetString(idFlag)
+		id, err := cmd.Flags().GetString(idFlag)
+		if err != nil {
+			logger.Error().Msgf("Error getting container id: %v", err)
+		}
 
 		dumpArgs := task.RuncDumpArgs{
 			Root: root,
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
-			ContainerId: id,
+			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
-			Type: task.RuncDumpArgs_LOCAL,
+			Type: task.CRType_LOCAL,
 		}
 
-		resp, err := cts.CheckpointRunc(&dumpArgs)
+		resp, err := cts.RuncDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -227,9 +234,9 @@ var dumpRuncCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 

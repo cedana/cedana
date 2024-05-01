@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +19,9 @@ var configCmd = &cobra.Command{
 var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "show currently set configuration",
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := utils.GetConfig()
+		logger := cmd.Context().Value("logger").(*zerolog.Logger)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to get config")
 			return err
@@ -37,7 +39,6 @@ var showCmd = &cobra.Command{
 }
 
 func init() {
-	logger = utils.GetLogger()
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(showCmd)
 }

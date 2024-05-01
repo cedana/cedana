@@ -6,58 +6,49 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc/status"
 )
 
 var execTaskCmd = &cobra.Command{
 	Use:   "exec",
 	Short: "Start and register a new process with Cedana",
-	Long:  "Start and register a process by passing a task + id pair (cedana exec <task> <id>)",
+	Long:  "Start and register a process (cedana exec <task>)",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 2 {
-			return fmt.Errorf("requires a task and id argument")
+		if len(args) != 1 {
+			return fmt.Errorf("requires a task argument")
 		}
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			logger.Error().Err(err).Msg("error creating client")
 			return
 		}
 		defer cts.Close()
 
-		if _, err := os.Stat(api.DBPath); err == nil {
-			conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
-			if err != nil {
-				logger.Fatal().Err(err).Msg("Could not open or create db")
-				return
-			}
-			err = conn.View(func(tx *bolt.Tx) error {
-				b := tx.Bucket([]byte("default"))
-				c := b.Cursor()
-				for k, _ := c.First(); k != nil; k, _ = c.Next() {
-					if args[1] == string(k) {
-						return fmt.Errorf("A job with this ID is currently running. Please use a unique ID.\n")
-					}
-				}
-				return nil
-			})
-			if err != nil {
-				return
-			}
-			conn.Close()
+		executable := args[0]
+		jid, err := cmd.Flags().GetString(idFlag)
+		if err != nil {
+			logger.Error().Err(err).Msg("invalid job id")
+		}
+
+		// Check if executable exists
+		if _, err := os.Stat(executable); err != nil {
+			logger.Error().Err(err).Msg("executable")
+			return
 		}
 
 		var env []string
 		var uid uint32
 		var gid uint32
-		var taskToExec string = args[0]
 
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
@@ -69,32 +60,33 @@ var execTaskCmd = &cobra.Command{
 		env = os.Environ()
 
 		wd, _ := cmd.Flags().GetString(wdFlag)
-		taskArgs := &task.StartTaskArgs{
-			Task:       taskToExec,
-			Id:         args[1],
+		taskArgs := &task.StartArgs{
+			Task:       executable,
 			WorkingDir: wd,
 			Env:        env,
 			UID:        uid,
 			GID:        gid,
+			JID:        jid,
 		}
 
-		resp, err := cts.StartTask(taskArgs)
+		resp, err := cts.Start(ctx, taskArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Start task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Err(st.Err()).Msg("start task failed")
 			} else {
-				logger.Error().Err(err).Msgf("Start task failed")
+				logger.Error().Err(err).Msg("start task failed")
 			}
-		} else {
-			fmt.Print(resp)
+			return
 		}
+		logger.Info().Msgf("Task started: %v", resp)
 	},
 }
 
 func init() {
 	execTaskCmd.Flags().StringP(wdFlag, "w", "", "working directory")
 	execTaskCmd.Flags().BoolP(rootFlag, "r", false, "run as root")
+	execTaskCmd.Flags().StringP(idFlag, "i", "", "job id to use")
 
 	rootCmd.AddCommand(execTaskCmd)
 }

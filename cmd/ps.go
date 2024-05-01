@@ -3,86 +3,61 @@ package cmd
 // This file contains all the ps-related commands when starting `cedana ps ...`
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/olekukonko/tablewriter"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	bolt "go.etcd.io/bbolt"
 )
 
 var psCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List managed processes",
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			logger.Error().Err(err).Msg("error creating client")
 			return
 		}
 		defer cts.Close()
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Job ID", "PID", "Status", "Local Checkpoint Path", "Remote Checkpoint ID"})
+		table.SetHeader([]string{"Job ID", "PID", "Status", "Checkpoint"})
 
-		if _, err := os.Stat(api.DBPath); err == nil {
-			// open db in read-only mode
-			conn, err := bolt.Open(api.DBPath, 0600, &bolt.Options{ReadOnly: true})
-			if err != nil {
-				logger.Fatal().Err(err).Msg("Could not open or create db")
-				return
-			}
-
-			defer conn.Close()
-
-			// job ID, PID, isRunning, CheckpointPath, Remote checkpoint ID
-			var data [][]string
-			err = conn.View(func(tx *bolt.Tx) error {
-				root := tx.Bucket([]byte("default"))
-				if root == nil {
-					return fmt.Errorf("could not find bucket")
-				}
-
-				return root.ForEachBucket(func(k []byte) error {
-					job := root.Bucket(k)
-					jobId := string(k)
-					return job.ForEach(func(k, v []byte) error {
-						var state task.ProcessState
-						var remoteCheckpointID string
-						var status string
-						err := json.Unmarshal(v, &state)
-						if err != nil {
-							return err
-						}
-
-						if state.RemoteState != nil {
-							// For now just grab latest checkpoint
-							remoteCheckpointID = state.RemoteState[len(state.RemoteState)-1].CheckpointID
-						}
-
-						if state.ProcessInfo != nil {
-							status = state.ProcessInfo.Status
-						}
-
-						data = append(data, []string{jobId, string(k), status, state.CheckpointPath, remoteCheckpointID})
-						return nil
-					})
-				})
-			})
-			if err != nil {
-				return
-			}
-
-			for _, v := range data {
-				table.Append(v)
-			}
+		resp, err := cts.Query(ctx, &task.QueryArgs{}) // get all processes
+		if err != nil {
+			logger.Error().Err(err).Msgf("error querying processes")
+			return
 		}
 
-		table.Render() // Send output
+		if len(resp.Processes) == 0 {
+			logger.Info().Msg("No managed processes")
+			return
+		}
+
+		for _, v := range resp.Processes {
+			var checkpoint, status string
+			if v.RemoteState != nil {
+				// For now just grab latest checkpoint
+				checkpoint = fmt.Sprintf("%s (remote)", v.RemoteState[len(v.RemoteState)-1].CheckpointID)
+			} else {
+				checkpoint = v.CheckpointPath
+			}
+
+			status = v.JobState.String()
+
+			pid := strconv.Itoa(int(v.PID))
+
+			table.Append([]string{v.JID, pid, status, checkpoint})
+		}
+
+		table.Render()
 	},
 }
 

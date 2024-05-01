@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,9 @@ var runcGetRuncIdByName = &cobra.Command{
 	Short: "Get runc id by container name",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -28,18 +30,18 @@ var runcGetRuncIdByName = &cobra.Command{
 
 		root, _ := cmd.Flags().GetString(rootFlag)
 		name := args[0]
-		runcArgs := &task.CtrByNameArgs{
-			Root:          root,
-			ContainerName: name,
+		query := &task.RuncQueryArgs{
+			Root:           root,
+			ContainerNames: []string{name},
 		}
 
 		// FIXME YA: When no PID given, still returns something
-		resp, err := cts.GetRuncIdByName(runcArgs)
+		resp, err := cts.RuncQuery(ctx, query)
 		if err != nil {
 			logger.Error().Err(err).Msgf("Container \"%s\" not found", name)
-		} else {
-			logger.Info().Msgf("Response: %v", resp)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Containers[0])
 	},
 }
 

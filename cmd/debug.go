@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
@@ -76,23 +75,24 @@ var debugRuncRestoreCmd = &cobra.Command{
 		// root := "/var/run/runc"
 		// bundle := "$HOME/bundle"
 		// consoleSocket := "/home/brandonsmith/tty.sock"
-		root := args[2]
-		bundle := args[3]
-		// consoleSocket := args[4]
-		opts := &container.RuncOpts{
-			Root:    root,
-			Bundle:  bundle,
-			Detatch: false,
-		}
-		imgPath := args[0]
-		containerId := args[1]
 
-		client := api.Client{}
+		// root := args[2]
+		// bundle := args[3]
+		// // consoleSocket := args[4]
+		// opts := &container.RuncOpts{
+		// 	Root:    root,
+		// 	Bundle:  bundle,
+		// 	Detatch: false,
+		// }
+		// imgPath := args[0]
+		// containerId := args[1]
 
-		err := client.RuncRestore(cmd.Context(), imgPath, containerId, false, []string{}, opts)
-		if err != nil {
-			return err
-		}
+		// client := api.Client{}
+
+		// err := client.RuncRestore(cmd.Context(), imgPath, containerId, false, []string{}, opts)
+		// if err != nil {
+		// 	return err
+		// }
 
 		return nil
 	},
@@ -101,20 +101,20 @@ var debugRuncRestoreCmd = &cobra.Command{
 var debugRuncDumpCmd = &cobra.Command{
 	Use: "runc-dump",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		imgPath := args[0]
-		containerId := args[1]
-		root := "/var/run/runc"
+		// imgPath := args[0]
+		// containerId := args[1]
+		// root := "/var/run/runc"
 
-		client := api.Client{}
+		// client := api.Client{}
 
-		criuOpts := &container.CriuOpts{
-			ImagesDirectory: imgPath,
-			WorkDirectory:   "",
-			LeaveRunning:    true,
-			TcpEstablished:  false,
-		}
+		// criuOpts := &container.CriuOpts{
+		// 	ImagesDirectory: imgPath,
+		// 	WorkDirectory:   "",
+		// 	LeaveRunning:    true,
+		// 	TcpEstablished:  false,
+		// }
 
-		client.RuncDump(cmd.Context(), root, containerId, criuOpts)
+		// client.RuncDump(cmd.Context(), root, containerId, criuOpts)
 
 		return nil
 	},

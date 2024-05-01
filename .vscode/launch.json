@@ -66,14 +66,7 @@
       "cwd": "${workspaceFolder}",
       "program": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "args": [
-        "dump",
-        "container",
-        "-i",
-        "",
-        "-p",
-        "${input:promptForContainer}"
-      ],
+      "args": ["dump", "container", "-i", "", "-p", "${input:promptForContainer}"],
       "env": {
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
       }

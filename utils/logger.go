@@ -3,13 +3,18 @@ package utils
 import (
 	"io"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-const defaultLogLevel = zerolog.DebugLevel
+const (
+	DEFAULT_LOG_LEVEL      = zerolog.DebugLevel
+	LOG_TIME_FORMAT_FULL   = time.RFC3339
+	LOG_CALLER_STACK_DEPTH = 3 // XXX YA: Hack-y
+)
 
 var logger zerolog.Logger
 
@@ -17,26 +22,32 @@ func GetLogger() *zerolog.Logger {
 	return &logger
 }
 
-// TODO add logging line and file numbers
+type LineInfoHook struct{}
+
+func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
+	_, file, line, ok := runtime.Caller(LOG_CALLER_STACK_DEPTH)
+	if ok && l >= zerolog.WarnLevel {
+		e.Str("file", file)
+		e.Int("line", line)
+	}
+}
 
 func init() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
 	logLevel, err := zerolog.ParseLevel(logLevelStr)
 	if err != nil || logLevelStr == "" { // allow turning off logging
-		logLevel = defaultLogLevel
+		logLevel = DEFAULT_LOG_LEVEL
 	}
 
 	var output io.Writer = zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: time.RFC3339,
+		Out: os.Stdout,
 	}
 
 	logger = zerolog.New(output).
 		Level(logLevel).
 		With().
 		Timestamp().
-		Logger()
+		Logger().Hook(LineInfoHook{})
 }

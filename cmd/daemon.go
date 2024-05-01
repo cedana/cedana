@@ -11,6 +11,7 @@ import (
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -31,9 +32,13 @@ var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: Can add to check if being run as root
-
 		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		if os.Getuid() != 0 {
+			logger.Error().Msg("daemon must be run as root")
+			return
+		}
 
 		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
@@ -79,6 +84,7 @@ func init() {
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
+	logger := ctx.Value("logger").(*zerolog.Logger)
 	_, err := os.Stat(filePath)
 	if err == nil {
 		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)

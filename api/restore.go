@@ -1,5 +1,7 @@
 package api
 
+// Internal functions used by service for restoring processes and containers
+
 import (
 	"context"
 	"encoding/json"
@@ -30,67 +32,63 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
+const (
+	CRIU_RESTORE_LOG_FILE   = "cedana-dump.log"
+	CRIU_RESTORE_LOG_LEVEL  = 4
+	RESTORE_TEMPDIR         = "/tmp/cedana_restore"
+	RESTORE_TEMPDIR_PERMS   = 0o755
+	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
+)
+
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
 
-	_, prepareRestoreSpan := c.tracer.Start(ctx, "prepare_restore")
+	_, prepareRestoreSpan := s.tracer.Start(ctx, "prepare_restore")
 	defer prepareRestoreSpan.End()
-	tmpdir := "/tmp/cedana_restore"
+
+	tempDir := RESTORE_TEMPDIR
 
 	// check if tmpdir exists
-	if _, err := os.Stat(tmpdir); os.IsNotExist(err) {
-		err := os.Mkdir(tmpdir, 0755)
+	// XXX YA: Tempdir usage is not thread safe
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	} else {
 		// likely an old checkpoint hanging around, delete
-		err := os.RemoveAll(tmpdir)
+		err := os.RemoveAll(tempDir)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		err = os.Mkdir(tmpdir, 0755)
+		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	}
 
-	logger.Info().Msgf("decompressing %s to %s", checkpointPath, tmpdir)
-	err := utils.UntarFolder(checkpointPath, tmpdir)
+	err := utils.UntarFolder(checkpointPath, tempDir)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("error decompressing checkpoint")
-	}
-
-	// read serialized cedanaCheckpoint
-	_, err = os.Stat(filepath.Join(tmpdir, "checkpoint_state.json"))
-	if err != nil {
-		logger.Fatal().Err(err).Msg("checkpoint_state.json not found, likely error in creating checkpoint")
+		s.logger.Error().Err(err).Msg("error decompressing checkpoint")
 		return nil, nil, nil, err
 	}
 
-	data, err := os.ReadFile(filepath.Join(tmpdir, "checkpoint_state.json"))
+	checkpointState, err := deserializeStateFromDir(tempDir)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("error reading checkpoint_state.json")
-		return nil, nil, nil, err
-	}
-
-	var checkpointState task.ProcessState
-	err = json.Unmarshal(data, &checkpointState)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("error unmarshaling checkpoint_state.json")
+		s.logger.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, err
 	}
 
 	open_fds := checkpointState.ProcessInfo.OpenFds
 
 	// create logfile for redirection
-	filename := fmt.Sprintf("/var/log/cedana-output-%s.log", fmt.Sprint(time.Now().Unix()))
+	filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
 	file, err := os.Create(filename)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("error creating logfile")
+		s.logger.Error().Err(err).Msg("error creating logfile")
 		return nil, nil, nil, err
 	}
 
@@ -122,12 +120,12 @@ func (c *Client) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpo
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished)
 
-	if err := chmodRecursive(tmpdir, 0o777); err != nil {
-		logger.Fatal().Err(err).Msg("error changing permissions")
+	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
+		s.logger.Error().Err(err).Msg("error changing permissions")
 		return nil, nil, nil, err
 	}
 
-	return &tmpdir, &checkpointState, extraFiles, nil
+	return &tempDir, checkpointState, extraFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -140,9 +138,8 @@ func chmodRecursive(path string, mode os.FileMode) error {
 	})
 }
 
-func (c *Client) ContainerRestore(imgPath string, containerId string) error {
-	logger := utils.GetLogger()
-	logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
+func (s *service) containerdRestore(ctx context.Context, imgPath string, containerId string) error {
+	s.logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
 		return err
@@ -150,75 +147,39 @@ func (c *Client) ContainerRestore(imgPath string, containerId string) error {
 	return nil
 }
 
-// restoreFiles looks at the files copied during checkpoint and copies them back to the
-// original path, creating folders along the way.
-func (c *Client) restoreFiles(ps *task.ProcessState, dir string) {
-	_, err := os.Stat(dir)
-	if err != nil {
-		return
-	}
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		for _, f := range ps.ProcessInfo.OpenFds {
-			if info.Name() == filepath.Base(f.Path) {
-				// copy file to path
-				err = os.MkdirAll(filepath.Dir(f.Path), 0755)
-				if err != nil {
-					return err
-				}
-
-				logger.Info().Msgf("copying file %s to %s", path, f)
-				// copyFile copies to folder, so grab folder path
-				err := utils.CopyFile(path, filepath.Dir(f.Path))
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		logger.Fatal().Err(err).Msg("error copying files")
-	}
-}
-
-func (c *Client) prepareRestoreOpts() *rpc.CriuOpts {
+func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel: proto.Int32(4),
-		LogFile:  proto.String("cedana-restore.log"),
+		LogLevel: proto.Int32(CRIU_RESTORE_LOG_LEVEL),
+		LogFile:  proto.String(CRIU_RESTORE_LOG_FILE),
 	}
 
 	return &opts
 }
 
-func (c *Client) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
-	_, restoreSpan := c.tracer.Start(ctx, "restore")
+func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
+	_, restoreSpan := s.tracer.Start(ctx, "restore")
 	restoreSpan.SetAttributes(attribute.Bool("container", false))
 	defer restoreSpan.End()
 
 	img, err := os.Open(dir)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("could not open directory")
+		s.logger.Fatal().Err(err).Msg("could not open directory")
 	}
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 
-	resp, err := c.CRIU.Restore(opts, &nfy, extraFiles)
+	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
-		logger.Warn().Msgf("error restoring process: %v", err)
+		s.logger.Warn().Msgf("error restoring process: %v", err)
 		restoreSpan.RecordError(err)
 		return nil, err
 	}
 
-	logger.Info().Msgf("process restored: %v", resp)
+	s.logger.Info().Msgf("process restored: %v", resp)
 
-	c.cleanupClient()
 	return resp.Restore.Pid, nil
 }
 
@@ -276,8 +237,8 @@ type linkPairs struct {
 	Value string
 }
 
-func (c *Client) RuncRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
-	ctx, restoreSpan := c.tracer.Start(ctx, "restore")
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
+	ctx, restoreSpan := s.tracer.Start(ctx, "restore")
 	restoreSpan.SetAttributes(attribute.Bool("container", true))
 	defer restoreSpan.End()
 
@@ -302,43 +263,32 @@ func (c *Client) RuncRestore(ctx context.Context, imgPath, containerId string, i
 		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
 			return err
 		}
-
 		if err := rsyncDirectories(runPath, newRunPath); err != nil {
 			return err
 		}
-
 		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
 		if err != nil {
 			return err
 		}
-
 		if err := json.Unmarshal(configFile, &spec); err != nil {
 			return err
 		}
-
 		recursivelyReplace(&spec, oldContainerId, containerId)
-
 		varPath := spec.Root.Path + "/"
-
 		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
 			return err
 		}
-
 		if err := rsyncDirectories(varPath, newVarPath); err != nil {
 			return err
 		}
-
 		spec.Root.Path = newVarPath
-
 		updatedConfig, err := json.Marshal(spec)
 		if err != nil {
 			return err
 		}
-
 		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
 			return err
 		}
-
 		opts.Bundle = newBundle + "/userdata"
 	}
 
@@ -392,14 +342,14 @@ func (c *Client) RuncRestore(ctx context.Context, imgPath, containerId string, i
 		return err
 	}
 
-	go func() {
-		if isPodman {
+	if isPodman {
+		go func() {
 			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
 				log.Fatal(err)
 			}
-		}
-	}()
-	return nil
+		}()
+	}
+	return err
 }
 
 // Bundle represents an OCI bundle
@@ -551,16 +501,16 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
 	var dir *string
 	var pid *int32
 
-	opts := c.prepareRestoreOpts()
+	opts := s.prepareRestoreOpts()
 	nfy := Notify{
-		Logger: logger,
+		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, err := c.prepareRestore(ctx, opts, args.CheckpointPath)
+	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args.CheckpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -571,13 +521,13 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = c.gpuRestore(ctx, *dir, args.UID, args.GID)
+				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID)
 				return err
 			},
 		}
 	}
 
-	pid, err = c.criuRestore(ctx, opts, nfy, *dir, extraFiles)
+	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +536,7 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 		go func() {
 			proc, err := process.NewProcess(*pid)
 			if err != nil {
-				logger.Error().Msgf("could not find process: %v", err)
+				s.logger.Error().Msgf("could not find process: %v", err)
 				return
 			}
 			for {
@@ -594,9 +544,10 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 				if err != nil || !running {
 					break
 				}
+				// XXX YA: Sleeping on loop is always bad, should use a channel or cond var
 				time.Sleep(1 * time.Second)
 			}
-			logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
+			s.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
 			gpuCmd.Process.Kill()
 		}()
 	}
@@ -604,13 +555,13 @@ func (c *Client) Restore(ctx context.Context, args *task.RestoreArgs) (*int32, e
 	return pid, nil
 }
 
-func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
-	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-restore")
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
+	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(uid, gid, logger)
+	gpuCmd, err := StartGPUController(uid, gid, s.logger)
 	if err != nil {
-		logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		s.logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err
 	}
 
@@ -633,11 +584,11 @@ func (c *Client) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*
 	}
 	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {
-		logger.Warn().Msgf("could not restore gpu: %v", err)
+		s.logger.Warn().Msgf("could not restore gpu: %v", err)
 		return nil, err
 	}
 
-	logger.Info().Msgf("gpu controller returned %v", resp)
+	s.logger.Info().Msgf("gpu controller returned %v", resp)
 
 	if !resp.Success {
 		return nil, fmt.Errorf("could not restore gpu")

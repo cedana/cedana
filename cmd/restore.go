@@ -5,9 +5,9 @@ package cmd
 import (
 	"os"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
@@ -23,7 +23,9 @@ var restoreProcessCmd = &cobra.Command{
 	Short: "Manually restore a process from a checkpoint located at input path",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -32,11 +34,11 @@ var restoreProcessCmd = &cobra.Command{
 
 		path := args[0]
 		restoreArgs := task.RestoreArgs{
-			CheckpointId:   "Not Implemented",
+			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 		}
 
-		resp, err := cts.RestoreTask(&restoreArgs)
+		resp, err := cts.Restore(ctx, &restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -44,9 +46,9 @@ var restoreProcessCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -55,79 +57,63 @@ var restoreJobCmd = &cobra.Command{
 	Short: "Manually restore a previously dumped process or container from an input id",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			logger.Error().Err(err).Msgf("error creating client")
 			return
 		}
 		defer cts.Close()
 
-		jobId := args[0]
-
 		// TODO NR: we shouldn't even be reading the db here!!
-		db := api.NewDB()
 
 		var uid uint32
 		var gid uint32
 
+		jid := args[0]
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
 		}
 
-		var restoreArgs task.RestoreArgs
+		// Query job state
+		query := task.QueryArgs{
+			JIDs: []string{jid},
+		}
+
+		res, err := cts.Query(ctx, &query)
+		if err != nil {
+			logger.Error().Msgf("Error querying job: %v", err)
+			return
+		}
+		state := res.Processes[0]
+
+		restoreArgs := task.RestoreArgs{
+			JID: jid,
+			UID: uid,
+			GID: gid,
+		}
 		if viper.GetBool("remote") {
-			jobState, err := db.GetStateFromID(jobId)
-			if err != nil {
-				logger.Error().Msgf("Error getting state from id: %v", err)
-				return
-			}
-
-			remoteState := jobState.GetRemoteState()
+			remoteState := state.GetRemoteState()
 			if remoteState == nil {
-				logger.Error().Msgf("No remote state found for id %s", jobId)
+				logger.Error().Msgf("No remote state found for id %s", jid)
 				return
 			}
-
 			// For now just grab latest checkpoint
 			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				logger.Error().Msgf("No checkpoint found for id %s", jobId)
+				logger.Error().Msgf("No checkpoint found for id %s", jid)
 				return
 			}
-
-			restoreArgs = task.RestoreArgs{
-				CheckpointId:   remoteState[len(remoteState)-1].CheckpointID,
-				CheckpointPath: "",
-				Type:           task.RestoreArgs_REMOTE,
-				JobID:          jobId,
-				UID:            uid,
-				GID:            gid,
-			}
+			restoreArgs.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
+			restoreArgs.Type = task.CRType_REMOTE
 		} else {
-			paths, err := db.GetLatestLocalCheckpoints(jobId)
-			if err != nil {
-				logger.Error().Msgf("Error getting latest local checkpoints: %v", err)
-				return
-			}
-
-			if len(paths) == 0 {
-				logger.Error().Msgf("no checkpoint found for id %s", jobId)
-				return
-			}
-
-			checkpointPath := *paths[0]
-			restoreArgs = task.RestoreArgs{
-				CheckpointId:   "",
-				CheckpointPath: checkpointPath,
-				Type:           task.RestoreArgs_LOCAL,
-				JobID:          jobId,
-				UID:            uid,
-				GID:            gid,
-			}
+			restoreArgs.CheckpointPath = state.GetCheckpointPath()
+			restoreArgs.Type = task.CRType_LOCAL
 		}
-		// pass path to restore task
-		resp, err := cts.RestoreTask(&restoreArgs)
+
+		resp, err := cts.Restore(ctx, &restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -135,9 +121,9 @@ var restoreJobCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -146,7 +132,9 @@ var containerdRestoreCmd = &cobra.Command{
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
@@ -155,12 +143,12 @@ var containerdRestoreCmd = &cobra.Command{
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
-		restoreArgs := &task.ContainerRestoreArgs{
+		restoreArgs := &task.ContainerdRestoreArgs{
 			ImgPath:     ref,
-			ContainerId: id,
+			ContainerID: id,
 		}
 
-		resp, err := cts.RestoreContainer(restoreArgs)
+		resp, err := cts.ContainerdRestore(ctx, restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -168,9 +156,9 @@ var containerdRestoreCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-		} else {
-			logger.Info().Msgf("Response: %v", resp.Message)
+			return
 		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }
 
@@ -179,18 +167,20 @@ var runcRestoreCmd = &cobra.Command{
 	Short: "Manually restore a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		cts, err := services.NewClient(api.Address)
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return
 		}
 		defer cts.Close()
 
-		root, _ := cmd.Flags().GetString(rootFlag)
-		bundle, _ := cmd.Flags().GetString(bundleFlag)
-		consoleSocket, _ := cmd.Flags().GetString(consoleSocketFlag)
-		detach, _ := cmd.Flags().GetBool(detachFlag)
-		netPid, _ := cmd.Flags().GetInt32(netPidFlag)
+		root, err := cmd.Flags().GetString(rootFlag)
+		bundle, err := cmd.Flags().GetString(bundleFlag)
+		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
+		detach, err := cmd.Flags().GetBool(detachFlag)
+		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		opts := &task.RuncOpts{
 			Root:          root,
 			Bundle:        bundle,
@@ -204,15 +194,15 @@ var runcRestoreCmd = &cobra.Command{
 		isK3s, _ := cmd.Flags().GetBool(isK3sFlag)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
-			ContainerId: id,
+			ContainerID: id,
 			IsK3S:       isK3s,
 			Opts:        opts,
-			Type:        task.RuncRestoreArgs_LOCAL,
+			Type:        task.CRType_LOCAL,
 			// CheckpointId: checkpointId,
 			// FIXME YA: Where does this come from?
 		}
 
-		resp, err := cts.RestoreRunc(restoreArgs)
+		resp, err := cts.RuncRestore(ctx, restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -220,8 +210,8 @@ var runcRestoreCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
+			return
 		}
-
 		logger.Info().Msgf("Response: %v", resp.Message)
 	},
 }

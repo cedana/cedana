@@ -60,8 +60,7 @@ type CedanaStore struct {
 	tracer trace.Tracer
 }
 
-func NewCedanaStore(tracer trace.Tracer) *CedanaStore {
-	logger := GetLogger()
+func NewCedanaStore(tracer trace.Tracer, logger *zerolog.Logger) *CedanaStore {
 	url := "https://" + viper.GetString("connection.cedana_url")
 	return &CedanaStore{
 		logger: logger,
