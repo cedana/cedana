@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	bolt "go.etcd.io/bbolt"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -34,14 +35,10 @@ func setup(t *testing.T) (task.TaskServiceClient, error) {
 		t.Error(err)
 	}
 
-	c, err := InstantiateClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	logger := utils.GetLogger()
+	tracer := otel.GetTracerProvider().Tracer("server-test")
 
-	svc := service{client: c, logger: &logger}
+	svc := service{logger: logger, tracer: tracer}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {
@@ -77,12 +74,11 @@ func TestClient_RunTask(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "", Id: ""})
+		_, err = client.Start(ctx, &task.StartArgs{Task: "", JID: ""})
 
 		if err == nil {
 			t.Error("expected error but got err == nil")
 		}
-
 	})
 }
 
@@ -92,7 +88,6 @@ func TestClient_TryStartJob(t *testing.T) {
 		t.Skip("Skipping test in CI")
 	}
 	t.Run("TaskFailsOnce", func(t *testing.T) {
-
 		client, err := setup(t)
 		if err != nil {
 			t.Error("error setting up grpc client")
@@ -103,11 +98,9 @@ func TestClient_TryStartJob(t *testing.T) {
 		uid := uint32(os.Getuid())
 		gid := uint32(os.Getgid())
 
-		_, err = client.StartTask(ctx, &task.StartTaskArgs{Task: "test", Id: "test", LogOutputFile: "somefile", UID: uid, GID: gid})
-
+		_, err = client.Start(ctx, &task.StartArgs{Task: "test", JID: "test", LogOutputFile: "somefile", UID: uid, GID: gid})
 		if err != nil {
 			t.Errorf("failed to start task: %v", err)
 		}
-
 	})
 }

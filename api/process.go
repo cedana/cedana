@@ -243,9 +243,6 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 			if len(pidSet) > 0 && !pidSet[state.PID] {
 				continue
 			}
-			if err != nil {
-				return nil, status.Error(codes.NotFound, "job not found")
-			}
 			res.Processes = append(res.Processes, &state)
 		}
 	}

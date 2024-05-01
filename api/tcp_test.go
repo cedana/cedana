@@ -79,14 +79,9 @@ func Test_MultiConn(t *testing.T) {
 		t.Error(err)
 	}
 
-	c, err := InstantiateClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	logger := utils.GetLogger()
 
-	svc := service{client: c, logger: &logger}
+	svc := service{logger: logger}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {
@@ -112,8 +107,7 @@ func Test_MultiConn(t *testing.T) {
 
 	exec := tcpTests["multiconn"].exec
 
-	resp, err := client.StartTask(ctx, &task.StartTaskArgs{Task: exec, Id: exec})
-
+	resp, err := client.Start(ctx, &task.StartArgs{Task: exec, JID: exec})
 	if err != nil {
 		t.Errorf("test failed: %s", err)
 	}
@@ -121,13 +115,12 @@ func Test_MultiConn(t *testing.T) {
 	t.Cleanup(func() {
 		syscall.Kill(int(resp.PID), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
-		c.cleanupClient()
 	})
 
-	oldState, _ := c.getState(resp.PID)
+	oldState, _ := svc.getState(resp.JID)
 	t.Logf("old state: %+v", oldState)
 
-	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_LOCAL, JobID: exec})
+	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.CRType_LOCAL, JID: exec})
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,8 +130,8 @@ func Test_MultiConn(t *testing.T) {
 
 	// and validate/compare
 	// validation is important, because even if we've C/Rd it can C/R incorrectly
-
 }
+
 func Test_DatabaseConn(t *testing.T) {
 	// spin up a process w/ a connection to a database
 	// verify correctness on restore

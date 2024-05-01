@@ -64,13 +64,13 @@ func (s *service) ProcessStateStreaming(args *task.ProcessStateStreamingArgs, st
 		for range ticker.C {
 			state, err := s.getState(jid)
 			if err != nil {
-				cancel(fmt.Errorf("error getting state: ", err))
+				cancel(fmt.Errorf("error getting state: %v", err))
 				return
 			}
 
 			err = stream.Send(state)
 			if err != nil {
-				cancel(fmt.Errorf("error sending state: ", err))
+				cancel(fmt.Errorf("error sending state: %v", err))
 				return
 			}
 		}
