@@ -1,7 +1,8 @@
+import asyncio
 import cedana_bindings as cedana
 import time
 
-def main(daemon_pid):
+async def main(daemon_pid, dump_type):
     jobs = [
         "server",
         "loop",
@@ -29,7 +30,7 @@ def main(daemon_pid):
             time.sleep(5)
 
             # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv
-            cedana.run_checkpoint(daemon_pid, jobID, cedana.output_dir, process_stats)
+            await cedana.run_checkpoint(daemon_pid, jobID, cedana.output_dir, process_stats, dump_type)
             time.sleep(3)
 
             cedana.run_restore(daemon_pid, jobID, cedana.output_dir)
@@ -40,3 +41,5 @@ def main(daemon_pid):
     # unique uuid for blob id
     return "benchmark-data-" + str(time.time())
 
+if __name__ == "__main__":
+    asyncio.run(main(sys.argv))

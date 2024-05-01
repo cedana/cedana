@@ -1,3 +1,4 @@
+import asyncio
 import benchmark
 import correctness
 import os
@@ -5,6 +6,7 @@ import psutil
 import shutil
 import subprocess
 import sys
+from tplib import task_pb2
 
 benchmarking_dir = "benchmarks"
 output_dir = "benchmark_results"
@@ -89,16 +91,21 @@ def push_to_bigquery():
     table = client.get_table(table_ref)
     print("Loaded {} rows to {}".format(table.num_rows, table_id))
 
-def main(args):
+async def main(args):
     daemon_pid = setup()
     if daemon_pid == -1:
         print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
         return
 
-    if "--correctness" in args:
-        blob_id = correctness.main(daemon_pid)
+    if "--local" in args:
+        dump_type = task_pb2.DumpArgs.LOCAL
     else:
-        blob_id = benchmark.main(daemon_pid)
+        dump_type = task_pb2.DumpArgs.REMOTE
+
+    if "--correctness" in args:
+        blob_id = await correctness.main(daemon_pid, dump_type)
+    else:
+        blob_id = await benchmark.main(daemon_pid, dump_type)
 
     if not "--local" in args:
         from google.cloud import bigquery
@@ -113,4 +120,4 @@ def main(args):
     cleanup()
 
 if __name__ == "__main__":
-    main(sys.argv)
+    asyncio.run(main(sys.argv))

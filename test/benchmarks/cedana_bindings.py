@@ -1,9 +1,12 @@
 import csv
+import grpc
+import os 
 import platform
 import psutil
-import os
 import signal
 import subprocess
+from tplib import task_pb2
+from tplib import task_pb2_grpc
 import time
 
 output_dir = "benchmark_results"
@@ -144,15 +147,19 @@ def terminate_process(pid, timeout=3):
         print(f"No permission to terminate process {pid}.")
 
 
-def run_checkpoint(daemonPID, jobID, output_dir, process_stats):
-    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID)
+async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type):
+    channel = grpc.aio.insecure_channel("localhost:8080")
+    dump_args = task_pb2.DumpArgs()
+    dump_args.Dir = "/tmp"
+    dump_args.Type = dump_type
+    dump_args.JobID = jobID
+    stub = task_pb2_grpc.TaskServiceStub(channel)
+
     # initial data here is fine - we want to measure impact of daemon on system
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_checkpoint".format(output_dir, jobID)
 
-    p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
-    # used for capturing full time instead of directly exiting
-    p.wait()
+    dump_resp = await stub.Dump(dump_args)
 
     time.sleep(5)
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)

@@ -2,7 +2,7 @@ import cedana_bindings as cedana
 import psutil
 import time
 
-def main(daemon_pid):
+async def main(daemon_pid, dump_type):
     job = "nn-1gb"
     cmd = "'python3 1gb_pytorch_correctness.py'"
     print("Starting correctness test for job {} with command {}".format(job, cmd))
@@ -11,7 +11,7 @@ def main(daemon_pid):
     process_stats_base = cedana.run_exec("'python3 1gb_pytorch_correctness.py nn-1gb-base'", jobID_base)
     process_stats_saved = cedana.run_exec("'python3 1gb_pytorch_correctness.py nn-1gb-saved'", jobID_saved)
     #time.sleep(5)
-    #cedana.run_checkpoint(daemon_pid, jobID_saved, cedana.output_dir, process_stats_saved)
+    #await cedana.run_checkpoint(daemon_pid, jobID_saved, cedana.output_dir, process_stats_saved, dump_type)
     #time.sleep(3) # vary time and  check checkpoints
     #cedana.run_restore(daemon_pid, jobID_saved, cedana.output_dir)
     #time.sleep(3)
