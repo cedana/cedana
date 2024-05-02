@@ -3,7 +3,6 @@ package utils
 import (
 	"io"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -11,25 +10,14 @@ import (
 )
 
 const (
-	DEFAULT_LOG_LEVEL      = zerolog.DebugLevel
-	LOG_TIME_FORMAT_FULL   = time.RFC3339
-	LOG_CALLER_STACK_DEPTH = 3 // XXX YA: Hack-y
+	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
+	LOG_TIME_FORMAT_FULL = time.RFC3339
 )
 
 var logger zerolog.Logger
 
 func GetLogger() *zerolog.Logger {
 	return &logger
-}
-
-type LineInfoHook struct{}
-
-func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
-	_, file, line, ok := runtime.Caller(LOG_CALLER_STACK_DEPTH)
-	if ok && l >= zerolog.WarnLevel {
-		e.Str("file", file)
-		e.Int("line", line)
-	}
 }
 
 func init() {
@@ -45,9 +33,20 @@ func init() {
 		Out: os.Stdout,
 	}
 
-	logger = zerolog.New(output).
-		Level(logLevel).
-		With().
-		Timestamp().
-		Logger().Hook(LineInfoHook{})
+	// If logging below debug level, also include caller info
+
+	if logLevel <= zerolog.DebugLevel {
+		logger = zerolog.New(output).
+			Level(logLevel).
+			With().
+			Caller().
+			Timestamp().
+			Logger()
+	} else {
+		logger = zerolog.New(output).
+			Level(logLevel).
+			With().
+			Timestamp().
+			Logger()
+	}
 }
