@@ -12,6 +12,7 @@ import (
 const (
 	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
 	LOG_TIME_FORMAT_FULL = time.RFC3339
+	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
 
 var logger zerolog.Logger
@@ -24,7 +25,7 @@ type LineInfoHook struct{}
 
 func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 	if l >= zerolog.WarnLevel {
-		e.Caller()
+		e.Caller(LOG_CALLER_SKIP)
 	}
 }
 

@@ -37,7 +37,7 @@ var psCmd = &cobra.Command{
 		}
 
 		if len(resp.Processes) == 0 {
-			logger.Info().Msg("No managed processes")
+			fmt.Println("No managed processes")
 			return
 		}
 
