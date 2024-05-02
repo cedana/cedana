@@ -24,10 +24,12 @@ func (s *service) updateState(jid string, state *task.ProcessState) error {
 	return s.db.Put([][]byte{DB_BUCKET_JOBS}, []byte(jid), marshalledState)
 }
 
+// Does not return an error if state is not found for a JID.
+// Returns nil in that case
 func (s *service) getState(jid string) (*task.ProcessState, error) {
 	value, err := s.db.Get([][]byte{DB_BUCKET_JOBS}, []byte(jid))
 	if value == nil {
-		return nil, fmt.Errorf("job not found")
+		return nil, nil
 	}
 	state := task.ProcessState{}
 	err = json.Unmarshal(value, &state)

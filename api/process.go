@@ -97,6 +97,9 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 			err = status.Error(codes.NotFound, err.Error())
 			return nil, err
 		}
+		if state == nil {
+			return nil, status.Error(codes.NotFound, "job not found")
+		}
 		pid = state.PID
 	}
 
@@ -226,7 +229,9 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 			if err != nil {
 				return nil, status.Error(codes.NotFound, "job not found")
 			}
-			res.Processes = append(res.Processes, state)
+			if state != nil {
+				res.Processes = append(res.Processes, state)
+			}
 		}
 	} else {
 		pidSet := make(map[int32]bool)
