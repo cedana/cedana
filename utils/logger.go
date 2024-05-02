@@ -10,14 +10,23 @@ import (
 )
 
 const (
-	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
-	LOG_TIME_FORMAT_FULL = time.RFC3339
+	DEFAULT_LOG_LEVEL      = zerolog.DebugLevel
+	LOG_TIME_FORMAT_FULL   = time.RFC3339
+	LOG_CALLER_STACK_DEPTH = 3 // XXX YA: Hack-y
 )
 
 var logger zerolog.Logger
 
 func GetLogger() *zerolog.Logger {
 	return &logger
+}
+
+type LineInfoHook struct{}
+
+func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
+	if l >= zerolog.WarnLevel {
+		e.Caller()
+	}
 }
 
 func init() {
@@ -33,20 +42,9 @@ func init() {
 		Out: os.Stdout,
 	}
 
-	// If logging below debug level, also include caller info
-
-	if logLevel <= zerolog.DebugLevel {
-		logger = zerolog.New(output).
-			Level(logLevel).
-			With().
-			Caller().
-			Timestamp().
-			Logger()
-	} else {
-		logger = zerolog.New(output).
-			Level(logLevel).
-			With().
-			Timestamp().
-			Logger()
-	}
+	logger = zerolog.New(output).
+		Level(logLevel).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
 }
