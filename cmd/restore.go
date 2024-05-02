@@ -66,8 +66,6 @@ var restoreJobCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		// TODO NR: we shouldn't even be reading the db here!!
-
 		var uid uint32
 		var gid uint32
 

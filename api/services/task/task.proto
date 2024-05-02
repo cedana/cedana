@@ -4,6 +4,10 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+// Query functions here work just like your familiar query functions in HTTP GET requests,
+// where if you don't specify anything in the query, it will return all the valid results,
+// but if you do it will filter out based on the query parameters.
+
 service TaskService {
   // Process
   rpc Start(StartArgs) returns (StartResp);
