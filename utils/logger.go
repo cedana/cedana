@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	DEFAULT_LOG_LEVEL      = zerolog.DebugLevel
-	LOG_TIME_FORMAT_FULL   = time.RFC3339
-	LOG_CALLER_STACK_DEPTH = 3 // XXX YA: Hack-y
+	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
+	LOG_TIME_FORMAT_FULL = time.RFC3339
 )
 
 var logger zerolog.Logger
