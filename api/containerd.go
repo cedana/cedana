@@ -35,6 +35,8 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
+  // TODO: Update state to add a job
+
 	return &task.ContainerdDumpResp{
 		Message:        "Dumped containerd container",
 		CheckpointPath: state.CheckpointPath,

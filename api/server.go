@@ -42,7 +42,7 @@ type service struct {
 	logger  *zerolog.Logger
 	tracer  trace.Tracer
 	store   *utils.CedanaStore
-	logFile *os.File
+	logFile *os.File // for streaming and storing logs
 
 	task.UnimplementedTaskServiceServer
 }
