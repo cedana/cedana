@@ -6,6 +6,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN apt-get update && \
     apt-get install -y software-properties-common git zip
 
+# TODO Git fetch to get utd cedana 
 RUN git clone --depth=1 --branch=hotfix/arch https://github.com/cedana/cedana.git
 WORKDIR /cedana/cmd/cedana-helper
 RUN go build

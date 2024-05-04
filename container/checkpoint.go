@@ -1334,6 +1334,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
+		MntnsCompatMode: proto.Bool(criuOpts.MntnsCompatMode),
 		External:        externalMounts,
 	}
 	// If the container is running in a network namespace and has
