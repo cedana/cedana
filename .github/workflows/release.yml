@@ -135,6 +135,7 @@ jobs:
         with:
           context: "{{defaultContext}}:cmd/cedana-helper"
           push: true
+          no-cache: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
