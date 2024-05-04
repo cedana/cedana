@@ -69,7 +69,7 @@ func StateList(root string) ([]map[string]string, error) {
 			}
 		}
 
-		configPath := filepath.Join("/host", bundle, "config.json")
+		configPath := filepath.Join(bundle, "config.json")
 		if _, err := os.Stat(configPath); err == nil {
 			configFile, err := os.ReadFile(configPath)
 			if err != nil {
