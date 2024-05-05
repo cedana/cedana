@@ -169,7 +169,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
 		External:        externalMounts,
-		MntnsCompatMode: true,
+		MntnsCompatMode: false,
 		TcpClose:        true,
 	}
 
