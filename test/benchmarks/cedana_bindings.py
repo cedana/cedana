@@ -164,14 +164,25 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
     time.sleep(5)
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)
 
+    return dump_resp
 
-def run_restore(daemonPID, jobID, output_dir):
-    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID)
+async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
+    channel = grpc.aio.insecure_channel("localhost:8080")
+    restore_args = task_pb2.RestoreArgs()
+    restore_args.Type = restore_type
+    restore_args.JobID = jobID
+    if restore_type == task_pb2.RestoreArgs.REMOTE:
+        restore_args.CheckpointId = checkpointID
+    else:
+        restore_args.CheckpointPath = checkpointID
+    restore_args.UID = os.getuid()
+    restore_args.GID = os.getgid()
+    stub = task_pb2_grpc.TaskServiceStub(channel)
+
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_restore".format(output_dir, jobID)
 
-    p = subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
-    p.wait()
+    restore_resp = await stub.Restore(restore_args)
 
     # nil value here
     process_stats = {}
@@ -180,16 +191,28 @@ def run_restore(daemonPID, jobID, output_dir):
     time.sleep(5)
     stop_recording("restore", daemonPID, initial_data, jobID, process_stats)
 
+    return restore_resp
 
-def run_exec(cmd, jobID):
+
+async def run_exec(cmd, jobID):
+    channel = grpc.aio.insecure_channel("localhost:8080")
+    start_task_args = task_pb2.StartTaskArgs()
+    start_task_args.Task = cmd
+    start_task_args.Id = jobID
+    start_task_args.WorkingDir = os.path.join(os.getcwd(), "benchmarks")
+    env = [] # format to match golang os.Environ()
+    for key in os.environ.keys():
+        env.append(key+"="+os.environ[key])
+    start_task_args.Env.extend(env)
+    start_task_args.UID = os.getuid()
+    start_task_args.GID = os.getgid()
+    stub = task_pb2_grpc.TaskServiceStub(channel)
+
+    start_task_resp = await stub.StartTask(start_task_args)
+
     process_stats = {}
-    exec_cmd = "cedana exec -w $PWD/benchmarks {} {}".format(cmd, jobID)
-
-    process = subprocess.Popen(["sh", "-c", exec_cmd], stdout=subprocess.PIPE)
-    pid = int(process.communicate()[0].decode().strip())
-    process_stats["pid"] = pid
-
-    psutil_process = psutil.Process(pid)
+    process_stats["pid"] = start_task_resp.PID
+    psutil_process = psutil.Process(start_task_resp.PID)
     process_stats["memory_kb"] = (
         psutil_process.memory_full_info().uss / 1024
     )  # convert to KB

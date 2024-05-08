@@ -97,17 +97,14 @@ async def main(args):
         print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
         return
 
-    if "--local" in args:
-        dump_type = task_pb2.DumpArgs.LOCAL
-    else:
-        dump_type = task_pb2.DumpArgs.REMOTE
+    remote = 0 if "--local" in args else 1
 
     if "--correctness" in args:
-        blob_id = await correctness.main(daemon_pid, dump_type)
+        blob_id = await correctness.main(daemon_pid, remote)
     else:
-        blob_id = await benchmark.main(daemon_pid, dump_type)
+        blob_id = await benchmark.main(daemon_pid, remote)
 
-    if not "--local" in args:
+    if remote:
         from google.cloud import bigquery
         from google.cloud import storage
         from google.cloud.bigquery import LoadJobConfig, SourceFormat
