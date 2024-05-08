@@ -1,12 +1,14 @@
 #!/bin/bash 
 
-# entrypoint for benchmarking docker script 
+# entrypoint for benchmarking docker script
+./reset.sh
 
-# start otelcol polling 
-otelcol-contrib --config test/benchmarks/otelcol-config.yaml &
+# start otelcol polling
+otelcol-contrib --config test/benchmarks/local-otelcol-config.yaml &
 
-# start daemon 
-sudo -E ./cedana daemon start & 
+# start daemon
+./build-start-daemon.sh
 
-# start benchmarking
-sudo -E python3 test/benchmarks/benchmark.py
+# start benchmarking, pass all args
+sudo -E python3 test/benchmarks/benchmark.py "$@"
+

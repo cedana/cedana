@@ -306,6 +306,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
+		MntnsCompatMode: true,
 	}
 	cfg, err := utils.InitConfig()
 	if err != nil {

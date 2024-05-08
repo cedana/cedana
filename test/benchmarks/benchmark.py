@@ -3,12 +3,11 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import requests
 import platform
 import profile_pb2
-from google.cloud import bigquery
-from google.cloud.bigquery import LoadJobConfig, SourceFormat
 import json
 
 
@@ -89,63 +88,12 @@ def start_recording(pid):
     return initial_data
 
 
-def clear_otel_data():
-    open("/cedana/data.json", "w").close()
-
-
-def process_otel_data():
-    with open("/cedana/data.json", "r", encoding="utf-8") as file:
-        content = file.read()
-
-    # HACK
-    cleaned_content = content.replace("\x00", "")
-    try:
-        data = json.loads(cleaned_content)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-
-    operation_details = {}
-
-    try:
-        for resourceSpan in data["resourceSpans"]:
-            for scopeSpan in resourceSpan["scopeSpans"]:
-                for span in scopeSpan["spans"]:
-                    operation_name = span["name"]
-                    start_time = int(span["startTimeUnixNano"])
-                    end_time = int(span["endTimeUnixNano"])
-                    duration_ns = end_time - start_time
-                    duration_ms = duration_ns / 1e6
-
-                    attributes = {}
-                    for attr in span.get("attributes", []):
-                        key = attr["key"]
-                        # Simplified value extraction for brevity
-                        value = attr["value"].get(
-                            "stringValue",
-                            attr["value"].get(
-                                "boolValue", attr["value"].get("intValue", "")
-                            ),
-                        )
-                        attributes[key] = value
-
-                    operation_details[operation_name] = {
-                        "duration_ms": duration_ms,
-                        "attributes": attributes,
-                    }
-
-        details_json = json.dumps(operation_details, indent=4)
-        print(details_json)
-    except Exception as e:
-        print(f"Error processing data: {e}")
-        return {}
-
-    # Assuming clear_otel_data() clears the data.json file
-    clear_otel_data()
-    return details_json
-
-
 def stop_recording(
-    operation_type, pid, initial_data, jobID, process_stats, operation_details
+    operation_type,
+    pid,
+    initial_data,
+    jobID,
+    process_stats,
 ):
     p = psutil.Process(pid)
     current_cpu_times = p.cpu_times()
@@ -202,12 +150,12 @@ def stop_recording(
                     "Read Bytes (MB)",
                     "CPU Utilization (Secs)",
                     "CPU Used (Percent)",
-                    "Raw Durations",
                     "Cedana Version",
                     "Processor",
                     "Physical Cores",
                     "CPU Cores",
                     "Memory (GB)",
+                    "blob_id",
                 ]
             )
 
@@ -225,12 +173,12 @@ def stop_recording(
                 read_bytes_diff / (1024 * 1024),  # convert to MB
                 cpu_utilization,
                 cpu_percent,
-                operation_details,
                 cedana_version,
                 processor,
                 physical_cores,
                 cpu_count,
                 memory,
+                "",
             ]
         )
 
@@ -241,33 +189,24 @@ def analyze_pprof(filename):
     pass
 
 
-def run_checkpoint(daemonPID, jobID, iteration, output_dir, process_stats):
-    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(
-        jobID + "-" + str(iteration)
-    )
-
+def run_checkpoint(daemonPID, jobID, output_dir, process_stats):
+    chkpt_cmd = "sudo -E ./cedana dump job {} -d tmp".format(jobID)
     # initial data here is fine - we want to measure impact of daemon on system
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}_checkpoint".format(
-        output_dir, jobID, iteration
-    )
+    cpu_profile_filename = "{}/cpu_{}_checkpoint".format(output_dir, jobID)
 
     p = subprocess.Popen(["sh", "-c", chkpt_cmd], stdout=subprocess.PIPE)
     # used for capturing full time instead of directly exiting
     p.wait()
 
     time.sleep(5)
-    otel_data = process_otel_data()
-    stop_recording(
-        "checkpoint", daemonPID, initial_data, jobID, process_stats, otel_data
-    )
+    stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)
 
 
-def run_restore(daemonPID, jobID, iteration, output_dir):
-    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID + "-" + str(iteration))
-
+def run_restore(daemonPID, jobID, output_dir):
+    restore_cmd = "sudo -E ./cedana restore job {}".format(jobID)
     initial_data = start_recording(daemonPID)
-    cpu_profile_filename = "{}/cpu_{}_{}_restore".format(output_dir, jobID, iteration)
+    cpu_profile_filename = "{}/cpu_{}_restore".format(output_dir, jobID)
 
     p = subprocess.Popen(["sh", "-c", restore_cmd], stdout=subprocess.PIPE)
     p.wait()
@@ -277,13 +216,12 @@ def run_restore(daemonPID, jobID, iteration, output_dir):
     process_stats["memory_kb"] = 0
 
     time.sleep(5)
-    otel_data = process_otel_data()
-    stop_recording("restore", daemonPID, initial_data, jobID, process_stats, otel_data)
+    stop_recording("restore", daemonPID, initial_data, jobID, process_stats)
 
 
 def run_exec(cmd, jobID):
     process_stats = {}
-    exec_cmd = "./cedana exec {} {}".format(cmd, jobID)
+    exec_cmd = "cedana exec -w $PWD/benchmarks {} {}".format(cmd, jobID)
 
     process = subprocess.Popen(["sh", "-c", exec_cmd], stdout=subprocess.PIPE)
     pid = int(process.communicate()[0].decode().strip())
@@ -317,6 +255,33 @@ def terminate_process(pid, timeout=3):
         print(f"Process {pid} does not exist.")
     except PermissionError:
         print(f"No permission to terminate process {pid}.")
+
+
+def push_otel_to_bucket(filename, blob_id):
+    client = storage.Client()
+    bucket = client.bucket("benchmark-otel-data")
+    blob = bucket.blob(blob_id)
+    blob.upload_from_filename(filename)
+
+
+def attach_bucket_id(csv_file, blob_id):
+    # read csv file
+    with open(csv_file, mode="r") as file:
+        csv_reader = csv.reader(file)
+        rows = list(csv_reader)
+
+        # assuming the first row is the header containing column names
+    header = rows[0]
+    blob_id_column_index = header.index("blob_id")
+
+    # update blob_id for each row
+    for row in rows[1:]:  # skip header row
+        row[blob_id_column_index] = blob_id
+
+    # write csv file
+    with open(csv_file, mode="w", newline="") as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerows(rows)
 
 
 def push_to_bigquery():
@@ -355,9 +320,15 @@ def push_to_bigquery():
     print("Loaded {} rows to {}".format(table.num_rows, table_id))
 
 
-def main():
+def main(args):
+    if "--local" in args:
+        local = True
+    else:   
+        from google.cloud import bigquery
+        from google.cloud import storage
+        from google.cloud.bigquery import LoadJobConfig, SourceFormat
     daemon_pid = setup()
-    jobIDs = [
+    jobs = [
         "server",
         "loop",
         "vscode-server",
@@ -365,43 +336,64 @@ def main():
         "nn-1gb",
     ]
     cmds = [
-        "./benchmarks/server",
-        "./benchmarks/test.sh",
+        "./server",
+        "./test.sh",
         "'code-server --bind-addr localhost:1234'",
-        "'python3 benchmarks/regression/main.py'",
-        "'python3 benchmarks/1gb_pytorch.py'",
+        "'python3 regression/main.py'",
+        "'python3 1gb_pytorch.py'",
     ]
 
-    # run in a loop
-    num_samples = 10
-    for x in range(len(jobIDs)):
-        print(
-            "Starting benchmarks for job {} with command {}".format(jobIDs[x], cmds[x])
-        )
-        jobID = jobIDs[x]
-        for y in range(num_samples):
-            # we pass a job ID + iteration to generate a unique one every time.
-            # sometimes in docker containers, the db file doesn't update fast (especially for the quick benchmarks) and
-            # we end up getting a killed PID.
-            process_stats = run_exec(cmds[x], jobID + "-" + str(y))
-            # wait a few seconds for memory to allocate
-            time.sleep(5)
+    if "--correctness" in args:
+        job = "nn-1gb"
+        cmd = "'python3 1gb_pytorch_correctness.py'"
+        print("Starting correctness test for job {} with command {}".format(job, cmd))
+        jobID_base = job + "-base"
+        jobID_saved = job + "-saved"
+        process_stats_base = run_exec("'python3 1gb_pytorch_correctness.py nn-1gb-base'", jobID_base)
+        process_stats_saved = run_exec("'python3 1gb_pytorch_correctness.py nn-1gb-saved'", jobID_saved)
+        time.sleep(5)
+        run_checkpoint(daemon_pid, jobID_saved, output_dir, process_stats_saved)
+        time.sleep(3) # vary time and  check checkpoints
+        run_restore(daemon_pid, jobID_saved, output_dir)
+        time.sleep(3)
+        print("process_stats_base:\n", process_stats_base)
+        print("process_stats_saved:\n", process_stats_saved)
+        # do not terminate, wait for the jobs to exit and then compare checkpoints
+        print("psutil.process_iter([\"pid\"]) = \n",psutil.pids())
+        while process_stats_base["pid"] in psutil.pids() or process_stats_saved["pid"] in psutil.pids():
+            continue
+        print("[PROCESS\u001b[35m",jobID_base, "\033[0mAND PROCESS\u001b[35m", jobID_saved, "\033[0mDONE.]")
+    else:
+        # run in a loop
+        num_samples = 5
+        for x in range(len(jobs)):
+            print("Starting benchmarks for job {} with command {}".format(jobs[x], cmds[x]))
+            job = jobs[x]
+            for y in range(num_samples):
+                jobID = job + "-" + str(y)
+                process_stats = run_exec(cmds[x], jobID)
+                # wait a few seconds for memory to allocate
+                time.sleep(5)
 
-            clear_otel_data()
+                # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv
+                run_checkpoint(daemon_pid, jobID, output_dir, process_stats)
+                time.sleep(3)
 
-            # we don't mutate jobID for checkpoint/restore here so we can pass the unadulterated one to our csv
-            run_checkpoint(daemon_pid, jobID, y, output_dir, process_stats)
-            time.sleep(3)
+                run_restore(daemon_pid, jobID, output_dir)
+                time.sleep(3)
 
-            run_restore(daemon_pid, jobID, y, output_dir)
-            time.sleep(3)
+                terminate_process(process_stats["pid"])
 
-            terminate_process(process_stats["pid"])
+        if local:
+            return
+        # unique uuid for blob id
+        blob_id = "benchmark-data-" + str(time.time())
+        push_otel_to_bucket("/cedana/data.json", blob_id)
+        attach_bucket_id("benchmark_output.csv", blob_id)
+        push_to_bigquery()
+        # delete benchmarking folder
+        cleanup()
 
-    push_to_bigquery()
 
-    # delete benchmarking folder
-    cleanup()
-
-
-main()
+if __name__ == "__main__":
+    main(sys.argv)

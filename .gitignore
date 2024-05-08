@@ -9,3 +9,7 @@ client_config.yaml
 tmp
 
 cedana_restore
+
+# local benchmarking
+data.json
+/benchmarks/

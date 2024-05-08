@@ -13,7 +13,7 @@ RUN apt-get update && \
 RUN add-apt-repository ppa:criu/ppa
 RUN apt update && apt install -y criu python3 pip sudo 
 
-RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana 
+RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
 WORKDIR /cedana 
 
 ENV USER="root"
@@ -25,7 +25,7 @@ RUN cd test/benchmarks pip install -r requirements
 
 RUN mkdir benchmark_results
 ## have to force protobuf compilation with older version
-RUN pip install protobuf==3.20.1 requests psutil google-cloud-bigquery torch
+RUN pip install --upgrade protobuf==3.20.1 requests psutil google-cloud-bigquery google-cloud-storage torch numpy
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 RUN git fetch 
