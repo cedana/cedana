@@ -12,6 +12,8 @@ CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 IS_K8S=${IS_K8S:-0}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 
+python3 -m pip install -i https://test.pypi.org/simple/ tplib-lianac
+
 echo "Building $APP_NAME..."
 go build 
 

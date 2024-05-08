@@ -10,5 +10,5 @@ otelcol-contrib --config test/benchmarks/local-otelcol-config.yaml &
 ./build-start-daemon.sh
 
 # start benchmarking, pass all args
-sudo -E python3 test/benchmarks/benchmark.py "$@"
+sudo -E python3 test/benchmarks/performance.py "$@"
 

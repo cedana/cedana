@@ -90,12 +90,12 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	}
 
 	s.client.generateState(pid)
-	var state task.ProcessState
+	state := &task.ProcessState{
+		Flag: task.FlagEnum_JOB_RUNNING,
+		PID:  pid,
+	}
 
-	state.Flag = task.FlagEnum_JOB_RUNNING
-	state.PID = pid
-
-	err = s.client.db.CreateOrUpdateCedanaProcess(args.JobID, &state)
+	err = s.client.db.CreateOrUpdateCedanaProcess(args.JobID, state)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -110,27 +110,27 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	var resp task.DumpResp
 
+	state, err = s.client.db.GetStateFromID(args.JobID)
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+		return nil, st.Err()
+	}
+	if state == nil {
+		st := status.New(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
+	}
+
 	switch args.Type {
 	case task.DumpArgs_LOCAL:
 		resp = task.DumpResp{
-			Message: fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+			CheckpointID: state.CheckpointPath,
 		}
 
 	case task.DumpArgs_REMOTE:
-		state, err := s.client.db.GetStateFromID(args.JobID)
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-			return nil, st.Err()
-		}
-
-		if state == nil {
-			st := status.New(codes.NotFound, fmt.Sprintf("state not found for job %v", args.JobID))
-			st.WithDetails(&errdetails.ErrorInfo{
-				Reason: err.Error(),
-			})
-			return nil, st.Err()
-		}
-
 		checkpointPath := state.CheckpointPath
 
 		file, err := os.Open(checkpointPath)
@@ -206,8 +206,9 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	switch args.Type {
 
 	case task.RestoreArgs_LOCAL:
-		// get checkpointPath from db
-		// assume a suitable file has been passed to args
+		if args.CheckpointPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
 		pid, err := s.client.Restore(ctx, args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
