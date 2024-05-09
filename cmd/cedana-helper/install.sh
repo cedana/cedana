@@ -2,6 +2,8 @@
 
 chroot /host <<"EOT"
 
+## These steps are unecessary if we're using a Cedana AMI or image (that has these dependencies preinstalled).
+
 # Check whether git is already installed
 if ! command -v git &> /dev/null; then
     yum install -y git
