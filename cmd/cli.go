@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 
 	"github.com/cedana/cedana/api"
@@ -549,6 +552,58 @@ var perfCmd = &cobra.Command{
 	Short: "Profile Cedana with performance counters",
 }
 
+var perfCritCmd = &cobra.Command{
+	Use:   "crit",
+	Short: "CRiu Image Tool",
+}
+
+var perfCritShowCmd = &cobra.Command{
+	Use:   "show /checkpointPath",
+	Short: "convert criu image from binary to human-readable json",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("requires a checkpoint path (directory or image) argument, use cedana ps to see checkpoint locations\n")
+		}
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli, err := NewCLI()
+		if err != nil {
+			return err
+		}
+		ckptPath := args[0]
+		fi, err := os.Stat(ckptPath)
+		if err != nil {
+			return err
+		}
+		if fi.IsDir() == true { // `crit show` all possible files in dir
+			cli.logger.Info().Msgf("crit show all files in %s", ckptPath)
+		} else { // `crit show` single file
+			cmd := exec.Command("crit", "show", ckptPath)
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &out
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf(out.String())
+			} else {
+				ext := filepath.Ext(ckptPath)
+				jsonPath := ckptPath[:len(ckptPath)-len(ext)] + ".json"
+				file, err := os.Create(jsonPath)
+				if err != nil {
+					return err
+				}
+				defer file.Close()
+				_, err = out.WriteTo(file)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("converted criu image %s to %s\n", ckptPath, jsonPath)
+			}
+		}
+		return nil
+	},
+}
+
 var perfStatCmd = &cobra.Command{
 	Use:   "stat",
 	Short: "Run a command and gather performance counter statistics",
@@ -590,7 +645,9 @@ func init() {
 	dumpCmd.AddCommand(dumpJobCmd)
 	dumpJobCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to dump to")
 
+	perfCritCmd.AddCommand(perfCritShowCmd)
 	perfStatCmd.Flags().Int32VarP(&statPID, "pid <pid>", "p", 0, "stat events on existing process id")
+	perfCmd.AddCommand(perfCritCmd)
 	perfCmd.AddCommand(perfStatCmd)
 
 	restoreCmd.AddCommand(restoreProcessCmd)
