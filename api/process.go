@@ -121,7 +121,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	switch args.Type {
 	case task.CRType_LOCAL:
 		resp = task.DumpResp{
-			Message: fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+			CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
 		}
 
 	case task.CRType_REMOTE:
