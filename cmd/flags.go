@@ -16,4 +16,6 @@ const (
 	isK3sFlag          = "is-k3s"
 	netPidFlag         = "net-pid"
 	tcpEstablishedFlag = "tcp-established"
+	startChrootFlag    = "start-chroot"
+	setupHostFlag      = "setup-host"
 )
