@@ -16,4 +16,5 @@ const (
 	isK3sFlag          = "is-k3s"
 	netPidFlag         = "net-pid"
 	tcpEstablishedFlag = "tcp-established"
+	gpuEnabledFlag     = "gpu-enabled"
 )

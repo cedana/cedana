@@ -109,7 +109,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	err = s.dump(ctx, args.Dir, state)
+	err = s.dump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
 		dumpTracer.RecordError(st.Err())
@@ -272,7 +272,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 
 	var gpuCmd *exec.Cmd
 	var err error
-	if viper.GetBool("gpu_enabled") {
+	if args.GPU {
 		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
 		if err != nil {

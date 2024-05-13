@@ -60,6 +60,7 @@ var execTaskCmd = &cobra.Command{
 		env = os.Environ()
 
 		wd, _ := cmd.Flags().GetString(wdFlag)
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		taskArgs := &task.StartArgs{
 			Task:       executable,
 			WorkingDir: wd,
@@ -67,6 +68,7 @@ var execTaskCmd = &cobra.Command{
 			UID:        uid,
 			GID:        gid,
 			JID:        jid,
+			GPU:        gpuEnabled,
 		}
 
 		resp, err := cts.Start(ctx, taskArgs)
@@ -87,6 +89,7 @@ func init() {
 	execTaskCmd.Flags().StringP(wdFlag, "w", "", "working directory")
 	execTaskCmd.Flags().BoolP(rootFlag, "r", false, "run as root")
 	execTaskCmd.Flags().StringP(idFlag, "i", "", "job id to use")
+	execTaskCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "enable gpu checkpointing")
 
 	rootCmd.AddCommand(execTaskCmd)
 }

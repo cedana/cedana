@@ -221,16 +221,15 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return err
 }
 
-func (s *service) dump(ctx context.Context, dir string, state *task.ProcessState) error {
+func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
-	dumpdir, err := s.prepareDump(ctx, state, dir, opts)
+	dumpdir, err := s.prepareDump(ctx, state, args.Dir, opts)
 	if err != nil {
 		return err
 	}
 
-	// TODO NR:add another check here for task running w/ accel resources
 	var GPUCheckpointed bool
-	if viper.GetBool("gpu_enabled") {
+	if args.GPU {
 		err = s.gpuDump(ctx, dumpdir)
 		if err != nil {
 			return err
@@ -243,7 +242,7 @@ func (s *service) dump(ctx context.Context, dir string, state *task.ProcessState
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
+		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
 		return err
 	}
 	defer img.Close()
