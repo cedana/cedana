@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
+	DB "github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -71,22 +71,11 @@ func Test_MultiConn(t *testing.T) {
 		srv.Stop()
 	})
 
-	mockDB, err := bolt.Open("test.db", 0600, nil)
-	t.Cleanup(func() {
-		mockDB.Close()
-	})
-	if err != nil {
-		t.Error(err)
-	}
-
-	c, err := InstantiateClient()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mockDB := DB.NewLocalDB("test.db")
 
 	logger := utils.GetLogger()
 
-	svc := service{client: c, logger: &logger}
+	svc := service{logger: logger, db: mockDB}
 	task.RegisterTaskServiceServer(srv, &svc)
 
 	go func() {
@@ -112,8 +101,7 @@ func Test_MultiConn(t *testing.T) {
 
 	exec := tcpTests["multiconn"].exec
 
-	resp, err := client.StartTask(ctx, &task.StartTaskArgs{Task: exec, Id: exec})
-
+	resp, err := client.Start(ctx, &task.StartArgs{Task: exec, JID: exec})
 	if err != nil {
 		t.Errorf("test failed: %s", err)
 	}
@@ -121,13 +109,12 @@ func Test_MultiConn(t *testing.T) {
 	t.Cleanup(func() {
 		syscall.Kill(int(resp.PID), syscall.SIGKILL)
 		os.RemoveAll("dumpdir")
-		c.cleanupClient()
 	})
 
-	oldState, _ := c.getState(resp.PID)
+	oldState, _ := svc.getState(resp.JID)
 	t.Logf("old state: %+v", oldState)
 
-	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.DumpArgs_LOCAL, JobID: exec})
+	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.CRType_LOCAL, JID: exec})
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,8 +124,8 @@ func Test_MultiConn(t *testing.T) {
 
 	// and validate/compare
 	// validation is important, because even if we've C/Rd it can C/R incorrectly
-
 }
+
 func Test_DatabaseConn(t *testing.T) {
 	// spin up a process w/ a connection to a database
 	// verify correctness on restore

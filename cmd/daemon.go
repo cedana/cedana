@@ -1,66 +1,76 @@
 package cmd
 
+// This file contains all the daemon-related commands when starting `cedana daemon ...`
+
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-var clientDaemonCmd = &cobra.Command{
+const (
+	gpuControllerBinaryName = "gpucontroller"
+	gpuControllerBinaryPath = "/usr/local/bin/gpu-controller"
+	gpuSharedLibName        = "libcedana"
+	gpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
+)
+
+var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("missing subcommand")
-	},
 }
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := utils.GetLogger()
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		if os.Getuid() != 0 {
+			logger.Error().Msg("daemon must be run as root")
+			return
+		}
 
 		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to initialize otel")
+			logger.Warn().Err(err).Msg("Failed to initialize otel")
 		}
-		defer stopOtel(cmd.Context())
+		defer stopOtel(ctx)
 
-		if os.Getenv("CEDANA_PROFILING_ENABLED") == "true" {
+		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
 
-		if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-			err := pullGPUBinary("gpucontroller", "/usr/local/bin/gpu-controller")
+		if viper.GetBool("gpu_enabled") {
+			err := pullGPUBinary(ctx, gpuControllerBinaryName, gpuControllerBinaryPath)
 			if err != nil {
-				logger.Warn().Err(err).Msg("could not pull gpu controller")
+				logger.Error().Err(err).Msg("could not pull gpu controller")
+				return
 			}
 
-			err = pullGPUBinary("libcedana", "/usr/local/lib/libcedana-gpu.so")
+			err = pullGPUBinary(ctx, gpuSharedLibName, gpuSharedLibPath)
 			if err != nil {
-				logger.Warn().Err(err).Msg("could not pull libcedana")
+				logger.Error().Err(err).Msg("could not pull libcedana")
+				return
 			}
 		}
 
-		logger.Info().Msgf("daemon version %s started at %s", cmd.Parent().Version, time.Now().Local())
+		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		startgRPCServer()
+		err = api.StartServer(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msgf("stopping daemon")
+		}
 	},
-}
-
-func startgRPCServer() {
-	logger := utils.GetLogger()
-
-	if _, err := api.StartGRPCServer(); err != nil {
-		logger.Error().Err(err).Msg("Failed to start gRPC server")
-	}
-
 }
 
 // Used for debugging and profiling only!
@@ -69,13 +79,12 @@ func startProfiler() {
 }
 
 func init() {
-	rootCmd.AddCommand(clientDaemonCmd)
-	clientDaemonCmd.AddCommand(startDaemonCmd)
+	rootCmd.AddCommand(daemonCmd)
+	daemonCmd.AddCommand(startDaemonCmd)
 }
 
-func pullGPUBinary(binary string, filePath string) error {
-	logger := utils.GetLogger()
-
+func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
+	logger := ctx.Value("logger").(*zerolog.Logger)
 	_, err := os.Stat(filePath)
 	if err == nil {
 		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)
@@ -84,24 +93,19 @@ func pullGPUBinary(binary string, filePath string) error {
 		return nil
 	}
 
-	cfg, err := utils.InitConfig()
-	if err != nil {
-		logger.Err(err).Msg("could not init config")
-		return err
-	}
-	url := "https://" + cfg.Connection.CedanaUrl + "/checkpoint/gpu/" + binary
+	url := "https://" + viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
 	logger.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	var resp *http.Response
 	if err != nil {
 		logger.Err(err).Msg("could not create request")
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.Connection.CedanaAuthToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err = httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -126,5 +130,5 @@ func pullGPUBinary(binary string, filePath string) error {
 		return err
 	}
 	logger.Debug().Msgf("%s downloaded", binary)
-	return nil
+	return err
 }

@@ -1,178 +1,192 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            // Easier to attach than debug the daemon
-            "name": "attach to running cedana daemon",
-            "type": "go",
-            "asRoot": true,
-            "request": "attach",
-            "mode": "local",
-            "console": "integratedTerminal",
-        },
-        {
-            "name": "debug cedana daemon-grpc",
-            "type": "go",
-            "request": "launch",
-            "mode": "exec",
-            "asRoot": true,
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/cedana",
-            "console": "integratedTerminal",
-            "buildFlags": "-buildvcs=false",
-            "args": ["daemon", "start"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
-                "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
-            },
-        },
-        {
-            "name": "debug cedana dump",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": ["client", "dump", "-p", "${input:promptForPID}"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
-        },
-        {
-            "name": "debug cedana gpu",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": ["gpu"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
-            },
-        },
-        {
-            "name": "debug cedana dump container",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": ["dump", "container", "-i","", "-p", "${input:promptForContainer}"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
-            },
-        },
-        {
-            "name": "debug cedana restore container",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": ["client", "restore", "-i", "containerd.io/checkpoint/test123456:09-19-2023-16:56:21", "-c", "${input:promptForContainer}"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
-            },
-        },
-        {
-            "name": "debug cedana restore runc",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-restore", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint", "asdasf", "/var/run/runc", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
-            },
-        },
-        {
-            "name": "debug cedana dump runc",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "buildFlags": "-buildvcs=false",
-            "args": ["debug", "runc-dump", "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint", "8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0"],
-            "env": {
-                "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
-            },
-        },
-        {
-            "name": "debug cedana restore",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "program": "${fileDirname}",
-            "console": "integratedTerminal",
-            "args": ["client", "restore", "${input:promptForCheckpoint}"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
-        }, 
-     {
-            "name": "debug cedana container",
-            "type": "go",
-            "asRoot": true,
-            "request": "launch",
-            "mode": "debug",
-            "program": "${fileDirname}",
-            "console": "integratedTerminal",
-            "args": ["client", "restore", "${input:promptForCheckpoint}"],
-            "env": {
-                "CEDANA_ORCH_ID": "orch123",
-                "CEDANA_JOB_ID": "testjob",
-                "CEDANA_CLIENT_ID": "client123",
-                "CEDANA_AUTH_TOKEN": "test",
-                "CEDANA_LOG_LEVEL": "0",
-            },
-        }, 
-   
-    ],
-    "inputs": [
-        {
-            "id": "promptForPID",
-            "type": "promptString",
-            "description": "enter PID",
-            "default": ""
-        },
-        {
-            "id": "promptForContainer",
-            "type": "promptString",
-            "description": "enter container ID",
-            "default": ""
-        },
-        {
-            "id": "promptForCheckpoint",
-            "type": "promptString",
-            "description": "enter path to checkpoint zipfile",
-            "default": ""
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "attach to running cedana daemon",
+      "type": "go",
+      "asRoot": true,
+      "request": "attach",
+      "mode": "local",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "debug cedana daemon-grpc",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "asRoot": true,
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/cedana",
+      "console": "integratedTerminal",
+      "buildFlags": "-buildvcs=false",
+      "args": ["daemon", "start"],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
+        "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
+      }
+    },
+    {
+      "name": "debug cedana dump",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": ["client", "dump", "-p", "${input:promptForPID}"],
+      "env": {
+        "CEDANA_ORCH_ID": "orch123",
+        "CEDANA_JOB_ID": "testjob",
+        "CEDANA_CLIENT_ID": "client123",
+        "CEDANA_AUTH_TOKEN": "test",
+        "CEDANA_LOG_LEVEL": "0"
+      }
+    },
+    {
+      "name": "debug cedana gpu",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": ["gpu"],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+      }
+    },
+    {
+      "name": "debug cedana dump container",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": ["dump", "container", "-i", "", "-p", "${input:promptForContainer}"],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+      }
+    },
+    {
+      "name": "debug cedana restore container",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "client",
+        "restore",
+        "-i",
+        "containerd.io/checkpoint/test123456:09-19-2023-16:56:21",
+        "-c",
+        "${input:promptForContainer}"
+      ],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+      }
+    },
+    {
+      "name": "debug cedana restore runc",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "buildFlags": "-buildvcs=false",
+      "args": [
+        "debug",
+        "runc-restore",
+        "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint",
+        "asdasf",
+        "/var/run/runc",
+        "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/"
+      ],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+      }
+    },
+    {
+      "name": "debug cedana dump runc",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "buildFlags": "-buildvcs=false",
+      "args": [
+        "debug",
+        "runc-dump",
+        "/var/lib/containers/storage/overlay-containers/8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0/userdata/checkpoint",
+        "8b911a1f16ee7a2501f0047a993503040bbeee076e2185f8a9a1fde29889fde0"
+      ],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin"
+      }
+    },
+    {
+      "name": "debug cedana restore",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "program": "${fileDirname}",
+      "console": "integratedTerminal",
+      "args": ["client", "restore", "${input:promptForCheckpoint}"],
+      "env": {
+        "CEDANA_ORCH_ID": "orch123",
+        "CEDANA_JOB_ID": "testjob",
+        "CEDANA_CLIENT_ID": "client123",
+        "CEDANA_AUTH_TOKEN": "test",
+        "CEDANA_LOG_LEVEL": "0"
+      }
+    },
+    {
+      "name": "debug cedana container",
+      "type": "go",
+      "asRoot": true,
+      "request": "launch",
+      "mode": "debug",
+      "program": "${fileDirname}",
+      "console": "integratedTerminal",
+      "args": ["client", "restore", "${input:promptForCheckpoint}"],
+      "env": {
+        "CEDANA_ORCH_ID": "orch123",
+        "CEDANA_JOB_ID": "testjob",
+        "CEDANA_CLIENT_ID": "client123",
+        "CEDANA_AUTH_TOKEN": "test",
+        "CEDANA_LOG_LEVEL": "0"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "promptForPID",
+      "type": "promptString",
+      "description": "enter PID",
+      "default": ""
+    },
+    {
+      "id": "promptForContainer",
+      "type": "promptString",
+      "description": "enter container ID",
+      "default": ""
+    },
+    {
+      "id": "promptForCheckpoint",
+      "type": "promptString",
+      "description": "enter path to checkpoint zipfile",
+      "default": ""
+    }
+  ]
 }

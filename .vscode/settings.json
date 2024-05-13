@@ -1,9 +1,9 @@
 {
-    "go.formatTool": "gofumpt",
-    "go.lintOnSave": "package",
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.python"
-    },
-    "python.formatting.provider": "none",
-    "cmake.configureOnOpen": false
+  "go.formatTool": "gofumpt",
+  "go.lintOnSave": "package",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python"
+  },
+  "python.formatting.provider": "none",
+  "cmake.configureOnOpen": false
 }

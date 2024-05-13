@@ -7,15 +7,15 @@ SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
 CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-0}
-GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
+CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
-IS_K8S=${IS_K8S:-0}
+CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 
 python3 -m pip install -i https://test.pypi.org/simple/ tplib-lianac
 
 echo "Building $APP_NAME..."
-go build 
+go build
 
 if [ $? -ne 0 ]; then
     echo "Build failed. Exiting."
@@ -24,7 +24,7 @@ fi
 
 sudo cp $APP_NAME $APP_PATH
 
-# if cedana_gpu_enabled=atrue, echo 
+# if cedana_gpu_enabled=atrue, echo
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
 fi
@@ -37,7 +37,7 @@ if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
 
-# create systemd file 
+# create systemd file
 echo "Creating $SERVICE_FILE..."
 cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
 [Unit]
@@ -45,12 +45,12 @@ Description=Cedana Checkpointing Daemon
 [Service]
 Environment=USER=$USER
 Environment=CEDANA_GPU_ENABLED=$CEDANA_GPU_ENABLED
-Environment=GPU_CONTROLLER_PATH=$GPU_CONTROLLER_PATH
+Environment=CEDANA_GPU_CONTROLLER_PATH=$CEDANA_GPU_CONTROLLER_PATH
 Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED
-Environment=IS_K8S=$IS_K8S
+Environment=CEDANA_IS_K8S=$CEDANA_IS_K8S
 Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
-ExecStart=$APP_PATH daemon start 
+ExecStart=$APP_PATH daemon start
 User=root
 Group=root
 Restart=no
@@ -59,7 +59,6 @@ Restart=no
 WantedBy=multi-user.target
 
 [Service]
-StandardOutput=append:/var/log/cedana-daemon.log
 StandardError=append:/var/log/cedana-daemon.log
 
 EOF

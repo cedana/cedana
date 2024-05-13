@@ -3,8 +3,8 @@ package utils
 import (
 	"context"
 	"errors"
-	"os"
 
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -17,11 +17,7 @@ import (
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
-	telemetryOn := os.Getenv("CEDANA_OTEL_ENABLED") == "true"
-	if !telemetryOn {
-		otel.SetTracerProvider(noop.NewTracerProvider())
-		return
-	}
+	telemetryOn := viper.GetBool("otel_enabled")
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
@@ -31,6 +27,11 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 		}
 		shutdownFuncs = nil
 		return err
+	}
+
+	if !telemetryOn {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+		return
 	}
 
 	handleErr := func(inErr error) {
@@ -74,7 +75,6 @@ func newTraceProvider(ctx context.Context, version string) (*trace.TracerProvide
 			semconv.ServiceVersionKey.String(version),
 		),
 	)
-
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -66,8 +67,8 @@ func main() {
 			}
 		}
 	}()
-	req := &task.CtrByNameArgs{}
-	cts.GetRuncIdByName(req)
+	req := &task.ContainerdQueryArgs{}
+	cts.ContainerdQuery(context.Background(), req)
 
 	select {}
 }
@@ -77,7 +78,7 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 	var err error
 
 	for i := 0; i < maxRetries; i++ {
-		client, err = services.NewClient("localhost:8080")
+		client, err = services.NewClient()
 		if err == nil {
 			// Successfully created the client, break out of the loop
 			break
@@ -96,7 +97,6 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 }
 
 func initialize() (int, error) {
-
 	if err := runCommand("bash", "./install.sh"); err != nil {
 		return -1, err
 	}
@@ -135,6 +135,6 @@ func startDaemon() (int, error) {
 }
 
 func isProcessRunning(pid int) (bool, error) {
-	//TODO Needs implemented
+	// TODO Needs implemented
 	return true, nil
 }
