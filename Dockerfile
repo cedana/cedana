@@ -20,7 +20,7 @@ RUN git fetch --all --tags && \
     git checkout $LATEST_TAG
 
 ENV USER="root"
-RUN go build && ./cedana bootstrap
+RUN go build
 RUN cp cedana /usr/local/bin/cedana
 
 ENTRYPOINT /bin/bash
