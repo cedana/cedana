@@ -33,7 +33,7 @@ func List(root string) error {
 	return nil
 }
 
-func GetPidByContainerId(containerId, root string) (int, error) {
+func GetPidByContainerId(containerId, root string) (int32, error) {
 	statePath := filepath.Join(root, containerId, "state.json")
 	var runcSpec libcontainer.State
 	if _, err := os.Stat(statePath); err == nil {
@@ -45,7 +45,7 @@ func GetPidByContainerId(containerId, root string) (int, error) {
 			return 0, err
 		}
 	}
-	return runcSpec.InitProcessPid, nil
+	return int32(runcSpec.InitProcessPid), nil
 }
 
 func GetContainerIdByName(containerName string, root string) (string, string, error) {
@@ -71,6 +71,7 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 					splitLabel := strings.Split(label, "=")
 					if splitLabel[0] == "bundle" {
 						bundle = splitLabel[1]
+						break
 					}
 				}
 			}

@@ -8,6 +8,7 @@ RUN apt-get update && \
 
 RUN git clone https://github.com/cedana/cedana.git
 WORKDIR /cedana/cmd/cedana-helper
+RUN git fetch --all --tags
 RUN go build
 
 ENV USER="root"

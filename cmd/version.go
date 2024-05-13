@@ -2,6 +2,13 @@ package cmd
 
 import "fmt"
 
-func SetVersionInfo(version, commit, date string) {
-	rootCmd.Version = fmt.Sprintf("%s (%s)", version, commit)
+// TODO instead read this from env vars/build scripts
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+func GetVersion() string {
+	return fmt.Sprintf("%s (%s)", version, commit)
 }

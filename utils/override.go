@@ -11,14 +11,10 @@ import (
 // types and helper function for managing the server overrides
 // dupe of client_config.go in orchestrator, fine for now until we have a shared library
 
-type ConfigClient struct {
-	Client        Client        `json:"client"`
-	Connection    Connection    `json:"connection"`
-	SharedStorage SharedStorage `json:"shared_storage"`
-}
-
-func LoadOverrides(cdir string) (*ConfigClient, error) {
-	var serverOverrides ConfigClient
+// XXX: Not sure what is the purpose of this override. Leaving this comment here for future
+// clarification.
+func LoadOverrides(cdir string) (*Config, error) {
+	var serverOverrides Config
 
 	// load override from file. Fail silently if it doesn't exist, or GenSampleConfig instead
 	// overrides are added during instance setup/creation/instantiation (?)

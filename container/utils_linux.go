@@ -219,6 +219,7 @@ func validateID(id string) error {
 
 	return nil
 }
+
 func Create(root, id string, config *configs.Config) (*RuncContainer, error) {
 	if root == "" {
 		return nil, errors.New("root not set")
@@ -254,7 +255,7 @@ func Create(root, id string, config *configs.Config) (*RuncContainer, error) {
 	// probably true in almost all scenarios). Checking all the hierarchies
 	// would be too expensive.
 	if cm.Exists() {
-		//pids, err := cm.GetAllPids()
+		// pids, err := cm.GetAllPids()
 		// Reading PIDs can race with cgroups removal, so ignore ENOENT and ENODEV.
 		if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENODEV) {
 			return nil, fmt.Errorf("unable to get cgroup PIDs: %w", err)
@@ -335,6 +336,7 @@ func (r *restoredState) transition(s containerState) error {
 	}
 	return fmt.Errorf("transition err")
 }
+
 func destroyContainer(c *RuncContainer) error {
 	// Usually, when a container init is gone, all other processes in its
 	// cgroup are killed by the kernel. This is not the case for a shared
@@ -363,6 +365,7 @@ func destroyContainer(c *RuncContainer) error {
 	c.State = &stoppedState{c: c}
 	return err
 }
+
 func runPoststopHooks(c *RuncContainer) error {
 	hooks := c.Config.Hooks
 	if hooks == nil {
@@ -501,6 +504,7 @@ func signalAllProcesses(m cgroups.Manager, s unix.Signal) error {
 
 	return nil
 }
+
 func (r *restoredState) destroy() error {
 	if _, err := os.Stat(filepath.Join(r.c.StateDir, "checkpoint")); err != nil {
 		if !os.IsNotExist(err) {
@@ -568,6 +572,7 @@ func (c *RuncContainer) hasInit() bool {
 	}
 	return true
 }
+
 func (p *pausedState) destroy() error {
 	if p.c.hasInit() {
 		return ErrPaused
@@ -772,6 +777,7 @@ func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 	}
 	return i, nil
 }
+
 func mountViaFDs(source string, srcFD *int, target, dstFD, fstype string, flags uintptr, data string) error {
 	src := source
 	if srcFD != nil {
@@ -786,9 +792,11 @@ func mountViaFDs(source string, srcFD *int, target, dstFD, fstype string, flags 
 	}
 	return nil
 }
+
 func runcMount(source, target, fstype string, flags uintptr, data string) error {
 	return mountViaFDs(source, nil, target, "", fstype, flags, data)
 }
+
 func (c *RuncContainer) criuSupportsExtNS(t configs.NamespaceType) bool {
 	var minVersion int
 	switch t {
@@ -804,9 +812,11 @@ func (c *RuncContainer) criuSupportsExtNS(t configs.NamespaceType) bool {
 	}
 	return c.checkCriuVersion(minVersion) == nil
 }
+
 func criuNsToKey(t configs.NamespaceType) string {
 	return "extRoot" + strings.Title(configs.NsName(t)) + "NS" //nolint:staticcheck // SA1019: strings.Title is deprecated
 }
+
 func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, t configs.NamespaceType) error {
 	if !c.criuSupportsExtNS(t) {
 		return nil
@@ -837,6 +847,7 @@ func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuO
 
 	return nil
 }
+
 func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File) error {
 	for _, ns := range c.Config.Namespaces {
 		switch ns.Type {
@@ -874,6 +885,7 @@ func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, ext
 
 	return nil
 }
+
 func (c *RuncContainer) handleCriuConfigurationFile(rpcOpts *criurpc.CriuOpts) {
 	// CRIU will evaluate a configuration starting with release 3.11.
 	// Settings in the configuration file will overwrite RPC settings.
@@ -898,6 +910,7 @@ func (c *RuncContainer) handleCriuConfigurationFile(rpcOpts *criurpc.CriuOpts) {
 		rpcOpts.ConfigFile = proto.String("/etc/criu/runc.conf")
 	}
 }
+
 func isPathInPrefixList(path string, prefix []string) bool {
 	for _, p := range prefix {
 		if strings.HasPrefix(path, p+"/") {
@@ -918,6 +931,7 @@ func (m *mountEntry) src() string {
 	}
 	return m.Source
 }
+
 func isProc(path string) (bool, error) {
 	var s unix.Statfs_t
 	if err := unix.Statfs(path, &s); err != nil {
@@ -925,6 +939,7 @@ func isProc(path string) (bool, error) {
 	}
 	return s.Type == unix.PROC_SUPER_MAGIC, nil
 }
+
 func checkProcMount(rootfs, dest, source string) error {
 	const procPath = "/proc"
 	path, err := filepath.Rel(filepath.Join(rootfs, procPath), dest)
@@ -979,6 +994,7 @@ func checkProcMount(rootfs, dest, source string) error {
 
 	return fmt.Errorf("%q cannot be mounted because it is inside /proc", dest)
 }
+
 func createIfNotExists(path string, isDir bool) error {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
@@ -997,6 +1013,7 @@ func createIfNotExists(path string, isDir bool) error {
 	}
 	return nil
 }
+
 func prepareBindMount(m mountEntry, rootfs string) error {
 	source := m.src()
 	stat, err := os.Stat(source)
@@ -1022,6 +1039,7 @@ func prepareBindMount(m mountEntry, rootfs string) error {
 
 	return nil
 }
+
 func (c *RuncContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 	switch m.Device {
 	case "cgroup":
@@ -1135,6 +1153,7 @@ func (c *RuncContainer) restoreNetwork(req *criurpc.CriuReq, criuOpts *CriuOpts)
 		req.Opts.Veths = append(req.Opts.Veths, veth)
 	}
 }
+
 func (c *RuncContainer) addCriuRestoreMount(req *criurpc.CriuReq, m *configs.Mount) {
 	mountDest := strings.TrimPrefix(m.Destination, c.Config.Rootfs)
 	if dest, err := securejoin.SecureJoin(c.Config.Rootfs, mountDest); err == nil {
@@ -1146,6 +1165,7 @@ func (c *RuncContainer) addCriuRestoreMount(req *criurpc.CriuReq, m *configs.Mou
 	}
 	req.Opts.ExtMnt = append(req.Opts.ExtMnt, extMnt)
 }
+
 func getCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 	mounts, err := cgroups.GetCgroupMounts(false)
 	if err != nil {
@@ -1179,6 +1199,7 @@ func getCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 
 	return binds, nil
 }
+
 func logCriuErrors(dir, file string) {
 	lookFor := []byte("Error") // Print the line that contains this...
 	const max = 5 + 1          // ... and a few preceding lines.
@@ -1226,6 +1247,7 @@ func logCriuErrors(dir, file string) {
 		logrus.Warnf("read %q: %v", logFile, err)
 	}
 }
+
 func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string, netPid int) error {
 	const logFile = "restore.log"
 	c.M.Lock()
@@ -1299,7 +1321,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// Same as during checkpointing. If the container has a specific network namespace
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
-	//TODO BS pull this dynamically from original container
+	// TODO BS pull this dynamically from original container
 	pidBytes, err := os.ReadFile(filepath.Join(bundle, "init.pid"))
 	if err != nil {
 		return err

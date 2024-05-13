@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/felixge/fgprof"
+	"github.com/spf13/viper"
 )
 
 type Timings struct {
@@ -29,7 +30,7 @@ const (
 )
 
 func NewTimings() *Timings {
-	enabled := os.Getenv("CEDANA_PROFILING_ENABLED") == "true"
+	enabled := viper.GetBool("profiling_enabled")
 
 	return &Timings{
 		enabled: enabled,
@@ -101,7 +102,6 @@ func setupProfilerHandlers() {
 
 	// Handler to stop CPU profiling
 	http.HandleFunc("/stop-profiling", func(w http.ResponseWriter, r *http.Request) {
-
 		filename := r.URL.Query().Get("filename")
 		if filename == "" {
 			// Set the header before writing the response body

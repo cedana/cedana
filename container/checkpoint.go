@@ -242,6 +242,7 @@ func (c *RuncContainer) saveState(s *State) (retErr error) {
 	stateFilePath := filepath.Join(c.StateDir, stateFilename)
 	return os.Rename(tmpFile.Name(), stateFilePath)
 }
+
 func (c *RuncContainer) currentState() (*State, error) {
 	var (
 		startTime           uint64
@@ -288,6 +289,7 @@ func (c *RuncContainer) currentState() (*State, error) {
 	}
 	return state, nil
 }
+
 func (c *RuncContainer) updateState(process parentProcess) (*State, error) {
 	if process != nil {
 		c.InitProcess = process
@@ -358,6 +360,7 @@ func (p *restoredProcess) setExternalDescriptors(newFds []string) {
 func (p *restoredProcess) forwardChildLogs() chan error {
 	return nil
 }
+
 func newRestoredProcess(cmd *exec.Cmd, fds []string) (*restoredProcess, error) {
 	var err error
 	pid := cmd.Process.Pid
@@ -821,7 +824,7 @@ func ContainerdCheckpoint(imagePath, id string) error {
 	}
 
 	// checkpoint task
-	//checkpoint, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)) //checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(""))
+	// checkpoint, err := task.Checkpoint(ctx, containerd.WithCheckpointImagePath(imagePath)) //checkpoint, err := runcCheckpointContainerd(ctx, containerdClient, task, WithCheckpointImagePath(""))
 	checkpoint, err := container.Checkpoint(ctx, "test123", opts...)
 	if err != nil {
 		return err
@@ -943,7 +946,6 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 			specD,
 		},
 	}, nil
-
 }
 
 func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
@@ -1281,7 +1283,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	c.M.Lock()
 	defer c.M.Unlock()
 
-	//snapshotOpts(c.Id)
+	// snapshotOpts(c.Id)
 	// Checkpoint is unlikely to work if os.Geteuid() != 0 || system.RunningInUserNS().
 	// (CLI prints a warning)
 	// TODO(avagin): Figure out how to make this work nicely. CRIU 2.0 has
@@ -1309,7 +1311,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	}
 	defer imageDir.Close()
 
-	//Find all bind mounts and add them as external mountpoints
+	// Find all bind mounts and add them as external mountpoints
 	externalMounts := []string{}
 	for _, m := range c.Config.Mounts {
 		if m.IsBind() {
