@@ -249,11 +249,11 @@ func init() {
 
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
-	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
-	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)

@@ -5,7 +5,6 @@ APP_NAME="cedana"
 APP_PATH="/usr/local/bin/$APP_NAME"
 SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
-CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
 CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-0}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
@@ -24,11 +23,6 @@ fi
 
 sudo cp $APP_NAME $APP_PATH
 
-# if cedana_gpu_enabled=atrue, echo
-if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
-    echo "Starting daemon with GPU support..."
-fi
-
 if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
     echo "Starting daemon with OpenTelemetry support..."
 fi
@@ -39,12 +33,11 @@ fi
 
 # create systemd file
 echo "Creating $SERVICE_FILE..."
-cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
+cat <<EOF | sudo tee $SERVICE_FILE >/dev/null
 [Unit]
 Description=Cedana Checkpointing Daemon
 [Service]
 Environment=USER=$USER
-Environment=CEDANA_GPU_ENABLED=$CEDANA_GPU_ENABLED
 Environment=CEDANA_GPU_CONTROLLER_PATH=$CEDANA_GPU_CONTROLLER_PATH
 Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED

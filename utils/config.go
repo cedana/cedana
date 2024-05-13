@@ -113,7 +113,6 @@ func bindEnvVars() {
 	// Others used across the codebase
 	viper.BindEnv("log_level", "CEDANA_LOG_LEVEL")
 	viper.BindEnv("otel_enabled", "CEDANA_OTEL_ENABLED")
-	viper.BindEnv("gpu_enabled", "CEDANA_GPU_ENABLED")
 	viper.BindEnv("gpu_controller_path", "CEDANA_GPU_CONTROLLER_PATH")
 	viper.BindEnv("gpu_debugging_enabled", "CEDANA_GPU_DEBUGGING_ENABLED")
 	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
