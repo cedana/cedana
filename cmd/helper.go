@@ -121,14 +121,6 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 	return client, nil
 }
 
-func initialize() (int, error) {
-	if err := runCommand("bash", "./scripts/install.sh"); err != nil {
-		return -1, err
-	}
-
-	return 0, nil
-}
-
 func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	cmd.Stdout = os.Stdout
