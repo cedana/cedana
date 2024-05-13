@@ -4,92 +4,45 @@ package cedana.services.task;
 
 option go_package = "github.com/cedana/cedana/api/services/task";
 
+// Query functions here work just like your familiar query functions in HTTP GET requests,
+// where if you don't specify anything in the query, it will return all the valid results,
+// but if you do it will filter out based on the query parameters.
+
 service TaskService {
-    rpc Dump(DumpArgs) returns (DumpResp);
-    rpc Restore(RestoreArgs) returns (RestoreResp);
+  // Process
+  rpc Start(StartArgs) returns (StartResp);
+  rpc Dump(DumpArgs) returns (DumpResp);
+  rpc Restore(RestoreArgs) returns (RestoreResp);
+  rpc Query(QueryArgs) returns (QueryResp);
 
-    rpc ContainerDump(ContainerDumpArgs) returns (ContainerDumpResp);
-    rpc ContainerRestore(ContainerRestoreArgs) returns (ContainerRestoreResp);
+  // Containerd
+  rpc ContainerdDump(ContainerdDumpArgs) returns (ContainerdDumpResp);
+  rpc ContainerdRestore(ContainerdRestoreArgs) returns (ContainerdRestoreResp);
+  rpc ContainerdQuery(ContainerdQueryArgs) returns (ContainerdQueryResp);
 
-    rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
-    rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
-    
-    rpc StartTask(StartTaskArgs) returns (StartTaskResp); 
-    
-    rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
-    rpc ClientStateStreaming(stream ClientStateStreamingResp) returns (stream ProcessState);
-    rpc MetaStateStreaming(stream MetaStateStreamingArgs) returns (stream MetaStateStreamingResp);
+  // Runc
+  rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
+  rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
+  rpc RuncQuery(RuncQueryArgs) returns (RuncQueryResp);
+  rpc RuncGetPausePid(RuncGetPausePidArgs) returns (RuncGetPausePidResp);
 
-    rpc ListRuncContainers(RuncRoot) returns (RuncList);
-    rpc GetRuncContainerByName(CtrByNameArgs) returns (CtrByNameResp);
-    rpc GetPausePid(PausePidArgs) returns (PausePidResp);
-    rpc ListContainers(ListArgs) returns (ListResp);
+  // Streaming
+  rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
+  rpc ProcessStateStreaming(ProcessStateStreamingArgs) returns (stream ProcessState);
 }
 
-message ListArgs {
-    string Root = 1;
-    string Namespace = 2;
+/////////////////////
+////// Process //////
+/////////////////////
+
+enum CRType {
+  LOCAL = 0;
+  REMOTE = 1;
 }
 
-message ListResp {
-    repeated Container containers = 1;
-}
-
-message Container {
-    string ContainerName = 1;
-    string ImageName = 2;
-    string SandboxId = 3;
-    string SandboxName = 4;
-    string SandboxNamespace = 5;
-    string SandboxUid = 6;
-}
-
-message Annotation {
-    map<string, string> Annotations = 1;
-}
-
-message External {
-    repeated string String = 1;
-}
-
-message DumpArgs {
-  int32 PID = 1;
-  string Dir = 2;
-  enum DumpType {
-    LOCAL = 0;
-    REMOTE = 1;
-  }
-  DumpType Type = 3;
-  string JobID = 4;
-}
-
-message DumpResp {
-    string Message = 1;
-    string CheckpointID = 2;
-    string UploadID = 3;
-}
-
-message RestoreArgs {
-  enum RestoreType {
-    LOCAL = 0; 
-    REMOTE = 1;
-  }
-  RestoreType Type = 1;
-  string CheckpointId = 2;
-  string CheckpointPath = 3;
-  string JobID = 4;
-  uint32 UID = 5; 
-  uint32 GID = 6;
-}
-
-message RestoreResp {
-    string Message = 1;
-    int32 NewPID = 2;
-}
-
-message StartTaskArgs {
+message StartArgs {
   string Task = 1;
-  string Id = 2;
+  string JID = 2;
   string WorkingDir = 3;
   repeated string Env = 4;
   string LogOutputFile = 5;
@@ -97,39 +50,212 @@ message StartTaskArgs {
   uint32 GID = 7;
 }
 
-message StartTaskResp {
-    string Message = 1;
-    int32 PID = 2;
+message StartResp {
+  string Message = 1;
+  int32 PID = 2;
+  string JID = 3;
 }
 
-// Log Streaming args
+message DumpArgs {
+  int32 PID = 1;
+  string Dir = 2;
+  CRType Type = 3;
+  string JID = 4;
+}
+
+message DumpResp {
+  string Message = 1;
+  string CheckpointID = 2;
+  string UploadID = 3;
+}
+
+message RestoreArgs {
+  CRType Type = 1;
+  string CheckpointID = 2;
+  string CheckpointPath = 3;
+  string JID = 4;
+  uint32 UID = 5;
+  uint32 GID = 6;
+}
+
+message RestoreResp {
+  string Message = 1;
+  int32 NewPID = 2;
+}
+
+message QueryArgs {
+  repeated int32 PIDs = 1;
+  repeated string JIDs = 2;
+}
+
+message QueryResp {
+  repeated ProcessState Processes = 1;
+}
+
+/////////////////////////
+////// Containerd ///////
+/////////////////////////
+
+message ContainerdDumpArgs {
+  string ContainerID = 1;
+  string Ref = 2;
+}
+
+message ContainerdDumpResp {
+  string CheckpointPath = 1;
+  string Message = 2;
+}
+
+message ContainerdRestoreArgs {
+  string ImgPath = 1;
+  string ContainerID = 2;
+}
+
+message ContainerdRestoreResp {
+  string Message = 1;
+}
+
+message ContainerdQueryArgs {
+  string Root = 1;
+  string Namespace = 2;
+}
+
+message ContainerdQueryResp {
+  repeated ContainerdContainer Containers = 1;
+}
+
+message ContainerdContainer {
+  string ContainerName = 1;
+  string ImageName = 2;
+  string SandboxId = 3;
+  string SandboxName = 4;
+  string SandboxNamespace = 5;
+  string SandboxUid = 6;
+}
+
+///////////////////
+////// Runc ///////
+///////////////////
+
+message RuncDumpArgs {
+  string Root = 1;
+  string CheckpointPath = 2;
+  string ContainerID = 3;
+  CriuOpts CriuOpts = 4;
+  CRType Type = 5;
+
+}
+
+message RuncDumpResp {
+  string Message = 1;
+  string CheckpointID = 2;
+  string UploadID = 3;
+}
+
+message CriuOpts {
+  string ImagesDirectory = 1;
+  string WorkDirectory = 2;
+  string ParentImage = 3;
+  bool LeaveRunning = 4;
+  bool TcpEstablished = 5;
+  bool ExternalUnixConnections = 6;
+  bool ShellJob = 7;
+  bool FileLocks = 8;
+  bool PreDump = 9;
+  int32 EmptyNs = 12;
+  bool AutoDedup = 13;
+  bool LazyPages = 14;
+  int32 StatusFd = 15;
+  string LsmProfile = 16;
+  string LsmMountContext = 17;
+}
+
+message RuncRestoreArgs {
+  string ContainerID = 1;
+  string ImagePath = 2;
+  bool IsK3s = 3;
+  RuncOpts Opts = 4;
+  CRType Type = 5;
+  string CheckpointID = 6;
+}
+
+message RuncRestoreResp {
+  string Message = 1;
+}
+
+message RuncOpts {
+  string Root = 1;
+  string ContainerID = 2;
+  string Bundle = 3;
+  bool SystemdCgroup = 4;
+  bool NoPivot = 5;
+  bool NoMountFallback = 6;
+  bool NoNewKeyring = 7;
+  string Rootless = 8;
+  bool NoSubreaper = 9;
+  bool Keep = 10;
+  string ConsoleSocket = 11;
+  bool Detatch = 12;
+  string PidFile = 13;
+  int32 PreserveFds = 14;
+  int32 NetPid = 15;
+}
+
+message RuncQueryArgs {
+  string Root = 1;
+  repeated string ContainerNames = 2;
+}
+
+message RuncQueryResp {
+  repeated RuncContainer Containers = 1;
+}
+
+message RuncContainer {
+  string ID = 1;
+  string BundlePath = 2;
+}
+
+message RuncGetPausePidArgs {
+  string BundlePath = 1;
+}
+
+message RuncGetPausePidResp {
+  int64 PausePid = 1;
+}
+
+///////////////////////
+////// Streaming //////
+///////////////////////
+
 message LogStreamingArgs {
   string Timestamp = 1;
   string Source = 2;
   string Level = 3;
   string Msg = 4;
 }
+
 message LogStreamingResp {
   string Status = 1;
 }
 
+enum ContainerRuntimeOpts {
+  CONTAINERD = 0;
+  RUNC = 1;
+}
 
 message ProcessState {
   int32 PID = 1;
   string Task = 2;
   ContainerRuntimeOpts ContainerRuntime = 3;
-  string ContainerId = 4;
+  string ContainerID = 4;
   string StartedAt = 5;
   ProcessInfo ProcessInfo = 6;
   string CheckpointPath = 7;
-  checkpointState CheckpointState = 8;
-  FlagEnum Flag = 9;
+  CheckpointState CheckpointState = 8;
+  JobState JobState = 9;
   repeated RemoteState RemoteState = 10;
   bool GPUCheckpointed = 11;
-  enum ContainerRuntimeOpts {
-    CONTAINERD = 0;
-    RUNC = 1;
-  }
+  string JID = 12;
 }
 
 message RemoteState {
@@ -162,10 +288,10 @@ message OpenFilesStat {
   string Path = 1;
   uint64 Fd = 2;
   string Mode = 3;
-  StreamType Stream = 5; 
+  StreamType Stream = 5;
   enum StreamType {
     STDIN = 0;
-    STDOUT = 1; 
+    STDOUT = 1;
     STDERR = 2;
     NONE = 3;
   }
@@ -178,7 +304,7 @@ message ConnectionStat {
   Addr Laddr = 4;
   Addr Raddr = 5;
   string Status = 6;
-  repeated int32 Uids = 7;
+  repeated int32 UIDs = 7;
   int32 PID = 8;
 }
 
@@ -187,28 +313,23 @@ message Addr {
   uint32 Port = 2;
 }
 
-
-enum FlagEnum {
+enum JobState {
   JOB_STARTUP_FAILED = 0;
   JOB_KILLED = 1;
   JOB_IDLE = 2;
   JOB_RUNNING = 3;
   JOB_PENDING = 4;
-  JOB_SETUP_FAILED = 5;
-  JOB_DONE = 6;
+  JOB_DONE = 5;
 }
 
-message ClientStateStreamingResp {
-  string Status = 1;
+message ProcessStateStreamingArgs {
+  string JID = 1;
 }
-
-// MetaState Streaming args
 
 message MetaStateStreamingArgs {
   ProviderEvent Event = 1;
   CheckpointReason CheckpointReason = 2;
 }
-
 
 message CheckpointReason {
   enum CheckpointReasonEnum {
@@ -230,126 +351,9 @@ message MetaStateStreamingResp {
   string Status = 1;
 }
 
-enum checkpointState {
+enum CheckpointState {
   CHECKPOINTED = 0;
   CHECKPOINT_FAILED = 1;
   RESTORED = 2;
   RESTORE_FAILED = 3;
-}
-
-message PausePidArgs {
-    string BundlePath = 1;
-}
-
-message PausePidResp {
-    int64 PausePid = 1;
-}
-
-message CtrByNameArgs {
-    string ContainerName = 1;
-    string Root = 2;
-}
-
-message CtrByNameResp {
-    string RuncContainerName = 1;
-    string RuncBundlePath = 2;
-}
-
-message RuncRoot {
-    string Root = 1;
-}
-
-message RuncList {
-    repeated string Containers = 1;
-}
-
-message ContainerDumpArgs {
-  string ContainerId = 1;
-  string Ref = 2;
-}
-
-message ContainerDumpResp {
-  string CheckpointPath = 1;
-  string Message = 2;
-}
-
-message ContainerRestoreArgs {
-  string ImgPath = 1;
-  string ContainerId = 2;
-}
-
-message ContainerRestoreResp {
-  string Message = 1;
-}
-
-message RuncDumpArgs {
-  string Root = 1;
-  string CheckpointPath = 2;
-  string ContainerId = 3;
-  CriuOpts CriuOpts = 4;
-  enum DumpType {
-    LOCAL = 0;
-    REMOTE = 1;
-  }
-  DumpType Type = 5;
-  string JobID = 6;
-
-}
-
-message RuncDumpResp {
-  string Message = 1;
-  string CheckpointId = 2;
-}
-
-message CriuOpts {
-  string ImagesDirectory = 1;
-  string WorkDirectory = 2;
-  string ParentImage = 3;
-  bool LeaveRunning = 4;
-  bool TcpEstablished = 5;
-  bool ExternalUnixConnections = 6;
-  bool ShellJob = 7;
-  bool FileLocks = 8;
-  bool PreDump = 9;
-  uint32 EmptyNs = 12;
-  bool AutoDedup = 13;
-  bool LazyPages = 14;
-  int32 StatusFd = 15;
-  string LsmProfile = 16;
-  string LsmMountContext = 17;
-}
-
-message RuncRestoreArgs {
-  string ContainerId = 1;
-  string ImagePath = 2;
-  bool IsK3s = 3;
-  RuncOpts Opts = 4;
-  enum RestoreType {
-    LOCAL = 0; 
-    REMOTE = 1;
-  }
-  RestoreType Type = 5;
-  string CheckpointId = 6;
-}
-
-message RuncOpts {
-  string Root = 1;
-  string ContainerId = 2;
-  string Bundle = 3;
-  bool SystemdCgroup = 4;
-  bool NoPivot = 5;
-  bool NoMountFallback = 6;
-  bool NoNewKeyring = 7;
-  string Rootless = 8;
-  bool NoSubreaper = 9;
-  bool Keep = 10;
-  string ConsoleSocket = 11;
-  bool Detatch = 12;
-  string PidFile = 13;
-  int32 PreserveFds = 14;
-  int32 NetPid = 15;
-}
-
-message RuncRestoreResp {
-  string Message = 1;
 }

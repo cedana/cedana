@@ -9,6 +9,7 @@ RUN apt-get update && \
 # TODO Git fetch to get utd cedana 
 RUN git clone --depth=1 --branch=hotfix/arch https://github.com/cedana/cedana.git
 WORKDIR /cedana/cmd/cedana-helper
+RUN git fetch --all --tags
 RUN go build
 
 ENV USER="root"

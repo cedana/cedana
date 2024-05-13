@@ -1,5 +1,7 @@
 package api
 
+// Internal functions used by service for dumping processes and containers
+
 import (
 	"context"
 	"fmt"
@@ -10,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
-	container "github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
+	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
@@ -25,35 +27,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	CRIU_DUMP_LOG_FILE  = "cedana-dump.log"
+	CRIU_DUMP_LOG_LEVEL = 4
+	GHOST_LIMIT         = 10000000
+	DUMP_FOLDER_PERMS   = 0o777
+
+	K8S_RUNC_ROOT    = "/run/containerd/runc/k8s.io"
+	DOCKER_RUNC_ROOT = "/run/docker/runtime-runc/moby"
+)
+
 // The bundle includes path to bundle and the runc/podman container id of the bundle. The bundle is a folder that includes the oci spec config.json
 // as well as the rootfs used for setting up the container. Sometimes rootfs can be defined elsewhere. Podman adds extra directories and files in their
 // bundle including a file called attach which is a unix socket for attaching stdin, stdout to the terminal
 type Bundle struct {
-	ContainerId string
+	ContainerID string
 	Bundle      string
 }
 
 // prepareDump =/= preDump.
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *rpc.CriuOpts) (string, error) {
-	_, dumpSpan := c.tracer.Start(ctx, "prepareDump")
+func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, dir string, opts *rpc.CriuOpts) (string, error) {
+	_, dumpSpan := s.tracer.Start(ctx, "prepareDump")
 	dumpSpan.SetAttributes(attribute.Bool("container", false))
 	defer dumpSpan.End()
 
 	var hasTCP bool
 	var hasExtUnixSocket bool
-
-	pname, err := utils.GetProcessName(pid)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-		return "", err
-	}
-
-	state, err := c.getState(pid)
-	if state == nil || err != nil {
-		return "", fmt.Errorf("could not get state")
-	}
 
 	for _, Conn := range state.ProcessInfo.OpenConnections {
 		if Conn.Type == syscall.SOCK_STREAM { // TCP
@@ -80,91 +81,252 @@ func (c *Client) prepareDump(ctx context.Context, pid int32, dir string, opts *r
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
 
-	// processname + datetime
-	// strip out non posix-compliant characters from the processname
-	formattedProcessName := regexp.MustCompile("[^a-zA-Z0-9_.-]").ReplaceAllString(*pname, "_")
-	formattedProcessName = strings.ReplaceAll(formattedProcessName, ".", "_")
-	processCheckpointDir := strings.Join([]string{formattedProcessName, time.Now().Format("02_01_2006_1504")}, "_")
-	checkpointFolderPath := filepath.Join(dir, processCheckpointDir)
-	_, err = os.Stat(filepath.Join(checkpointFolderPath))
+	// jobID + UTC time (nanoseconds)
+	// strip out non posix-compliant characters from the jobID
+	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	processDumpDir := strings.Join([]string{state.JID, timeString}, "_")
+	dumpDirPath := filepath.Join(dir, processDumpDir)
+	_, err := os.Stat(dumpDirPath)
 	if err != nil {
-		if err := os.MkdirAll(checkpointFolderPath, 0o777); err != nil {
+		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
 			return "", err
 		}
 	}
 
-	err = chmodRecursive(checkpointFolderPath, 0o777)
+	err = chmodRecursive(dumpDirPath, DUMP_FOLDER_PERMS)
 	if err != nil {
 		return "", err
 	}
 
 	// close common fds
-	err = closeCommonFds(int32(os.Getpid()), pid)
+	err = closeCommonFds(int32(os.Getpid()), state.PID)
 	if err != nil {
 		return "", err
 	}
 
-	// c.copyOpenFiles(checkpointFolderPath, state)
+	// c.copyOpenFiles(dumpDirPath, state)
 
-	return checkpointFolderPath, nil
+	return dumpDirPath, nil
 }
 
-func (c *Client) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
-	_, postDumpSpan := c.tracer.Start(ctx, "post-dump")
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
+	_, postDumpSpan := s.tracer.Start(ctx, "post-dump")
 	defer postDumpSpan.End()
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	state.CheckpointPath = compressedCheckpointPath
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
+
 	// sneak in a serialized state obj
-	err := c.SerializeStateToDir(dumpdir, state)
+	err := serializeStateToDir(dumpdir, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 	}
 
-	c.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+	s.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 	}
 
-	err = c.db.UpdateProcessStateWithID(c.jobID, state)
+	err = s.updateState(state.JID, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 	}
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
 		postDumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 	}
 
 	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
-func (c *Client) discardParentFds() {
-
-}
-
-func (c *Client) prepareCheckpointOpts() *rpc.CriuOpts {
+func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:     proto.Int32(4),
-		LogFile:      proto.String("dump.log"),
-		LeaveRunning: proto.Bool(c.config.Client.LeaveRunning),
-		GhostLimit:   proto.Uint32(uint32(10000000)),
+		LogLevel:     proto.Int32(CRIU_DUMP_LOG_LEVEL),
+		LogFile:      proto.String(CRIU_DUMP_LOG_FILE),
+		LeaveRunning: proto.Bool(viper.GetBool("client.leave_running")),
+		GhostLimit:   proto.Uint32(GHOST_LIMIT),
 	}
 	return &opts
+}
 
+func (s *service) runcDump(ctx context.Context, root, containerID string, opts *container.CriuOpts, state *task.ProcessState) error {
+	_, dumpSpan := s.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", true))
+
+	links := []linkPairs{
+		{"/host/var/run/netns", "/var/run/netns"},
+		{"/host/run/containerd", "/run/containerd"},
+		{"/host/var/run/secrets", "/var/run/secrets"},
+		{"/host/var/lib/rancher", "/var/lib/rancher"},
+		{"/host/run/k3s", "/run/k3s"},
+		{"/host/var/lib/kubelet", "/var/lib/kubelet"},
+	}
+	// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
+	for _, link := range links {
+		// Check if the target file exists
+		if _, err := os.Stat(link.Value); os.IsNotExist(err) {
+			// Target file does not exist, attempt to create a symbolic link
+			if err := os.Symlink(link.Key, link.Value); err != nil {
+				// Handle the error if creating symlink fails
+				fmt.Println("Error creating symlink:", err)
+				// Handle the error or log it as needed
+			}
+		} else if err != nil {
+			// Handle other errors from os.Stat if any
+			fmt.Println("Error checking file info:", err)
+			// Handle the error or log it as needed
+		}
+	}
+	bundle := Bundle{ContainerID: containerID}
+	runcContainer := container.GetContainerFromRunc(containerID, root)
+	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
+	if err != nil {
+		dumpSpan.RecordError(err)
+		s.logger.Fatal().Err(err)
+	}
+	dumpSpan.End()
+
+	if checkIfPodman(bundle) {
+		if err := patchPodmanDump(containerID, opts.ImagesDirectory); err != nil {
+			return err
+		}
+	}
+
+	// CRIU ntfy hooks get run before this,
+	// so have to ensure that image files aren't tampered with
+	s.postDump(ctx, opts.ImagesDirectory, state)
+
+	return nil
+}
+
+func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
+	err := container.ContainerdCheckpoint(imagePath, containerID)
+	if err != nil {
+		s.logger.Fatal().Err(err)
+		return err
+	}
+
+	// CRIU ntfy hooks get run before this,
+	// so have to ensure that image files aren't tampered with
+	s.postDump(ctx, imagePath, state)
+
+	return err
+}
+
+func (s *service) dump(ctx context.Context, dir string, state *task.ProcessState) error {
+	opts := s.prepareDumpOpts()
+	dumpdir, err := s.prepareDump(ctx, state, dir, opts)
+	if err != nil {
+		return err
+	}
+
+	// TODO NR:add another check here for task running w/ accel resources
+	var GPUCheckpointed bool
+	if viper.GetBool("gpu_enabled") {
+		err = s.gpuDump(ctx, dumpdir)
+		if err != nil {
+			return err
+		}
+		GPUCheckpointed = true
+		if err != nil {
+			return err
+		}
+	}
+
+	img, err := os.Open(dumpdir)
+	if err != nil {
+		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dir)
+		return err
+	}
+	defer img.Close()
+
+	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
+	opts.Pid = proto.Int32(state.PID)
+
+	nfy := Notify{
+		Logger: s.logger,
+	}
+
+	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
+
+	_, dumpSpan := s.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", false))
+	_, err = s.CRIU.Dump(opts, &nfy)
+	if err != nil {
+		// check for sudo error
+		if strings.Contains(err.Error(), "errno 0") {
+			s.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+			return err
+		}
+
+		dumpSpan.RecordError(err)
+		s.logger.Warn().Msgf("error dumping process: %v", err)
+		return err
+	}
+
+	dumpSpan.End()
+
+	state.GPUCheckpointed = GPUCheckpointed
+	if !(*opts.LeaveRunning) {
+		state.JobState = task.JobState_JOB_KILLED
+	}
+
+	s.postDump(ctx, dumpdir, state)
+
+	return nil
+}
+
+func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
+	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-ckpt")
+	defer gpuSpan.End()
+	// TODO NR - these should move out of here and be part of the Client lifecycle
+	// setting up a connection could be a source of slowdown for checkpointing
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		s.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
+		return err
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.CheckpointRequest{
+		Directory: dumpdir,
+	}
+
+	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("could not checkpoint gpu")
+	}
+	if resp.MemPath == "" {
+		return fmt.Errorf("gpu checkpoint did not return mempath")
+	}
+	if resp.CkptPath == "" {
+		return fmt.Errorf("gpu checkpoint did not return ckptpath")
+	}
+
+	return nil
 }
 
 func checkIfPodman(b Bundle) bool {
 	var matched bool
-	if b.ContainerId != "" {
-		_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", b.ContainerId, "userdata"))
+	if b.ContainerID != "" {
+		_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", b.ContainerID, "userdata"))
 		return err == nil
 	} else {
 		pattern := "/var/lib/containers/storage/overlay-containers/.*?/userdata"
@@ -173,15 +335,15 @@ func checkIfPodman(b Bundle) bool {
 	return matched
 }
 
-func patchPodmanDump(containerId, imgPath string) error {
+func patchPodmanDump(containerID, imgPath string) error {
 	var containerStoreData *types.StoreContainer
 
 	config := make(map[string]interface{})
 	state := make(map[string]interface{})
 
-	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerId + "/userdata"
+	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerID + "/userdata"
 
-	byteId := []byte(containerId)
+	byteId := []byte(containerID)
 
 	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
 
@@ -192,7 +354,6 @@ func patchPodmanDump(containerId, imgPath string) error {
 	defer db.Conn.Close()
 
 	err := db.Conn.View(func(tx *bolt.Tx) error {
-
 		bkt, err := utils.GetCtrBucket(tx)
 		if err != nil {
 			return err
@@ -245,202 +406,5 @@ func patchPodmanDump(containerId, imgPath string) error {
 	if err != nil {
 		return err
 	}
-	return nil
-
-}
-
-func (c *Client) RuncDump(ctx context.Context, root, containerId string, opts *container.CriuOpts) error {
-	_, dumpSpan := c.tracer.Start(ctx, "dump")
-	dumpSpan.SetAttributes(attribute.Bool("container", true))
-
-	links := []linkPairs{
-		{"/host/var/run/netns", "/var/run/netns"},
-		{"/host/run/containerd", "/run/containerd"},
-		{"/host/var/run/secrets", "/var/run/secrets"},
-		{"/host/var/lib/rancher", "/var/lib/rancher"},
-		{"/host/run/k3s", "/run/k3s"},
-		{"/host/var/lib/kubelet", "/var/lib/kubelet"},
-	}
-	// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
-	for _, link := range links {
-		// Check if the target file exists
-		if _, err := os.Stat(link.Value); os.IsNotExist(err) {
-			// Target file does not exist, attempt to create a symbolic link
-			if err := os.Symlink(link.Key, link.Value); err != nil {
-				// Handle the error if creating symlink fails
-				fmt.Println("Error creating symlink:", err)
-				// Handle the error or log it as needed
-			}
-		} else if err != nil {
-			// Handle other errors from os.Stat if any
-			fmt.Println("Error checking file info:", err)
-			// Handle the error or log it as needed
-		}
-	}
-	bundle := Bundle{ContainerId: containerId}
-	runcContainer := container.GetContainerFromRunc(containerId, root)
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
-	if err != nil {
-		dumpSpan.RecordError(err)
-		c.logger.Fatal().Err(err)
-	}
-	dumpSpan.End()
-
-	if checkIfPodman(bundle) {
-		if err := patchPodmanDump(containerId, opts.ImagesDirectory); err != nil {
-			return err
-		}
-	}
-
-	pid, err := runc.GetPidByContainerId(containerId, root)
-	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
-		return err
-	}
-
-	state, err := c.generateState(int32(pid))
-	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
-		return err
-	}
-
-	// CRIU ntfy hooks get run before this,
-	// so have to ensure that image files aren't tampered with
-	c.postDump(ctx, opts.ImagesDirectory, state)
-	c.cleanupClient()
-
-	return nil
-}
-
-func (c *Client) ContainerDump(imagePath, containerId string) error {
-	root := "/run/containerd/runc/k8s.io"
-
-	err := container.ContainerdCheckpoint(imagePath, containerId)
-	if err != nil {
-		c.logger.Fatal().Err(err)
-		return err
-	}
-
-	pid, err := runc.GetPidByContainerId(containerId, root)
-	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
-		return err
-	}
-
-	state, err := c.generateState(int32(pid))
-	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
-		return err
-	}
-
-	// CRIU ntfy hooks get run before this,
-	// so have to ensure that image files aren't tampered with
-	c.postDump(context.Background(), imagePath, state)
-	c.cleanupClient()
-
-	return nil
-}
-
-func (c *Client) Dump(ctx context.Context, dir string, pid int32) error {
-	opts := c.prepareCheckpointOpts()
-	dumpdir, err := c.prepareDump(ctx, pid, dir, opts)
-	if err != nil {
-		return err
-	}
-
-	// TODO NR:add another check here for task running w/ accel resources
-	var GPUCheckpointed bool
-	if os.Getenv("CEDANA_GPU_ENABLED") == "true" {
-		err = c.gpuCheckpoint(ctx, dumpdir)
-		if err != nil {
-			return err
-		}
-		GPUCheckpointed = true
-		if err != nil {
-			return err
-		}
-	}
-
-	img, err := os.Open(dumpdir)
-	if err != nil {
-		c.logger.Warn().Msgf("could not open checkpoint storage dir %s with error: %v", dir, err)
-		return err
-	}
-	defer img.Close()
-
-	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-	opts.Pid = proto.Int32(pid)
-
-	nfy := Notify{
-		Logger: c.logger,
-	}
-
-	c.logger.Info().Msgf(`beginning dump of pid %d`, pid)
-	state, err := c.generateState(pid)
-	if err != nil {
-		c.logger.Warn().Msgf("could not generate state: %v", err)
-		return err
-	}
-
-	_, dumpSpan := c.tracer.Start(ctx, "dump")
-	dumpSpan.SetAttributes(attribute.Bool("container", false))
-	_, err = c.CRIU.Dump(opts, &nfy)
-	if err != nil {
-		// check for sudo error
-		if strings.Contains(err.Error(), "errno 0") {
-			c.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
-			return err
-		}
-
-		dumpSpan.RecordError(err)
-		c.logger.Warn().Msgf("error dumping process: %v", err)
-		return err
-	}
-
-	dumpSpan.End()
-
-	state.GPUCheckpointed = GPUCheckpointed
-	c.postDump(ctx, dumpdir, state)
-	c.cleanupClient()
-
-	return nil
-}
-
-func (c *Client) gpuCheckpoint(ctx context.Context, dumpdir string) error {
-	ctx, gpuSpan := c.tracer.Start(ctx, "gpu-ckpt")
-	defer gpuSpan.End()
-	// TODO NR - these should move out of here and be part of the Client lifecycle
-	// setting up a connection could be a source of slowdown for checkpointing
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
-	if err != nil {
-		c.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
-		return err
-	}
-	defer gpuConn.Close()
-
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
-
-	args := gpu.CheckpointRequest{
-		Directory: dumpdir,
-	}
-
-	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
-	if err != nil {
-		return err
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("could not checkpoint gpu")
-	}
-	if resp.MemPath == "" {
-		return fmt.Errorf("gpu checkpoint did not return mempath")
-	}
-	if resp.CkptPath == "" {
-		return fmt.Errorf("gpu checkpoint did not return ckptpath")
-	}
-
 	return nil
 }

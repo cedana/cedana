@@ -3,40 +3,48 @@ package utils
 import (
 	"io"
 	"os"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-var once sync.Once
+const (
+	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
+	LOG_TIME_FORMAT_FULL = time.RFC3339
+	LOG_CALLER_SKIP      = 3 // stack frame depth
+)
 
-var log zerolog.Logger
+var logger zerolog.Logger
 
-func GetLogger() zerolog.Logger {
-	once.Do(func() {
-		zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-		zerolog.TimeFieldFormat = time.RFC3339Nano
+func GetLogger() *zerolog.Logger {
+	return &logger
+}
 
-		logLevel, err := strconv.Atoi(os.Getenv("LOG_LEVEL"))
-		if err != nil {
-			logLevel = int(zerolog.DebugLevel)
-		}
+type LineInfoHook struct{}
 
-		var output io.Writer = zerolog.ConsoleWriter{
-			Out:        os.Stdout,
-			TimeFormat: time.RFC3339,
-		}
+func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
+	if l >= zerolog.WarnLevel {
+		e.Caller(LOG_CALLER_SKIP)
+	}
+}
 
-		log = zerolog.New(output).
-			Level(zerolog.Level(logLevel)).
-			With().
-			Timestamp().
-			Logger().
-			Output(zerolog.ConsoleWriter{Out: os.Stdout})
-	})
+func init() {
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	return log
+	logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
+	logLevel, err := zerolog.ParseLevel(logLevelStr)
+	if err != nil || logLevelStr == "" { // allow turning off logging
+		logLevel = DEFAULT_LOG_LEVEL
+	}
+
+	var output io.Writer = zerolog.ConsoleWriter{
+		Out: os.Stdout,
+	}
+
+	logger = zerolog.New(output).
+		Level(logLevel).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
 }

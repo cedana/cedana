@@ -2,6 +2,8 @@
 
 chroot /host <<"EOT"
 
+## These steps are unecessary if we're using a Cedana AMI or image (that has these dependencies preinstalled).
+
 # Check whether git is already installed
 if ! command -v git &> /dev/null; then
     yum install -y git
@@ -35,7 +37,7 @@ cd /
 # Clone Cedana repository and build
 git clone https://github.com/cedana/cedana.git
 
-LINE="export IS_K8S=1"
+LINE="export CEDANA_IS_K8S=1"
 
 # Add the line to the .bashrc file
 echo "$LINE" >> ~/.bashrc

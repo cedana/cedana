@@ -37,15 +37,12 @@ type RuncOpts struct {
 }
 
 func Restore(imgPath string, containerID string) error {
-
 	err := containerdRestore(containerID, imgPath)
-
 	if err != nil {
 		return err
 	}
 
 	return nil
-
 }
 
 func containerdRestore(id string, ref string) error {
@@ -157,7 +154,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		return err
 	}
 
-	//Find where to mount to
+	// Find where to mount to
 	externalMounts := []string{}
 	for _, m := range spec.Mounts {
 		if m.Type == "bind" {

@@ -8,5 +8,6 @@ torchvision==0.15.2
 typing_extensions
 protobuf==3.20.1
 google-cloud-bigquery
+google-cloud-storage
 requests 
 psutil

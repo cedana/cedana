@@ -4,8 +4,13 @@ client_config.yaml
 .gitconfig
 .vscode/*
 *.log
+notes.md
 
 *.csv
 tmp
 
 cedana_restore
+
+# local benchmarking
+data.json
+/benchmarks/
