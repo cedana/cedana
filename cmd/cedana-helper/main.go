@@ -104,11 +104,6 @@ func initialize() (int, error) {
 	return 0, nil
 }
 
-func copyScript(src, dest string) error {
-	cmd := exec.Command("cp", src, dest)
-	return cmd.Run()
-}
-
 func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	cmd.Stdout = os.Stdout
@@ -117,7 +112,7 @@ func runCommand(command string, args ...string) error {
 }
 
 func startDaemon() (int, error) {
-	cmd := exec.Command("../../build-start-daemon.sh")
+	cmd := exec.Command("bash", "-c", "./start.sh")
 	err := cmd.Start()
 	if err != nil {
 		return -1, err
