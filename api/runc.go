@@ -36,7 +36,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
-		MntnsCompatMode: true,
+		MntnsCompatMode: false,
 	}
 
 	err = s.runcDump(ctx, args.Root, args.ContainerID, criuOpts, state)
@@ -112,7 +112,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	}
 
-  // TODO: Update state to add or use a job that exists for this container
+	// TODO: Update state to add or use a job that exists for this container
 
 	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerID)}, nil
 }
