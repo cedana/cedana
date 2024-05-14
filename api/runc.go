@@ -16,8 +16,6 @@ import (
 )
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	// TODO BS: This will be done at controller level, just doing it here for now...
-
 	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
