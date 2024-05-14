@@ -1,4 +1,5 @@
 import cedana_bindings as cedana
+from process_json import diff_ckpts, print_result
 import psutil
 import time
 from tplib import task_pb2
@@ -23,5 +24,6 @@ async def main(daemon_pid, remote):
     while process_stats_base["pid"] in psutil.pids() or process_stats_saved["pid"] in psutil.pids():
         continue
     print("[PROCESS\u001b[35m", jobID_base, "\033[0mAND PROCESS\u001b[35m", jobID_saved, "\033[0mDONE.]")
+    print_result("overall", diff_ckpts(jobID_base, jobID_saved, True))
 
     return "correctness-data-" + str(time.time())
