@@ -67,6 +67,7 @@ message DumpResp {
   string Message = 1;
   string CheckpointID = 2;
   string UploadID = 3;
+  ProcessState State = 4;
 }
 
 message RestoreArgs {
@@ -81,6 +82,7 @@ message RestoreArgs {
 message RestoreResp {
   string Message = 1;
   int32 NewPID = 2;
+  ProcessState State = 3;
 }
 
 message QueryArgs {
@@ -143,6 +145,7 @@ message RuncDumpArgs {
   string ContainerID = 3;
   CriuOpts CriuOpts = 4;
   CRType Type = 5;
+  ProcessState state = 6;
 
 }
 
@@ -150,6 +153,7 @@ message RuncDumpResp {
   string Message = 1;
   string CheckpointID = 2;
   string UploadID = 3;
+  ProcessState State = 4;
 }
 
 message CriuOpts {
@@ -181,6 +185,7 @@ message RuncRestoreArgs {
 
 message RuncRestoreResp {
   string Message = 1;
+  ProcessState State = 2;
 }
 
 message RuncOpts {

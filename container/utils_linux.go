@@ -1732,5 +1732,6 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, e
 		bundle:          context.Bundle,
 		netPid:          context.NetPid,
 	}
+
 	return r.Run(spec.Process, context.Root)
 }

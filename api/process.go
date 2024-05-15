@@ -147,6 +147,8 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, st.Err()
 	}
 
+	resp.State = state
+
 	return &resp, err
 }
 
@@ -207,6 +209,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		}
 	}
 
+	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
 	// We could be restoring on a new machine, so we update the state
 	state, err := s.generateState(*pid)
 	if err != nil {
@@ -217,6 +220,8 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to update state after restore")
 	}
+
+	resp.State = state
 
 	return &resp, nil
 }
