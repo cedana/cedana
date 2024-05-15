@@ -81,7 +81,7 @@ func startProfiler() {
 func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
-	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, false, "start daemon with GPU support")
+	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
