@@ -49,8 +49,8 @@ var startDaemonCmd = &cobra.Command{
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
-
-		if viper.GetBool("gpu_enabled") {
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		if gpuEnabled {
 			err := pullGPUBinary(ctx, gpuControllerBinaryName, gpuControllerBinaryPath)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
@@ -81,6 +81,7 @@ func startProfiler() {
 func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
+	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, false, "start daemon with GPU support")
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
