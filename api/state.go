@@ -34,6 +34,13 @@ func (s *service) getState(jid string) (*task.ProcessState, error) {
 	if value == nil {
 		return nil, nil
 	}
+
+	if err != nil {
+		fmt.Println("error", err)
+		return nil, err
+	}
+
+	fmt.Println("value", value)
 	state := task.ProcessState{}
 	err = json.Unmarshal(value, &state)
 	if err != nil {

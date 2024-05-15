@@ -1,5 +1,8 @@
 ## Tests
 
+### `smoke.sh`
+Run smoke tests (to validate c/r works). This is a quick validation to ensure nothing is broken, and not representative of the many different things that can go wrong. 
+
 ### Benchmarking
 
 #### Local Benchmarking
