@@ -1,3 +1,4 @@
+import csv
 import filecmp
 import glob
 import json
@@ -14,11 +15,24 @@ def find_dir(jobID: str) -> str:
     full_paths = [os.path.join(directory, entry) for entry in entries]
     return max(full_paths, key=os.path.getmtime)
 
-def print_result(name: str, result: bool, err: str=""):
-    if result:
-        print("\033[1;32mPASS\033[0m", name)
-    else:
-        print("\033[1;31mFAIL\033[0m", name + ": " + err if err else name)
+def print_results(results: list[list[str]]):
+    def print_result(name: str, result: bool, err: str):
+        if result:
+            print("\033[1;32mPASS\033[0m", name)
+        else:
+            print("\033[1;31mFAIL\033[0m", name + ":", err)
+    for result in results[1:-1]:
+        print_result(*result)
+    print("-"*20)
+    print_result(*results[-1])
+
+
+def save_results(filename: str, results: list[list[str]]) -> bool:
+    with open(filename, 'w', newline='') as file:
+        writer = csv.writer(file, delimiter=',', lineterminator='\n')
+        writer.writerows(results)
+        return True
+    return False
 
 # compare dir1/* and dir2/* that should be identical
 def diff_other(dir1: str, dir2: str, verbose: bool) -> (bool, str):
@@ -37,7 +51,7 @@ def diff_other(dir1: str, dir2: str, verbose: bool) -> (bool, str):
         assert len(fs1) == 1
         assert len(fs2) == 1
         res = filecmp.cmp(*fs1, *fs2)
-        return res, str(*fs1) + " and" + str(*fs2) + " differ"
+        return res, None if res else str(*fs1) + " and " + str(*fs2) + " differ"
     else:
         res = True
         for file in files:
@@ -51,7 +65,7 @@ def diff_other(dir1: str, dir2: str, verbose: bool) -> (bool, str):
         assert len(fs1) == 1
         assert len(fs2) == 1
         res &= filecmp.cmp(*fs1, *fs2)
-        return res, "other files differ"
+        return res, None if res else "other files differ"
 
 def diff_files(dir1: str, dir2: str) -> (bool, str):
     def prep_files(dir_path: str) -> dict:
@@ -74,7 +88,7 @@ def diff_files(dir1: str, dir2: str) -> (bool, str):
             return False, "differing entries"
         if entry2 not in entries1 and not entry2["reg"]["name"].startswith("/var/log/cedana-output"):
             return False, "differing entries"
-    return True, ""
+    return True, None
 
 def diff_mm(dir1: str, dir2: str) -> (bool, str):
     def prep_mm(dir_path: str) -> dict:
@@ -110,7 +124,7 @@ def diff_mm(dir1: str, dir2: str) -> (bool, str):
     for vma1, vma2 in zip(vmas1, vmas2):
         if vma1 not in vmas2 or vma2 not in vmas1:
             return False, "differing vmas"
-    return True, ""
+    return True, None
 
 def diff_pagemap(dir1: str, dir2: str) -> (bool, str):
     def prep_pagemap(dir_path: str) -> dict:
@@ -135,12 +149,12 @@ def diff_pagemap(dir1: str, dir2: str) -> (bool, str):
     for entry1, entry2 in zip(entries1, entries2):
         if entry1 not in entries2 or entry2 not in entries1:
             misses += 1
+    res = (misses / len(entries1) < 0.25)
     err = "misses / len(entries) = " + str(misses/len(entries1)) + " should be < 0.25"
-    return (misses / len(entries1) < 0.25), err # todo: verify threshold
+    return res, None if res else err # todo: verify threshold
 
-def diff_ckpts(jobID1: str, jobID2: str, verbose: bool) -> bool:
-    if verbose:
-        print("DIFFING JOBS \""+jobID1+"\" AND \""+jobID2+"\"...")
+def diff_ckpts(jobID1: str, jobID2: str, filename: str, verbose: bool) -> bool:
+    print("DIFFING JOBS \""+jobID1+"\" AND \""+jobID2+"\"...") if verbose else None
     dir1 = find_dir(jobID1)
     dir2 = find_dir(jobID2)
     if verbose:
@@ -154,15 +168,20 @@ def diff_ckpts(jobID1: str, jobID2: str, verbose: bool) -> bool:
     test_mm, err_mm = diff_mm(dir1, dir2)
     test_pagemap, err_pagemap = diff_pagemap(dir1, dir2)
     test_other, err_other = diff_other(dir1, dir2, verbose)
-    if verbose:
-        print_result("files test", test_files, err_files)
-        print_result("mm-<PID> test", test_mm, err_mm)
-        print_result("pagemap-<PID> test", test_pagemap, err_pagemap)
-        print_result("other test", test_other, err_other)
-        print("-"*20)
-    return (test_files and test_mm and test_pagemap and test_other)
+    test_overall = test_files and test_mm and test_pagemap and test_other
+    err_overall = None if test_overall else ">0 diff failed"
+    test_results = [
+        ["name", "result", "error"],
+        ["files test", test_files, err_files],
+        ["mm test", test_mm, err_mm],
+        ["pagemap test", test_pagemap, err_pagemap],
+        ["other test", test_other, err_other],
+        ["overall", test_overall, err_overall]
+    ]
+    print_results(test_results) if verbose else None
+    save_results(filename, test_results)
+    return test_overall
 
 if __name__ == "__main__":
     verbose = ("--verbose" in sys.argv)
-    result = diff_ckpts("nn-1gb-base", "nn-1gb-saved", verbose)
-    print_result("overall", result) if verbose else None
+    result = diff_ckpts("nn-1gb-base", "nn-1gb-saved", "terminal.csv", verbose)
