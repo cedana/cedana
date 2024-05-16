@@ -60,7 +60,9 @@ var execTaskCmd = &cobra.Command{
 
 		wd, _ := cmd.Flags().GetString(wdFlag)
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-
+		if gpuEnabled {
+			executable = fmt.Sprintf("LD_PRELOAD=%s %s", gpuSharedLibPath, executable)
+		}
 		taskArgs := &task.StartArgs{
 			Task:       executable,
 			WorkingDir: wd,
