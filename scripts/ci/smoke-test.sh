@@ -22,6 +22,6 @@ sudo docker run \
     git fetch origin &&
     git checkout ${BRANCH_NAME} &&
     git pull origin ${BRANCH_NAME} &&
-    ./build-start-daemon.sh &&
+    go build && ./cedana daemon start & sleep 5 &&
     sudo -E python3 test/benchmarks/performance.py --local &&
 "

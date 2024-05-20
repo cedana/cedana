@@ -11,3 +11,5 @@ google-cloud-bigquery
 google-cloud-storage
 requests 
 psutil
+grpcio
+grpcio-tools

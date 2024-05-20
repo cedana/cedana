@@ -25,7 +25,6 @@ RUN cd test/benchmarks pip install -r requirements
 
 RUN mkdir benchmark_results
 ## have to force protobuf compilation with older version
-RUN pip install --upgrade protobuf==3.20.1 requests psutil google-cloud-bigquery google-cloud-storage torch numpy grpc
 RUN cd test/benchmarks && protoc --python_out=. profile.proto
 
 RUN git fetch 
