@@ -49,7 +49,7 @@ fi
 if [ $USE_SYSTEMCTL -eq 1 ]; then
     # create systemd file
     echo "Creating $SERVICE_FILE..."
-    cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
+    cat <<EOF | sudo tee $SERVICE_FILE >/dev/null
 [Unit]
 Description=Cedana Checkpointing Daemon
 [Service]

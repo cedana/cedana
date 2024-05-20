@@ -18,13 +18,13 @@ sudo docker pull cedana/cedana-benchmarking:latest
 
 BRANCH_NAME="${CI_BRANCH:-main}"
 sudo docker run \
+    -e CEDANA_OTEL_ENABLED=false \
     --privileged --tmpfs /run \
     --entrypoint /bin/bash \
     cedana/cedana-benchmarking:latest -c "
     git fetch origin &&
     git checkout ${BRANCH_NAME} &&
     git pull origin ${BRANCH_NAME} &&
-    pip install grpcio grpcio-tools &&
     ./build-start-daemon.sh &&
     sudo -E python3 test/benchmarks/performance.py --local
 "
