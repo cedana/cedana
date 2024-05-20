@@ -18,7 +18,6 @@ sudo docker pull cedana/cedana-benchmarking:latest
 
 BRANCH_NAME="${CI_BRANCH:-main}" # Default to 'main' if CI_BRANCH is not set
 sudo docker run \
-    -v ${PWD}/client_config.json:/root/.cedana/client_config.json \
     --privileged --tmpfs /run cedana/cedana-benchmarking:latest /bin/bash -c "
     git fetch origin &&
     git checkout ${BRANCH_NAME} &&
