@@ -25,6 +25,6 @@ sudo docker run \
     git checkout ${BRANCH_NAME} &&
     git pull origin ${BRANCH_NAME} &&
     pip install grpcio grpcio-tools &&
-    go build && ./cedana daemon start & sleep 5 &&
+    ./build-start-daemon.sh &&
     sudo -E python3 test/benchmarks/performance.py --local
 "
