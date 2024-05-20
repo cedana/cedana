@@ -29,4 +29,4 @@ jobs:
       - name: Run smoke tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
-        run: make -C scripts/ci smoke
+        run: sudo -E make -C scripts/ci smoke
