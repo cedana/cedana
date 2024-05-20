@@ -23,6 +23,10 @@ jobs:
         run: |
           mkdir -p /home/runner/.cedana
           echo '{ "self_serve": false, "enabled_providers": [ "local" ], "shared_storage": { "mount_point": "/home/runner/.cedana/", "dump_storage_dir": "/home/runner/.cedana/" }, "checkpoint": { "heartbeat_enabled": false, "heartbeat_interval_seconds": 60 }, "connection": { "nats_url": "0.0.0.0", "nats_port": 4222, "auth_token": "test" } }' > /home/runner/.cedana/cedana_config.json
-
       - name: Test
         run: CI=true go test -bench=. -v ./...
+
+      - name: Run smoke tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+        run: make -C scripts/ci smoke
