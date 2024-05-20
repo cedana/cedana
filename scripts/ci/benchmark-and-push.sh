@@ -56,4 +56,3 @@ sudo docker run \
  -e SIGNOZ_ACCESS_TOKEN=$SIGNOZ_ACCESS_TOKEN \
   --privileged --tmpfs /run cedana/cedana-benchmarking:latest
 
-# delete bucket from minio after benchmarking 
