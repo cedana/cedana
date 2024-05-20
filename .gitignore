@@ -14,3 +14,5 @@ cedana_restore
 # local benchmarking
 data.json
 /benchmarks/
+
+venv
