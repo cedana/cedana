@@ -17,6 +17,13 @@ const (
 	configFilePerm = 0644
 )
 
+const (
+	GpuControllerBinaryName = "gpucontroller"
+	GpuControllerBinaryPath = "/usr/local/bin/gpu-controller"
+	GpuSharedLibName        = "libcedana"
+	GpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
+)
+
 // XXX: Config file should have a version field to manage future changes to schema
 type (
 	Config struct {
@@ -96,6 +103,8 @@ func setDefaults() {
 	viper.SetDefault("connection.cedana_url", "0.0.0.0")
 	viper.SetDefault("connection.cedana_user", "random-user")
 	viper.SetDefault("connection.cedana_auth_token", "random-token")
+
+	viper.SetDefault("gpu_controller_path", GpuControllerBinaryPath)
 }
 
 // Add bindings for env vars so env vars can be used as backup
