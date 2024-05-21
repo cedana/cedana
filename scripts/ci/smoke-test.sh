@@ -16,9 +16,13 @@ fi
 
 sudo docker pull cedana/cedana-benchmarking:latest
 
+echo '{"client":{"leave_running":false, "task":""}}' >client_config.json
+cat client_config.json
+
 BRANCH_NAME="${CI_BRANCH:-main}"
 sudo docker run \
     -e CEDANA_OTEL_ENABLED=false \
+    -v ${PWD}/client_config.json:/root/.cedana/client_config.json \
     --privileged --tmpfs /run \
     --entrypoint /bin/bash \
     cedana/cedana-benchmarking:latest -c "
