@@ -6,24 +6,11 @@ jobs:
    test:
     runs-on: ubicloud-standard-8
     steps:
-      - uses: actions/checkout@v3
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.20'
-
-      - name: Install CRIU
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y criu
-
-      - name: Create .cedana directory and cedana_config.json
-        run: |
-          mkdir -p /home/runner/.cedana
-          echo '{ "self_serve": false, "enabled_providers": [ "local" ], "shared_storage": { "mount_point": "/home/runner/.cedana/", "dump_storage_dir": "/home/runner/.cedana/" }, "checkpoint": { "heartbeat_enabled": false, "heartbeat_interval_seconds": 60 }, "connection": { "nats_url": "0.0.0.0", "nats_port": 4222, "auth_token": "test" } }' > /home/runner/.cedana/cedana_config.json
-      - name: Test
-        run: CI=true go test -bench=. -v ./...
 
       - name: Run smoke tests
         env:

@@ -57,14 +57,12 @@ setup_ci() {
     echo "export PATH=$PATH:/usr/local/go/bin" >>/root/.bashrc
 
     # Install CRIU
-    git clone https://github.com/checkpoint-restore/criu.git && cd criu
-    git checkout master && git pull
-    make
-    cp criu/criu /usr/local/bin/criu
-    cd ..
-
+    sudo add-apt-repository -y ppa:criu/ppa
+    sudo apt-get update && sudo apt-get install -y criu
     # Install Cedana
     git clone https://github.com/cedana/cedana && mkdir ~/.cedana
+    cd cedana
+
     git fetch && git checkout ${BRANCH_NAME} && git pull origin ${BRANCH_NAME}
     cd cedana
 
@@ -73,10 +71,12 @@ setup_ci() {
 }
 
 start_cedana() {
+    cd cedana
     ./build-start-daemon.sh
 }
 
 start_smoke() {
+    cd cedana
     sudo -E python3 test/benchmarks/performance.py --smoke --num_samples 3
 }
 
