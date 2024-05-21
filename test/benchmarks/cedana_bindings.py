@@ -170,7 +170,9 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
     return dump_resp
 
 
-async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
+async def run_restore(
+    daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=5, delay=5
+):
     channel = grpc.aio.insecure_channel("localhost:8080")
     restore_args = task_pb2.RestoreArgs()
     restore_args.Type = restore_type
@@ -186,7 +188,16 @@ async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_restore".format(output_dir, jobID)
 
-    restore_resp = await stub.Restore(restore_args)
+    # we add a retrier here because PID conflicts happen due to a race condition inside docker containers
+    # this is not an issue outside of docker containers for some reason, TODO NR to investigate further
+    for attempt in range(max_retries):
+        restore_resp = await stub.Restore(restore_args)
+
+        if "File exists" not in restore_resp.message:
+            break
+
+        if attempt < max_retries - 1:
+            time.sleep(delay)
 
     # nil value here
     process_stats = {}

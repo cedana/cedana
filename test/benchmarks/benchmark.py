@@ -41,10 +41,6 @@ async def main(daemon_pid, remote, num_samples=5):
             )
             time.sleep(3)
 
-            cedana.terminate_process(process_stats["pid"])
-
-            time.sleep(3)
-
             restore_resp = await cedana.run_restore(
                 daemon_pid, jobID, dump_resp.CheckpointID, cedana.output_dir, remote
             )
