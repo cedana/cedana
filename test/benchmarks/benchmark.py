@@ -4,8 +4,8 @@ import time
 from tplib import task_pb2
 
 
-async def main(daemon_pid, remote):
-
+async def main(daemon_pid, remote, num_samples=5):
+    print("Starting benchmarking with {} samples".format(num_samples))
     jobs = [
         "server",
         "loop",
@@ -22,7 +22,6 @@ async def main(daemon_pid, remote):
     ]
 
     # run in a loop
-    num_samples = 5
     for x in range(len(jobs)):
         print(
             "Starting benchmarks for job \033[1m{}\033[0m with command \033[1m{}\033[0m".format(
@@ -40,12 +39,12 @@ async def main(daemon_pid, remote):
             dump_resp = await cedana.run_checkpoint(
                 daemon_pid, jobID, cedana.output_dir, process_stats, remote
             )
-            time.sleep(5)
+            time.sleep(3)
 
             restore_resp = await cedana.run_restore(
                 daemon_pid, jobID, dump_resp.CheckpointID, cedana.output_dir, remote
             )
-            time.sleep(5)
+            time.sleep(3)
 
             cedana.terminate_process(process_stats["pid"])
 

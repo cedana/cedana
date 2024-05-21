@@ -106,11 +106,14 @@ async def main(args):
         return
 
     remote = 0 if "--local" in args else 1
+    num_samples = (
+        5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1])
+    )
 
     if "--correctness" in args:
         blob_id = await correctness.main(daemon_pid, remote)
     else:
-        blob_id = await benchmark.main(daemon_pid, remote)
+        blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
     if remote:
         from google.cloud import bigquery
