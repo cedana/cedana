@@ -6,6 +6,15 @@ from tplib import task_pb2
 
 
 async def main(daemon_pid, remote, num_samples=5):
+    print("running adjust pid script...")
+    try:
+        result = subprocess.run(
+            ["/bin/bash", "adjust_pids.sh"], check=True, text=True, capture_output=True
+        )
+        print("Script output:", result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("Error running script:", e.stderr)
+
     print("Starting smoke test with {} samples".format(num_samples))
     jobs = [
         "server",
