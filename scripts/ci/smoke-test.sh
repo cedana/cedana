@@ -17,7 +17,7 @@ fi
 sudo docker pull cedana/cedana-benchmarking:latest
 
 echo '{"client":{"leave_running":false, "task":""}}' >client_config.json
-cat client_config.json
+echo uname -r
 
 BRANCH_NAME="${CI_BRANCH:-main}"
 sudo docker run \
