@@ -1,6 +1,9 @@
 #!/bin/bash
 # Used to run a quick smoke test for CI
 
+# get out from scripts/ci to root of repo
+cd ../..
+
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
