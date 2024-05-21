@@ -8,9 +8,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cedana/cedana/api/kube"
 	"github.com/cedana/runc/libcontainer"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
+
+type runcContainer struct {
+	containerId      string
+	bundle           string
+	containerName    string
+	imageName        string
+	sandboxId        string
+	sandboxName      string
+	sandboxNamespace string
+	sandboxUid       string
+}
 
 func List(root string) error {
 	dir, err := os.Open(root)
@@ -46,6 +58,35 @@ func GetPidByContainerId(containerId, root string) (int32, error) {
 		}
 	}
 	return int32(runcSpec.InitProcessPid), nil
+}
+
+func RuncGetAll(root, namespace string) ([]runcContainer, error) {
+	var containers []runcContainer
+	kubeContainers, err := kube.StateList(root)
+	if err != nil {
+		return containers, err
+	}
+
+	for _, sandbox := range kubeContainers {
+		var c runcContainer
+
+		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
+			c.containerName = sandbox.Annotations[kube.CONTAINER_NAME]
+			c.imageName = sandbox.Annotations[kube.IMAGE_NAME]
+			c.sandboxId = sandbox.Annotations[kube.SANDBOX_ID]
+			c.sandboxName = sandbox.Annotations[kube.SANDBOX_NAME]
+			c.sandboxUid = sandbox.Annotations[kube.SANDBOX_UID]
+			c.sandboxNamespace = sandbox.Annotations[kube.SANDBOX_NAMESPACE]
+			c.containerId = sandbox.ContainerId
+			c.bundle = sandbox.Bundle
+
+			if sandbox.Annotations[kube.SANDBOX_NAMESPACE] == namespace || namespace == "" && c.imageName != "" {
+				containers = append(containers, c)
+			}
+		}
+	}
+
+	return containers, nil
 }
 
 func GetContainerIdByName(containerName string, root string) (string, string, error) {

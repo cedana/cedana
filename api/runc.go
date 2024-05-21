@@ -119,6 +119,9 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	var containers []*task.RuncContainer
+	if len(args.ContainerNames) == 0 {
+		runc.RuncGetAll(args.Root, args.Namespace)
+	}
 	for _, name := range args.ContainerNames {
 		runcId, bundle, err := runc.GetContainerIdByName(name, args.Root)
 		if err != nil {

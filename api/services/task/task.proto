@@ -203,7 +203,8 @@ message RuncOpts {
 
 message RuncQueryArgs {
   string Root = 1;
-  repeated string ContainerNames = 2;
+  string Namespace = 2;
+  repeated string ContainerNames = 3;
 }
 
 message RuncQueryResp {
@@ -213,6 +214,11 @@ message RuncQueryResp {
 message RuncContainer {
   string ID = 1;
   string BundlePath = 2;
+  string ContainerName = 3;
+  string ImageName = 4;
+  string SandboxId = 5;
+  string SandboxName = 6;
+  string SandboxUid = 7;
 }
 
 message RuncGetPausePidArgs {
