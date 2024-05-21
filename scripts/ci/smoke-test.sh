@@ -62,9 +62,7 @@ setup_ci() {
     # Install Cedana
     git clone https://github.com/cedana/cedana && mkdir ~/.cedana
     cd cedana
-
     git fetch && git checkout ${BRANCH_NAME} && git pull origin ${BRANCH_NAME}
-    cd cedana
 
     # Install smoke & bench deps
     sudo pip3 install -r test/benchmarks/requirements
