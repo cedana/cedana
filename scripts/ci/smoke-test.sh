@@ -30,5 +30,5 @@ sudo docker run \
     git checkout ${BRANCH_NAME} &&
     git pull origin ${BRANCH_NAME} &&
     ./build-start-daemon.sh &&
-    sudo -E python3 test/benchmarks/performance.py --smoke
+    sudo -E python3 test/benchmarks/performance.py --local --num_samples 1
 "
