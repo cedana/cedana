@@ -3,6 +3,7 @@ import asyncio
 import cedana_bindings as cedana
 import time
 from tplib import task_pb2
+import subprocess
 
 
 async def main(daemon_pid, remote, num_samples=5):
