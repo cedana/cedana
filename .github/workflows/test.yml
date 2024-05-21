@@ -6,14 +6,15 @@ jobs:
    test:
     runs-on: ubicloud-standard-8
     steps:
+      - uses: actions/checkout@v3
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.20'
 
-      - name: Run smoke tests
+     - name: Run smoke tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: sudo -E make -C cedana/scripts/ci smoke
+        run: sudo -E make -C scripts/ci smoke
