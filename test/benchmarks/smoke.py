@@ -10,7 +10,7 @@ async def main(daemon_pid, remote, num_samples=5):
     print("running adjust pid script...")
     try:
         result = subprocess.run(
-            ["/bin/bash", "tests/benchmarks/adjust_pids.sh"],
+            ["/bin/bash", "test/benchmarks/adjust_pids.sh"],
             check=True,
             text=True,
             capture_output=True,
