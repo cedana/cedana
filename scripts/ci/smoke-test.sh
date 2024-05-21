@@ -23,6 +23,7 @@ BRANCH_NAME="${CI_BRANCH:-main}"
 sudo docker run \
     -e CEDANA_OTEL_ENABLED=false \
     -v ${PWD}/client_config.json:/root/.cedana/client_config.json \
+    --cap-add=SYS_ADMIN \
     --privileged --tmpfs /run \
     --entrypoint /bin/bash \
     cedana/cedana-benchmarking:latest -c "
