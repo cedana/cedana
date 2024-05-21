@@ -191,13 +191,15 @@ async def run_restore(
     # we add a retrier here because PID conflicts happen due to a race condition inside docker containers
     # this is not an issue outside of docker containers for some reason, TODO NR to investigate further
     for attempt in range(max_retries):
-        restore_resp = await stub.Restore(restore_args)
-
-        if "File exists" not in restore_resp.message:
-            break
-
-        if attempt < max_retries - 1:
-            time.sleep(delay)
+        try:
+            restore_resp = await stub.Restore(restore_args)
+            break  # Exit the loop if successful
+        except grpc.aio.AioRpcError as e:
+            if "File exists" in e.details() and attempt < max_retries - 1:
+                print("PID conflict detected, retrying...")
+                time.sleep(delay)
+            else:
+                raise
 
     # nil value here
     process_stats = {}
