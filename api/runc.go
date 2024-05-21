@@ -122,8 +122,8 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 	if len(args.ContainerNames) == 0 {
 		runc.RuncGetAll(args.Root, args.Namespace)
 	}
-	for _, name := range args.ContainerNames {
-		runcId, bundle, err := runc.GetContainerIdByName(name, args.Root)
+	for i, name := range args.ContainerNames {
+		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
 		if err != nil {
 			return nil, status.Error(codes.NotFound, fmt.Sprintf("Container \"%s\" not found", name))
 		}

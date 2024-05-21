@@ -205,6 +205,7 @@ message RuncQueryArgs {
   string Root = 1;
   string Namespace = 2;
   repeated string ContainerNames = 3;
+  repeated string SandboxNames = 4;
 }
 
 message RuncQueryResp {
