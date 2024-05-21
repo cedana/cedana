@@ -1489,6 +1489,8 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			return err
 		}
 
+		fdsJSON, err = json.Marshal([]string{"/dev/null", "/dev/null", "/dev/null"})
+
 		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
 		if err != nil {
 			return err
