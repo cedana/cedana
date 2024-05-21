@@ -69,7 +69,7 @@ setup_ci() {
     cd cedana
 
     # Install smoke & bench deps
-    pip3 install -r test/benchmarks/requirements.txt
+    sudo pip3 install -r test/benchmarks/requirements
 }
 
 start_cedana() {
