@@ -49,9 +49,8 @@ print_env
 sudo docker pull cedana/cedana-benchmarking:latest
 
 echo '{"client":{"leave_running":false, "task":""}}' >client_config.json
-uname -r
-
 BRANCH_NAME="${CI_BRANCH:-main}"
+
 sudo docker run \
     -e CEDANA_OTEL_ENABLED=false \
     -v ${PWD}/client_config.json:/root/.cedana/client_config.json \

@@ -7,10 +7,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Target PID threshold
-TARGET_PID=1000
+TARGET_PID=10000
 
-# Function to check current PID and adjust ns_last_pid if needed
-#
 adjust_pids() {
     current_pid=$(cat /proc/sys/kernel/ns_last_pid)
     if [ "$current_pid" -lt "$TARGET_PID" ]; then
