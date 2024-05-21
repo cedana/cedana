@@ -89,7 +89,7 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 	return containers, nil
 }
 
-func GetContainerIdByName(containerName string, root string) (string, string, error) {
+func GetContainerIdByName(containerName, sandboxName, root string) (string, string, error) {
 	dirs, err := os.ReadDir(root)
 	if err != nil {
 		return "", "", err
@@ -112,13 +112,13 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 					splitLabel := strings.Split(label, "=")
 					if splitLabel[0] == "bundle" {
 						bundle = splitLabel[1]
-						break
 					}
 				}
 			}
 		}
 
-		configPath := filepath.Join(bundle, "config.json")
+		// TODO the prefixing here is for k3s only, or !cedana-helper. Meaning that Cedana is running inside the Cedana Daemonset deployment and not on host
+		configPath := filepath.Join(filepath.Join("/host", bundle), "config.json")
 		if _, err := os.Stat(configPath); err == nil {
 			configFile, err := os.ReadFile(configPath)
 			if err != nil {
@@ -127,8 +127,15 @@ func GetContainerIdByName(containerName string, root string) (string, string, er
 			if err := json.Unmarshal(configFile, &spec); err != nil {
 				return "", "", err
 			}
-			if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
-				return dir.Name(), bundle, nil
+
+			if sandboxName != "" {
+				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName && spec.Annotations["io.kubernetes.cri.sandbox-name"] == sandboxName {
+					return dir.Name(), bundle, nil
+				}
+			} else {
+				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
+					return dir.Name(), bundle, nil
+				}
 			}
 		}
 
