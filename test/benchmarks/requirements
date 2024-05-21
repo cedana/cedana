@@ -1,3 +1,7 @@
+--extra-index-url https://test.pypi.org/simple/
+tplib-lianac
+grpcio
+grpcio-tools
 matplotlib==3.7.2
 pandas==2.0.3
 numpy==1.25.2
@@ -6,10 +10,8 @@ six==1.16.0
 torch==2.0.1
 torchvision==0.15.2
 typing_extensions
-protobuf==3.20.1
+protobuf
 google-cloud-bigquery
 google-cloud-storage
 requests 
 psutil
-grpcio
-grpcio-tools

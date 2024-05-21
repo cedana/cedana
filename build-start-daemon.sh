@@ -20,9 +20,6 @@ for arg in "$@"; do
     fi
 done
 
-python3 -m pip install -i https://test.pypi.org/simple/ tplib-lianac
-python3 -m pip install grpcio grpcio-tools
-
 echo "Building $APP_NAME..."
 go build
 
