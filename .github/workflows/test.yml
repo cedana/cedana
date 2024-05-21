@@ -18,3 +18,6 @@ jobs:
           CI_BRANCH: ${{ github.ref_name }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: sudo -E make -C scripts/ci smoke
+
+      - name: Test
+        run: CI=true go test -v ./...
