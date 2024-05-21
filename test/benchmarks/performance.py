@@ -1,6 +1,7 @@
 import asyncio
 import benchmark
 import correctness
+import smoke
 import os
 import psutil
 import shutil
@@ -105,13 +106,15 @@ async def main(args):
         )
         return
 
-    remote = 0 if "--local" in args else 1
+    remote = 0 if "--local" or "--smoke" in args else 1
     num_samples = (
         5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1])
     )
 
     if "--correctness" in args:
         blob_id = await correctness.main(daemon_pid, remote)
+    if "--smoke" in args:
+        blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
     else:
         blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
