@@ -8,14 +8,12 @@ async def main(daemon_pid, remote, num_samples=5):
     print("Starting benchmarking with {} samples".format(num_samples))
     jobs = [
         "server",
-        "loop",
         "vscode-server",
         "regression",
         "nn-1gb",
     ]
     cmds = [
         "./server",
-        "./test.sh",
         "code-server --bind-addr localhost:1234",
         "python3 regression/main.py",
         "python3 1gb_pytorch.py",
