@@ -11,8 +11,14 @@ CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:false}
+USE_SYSTEMCTL=0
 
-python3 -m pip install -i https://test.pypi.org/simple/ tplib-lianac
+# Check for --systemctl flag
+for arg in "$@"; do
+    if [ "$arg" == "--systemctl" ]; then
+        USE_SYSTEMCTL=1
+    fi
+done
 
 echo "Building $APP_NAME..."
 go build
@@ -32,9 +38,11 @@ if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
 
-# create systemd file
-echo "Creating $SERVICE_FILE..."
-cat <<EOF | sudo tee $SERVICE_FILE >/dev/null
+
+if [ $USE_SYSTEMCTL -eq 1 ]; then
+    # create systemd file
+    echo "Creating $SERVICE_FILE..."
+    cat <<EOF | sudo tee $SERVICE_FILE >/dev/null
 [Unit]
 Description=Cedana Checkpointing Daemon
 [Service]
@@ -54,14 +62,17 @@ WantedBy=multi-user.target
 
 [Service]
 StandardError=append:/var/log/cedana-daemon.log
-
 EOF
 
-echo "Reloading systemd..."
-sudo systemctl daemon-reload
+    echo "Reloading systemd..."
+    sudo systemctl daemon-reload
 
-echo "Enabling and starting $APP_NAME service..."
-sudo systemctl enable $APP_NAME.service
-sudo systemctl start $APP_NAME.service
-
-echo "$APP_NAME service setup complete."
+    echo "Enabling and starting $APP_NAME service..."
+    sudo systemctl enable $APP_NAME.service
+    sudo systemctl start $APP_NAME.service
+    echo "$APP_NAME service setup complete."
+else
+    echo "Starting daemon as a background process..."
+    sudo $APP_PATH daemon start &
+    echo "$APP_NAME daemon started as a background process."
+fi
