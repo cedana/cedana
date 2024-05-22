@@ -33,8 +33,9 @@ const (
 	GHOST_LIMIT         = 10000000
 	DUMP_FOLDER_PERMS   = 0o777
 
-	K8S_RUNC_ROOT    = "/run/containerd/runc/k8s.io"
-	DOCKER_RUNC_ROOT = "/run/docker/runtime-runc/moby"
+	K8S_RUNC_ROOT     = "/run/containerd/runc/k8s.io"
+	DOCKER_RUNC_ROOT  = "/run/docker/runtime-runc/moby"
+	DEFAULT_RUNC_ROOT = "/run/runc"
 )
 
 // The bundle includes path to bundle and the runc/podman container id of the bundle. The bundle is a folder that includes the oci spec config.json

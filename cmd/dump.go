@@ -190,8 +190,9 @@ var dumpRuncCmd = &cobra.Command{
 		defer cts.Close()
 
 		rootPath := map[string]string{
-			"k8s":    api.K8S_RUNC_ROOT,
-			"docker": api.DOCKER_RUNC_ROOT,
+			"k8s":     api.K8S_RUNC_ROOT,
+			"docker":  api.DOCKER_RUNC_ROOT,
+			"default": api.DEFAULT_RUNC_ROOT,
 		}
 
 		root, _ := cmd.Flags().GetString(containerRootFlag)
