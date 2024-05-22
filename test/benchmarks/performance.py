@@ -98,9 +98,10 @@ async def main(args):
         return
 
     remote = 0 if "--local" in args else 1
+    verbose = True if "--verbose" in args else False
 
     if "--correctness" in args:
-        blob_id = await correctness.main(daemon_pid, remote)
+        blob_id = await correctness.main(daemon_pid, remote, verbose)
     else:
         blob_id = await benchmark.main(daemon_pid, remote)
 
@@ -112,7 +113,7 @@ async def main(args):
         push_otel_to_bucket("/cedana/data.json", blob_id)
         attach_bucket_id("benchmark_output.csv", blob_id)
         push_to_bigquery()
-        
+
     # delete benchmarking folder
     cleanup()
 
