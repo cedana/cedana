@@ -89,7 +89,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	case task.CRType_LOCAL:
 		err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, args.IsK3S, []string{}, opts)
 		if err != nil {
-			err = status.Error(codes.InvalidArgument, "invalid argument")
+			err = status.Error(codes.Internal, err.Error())
 			return nil, err
 		}
 
