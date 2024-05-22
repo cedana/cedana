@@ -217,7 +217,7 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: root,
+			Root: rootPath[root],
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
 			ContainerID: id,

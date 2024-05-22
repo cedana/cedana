@@ -24,11 +24,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		return nil, err
 	}
 
-	state, err := s.generateState(pid)
-	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
-		return nil, err
-	}
+	state := &task.ProcessState{}
+
 	state.JobState = task.JobState_JOB_RUNNING
 
 	criuOpts := &container.CriuOpts{
