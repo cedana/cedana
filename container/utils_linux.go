@@ -1322,7 +1322,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
 	// TODO BS pull this dynamically from original container
-	pidBytes, err := os.ReadFile(filepath.Join(bundle, "init.pid"))
+	pidBytes, err := os.ReadFile(filepath.Join(bundle, "pidfile"))
 	if err != nil {
 		return err
 	}

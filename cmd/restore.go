@@ -189,6 +189,7 @@ var runcRestoreCmd = &cobra.Command{
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
+		logger.Log().Msg(id)
 		isK3s, _ := cmd.Flags().GetBool(isK3sFlag)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
