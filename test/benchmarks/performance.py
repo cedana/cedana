@@ -99,9 +99,11 @@ async def main(args):
 
     remote = 0 if "--local" or "--smoke" in args else 1
     num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
+    verbose = True if "--verbose" in args else False
+
 
     if "--correctness" in args:
-        blob_id = await correctness.main(daemon_pid, remote)
+        blob_id = await correctness.main(daemon_pid, remote, verbose)
     if "--smoke" in args:
         blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
     else:
@@ -115,6 +117,7 @@ async def main(args):
         push_otel_to_bucket("/cedana/data.json", blob_id)
         attach_bucket_id("benchmark_output.csv", blob_id)
         push_to_bigquery()
+
     # delete benchmarking folder
     cleanup()
 

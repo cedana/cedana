@@ -20,6 +20,8 @@ for arg in "$@"; do
     fi
 done
 
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
+
 echo "Building $APP_NAME..."
 go build
 
