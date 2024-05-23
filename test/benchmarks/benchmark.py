@@ -3,8 +3,9 @@ import cedana_bindings as cedana
 import time
 from tplib import task_pb2
 
-async def main(daemon_pid, remote):
 
+async def main(daemon_pid, remote, num_samples=5):
+    print("Starting benchmarking with {} samples".format(num_samples))
     jobs = [
         "server",
         "loop",
@@ -21,7 +22,6 @@ async def main(daemon_pid, remote):
     ]
 
     # run in a loop
-    num_samples = 5
     for x in range(len(jobs)):
         print("Starting benchmarks for job \033[1m{}\033[0m with command \033[1m{}\033[0m".format(jobs[x], cmds[x]))
         job = jobs[x]
