@@ -62,6 +62,7 @@ def attach_bucket_id(csv_file, blob_id):
         csv_writer = csv.writer(file)
         csv_writer.writerows(rows)
 
+
 def push_to_bigquery():
     client = bigquery.Client()
 
@@ -101,13 +102,13 @@ def push_to_bigquery():
 async def main(args):
     daemon_pid = setup()
     if daemon_pid == -1:
-        print(
-            "ERROR: cedana process not found in active PIDs. Have you started cedana daemon?"
-        )
-        return
+        print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
+        sys.exit(1)
 
     remote = 0 if "--local" or "--smoke" in args else 1
-    num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
+    num_samples = (
+        5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1])
+    )
     verbose = True if "--verbose" in args else False
 
     if "--correctness" in args:
