@@ -48,7 +48,7 @@ def attach_bucket_id(csv_file, blob_id):
     blob_id_column_index = header.index("blob_id")
 
     # update blob_id for each row
-    for row in rows[1:]:  # skip header row
+    for row in rows[1:]: # skip header row
         row[blob_id_column_index] = blob_id
 
     # write csv file
@@ -66,9 +66,9 @@ def push_to_bigquery():
 
     job_config = LoadJobConfig(
         source_format=SourceFormat.CSV,
-        skip_leading_rows=1,  # change this according to your CSV file
-        autodetect=True,  # auto-detect schema if the table doesn't exist
-        write_disposition="WRITE_APPEND",  # options: WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
+        skip_leading_rows=1, # change this according to your CSV file
+        autodetect=True, # auto-detect schema if the table doesn't exist
+        write_disposition="WRITE_APPEND", # options: WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
     )
 
     dataset_ref = client.dataset(dataset_id)
@@ -101,7 +101,6 @@ async def main(args):
     num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
     verbose = True if "--verbose" in args else False
 
-
     if "--correctness" in args:
         blob_id = await correctness.main(daemon_pid, remote, verbose)
     if "--smoke" in args:
@@ -120,7 +119,6 @@ async def main(args):
 
     # delete benchmarking folder
     cleanup()
-
 
 if __name__ == "__main__":
     asyncio.run(main(sys.argv))
