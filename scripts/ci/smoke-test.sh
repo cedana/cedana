@@ -1,7 +1,7 @@
 #!/bin/bash
 # Used to run a quick smoke test for CI
 
-APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
+APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf"
@@ -9,6 +9,11 @@ APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
 install_apt_packages() {
     apt-get update
     apt-get install -y $APT_PACKAGES
+}
+
+install_code_server() {
+    curl -fOL https://github.com/coder/code-server/releases/download/v$VERSION/code-server_${VERSION}_amd64.deb
+    sudo dpkg -i code-server_${VERSION}_amd64.deb
 }
 
 print_header() {
@@ -48,6 +53,7 @@ print_env() {
 setup_ci() {
     [ -n "$SKIP_CI_SETUP" ] && return
     install_apt_packages
+    install_code_server
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
