@@ -166,9 +166,7 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
 
     return dump_resp
 
-async def run_restore(
-    daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5
-):
+async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5):
     channel = grpc.aio.insecure_channel("localhost:8080")
     restore_args = task_pb2.RestoreArgs()
     restore_args.Type = restore_type
