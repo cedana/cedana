@@ -20,6 +20,8 @@ for arg in "$@"; do
     fi
 done
 
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
+
 echo "Building $APP_NAME..."
 go build
 
@@ -37,7 +39,6 @@ fi
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
-
 
 if [ $USE_SYSTEMCTL -eq 1 ]; then
     # create systemd file

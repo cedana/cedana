@@ -2,18 +2,20 @@ import csv
 import grpc
 import os
 import platform
-import psutil
 import signal
 import subprocess
-from tplib import task_pb2
-from tplib import task_pb2_grpc
 import time
+
+import grpc
+import psutil
+from tplib import task_pb2, task_pb2_grpc
 
 output_dir = "benchmark_results"
 
 cedana_version = (
     subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
 )
+
 
 def start_recording(pid):
     initial_data = {}
@@ -28,6 +30,7 @@ def start_recording(pid):
         print(f"No such process with PID {pid}")
 
     return initial_data
+
 
 def stop_recording(
     operation_type,
@@ -71,7 +74,7 @@ def stop_recording(
     processor = platform.processor()
     physical_cores = psutil.cpu_count(logical=False)
     cpu_count = psutil.cpu_count(logical=True)
-    memory = psutil.virtual_memory().total / (1024 ** 3)
+    memory = psutil.virtual_memory().total / (1024**3)
 
     # read from otelcol json
     with open("benchmark_output.csv", mode="a", newline="") as file:
@@ -125,6 +128,7 @@ def stop_recording(
 
         # delete profile file after
 
+
 def terminate_process(pid, timeout=3):
     try:
         # Send SIGTERM
@@ -166,9 +170,7 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
 
     return dump_resp
 
-async def run_restore(
-    daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5
-):
+async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5):
     channel = grpc.aio.insecure_channel("localhost:8080")
     restore_args = task_pb2.RestoreArgs()
     restore_args.Type = restore_type
@@ -215,7 +217,7 @@ async def run_exec(cmd, jobID):
     start_task_args.WorkingDir = os.path.join(os.getcwd(), "benchmarks")
     env = []  # format to match golang os.Environ()
     for key in os.environ.keys():
-        env.append(key+"="+os.environ[key])
+        env.append(key + "=" + os.environ[key])
     start_task_args.Env.extend(env)
     start_task_args.UID = os.getuid()
     start_task_args.GID = os.getgid()

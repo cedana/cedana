@@ -3,7 +3,7 @@ name: Test
 on: [push]
 
 jobs:
-  build:
+  test:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
