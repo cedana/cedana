@@ -61,8 +61,11 @@ func (s *service) generateState(pid int32) (*task.ProcessState, error) {
 		return nil, fmt.Errorf("could not list jobs: %v", err)
 	}
 	for _, v := range list {
-		st := task.ProcessState{}
-		err = json.Unmarshal(v, &st)
+		st := &task.ProcessState{}
+		err = json.Unmarshal(v, st)
+		if err != nil {
+			continue
+		}
 		if st.PID == pid {
 			state.JID = st.JID
 			break

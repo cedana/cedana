@@ -310,6 +310,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	if err != nil {
 		return 0, err
 	}
+	os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
 
 	var stderrbuf bytes.Buffer
 	var gpuerrbuf bytes.Buffer

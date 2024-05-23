@@ -66,6 +66,9 @@ func (db *LocalDB) Get(path [][]byte, key []byte) ([]byte, error) {
 		if v == nil {
 			return nil
 		}
+		new_v := make([]byte, len(v))
+		copy(new_v, v)
+		v = new_v
 
 		return nil
 	})
@@ -187,7 +190,10 @@ func (db *LocalDB) List(path [][]byte) ([][]byte, error) {
 
 		c := b.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			list = append(list, v)
+			// copy value to a new byte array
+			new_v := make([]byte, len(v))
+			copy(new_v, v)
+			list = append(list, new_v)
 		}
 
 		return nil
@@ -221,7 +227,9 @@ func (db *LocalDB) ListKeys(path [][]byte) ([][]byte, error) {
 
 		c := b.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			list = append(list, k)
+			new_k := make([]byte, len(k))
+			copy(new_k, k)
+			list = append(list, new_k)
 		}
 
 		return nil
