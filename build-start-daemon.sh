@@ -32,6 +32,10 @@ fi
 
 sudo cp $APP_NAME $APP_PATH
 
+if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
+    echo "Starting daemon with GPU support..."
+fi
+
 if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
     echo "Starting daemon with OpenTelemetry support..."
 fi

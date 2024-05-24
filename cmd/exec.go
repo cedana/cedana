@@ -8,6 +8,7 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -52,16 +53,24 @@ var execTaskCmd = &cobra.Command{
 
 		env = os.Environ()
 
+		logRedirectFile, _ := cmd.Flags().GetString(logRedirectFlag)
+
 		wd, _ := cmd.Flags().GetString(wdFlag)
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		if gpuEnabled {
+			logger.Info().Msgf("starting task w/ gpu enabled")
+			executable = fmt.Sprintf("LD_PRELOAD=%s %s", utils.GpuSharedLibPath, executable)
+		}
+
 		taskArgs := &task.StartArgs{
-			Task:       executable,
-			WorkingDir: wd,
-			Env:        env,
-			UID:        uid,
-			GID:        gid,
-			JID:        jid,
-			GPU:        gpuEnabled,
+			Task:          executable,
+			WorkingDir:    wd,
+			Env:           env,
+			UID:           uid,
+			GID:           gid,
+			JID:           jid,
+			GPU:           gpuEnabled,
+			LogOutputFile: logRedirectFile,
 		}
 
 		resp, err := cts.Start(ctx, taskArgs)
@@ -83,6 +92,7 @@ func init() {
 	execTaskCmd.Flags().BoolP(rootFlag, "r", false, "run as root")
 	execTaskCmd.Flags().StringP(idFlag, "i", "", "job id to use")
 	execTaskCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "enable gpu checkpointing")
+	execTaskCmd.Flags().StringP(logRedirectFlag, "l", "", "log redirect file (stdout/stderr)")
 
 	rootCmd.AddCommand(execTaskCmd)
 }

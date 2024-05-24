@@ -17,6 +17,7 @@ const (
 	netPidFlag         = "net-pid"
 	tcpEstablishedFlag = "tcp-established"
 	gpuEnabledFlag     = "gpu-enabled"
+	logRedirectFlag    = "log-redirect"
 	startChrootFlag    = "start-chroot"
 	setupHostFlag      = "setup-host"
 )
