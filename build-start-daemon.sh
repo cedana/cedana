@@ -9,14 +9,21 @@ CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-0}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
+CEDANA_GPU_ENABLED=false
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
-CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:false}
 USE_SYSTEMCTL=0
 
 # Check for --systemctl flag
 for arg in "$@"; do
     if [ "$arg" == "--systemctl" ]; then
         USE_SYSTEMCTL=1
+    fi
+done
+
+# Check for --gpu flag
+for arg in "$@"; do
+    if [ "$arg" == "--gpu" ]; then
+        CEDANA_GPU_ENABLED=true
     fi
 done
 
@@ -32,9 +39,6 @@ fi
 
 sudo cp $APP_NAME $APP_PATH
 
-if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
-    echo "Starting daemon with GPU support..."
-fi
 
 if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
     echo "Starting daemon with OpenTelemetry support..."
