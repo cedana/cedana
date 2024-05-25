@@ -113,7 +113,7 @@ async def main(args):
 
     if "--correctness" in args:
         blob_id = await correctness.main(daemon_pid, remote, verbose)
-    if "--smoke" in args:
+    elif "--smoke" in args:
         blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
     else:
         blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
