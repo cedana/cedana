@@ -58,6 +58,8 @@ setup_ci() {
     [ -n "$SKIP_CI_SETUP" ] && return
     install_apt_packages
     install_code_server
+    install_bats_core
+
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
