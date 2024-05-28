@@ -6,7 +6,7 @@ source ./helpers.sh
 
 function start_regression() {
     echo "Running regression tests in cwd: $(pwd)"
-    cd tests/regression
+    cd test/regression
     bats main.bats
 }
 
