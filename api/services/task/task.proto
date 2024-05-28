@@ -48,6 +48,7 @@ message StartArgs {
   string LogOutputFile = 5;
   uint32 UID = 6;
   uint32 GID = 7;
+  bool GPU = 8;
 }
 
 message StartResp {
@@ -61,6 +62,7 @@ message DumpArgs {
   string Dir = 2;
   CRType Type = 3;
   string JID = 4;
+  bool GPU = 5;
 }
 
 message DumpResp {
@@ -69,6 +71,7 @@ message DumpResp {
   string UploadID = 3;
   ProcessState State = 4;
 }
+
 
 message RestoreArgs {
   CRType Type = 1;
@@ -145,7 +148,11 @@ message RuncDumpArgs {
   string ContainerID = 3;
   CriuOpts CriuOpts = 4;
   CRType Type = 5;
+<<<<<<< HEAD
   ProcessState state = 6;
+=======
+  bool GPU = 6;
+>>>>>>> main
 
 }
 
