@@ -19,5 +19,10 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: sudo -E make -C scripts/ci smoke
 
+      - name: Run regression tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+        run: sudo -E make -C scripts/ci regression
+
       - name: Test
         run: CI=true go test -v ./...

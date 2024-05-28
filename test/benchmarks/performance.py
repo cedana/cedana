@@ -1,6 +1,7 @@
 import asyncio
 import benchmark
 import correctness
+import smoke
 import os
 import psutil
 import shutil
@@ -12,11 +13,13 @@ from tplib import task_pb2
 benchmarking_dir = "benchmarks"
 output_dir = "benchmark_results"
 
+
 def get_pid_by_name(process_name: str) -> int:
     for proc in psutil.process_iter(["name"]):
         if proc.info["name"] == process_name:
             return proc.pid
     return -1
+
 
 def setup() -> int:
     # download benchmarking repo
@@ -28,14 +31,17 @@ def setup() -> int:
 
     return get_pid_by_name("cedana")
 
+
 def cleanup():
     shutil.rmtree(benchmarking_dir)
+
 
 def push_otel_to_bucket(filename, blob_id):
     client = storage.Client()
     bucket = client.bucket("benchmark-otel-data")
     blob = bucket.blob(blob_id)
     blob.upload_from_filename(filename)
+
 
 def attach_bucket_id(csv_file, blob_id):
     # read csv file
@@ -48,13 +54,14 @@ def attach_bucket_id(csv_file, blob_id):
     blob_id_column_index = header.index("blob_id")
 
     # update blob_id for each row
-    for row in rows[1:]: # skip header row
+    for row in rows[1:]:  # skip header row
         row[blob_id_column_index] = blob_id
 
     # write csv file
     with open(csv_file, mode="w", newline="") as file:
         csv_writer = csv.writer(file)
         csv_writer.writerows(rows)
+
 
 def push_to_bigquery():
     client = bigquery.Client()
@@ -66,9 +73,9 @@ def push_to_bigquery():
 
     job_config = LoadJobConfig(
         source_format=SourceFormat.CSV,
-        skip_leading_rows=1, # change this according to your CSV file
-        autodetect=True, # auto-detect schema if the table doesn't exist
-        write_disposition="WRITE_APPEND", # options: WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
+        skip_leading_rows=1,  # change this according to your CSV file
+        autodetect=True,  # auto-detect schema if the table doesn't exist
+        write_disposition="WRITE_APPEND",  # options: WRITE_APPEND, WRITE_EMPTY, WRITE_TRUNCATE
     )
 
     dataset_ref = client.dataset(dataset_id)
@@ -91,11 +98,12 @@ def push_to_bigquery():
     table = client.get_table(table_ref)
     print("Loaded {} rows to {}".format(table.num_rows, table_id))
 
+
 async def main(args):
     daemon_pid = setup()
     if daemon_pid == -1:
         print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
-        return
+        sys.exit(1)
 
     remote = 0 if "--local" or "--smoke" in args else 1
     num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
@@ -119,6 +127,7 @@ async def main(args):
 
     # delete benchmarking folder
     cleanup()
+
 
 if __name__ == "__main__":
     asyncio.run(main(sys.argv))

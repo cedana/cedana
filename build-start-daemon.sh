@@ -5,11 +5,11 @@ APP_NAME="cedana"
 APP_PATH="/usr/local/bin/$APP_NAME"
 SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
-CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-0}
 CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-0}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
+CEDANA_GPU_ENABLED=false
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 USE_SYSTEMCTL=0
 
@@ -17,6 +17,13 @@ USE_SYSTEMCTL=0
 for arg in "$@"; do
     if [ "$arg" == "--systemctl" ]; then
         USE_SYSTEMCTL=1
+    fi
+done
+
+# Check for --gpu flag
+for arg in "$@"; do
+    if [ "$arg" == "--gpu" ]; then
+        CEDANA_GPU_ENABLED=true
     fi
 done
 
@@ -32,7 +39,6 @@ fi
 
 sudo cp $APP_NAME $APP_PATH
 
-# if cedana_gpu_enabled=atrue, echo
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
 fi
@@ -53,13 +59,12 @@ if [ $USE_SYSTEMCTL -eq 1 ]; then
 Description=Cedana Checkpointing Daemon
 [Service]
 Environment=USER=$USER
-Environment=CEDANA_GPU_ENABLED=$CEDANA_GPU_ENABLED
 Environment=CEDANA_GPU_CONTROLLER_PATH=$CEDANA_GPU_CONTROLLER_PATH
 Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED
 Environment=CEDANA_IS_K8S=$CEDANA_IS_K8S
 Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
-ExecStart=$APP_PATH daemon start
+ExecStart=$APP_PATH daemon start --gpu-enabled=$CEDANA_GPU_ENABLED
 User=root
 Group=root
 Restart=no
@@ -80,6 +85,6 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    sudo $APP_PATH daemon start &
+    sudo $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
     echo "$APP_NAME daemon started as a background process."
 fi
