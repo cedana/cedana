@@ -64,7 +64,7 @@ Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED
 Environment=CEDANA_IS_K8S=$CEDANA_IS_K8S
 Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
-ExecStart=$APP_PATH daemon start --gpu-enabled $CEDANA_GPU_ENABLED
+ExecStart=$APP_PATH daemon start --gpu-enabled=$CEDANA_GPU_ENABLED
 User=root
 Group=root
 Restart=no
@@ -85,6 +85,6 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    sudo $APP_PATH daemon start --gpu-enabled "$CEDANA_GPU_ENABLED" &
+    sudo $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
     echo "$APP_NAME daemon started as a background process."
 fi

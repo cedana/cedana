@@ -279,7 +279,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		if err != nil {
 			return 0, err
 		}
-		// force sleep for a few ms to allow GPU controller to start
+		// XXX: force sleep for a few ms to allow GPU controller to start
 		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
 	}
