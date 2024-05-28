@@ -14,6 +14,12 @@ install_code_server() {
     curl -fsSL https://code-server.dev/install.sh | sh
 }
 
+install_bats_core() {
+    git clone https://github.com/bats-core/bats-core.git
+    cd bats-core
+    ./install.sh /usr/local
+}
+
 print_header() {
     echo "############### $1 ###############"
 }
