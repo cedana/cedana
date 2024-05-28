@@ -67,10 +67,11 @@ var perfCritShowCmd = &cobra.Command{
 				return err
 			}
 			for _, file := range files {
+				is_dump_log := (file.Name() == "cedana-dump.log" && file.Name() != "dump.log")
 				is_json_file := strings.HasSuffix(file.Name(), ".json")
 				is_pages_file := strings.HasPrefix(file.Name(), "pages-")
 				is_core_file := strings.HasPrefix(file.Name(), "core-")
-				if file.Name() != "dump.log" && !is_json_file && !is_pages_file && !is_core_file {
+				if !is_dump_log && !is_json_file && !is_pages_file && !is_core_file {
 					err := show_file(filepath.Join(ckptPath, file.Name()))
 					if err != nil {
 						return err

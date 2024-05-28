@@ -162,8 +162,13 @@ def diff_ckpts(jobID1: str, jobID2: str, filename: str, verbose: bool) -> bool:
         print("FOUND", dir2+"/...")
         print("-"*20)
         print("TESTING...")
-    subprocess.run(["cedana", "perf", "crit", "show", dir1], capture_output=True, text=True)
-    subprocess.run(["cedana", "perf", "crit", "show", dir2], capture_output=True, text=True)
+    e = os.environ.copy()
+    err1 = subprocess.run(["cedana", "perf", "crit", "show", dir1], capture_output=True, text=True, env=e)
+    if err1.returncode:
+        print("ERROR: cedana perf crit show {} returned\n{}".format(dir1, err1.stdout))
+    err2 = subprocess.run(["cedana", "perf", "crit", "show", dir2], capture_output=True, text=True, env=e)
+    if err2.returncode:
+        print("ERROR: cedana perf crit show {} returned\n{}".format(dir2, err2.stdout))
     test_files, err_files = diff_files(dir1, dir2)
     test_mm, err_mm = diff_mm(dir1, dir2)
     test_pagemap, err_pagemap = diff_pagemap(dir1, dir2)

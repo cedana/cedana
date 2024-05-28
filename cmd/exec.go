@@ -40,12 +40,6 @@ var execTaskCmd = &cobra.Command{
 			logger.Error().Err(err).Msg("invalid job id")
 		}
 
-		// Check if executable exists
-		if _, err := os.Stat(executable); err != nil {
-			logger.Error().Err(err).Msg("executable")
-			return
-		}
-
 		var env []string
 		var uid uint32
 		var gid uint32

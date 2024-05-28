@@ -4,6 +4,7 @@ import correctness
 import os
 import psutil
 import shutil
+import smoke
 import subprocess
 import sys
 from tplib import task_pb2
@@ -55,7 +56,6 @@ def attach_bucket_id(csv_file, blob_id):
         csv_writer = csv.writer(file)
         csv_writer.writerows(rows)
 
-
 def push_to_bigquery():
     client = bigquery.Client()
 
@@ -97,12 +97,16 @@ async def main(args):
         print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
         return
 
-    remote = 0 if "--local" in args else 1
+    remote = 0 if "--local" or "--smoke" in args else 1
+    num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
+    verbose = True if "--verbose" in args else False
 
     if "--correctness" in args:
-        blob_id = await correctness.main(daemon_pid, remote)
+        blob_id = await correctness.main(daemon_pid, remote, verbose)
+    elif "--smoke" in args:
+        blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
     else:
-        blob_id = await benchmark.main(daemon_pid, remote)
+        blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
     if remote:
         from google.cloud import bigquery
@@ -112,7 +116,7 @@ async def main(args):
         push_otel_to_bucket("/cedana/data.json", blob_id)
         attach_bucket_id("benchmark_output.csv", blob_id)
         push_to_bigquery()
-        
+
     # delete benchmarking folder
     cleanup()
 
