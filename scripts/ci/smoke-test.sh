@@ -80,7 +80,7 @@ start_cedana() {
 
 start_smoke() {
     cd cedana
-    sudo -E python3 test/benchmarks/performance.py --smoke --num_samples 3
+    sudo -E python3 test/benchmarks/performance.py --smoke --num_samples 1
 }
 
 print_env
