@@ -106,9 +106,7 @@ async def main(args):
         sys.exit(1)
 
     remote = 0 if "--local" or "--smoke" in args else 1
-    num_samples = (
-        5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1])
-    )
+    num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
     verbose = True if "--verbose" in args else False
 
     if "--correctness" in args:
