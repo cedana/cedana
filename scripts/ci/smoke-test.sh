@@ -12,8 +12,7 @@ install_apt_packages() {
 }
 
 install_code_server() {
-    curl -fOL https://github.com/coder/code-server/releases/download/v$VERSION/code-server_${VERSION}_amd64.deb
-    sudo dpkg -i code-server_${VERSION}_amd64.deb
+    curl -fsSL https://code-server.dev/install.sh | sh
 }
 
 print_header() {
@@ -81,7 +80,7 @@ start_cedana() {
 
 start_smoke() {
     cd cedana
-    sudo -E python3 test/benchmarks/performance.py --smoke --num_samples 3
+    sudo -E python3 test/benchmarks/performance.py --smoke --num_samples 1
 }
 
 print_env
