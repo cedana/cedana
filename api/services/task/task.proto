@@ -148,12 +148,8 @@ message RuncDumpArgs {
   string ContainerID = 3;
   CriuOpts CriuOpts = 4;
   CRType Type = 5;
-<<<<<<< HEAD
   ProcessState state = 6;
-=======
-  bool GPU = 6;
->>>>>>> main
-
+  bool GPU = 7;
 }
 
 message RuncDumpResp {
