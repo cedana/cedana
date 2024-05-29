@@ -8,3 +8,9 @@ export CONTAINER_TERMINAL
 
 benchmark:
 	./benchmark-and-push.sh
+
+smoke:
+	./smoke-test.sh
+
+regression:
+	./regression-test.sh

@@ -121,10 +121,12 @@ var dumpJobCmd = &cobra.Command{
 			taskType = task.CRType_LOCAL
 		}
 
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		dumpArgs := task.DumpArgs{
 			JID:  id,
 			Dir:  dir,
 			Type: taskType,
+			GPU:  gpuEnabled,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)
@@ -245,10 +247,14 @@ func init() {
 	// Process/jobs
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpCmd.AddCommand(dumpJobCmd)
+
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
+	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
+
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
+	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)
@@ -265,6 +271,7 @@ func init() {
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 
 	rootCmd.AddCommand(dumpCmd)
 }

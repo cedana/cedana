@@ -16,13 +16,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	gpuControllerBinaryName = "gpucontroller"
-	gpuControllerBinaryPath = "/usr/local/bin/gpu-controller"
-	gpuSharedLibName        = "libcedana"
-	gpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
-)
-
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
@@ -49,15 +42,15 @@ var startDaemonCmd = &cobra.Command{
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
-
-		if viper.GetBool("gpu_enabled") {
-			err := pullGPUBinary(ctx, gpuControllerBinaryName, gpuControllerBinaryPath)
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		if gpuEnabled {
+			err := pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
 				return
 			}
 
-			err = pullGPUBinary(ctx, gpuSharedLibName, gpuSharedLibPath)
+			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull libcedana")
 				return
@@ -81,6 +74,7 @@ func startProfiler() {
 func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
+	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {

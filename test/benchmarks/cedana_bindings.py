@@ -1,19 +1,21 @@
 import csv
 import grpc
-import os 
+import os
 import platform
-import psutil
 import signal
 import subprocess
-from tplib import task_pb2
-from tplib import task_pb2_grpc
 import time
+
+import grpc
+import psutil
+from tplib import task_pb2, task_pb2_grpc
 
 output_dir = "benchmark_results"
 
 cedana_version = (
     subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
 )
+
 
 def start_recording(pid):
     initial_data = {}
@@ -28,6 +30,7 @@ def start_recording(pid):
         print(f"No such process with PID {pid}")
 
     return initial_data
+
 
 def stop_recording(
     operation_type,
@@ -71,7 +74,7 @@ def stop_recording(
     processor = platform.processor()
     physical_cores = psutil.cpu_count(logical=False)
     cpu_count = psutil.cpu_count(logical=True)
-    memory = psutil.virtual_memory().total / (1024 ** 3)
+    memory = psutil.virtual_memory().total / (1024**3)
 
     # read from otelcol json
     with open("benchmark_output.csv", mode="a", newline="") as file:
@@ -125,6 +128,7 @@ def stop_recording(
 
         # delete profile file after
 
+
 def terminate_process(pid, timeout=3):
     try:
         # Send SIGTERM
@@ -152,7 +156,7 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
     dump_args = task_pb2.DumpArgs()
     dump_args.Dir = "/tmp"
     dump_args.Type = dump_type
-    dump_args.JobID = jobID
+    dump_args.JID = jobID
     stub = task_pb2_grpc.TaskServiceStub(channel)
 
     # initial data here is fine - we want to measure impact of daemon on system
@@ -166,12 +170,12 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
 
     return dump_resp
 
-async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
+async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5):
     channel = grpc.aio.insecure_channel("localhost:8080")
     restore_args = task_pb2.RestoreArgs()
     restore_args.Type = restore_type
-    restore_args.JobID = jobID
-    if restore_type == task_pb2.RestoreArgs.REMOTE:
+    restore_args.JID = jobID
+    if restore_type == task_pb2.CRType.REMOTE:
         restore_args.CheckpointId = checkpointID
     else:
         restore_args.CheckpointPath = checkpointID
@@ -182,7 +186,18 @@ async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
     initial_data = start_recording(daemonPID)
     cpu_profile_filename = "{}/cpu_{}_restore".format(output_dir, jobID)
 
-    restore_resp = await stub.Restore(restore_args)
+    # we add a retrier here because PID conflicts happen due to a race condition inside docker containers
+    # this is not an issue outside of docker containers for some reason, TODO NR to investigate further
+    for attempt in range(max_retries):
+        try:
+            restore_resp = await stub.Restore(restore_args)
+            break  # Exit the loop if successful
+        except grpc.aio.AioRpcError as e:
+            if "File exists" in e.details() and attempt < max_retries - 1:
+                print("PID conflict detected, retrying...")
+                time.sleep(delay)
+            else:
+                raise
 
     # nil value here
     process_stats = {}
@@ -196,19 +211,19 @@ async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type):
 
 async def run_exec(cmd, jobID):
     channel = grpc.aio.insecure_channel("localhost:8080")
-    start_task_args = task_pb2.StartTaskArgs()
+    start_task_args = task_pb2.StartArgs()
     start_task_args.Task = cmd
-    start_task_args.Id = jobID
+    start_task_args.JID = jobID
     start_task_args.WorkingDir = os.path.join(os.getcwd(), "benchmarks")
-    env = [] # format to match golang os.Environ()
+    env = []  # format to match golang os.Environ()
     for key in os.environ.keys():
-        env.append(key+"="+os.environ[key])
+        env.append(key + "=" + os.environ[key])
     start_task_args.Env.extend(env)
     start_task_args.UID = os.getuid()
     start_task_args.GID = os.getgid()
     stub = task_pb2_grpc.TaskServiceStub(channel)
 
-    start_task_resp = await stub.StartTask(start_task_args)
+    start_task_resp = await stub.Start(start_task_args)
 
     process_stats = {}
     process_stats["pid"] = start_task_resp.PID
@@ -217,4 +232,4 @@ async def run_exec(cmd, jobID):
         psutil_process.memory_full_info().uss / 1024
     )  # convert to KB
 
-    return process_stats 
+    return process_stats

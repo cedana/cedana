@@ -3,6 +3,7 @@ package api
 // Implements the task service functions for processes
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -109,7 +110,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
-	err = s.dump(ctx, args.Dir, state)
+	err = s.dump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
 		dumpTracer.RecordError(st.Err())
@@ -272,12 +273,14 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 
 	var gpuCmd *exec.Cmd
 	var err error
-	if viper.GetBool("gpu_enabled") {
+	if args.GPU {
 		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
 		if err != nil {
 			return 0, err
 		}
+		// XXX: force sleep for a few ms to allow GPU controller to start
+		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
 	}
 
@@ -310,13 +313,19 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	if err != nil {
 		return 0, err
 	}
+	os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
 
-	var stderrbuf bytes.Buffer
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return 0, err
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return 0, err
+	}
+
 	var gpuerrbuf bytes.Buffer
-
-	cmd.Stdout = outputFile
-	cmd.Stderr = io.MultiWriter(outputFile, &stderrbuf)
-
 	if gpuCmd != nil {
 		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 	}
@@ -330,6 +339,26 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	pid = int32(cmd.Process.Pid)
 
 	go func() {
+		stdoutScanner := bufio.NewScanner(stdoutPipe)
+		stderrScanner := bufio.NewScanner(stderrPipe)
+
+		for stdoutScanner.Scan() {
+			outputFile.WriteString(stdoutScanner.Text() + "\n")
+		}
+		if err := stdoutScanner.Err(); err != nil {
+			s.logger.Err(err).Msg("Error reading stdout")
+		}
+
+		for stderrScanner.Scan() {
+			outputFile.WriteString(stderrScanner.Text() + "\n")
+		}
+		if err := stderrScanner.Err(); err != nil {
+			s.logger.Err(err).Msg("Error reading stderr")
+		}
+	}()
+
+	go func() {
+		defer outputFile.Close()
 		err := cmd.Wait()
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()

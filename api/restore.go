@@ -516,6 +516,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 	}
 
 	var gpuCmd *exec.Cmd
+	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
