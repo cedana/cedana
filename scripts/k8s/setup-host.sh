@@ -50,9 +50,11 @@ git clone https://github.com/cedana/cedana.git
 echo "export IS_K8S=1" >> ~/.bashrc
 source ~/.bashrc
 
-cd cedana && go build -v
+cd cedana
+git fetch && git checkout feat/ced-355
+go build -v
 cp cedana /usr/local/bin/cedana
 
-cedana daemon start &
+./build-start-daemon.sh
 
 EOT
