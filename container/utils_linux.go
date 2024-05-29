@@ -1250,6 +1250,10 @@ func logCriuErrors(dir, file string) {
 
 func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string, netPid int) error {
 	const logFile = "restore.log"
+
+	var crioPidFilePath = filepath.Join(bundle, "pidfile")
+	var containerdPidFilePath = filepath.Join(bundle, "init.pid")
+
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1322,10 +1326,18 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
 	// TODO BS pull this dynamically from original container
-	pidBytes, err := os.ReadFile(filepath.Join(bundle, "pidfile"))
-	if err != nil {
-		return err
+	var pidBytes []byte
+	var readfileErr error
+	if _, err = os.Stat(crioPidFilePath); err == nil {
+		pidBytes, readfileErr = os.ReadFile(crioPidFilePath)
+	} else {
+		pidBytes, readfileErr = os.ReadFile(containerdPidFilePath)
 	}
+
+	if readfileErr != nil {
+		return readfileErr
+	}
+
 	pidStr := string(pidBytes)
 	if netPid != 0 {
 		pidStr = fmt.Sprint(netPid)
