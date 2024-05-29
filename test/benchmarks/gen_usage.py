@@ -3,37 +3,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-# n users work 8 hours a day from 9am until 5pm
-# time (min) | utilization | suspend | resume
-# -----------|-------------|---------|--------
-# 0 - 539    | 0           | 0       | 0
-# 540 (9am)  | 1           | 0       | 1
-# 541 - 1019 | 1           | 0       | 0
-# 1020 (5pm) | 0           | 1       | 0
-# for each minute, make a json object e.g.
-# {
-#   "time": 0,
-#   "utilization": 0,
-#   "suspend": 0,
-#   "resume": 0,
-# }
-# for each user, make a json object e.g.
-# {
-#   "id": 0,
-#   "usage data": {prev json object}
-# }
-def naive(n: int):
+# n users work hrs_worked hours a day based on specified start_range
+def monte_carlo_len_spec(n: int, start_range=(360,720), hrs_worked=8):
     usage = {}
     for id in range(n):
         usage_data = []
+        start_time = random.randint(start_range[0], start_range[1])
+        end_time = start_time + hrs_worked*60
         for t in range(1440): # minute
-            u = 1 if t > 539 and t < 1020 else 0
-            s = 1 if t == 1020 else 0
-            r = 1 if t == 540 else 0
+            u = 1 if t >= start_time and t < end_time else 0
+            s = 1 if t == end_time else 0
+            m = 1 if t == start_time else 0
+            r = 1 if t == start_time + 1 else 0
             usage_data.append({
                 "time": t,
                 "utilization": u,
                 "suspend": s,
+                "migrate": m,
                 "resume": r,
             })
         usage["user " + str(id)] = {
@@ -42,44 +28,28 @@ def naive(n: int):
         }
     return json.dumps(usage)
 
-# n users work 8 hours a day at times that vary based on start_range
-def monte_carlo_8_hr(n: int, start_range=(360,720)): # 6am-12pm
+# n users work at times based on specified start_range and end_range
+def monte_carlo_range_spec(n: int, start_range=(360, 720), end_range=(840, 1200)):
     usage = {}
     for id in range(n):
         usage_data = []
-        start_time = random.randint(start_range[0], start_range[1])
-        end_time = start_time + 8*60
+        a = random.randint(start_range[0], start_range[1])
+        b = random.randint(end_range[0], end_range[1])
+        while abs(a-b) < 15: # work minimum 15 minutes
+            a = random.randint(start_range[0], start_range[1])
+            b = random.randint(end_range[0], end_range[1])
+        start_time = min(a, b)
+        end_time = max(a, b)
         for t in range(1440): # minute
             u = 1 if t >= start_time and t < end_time else 0
             s = 1 if t == end_time else 0
-            r = 1 if t == start_time else 0
+            m = 1 if t == start_time else 0
+            r = 1 if t == start_time + 1 else 0
             usage_data.append({
                 "time": t,
                 "utilization": u,
                 "suspend": s,
-                "resume": r,
-            })
-        usage["user " + str(id)] = {
-            "id": id,
-            "usage_data": usage_data
-        }
-    return json.dumps(usage)
-
-# n users work any hours a day at times that vary based on start_range and end_range
-def monte_carlo_any_hr(n: int, start_range=(360, 720), end_range=(840, 1200)):
-    usage = {}
-    for id in range(n):
-        usage_data = []
-        start_time = random.randint(start_range[0], start_range[1])
-        end_time = random.randint(end_range[0], end_range[1])
-        for t in range(1440): # minute
-            u = 1 if t >= start_time and t < end_time else 0
-            s = 1 if t == end_time else 0
-            r = 1 if t == start_time else 0
-            usage_data.append({
-                "time": t,
-                "utilization": u,
-                "suspend": s,
+                "migrate": m,
                 "resume": r,
             })
         usage["user " + str(id)] = {
@@ -113,10 +83,10 @@ def plot_utilization(usage_json, filename='utilization_plot.png'):
 
     # display time in hours
     plt.xticks(np.arange(0, 1440, 60), [f'{h:02}:00' for h in range(24)], rotation=45)
-    
+
     # display discrete utilization
     plt.yticks([0, 1], ['0', '1'])
-    
+
     # add labels
     plt.xlabel('Time')
     plt.ylabel('Utilization')
@@ -127,11 +97,23 @@ def plot_utilization(usage_json, filename='utilization_plot.png'):
     plt.savefig(filename)
     plt.close()
 
+def save_json_to_file(usage_json, filename):
+    with open(filename, "w") as json_file:
+        json_file.write(usage_json)
+
 def main():
-    plot_utilization(naive(10), "naive.png")
-    plot_utilization(monte_carlo_8_hr(10), "8hr.png")
-    plot_utilization(monte_carlo_any_hr(10), "normal_range.png")
-    plot_utilization(monte_carlo_any_hr(10,(0,1440),(0,1440)), "any.png")
+    # s = start, e = end
+    # time in 24h format
+    base_8 = monte_carlo_len_spec(10, (540,540)) # s = 9, e = 17
+    range_8 = monte_carlo_len_spec(10) # s = rand(6-12), e = s + 8h
+    base_r = monte_carlo_range_spec(10) # s = rand(6-12), e = rand(14-20)
+    any_r = monte_carlo_range_spec(10, (0,1440), (0,1440)) # s, e = rand(0-23:59) | e >= s + 15m
+    plot_utilization(base_8, "naive.png")
+    plot_utilization(range_8, "8hr.png")
+    plot_utilization(base_r, "normal_range.png")
+    plot_utilization(any_r, "any_range.png")
+    save_json_to_file(base_8, "base_8.json")
+    save_json_to_file(base_r, "base_r.json")
 
 if __name__ == "__main__":
     main()
