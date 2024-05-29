@@ -40,7 +40,7 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
 
 # Install CRIU
 git clone https://github.com/checkpoint-restore/criu.git && cd /criu
-git checkout master && git pull
+git pull
 make
 cp criu/criu /usr/local/bin/criu
 cd /
