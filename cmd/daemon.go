@@ -95,7 +95,7 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
-	startDaemonCmd.Flags().String(cudaVersionFlag, "cuda11_8", "cuda version to use")
+	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 }
 
 type pullGPUBinaryRequest struct {
