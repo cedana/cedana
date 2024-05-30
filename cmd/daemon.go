@@ -21,6 +21,20 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
+var cudaVersions = map[string]string{
+	"cuda11_8": "cuda11_8",
+	"cuda12_1": "cuda12_1",
+	"cuda12_4": "cuda12_4",
+}
+
+func validateCudaVersion(cmd *cobra.Command, args []string) error {
+	cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
+	if _, ok := cudaVersions[cudaVersion]; !ok {
+		return fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
+	}
+	return nil
+}
+
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
@@ -44,7 +58,12 @@ var startDaemonCmd = &cobra.Command{
 		}
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		if gpuEnabled {
-			err := pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
+			err := validateCudaVersion(cmd, args)
+			if err != nil {
+				logger.Error().Err(err).Msg("invalid cuda version")
+				return
+			}
+			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
 				return
@@ -75,6 +94,8 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
+	startDaemonCmd.Flags().String(cudaVersionFlag, "cuda11_8", "cuda version to use")
+	startDaemonCmd.MarkFlagsRequiredTogether(gpuEnabledFlag, cudaVersionFlag)
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {

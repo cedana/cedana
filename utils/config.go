@@ -19,7 +19,7 @@ const (
 
 const (
 	GpuControllerBinaryName = "gpucontroller"
-	GpuControllerBinaryPath = "/usr/local/bin/gpu-controller"
+	GpuControllerBinaryPath = "/usr/local/bin/cedana-gpu-controller"
 	GpuSharedLibName        = "libcedana"
 	GpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
 )
