@@ -20,4 +20,5 @@ const (
 	logRedirectFlag    = "log-redirect"
 	startChrootFlag    = "start-chroot"
 	setupHostFlag      = "setup-host"
+	cudaVersionFlag    = "cuda"
 )

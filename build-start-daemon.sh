@@ -85,6 +85,6 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    sudo $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+    sudo -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
     echo "$APP_NAME daemon started as a background process."
 fi

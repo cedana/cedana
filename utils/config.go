@@ -19,7 +19,7 @@ const (
 
 const (
 	GpuControllerBinaryName = "gpucontroller"
-	GpuControllerBinaryPath = "/usr/local/bin/gpu-controller"
+	GpuControllerBinaryPath = "/usr/local/bin/cedana-gpu-controller"
 	GpuSharedLibName        = "libcedana"
 	GpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
 )
@@ -100,9 +100,7 @@ func setDefaults() {
 
 	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
 
-	viper.SetDefault("connection.cedana_url", "0.0.0.0")
 	viper.SetDefault("connection.cedana_user", "random-user")
-	viper.SetDefault("connection.cedana_auth_token", "random-token")
 
 	viper.SetDefault("gpu_controller_path", GpuControllerBinaryPath)
 }
