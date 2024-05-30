@@ -152,6 +152,6 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		logger.Err(err).Msg("could not read file from response")
 		return err
 	}
-	logger.Debug().Msgf("%s downloaded", binary)
+	logger.Info().Msgf("%s downloaded to %s", binary, filePath)
 	return err
 }
