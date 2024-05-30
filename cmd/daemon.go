@@ -52,6 +52,7 @@ var startDaemonCmd = &cobra.Command{
 		}
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		if gpuEnabled {
+			// defaults to 11_8, this continues if --cuda is not specified
 			cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
 			if _, ok := cudaVersions[cudaVersion]; !ok {
 				err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
@@ -91,7 +92,6 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "cuda11_8", "cuda version to use")
-	startDaemonCmd.MarkFlagsRequiredTogether(gpuEnabledFlag, cudaVersionFlag)
 }
 
 type pullGPUBinaryRequest struct {
