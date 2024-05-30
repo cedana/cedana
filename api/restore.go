@@ -533,25 +533,28 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		return nil, err
 	}
 
-	if state.GPUCheckpointed {
-		go func() {
-			proc, err := process.NewProcess(*pid)
-			if err != nil {
-				s.logger.Error().Msgf("could not find process: %v", err)
-				return
+	go func() {
+		proc, err := process.NewProcess(*pid)
+		if err != nil {
+			s.logger.Error().Msgf("could not find process: %v", err)
+			return
+		}
+		for {
+			running, err := proc.IsRunning()
+			if err != nil || !running {
+				break
 			}
-			for {
-				running, err := proc.IsRunning()
-				if err != nil || !running {
-					break
-				}
-				// XXX YA: Sleeping on loop is always bad, should use a channel or cond var
-				time.Sleep(1 * time.Second)
-			}
+			// XXX YA: Sleeping on loop is always bad, should use a channel or cond var
+			time.Sleep(1 * time.Second)
+		}
+
+		if gpuCmd != nil {
 			s.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
 			gpuCmd.Process.Kill()
-		}()
-	}
+		} else {
+			s.logger.Debug().Msgf("process %d exited", *pid)
+		}
+	}()
 
 	return pid, nil
 }
