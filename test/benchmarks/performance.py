@@ -1,5 +1,6 @@
 import asyncio
 import benchmark
+import continuous
 import correctness
 import os
 import psutil
@@ -105,6 +106,8 @@ async def main(args):
         blob_id = await correctness.main(daemon_pid, remote, verbose)
     elif "--smoke" in args:
         blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
+    elif "--continuous" in args:
+        blob_id = await continuous.main(daemon_pid, remote)
     else:
         blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
