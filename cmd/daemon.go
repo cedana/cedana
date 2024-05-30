@@ -62,13 +62,13 @@ var startDaemonCmd = &cobra.Command{
 
 			logger.Info().Msgf("pulling gpu binaries for cuda version %s", cudaVersion)
 
-			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersion)
+			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersions[cudaVersion])
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
 				return err
 			}
 
-			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersion)
+			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersions[cudaVersion])
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull libcedana")
 				return err
