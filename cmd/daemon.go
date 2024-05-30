@@ -29,14 +29,6 @@ var cudaVersions = map[string]string{
 	"cuda12_4": "cuda12_4",
 }
 
-func validateCudaVersion(cmd *cobra.Command, args []string) error {
-	cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
-	if _, ok := cudaVersions[cudaVersion]; !ok {
-		return fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
-	}
-	return nil
-}
-
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
@@ -60,18 +52,20 @@ var startDaemonCmd = &cobra.Command{
 		}
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		if gpuEnabled {
-			err := validateCudaVersion(cmd, args)
-			if err != nil {
+			cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
+			if _, ok := cudaVersions[cudaVersion]; !ok {
+				err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
 				logger.Error().Err(err).Msg("invalid cuda version")
 				return
 			}
-			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
+
+			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersion)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
 				return
 			}
 
-			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath)
+			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersion)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull libcedana")
 				return
