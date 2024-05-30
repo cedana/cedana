@@ -32,18 +32,18 @@ var cudaVersions = map[string]string{
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
 		if os.Getuid() != 0 {
-			logger.Error().Msg("daemon must be run as root")
-			return
+			return fmt.Errorf("daemon must be run as root")
 		}
 
 		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to initialize otel")
+			return err
 		}
 		defer stopOtel(ctx)
 
@@ -57,19 +57,21 @@ var startDaemonCmd = &cobra.Command{
 			if _, ok := cudaVersions[cudaVersion]; !ok {
 				err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
 				logger.Error().Err(err).Msg("invalid cuda version")
-				return
+				return err
 			}
+
+			logger.Info().Msgf("pulling gpu binaries for cuda version %s", cudaVersion)
 
 			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersion)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull gpu controller")
-				return
+				return err
 			}
 
 			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersion)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not pull libcedana")
-				return
+				return err
 			}
 		}
 
@@ -79,6 +81,8 @@ var startDaemonCmd = &cobra.Command{
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 		}
+
+		return nil
 	},
 }
 
@@ -107,7 +111,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		return nil
 	}
 
-	url := "https://" + viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
+	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
 	logger.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
