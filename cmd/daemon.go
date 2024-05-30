@@ -3,7 +3,9 @@ package cmd
 // This file contains all the daemon-related commands when starting `cedana daemon ...`
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -98,13 +100,16 @@ func init() {
 	startDaemonCmd.MarkFlagsRequiredTogether(gpuEnabledFlag, cudaVersionFlag)
 }
 
-func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
+type pullGPUBinaryRequest struct {
+	CudaVersion string `json:"cuda_version"`
+}
+
+func pullGPUBinary(ctx context.Context, binary string, filePath string, version string) error {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	_, err := os.Stat(filePath)
 	if err == nil {
 		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)
-		// file exists, do nothing.
-		// TODO NR - check version of binary
+		// TODO NR - check version and checksum of binary?
 		return nil
 	}
 
@@ -113,16 +118,21 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	var resp *http.Response
+	body := pullGPUBinaryRequest{
+		CudaVersion: version,
+	}
+
+	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		logger.Err(err).Msg("could not create request")
+		logger.Err(err).Msg("could not marshal request body")
 		return err
 	}
 
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err = httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		logger.Err(err).Msg("gpu binary get request failed")
 		return err
