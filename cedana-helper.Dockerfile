@@ -17,7 +17,8 @@ WORKDIR /cedana
 
 RUN git fetch --all --tags && \
     LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`) && \
-    git checkout feat/ced-355
+    git checkout feat/ced-355 && \
+    git pull
 
 ENV USER="root"
 RUN go build
