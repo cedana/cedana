@@ -24,9 +24,9 @@ var daemonCmd = &cobra.Command{
 }
 
 var cudaVersions = map[string]string{
-	"cuda11_8": "cuda11_8",
-	"cuda12_1": "cuda12_1",
-	"cuda12_4": "cuda12_4",
+	"11.8": "cuda11_8",
+	"12.1": "cuda12_1",
+	"12.4": "cuda12_4",
 }
 
 var startDaemonCmd = &cobra.Command{
