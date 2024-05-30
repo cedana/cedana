@@ -106,7 +106,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	_, err := os.Stat(filePath)
 	if err == nil {
-		logger.Debug().Msgf("binary exists at %s, doing nothing", filePath)
+		logger.Debug().Msgf("binary exists at %s, doing nothing. Delete existing binary to download another supported cuda version.", filePath)
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
