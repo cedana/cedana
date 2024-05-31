@@ -24,7 +24,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		return nil, err
 	}
 
-	state, err := s.generateState(pid)
+	state, err := s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -71,7 +71,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err

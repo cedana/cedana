@@ -132,7 +132,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		s.logger.Fatal().Err(err)
 	}
 
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)

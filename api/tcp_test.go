@@ -111,7 +111,7 @@ func Test_MultiConn(t *testing.T) {
 		os.RemoveAll("dumpdir")
 	})
 
-	oldState, _ := svc.getState(resp.JID)
+	oldState, _ := svc.getState(ctx, resp.JID)
 	t.Logf("old state: %+v", oldState)
 
 	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.CRType_LOCAL, JID: exec})
