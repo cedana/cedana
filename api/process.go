@@ -52,10 +52,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	if args.JID == "" {
 		state.JID = xid.New().String()
 	} else {
-		existingState, err := s.getState(args.JID)
-		if err != nil {
-			return nil, status.Error(codes.NotFound, "failed to check existing jobs")
-		}
+		existingState, _ := s.getState(args.JID)
 		if existingState != nil {
 			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
 		}
