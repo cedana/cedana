@@ -7,7 +7,7 @@ from tplib import task_pb2
 
 def get_24h_usage_data(name):
     if name == "base":
-        return gen_usage.monte_carlo_len_spec((0,0),24)
+        return gen_usage.base()
     elif name == "9to5":
         return gen_usage.monte_carlo_len_spec((540,540))
     elif name == "8h_varied":

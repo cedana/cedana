@@ -4,18 +4,28 @@ import numpy as np
 import pandas as pd
 import random
 
+# machine is always on with no cedana control
+def base():
+    usage = pd.DataFrame({'time': range(1440)})
+    usage['utilization'] = True
+    usage['suspend'] = False
+    usage['migrate'] = False
+    usage['restore'] = False
+    return usage
+
+def monte_carlo(s: int, e: int):
+    usage = pd.DataFrame({'time': range(1440)})
+    usage['utilization'] = usage['time'].apply(lambda t: t >= s and t < e)
+    usage['suspend'] = usage['time'] == e
+    usage['migrate'] = usage['time'] == s
+    usage['restore'] = usage['time'] == (s + 1)
+    return usage
+
 # user works hrs_worked hours a day based on specified start_range
 def monte_carlo_len_spec(start_range=(360,720), hrs_worked=8):
     s = random.randint(start_range[0], start_range[1])
     e = s + hrs_worked*60
-
-    usage = pd.DataFrame({'time': range(1440)})
-    usage['utilization'] = usage['time'].apply(lambda t: 1 if t >= s and t < e else 0)
-    usage['suspend'] = usage['time'].apply(lambda t: 1 if t == e else 0)
-    usage['migrate'] = usage['time'].apply(lambda t: 1 if t == s else 0)
-    usage['restore'] = usage['time'].apply(lambda t: 1 if t == s + 1 else 0)
-
-    return usage
+    return monte_carlo(s, e)
 
 # user works at times based on specified start_range and end_range
 def monte_carlo_range_spec(start_range=(360, 720), end_range=(840, 1200)):
@@ -26,14 +36,7 @@ def monte_carlo_range_spec(start_range=(360, 720), end_range=(840, 1200)):
         b = random.randint(end_range[0], end_range[1])
     s = min(a, b)
     e = max(a, b)
-
-    usage = pd.DataFrame({'time': range(1440)})
-    usage['utilization'] = usage['time'].apply(lambda t: 1 if t >= s and t < e else 0)
-    usage['suspend'] = usage['time'].apply(lambda t: 1 if t == e else 0)
-    usage['migrate'] = usage['time'].apply(lambda t: 1 if t == s else 0)
-    usage['restore'] = usage['time'].apply(lambda t: 1 if t == s + 1 else 0)
-
-    return usage
+    return monte_carlo(s, e)
 
 # on for n minutes, off for n minutes
 def on_and_off(n=15):
@@ -42,7 +45,6 @@ def on_and_off(n=15):
     usage['suspend'] = usage['time'] % (2 * n) == n-1
     usage['migrate'] = usage['time'] % (2 * n) == 0
     usage['restore'] = usage['time'] % (2 * n) == 1
-
     return usage
 
 def main():
