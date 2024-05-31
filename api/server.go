@@ -14,6 +14,8 @@ import (
 	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
 	DB "github.com/cedana/cedana/db"
+	sqlite "github.com/cedana/cedana/sqlite_db"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -23,6 +25,8 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	"database/sql"
 )
 
 const (
@@ -33,12 +37,14 @@ const (
 	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS      = 0o644
 	SERVER_DB_PATH        = "/tmp/cedana.db"
+	SQLITE_DB_PATH		  = "/tmp/sqlite_cedana.db"
 )
 
 type service struct {
 	CRIU    *Criu
 	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db      DB.DB        // Key-value store for metadata/state
+	queries *sqlite.Queries
 	logger  *zerolog.Logger
 	tracer  trace.Tracer
 	store   *utils.CedanaStore
@@ -71,11 +77,22 @@ func NewServer(ctx context.Context) (*Server, error) {
 		TimeFormat: utils.LOG_TIME_FORMAT_FULL,
 	}))
 
+	db, err := sql.Open("sqlite3", SQLITE_DB_PATH)
+	if err != nil {
+		return nil, err
+	}
+
+	// create sqlite tables
+	if _, err := db.ExecContext(ctx, sqlite.Ddl); err != nil {
+		return nil, err
+	}
+
 	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
 		CRIU:    &Criu{},
 		fs:      &afero.Afero{Fs: afero.NewOsFs()},
 		db:      DB.NewLocalDB(SERVER_DB_PATH),
+		queries:	sqlite.New(db),
 		logger:  &newLogger,
 		tracer:  tracer,
 		store:   utils.NewCedanaStore(tracer, logger),

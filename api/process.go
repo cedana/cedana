@@ -240,10 +240,14 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 		for _, pid := range args.PIDs {
 			pidSet[pid] = true
 		}
-		list, err := s.db.List([][]byte{DB_BUCKET_JOBS})
-		for _, val := range list {
+
+		list, err := s.queries.ListJobs(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
+		}
+		for _, job := range list {
 			state := task.ProcessState{}
-			err = json.Unmarshal(val, &state)
+			err = json.Unmarshal(job.State, &state)
 			if err != nil {
 				return nil, status.Error(codes.Internal, "failed to unmarshal state")
 			}
