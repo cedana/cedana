@@ -26,7 +26,7 @@ def monte_carlo_len_spec(n: int, start_range=(360,720), hrs_worked=8):
             "id": id,
             "usage_data": usage_data
         }
-    return json.dumps(usage)
+    return usage
 
 # n users work at times based on specified start_range and end_range
 def monte_carlo_range_spec(n: int, start_range=(360, 720), end_range=(840, 1200)):
@@ -56,11 +56,9 @@ def monte_carlo_range_spec(n: int, start_range=(360, 720), end_range=(840, 1200)
             "id": id,
             "usage_data": usage_data
         }
-    return json.dumps(usage)
+    return usage
 
-def plot_utilization(usage_json, filename='utilization_plot.png'):
-    usage = json.loads(usage_json)
-
+def plot_utilization(usage, filename='utilization_plot.png'):
     # init plot
     plt.figure(figsize=(15, 10))
 
@@ -97,9 +95,9 @@ def plot_utilization(usage_json, filename='utilization_plot.png'):
     plt.savefig(filename)
     plt.close()
 
-def save_json_to_file(usage_json, filename):
+def save_json_to_file(usage, filename):
     with open(filename, "w") as json_file:
-        json_file.write(usage_json)
+        json_file.write(json.dumps(usage))
 
 def main():
     # s = start, e = end
