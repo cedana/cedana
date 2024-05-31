@@ -107,7 +107,8 @@ async def main(args):
     elif "--smoke" in args:
         blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
     elif "--continuous" in args:
-        blob_id = await continuous.main(daemon_pid, remote)
+        name = next((arg.split('=')[1] for arg in sys.argv if arg.startswith('--name=')), 'base')
+        blob_id = await continuous.main(daemon_pid, remote, name)
     else:
         blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
