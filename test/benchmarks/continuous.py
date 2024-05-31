@@ -16,6 +16,8 @@ def get_24h_usage_data(name):
         return gen_usage.monte_carlo_range_spec()
     elif name == "any_range":
         return gen_usage.monte_carlo_range_spec((0,1440))
+    elif name == "on_off":
+        return gen_usage.on_and_off(5)
     else:
         print("Unknown name `" + name + "` for get_24h_usage_data")
 
@@ -50,7 +52,7 @@ async def run_continuous(daemonPID, remote, name):
             dump_resp = await cedana.run_checkpoint(daemonPID, jobID, cedana.output_dir, process_stats, remote)
             ckptID = dump_resp.CheckpointID
         # elif usage_slice['migrate']: # TODO migrate
-        elif usage_slice['resume']:
+        elif usage_slice['restore']:
             await cedana.run_restore(daemonPID, jobID, ckptID, cedana.output_dir, remote)
 
         # get new usage data every 24h
