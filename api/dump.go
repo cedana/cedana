@@ -158,9 +158,11 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	return &opts
 }
 
-func (s *service) runcDump(ctx context.Context, root, containerID string, opts *container.CriuOpts, state *task.ProcessState) error {
+func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
 	_, dumpSpan := s.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", true))
+
+	var crPid int
 
 	links := []linkPairs{
 		{"/host/var/run/netns", "/var/run/netns"},
@@ -186,9 +188,17 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, opts *
 			// Handle the error or log it as needed
 		}
 	}
+
 	bundle := Bundle{ContainerID: containerID}
 	runcContainer := container.GetContainerFromRunc(containerID, root)
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
+
+	if pid != 0 {
+		crPid = int(pid)
+	} else {
+		crPid = runcContainer.Pid
+	}
+
+	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
 		dumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)

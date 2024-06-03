@@ -206,6 +206,7 @@ var dumpRuncCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		pid, _ := cmd.Flags().GetInt(pidFlag)
 
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
@@ -223,6 +224,7 @@ var dumpRuncCmd = &cobra.Command{
 			Root: rootPath[root],
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
+			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
