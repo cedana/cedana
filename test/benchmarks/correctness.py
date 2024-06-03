@@ -76,8 +76,8 @@ async def c2r2c2r2(job: str, cmd: str, daemon_pid: int, remote: bool, verbose: b
 
 async def c1c2r1r2(job: str, cmd: str, daemon_pid: int, remote: bool, verbose: bool) -> bool:
     print_test("ckpt1 ckpt2 restore1 restore2", job, cmd) if verbose else None
-    jobID1 = job + "-saved-1st-tgt"
-    jobID2 = job + "-saved-2nd-tgt"
+    jobID1 = job + "-c1c2r1r2-1"
+    jobID2 = job + "-c1c2r1r2-2"
     stats1 = await cedana.run_exec(cmd+" "+jobID1, jobID1)
     stats2 = await cedana.run_exec(cmd+" "+jobID2, jobID2)
     resp1 = await cedana.run_checkpoint(daemon_pid, jobID1, cedana.output_dir, stats1, remote)

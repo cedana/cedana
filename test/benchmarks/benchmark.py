@@ -43,5 +43,6 @@ async def main(daemon_pid, remote, num_samples=5):
     # unique uuid for blob id
     return "benchmark-data-" + str(time.time())
 
+
 if __name__ == "__main__":
     asyncio.run(main(sys.argv))

@@ -16,6 +16,9 @@ const (
 	isK3sFlag          = "is-k3s"
 	netPidFlag         = "net-pid"
 	tcpEstablishedFlag = "tcp-established"
+	gpuEnabledFlag     = "gpu-enabled"
+	logRedirectFlag    = "log-redirect"
 	startChrootFlag    = "start-chroot"
 	setupHostFlag      = "setup-host"
+	cudaVersionFlag    = "cuda"
 )
