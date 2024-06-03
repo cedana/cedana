@@ -172,6 +172,7 @@ message CriuOpts {
   int32 StatusFd = 15;
   string LsmProfile = 16;
   string LsmMountContext = 17;
+  repeated string External = 18;
 }
 
 message RuncRestoreArgs {

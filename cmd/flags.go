@@ -22,4 +22,5 @@ const (
 	setupHostFlag      = "setup-host"
 	cudaVersionFlag    = "cuda"
 	pidFlag            = "pid"
+	externalFlag       = "external"
 )

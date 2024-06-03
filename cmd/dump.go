@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
@@ -208,11 +209,28 @@ var dumpRuncCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		pid, _ := cmd.Flags().GetInt(pidFlag)
 
+		external, _ := cmd.Flags().GetString(externalFlag)
+
+		var externalNamespaces []string
+
+		namespaces := strings.Split(external, ",")
+
+		for _, ns := range namespaces {
+			nsParts := strings.Split(ns, ":")
+
+			nsType := nsParts[0]
+			nsDestination := nsParts[1]
+
+			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:%s"), nsType, nsDestination, nsDestination)
+
+		}
+
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   wdPath,
 			LeaveRunning:    true,
 			TcpEstablished:  tcpEstablished,
+			External:        externalNamespaces,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
