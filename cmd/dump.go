@@ -221,8 +221,7 @@ var dumpRuncCmd = &cobra.Command{
 			nsType := nsParts[0]
 			nsDestination := nsParts[1]
 
-			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:%s"), nsType, nsDestination, nsDestination)
-
+			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:%s", nsType, nsDestination, nsDestination))
 		}
 
 		criuOpts := &task.CriuOpts{
@@ -293,6 +292,7 @@ func init() {
 	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().String(pidFlag, "", "external")
 
 	rootCmd.AddCommand(dumpCmd)
 }
