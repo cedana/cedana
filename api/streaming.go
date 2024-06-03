@@ -52,7 +52,7 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 func (s *service) ProcessStateStreaming(args *task.ProcessStateStreamingArgs, stream task.TaskService_ProcessStateStreamingServer) error {
 	// Early return if no JID
 	jid := args.JID
-	state, err := s.getState(jid)
+	state, err := s.getState(context.Background(), jid)
 	if err != nil || state == nil {
 		return status.Errorf(codes.NotFound, "job %s not found", jid)
 	}
@@ -62,7 +62,7 @@ func (s *service) ProcessStateStreaming(args *task.ProcessStateStreamingArgs, st
 	go func() {
 		ticker := time.NewTicker(time.Duration(PROCESS_STREAMING_RATE_SECONDS) * time.Second)
 		for range ticker.C {
-			state, err := s.getState(jid)
+			state, err := s.getState(context.Background(), jid)
 			if err != nil {
 				cancel(fmt.Errorf("error getting state: %v", err))
 				return

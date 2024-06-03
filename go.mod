@@ -14,6 +14,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/docker v24.0.6+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/moby/sys/user v0.1.0
 	github.com/olekukonko/tablewriter v0.0.5

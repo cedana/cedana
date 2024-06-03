@@ -22,7 +22,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-	state, err := s.generateState(pid)
+	state, err := s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
