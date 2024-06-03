@@ -292,7 +292,7 @@ func init() {
 	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
-	dumpRuncCmd.Flags().String(pidFlag, "", "external")
+	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
 	rootCmd.AddCommand(dumpCmd)
 }
