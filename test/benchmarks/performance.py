@@ -1,5 +1,6 @@
 import asyncio
 import benchmark
+import continuous
 import correctness
 import smoke
 import os
@@ -113,6 +114,9 @@ async def main(args):
         blob_id = await correctness.main(daemon_pid, remote, verbose)
     elif "--smoke" in args:
         blob_id = await smoke.main(daemon_pid, remote, num_samples=num_samples)
+    elif "--continuous" in args:
+        name = next((arg.split('=')[1] for arg in sys.argv if arg.startswith('--name=')), 'base')
+        blob_id = await continuous.main(daemon_pid, remote, name)
     else:
         blob_id = await benchmark.main(daemon_pid, remote, num_samples=num_samples)
 
