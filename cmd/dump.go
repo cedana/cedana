@@ -274,7 +274,7 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpRuncCmd.Flags().Int32P(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 
 	rootCmd.AddCommand(dumpCmd)
 }
