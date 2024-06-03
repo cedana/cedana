@@ -1,10 +1,12 @@
-package sqlite_db
+package db
 
 // Local implementation of sqlite DB
 
 import (
 	"database/sql"
 	"context"
+	"github.com/cedana/cedana/db/sqlite"
+	"github.com/cedana/cedana/db/models"
 )
 
 const (
@@ -12,7 +14,7 @@ const (
 )
 
 type LocalDB struct {
-	queries *Queries
+	queries *sqlite.Queries
 }
 
 func NewLocalDB(ctx context.Context) DB {
@@ -23,12 +25,12 @@ func NewLocalDB(ctx context.Context) DB {
 	}
 
 	// create sqlite tables
-	if _, err := db.ExecContext(ctx, Ddl); err != nil {
+	if _, err := db.ExecContext(ctx, sqlite.Ddl); err != nil {
 		return nil
 	}
 
 	return &LocalDB{
-		queries: New(db),
+		queries: sqlite.New(db),
 	}
 }
 
@@ -36,7 +38,7 @@ func NewLocalDB(ctx context.Context) DB {
 // Getters //
 /////////////
 
-func (db *LocalDB) Get(ctx context.Context, jid []byte) (Job, error) {
+func (db *LocalDB) GetJob(ctx context.Context, jid []byte) (models.Job, error) {
 	return db.queries.GetJob(ctx, jid)
 }
 
@@ -44,13 +46,13 @@ func (db *LocalDB) Get(ctx context.Context, jid []byte) (Job, error) {
 // Setters //
 /////////////
 
-func (db *LocalDB) Put(ctx context.Context, jid []byte, state []byte) error {
-	_, err := db.queries.CreateJob(ctx, CreateJobParams{
+func (db *LocalDB) PutJob(ctx context.Context, jid []byte, state []byte) error {
+	_, err := db.queries.CreateJob(ctx, sqlite.CreateJobParams{
 		Jid: jid,
 		State:  state,
 	})
 	if err != nil {
-		err = db.queries.UpdateJob(ctx, UpdateJobParams{
+		err = db.queries.UpdateJob(ctx, sqlite.UpdateJobParams{
 			Jid: jid,
 			State:  state,
 		})
@@ -64,6 +66,6 @@ func (db *LocalDB) Put(ctx context.Context, jid []byte, state []byte) error {
 // Listers //
 /////////////
 
-func (db *LocalDB) List(ctx context.Context) ([]Job, error) {
+func (db *LocalDB) ListJobs(ctx context.Context) ([]models.Job, error) {
 	return db.queries.ListJobs(ctx)
 }

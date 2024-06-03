@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.26.0
 
-package sqlite_db
+package sqlite
 
 import (
 	"context"

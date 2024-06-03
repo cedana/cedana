@@ -13,7 +13,7 @@ import (
 
 	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
-	sqlite "github.com/cedana/cedana/sqlite_db"
+	"github.com/cedana/cedana/db"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
@@ -38,7 +38,7 @@ const (
 type service struct {
 	CRIU    *Criu
 	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db sqlite.DB
+	db db.DB
 	logger  *zerolog.Logger
 	tracer  trace.Tracer
 	store   *utils.CedanaStore
@@ -75,7 +75,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	service := &service{
 		CRIU:    &Criu{},
 		fs:      &afero.Afero{Fs: afero.NewOsFs()},
-		db:		 sqlite.NewLocalDB(ctx),
+		db:		 db.NewLocalDB(ctx),
 		logger:  &newLogger,
 		tracer:  tracer,
 		store:   utils.NewCedanaStore(tracer, logger),

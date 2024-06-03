@@ -1,19 +1,20 @@
-package sqlite_db
+package db
 
 // This file contains the getters and setter for the sqlite DB
 // Implementation of the interface can be found in the local.go
 
 import (
 	"context"
+	"github.com/cedana/cedana/db/models"
 )
 
 type DB interface {
 	// Getters
-	Get(context.Context, []byte) (Job, error)
+	GetJob(context.Context, []byte) (models.Job, error)
 
 	// Setters (create or update)
-	Put(context.Context, []byte, []byte) error
+	PutJob(context.Context, []byte, []byte) error
 
 	// Listers
-	List(context.Context) ([]Job, error)
+	ListJobs(context.Context) ([]models.Job, error)
 }

@@ -27,7 +27,7 @@ func (s *service) updateState(ctx context.Context, jid string, state *task.Proce
 	// try creating the job, which would fail
 	// in case the JID exists
 	// On error, update the job
-	err = s.db.Put(ctx, []byte(jid), marshalledState)
+	err = s.db.PutJob(ctx, []byte(jid), marshalledState)
 	return err
 }
 
@@ -35,7 +35,7 @@ func (s *service) updateState(ctx context.Context, jid string, state *task.Proce
 // Returns nil in that case
 func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState, error) {
 
-	fetchedJob, err := s.db.Get(ctx, []byte(jid))
+	fetchedJob, err := s.db.GetJob(ctx, []byte(jid))
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	state.PID = pid
 
 	// Search for JID, if found, use it, otherwise generate a new one
-	list, err := s.db.List(ctx)
+	list, err := s.db.ListJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not list jobs: %v", err)
 	}

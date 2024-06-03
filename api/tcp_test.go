@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
-	sqlite "github.com/cedana/cedana/sqlite_db"
+	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -71,7 +71,7 @@ func Test_MultiConn(t *testing.T) {
 		srv.Stop()
 	})
 
-	mockDB := sqlite.NewLocalDB(context.Background())
+	mockDB := db.NewLocalDB(context.Background())
 
 	logger := utils.GetLogger()
 

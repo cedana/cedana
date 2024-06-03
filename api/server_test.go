@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
-	sqlite "github.com/cedana/cedana/sqlite_db"
+	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
@@ -27,7 +27,7 @@ func setup(t *testing.T) (task.TaskServiceClient, error) {
 		srv.Stop()
 	})
 
-	mockDB := sqlite.NewLocalDB(context.Background())
+	mockDB := db.NewLocalDB(context.Background())
 
 	logger := utils.GetLogger()
 	tracer := otel.GetTracerProvider().Tracer("server-test")

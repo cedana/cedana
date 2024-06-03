@@ -238,7 +238,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 			pidSet[pid] = true
 		}
 
-		list, err := s.db.List(ctx)
+		list, err := s.db.ListJobs(ctx)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
 		}

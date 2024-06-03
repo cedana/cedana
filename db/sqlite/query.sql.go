@@ -3,11 +3,12 @@
 //   sqlc v1.26.0
 // source: query.sql
 
-package sqlite_db
+package sqlite
 
 import (
 	"context"
 	_ "embed"
+	"github.com/cedana/cedana/db/models"
 )
 
 //go:embed schema.sql
@@ -27,9 +28,9 @@ type CreateJobParams struct {
 	State []byte
 }
 
-func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, error) {
+func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (models.Job, error) {
 	row := q.db.QueryRowContext(ctx, createJob, arg.Jid, arg.State)
-	var i Job
+	var i models.Job
 	err := row.Scan(&i.Jid, &i.State)
 	return i, err
 }
@@ -39,9 +40,9 @@ SELECT jid, state FROM jobs
 WHERE jid = ? LIMIT 1
 `
 
-func (q *Queries) GetJob(ctx context.Context, jid []byte) (Job, error) {
+func (q *Queries) GetJob(ctx context.Context, jid []byte) (models.Job, error) {
 	row := q.db.QueryRowContext(ctx, getJob, jid)
-	var i Job
+	var i models.Job
 	err := row.Scan(&i.Jid, &i.State)
 	return i, err
 }
@@ -50,15 +51,15 @@ const listJobs = `-- name: ListJobs :many
 SELECT jid, state FROM jobs
 `
 
-func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
+func (q *Queries) ListJobs(ctx context.Context) ([]models.Job, error) {
 	rows, err := q.db.QueryContext(ctx, listJobs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Job
+	var items []models.Job
 	for rows.Next() {
-		var i Job
+		var i models.Job
 		if err := rows.Scan(&i.Jid, &i.State); err != nil {
 			return nil, err
 		}
