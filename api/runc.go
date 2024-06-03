@@ -39,7 +39,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		MntnsCompatMode: false,
 	}
 
-	err = s.runcDump(ctx, args.Root, args.ContainerID, criuOpts, state)
+	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{

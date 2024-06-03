@@ -147,7 +147,7 @@ message RuncDumpArgs {
   CriuOpts CriuOpts = 4;
   CRType Type = 5;
   bool GPU = 6;
-
+  int32 pid = 7;
 }
 
 message RuncDumpResp {
