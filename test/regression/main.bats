@@ -37,6 +37,7 @@ load helper.bash
     # check the post-restore log files
     [ -f $rawfile ]
     sleep 2
+    echo $rawfile >&3
     [ -s $rawfile ]
 
     # kill the process
