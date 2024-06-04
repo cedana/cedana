@@ -220,6 +220,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/proc/sys",
 			Source:      "/proc/sys",
 		},
+		{
+			Destination: "/proc/swaps",
+			Source:      "/proc/swaps",
+		},
 	}
 
 	// TODO make this sysbox only
