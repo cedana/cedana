@@ -207,6 +207,11 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/var/lib/k0s",
 			Source:      "/var/lib/sysbox/k0s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
 		},
+
+		{
+			Destination: "/dev/kmsg",
+			Source:      "/null",
+		},
 	}
 
 	// TODO make this sysbox only
