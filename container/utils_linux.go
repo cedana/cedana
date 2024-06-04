@@ -849,7 +849,7 @@ func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuO
 }
 
 func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
-	nsPath := fmt.Sprintf("/proc/%s/pid", initPid)
+	nsPath := fmt.Sprintf("/proc/%s/ns/pid", initPid)
 
 	// CRIU wants the information about an existing namespace
 	// like this: --inherit-fd fd[<fd>]:<key>
