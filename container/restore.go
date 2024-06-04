@@ -224,6 +224,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/proc/swaps",
 			Source:      "/proc/swaps",
 		},
+		{
+			Destination: "/sys/module/nf_conntrack/parameters",
+			Source:      "/sys/module/nf_conntrack/parameters",
+		},
 	}
 
 	// TODO make this sysbox only
