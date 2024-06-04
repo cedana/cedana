@@ -167,6 +167,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		"/usr/src/linux-aws-6.5-headers-6.5.0-1017",
 		"/usr/src/linux-headers-6.5.0-1017-aws",
 		"/var/lib/kubelet",
+		"/var/lib/rancher/rke2",
 	}
 
 	// TODO make this sysbox only
