@@ -10,7 +10,7 @@ exec_task() {
 
 checkpoint_task() {
     local job_id="$1"
-    cedana dump job "$job_id"
+    cedana dump job "$job_id" -d /tmp
 }
 
 restore_task() {
