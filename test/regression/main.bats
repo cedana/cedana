@@ -31,13 +31,12 @@ load helper.bash
     run restore_task $job_id
 
     # get the post-restore log file
-    local file=$(ls /var/log/ | grep cedana-output-)
+    local file=$(ls /var/log/ | grep cedana-output- | tail -1)
     local rawfile="/var/log/$file"
 
     # check the post-restore log files
     [ -f $rawfile ]
     sleep 2
-    echo $rawfile >&3
     [ -s $rawfile ]
 
     # kill the process
