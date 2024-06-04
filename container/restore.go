@@ -187,6 +187,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/var/lib/sysbox/rancher-k3s/",
 			Source:      "/var/lib/sysbox/rancher-k3s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
 		},
+		{
+			Destination: "/var/lib/rancher/k3s",
+			Source:      "/var/lib/sysbox/rancher-k3s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+		},
 	}
 
 	// TODO make this sysbox only
