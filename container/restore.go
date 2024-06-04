@@ -162,17 +162,36 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	sysboxMounts := &[]string{
-		"/lib/modules/6.5.0-1017-aws",
-		"/usr/src/linux-aws-6.5-headers-6.5.0-1017",
-		"/usr/src/linux-headers-6.5.0-1017-aws",
-		"/var/lib/kubelet",
-		"/var/lib/rancher/rke2",
+	sysboxMounts := &[]rspec.Mount{
+		{
+			Destination: "/lib/modules/6.5.0-1017-aws",
+			Source:      "/usr/lib/modules/6.5.0-1017-aws",
+		},
+		{
+			Destination: "/usr/src/linux-aws-6.5-headers-6.5.0-1017",
+			Source:      "/usr/src/linux-aws-6.5-headers-6.5.0-1017",
+		},
+		{
+			Destination: "/usr/src/linux-headers-6.5.0-1017-aws",
+			Source:      "/usr/src/linux-headers-6.5.0-1017-aws",
+		},
+		{
+			Destination: "/var/lib/kubelet",
+			Source:      "/var/lib/sysbox/kubelet/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+		},
+		{
+			Destination: "/var/lib/rancher/rke2",
+			Source:      "/var/lib/sysbox/rancher-rke2/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+		},
+		{
+			Destination: "/var/lib/sysbox/rancher-k3s/",
+			Source:      "/var/lib/sysbox/rancher-k3s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+		},
 	}
 
 	// TODO make this sysbox only
 	for _, m := range *sysboxMounts {
-		externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m, m))
+		externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
 	}
 
 	criuOpts := CriuOpts{
