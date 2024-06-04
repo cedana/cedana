@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/cedana/cedana/utils"
 	"github.com/containerd/console"
@@ -162,6 +164,9 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
+	splitBundle := strings.Split(opts.Bundle, "/")
+	bundleID := splitBundle[len(splitBundle)-1]
+
 	sysboxMounts := &[]rspec.Mount{
 		{
 			Destination: "/lib/modules/6.5.0-1017-aws",
@@ -177,35 +182,35 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		},
 		{
 			Destination: "/var/lib/kubelet",
-			Source:      "/var/lib/sysbox/kubelet/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/kubelet", bundleID),
 		},
 		{
 			Destination: "/var/lib/rancher/rke2",
-			Source:      "/var/lib/sysbox/rancher-rke2/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/rancher-rke2", bundleID),
 		},
 		{
 			Destination: "/var/lib/sysbox/rancher-k3s/",
-			Source:      "/var/lib/sysbox/rancher-k3s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/rancher-k3s", bundleID),
 		},
 		{
 			Destination: "/var/lib/rancher/k3s",
-			Source:      "/var/lib/sysbox/rancher-k3s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/rancher-k3s", bundleID),
 		},
 		{
 			Destination: "/var/lib/docker",
-			Source:      "/var/lib/sysbox/docker/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/docker", bundleID),
 		},
 		{
 			Destination: "/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs",
-			Source:      "/var/lib/sysbox/containerd/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/containerd", bundleID),
 		},
 		{
 			Destination: "/var/lib/buildkit",
-			Source:      "/var/lib/sysbox/buildkit/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/buildkit", bundleID),
 		},
 		{
 			Destination: "/var/lib/k0s",
-			Source:      "/var/lib/sysbox/k0s/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+			Source:      filepath.Join("/var/lib/sysbox/k0s", bundleID),
 		},
 
 		{
@@ -231,6 +236,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		{
 			Destination: "/sys/kernel",
 			Source:      "/sys/kernel",
+		},
+		{
+			Destination: "/sys/devices/virtual",
+			Source:      "/sys/devices/virtual",
 		},
 	}
 
