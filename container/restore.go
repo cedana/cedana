@@ -212,6 +212,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/dev/kmsg",
 			Source:      "/null",
 		},
+		{
+			Destination: "/proc/uptime",
+			Source:      "/proc/uptime",
+		},
 	}
 
 	// TODO make this sysbox only
