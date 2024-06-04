@@ -195,6 +195,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 			Destination: "/var/lib/docker",
 			Source:      "/var/lib/sysbox/docker/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
 		},
+		{
+			Destination: "/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs",
+			Source:      "/var/lib/sysbox/containerd/f146fdc0c42d0a8e20ca9981c5a55e6998b75c477a04f24f4c663de451d4666a",
+		},
 	}
 
 	// TODO make this sysbox only
