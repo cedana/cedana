@@ -221,7 +221,7 @@ var dumpRuncCmd = &cobra.Command{
 			nsType := nsParts[0]
 			nsDestination := nsParts[1]
 
-			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:%s", nsType, nsDestination, nsDestination))
+			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
 		}
 
 		criuOpts := &task.CriuOpts{
