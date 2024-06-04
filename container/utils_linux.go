@@ -849,7 +849,7 @@ func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuO
 }
 
 func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File) error {
-	nsPath := c.Config.Namespaces.PathOf("pid")
+	nsPath := c.Config.Namespaces.PathOf(configs.NEWPID)
 
 	// CRIU wants the information about an existing namespace
 	// like this: --inherit-fd fd[<fd>]:<key>
@@ -858,7 +858,7 @@ func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.Cri
 
 	nsFd, err := os.Open(nsPath)
 	if err != nil {
-		logrus.Errorf("If a specific network namespace is defined it must exist: %s", err)
+		logrus.Errorf("If a specific pid namespace is defined it must exist: %s", err)
 		return fmt.Errorf("Requested network namespace %v does not exist", nsPath)
 	}
 	inheritFd := &criurpc.InheritFd{
