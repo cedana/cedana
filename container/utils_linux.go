@@ -848,8 +848,8 @@ func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuO
 	return nil
 }
 
-func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File) error {
-	nsPath := c.Config.Namespaces.PathOf(configs.NEWPID)
+func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
+	nsPath := fmt.Sprintf("/proc/%s/pid", initPid)
 
 	// CRIU wants the information about an existing namespace
 	// like this: --inherit-fd fd[<fd>]:<key>
@@ -874,9 +874,9 @@ func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.Cri
 	return nil
 }
 
-func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File) error {
+func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
 
-	if err := c.handleRestoringExternalPidNamespace(rpcOpts, extraFiles); err != nil {
+	if err := c.handleRestoringExternalPidNamespace(rpcOpts, extraFiles, initPid); err != nil {
 		return err
 	}
 
@@ -1432,7 +1432,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	}
 	c.handleCriuConfigurationFile(req.Opts)
 
-	if err := c.handleRestoringNamespaces(req.Opts, &extraFiles); err != nil {
+	if err := c.handleRestoringNamespaces(req.Opts, &extraFiles, pidStr); err != nil {
 		return err
 	}
 
