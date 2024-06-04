@@ -162,6 +162,15 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
+	sysboxMounts := &[]string{
+		"/lib/modules/6.5.0-1017-aws",
+	}
+
+	// TODO make this sysbox only
+	for _, m := range *sysboxMounts {
+		externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m, m))
+	}
+
 	criuOpts := CriuOpts{
 		ImagesDirectory: imgPath,
 		WorkDirectory:   "",
