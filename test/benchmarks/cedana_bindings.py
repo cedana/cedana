@@ -176,7 +176,7 @@ async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, 
     restore_args.Type = restore_type
     restore_args.JID = jobID
     if restore_type == task_pb2.CRType.REMOTE:
-        restore_args.CheckpointId = checkpointID
+        restore_args.CheckpointID = checkpointID
     else:
         restore_args.CheckpointPath = checkpointID
     restore_args.UID = os.getuid()
