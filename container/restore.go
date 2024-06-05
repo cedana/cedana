@@ -142,17 +142,19 @@ func containerdRestore(id string, ref string) error {
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	var spec rspec.Spec
+	var stateSpec rspec.Spec
 
+	splitBundle := strings.Split(opts.Bundle, "/")
+	bundleID := splitBundle[len(splitBundle)-1]
+
+	statePath := filepath.Join("/run/docker/runtime-runc/moby", bundleID, "state.json")
 	configPath := opts.Bundle + "/config.json"
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		fmt.Println("Error reading config.json:", err)
+	if err := readOCISpecJson(configPath, &spec); err != nil {
 		return err
 	}
 
-	if err := json.Unmarshal(data, &spec); err != nil {
-		fmt.Println("Error decoding config.json:", err)
+	if err := readOCISpecJson(statePath, &stateSpec); err != nil {
 		return err
 	}
 
@@ -164,22 +166,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	splitBundle := strings.Split(opts.Bundle, "/")
-	bundleID := splitBundle[len(splitBundle)-1]
-
-	sysboxMounts := &[]rspec.Mount{
-		{
-			Destination: "/lib/modules/6.5.0-1017-aws",
-			Source:      "/usr/lib/modules/6.5.0-1017-aws",
-		},
-		{
-			Destination: "/usr/src/linux-aws-6.5-headers-6.5.0-1017",
-			Source:      "/usr/src/linux-aws-6.5-headers-6.5.0-1017",
-		},
-		{
-			Destination: "/usr/src/linux-headers-6.5.0-1017-aws",
-			Source:      "/usr/src/linux-headers-6.5.0-1017-aws",
-		},
+	sysboxMounts := []rspec.Mount{
 		{
 			Destination: "/var/lib/kubelet",
 			Source:      filepath.Join("/var/lib/sysbox/kubelet", bundleID),
@@ -243,8 +230,34 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		},
 	}
 
+	srcFiles, err := os.ReadDir("/usr/src/")
+	if err != nil {
+		return err
+	}
+
+	for _, file := range srcFiles {
+		mount := rspec.Mount{
+			Destination: filepath.Join("/usr/src", file.Name()),
+			Source:      filepath.Join("/usr/src", file.Name()),
+		}
+		sysboxMounts = append(sysboxMounts, mount)
+	}
+
+	moduleFiles, err := os.ReadDir("/usr/lib/modules/")
+	if err != nil {
+		return err
+	}
+
+	for _, file := range moduleFiles {
+		mount := rspec.Mount{
+			Destination: filepath.Join("/lib/modules", file.Name()),
+			Source:      filepath.Join("/usr/lib/modules", file.Name()),
+		}
+		sysboxMounts = append(sysboxMounts, mount)
+	}
+
 	// TODO make this sysbox only
-	for _, m := range *sysboxMounts {
+	for _, m := range sysboxMounts {
 		externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
 	}
 
@@ -270,5 +283,20 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func readOCISpecJson(path string, spec *rspec.Spec) error {
+	configData, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("Error reading config.json:", err)
+		return err
+	}
+
+	if err := json.Unmarshal(configData, &spec); err != nil {
+		fmt.Println("Error decoding config.json:", err)
+		return err
+	}
+
 	return nil
 }
