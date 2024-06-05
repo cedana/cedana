@@ -2,7 +2,6 @@ import asyncio
 import benchmark
 import continuous
 import correctness
-import smoke
 import os
 import psutil
 import shutil
@@ -106,7 +105,7 @@ async def main(args):
         print("ERROR: cedana process not found in active PIDs. Have you started cedana daemon?")
         sys.exit(1)
 
-    remote = 0 if "--local" or "--smoke" in args else 1
+    remote = 0 if "--local" in args or "--smoke" in args else 1
     num_samples = (5 if "--num_samples" not in args else int(args[args.index("--num_samples") + 1]))
     verbose = True if "--verbose" in args else False
 
