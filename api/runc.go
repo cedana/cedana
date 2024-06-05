@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/cedana/cedana/api/runc"
@@ -85,6 +86,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		ConsoleSocket: args.Opts.ConsoleSocket,
 		Detatch:       args.Opts.Detatch,
 		NetPid:        int(args.Opts.NetPid),
+		StateRoot:     filepath.Join(args.StateRoot, args.ContainerID, "state.json"),
 	}
 	switch args.Type {
 	case task.CRType_LOCAL:

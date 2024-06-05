@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/cedana/cedana/utils"
 	"github.com/containerd/console"
@@ -36,6 +34,7 @@ type RuncOpts struct {
 	PreserveFds     int
 	Pid             int
 	NetPid          int
+	StateRoot       string
 }
 
 func Restore(imgPath string, containerID string) error {
@@ -144,17 +143,13 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	var spec rspec.Spec
 	var stateSpec rspec.Spec
 
-	splitBundle := strings.Split(opts.Bundle, "/")
-	bundleID := splitBundle[len(splitBundle)-1]
-
-	statePath := filepath.Join("/run/docker/runtime-runc/moby", bundleID, "state.json")
 	configPath := opts.Bundle + "/config.json"
 
 	if err := readOCISpecJson(configPath, &spec); err != nil {
 		return err
 	}
 
-	if err := readOCISpecJson(statePath, &stateSpec); err != nil {
+	if err := readOCISpecJson(opts.StateRoot, &stateSpec); err != nil {
 		return err
 	}
 
