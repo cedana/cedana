@@ -182,7 +182,6 @@ message RuncRestoreArgs {
   RuncOpts Opts = 4;
   CRType Type = 5;
   string CheckpointID = 6;
-  string StateRoot = 7;
 }
 
 message RuncRestoreResp {
