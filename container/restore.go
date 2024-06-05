@@ -141,15 +141,10 @@ func containerdRestore(id string, ref string) error {
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	var spec rspec.Spec
-	var stateSpec rspec.Spec
 
 	configPath := opts.Bundle + "/config.json"
 
 	if err := readOCISpecJson(configPath, &spec); err != nil {
-		return err
-	}
-
-	if err := readOCISpecJson(opts.StateRoot, &stateSpec); err != nil {
 		return err
 	}
 
@@ -161,9 +156,17 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	for _, m := range stateSpec.Mounts {
-		if m.Type == "bind" {
-			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+	if opts.StateRoot != "" {
+		var stateSpec rspec.Spec
+
+		if err := readOCISpecJson(opts.StateRoot, &stateSpec); err != nil {
+			return err
+		}
+
+		for _, m := range stateSpec.Mounts {
+			if m.Type == "bind" {
+				externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+			}
 		}
 	}
 
