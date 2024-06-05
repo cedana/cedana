@@ -188,7 +188,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, err
 		}
 
-		pid, err := s.restore(ctx, &task.RestoreArgs{
+		pid, err = s.restore(ctx, &task.RestoreArgs{
 			Type:           task.CRType_REMOTE,
 			CheckpointID:   args.CheckpointID,
 			CheckpointPath: *zipFile,
