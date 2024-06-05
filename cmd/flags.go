@@ -7,7 +7,6 @@ const (
 	imgFlag            = "image"
 	idFlag             = "id"
 	rootFlag           = "root"
-	stateRootFlag      = "state-root"
 	wdFlag             = "working-dir"
 	containerNameFlag  = "container-name"
 	containerRootFlag  = "container-root"

@@ -156,10 +156,10 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	if opts.StateRoot != "" {
+	if opts.Root != "" {
 		var stateSpec rspec.Spec
 
-		if err := readOCISpecJson(opts.StateRoot, &stateSpec); err != nil {
+		if err := readOCISpecJson(opts.Root, &stateSpec); err != nil {
 			return err
 		}
 
