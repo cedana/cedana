@@ -62,7 +62,6 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 
 	s.logger.Info().Msgf("managing process with pid %d", pid)
 
-	// FIXME YA: Should kill process on any errors to fix inconsistent state
 	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to update state")
