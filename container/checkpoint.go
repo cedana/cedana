@@ -1312,10 +1312,9 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	defer imageDir.Close()
 
 	// Find all bind mounts and add them as external mountpoints
-	externalMounts := []string{}
 	for _, m := range c.Config.Mounts {
 		if m.IsBind() {
-			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination))
+			criuOpts.External = append(criuOpts.External, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination))
 		}
 	}
 
@@ -1336,7 +1335,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		OrphanPtsMaster: proto.Bool(true),
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
-		External:        externalMounts,
+		External:        criuOpts.External,
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
@@ -1488,6 +1487,8 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		if err != nil {
 			return err
 		}
+
+		fdsJSON, err = json.Marshal([]string{"/dev/null", "/dev/null", "/dev/null"})
 
 		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
 		if err != nil {

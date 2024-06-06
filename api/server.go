@@ -121,7 +121,7 @@ func StartServer(cmdCtx context.Context) error {
 		// Here join netns
 		// TODO find pause bundle path
 		if viper.GetBool("is_k8s") {
-			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, K8S_RUNC_ROOT)
+			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, "", K8S_RUNC_ROOT)
 			if err != nil {
 				cancel(err)
 				return
