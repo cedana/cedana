@@ -43,6 +43,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	state.JobState = task.JobState_JOB_RUNNING
 	if args.JID == "" {
 		state.JID = xid.New().String()
+		args.JID = state.JID
 	} else {
 		existingState, _ := s.getState(ctx, args.JID)
 		if existingState != nil {
@@ -371,10 +372,16 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
 			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
+		state, _ := s.getState(ctx, args.JID)
 		if err != nil {
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+		}
+		state.JobState = task.JobState_JOB_DONE
+		s.updateState(ctx, args.JID, state)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("failed to update state after job done")
 		}
 	}()
 
