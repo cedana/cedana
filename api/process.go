@@ -66,6 +66,10 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		return nil, status.Error(codes.Internal, "failed to run task")
 		// TODO BS: replace doom loop with just retrying from market
 	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
+	}
 
 	s.logger.Info().Msgf("managing process with pid %d", pid)
 
@@ -384,6 +388,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			return
 		}
 		state.JobState = task.JobState_JOB_DONE
+		state.PID = pid
 		err = s.updateState(ctx, args.JID, state)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to update state after job done")
