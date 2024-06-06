@@ -381,15 +381,15 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
 		}
-		ctx := context.WithoutCancel(ctx) // since this routine can outlive the parent
-		state, err := s.getState(ctx, args.JID)
+		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		state, err := s.getState(childCtx, args.JID)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to get state after job done")
 			return
 		}
 		state.JobState = task.JobState_JOB_DONE
 		state.PID = pid
-		err = s.updateState(ctx, args.JID, state)
+		err = s.updateState(childCtx, args.JID, state)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to update state after job done")
 		}
