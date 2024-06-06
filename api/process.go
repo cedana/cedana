@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
@@ -289,6 +290,15 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		// XXX: force sleep for a few ms to allow GPU controller to start
 		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
+
+    sharedLibPath := viper.GetString("gpu_shared_lib_path")
+    if sharedLibPath == "" {
+      sharedLibPath = utils.GpuSharedLibPath
+    }
+    if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+      return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+    }
+		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -374,7 +384,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
+			s.logger.Debug().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")

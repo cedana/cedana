@@ -59,7 +59,6 @@ var execTaskCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		if gpuEnabled {
 			logger.Info().Msgf("starting task w/ gpu enabled")
-			executable = fmt.Sprintf("LD_PRELOAD=%s %s", utils.GpuSharedLibPath, executable)
 		}
 
 		taskArgs := &task.StartArgs{
