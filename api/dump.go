@@ -192,6 +192,9 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	bundle := Bundle{ContainerID: containerID}
 	runcContainer := container.GetContainerFromRunc(containerID, root)
 
+	// TODO make into flag and describe how this redirects using container's init process pid and
+	// instead a specific pid.
+
 	if pid != 0 {
 		crPid = int(pid)
 	} else {
