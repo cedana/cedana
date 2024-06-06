@@ -39,16 +39,8 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	}
 
 	state := &task.ProcessState{}
-	pid, err := s.run(ctx, args)
-	if err != nil {
-		// TODO BS: this should be at market level
-		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
-		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
-	}
 
 	state.JobState = task.JobState_JOB_RUNNING
-	state.PID = pid
 	if args.JID == "" {
 		state.JID = xid.New().String()
 	} else {
@@ -58,6 +50,16 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		}
 		state.JID = args.JID
 	}
+
+	pid, err := s.run(ctx, args)
+	state.PID = pid
+	if err != nil {
+		// TODO BS: this should be at market level
+		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+
 	s.logger.Info().Msgf("managing process with pid %d", pid)
 
 	// FIXME YA: Should kill process on any errors to fix inconsistent state
