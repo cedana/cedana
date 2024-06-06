@@ -9,7 +9,6 @@ const (
 	rootFlag           = "root"
 	wdFlag             = "working-dir"
 	containerNameFlag  = "container-name"
-	containerRootFlag  = "container-root"
 	bundleFlag         = "bundle"
 	consoleSocketFlag  = "console-socket"
 	detachFlag         = "detach"

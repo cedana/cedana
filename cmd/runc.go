@@ -1,13 +1,18 @@
 package cmd
 
 import (
+	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
-const RuncRootDir = "/var/run/runc"
+var runcRootPath = map[string]string{
+	"k8s":     api.K8S_RUNC_ROOT,
+	"docker":  api.DOCKER_RUNC_ROOT,
+	"default": api.DEFAULT_RUNC_ROOT,
+}
 
 var runcCmd = &cobra.Command{
 	Use:   "runc",
@@ -46,7 +51,7 @@ var runcGetRuncIdByName = &cobra.Command{
 }
 
 func init() {
-	runcGetRuncIdByName.Flags().StringP(rootFlag, "r", RuncRootDir, "runc root directory")
+	runcGetRuncIdByName.Flags().StringP(rootFlag, "r", runcRootPath["default"], "runc root directory")
 	runcCmd.AddCommand(runcGetRuncIdByName)
 
 	rootCmd.AddCommand(runcCmd)
