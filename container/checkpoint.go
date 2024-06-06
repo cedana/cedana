@@ -1311,20 +1311,11 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 	}
 	defer imageDir.Close()
 
-	sysboxMounts := &[]string{
-		"/lib/modules/6.5.0-1017-aws",
-	}
-
 	// Find all bind mounts and add them as external mountpoints
 	for _, m := range c.Config.Mounts {
 		if m.IsBind() {
 			criuOpts.External = append(criuOpts.External, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination))
 		}
-	}
-
-	// TODO make this sysbox only
-	for _, m := range *sysboxMounts {
-		criuOpts.External = append(criuOpts.External, fmt.Sprintf("mnt[%s]:%s", m, m))
 	}
 
 	rpcOpts := criurpc.CriuOpts{
