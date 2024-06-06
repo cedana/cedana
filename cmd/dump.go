@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
@@ -192,14 +191,8 @@ var dumpRuncCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		rootPath := map[string]string{
-			"k8s":     api.K8S_RUNC_ROOT,
-			"docker":  api.DOCKER_RUNC_ROOT,
-			"default": api.DEFAULT_RUNC_ROOT,
-		}
-
-		root, _ := cmd.Flags().GetString(containerRootFlag)
-		if rootPath[root] == "" {
+		root, _ := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
 			return
 		}
@@ -239,7 +232,7 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: rootPath[root],
+			Root: runcRootPath[root],
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
 			Pid:         int32(pid),
@@ -290,7 +283,7 @@ func init() {
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().StringP(rootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")

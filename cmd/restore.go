@@ -175,12 +175,16 @@ var runcRestoreCmd = &cobra.Command{
 		defer cts.Close()
 
 		root, err := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
+			logger.Error().Msgf("container root %s not supported", root)
+			return
+		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		opts := &task.RuncOpts{
-			Root:          root,
+			Root:          runcRootPath[root],
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detatch:       detach,
@@ -237,7 +241,7 @@ func init() {
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired(bundleFlag)
 	runcRestoreCmd.Flags().StringP(consoleSocketFlag, "c", "", "console socket path")
-	runcRestoreCmd.Flags().StringP(rootFlag, "r", RuncRootDir, "runc root directory")
+	runcRestoreCmd.Flags().StringP(rootFlag, "r", runcRootPath["default"], "runc root directory")
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
