@@ -54,10 +54,8 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	pid, err := s.run(ctx, args)
 	state.PID = pid
 	if err != nil {
-		// TODO BS: this should be at market level
 		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
 		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
 	}
 
 	s.logger.Info().Msgf("managing process with pid %d", pid)
