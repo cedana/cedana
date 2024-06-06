@@ -8,7 +8,6 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
