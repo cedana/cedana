@@ -60,18 +60,24 @@ var startDaemonCmd = &cobra.Command{
 				return err
 			}
 
-			logger.Info().Msgf("pulling gpu binaries for cuda version %s", cudaVersion)
-
-			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersions[cudaVersion])
-			if err != nil {
-				logger.Error().Err(err).Msg("could not pull gpu controller")
-				return err
+			if viper.GetString("gpu_controller_path") == "" {
+				err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersions[cudaVersion])
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull gpu controller")
+					return err
+				}
+			} else {
+				logger.Info().Msgf("using gpu controller at %s", viper.GetString("gpu_controller_path"))
 			}
 
-			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersions[cudaVersion])
-			if err != nil {
-				logger.Error().Err(err).Msg("could not pull libcedana")
-				return err
+			if viper.GetString("gpu_shared_lib_path") == "" {
+				err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersions[cudaVersion])
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull libcedana")
+					return err
+				}
+			} else {
+				logger.Info().Msgf("using gpu shared lib at %s", viper.GetString("gpu_shared_lib_path"))
 			}
 		}
 
@@ -104,6 +110,7 @@ type pullGPUBinaryRequest struct {
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string, version string) error {
 	logger := ctx.Value("logger").(*zerolog.Logger)
+	logger.Info().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
 	_, err := os.Stat(filePath)
 	if err == nil {
 		logger.Debug().Msgf("binary exists at %s, doing nothing. Delete existing binary to download another supported cuda version.", filePath)
