@@ -214,14 +214,15 @@ var dumpRuncCmd = &cobra.Command{
 		var externalNamespaces []string
 
 		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
 
-		for _, ns := range namespaces {
-			nsParts := strings.Split(ns, ":")
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
 
-			nsType := nsParts[0]
-			nsDestination := nsParts[1]
-
-			externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
 		}
 
 		criuOpts := &task.CriuOpts{
