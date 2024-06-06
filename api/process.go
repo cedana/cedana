@@ -43,6 +43,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	state.JobState = task.JobState_JOB_RUNNING
 	if args.JID == "" {
 		state.JID = xid.New().String()
+		args.JID = state.JID
 	} else {
 		existingState, _ := s.getState(ctx, args.JID)
 		if existingState != nil {
@@ -50,21 +51,27 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		}
 		state.JID = args.JID
 	}
+	err := s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state")
+	}
 
 	pid, err := s.run(ctx, args)
 	state.PID = pid
 	if err != nil {
+		// TODO BS: this should be at market level
 		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		state.JobState = task.JobState_JOB_STARTUP_FAILED
+		s.updateState(ctx, state.JID, state)
 		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
 	}
 
 	s.logger.Info().Msgf("managing process with pid %d", pid)
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("failed to update state")
-		return nil, status.Error(codes.Internal, "failed to update state")
-	}
 
 	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
 		err = status.Error(codes.Internal, "Task startup failed")
@@ -373,6 +380,18 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+		}
+		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		state, err := s.getState(childCtx, args.JID)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to get state after job done")
+			return
+		}
+		state.JobState = task.JobState_JOB_DONE
+		state.PID = pid
+		err = s.updateState(childCtx, args.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update state after job done")
 		}
 	}()
 
