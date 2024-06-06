@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -146,7 +147,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 
 	configPath := opts.Bundle + "/config.json"
 
-	if err := readOCISpecJson(configPath, &spec); err != nil {
+	if err := readJSON(configPath, &spec); err != nil {
 		return err
 	}
 
@@ -159,19 +160,19 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	}
 
 	if opts.Root != "" {
-		var stateSpec rspec.Spec
+		var baseState libcontainer.BaseState
 
 		split := strings.Split(opts.Bundle, "/")
 		containerID := split[len(split)-1]
 
 		stateJsonPath := filepath.Join(opts.Root, containerID, "state.json")
 
-		if err := readOCISpecJson(stateJsonPath, &stateSpec); err != nil {
+		if err := readJSON(stateJsonPath, &baseState); err != nil {
 			return err
 		}
 
-		for _, m := range stateSpec.Mounts {
-			if m.Type == "bind" {
+		for _, m := range baseState.Config.Mounts {
+			if m.Device == "bind" {
 				externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
 			}
 		}
@@ -203,7 +204,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	return nil
 }
 
-func readOCISpecJson(path string, spec *rspec.Spec) error {
+func readJSON[T any](path string, spec *T) error {
 	configData, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("Error reading config.json:", err)
