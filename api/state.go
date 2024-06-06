@@ -12,27 +12,36 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
+
+	"context"
 )
 
 const CHECKPOINT_STATE_FILE = "checkpoint_state.json"
 
-func (s *service) updateState(jid string, state *task.ProcessState) error {
+func (s *service) updateState(ctx context.Context, jid string, state *task.ProcessState) error {
 	marshalledState, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	return s.db.Put([][]byte{DB_BUCKET_JOBS}, []byte(jid), marshalledState)
+
+	// try creating the job, which would fail
+	// in case the JID exists
+	// On error, update the job
+	err = s.db.PutJob(ctx, []byte(jid), marshalledState)
+	return err
 }
 
 // Does not return an error if state is not found for a JID.
 // Returns nil in that case
-func (s *service) getState(jid string) (*task.ProcessState, error) {
-	value, err := s.db.Get([][]byte{DB_BUCKET_JOBS}, []byte(jid))
-	if value == nil {
-		return nil, nil
+func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState, error) {
+
+	fetchedJob, err := s.db.GetJob(ctx, []byte(jid))
+	if err != nil {
+		return nil, err
 	}
+
 	state := task.ProcessState{}
-	err = json.Unmarshal(value, &state)
+	err = json.Unmarshal(fetchedJob.State, &state)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +50,7 @@ func (s *service) getState(jid string) (*task.ProcessState, error) {
 
 // Generates a new state for a process with given PID
 // TODO NR - customizable errors
-func (s *service) generateState(pid int32) (*task.ProcessState, error) {
+func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessState, error) {
 	if pid == 0 {
 		return nil, fmt.Errorf("invalid PID %d", pid)
 	}
@@ -56,13 +65,13 @@ func (s *service) generateState(pid int32) (*task.ProcessState, error) {
 	state.PID = pid
 
 	// Search for JID, if found, use it, otherwise generate a new one
-	list, err := s.db.List([][]byte{DB_BUCKET_JOBS})
+	list, err := s.db.ListJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not list jobs: %v", err)
 	}
-	for _, v := range list {
+	for _, job := range list {
 		st := &task.ProcessState{}
-		err = json.Unmarshal(v, st)
+		err = json.Unmarshal(job.State, st)
 		if err != nil {
 			continue
 		}

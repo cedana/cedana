@@ -52,10 +52,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	if args.JID == "" {
 		state.JID = xid.New().String()
 	} else {
-		existingState, err := s.getState(args.JID)
-		if err != nil {
-			return nil, status.Error(codes.NotFound, "failed to check existing jobs")
-		}
+		existingState, _ := s.getState(ctx, args.JID)
 		if existingState != nil {
 			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
 		}
@@ -64,7 +61,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	s.logger.Info().Msgf("managing process with pid %d", pid)
 
 	// FIXME YA: Should kill process on any errors to fix inconsistent state
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to update state")
 		return nil, status.Error(codes.Internal, "failed to update state")
@@ -93,7 +90,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	pid := args.PID
 
 	if pid == 0 { // if job
-		state, err = s.getState(args.JID)
+		state, err = s.getState(ctx, args.JID)
 		if err != nil {
 			err = status.Error(codes.NotFound, err.Error())
 			return nil, err
@@ -104,7 +101,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		pid = state.PID
 	}
 
-	state, err = s.generateState(pid)
+	state, err = s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -142,7 +139,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
 		return nil, st.Err()
@@ -209,12 +206,12 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}
 
 	// We could be restoring on a new machine, so we update the state
-	state, err := s.generateState(*pid)
+	state, err := s.generateState(ctx, *pid)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
 	}
 	state.JobState = task.JobState_JOB_RUNNING
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to update state after restore")
 	}
@@ -227,7 +224,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 
 	if len(args.JIDs) > 0 {
 		for _, jid := range args.JIDs {
-			state, err := s.getState(jid)
+			state, err := s.getState(ctx, jid)
 			if err != nil {
 				return nil, status.Error(codes.NotFound, "job not found")
 			}
@@ -240,10 +237,14 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 		for _, pid := range args.PIDs {
 			pidSet[pid] = true
 		}
-		list, err := s.db.List([][]byte{DB_BUCKET_JOBS})
-		for _, val := range list {
+
+		list, err := s.db.ListJobs(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
+		}
+		for _, job := range list {
 			state := task.ProcessState{}
-			err = json.Unmarshal(val, &state)
+			err = json.Unmarshal(job.State, &state)
 			if err != nil {
 				return nil, status.Error(codes.Internal, "failed to unmarshal state")
 			}

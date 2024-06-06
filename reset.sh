@@ -1,4 +1,5 @@
 sudo rm -rf /tmp/cedana*
+sudo rm -rf /tmp/sqlite_cedana*
 sudo rm -rf /var/log/cedana*
 sudo rm -rf /dev/shm/cedana*
 

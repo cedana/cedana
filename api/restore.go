@@ -97,7 +97,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkp
 			isShellJob = true
 		}
 		// if stdout or stderr, always redirect fds
-		if f.Stream == task.OpenFilesStat_STDOUT || f.Stream == task.OpenFilesStat_STDERR {
+		if f.Fd == 1 || f.Fd == 2 {
 			// strip leading slash from f
 			f.Path = strings.TrimPrefix(f.Path, "/")
 
