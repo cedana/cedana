@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 
+	"github.com/cedana/cedana/api/containerd"
 	"github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
@@ -35,7 +36,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-  // TODO: Update state to add a job
+	// TODO: Update state to add a job
 
 	return &task.ContainerdDumpResp{
 		Message:        "Dumped containerd container",
@@ -82,4 +83,15 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 	return &task.ContainerdQueryResp{
 		Containers: containers,
 	}, nil
+}
+
+func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
+	resp := &task.ContainerdRootfsDumpResp{}
+
+	containerdService, err := containerd.New(args.Address)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
 }
