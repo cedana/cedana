@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/cedana/cedana/utils"
 	"github.com/containerd/console"
@@ -159,7 +161,12 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	if opts.Root != "" {
 		var stateSpec rspec.Spec
 
-		if err := readOCISpecJson(opts.Root, &stateSpec); err != nil {
+		split := strings.Split(opts.Bundle, "/")
+		containerID := split[len(split)-1]
+
+		stateJsonPath := filepath.Join(opts.Root, containerID, "state.json")
+
+		if err := readOCISpecJson(stateJsonPath, &stateSpec); err != nil {
 			return err
 		}
 
