@@ -51,10 +51,11 @@ echo "export IS_K8S=1" >> ~/.bashrc
 source ~/.bashrc
 
 cd cedana
-git fetch && git checkout feat/ced-355
+git fetch
+git pull
 go build -v
 cp cedana /usr/local/bin/cedana
 
-./build-start-daemon.sh
+cedana daemon start --systemctl
 
 EOT
