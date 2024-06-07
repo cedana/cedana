@@ -6,6 +6,8 @@ const (
 	dirFlag            = "dir"
 	imgFlag            = "image"
 	idFlag             = "id"
+	refFlag            = "ref"
+	addressFlag        = "address"
 	rootFlag           = "root"
 	wdFlag             = "working-dir"
 	containerNameFlag  = "container-name"

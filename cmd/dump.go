@@ -177,6 +177,49 @@ var dumpContainerdCmd = &cobra.Command{
 	},
 }
 
+var dumpContainerdRootfsCmd = &cobra.Command{
+	Use:   "runc",
+	Short: "Manually checkpoint a running runc container's rootfs and bundle into an image",
+	Args:  cobra.ArbitraryArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		id, err := cmd.Flags().GetString(idFlag)
+		ref, err := cmd.Flags().GetString(refFlag)
+		addr, err := cmd.Flags().GetString(addressFlag)
+
+		if err != nil {
+			logger.Error().Msgf("Error getting container id: %v", err)
+		}
+
+		dumpArgs := task.ContainerdRootfsDumpArgs{
+			ContainerID: id,
+			ImageRef:    ref,
+			Address:     addr,
+		}
+
+		resp, err := cts.ContainerdRootfsDump(ctx, &dumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Checkpoint rootfs failed: %v, %v", st.Message(), st.Code())
+			} else {
+				logger.Error().Msgf("Checkpoint rootfs failed: %v", err)
+			}
+			return
+		}
+		logger.Info().Msgf("Saved rootfs and stored in new image: %s", resp.ImageRef)
+
+	},
+}
+
 var dumpRuncCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually checkpoint a running runc container to a directory",
@@ -262,6 +305,13 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(idFlag, "p", "", "container id")
 	dumpContainerdCmd.MarkFlagRequired(idFlag)
 
+	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
+	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
+	dumpContainerdRootfsCmd.MarkFlagRequired(refFlag)
+	dumpContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	dumpContainerdRootfsCmd.MarkFlagRequired(addressFlag)
+
 	// TODO Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
 	dumpRuncCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
@@ -271,6 +321,8 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+
+	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)
 }

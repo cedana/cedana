@@ -12,7 +12,12 @@ type ContainerdService struct {
 	client *containerd.Client
 }
 
-func New(address string) (*ContainerdService, error) {
+//func NewClient(context *cli.Context, opts ...containerd.Opt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
+//timeoutOpt := containerd.WithTimeout(context.Duration("connect-timeout"))
+//opts = append(opts, timeoutOpt)
+//kclient, err := containerd.New(context.String("address"), opts...)
+
+func New(ctx context.Context, address string) (*ContainerdService, error) {
 
 	client, err := containerd.New(address)
 
