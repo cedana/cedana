@@ -142,6 +142,7 @@ message ContainerdRootfsDumpArgs {
   string ContainerID = 1;
   string ImageRef = 2;
   string Address = 3;
+  string Namespace = 4;
 }
 
 message ContainerdRootfsDumpResp {

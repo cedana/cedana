@@ -29,9 +29,9 @@ func New(ctx context.Context, address string) (*ContainerdService, error) {
 	return &ContainerdService{client}, nil
 }
 
-func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef string) (string, error) {
+func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
 	// TODO add namespace opt
-	ctx = namespaces.WithNamespace(ctx, "default")
+	ctx = namespaces.WithNamespace(ctx, ns)
 
 	opts := []containerd.CheckpointOpts{
 		containerd.WithCheckpointRuntime,

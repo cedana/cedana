@@ -8,6 +8,7 @@ const (
 	idFlag             = "id"
 	refFlag            = "ref"
 	addressFlag        = "address"
+	namespaceFlag      = "namespace"
 	rootFlag           = "root"
 	wdFlag             = "working-dir"
 	containerNameFlag  = "container-name"

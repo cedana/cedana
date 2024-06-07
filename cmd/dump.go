@@ -194,15 +194,18 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 		id, err := cmd.Flags().GetString(idFlag)
 		ref, err := cmd.Flags().GetString(refFlag)
 		addr, err := cmd.Flags().GetString(addressFlag)
+		ns, err := cmd.Flags().GetString(namespaceFlag)
 
-		if err != nil {
-			logger.Error().Msgf("Error getting container id: %v", err)
+		// Default to moby if ns is not provided
+		if ns == "" {
+			ns = "moby"
 		}
 
 		dumpArgs := task.ContainerdRootfsDumpArgs{
 			ContainerID: id,
 			ImageRef:    ref,
 			Address:     addr,
+			Namespace:   ns,
 		}
 
 		resp, err := cts.ContainerdRootfsDump(ctx, &dumpArgs)
@@ -311,6 +314,7 @@ func init() {
 	dumpContainerdRootfsCmd.MarkFlagRequired(refFlag)
 	dumpContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
 	dumpContainerdRootfsCmd.MarkFlagRequired(addressFlag)
+	dumpContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
 	// TODO Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
