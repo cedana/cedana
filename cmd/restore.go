@@ -160,7 +160,7 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
-var containerdRestoreRootfsCmd = &cobra.Command{
+var restoreContainerdRootfsCmd = &cobra.Command{
 	Use:   "rootfs",
 	Short: "Manually restore a container with a checkpointed rootfs",
 	Args:  cobra.ArbitraryArgs,
@@ -266,6 +266,14 @@ func init() {
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
+
+	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
+	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
+	restoreContainerdRootfsCmd.MarkFlagRequired(refFlag)
+	restoreContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	restoreContainerdRootfsCmd.MarkFlagRequired(addressFlag)
+	restoreContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
