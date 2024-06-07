@@ -74,6 +74,7 @@ func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, i
 }
 
 func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID, imageRef, ns string) error {
+	ctx = namespaces.WithNamespace(ctx, ns)
 
 	checkpoint, err := service.client.GetImage(ctx, imageRef)
 	if err != nil {
