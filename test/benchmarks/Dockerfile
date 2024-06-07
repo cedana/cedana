@@ -36,4 +36,4 @@ RUN wget https://github.com/open-telemetry/opentelemetry-collector-releases/rele
 ## want to bypass systemd init scripts
 RUN dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
 
-ENTRYPOINT ["./test/benchmarks/entrypoint.sh --continuous --name=std_range"]
+ENTRYPOINT ["./test/benchmarks/entrypoint.sh", "--continuous", "--name=std_range"]
