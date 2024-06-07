@@ -160,6 +160,46 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
+var containerdRestoreRootfsCmd = &cobra.Command{
+	Use:   "rootfs",
+	Short: "Manually restore a container with a checkpointed rootfs",
+	Args:  cobra.ArbitraryArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		ref, _ := cmd.Flags().GetString(refFlag)
+		id, _ := cmd.Flags().GetString(idFlag)
+		addr, _ := cmd.Flags().GetString(addressFlag)
+		ns, _ := cmd.Flags().GetString(namespaceFlag)
+
+		restoreArgs := &task.ContainerdRootfsRestoreArgs{
+			ContainerID: id,
+			ImageRef:    ref,
+			Address:     addr,
+			Namespace:   ns,
+		}
+
+		resp, err := cts.ContainerdRootfsRestore(ctx, restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Restore rootfs container failed: %v, %v", st.Message(), st.Code())
+			} else {
+				logger.Error().Msgf("Restore rootfs container failed: %v", err)
+			}
+			return
+		}
+		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
+	},
+}
+
 var runcRestoreCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually restore a running runc container to a directory",

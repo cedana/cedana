@@ -32,6 +32,7 @@ type TaskServiceClient interface {
 	ContainerdRestore(ctx context.Context, in *ContainerdRestoreArgs, opts ...grpc.CallOption) (*ContainerdRestoreResp, error)
 	ContainerdQuery(ctx context.Context, in *ContainerdQueryArgs, opts ...grpc.CallOption) (*ContainerdQueryResp, error)
 	ContainerdRootfsDump(ctx context.Context, in *ContainerdRootfsDumpArgs, opts ...grpc.CallOption) (*ContainerdRootfsDumpResp, error)
+	ContainerdRootfsRestore(ctx context.Context, in *ContainerdRootfsRestoreArgs, opts ...grpc.CallOption) (*ContainerdRootfsRestoreResp, error)
 	// Runc
 	RuncDump(ctx context.Context, in *RuncDumpArgs, opts ...grpc.CallOption) (*RuncDumpResp, error)
 	RuncRestore(ctx context.Context, in *RuncRestoreArgs, opts ...grpc.CallOption) (*RuncRestoreResp, error)
@@ -116,6 +117,15 @@ func (c *taskServiceClient) ContainerdQuery(ctx context.Context, in *ContainerdQ
 func (c *taskServiceClient) ContainerdRootfsDump(ctx context.Context, in *ContainerdRootfsDumpArgs, opts ...grpc.CallOption) (*ContainerdRootfsDumpResp, error) {
 	out := new(ContainerdRootfsDumpResp)
 	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/ContainerdRootfsDump", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ContainerdRootfsRestore(ctx context.Context, in *ContainerdRootfsRestoreArgs, opts ...grpc.CallOption) (*ContainerdRootfsRestoreResp, error) {
+	out := new(ContainerdRootfsRestoreResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/ContainerdRootfsRestore", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +245,7 @@ type TaskServiceServer interface {
 	ContainerdRestore(context.Context, *ContainerdRestoreArgs) (*ContainerdRestoreResp, error)
 	ContainerdQuery(context.Context, *ContainerdQueryArgs) (*ContainerdQueryResp, error)
 	ContainerdRootfsDump(context.Context, *ContainerdRootfsDumpArgs) (*ContainerdRootfsDumpResp, error)
+	ContainerdRootfsRestore(context.Context, *ContainerdRootfsRestoreArgs) (*ContainerdRootfsRestoreResp, error)
 	// Runc
 	RuncDump(context.Context, *RuncDumpArgs) (*RuncDumpResp, error)
 	RuncRestore(context.Context, *RuncRestoreArgs) (*RuncRestoreResp, error)
@@ -273,6 +284,9 @@ func (UnimplementedTaskServiceServer) ContainerdQuery(context.Context, *Containe
 }
 func (UnimplementedTaskServiceServer) ContainerdRootfsDump(context.Context, *ContainerdRootfsDumpArgs) (*ContainerdRootfsDumpResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ContainerdRootfsDump not implemented")
+}
+func (UnimplementedTaskServiceServer) ContainerdRootfsRestore(context.Context, *ContainerdRootfsRestoreArgs) (*ContainerdRootfsRestoreResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ContainerdRootfsRestore not implemented")
 }
 func (UnimplementedTaskServiceServer) RuncDump(context.Context, *RuncDumpArgs) (*RuncDumpResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RuncDump not implemented")
@@ -449,6 +463,24 @@ func _TaskService_ContainerdRootfsDump_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_ContainerdRootfsRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerdRootfsRestoreArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ContainerdRootfsRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/ContainerdRootfsRestore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ContainerdRootfsRestore(ctx, req.(*ContainerdRootfsRestoreArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TaskService_RuncDump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RuncDumpArgs)
 	if err := dec(in); err != nil {
@@ -606,6 +638,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ContainerdRootfsDump",
 			Handler:    _TaskService_ContainerdRootfsDump_Handler,
+		},
+		{
+			MethodName: "ContainerdRootfsRestore",
+			Handler:    _TaskService_ContainerdRootfsRestore_Handler,
 		},
 		{
 			MethodName: "RuncDump",

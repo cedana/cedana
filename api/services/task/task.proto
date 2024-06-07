@@ -21,6 +21,7 @@ service TaskService {
   rpc ContainerdQuery(ContainerdQueryArgs) returns (ContainerdQueryResp);
 
   rpc ContainerdRootfsDump(ContainerdRootfsDumpArgs) returns (ContainerdRootfsDumpResp);
+  rpc ContainerdRootfsRestore(ContainerdRootfsRestoreArgs) returns (ContainerdRootfsRestoreResp);
 
   // Runc
   rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
@@ -146,6 +147,17 @@ message ContainerdRootfsDumpArgs {
 }
 
 message ContainerdRootfsDumpResp {
+  string ImageRef = 1;
+}
+
+message ContainerdRootfsRestoreArgs {
+  string ContainerID = 1;
+  string ImageRef = 2;
+  string Address = 3;
+  string Namespace = 4;
+}
+
+message ContainerdRootfsRestoreResp {
   string ImageRef = 1;
 }
 

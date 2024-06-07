@@ -133,6 +133,16 @@ func (c *ServiceClient) ContainerdRootfsDump(ctx context.Context, args *task.Con
 	return resp, nil
 }
 
+func (c *ServiceClient) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.ContainerdRootfsRestore(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 ////////////////////////
 // Runc Service Calls //
 ////////////////////////
