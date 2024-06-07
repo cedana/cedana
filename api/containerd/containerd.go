@@ -99,7 +99,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 	if err != nil {
 		return err
 	}
-	topts := []containerd.NewTaskOpts{containerd.WithTaskCheckpoint(checkpoint)}
+	topts := []containerd.NewTaskOpts{}
 	spec, err := ctr.Spec(ctx)
 	if err != nil {
 		return err
