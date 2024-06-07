@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 
+	"github.com/cedana/cedana/api/containerd"
 	"github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
@@ -35,7 +36,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-  // TODO: Update state to add a job
+	// TODO: Update state to add a job
 
 	return &task.ContainerdDumpResp{
 		Message:        "Dumped containerd container",
@@ -57,23 +58,23 @@ func (s *service) ContainerdRestore(ctx context.Context, args *task.ContainerdRe
 func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQueryArgs) (*task.ContainerdQueryResp, error) {
 	var containers []*task.ContainerdContainer
 
-	annotations, err := kube.StateList(args.Root)
+	runcContainers, err := kube.StateList(args.Root)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, sandbox := range annotations {
+	for _, c := range runcContainers {
 		var container task.ContainerdContainer
 
-		if sandbox[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
-			container.ContainerName = sandbox[kube.CONTAINER_NAME]
-			container.ImageName = sandbox[kube.IMAGE_NAME]
-			container.SandboxId = sandbox[kube.SANDBOX_ID]
-			container.SandboxName = sandbox[kube.SANDBOX_NAME]
-			container.SandboxUid = sandbox[kube.SANDBOX_UID]
-			container.SandboxNamespace = sandbox[kube.SANDBOX_NAMESPACE]
+		if c.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
+			container.ContainerName = c.Annotations[kube.CONTAINER_NAME]
+			container.ImageName = c.Annotations[kube.IMAGE_NAME]
+			container.SandboxId = c.Annotations[kube.SANDBOX_ID]
+			container.SandboxName = c.Annotations[kube.SANDBOX_NAME]
+			container.SandboxUid = c.Annotations[kube.SANDBOX_UID]
+			container.SandboxNamespace = c.Annotations[kube.SANDBOX_NAMESPACE]
 
-			if sandbox[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" && container.ImageName != "" {
+			if c.Annotations[kube.SANDBOX_NAMESPACE] == args.Namespace || args.Namespace == "" && container.ImageName != "" {
 				containers = append(containers, &container)
 			}
 		}
@@ -82,4 +83,36 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 	return &task.ContainerdQueryResp{
 		Containers: containers,
 	}, nil
+}
+
+func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
+
+	containerdService, err := containerd.New(ctx, args.Address)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	ref, err := containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
+}
+
+func (s *service) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
+	resp := &task.ContainerdRootfsRestoreResp{}
+
+	containerdService, err := containerd.New(ctx, args.Address)
+	if err != nil {
+		return resp, err
+	}
+
+	if err := containerdService.RestoreRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace); err != nil {
+		return resp, err
+	}
+
+	resp.ImageRef = args.ImageRef
+
+	return resp, nil
 }

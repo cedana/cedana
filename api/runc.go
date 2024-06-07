@@ -37,9 +37,10 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		LeaveRunning:    true,
 		TcpEstablished:  args.CriuOpts.TcpEstablished,
 		MntnsCompatMode: false,
+		External:        args.CriuOpts.External,
 	}
 
-	err = s.runcDump(ctx, args.Root, args.ContainerID, criuOpts, state)
+	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
@@ -87,12 +88,13 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		ConsoleSocket: args.Opts.ConsoleSocket,
 		Detatch:       args.Opts.Detatch,
 		NetPid:        int(args.Opts.NetPid),
+		StateRoot:     args.Opts.Root,
 	}
 	switch args.Type {
 	case task.CRType_LOCAL:
 		err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, args.IsK3S, []string{}, opts)
 		if err != nil {
-			err = status.Error(codes.InvalidArgument, "invalid argument")
+			err = status.Error(codes.Internal, err.Error())
 			return nil, err
 		}
 
@@ -119,8 +121,11 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	var containers []*task.RuncContainer
-	for _, name := range args.ContainerNames {
-		runcId, bundle, err := runc.GetContainerIdByName(name, args.Root)
+	if len(args.ContainerNames) == 0 {
+		runc.RuncGetAll(args.Root, args.Namespace)
+	}
+	for i, name := range args.ContainerNames {
+		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
 		if err != nil {
 			return nil, status.Error(codes.NotFound, fmt.Sprintf("Container \"%s\" not found", name))
 		}

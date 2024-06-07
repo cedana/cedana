@@ -5,8 +5,8 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
@@ -177,6 +177,52 @@ var dumpContainerdCmd = &cobra.Command{
 	},
 }
 
+var dumpContainerdRootfsCmd = &cobra.Command{
+	Use:   "rootfs",
+	Short: "Manually checkpoint a running runc container's rootfs and bundle into an image",
+	Args:  cobra.ArbitraryArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		id, err := cmd.Flags().GetString(idFlag)
+		ref, err := cmd.Flags().GetString(refFlag)
+		addr, err := cmd.Flags().GetString(addressFlag)
+		ns, err := cmd.Flags().GetString(namespaceFlag)
+
+		// Default to moby if ns is not provided
+		if ns == "" {
+			ns = "moby"
+		}
+
+		dumpArgs := task.ContainerdRootfsDumpArgs{
+			ContainerID: id,
+			ImageRef:    ref,
+			Address:     addr,
+			Namespace:   ns,
+		}
+
+		resp, err := cts.ContainerdRootfsDump(ctx, &dumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Checkpoint rootfs failed: %v, %v", st.Message(), st.Code())
+			} else {
+				logger.Error().Msgf("Checkpoint rootfs failed: %v", err)
+			}
+			return
+		}
+		logger.Info().Msgf("Saved rootfs and stored in new image: %s", resp.ImageRef)
+
+	},
+}
+
 var dumpRuncCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually checkpoint a running runc container to a directory",
@@ -191,13 +237,8 @@ var dumpRuncCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		rootPath := map[string]string{
-			"k8s":    api.K8S_RUNC_ROOT,
-			"docker": api.DOCKER_RUNC_ROOT,
-		}
-
-		root, _ := cmd.Flags().GetString(containerRootFlag)
-		if rootPath[root] == "" {
+		root, _ := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
 			return
 		}
@@ -205,12 +246,30 @@ var dumpRuncCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		pid, _ := cmd.Flags().GetInt(pidFlag)
+
+		external, _ := cmd.Flags().GetString(externalFlag)
+
+		var externalNamespaces []string
+
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
+		}
 
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   wdPath,
 			LeaveRunning:    true,
 			TcpEstablished:  tcpEstablished,
+			External:        externalNamespaces,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -219,9 +278,10 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: root,
+			Root: runcRootPath[root],
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
+			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
@@ -262,6 +322,14 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(idFlag, "p", "", "container id")
 	dumpContainerdCmd.MarkFlagRequired(idFlag)
 
+	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
+	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
+	dumpContainerdRootfsCmd.MarkFlagRequired(refFlag)
+	dumpContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	dumpContainerdRootfsCmd.MarkFlagRequired(addressFlag)
+	dumpContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
+
 	// TODO Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
 	dumpRuncCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
@@ -269,8 +337,12 @@ func init() {
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().StringP(rootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().String(externalFlag, "", "external")
+
+	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)
 }

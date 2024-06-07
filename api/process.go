@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
@@ -39,18 +40,11 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	}
 
 	state := &task.ProcessState{}
-	pid, err := s.run(ctx, args)
-	if err != nil {
-		// TODO BS: this should be at market level
-		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
-		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
-	}
 
 	state.JobState = task.JobState_JOB_RUNNING
-	state.PID = pid
 	if args.JID == "" {
 		state.JID = xid.New().String()
+		args.JID = state.JID
 	} else {
 		existingState, _ := s.getState(ctx, args.JID)
 		if existingState != nil {
@@ -58,14 +52,27 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		}
 		state.JID = args.JID
 	}
-	s.logger.Info().Msgf("managing process with pid %d", pid)
-
-	// FIXME YA: Should kill process on any errors to fix inconsistent state
-	err = s.updateState(ctx, state.JID, state)
+	err := s.updateState(ctx, state.JID, state)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("failed to update state")
 		return nil, status.Error(codes.Internal, "failed to update state")
 	}
+
+	pid, err := s.run(ctx, args)
+	state.PID = pid
+	if err != nil {
+		// TODO BS: this should be at market level
+		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		state.JobState = task.JobState_JOB_STARTUP_FAILED
+		s.updateState(ctx, state.JID, state)
+		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
+	}
+
+	s.logger.Info().Msgf("managing process with pid %d", pid)
 
 	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
 		err = status.Error(codes.Internal, "Task startup failed")
@@ -283,6 +290,15 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		// XXX: force sleep for a few ms to allow GPU controller to start
 		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
+
+    sharedLibPath := viper.GetString("gpu_shared_lib_path")
+    if sharedLibPath == "" {
+      sharedLibPath = utils.GpuSharedLibPath
+    }
+    if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+      return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+    }
+		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -368,12 +384,24 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
+			s.logger.Debug().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+		}
+		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		state, err := s.getState(childCtx, args.JID)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to get state after job done")
+			return
+		}
+		state.JobState = task.JobState_JOB_DONE
+		state.PID = pid
+		err = s.updateState(childCtx, args.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update state after job done")
 		}
 	}()
 

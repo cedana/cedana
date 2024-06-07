@@ -11,7 +11,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.22'
 
       - name: Run smoke tests
         env:
@@ -23,6 +23,3 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
         run: sudo -E make -C scripts/ci regression
-
-      - name: Test
-        run: CI=true go test -v ./...

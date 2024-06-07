@@ -40,7 +40,7 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
 
 # Install CRIU
 git clone https://github.com/checkpoint-restore/criu.git && cd /criu
-git checkout master && git pull
+git pull
 make
 cp criu/criu /usr/local/bin/criu
 cd /
@@ -50,9 +50,12 @@ git clone https://github.com/cedana/cedana.git
 echo "export IS_K8S=1" >> ~/.bashrc
 source ~/.bashrc
 
-cd cedana && go build -v
+cd cedana
+git fetch
+git pull
+go build -v
 cp cedana /usr/local/bin/cedana
 
-cedana daemon start &
+cedana daemon start --systemctl
 
 EOT
