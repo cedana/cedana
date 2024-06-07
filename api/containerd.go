@@ -93,5 +93,7 @@ func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.Container
 		return resp, err
 	}
 
+	containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef)
+
 	return resp, nil
 }
