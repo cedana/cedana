@@ -86,14 +86,16 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 }
 
 func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
-	resp := &task.ContainerdRootfsDumpResp{}
 
 	containerdService, err := containerd.New(ctx, args.Address)
 	if err != nil {
-		return resp, err
+		return &task.ContainerdRootfsDumpResp{}, err
 	}
 
-	containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef)
+	ref, err := containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
 
-	return resp, nil
+	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
 }
