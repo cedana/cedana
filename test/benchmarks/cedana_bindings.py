@@ -99,7 +99,6 @@ def stop_recording(
                     "Physical Cores",
                     "CPU Cores",
                     "Memory (GB)",
-                    "blob_id",
                 ]
             )
 
