@@ -178,7 +178,7 @@ var dumpContainerdCmd = &cobra.Command{
 }
 
 var dumpContainerdRootfsCmd = &cobra.Command{
-	Use:   "runc",
+	Use:   "rootfs",
 	Short: "Manually checkpoint a running runc container's rootfs and bundle into an image",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
