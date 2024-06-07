@@ -90,7 +90,6 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 
 	opts := []containerd.RestoreOpts{
 		containerd.WithRestoreImage,
-		containerd.WithRestoreSpec,
 		containerd.WithRestoreRuntime,
 		containerd.WithRestoreRW,
 	}
