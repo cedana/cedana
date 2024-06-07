@@ -31,7 +31,7 @@ func New(ctx context.Context, address string) (*ContainerdService, error) {
 
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef string) (string, error) {
 	// TODO add namespace opt
-	namespaces.WithNamespace(ctx, "default")
+	ctx = namespaces.WithNamespace(ctx, "default")
 
 	opts := []containerd.CheckpointOpts{
 		containerd.WithCheckpointRuntime,
