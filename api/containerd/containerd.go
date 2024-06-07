@@ -35,7 +35,7 @@ func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, i
 
 	opts := []containerd.CheckpointOpts{
 		containerd.WithCheckpointRuntime,
-		//containerd.WithCheckpointImage,
+		containerd.WithCheckpointImage,
 		containerd.WithCheckpointRW,
 	}
 
