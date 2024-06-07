@@ -1523,6 +1523,7 @@ type RuncDumpArgs struct {
 	CriuOpts       *CriuOpts `protobuf:"bytes,4,opt,name=CriuOpts,proto3" json:"CriuOpts,omitempty"`
 	Type           CRType    `protobuf:"varint,5,opt,name=Type,proto3,enum=cedana.services.task.CRType" json:"Type,omitempty"`
 	GPU            bool      `protobuf:"varint,6,opt,name=GPU,proto3" json:"GPU,omitempty"`
+	Pid            int32     `protobuf:"varint,7,opt,name=pid,proto3" json:"pid,omitempty"`
 }
 
 func (x *RuncDumpArgs) Reset() {
@@ -1599,6 +1600,13 @@ func (x *RuncDumpArgs) GetGPU() bool {
 	return false
 }
 
+func (x *RuncDumpArgs) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
 type RuncDumpResp struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1667,21 +1675,22 @@ type CriuOpts struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	ImagesDirectory         string `protobuf:"bytes,1,opt,name=ImagesDirectory,proto3" json:"ImagesDirectory,omitempty"`
-	WorkDirectory           string `protobuf:"bytes,2,opt,name=WorkDirectory,proto3" json:"WorkDirectory,omitempty"`
-	ParentImage             string `protobuf:"bytes,3,opt,name=ParentImage,proto3" json:"ParentImage,omitempty"`
-	LeaveRunning            bool   `protobuf:"varint,4,opt,name=LeaveRunning,proto3" json:"LeaveRunning,omitempty"`
-	TcpEstablished          bool   `protobuf:"varint,5,opt,name=TcpEstablished,proto3" json:"TcpEstablished,omitempty"`
-	ExternalUnixConnections bool   `protobuf:"varint,6,opt,name=ExternalUnixConnections,proto3" json:"ExternalUnixConnections,omitempty"`
-	ShellJob                bool   `protobuf:"varint,7,opt,name=ShellJob,proto3" json:"ShellJob,omitempty"`
-	FileLocks               bool   `protobuf:"varint,8,opt,name=FileLocks,proto3" json:"FileLocks,omitempty"`
-	PreDump                 bool   `protobuf:"varint,9,opt,name=PreDump,proto3" json:"PreDump,omitempty"`
-	EmptyNs                 int32  `protobuf:"varint,12,opt,name=EmptyNs,proto3" json:"EmptyNs,omitempty"`
-	AutoDedup               bool   `protobuf:"varint,13,opt,name=AutoDedup,proto3" json:"AutoDedup,omitempty"`
-	LazyPages               bool   `protobuf:"varint,14,opt,name=LazyPages,proto3" json:"LazyPages,omitempty"`
-	StatusFd                int32  `protobuf:"varint,15,opt,name=StatusFd,proto3" json:"StatusFd,omitempty"`
-	LsmProfile              string `protobuf:"bytes,16,opt,name=LsmProfile,proto3" json:"LsmProfile,omitempty"`
-	LsmMountContext         string `protobuf:"bytes,17,opt,name=LsmMountContext,proto3" json:"LsmMountContext,omitempty"`
+	ImagesDirectory         string   `protobuf:"bytes,1,opt,name=ImagesDirectory,proto3" json:"ImagesDirectory,omitempty"`
+	WorkDirectory           string   `protobuf:"bytes,2,opt,name=WorkDirectory,proto3" json:"WorkDirectory,omitempty"`
+	ParentImage             string   `protobuf:"bytes,3,opt,name=ParentImage,proto3" json:"ParentImage,omitempty"`
+	LeaveRunning            bool     `protobuf:"varint,4,opt,name=LeaveRunning,proto3" json:"LeaveRunning,omitempty"`
+	TcpEstablished          bool     `protobuf:"varint,5,opt,name=TcpEstablished,proto3" json:"TcpEstablished,omitempty"`
+	ExternalUnixConnections bool     `protobuf:"varint,6,opt,name=ExternalUnixConnections,proto3" json:"ExternalUnixConnections,omitempty"`
+	ShellJob                bool     `protobuf:"varint,7,opt,name=ShellJob,proto3" json:"ShellJob,omitempty"`
+	FileLocks               bool     `protobuf:"varint,8,opt,name=FileLocks,proto3" json:"FileLocks,omitempty"`
+	PreDump                 bool     `protobuf:"varint,9,opt,name=PreDump,proto3" json:"PreDump,omitempty"`
+	EmptyNs                 int32    `protobuf:"varint,12,opt,name=EmptyNs,proto3" json:"EmptyNs,omitempty"`
+	AutoDedup               bool     `protobuf:"varint,13,opt,name=AutoDedup,proto3" json:"AutoDedup,omitempty"`
+	LazyPages               bool     `protobuf:"varint,14,opt,name=LazyPages,proto3" json:"LazyPages,omitempty"`
+	StatusFd                int32    `protobuf:"varint,15,opt,name=StatusFd,proto3" json:"StatusFd,omitempty"`
+	LsmProfile              string   `protobuf:"bytes,16,opt,name=LsmProfile,proto3" json:"LsmProfile,omitempty"`
+	LsmMountContext         string   `protobuf:"bytes,17,opt,name=LsmMountContext,proto3" json:"LsmMountContext,omitempty"`
+	External                []string `protobuf:"bytes,18,rep,name=External,proto3" json:"External,omitempty"`
 }
 
 func (x *CriuOpts) Reset() {
@@ -1819,6 +1828,13 @@ func (x *CriuOpts) GetLsmMountContext() string {
 		return x.LsmMountContext
 	}
 	return ""
+}
+
+func (x *CriuOpts) GetExternal() []string {
+	if x != nil {
+		return x.External
+	}
+	return nil
 }
 
 type RuncRestoreArgs struct {
@@ -2120,7 +2136,9 @@ type RuncQueryArgs struct {
 	unknownFields protoimpl.UnknownFields
 
 	Root           string   `protobuf:"bytes,1,opt,name=Root,proto3" json:"Root,omitempty"`
-	ContainerNames []string `protobuf:"bytes,2,rep,name=ContainerNames,proto3" json:"ContainerNames,omitempty"`
+	Namespace      string   `protobuf:"bytes,2,opt,name=Namespace,proto3" json:"Namespace,omitempty"`
+	ContainerNames []string `protobuf:"bytes,3,rep,name=ContainerNames,proto3" json:"ContainerNames,omitempty"`
+	SandboxNames   []string `protobuf:"bytes,4,rep,name=SandboxNames,proto3" json:"SandboxNames,omitempty"`
 }
 
 func (x *RuncQueryArgs) Reset() {
@@ -2162,9 +2180,23 @@ func (x *RuncQueryArgs) GetRoot() string {
 	return ""
 }
 
+func (x *RuncQueryArgs) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
 func (x *RuncQueryArgs) GetContainerNames() []string {
 	if x != nil {
 		return x.ContainerNames
+	}
+	return nil
+}
+
+func (x *RuncQueryArgs) GetSandboxNames() []string {
+	if x != nil {
+		return x.SandboxNames
 	}
 	return nil
 }
@@ -2221,8 +2253,13 @@ type RuncContainer struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	ID         string `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	BundlePath string `protobuf:"bytes,2,opt,name=BundlePath,proto3" json:"BundlePath,omitempty"`
+	ID            string `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	BundlePath    string `protobuf:"bytes,2,opt,name=BundlePath,proto3" json:"BundlePath,omitempty"`
+	ContainerName string `protobuf:"bytes,3,opt,name=ContainerName,proto3" json:"ContainerName,omitempty"`
+	ImageName     string `protobuf:"bytes,4,opt,name=ImageName,proto3" json:"ImageName,omitempty"`
+	SandboxId     string `protobuf:"bytes,5,opt,name=SandboxId,proto3" json:"SandboxId,omitempty"`
+	SandboxName   string `protobuf:"bytes,6,opt,name=SandboxName,proto3" json:"SandboxName,omitempty"`
+	SandboxUid    string `protobuf:"bytes,7,opt,name=SandboxUid,proto3" json:"SandboxUid,omitempty"`
 }
 
 func (x *RuncContainer) Reset() {
@@ -2267,6 +2304,41 @@ func (x *RuncContainer) GetID() string {
 func (x *RuncContainer) GetBundlePath() string {
 	if x != nil {
 		return x.BundlePath
+	}
+	return ""
+}
+
+func (x *RuncContainer) GetContainerName() string {
+	if x != nil {
+		return x.ContainerName
+	}
+	return ""
+}
+
+func (x *RuncContainer) GetImageName() string {
+	if x != nil {
+		return x.ImageName
+	}
+	return ""
+}
+
+func (x *RuncContainer) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *RuncContainer) GetSandboxName() string {
+	if x != nil {
+		return x.SandboxName
+	}
+	return ""
+}
+
+func (x *RuncContainer) GetSandboxUid() string {
+	if x != nil {
+		return x.SandboxUid
 	}
 	return ""
 }

@@ -12,7 +12,6 @@ const (
 	rootFlag           = "root"
 	wdFlag             = "working-dir"
 	containerNameFlag  = "container-name"
-	containerRootFlag  = "container-root"
 	bundleFlag         = "bundle"
 	consoleSocketFlag  = "console-socket"
 	detachFlag         = "detach"
@@ -24,4 +23,6 @@ const (
 	startChrootFlag    = "start-chroot"
 	setupHostFlag      = "setup-host"
 	cudaVersionFlag    = "cuda"
+	pidFlag            = "pid"
+	externalFlag       = "external"
 )

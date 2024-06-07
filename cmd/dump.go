@@ -5,8 +5,8 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
-	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
@@ -237,13 +237,8 @@ var dumpRuncCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		rootPath := map[string]string{
-			"k8s":    api.K8S_RUNC_ROOT,
-			"docker": api.DOCKER_RUNC_ROOT,
-		}
-
-		root, _ := cmd.Flags().GetString(containerRootFlag)
-		if rootPath[root] == "" {
+		root, _ := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
 			return
 		}
@@ -251,12 +246,30 @@ var dumpRuncCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		pid, _ := cmd.Flags().GetInt(pidFlag)
+
+		external, _ := cmd.Flags().GetString(externalFlag)
+
+		var externalNamespaces []string
+
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
+		}
 
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   wdPath,
 			LeaveRunning:    true,
 			TcpEstablished:  tcpEstablished,
+			External:        externalNamespaces,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -265,9 +278,10 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: root,
+			Root: runcRootPath[root],
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
+			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
@@ -323,8 +337,10 @@ func init() {
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpRuncCmd.Flags().StringP(containerRootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().StringP(rootFlag, "r", "k8s", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 

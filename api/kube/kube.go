@@ -35,11 +35,12 @@ type Container struct {
 
 type RuncContainer struct {
 	ContainerId string
+	Bundle      string
 	Annotations map[string]string
 }
 
-func StateList(root string) ([]map[string]string, error) {
-	var ContainerAnnotations []map[string]string
+func StateList(root string) ([]RuncContainer, error) {
+	var RuncContainers []RuncContainer
 
 	dirs, err := os.ReadDir(root)
 	if err != nil {
@@ -79,8 +80,15 @@ func StateList(root string) ([]map[string]string, error) {
 				return nil, err
 			}
 		}
-		ContainerAnnotations = append(ContainerAnnotations, spec.Annotations)
+
+		c := RuncContainer{
+			ContainerId: dir.Name(),
+			Bundle:      bundle,
+			Annotations: spec.Annotations,
+		}
+
+		RuncContainers = append(RuncContainers, c)
 	}
 
-	return ContainerAnnotations, nil
+	return RuncContainers, nil
 }

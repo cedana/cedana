@@ -8,7 +8,6 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -59,7 +58,6 @@ var execTaskCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		if gpuEnabled {
 			logger.Info().Msgf("starting task w/ gpu enabled")
-			executable = fmt.Sprintf("LD_PRELOAD=%s %s", utils.GpuSharedLibPath, executable)
 		}
 
 		taskArgs := &task.StartArgs{
