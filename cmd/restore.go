@@ -267,6 +267,7 @@ func init() {
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
+	restoreCmd.AddCommand(restoreContainerdRootfsCmd)
 	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
 	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
 	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
