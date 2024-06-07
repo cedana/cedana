@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 
+	"github.com/cedana/cedana/api/containerd"
 	"github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
@@ -82,4 +83,36 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 	return &task.ContainerdQueryResp{
 		Containers: containers,
 	}, nil
+}
+
+func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
+
+	containerdService, err := containerd.New(ctx, args.Address)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	ref, err := containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
+}
+
+func (s *service) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
+	resp := &task.ContainerdRootfsRestoreResp{}
+
+	containerdService, err := containerd.New(ctx, args.Address)
+	if err != nil {
+		return resp, err
+	}
+
+	if err := containerdService.RestoreRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace); err != nil {
+		return resp, err
+	}
+
+	resp.ImageRef = args.ImageRef
+
+	return resp, nil
 }
