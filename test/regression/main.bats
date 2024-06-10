@@ -44,17 +44,29 @@ load helper.bash
     kill -9 $pid
 }
 
-@test "Rootfs snapshot reaches containerd image service" {
-  local container_id="busybox"
+@test "Rootfs snapshot of containerd container" {
+  local container_id="busybox-test"
   local image_ref="checkpoint/test:latest"
   local containerd_sock="/run/containerd/containerd.sock"
   local namespace="default"
 
-  local container_name="busybox"
 
-  run start_busybox $container_name
+  run start_busybox $container_id
   run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
+  echo "$output"
 
-  [[ "$output" -eq "$image_ref" ]]
+  [[ "$output" == *"$image_ref"* ]]
+}
 
+@test "Rootfs restore of containerd container" {
+  local container_id="busybox-test-restore"
+  local image_ref="checkpoint/test:latest"
+  local containerd_sock="/run/containerd/containerd.sock"
+  local namespace="default"
+
+
+  run rootfs_restore $container_id $image_ref $containerd_sock $namespace
+  echo "$output"
+
+  [[ "$output" == *"$image_ref"* ]]
 }

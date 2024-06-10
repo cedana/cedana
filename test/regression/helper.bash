@@ -32,8 +32,14 @@ rootfs_checkpoint() {
   local containerd_sock="$3"
   local namespace="$4"
 
-
   cedana dump rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
+rootfs_restore() {
+  local container_id="$1"
+  local image_ref="$2"
+  local containerd_sock="$3"
+  local namespace="$4"
 
+  cedana restore rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
+}
