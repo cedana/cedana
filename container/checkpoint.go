@@ -890,6 +890,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		if err != nil {
 			return &apiTasks.CheckpointTaskResponse{}, err
 		}
+
 		criuOpts.ImagesDirectory = image
 		fmt.Printf("Checkpointing to %s\n", image)
 		defer os.RemoveAll(image)
@@ -901,6 +902,11 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	if err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
+
+	if err := os.WriteFile(filepath.Join(image, "spec"), data, 0777); err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+
 	spec := bytes.NewReader(data)
 	specD, err := localWriteContent(ctx, client, images.MediaTypeContainerd1CheckpointConfig, filepath.Join(image, "spec"), spec)
 	if err != nil {
