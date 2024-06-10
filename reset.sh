@@ -5,4 +5,5 @@ sudo rm -rf /dev/shm/cedana*
 
 sudo pkill gpu-controller 
 sudo pkill cdp 
+sudo pkill otelcol-contrib
 sudo systemctl stop cedana.service
