@@ -1005,7 +1005,8 @@ func ContainerdCheckpoint(ctx context.Context, containerdClient *containerd.Clie
 	}
 
 	containerdContainer := &ContainerdContainer{
-		client: containerdClient,
+		Container: container,
+		client:    containerdClient,
 	}
 
 	task, err := container.Task(ctx, nil)
