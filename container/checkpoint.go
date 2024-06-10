@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -902,11 +901,9 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	if err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
-
 	if err := os.WriteFile(filepath.Join(image, "spec"), data, 0777); err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
-
 	spec := bytes.NewReader(data)
 	specD, err := localWriteContent(ctx, client, images.MediaTypeContainerd1CheckpointConfig, filepath.Join(image, "spec"), spec)
 	if err != nil {
@@ -1069,21 +1066,6 @@ func WithCheckpointState(ctx context.Context, client *containerd.Client, c *cont
 		})
 	}
 
-	// save copts
-	data, err := proto.Marshal(any)
-	if err != nil {
-		return err
-	}
-	r := bytes.NewReader(data)
-	desc, err := writeContent(ctx, client.ContentStore(), images.MediaTypeContainerd1CheckpointOptions, c.ID+"-checkpoint-options", r)
-	if err != nil {
-		return err
-	}
-	desc.Platform = &imagespec.Platform{
-		OS:           runtime.GOOS,
-		Architecture: runtime.GOARCH,
-	}
-	index.Manifests = append(index.Manifests, desc)
 	return nil
 }
 

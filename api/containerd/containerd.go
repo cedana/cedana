@@ -11,11 +11,13 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
+	"github.com/rs/zerolog"
 	"golang.org/x/net/context"
 )
 
 type ContainerdService struct {
 	client *containerd.Client
+	logger *zerolog.Logger
 }
 
 //func NewClient(context *cli.Context, opts ...containerd.Opt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
@@ -23,7 +25,7 @@ type ContainerdService struct {
 //opts = append(opts, timeoutOpt)
 //kclient, err := containerd.New(context.String("address"), opts...)
 
-func New(ctx context.Context, address string) (*ContainerdService, error) {
+func New(ctx context.Context, address string, logger *zerolog.Logger) (*ContainerdService, error) {
 
 	client, err := containerd.New(address)
 
@@ -31,7 +33,10 @@ func New(ctx context.Context, address string) (*ContainerdService, error) {
 		return nil, err
 	}
 
-	return &ContainerdService{client}, nil
+	return &ContainerdService{
+		client,
+		logger,
+	}, nil
 }
 
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
@@ -63,6 +68,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		containerd.WithRestoreImage,
 		containerd.WithRestoreRuntime,
 		containerd.WithRestoreRW,
+		containerd.WithRestoreSpec,
 	}
 
 	ctr, err := service.client.Restore(ctx, containerID, checkpoint, opts...)
