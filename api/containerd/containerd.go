@@ -3,6 +3,7 @@ package containerd
 import (
 	"fmt"
 
+	"github.com/cedana/cedana/container"
 	"github.com/containerd/console"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -34,39 +35,9 @@ func New(ctx context.Context, address string) (*ContainerdService, error) {
 }
 
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
-	// TODO add namespace opt
 	ctx = namespaces.WithNamespace(ctx, ns)
 
-	opts := []containerd.CheckpointOpts{
-		containerd.WithCheckpointRuntime,
-		containerd.WithCheckpointImage,
-		containerd.WithCheckpointRW,
-	}
-
-	container, err := service.client.LoadContainer(ctx, containerID)
-	if err != nil {
-		return "", err
-	}
-
-	task, err := container.Task(ctx, nil)
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return "", err
-		}
-	}
-	// pause if running
-	if task != nil {
-		if err := task.Pause(ctx); err != nil {
-			return "", err
-		}
-		defer func() {
-			if err := task.Resume(ctx); err != nil {
-				fmt.Println(fmt.Errorf("error resuming task: %w", err))
-			}
-		}()
-	}
-
-	if _, err := container.Checkpoint(ctx, imageRef, opts...); err != nil {
+	if err := container.ContainerdCheckpoint(ctx, service.client, containerID, imageRef); err != nil {
 		return "", err
 	}
 
