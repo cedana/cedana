@@ -337,7 +337,7 @@ func init() {
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpRuncCmd.Flags().StringP(rootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
