@@ -54,9 +54,7 @@ cd cedana
 git fetch
 git pull
 go build -v
-cp cedana /usr/local/bin/cedana
 
-cedana daemon start --systemctl
 ./build-start-daemon.sh --systemctl
 
 EOT
