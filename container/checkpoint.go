@@ -985,7 +985,8 @@ type ContainerdContainer struct {
 	client *containerd.Client
 }
 
-func ContainerdCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
+// for a full containerd checkpoint, we'd use the runc checkpointing primitives + rootfs
+func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
 
 	containers, err := containerdClient.Containers(ctx)
 	if err != nil {
