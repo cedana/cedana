@@ -51,9 +51,6 @@ echo "export IS_K8S=1" >> ~/.bashrc
 source ~/.bashrc
 
 cd cedana
-git fetch
-git pull
-go build -v
 
 ./build-start-daemon.sh --systemctl
 
