@@ -13,7 +13,7 @@ load helper.bash
     [ -f /var/log/cedana-output.log ]
     sleep 2
     [ -s /var/log/cedana-output.log ]
-    
+
     # kill the process
     pid=$(ps -aux | grep $task | awk '{print $2}')
     kill -9 $pid
@@ -42,4 +42,31 @@ load helper.bash
     # kill the process
     pid=$(ps -aux | grep $task | awk '{print $2}')
     kill -9 $pid
+}
+
+@test "Rootfs snapshot of containerd container" {
+  local container_id="busybox-test"
+  local image_ref="checkpoint/test:latest"
+  local containerd_sock="/run/containerd/containerd.sock"
+  local namespace="default"
+
+
+  run start_busybox $container_id
+  run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
+  echo "$output"
+
+  [[ "$output" == *"$image_ref"* ]]
+}
+
+@test "Rootfs restore of containerd container" {
+  local container_id="busybox-test-restore"
+  local image_ref="checkpoint/test:latest"
+  local containerd_sock="/run/containerd/containerd.sock"
+  local namespace="default"
+
+
+  run rootfs_restore $container_id $image_ref $containerd_sock $namespace
+  echo "$output"
+
+  [[ "$output" == *"$image_ref"* ]]
 }

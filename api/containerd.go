@@ -87,7 +87,7 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 
 func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
 
-	containerdService, err := containerd.New(ctx, args.Address)
+	containerdService, err := containerd.New(ctx, args.Address, s.logger)
 	if err != nil {
 		return &task.ContainerdRootfsDumpResp{}, err
 	}
@@ -103,7 +103,7 @@ func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.Container
 func (s *service) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
 	resp := &task.ContainerdRootfsRestoreResp{}
 
-	containerdService, err := containerd.New(ctx, args.Address)
+	containerdService, err := containerd.New(ctx, args.Address, s.logger)
 	if err != nil {
 		return resp, err
 	}

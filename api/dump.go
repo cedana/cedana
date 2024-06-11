@@ -222,17 +222,12 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 }
 
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
-	err := container.ContainerdCheckpoint(imagePath, containerID)
-	if err != nil {
-		s.logger.Fatal().Err(err)
-		return err
-	}
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	s.postDump(ctx, imagePath, state)
 
-	return err
+	return nil
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {

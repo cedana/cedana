@@ -3,6 +3,7 @@ package containerd
 import (
 	"fmt"
 
+	"github.com/cedana/cedana/container"
 	"github.com/containerd/console"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -10,11 +11,13 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
+	"github.com/rs/zerolog"
 	"golang.org/x/net/context"
 )
 
 type ContainerdService struct {
 	client *containerd.Client
+	logger *zerolog.Logger
 }
 
 //func NewClient(context *cli.Context, opts ...containerd.Opt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
@@ -22,7 +25,7 @@ type ContainerdService struct {
 //opts = append(opts, timeoutOpt)
 //kclient, err := containerd.New(context.String("address"), opts...)
 
-func New(ctx context.Context, address string) (*ContainerdService, error) {
+func New(ctx context.Context, address string, logger *zerolog.Logger) (*ContainerdService, error) {
 
 	client, err := containerd.New(address)
 
@@ -30,43 +33,16 @@ func New(ctx context.Context, address string) (*ContainerdService, error) {
 		return nil, err
 	}
 
-	return &ContainerdService{client}, nil
+	return &ContainerdService{
+		client,
+		logger,
+	}, nil
 }
 
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
-	// TODO add namespace opt
 	ctx = namespaces.WithNamespace(ctx, ns)
 
-	opts := []containerd.CheckpointOpts{
-		containerd.WithCheckpointRuntime,
-		containerd.WithCheckpointImage,
-		containerd.WithCheckpointRW,
-	}
-
-	container, err := service.client.LoadContainer(ctx, containerID)
-	if err != nil {
-		return "", err
-	}
-
-	task, err := container.Task(ctx, nil)
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return "", err
-		}
-	}
-	// pause if running
-	if task != nil {
-		if err := task.Pause(ctx); err != nil {
-			return "", err
-		}
-		defer func() {
-			if err := task.Resume(ctx); err != nil {
-				fmt.Println(fmt.Errorf("error resuming task: %w", err))
-			}
-		}()
-	}
-
-	if _, err := container.Checkpoint(ctx, imageRef, opts...); err != nil {
+	if err := container.ContainerdRootfsCheckpoint(ctx, service.client, containerID, imageRef); err != nil {
 		return "", err
 	}
 
@@ -90,11 +66,12 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 
 	opts := []containerd.RestoreOpts{
 		containerd.WithRestoreImage,
-		containerd.WithRestoreSpec,
 		containerd.WithRestoreRuntime,
 		containerd.WithRestoreRW,
+		containerd.WithRestoreSpec,
 	}
 
+	// complete rootfs restore using containerd client
 	ctr, err := service.client.Restore(ctx, containerID, checkpoint, opts...)
 	if err != nil {
 		return err

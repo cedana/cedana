@@ -28,10 +28,10 @@ import (
 	"github.com/checkpoint-restore/go-criu/v6"
 	criurpc "github.com/checkpoint-restore/go-criu/v6/rpc"
 	containerd "github.com/containerd/containerd"
+	"github.com/containerd/containerd/api/services/tasks/v1"
 	apiTasks "github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
 	containerdTypes "github.com/containerd/containerd/api/types"
-	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
@@ -55,6 +55,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	is "github.com/opencontainers/image-spec/specs-go"
 	ver "github.com/opencontainers/image-spec/specs-go"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
@@ -773,7 +774,7 @@ func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelF
 	return ctx, cancel
 }
 
-func ContainerdCheckpoint(imagePath, id string) error {
+func containerdCheckpoint(imagePath, id string) error {
 	logger := utils.GetLogger()
 
 	ctx := gocontext.Background()
@@ -883,56 +884,24 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 
 	image := opts.ImagePath
 
-	checkpointImageExists := false
-
 	if image == "" {
-		checkpointImageExists = true
 		image, err = os.MkdirTemp(os.Getenv("XDG_RUNTIME_DIR"), "ctrd-checkpoint")
 		if err != nil {
 			return &apiTasks.CheckpointTaskResponse{}, err
 		}
+
 		criuOpts.ImagesDirectory = image
 		fmt.Printf("Checkpointing to %s\n", image)
 		defer os.RemoveAll(image)
 	}
 
-	root := "/run/containerd/runc/default"
-
-	// EKS
-	_, err = os.Stat(root)
-	if err != nil {
-		root = "/run/containerd/runc/k8s.io"
-	}
-
-	c := GetContainerFromRunc(container.ID, root)
-
-	err = c.RuncCheckpoint(criuOpts, c.Pid, root, c.Config)
-	if err != nil {
-		return nil, err
-	}
-
-	// do not commit checkpoint image if checkpoint ImagePath is passed,
-	// return if checkpointImageExists is false
-	if !checkpointImageExists {
-		return &apiTasks.CheckpointTaskResponse{}, nil
-	}
-	// write checkpoint to the content store
-	tar := archive.Diff(ctx, "", image)
-	cp, err := localWriteContent(ctx, client, images.MediaTypeContainerd1Checkpoint, image, tar)
-	if err != nil {
-		return nil, err
-	}
-	// close tar first after write
-	if err := tar.Close(); err != nil {
-		return &apiTasks.CheckpointTaskResponse{}, err
-	}
-	if err != nil {
-		return &apiTasks.CheckpointTaskResponse{}, err
-	}
 	// write the config to the content store
 	pbany := protobuf.FromAny(container.Spec)
 	data, err := proto.Marshal(pbany)
 	if err != nil {
+		return &apiTasks.CheckpointTaskResponse{}, err
+	}
+	if err := os.WriteFile(filepath.Join(image, "spec"), data, 0777); err != nil {
 		return &apiTasks.CheckpointTaskResponse{}, err
 	}
 	spec := bytes.NewReader(data)
@@ -942,7 +911,6 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	}
 	return &apiTasks.CheckpointTaskResponse{
 		Descriptors: []*containerdTypes.Descriptor{
-			cp,
 			specD,
 		},
 	}, nil
@@ -1012,7 +980,175 @@ func CheckRuntime(current, expected string) bool {
 	return true
 }
 
-func runcCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
+type ContainerdContainer struct {
+	containerd.Container
+	client *containerd.Client
+}
+
+// for a full containerd checkpoint, we'd use the runc checkpointing primitives + rootfs
+func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
+
+	containers, err := containerdClient.Containers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, container := range containers {
+		fmt.Println(container.ID())
+	}
+
+	opts := []containerd.CheckpointOpts{
+		containerd.WithCheckpointRuntime,
+		containerd.WithCheckpointImage,
+		containerd.WithCheckpointRW,
+		WithCheckpointState,
+	}
+
+	container, err := containerdClient.LoadContainer(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	containerdContainer := &ContainerdContainer{
+		Container: container,
+		client:    containerdClient,
+	}
+
+	task, err := container.Task(ctx, nil)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+	}
+	// pause if running
+	if task != nil {
+		if err := task.Pause(ctx); err != nil {
+			return err
+		}
+		defer func() {
+			if err := task.Resume(ctx); err != nil {
+				fmt.Println(fmt.Errorf("error resuming task: %w", err))
+			}
+		}()
+	}
+
+	if err := containerdContainer.ContainerCheckpointContainerd(ctx, ref, opts...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func WithCheckpointState(ctx context.Context, client *containerd.Client, c *containers.Container, index *imagespec.Index, copts *options.CheckpointOptions) error {
+	any, err := protobuf.MarshalAnyToProto(copts)
+	if err != nil {
+		return nil
+	}
+
+	request := &tasks.CheckpointTaskRequest{
+		ContainerID: c.ID,
+		Options:     any,
+	}
+
+	response, err := localCheckpointTask(ctx, client, index, request, *c)
+	if err != nil {
+		return err
+	}
+
+	for _, d := range response.Descriptors {
+		index.Manifests = append(index.Manifests, v1.Descriptor{
+			MediaType: d.MediaType,
+			Size:      d.Size,
+			Digest:    digest.Digest(d.Digest),
+			Platform: &v1.Platform{
+				OS:           goruntime.GOOS,
+				Architecture: goruntime.GOARCH,
+			},
+			Annotations: d.Annotations,
+		})
+	}
+
+	return nil
+}
+
+func (c *ContainerdContainer) ContainerCheckpointContainerd(ctx context.Context, ref string, opts ...containerd.CheckpointOpts) error {
+
+	index := &ocispec.Index{
+		Versioned: ver.Versioned{
+			SchemaVersion: 2,
+		},
+		Annotations: make(map[string]string),
+	}
+	copts := &options.CheckpointOptions{
+		Exit:                false,
+		OpenTcp:             false,
+		ExternalUnixSockets: false,
+		Terminal:            false,
+		FileLocks:           true,
+		EmptyNamespaces:     nil,
+	}
+	info, err := c.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	img, err := c.Image(ctx)
+	if err != nil {
+		return err
+	}
+
+	ctx, done, err := c.client.WithLease(ctx)
+	if err != nil {
+		return err
+	}
+	defer done(ctx)
+
+	// add image name to manifest
+	index.Annotations[ocispec.AnnotationRefName] = img.Name()
+	// add runtime info to index
+	index.Annotations[checkpointRuntimeNameLabel] = info.Runtime.Name
+	// add snapshotter info to index
+	index.Annotations[checkpointSnapshotterNameLabel] = info.Snapshotter
+
+	// process remaining opts
+	for _, o := range opts {
+		if err := o(ctx, c.client, &info, index, copts); err != nil {
+			err = errdefs.FromGRPC(err)
+			if !errdefs.IsAlreadyExists(err) {
+				return err
+			}
+		}
+	}
+
+	desc, err := writeRefIndex(ctx, index, c.client, c.ID()+"index")
+	if err != nil {
+		return err
+	}
+	i := images.Image{
+		Name:   ref,
+		Target: desc,
+	}
+
+	_, err = c.client.ImageService().Create(ctx, i)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeRefIndex(ctx context.Context, index *ocispec.Index, client *containerd.Client, ref string) (d ocispec.Descriptor, err error) {
+	labels := map[string]string{}
+	for i, m := range index.Manifests {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
+	}
+	data, err := json.Marshal(index)
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	return writeContent(ctx, client.ContentStore(), ocispec.MediaTypeImageIndex, ref, bytes.NewReader(data), content.WithLabels(labels))
+}
+
+func RuncCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
 	if ctx == nil {
 		ctx = gocontext.Background()
 	}
@@ -1231,7 +1367,6 @@ func snapshotOpts(id string) error {
 		containerd.WithCheckpointRuntime,
 		containerd.WithCheckpointImage,
 		containerd.WithCheckpointRW,
-		containerd.WithCheckpointTask,
 	}
 
 	containerdClient, err := containerd.New("/run/containerd/containerd.sock")
