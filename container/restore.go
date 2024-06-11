@@ -159,21 +159,25 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	if opts.Root != "" {
+	if opts.StateRoot != "" {
 		var baseState libcontainer.BaseState
 
 		split := strings.Split(opts.Bundle, "/")
 		containerID := split[len(split)-1]
 
-		stateJsonPath := filepath.Join(opts.Root, containerID, "state.json")
+		stateJsonPath := filepath.Join(opts.StateRoot, containerID, "state.json")
 
-		if err := readJSON(stateJsonPath, &baseState); err != nil {
-			return err
-		}
+    // skip if the file does not exist
+		if _, err := os.Stat(stateJsonPath); err == nil {
+      // if it exists we dont accept an error
+			if err := readJSON(stateJsonPath, &baseState); err != nil {
+				return err
+			}
 
-		for _, m := range baseState.Config.Mounts {
-			if m.Device == "bind" {
-				externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+			for _, m := range baseState.Config.Mounts {
+				if m.Device == "bind" {
+					externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+				}
 			}
 		}
 	}
