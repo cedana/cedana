@@ -42,7 +42,7 @@ func New(ctx context.Context, address string, logger *zerolog.Logger) (*Containe
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
 	ctx = namespaces.WithNamespace(ctx, ns)
 
-	if err := container.ContainerdCheckpoint(ctx, service.client, containerID, imageRef); err != nil {
+	if err := container.ContainerdRootfsCheckpoint(ctx, service.client, containerID, imageRef); err != nil {
 		return "", err
 	}
 
@@ -71,6 +71,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		containerd.WithRestoreSpec,
 	}
 
+	// complete rootfs restore using containerd client
 	ctr, err := service.client.Restore(ctx, containerID, checkpoint, opts...)
 	if err != nil {
 		return err
