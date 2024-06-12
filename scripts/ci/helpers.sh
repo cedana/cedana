@@ -106,3 +106,7 @@ setup_ci() {
 start_cedana() {
     ./build-start-daemon.sh
 }
+
+cleanup_cedana() {
+    ./reset.sh
+}

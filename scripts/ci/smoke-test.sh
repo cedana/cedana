@@ -11,3 +11,4 @@ print_env
 setup_ci
 start_cedana
 start_smoke
+cleanup_cedana
