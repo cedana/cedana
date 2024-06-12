@@ -31,13 +31,13 @@ install_docker() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     sudo apt-get update
-    sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 install_sysbox() {
     wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
-    apt-get install jq
-    apt-get install ./sysbox-ce_0.6.4-0.linux_amd64.deb
+    apt-get install -y jq
+    apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
 }
 
 print_header() {
