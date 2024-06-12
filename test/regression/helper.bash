@@ -47,7 +47,7 @@ rootfs_restore() {
 runc_exec() {
   local bundle="$1"
   local job_id="$2"
-  sudo runc run "$job_id" -b "$bundle" &
+  sudo runc run "$job_id" -b "$bundle" -d
 }
 
 runc_checkpoint() {

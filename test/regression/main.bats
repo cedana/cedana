@@ -2,8 +2,6 @@
 
 load helper.bash
 
-set -e
-
 @test "Output file created and has some data" {
     local task="./test.sh"
     local job_id="test"
