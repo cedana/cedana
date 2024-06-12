@@ -89,11 +89,11 @@ load helper.bash
   run sleep 1
 
   # check if container running correctly, count lines in output file
-  [[ -f $out_file]]
+  [[ -f $out_file ]]
   local nlines_before = $(sudo wc -l $out_file | awk '{print $1}')
   sleep 2
   local nlines_after = $(sudo wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
+  [[ $nlines_after -gt $nlines_before ]]
 
   # checkpoint the container
   runc_checkpoint $dumpdir $job_id
@@ -117,11 +117,11 @@ load helper.bash
   run sleep 1
 
   # check if container running correctly, count lines in output file
-  [ -f $out_file]
+  [[ -f $out_file ]]
   local nlines_before = $(wc -l $out_file | awk '{print $1}')
   sleep 2
   local nlines_after = $(wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
+  [[ $nlines_after -gt $nlines_before ]]
 
   # clean up
   sudo runc kill $job_id SIGKILL
