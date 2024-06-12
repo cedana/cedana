@@ -6,12 +6,12 @@ chroot /host <<"EOT"
 YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
     protobuf-c protobuf-c-devel protobuf-compiler \
     protobuf-devel protobuf-python libnl3-devel \
-    libcap-devel"
+    libcap-devel `Development Tools`"
 
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf"
+    protobuf-compiler python3-protobuf build-essential"
 
 install_apt_packages() {
     apt-get update
