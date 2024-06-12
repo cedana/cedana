@@ -18,6 +18,7 @@ install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
     cd bats-core
     ./install.sh /usr/local
+    cd -
 }
 
 install_docker() {
@@ -86,7 +87,7 @@ setup_ci() {
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
-    BRANCH_NAME="${CI_BRANCH:-main}"
+    # BRANCH_NAME="${CI_BRANCH:-main}"
 
     export PATH=$PATH:/usr/local/go/bin
     echo "export PATH=$PATH:/usr/local/go/bin" >>/root/.bashrc
@@ -94,12 +95,12 @@ setup_ci() {
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
     sudo apt-get update && sudo apt-get install -y criu
-    # Install Cedana
-    git clone https://github.com/cedana/cedana && mkdir ~/.cedana
-    cd cedana
-    git fetch && git checkout ${BRANCH_NAME} && git pull origin ${BRANCH_NAME}
+    # # Install Cedana
+    # git clone https://github.com/cedana/cedana && mkdir ~/.cedana
+    # git fetch && git checkout ${BRANCH_NAME} && git pull origin ${BRANCH_NAME}
 
     # Install smoke & bench deps
+    cd ../../
     sudo pip3 install -r test/benchmarks/requirements
 }
 
