@@ -73,10 +73,11 @@ load helper.bash
 
 @test "Simple runc checkpoint" {
   local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
-  local bundle="./bundle"
+  local bundle=$(pwd)/bundle
   local job_id="runc-test"
-  local out_file="./bundle/rootfs/out"
+  local out_file=$bundle/rootfs/out
   local dumpdir=$(pwd)/dump
+  local tty_sock=$(pwd)/tty.sock
 
   # fetch and unpack a rootfs
   wget $rootfs
@@ -85,11 +86,15 @@ load helper.bash
   sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
   # create a runc container
-  run runc_exec $bundle $job_id
+  recvtty $tty_sock &
+  local tty_pid=$!
+  sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
+  sudo runc list
   sleep 1
 
   # check if container running correctly, count lines in output file
-  [ -f $out_file ]
+  run sudo test -f "$out_file"
+  [ "$status" -eq 0 ]
   local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
   sleep 2
   local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
@@ -102,28 +107,35 @@ load helper.bash
   # clean up
   sudo runc kill $job_id SIGKILL
   sudo runc delete $job_id
+  # kill -9 $tty_pid
+  sudo rm -rf $tty_sock
 }
 
 @test "Simple runc restore" {
-  local bundle="./bundle"
+  local bundle=$(pwd)/bundle
   local job_id="runc-test-restored"
-  local out_file="./bundle/rootfs/out"
+  local out_file=$bundle/rootfs/out
   local dumpdir=$(pwd)/dump
+  local tty_sock=$(pwd)/tty.sock
 
   # restore the container
-  [[ -d $bundle ]]
-  [[ -d $dumpdir ]]
-  run runc_restore $bundle $dumpdir $job_id
+  [ -d $bundle ]
+  [ -d $dumpdir ]
+  recvtty $tty_sock &
+  local tty_pid=$!
+  run runc_restore $bundle $dumpdir $job_id $tty_sock
   sleep 1
 
   # check if container running correctly, count lines in output file
-  [[ -f $out_file ]]
+  [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
   sleep 2
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
-  [[ $nlines_after -gt $nlines_before ]]
+  [ $nlines_after -gt $nlines_before ]
 
   # clean up
   sudo runc kill $job_id SIGKILL
   sudo runc delete $job_id
+  # kill -9 $tty_pid
+  sudo rm -rf $tty_sock
 }

@@ -44,12 +44,6 @@ rootfs_restore() {
   cedana restore rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
-runc_exec() {
-  local bundle="$1"
-  local job_id="$2"
-  sudo runc run "$job_id" -b "$bundle" -d
-}
-
 runc_checkpoint() {
   local dir="$1"
   local job_id="$2"
@@ -60,5 +54,6 @@ runc_restore() {
   local bundle="$1"
   local dir="$2"
   local id="$3"
-  cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id"
+  local tty="$4"
+  cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
 }

@@ -5,11 +5,9 @@
       "uid": 0,
       "gid": 0
     },
+    "terminal": true,
     "args": ["/bin/sh", "-c", "while true; do date >> /out; sleep 1; done"],
-    "env": [
-      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-      "TERM=xterm"
-    ],
+    "env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "TERM=xterm"],
     "cwd": "/",
     "capabilities": {
       "bounding": ["CAP_AUDIT_WRITE", "CAP_KILL", "CAP_NET_BIND_SERVICE"],
@@ -47,14 +45,7 @@
       "destination": "/dev/pts",
       "type": "devpts",
       "source": "devpts",
-      "options": [
-        "nosuid",
-        "noexec",
-        "newinstance",
-        "ptmxmode=0666",
-        "mode=0620",
-        "gid=5"
-      ]
+      "options": ["nosuid", "noexec", "newinstance", "ptmxmode=0666", "mode=0620", "gid=5"]
     },
     {
       "destination": "/dev/shm",
@@ -122,12 +113,6 @@
       "/sys/firmware",
       "/proc/scsi"
     ],
-    "readonlyPaths": [
-      "/proc/bus",
-      "/proc/fs",
-      "/proc/irq",
-      "/proc/sys",
-      "/proc/sysrq-trigger"
-    ]
+    "readonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"]
   }
 }
