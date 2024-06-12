@@ -107,6 +107,6 @@ start_cedana() {
     ./build-start-daemon.sh
 }
 
-cleanup_cedana() {
-    ./reset.sh
+stop_cedana() {
+    sudo pkill -9 cedana
 }
