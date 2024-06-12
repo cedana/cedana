@@ -79,14 +79,14 @@ load helper.bash
   local dumpdir=$(pwd)/dump
 
   # fetch and unpack a rootfs
-  run wget $rootfs
-  run mkdir -p $bundle/rootfs
-  sudo chown root:root $bundle
-  run sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+  wget $rootfs
+  mkdir -p $bundle/rootfs
+  schown root:root $bundle
+  sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
   # create a runc container
-  runc_exec $bundle $job_id
-  run sleep 1
+  run runc_exec $bundle $job_id
+  sleep 1
 
   # check if container running correctly, count lines in output file
   [[ -f $out_file ]]
@@ -96,7 +96,7 @@ load helper.bash
   [[ $nlines_after -gt $nlines_before ]]
 
   # checkpoint the container
-  runc_checkpoint $dumpdir $job_id
+  run runc_checkpoint $dumpdir $job_id
   [[ -d $dumpdir ]]
 
   # clean up
@@ -113,8 +113,8 @@ load helper.bash
   # restore the container
   [[ -d $bundle ]]
   [[ -d $dumpdir ]]
-  runc_restore $bundle $dumpdir $job_id
-  run sleep 1
+  run runc_restore $bundle $dumpdir $job_id
+  sleep 1
 
   # check if container running correctly, count lines in output file
   [[ -f $out_file ]]
