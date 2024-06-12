@@ -81,8 +81,8 @@ load helper.bash
   # fetch and unpack a rootfs
   run wget $rootfs
   run mkdir -p $bundle/rootfs
-  run tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
-  sudo chown -R root:root $bundle
+  sudo chown root:root $bundle
+  run sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
   # create a runc container
   runc_exec $bundle $job_id
@@ -90,9 +90,9 @@ load helper.bash
 
   # check if container running correctly, count lines in output file
   [[ -f $out_file ]]
-  local nlines_before = $(sudo wc -l $out_file | awk '{print $1}')
+  local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
   sleep 2
-  local nlines_after = $(sudo wc -l $out_file | awk '{print $1}')
+  local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
   [[ $nlines_after -gt $nlines_before ]]
 
   # checkpoint the container
@@ -118,9 +118,9 @@ load helper.bash
 
   # check if container running correctly, count lines in output file
   [[ -f $out_file ]]
-  local nlines_before = $(wc -l $out_file | awk '{print $1}')
+  local nlines_before=$(wc -l $out_file | awk '{print $1}')
   sleep 2
-  local nlines_after = $(wc -l $out_file | awk '{print $1}')
+  local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [[ $nlines_after -gt $nlines_before ]]
 
   # clean up
