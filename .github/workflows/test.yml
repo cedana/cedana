@@ -2,6 +2,10 @@ name: Test
 
 on: [push]
 
+concurrency:
+  group: cedana-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubicloud-standard-8
