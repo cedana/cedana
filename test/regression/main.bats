@@ -2,6 +2,8 @@
 
 load helper.bash
 
+set -e
+
 @test "Output file created and has some data" {
     local task="./test.sh"
     local job_id="test"
@@ -81,7 +83,7 @@ load helper.bash
   # fetch and unpack a rootfs
   wget $rootfs
   mkdir -p $bundle/rootfs
-  schown root:root $bundle
+  sudo chown root:root $bundle
   sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
   # create a runc container
