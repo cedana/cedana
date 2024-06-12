@@ -70,3 +70,60 @@ load helper.bash
 
   [[ "$output" == *"$image_ref"* ]]
 }
+
+@test "Simple runc checkpoint" {
+  local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
+  local bundle="./bundle"
+  local job_id="runc-test"
+  local out_file="./bundle/rootfs/out"
+  local dumpdir=$(pwd)/dump
+
+  # fetch and unpack a rootfs
+  run wget $rootfs
+  run mkdir -p $bundle/rootfs
+  run tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+  sudo chown -R root:root $bundle
+
+  # create a runc container
+  runc_exec $bundle $job_id
+  run sleep 1
+
+  # check if container running correctly, count lines in output file
+  [[ -f $out_file]]
+  local nlines_before = $(sudo wc -l $out_file | awk '{print $1}')
+  sleep 2
+  local nlines_after = $(sudo wc -l $out_file | awk '{print $1}')
+  [ $nlines_after -gt $nlines_before ]
+
+  # checkpoint the container
+  runc_checkpoint $dumpdir $job_id
+  [[ -d $dumpdir ]]
+
+  # clean up
+  sudo runc kill $job_id SIGKILL
+  sudo runc delete $job_id
+}
+
+@test "Simple runc restore" {
+  local bundle="./bundle"
+  local job_id="runc-test-restored"
+  local out_file="./bundle/rootfs/out"
+  local dumpdir=$(pwd)/dump
+
+  # restore the container
+  [[ -d $bundle ]]
+  [[ -d $dumpdir ]]
+  runc_restore $bundle $dumpdir $job_id
+  run sleep 1
+
+  # check if container running correctly, count lines in output file
+  [ -f $out_file]
+  local nlines_before = $(wc -l $out_file | awk '{print $1}')
+  sleep 2
+  local nlines_after = $(wc -l $out_file | awk '{print $1}')
+  [ $nlines_after -gt $nlines_before ]
+
+  # clean up
+  sudo runc kill $job_id SIGKILL
+  sudo runc delete $job_id
+}
