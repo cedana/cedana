@@ -13,8 +13,9 @@ import (
 
 	"github.com/cedana/cedana/api/runc"
 	task "github.com/cedana/cedana/api/services/task"
-	DB "github.com/cedana/cedana/db"
+	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
@@ -32,13 +33,12 @@ const (
 	SERVER_LOG_PATH       = "/var/log/cedana-daemon.log"
 	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS      = 0o644
-	SERVER_DB_PATH        = "/tmp/cedana.db"
 )
 
 type service struct {
 	CRIU    *Criu
 	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db      DB.DB        // Key-value store for metadata/state
+	db      db.DB
 	logger  *zerolog.Logger
 	tracer  trace.Tracer
 	store   *utils.CedanaStore
@@ -75,7 +75,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	service := &service{
 		CRIU:    &Criu{},
 		fs:      &afero.Afero{Fs: afero.NewOsFs()},
-		db:      DB.NewLocalDB(SERVER_DB_PATH),
+		db:      db.NewLocalDB(ctx),
 		logger:  &newLogger,
 		tracer:  tracer,
 		store:   utils.NewCedanaStore(tracer, logger),
@@ -121,7 +121,7 @@ func StartServer(cmdCtx context.Context) error {
 		// Here join netns
 		// TODO find pause bundle path
 		if viper.GetBool("is_k8s") {
-			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, K8S_RUNC_ROOT)
+			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, "", K8S_RUNC_ROOT)
 			if err != nil {
 				cancel(err)
 				return
@@ -172,9 +172,11 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
-		err := fmt.Errorf("gpu controller path not set")
+		controllerPath = utils.GpuControllerBinaryPath
+	}
+	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
 		logger.Fatal().Err(err)
-		return nil, err
+		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
 	if viper.GetBool("gpu_debugging_enabled") {

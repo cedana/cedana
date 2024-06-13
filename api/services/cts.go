@@ -14,7 +14,7 @@ import (
 
 const (
 	DEFAULT_PROCESS_DEADLINE    = 20 * time.Minute
-	DEFAULT_CONTAINERD_DEADLINE = 1 * time.Minute
+	DEFAULT_CONTAINERD_DEADLINE = 10 * time.Minute
 	DEFAULT_RUNC_DEADLINE       = 1 * time.Minute
 )
 
@@ -117,6 +117,26 @@ func (c *ServiceClient) ContainerdQuery(ctx context.Context, args *task.Containe
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
 	resp, err := c.taskService.ContainerdQuery(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.ContainerdRootfsDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.ContainerdRootfsRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}

@@ -43,7 +43,6 @@ processors:
       hostname_sources: [os] # alternatively, use [dns,os] for setting FQDN as host.name and os as fallback
 extensions:
   health_check: {}
-  zpages: {}
 exporters:
   file:
     path: "data.json"
@@ -53,21 +52,9 @@ service:
   telemetry:
     metrics:
       address: 0.0.0.0:8888
-  extensions: [health_check, zpages]
+  extensions: [health_check]
   pipelines:
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [file]
-    metrics/internal:
-      receivers: [prometheus, hostmetrics]
-      processors: [batch]
-      exporters: [file]
     traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [file]
-    logs:
       receivers: [otlp]
       processors: [batch]
       exporters: [file]

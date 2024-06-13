@@ -1,24 +1,20 @@
 package db
 
-// This file contains the key-value database interface
-// The interface can be implemented as a local/remote KV database
+// This file contains the getters and setter for the sqlite DB
+// Implementation of the interface can be found in the local.go
 
-// Opening/creation of files/buckets must be managed by implementation
-// [][]byte is used to represent a path to a bucket (for nested buckets)
+import (
+	"context"
+	"github.com/cedana/cedana/db/models"
+)
+
 type DB interface {
 	// Getters
-	Get([][]byte, []byte) ([]byte, error)
-	GetString([][]byte, []byte) (string, error)
-	GetBool([][]byte, []byte) (bool, error)
-	GetInt([][]byte, []byte) (int, error)
+	GetJob(context.Context, []byte) (models.Job, error)
 
 	// Setters (create or update)
-	Put([][]byte, []byte, []byte) error
-	PutString([][]byte, []byte, string) error
-	PutBool([][]byte, []byte, bool) error
-	PutInt([][]byte, []byte, int) error
+	PutJob(context.Context, []byte, []byte) error
 
 	// Listers
-	List([][]byte) ([][]byte, error)
-	ListKeys([][]byte) ([][]byte, error)
+	ListJobs(context.Context) ([]models.Job, error)
 }

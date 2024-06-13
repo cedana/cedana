@@ -8,6 +8,7 @@ function start_regression() {
     echo "Running regression tests in cwd: $(pwd)"
     cd test/regression
     bats main.bats
+    cd -
 }
 
 # we assume setup_ci and start_cedana have checked out
@@ -16,3 +17,4 @@ print_env
 setup_ci
 start_cedana
 start_regression
+stop_cedana

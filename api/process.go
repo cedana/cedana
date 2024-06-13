@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
@@ -39,36 +40,39 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	}
 
 	state := &task.ProcessState{}
-	pid, err := s.run(ctx, args)
-	if err != nil {
-		// TODO BS: this should be at market level
-		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
-		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
-	}
 
 	state.JobState = task.JobState_JOB_RUNNING
-	state.PID = pid
 	if args.JID == "" {
 		state.JID = xid.New().String()
+		args.JID = state.JID
 	} else {
-		existingState, err := s.getState(args.JID)
-		if err != nil {
-			return nil, status.Error(codes.NotFound, "failed to check existing jobs")
-		}
+		existingState, _ := s.getState(ctx, args.JID)
 		if existingState != nil {
 			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
 		}
 		state.JID = args.JID
 	}
-	s.logger.Info().Msgf("managing process with pid %d", pid)
-
-	// FIXME YA: Should kill process on any errors to fix inconsistent state
-	err = s.updateState(state.JID, state)
+	err := s.updateState(ctx, state.JID, state)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("failed to update state")
 		return nil, status.Error(codes.Internal, "failed to update state")
 	}
+
+	pid, err := s.run(ctx, args)
+	state.PID = pid
+	if err != nil {
+		// TODO BS: this should be at market level
+		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		state.JobState = task.JobState_JOB_STARTUP_FAILED
+		s.updateState(ctx, state.JID, state)
+		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
+	}
+
+	s.logger.Info().Msgf("managing process with pid %d", pid)
 
 	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
 		err = status.Error(codes.Internal, "Task startup failed")
@@ -93,7 +97,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	pid := args.PID
 
 	if pid == 0 { // if job
-		state, err = s.getState(args.JID)
+		state, err = s.getState(ctx, args.JID)
 		if err != nil {
 			err = status.Error(codes.NotFound, err.Error())
 			return nil, err
@@ -104,7 +108,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		pid = state.PID
 	}
 
-	state, err = s.generateState(pid)
+	state, err = s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -142,7 +146,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
 		return nil, st.Err()
@@ -193,7 +197,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 			return nil, err
 		}
 
-		pid, err := s.restore(ctx, &task.RestoreArgs{
+		pid, err = s.restore(ctx, &task.RestoreArgs{
 			Type:           task.CRType_REMOTE,
 			CheckpointID:   args.CheckpointID,
 			CheckpointPath: *zipFile,
@@ -212,12 +216,12 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
 	// We could be restoring on a new machine, so we update the state
-	state, err := s.generateState(*pid)
+	state, err := s.generateState(ctx, *pid)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
 	}
 	state.JobState = task.JobState_JOB_RUNNING
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to update state after restore")
 	}
@@ -232,7 +236,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 
 	if len(args.JIDs) > 0 {
 		for _, jid := range args.JIDs {
-			state, err := s.getState(jid)
+			state, err := s.getState(ctx, jid)
 			if err != nil {
 				return nil, status.Error(codes.NotFound, "job not found")
 			}
@@ -245,10 +249,14 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 		for _, pid := range args.PIDs {
 			pidSet[pid] = true
 		}
-		list, err := s.db.List([][]byte{DB_BUCKET_JOBS})
-		for _, val := range list {
+
+		list, err := s.db.ListJobs(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
+		}
+		for _, job := range list {
 			state := task.ProcessState{}
-			err = json.Unmarshal(val, &state)
+			err = json.Unmarshal(job.State, &state)
 			if err != nil {
 				return nil, status.Error(codes.Internal, "failed to unmarshal state")
 			}
@@ -287,6 +295,15 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		// XXX: force sleep for a few ms to allow GPU controller to start
 		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
+
+    sharedLibPath := viper.GetString("gpu_shared_lib_path")
+    if sharedLibPath == "" {
+      sharedLibPath = utils.GpuSharedLibPath
+    }
+    if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+      return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+    }
+		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 
 	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -372,12 +389,24 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			}
 			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Info().Msgf("GPU controller log: %v", gpuerrbuf.String())
+			s.logger.Debug().Msgf("GPU controller log: %v", gpuerrbuf.String())
 		}
 		if err != nil {
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+		}
+		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		state, err := s.getState(childCtx, args.JID)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to get state after job done")
+			return
+		}
+		state.JobState = task.JobState_JOB_DONE
+		state.PID = pid
+		err = s.updateState(childCtx, args.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update state after job done")
 		}
 	}()
 

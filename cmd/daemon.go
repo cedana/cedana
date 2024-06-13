@@ -60,18 +60,24 @@ var startDaemonCmd = &cobra.Command{
 				return err
 			}
 
-			logger.Info().Msgf("pulling gpu binaries for cuda version %s", cudaVersion)
-
-			err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersions[cudaVersion])
-			if err != nil {
-				logger.Error().Err(err).Msg("could not pull gpu controller")
-				return err
+			if viper.GetString("gpu_controller_path") == "" {
+				err = pullGPUBinary(ctx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, cudaVersions[cudaVersion])
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull gpu controller")
+					return err
+				}
+			} else {
+				logger.Debug().Msgf("using gpu controller at %s", viper.GetString("gpu_controller_path"))
 			}
 
-			err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersions[cudaVersion])
-			if err != nil {
-				logger.Error().Err(err).Msg("could not pull libcedana")
-				return err
+			if viper.GetString("gpu_shared_lib_path") == "" {
+				err = pullGPUBinary(ctx, utils.GpuSharedLibName, utils.GpuSharedLibPath, cudaVersions[cudaVersion])
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull libcedana")
+					return err
+				}
+			} else {
+				logger.Debug().Msgf("using gpu shared lib at %s", viper.GetString("gpu_shared_lib_path"))
 			}
 		}
 
@@ -110,6 +116,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
+	logger.Debug().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
 
 	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
 	logger.Debug().Msgf("pulling %s from %s", binary, url)
@@ -152,6 +159,6 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		logger.Err(err).Msg("could not read file from response")
 		return err
 	}
-	logger.Info().Msgf("%s downloaded to %s", binary, filePath)
+	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
 	return err
 }

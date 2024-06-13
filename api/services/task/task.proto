@@ -20,6 +20,9 @@ service TaskService {
   rpc ContainerdRestore(ContainerdRestoreArgs) returns (ContainerdRestoreResp);
   rpc ContainerdQuery(ContainerdQueryArgs) returns (ContainerdQueryResp);
 
+  rpc ContainerdRootfsDump(ContainerdRootfsDumpArgs) returns (ContainerdRootfsDumpResp);
+  rpc ContainerdRootfsRestore(ContainerdRootfsRestoreArgs) returns (ContainerdRootfsRestoreResp);
+
   // Runc
   rpc RuncDump(RuncDumpArgs) returns (RuncDumpResp);
   rpc RuncRestore(RuncRestoreArgs) returns (RuncRestoreResp);
@@ -138,6 +141,28 @@ message ContainerdContainer {
   string SandboxUid = 6;
 }
 
+message ContainerdRootfsDumpArgs {
+  string ContainerID = 1;
+  string ImageRef = 2;
+  string Address = 3;
+  string Namespace = 4;
+}
+
+message ContainerdRootfsDumpResp {
+  string ImageRef = 1;
+}
+
+message ContainerdRootfsRestoreArgs {
+  string ContainerID = 1;
+  string ImageRef = 2;
+  string Address = 3;
+  string Namespace = 4;
+}
+
+message ContainerdRootfsRestoreResp {
+  string ImageRef = 1;
+}
+
 ///////////////////
 ////// Runc ///////
 ///////////////////
@@ -150,6 +175,7 @@ message RuncDumpArgs {
   CRType Type = 5;
   ProcessState state = 6;
   bool GPU = 7;
+  int32 pid = 8;
 }
 
 message RuncDumpResp {
@@ -175,6 +201,7 @@ message CriuOpts {
   int32 StatusFd = 15;
   string LsmProfile = 16;
   string LsmMountContext = 17;
+  repeated string External = 18;
 }
 
 message RuncRestoreArgs {
@@ -211,7 +238,9 @@ message RuncOpts {
 
 message RuncQueryArgs {
   string Root = 1;
-  repeated string ContainerNames = 2;
+  string Namespace = 2;
+  repeated string ContainerNames = 3;
+  repeated string SandboxNames = 4;
 }
 
 message RuncQueryResp {
@@ -221,6 +250,11 @@ message RuncQueryResp {
 message RuncContainer {
   string ID = 1;
   string BundlePath = 2;
+  string ContainerName = 3;
+  string ImageName = 4;
+  string SandboxId = 5;
+  string SandboxName = 6;
+  string SandboxUid = 7;
 }
 
 message RuncGetPausePidArgs {

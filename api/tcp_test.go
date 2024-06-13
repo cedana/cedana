@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cedana/cedana/api/services/task"
-	DB "github.com/cedana/cedana/db"
+	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -71,7 +71,7 @@ func Test_MultiConn(t *testing.T) {
 		srv.Stop()
 	})
 
-	mockDB := DB.NewLocalDB("test.db")
+	mockDB := db.NewLocalDB(context.Background())
 
 	logger := utils.GetLogger()
 
@@ -111,7 +111,7 @@ func Test_MultiConn(t *testing.T) {
 		os.RemoveAll("dumpdir")
 	})
 
-	oldState, _ := svc.getState(resp.JID)
+	oldState, _ := svc.getState(ctx, resp.JID)
 	t.Logf("old state: %+v", oldState)
 
 	_, err = client.Dump(ctx, &task.DumpArgs{Dir: "dumpdir", PID: resp.PID, Type: task.CRType_LOCAL, JID: exec})

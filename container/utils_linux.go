@@ -848,7 +848,39 @@ func (c *RuncContainer) handleRestoringExternalNamespaces(rpcOpts *criurpc.CriuO
 	return nil
 }
 
-func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File) error {
+func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
+	nsPath := fmt.Sprintf("/proc/%s/ns/pid", initPid)
+
+	// CRIU wants the information about an existing namespace
+	// like this: --inherit-fd fd[<fd>]:<key>
+	// The <key> needs to be the same as during checkpointing.
+	// We are always using 'extRoot<TYPE>NS' as the key in this.
+
+	nsFd, err := os.Open(nsPath)
+	if err != nil {
+		logrus.Errorf("If a specific pid namespace is defined it must exist: %s", err)
+		return fmt.Errorf("Requested network namespace %v does not exist", nsPath)
+	}
+	inheritFd := &criurpc.InheritFd{
+		Key: proto.String("extRootPidNS"),
+		// The offset of four is necessary because 0, 1, 2 and 3 are
+		// already used by stdin, stdout, stderr, 'criu swrk' socket.
+		Fd: proto.Int32(int32(4 + len(*extraFiles))),
+	}
+	rpcOpts.InheritFd = append(rpcOpts.InheritFd, inheritFd)
+	// All open FDs need to be transferred to CRIU via extraFiles
+	*extraFiles = append(*extraFiles, nsFd)
+
+	return nil
+}
+
+func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
+	if initPid != "" {
+		if err := c.handleRestoringExternalPidNamespace(rpcOpts, extraFiles, initPid); err != nil {
+			return err
+		}
+	}
+
 	for _, ns := range c.Config.Namespaces {
 		switch ns.Type {
 		case configs.NEWNET, configs.NEWPID:
@@ -1250,6 +1282,10 @@ func logCriuErrors(dir, file string) {
 
 func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string, netPid int) error {
 	const logFile = "restore.log"
+
+	crioPidFilePath := filepath.Join(bundle, "pidfile")
+	containerdPidFilePath := filepath.Join(bundle, "init.pid")
+
 	c.M.Lock()
 	defer c.M.Unlock()
 
@@ -1318,20 +1354,34 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			ManageCgroupsMode: (*criurpc.CriuCgMode)(proto.Int32(0)),
 		},
 	}
+
 	// Same as during checkpointing. If the container has a specific network namespace
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
 	// TODO BS pull this dynamically from original container
-	pidBytes, err := os.ReadFile(filepath.Join(bundle, "init.pid"))
-	if err != nil {
-		return err
-	}
-	pidStr := string(pidBytes)
+	pidStr := ""
 	if netPid != 0 {
 		pidStr = fmt.Sprint(netPid)
+	} else {
+		var pidBytes []byte
+		var readfileErr error
+		if _, err = os.Stat(crioPidFilePath); err == nil {
+			pidBytes, readfileErr = os.ReadFile(crioPidFilePath)
+		} else if _, err = os.Stat(containerdPidFilePath); err == nil {
+			pidBytes, readfileErr = os.ReadFile(containerdPidFilePath)
+		}
+
+		if readfileErr != nil {
+			return readfileErr
+		}
+
+		if pidBytes != nil {
+			pidStr = string(pidBytes)
+		}
 	}
-	nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
-	if nsPath != "" {
+
+	if pidStr != "" {
+		nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
 		// not error out if it fails. runc will just behave as it used
@@ -1389,7 +1439,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 	}
 	c.handleCriuConfigurationFile(req.Opts)
 
-	if err := c.handleRestoringNamespaces(req.Opts, &extraFiles); err != nil {
+	if err := c.handleRestoringNamespaces(req.Opts, &extraFiles, pidStr); err != nil {
 		return err
 	}
 

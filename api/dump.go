@@ -33,8 +33,9 @@ const (
 	GHOST_LIMIT         = 10000000
 	DUMP_FOLDER_PERMS   = 0o777
 
-	K8S_RUNC_ROOT    = "/run/containerd/runc/k8s.io"
-	DOCKER_RUNC_ROOT = "/run/docker/runtime-runc/moby"
+	K8S_RUNC_ROOT     = "/run/containerd/runc/k8s.io"
+	DOCKER_RUNC_ROOT  = "/run/docker/runtime-runc/moby"
+	DEFAULT_RUNC_ROOT = "/run/runc"
 )
 
 // The bundle includes path to bundle and the runc/podman container id of the bundle. The bundle is a folder that includes the oci spec config.json
@@ -132,7 +133,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		s.logger.Fatal().Err(err)
 	}
 
-	err = s.updateState(state.JID, state)
+	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		postDumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
@@ -157,9 +158,11 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	return &opts
 }
 
-func (s *service) runcDump(ctx context.Context, root, containerID string, opts *container.CriuOpts, state *task.ProcessState) error {
+func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
 	_, dumpSpan := s.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", true))
+
+	var crPid int
 
 	links := []linkPairs{
 		{"/host/var/run/netns", "/var/run/netns"},
@@ -185,9 +188,20 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, opts *
 			// Handle the error or log it as needed
 		}
 	}
+
 	bundle := Bundle{ContainerID: containerID}
 	runcContainer := container.GetContainerFromRunc(containerID, root)
-	err := runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
+
+	// TODO make into flag and describe how this redirects using container's init process pid and
+	// instead a specific pid.
+
+	if pid != 0 {
+		crPid = int(pid)
+	} else {
+		crPid = runcContainer.Pid
+	}
+
+	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
 		dumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
@@ -208,17 +222,12 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, opts *
 }
 
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
-	err := container.ContainerdCheckpoint(imagePath, containerID)
-	if err != nil {
-		s.logger.Fatal().Err(err)
-		return err
-	}
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	s.postDump(ctx, imagePath, state)
 
-	return err
+	return nil
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {

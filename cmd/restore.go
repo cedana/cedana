@@ -160,6 +160,46 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
+var restoreContainerdRootfsCmd = &cobra.Command{
+	Use:   "rootfs",
+	Short: "Manually restore a container with a checkpointed rootfs",
+	Args:  cobra.ArbitraryArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+		cts, err := services.NewClient()
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		ref, _ := cmd.Flags().GetString(refFlag)
+		id, _ := cmd.Flags().GetString(idFlag)
+		addr, _ := cmd.Flags().GetString(addressFlag)
+		ns, _ := cmd.Flags().GetString(namespaceFlag)
+
+		restoreArgs := &task.ContainerdRootfsRestoreArgs{
+			ContainerID: id,
+			ImageRef:    ref,
+			Address:     addr,
+			Namespace:   ns,
+		}
+
+		resp, err := cts.ContainerdRootfsRestore(ctx, restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Restore rootfs container failed: %v, %v", st.Message(), st.Code())
+			} else {
+				logger.Error().Msgf("Restore rootfs container failed: %v", err)
+			}
+			return
+		}
+		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
+	},
+}
+
 var runcRestoreCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually restore a running runc container to a directory",
@@ -175,12 +215,16 @@ var runcRestoreCmd = &cobra.Command{
 		defer cts.Close()
 
 		root, err := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
+			logger.Error().Msgf("container root %s not supported", root)
+			return
+		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		opts := &task.RuncOpts{
-			Root:          root,
+			Root:          runcRootPath[root],
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detatch:       detach,
@@ -189,6 +233,7 @@ var runcRestoreCmd = &cobra.Command{
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
+		logger.Log().Msg(id)
 		isK3s, _ := cmd.Flags().GetBool(isK3sFlag)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
@@ -227,6 +272,15 @@ func init() {
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
+	restoreCmd.AddCommand(restoreContainerdRootfsCmd)
+	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
+	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
+	restoreContainerdRootfsCmd.MarkFlagRequired(refFlag)
+	restoreContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	restoreContainerdRootfsCmd.MarkFlagRequired(addressFlag)
+	restoreContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
+
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
@@ -236,7 +290,7 @@ func init() {
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired(bundleFlag)
 	runcRestoreCmd.Flags().StringP(consoleSocketFlag, "c", "", "console socket path")
-	runcRestoreCmd.Flags().StringP(rootFlag, "r", RuncRootDir, "runc root directory")
+	runcRestoreCmd.Flags().StringP(rootFlag, "r", "default", "runc root directory")
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")

@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -34,6 +37,7 @@ type RuncOpts struct {
 	PreserveFds     int
 	Pid             int
 	NetPid          int
+	StateRoot       string
 }
 
 func Restore(imgPath string, containerID string) error {
@@ -143,14 +147,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 
 	configPath := opts.Bundle + "/config.json"
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		fmt.Println("Error reading config.json:", err)
-		return err
-	}
-
-	if err := json.Unmarshal(data, &spec); err != nil {
-		fmt.Println("Error decoding config.json:", err)
+	if err := readJSON(configPath, &spec); err != nil {
 		return err
 	}
 
@@ -159,6 +156,29 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	for _, m := range spec.Mounts {
 		if m.Type == "bind" {
 			externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+		}
+	}
+
+	if opts.Root != "" {
+		var baseState libcontainer.BaseState
+
+		split := strings.Split(opts.Bundle, "/")
+		containerID := split[len(split)-1]
+
+		stateJsonPath := filepath.Join(opts.Root, containerID, "state.json")
+
+		// skip if the file does not exist, allowing for a clean restore as well
+		if _, err := os.Stat(stateJsonPath); err == nil {
+			// if it exists we dont accept an error
+			if err := readJSON(stateJsonPath, &baseState); err != nil {
+				return err
+			}
+
+			for _, m := range baseState.Config.Mounts {
+				if m.Device == "bind" {
+					externalMounts = append(externalMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Source))
+				}
+			}
 		}
 	}
 
@@ -180,9 +200,25 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		NetPid:        opts.NetPid,
 	}
 
-	_, err = StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
+	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func readJSON[T any](path string, spec *T) error {
+	configData, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("Error reading config.json:", err)
+		return err
+	}
+
+	if err := json.Unmarshal(configData, &spec); err != nil {
+		fmt.Println("Error decoding config.json:", err)
+		return err
+	}
+
 	return nil
 }
