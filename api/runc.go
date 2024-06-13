@@ -10,7 +10,6 @@ import (
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
 	container "github.com/cedana/cedana/container"
-	"github.com/rs/xid"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -71,7 +70,6 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
-
 	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
@@ -120,7 +118,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
 	}
 
-	state, err := s.generateState(pid)
+	state, err := s.generateState(ctx, pid)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to generate state: %v", err))
 	}
