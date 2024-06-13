@@ -11,6 +11,9 @@ import (
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/xid"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 
 	"context"
@@ -48,7 +51,7 @@ func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState,
 	return &state, err
 }
 
-// Generates a new state for a process with given PID
+
 // TODO NR - customizable errors
 func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessState, error) {
 	if pid == 0 {
@@ -161,6 +164,36 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	cwd, err := p.Cwd()
 	if err != nil {
 		return nil, nil
+	}
+
+	// system information
+	cpuinfo, _ := cpu.Info()
+	vcpus, _ := cpu.Counts(true)
+	state.CPUInfo = &task.CPUInfo{
+		Count:      int32(vcpus),
+		CPU:        cpuinfo[0].CPU,
+		VendorID:   cpuinfo[0].VendorID,
+		Family:     cpuinfo[0].Family,
+		PhysicalID: cpuinfo[0].PhysicalID,
+	}
+
+	mem, _ := mem.VirtualMemory()
+	state.MemoryInfo = &task.MemoryInfo{
+		Total:     mem.Total,
+		Available: mem.Available,
+		Used:      mem.Used,
+	}
+
+	host, _ := host.Info()
+	state.HostInfo = &task.HostInfo{
+		HostID:               host.HostID,
+		Hostname:             host.Hostname,
+		OS:                   host.OS,
+		Platform:             host.Platform,
+		KernelVersion:        host.KernelVersion,
+		KernelArch:           host.KernelArch,
+		VirtualizationSystem: host.VirtualizationSystem,
+		VirtualizationRole:   host.VirtualizationRole,
 	}
 
 	// ignore sending network for now, little complicated

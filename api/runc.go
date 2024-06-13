@@ -16,11 +16,9 @@ import (
 )
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
-	// TODO BS: This will be done at controller level, just doing it here for now...
-
 	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
+		err = status.Error(codes.Internal, fmt.Sprintf("failed to get pid by container id: %v", err))
 		return nil, err
 	}
 
@@ -78,6 +76,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		return nil, err
 	}
 
+	resp.State = state
+
 	return &resp, err
 }
 
@@ -111,12 +111,23 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			return nil, staterr
 		}
+	}
 
+	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Opts.Root)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
+	}
+
+	state, err := s.generateState(ctx, pid)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to generate state: %v", err))
 	}
 
 	// TODO: Update state to add or use a job that exists for this container
-
-	return &task.RuncRestoreResp{Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerID)}, nil
+	return &task.RuncRestoreResp{
+		Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerID),
+		State:   state,
+	}, nil
 }
 
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {

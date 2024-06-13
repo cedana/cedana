@@ -72,6 +72,7 @@ message DumpResp {
   string Message = 1;
   string CheckpointID = 2;
   string UploadID = 3;
+  ProcessState State = 4;
 }
 
 
@@ -87,6 +88,7 @@ message RestoreArgs {
 message RestoreResp {
   string Message = 1;
   int32 NewPID = 2;
+  ProcessState State = 3;
 }
 
 message QueryArgs {
@@ -171,14 +173,16 @@ message RuncDumpArgs {
   string ContainerID = 3;
   CriuOpts CriuOpts = 4;
   CRType Type = 5;
-  bool GPU = 6;
-  int32 pid = 7;
+  ProcessState state = 6;
+  bool GPU = 7;
+  int32 pid = 8;
 }
 
 message RuncDumpResp {
   string Message = 1;
   string CheckpointID = 2;
   string UploadID = 3;
+  ProcessState State = 4;
 }
 
 message CriuOpts {
@@ -211,6 +215,7 @@ message RuncRestoreArgs {
 
 message RuncRestoreResp {
   string Message = 1;
+  ProcessState State = 2;
 }
 
 message RuncOpts {
@@ -293,6 +298,9 @@ message ProcessState {
   repeated RemoteState RemoteState = 10;
   bool GPUCheckpointed = 11;
   string JID = 12;
+  HostInfo HostInfo = 13;
+  CPUInfo CPUInfo = 14;
+  MemoryInfo MemoryInfo = 15;
 }
 
 message RemoteState {
@@ -301,14 +309,6 @@ message RemoteState {
   int64 Timestamp = 3;
 }
 
-message ClientInfo {
-  string Id = 1;
-  string Hostname = 2;
-  string Platform = 3;
-  string OS = 4;
-  uint64 Uptime = 5;
-  uint64 RemainingMemory = 6;
-}
 
 message ProcessInfo {
   int32 PID = 1;
@@ -319,6 +319,31 @@ message ProcessInfo {
   float MemoryPercent = 6;
   bool IsRunning = 7;
   string Status = 8;
+}
+
+message HostInfo {
+  string HostID = 1;
+  string Hostname = 4;
+  string OS = 5;
+  string Platform = 6;
+  string KernelVersion = 7;
+  string KernelArch = 8;
+  string VirtualizationSystem = 9;
+  string VirtualizationRole = 10;
+}
+
+message CPUInfo {
+  int32 Count = 1;
+  int32 CPU = 2;
+  string VendorID = 3;
+  string Family = 4;
+  string PhysicalID = 5;
+}
+
+message MemoryInfo {
+  uint64 Total = 1;
+  uint64 Available = 2;
+  uint64 Used = 3;
 }
 
 message OpenFilesStat {
