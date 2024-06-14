@@ -27,7 +27,7 @@ const (
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
@@ -45,6 +45,8 @@ var helperCmd = &cobra.Command{
 			}
 		}
 		startHelper(ctx, startChroot)
+
+		return nil
 	},
 }
 

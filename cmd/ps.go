@@ -17,13 +17,13 @@ import (
 var psCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List managed processes",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Err(err).Msg("error creating client")
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -33,12 +33,12 @@ var psCmd = &cobra.Command{
 		resp, err := cts.Query(ctx, &task.QueryArgs{}) // get all processes
 		if err != nil {
 			logger.Error().Err(err).Msgf("error querying processes")
-			return
+			return err
 		}
 
 		if len(resp.Processes) == 0 {
 			fmt.Println("No managed processes")
-			return
+			return nil
 		}
 
 		for _, v := range resp.Processes {
@@ -58,6 +58,8 @@ var psCmd = &cobra.Command{
 		}
 
 		table.Render()
+
+		return nil
 	},
 }
 
