@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ADDRESS               = "localhost:8080"
+	ADDRESS               = "0.0.0.0:8080"
 	PROTOCOL              = "tcp"
 	CEDANA_CONTAINER_NAME = "binary-container"
 	SERVER_LOG_PATH       = "/var/log/cedana-daemon.log"
