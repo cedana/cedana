@@ -13,5 +13,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	cmd.Execute(ctx)
+  if err := cmd.Execute(ctx); err != nil {
+    os.Exit(1)
+  }
 }

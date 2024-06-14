@@ -23,14 +23,14 @@ var execTaskCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Err(err).Msg("error creating client")
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -79,9 +79,11 @@ var execTaskCmd = &cobra.Command{
 			} else {
 				logger.Error().Err(err).Msg("start task failed")
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Task started: %v", resp)
+
+		return nil
 	},
 }
 
