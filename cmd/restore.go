@@ -22,13 +22,13 @@ var restoreProcessCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Manually restore a process from a checkpoint located at input path",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -46,9 +46,11 @@ var restoreProcessCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -56,13 +58,13 @@ var restoreJobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manually restore a previously dumped process or container from an input id",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Err(err).Msgf("error creating client")
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -84,7 +86,7 @@ var restoreJobCmd = &cobra.Command{
 		res, err := cts.Query(ctx, &query)
 		if err != nil {
 			logger.Error().Msgf("Error querying job: %v", err)
-			return
+			return err
 		}
 		state := res.Processes[0]
 
@@ -97,12 +99,12 @@ var restoreJobCmd = &cobra.Command{
 			remoteState := state.GetRemoteState()
 			if remoteState == nil {
 				logger.Error().Msgf("No remote state found for id %s", jid)
-				return
+				return err
 			}
 			// For now just grab latest checkpoint
 			if remoteState[len(remoteState)-1].CheckpointID == "" {
 				logger.Error().Msgf("No checkpoint found for id %s", jid)
-				return
+				return err
 			}
 			restoreArgs.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
 			restoreArgs.Type = task.CRType_REMOTE
@@ -119,9 +121,11 @@ var restoreJobCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -129,13 +133,13 @@ var containerdRestoreCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -154,9 +158,11 @@ var containerdRestoreCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -164,13 +170,13 @@ var restoreContainerdRootfsCmd = &cobra.Command{
 	Use:   "rootfs",
 	Short: "Manually restore a container with a checkpointed rootfs",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -194,9 +200,11 @@ var restoreContainerdRootfsCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore rootfs container failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
+
+		return nil
 	},
 }
 
@@ -204,20 +212,20 @@ var runcRestoreCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually restore a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
 		root, err := cmd.Flags().GetString(rootFlag)
 		if runcRootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
-			return
+			return err
 		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
@@ -253,9 +261,11 @@ var runcRestoreCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Restore task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 

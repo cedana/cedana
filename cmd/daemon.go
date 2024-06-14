@@ -86,6 +86,7 @@ var startDaemonCmd = &cobra.Command{
 		err = api.StartServer(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
+			return err
 		}
 
 		return nil

@@ -23,13 +23,13 @@ var runcGetRuncIdByName = &cobra.Command{
 	Use:   "get",
 	Short: "Get runc id by container name",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -44,9 +44,11 @@ var runcGetRuncIdByName = &cobra.Command{
 		resp, err := cts.RuncQuery(ctx, query)
 		if err != nil {
 			logger.Error().Err(err).Msgf("Container \"%s\" not found", name)
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Containers[0])
+
+		return nil
 	},
 }
 
