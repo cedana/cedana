@@ -15,7 +15,7 @@ import (
 const (
 	DEFAULT_PROCESS_DEADLINE    = 20 * time.Minute
 	DEFAULT_CONTAINERD_DEADLINE = 10 * time.Minute
-	DEFAULT_RUNC_DEADLINE       = 1 * time.Minute
+	DEFAULT_RUNC_DEADLINE       = 10 * time.Minute
 )
 
 type ServiceClient struct {
