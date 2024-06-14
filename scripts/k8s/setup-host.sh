@@ -23,7 +23,24 @@ install_yum_packages() {
     yum group install -y "Development Tools"
 }
 
-if [ -f /etc/debian_version ]; then
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+        debian | ubuntu)
+            install_apt_packages
+            ;;
+        rhel | centos | fedora)
+            install_yum_packages
+            ;;
+        amzn)
+            install_yum_packages
+            ;;
+        *)
+            echo "Unknown distribution"
+            exit 1
+            ;;
+    esac
+elif [ -f /etc/debian_version ]; then
     install_apt_packages
 elif [ -f /etc/redhat-release ]; then
     install_yum_packages
@@ -31,6 +48,7 @@ else
     echo "Unknown distribution"
     exit 1
 fi
+
 
 wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
 tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
