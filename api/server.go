@@ -229,7 +229,7 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		logger.Info().
+		logger.Debug().
 			Str("method", info.FullMethod).
 			Msg("gRPC stream started")
 
@@ -241,7 +241,7 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 				Err(err).
 				Msg("gRPC stream failed")
 		} else {
-			logger.Info().
+			logger.Debug().
 				Str("method", info.FullMethod).
 				Msg("gRPC stream succeeded")
 		}
@@ -258,7 +258,7 @@ func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
 		// Log the request
-		logger.Info().
+		logger.Debug().
 			Str("method", info.FullMethod).
 			Interface("request", req).
 			Msg("gRPC request received")
@@ -275,7 +275,7 @@ func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor
 				Err(err).
 				Msg("gRPC request failed")
 		} else {
-			logger.Info().
+			logger.Debug().
 				Str("method", info.FullMethod).
 				Interface("response", resp).
 				Msg("gRPC request succeeded")
