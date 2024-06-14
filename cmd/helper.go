@@ -50,6 +50,27 @@ var helperCmd = &cobra.Command{
 	},
 }
 
+var destroyCmd = &cobra.Command{
+	Use:   "destroy",
+	Short: "Destroy cedana from host of kubernetes worker node",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		if err := destroyCedana(ctx); err != nil {
+			logger.Error().Err(err).Msg("Unable to destroy cedana on host.")
+		}
+
+		return nil
+	},
+}
+
+func destroyCedana(ctx context.Context) error {
+	logger := ctx.Value("logger").(*zerolog.Logger)
+
+	return nil
+}
+
 func startHelper(ctx context.Context, startChroot bool) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	signalChannel := make(chan os.Signal, 1)
@@ -161,4 +182,6 @@ func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
 	rootCmd.AddCommand(helperCmd)
+
+	helperCmd.AddCommand(destroyCmd)
 }
