@@ -14,14 +14,14 @@ import (
 )
 
 type runcContainer struct {
-	containerId      string
-	bundle           string
-	containerName    string
-	imageName        string
-	sandboxId        string
-	sandboxName      string
-	sandboxNamespace string
-	sandboxUid       string
+	ContainerId      string
+	Bundle           string
+	ContainerName    string
+	ImageName        string
+	SandboxId        string
+	SandboxName      string
+	SandboxNamespace string
+	SandboxUid       string
 }
 
 func List(root string) error {

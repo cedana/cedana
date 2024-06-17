@@ -133,7 +133,24 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	var containers []*task.RuncContainer
 	if len(args.ContainerNames) == 0 {
-		runc.RuncGetAll(args.Root, args.Namespace)
+
+		runcContainers, err := runc.RuncGetAll(args.Root, args.Namespace)
+		if err != nil {
+			return nil, status.Error(codes.NotFound, fmt.Sprintf("Container \"%s\" not found"))
+		}
+
+		for _, c := range runcContainers {
+			ctr := &task.RuncContainer{
+				ID:            c.ContainerId,
+				ImageName:     c.ImageName,
+				BundlePath:    c.Bundle,
+				ContainerName: c.ContainerName,
+				SandboxId:     c.SandboxId,
+				SandboxName:   c.SandboxName,
+				SandboxUid:    c.SandboxUid,
+			}
+			containers = append(containers, ctr)
+		}
 	}
 	for i, name := range args.ContainerNames {
 		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
