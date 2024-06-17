@@ -71,16 +71,16 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 		var c runcContainer
 
 		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
-			c.containerName = sandbox.Annotations[kube.CONTAINER_NAME]
-			c.imageName = sandbox.Annotations[kube.IMAGE_NAME]
-			c.sandboxId = sandbox.Annotations[kube.SANDBOX_ID]
-			c.sandboxName = sandbox.Annotations[kube.SANDBOX_NAME]
-			c.sandboxUid = sandbox.Annotations[kube.SANDBOX_UID]
-			c.sandboxNamespace = sandbox.Annotations[kube.SANDBOX_NAMESPACE]
-			c.containerId = sandbox.ContainerId
-			c.bundle = sandbox.Bundle
+			c.ContainerName = sandbox.Annotations[kube.CONTAINER_NAME]
+			c.ImageName = sandbox.Annotations[kube.IMAGE_NAME]
+			c.SandboxId = sandbox.Annotations[kube.SANDBOX_ID]
+			c.SandboxName = sandbox.Annotations[kube.SANDBOX_NAME]
+			c.SandboxUid = sandbox.Annotations[kube.SANDBOX_UID]
+			c.SandboxNamespace = sandbox.Annotations[kube.SANDBOX_NAMESPACE]
+			c.ContainerId = sandbox.ContainerId
+			c.Bundle = sandbox.Bundle
 
-			if sandbox.Annotations[kube.SANDBOX_NAMESPACE] == namespace || namespace == "" && c.imageName != "" {
+			if sandbox.Annotations[kube.SANDBOX_NAMESPACE] == namespace || namespace == "" && c.ImageName != "" {
 				containers = append(containers, c)
 			}
 		}
