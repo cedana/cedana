@@ -68,6 +68,12 @@ var destroyCmd = &cobra.Command{
 func destroyCedana(ctx context.Context) error {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 
+	if err := runCommand("bash", "./scripts/k8s/cleanup-host.sh"); err != nil {
+		logger.Error().Err(err).Msg("Cleanup host script failed")
+
+		return err
+	}
+
 	return nil
 }
 
