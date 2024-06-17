@@ -54,9 +54,6 @@ type Server struct {
 }
 
 func NewServer(ctx context.Context) (*Server, error) {
-	server := &Server{
-		grpcServer: grpc.NewServer(),
-	}
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	logFile, err := os.OpenFile(SERVER_LOG_PATH, SERVER_LOG_MODE, SERVER_LOG_PERMS)
 	if err != nil {
@@ -70,6 +67,13 @@ func NewServer(ctx context.Context) (*Server, error) {
 		Out:        logFile,
 		TimeFormat: utils.LOG_TIME_FORMAT_FULL,
 	}))
+
+	server := &Server{
+		grpcServer: grpc.NewServer(
+			grpc.StreamInterceptor(loggingStreamInterceptor(&newLogger)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(&newLogger)),
+		),
+	}
 
 	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
@@ -216,4 +220,36 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 	}
 	logger.Info().Msgf("GPU controller started with pid: %d, logging to: /tmp/cedana-gpucontroller.log", gpuCmd.Process.Pid)
 	return gpuCmd, nil
+}
+
+func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		logger.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
+
+		err := handler(srv, ss)
+
+		if err != nil {
+			logger.Error().Str("method", info.FullMethod).Err(err).Msg("gRPC stream failed")
+		} else {
+			logger.Debug().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
+		}
+
+		return err
+	}
+}
+
+func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+
+		resp, err := handler(ctx, req)
+
+		if err != nil {
+			logger.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+		} else {
+			logger.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+		}
+
+		return resp, err
+	}
 }
