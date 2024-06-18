@@ -51,7 +51,7 @@ which also provides information about any local or remote checkpoints associated
 To checkpoint a running job, you can run:
 
 ```sh
-cedana client dump job JOBID -d DIR
+cedana dump job JOBID -d DIR
 ```
 A successsful `dump` creates a `process_name_datetime.tar` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint in in the config:
 
@@ -66,7 +66,7 @@ See the configuration section for more toggles.
 ### Restoring
 
 ```sh
-cedana client restore job JOBID
+cedana restore job JOBID
 ```
 
 Currently, we also support `runc` and by extension Docker, `containerd` checkpointing and more container runtime support planned in the future. It should be noted that container checkpointing is generally orchestrated externally, leading the CLI options to be a little janky.
