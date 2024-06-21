@@ -11,10 +11,12 @@ function start_regression() {
     cd -
 }
 
-# we assume setup_ci and start_cedana have checked out
-# the correct branch, and we're currently cd'd into the right dir
-print_env
-setup_ci
-start_cedana
-start_regression
-stop_cedana
+main() {
+    print_env || { echo "print_env failed"; exit 1; }
+    setup_ci || { echo "setup_ci failed"; exit 1; }
+    start_cedana || { echo "start_cedana failed"; exit 1; }
+    start_regression || { echo "start_regression failed"; exit 1; }
+    stop_cedana || { echo "stop_cedana failed"; exit 1; }
+}
+
+main
