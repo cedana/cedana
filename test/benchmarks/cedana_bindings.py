@@ -12,9 +12,7 @@ from tplib import task_pb2, task_pb2_grpc
 
 output_dir = "benchmark_results"
 
-cedana_version = (
-    subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
-)
+subprocess.run(["git", "fetch", "--tags"])
 
 
 def start_recording(pid):
@@ -40,6 +38,15 @@ def stop_recording(
     process_stats,
 ):
     p = psutil.Process(pid)
+    try:
+        cedana_version = (
+            subprocess.check_output(["git", "describe", "--tags"])
+            .decode("utf-8")
+            .strip()
+        )
+    except subprocess.CalledProcessError:
+        cedana_version = "dev"
+
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data["cpu_times"].user
     cpu_time_system_diff = current_cpu_times.system - initial_data["cpu_times"].system
@@ -168,6 +175,7 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
     stop_recording("checkpoint", daemonPID, initial_data, jobID, process_stats)
 
     return dump_resp
+
 
 async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5):
     channel = grpc.aio.insecure_channel("localhost:8080")
