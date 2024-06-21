@@ -13,9 +13,6 @@ from tplib import task_pb2, task_pb2_grpc
 output_dir = "benchmark_results"
 
 subprocess.run(["git", "fetch", "--tags"])
-cedana_version = (
-    subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
-)
 
 
 def start_recording(pid):
@@ -41,6 +38,10 @@ def stop_recording(
     process_stats,
 ):
     p = psutil.Process(pid)
+    # moved here so we only collect version data if running in benchmarking (where a version # exists)
+    cedana_version = (
+        subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
+    )
     current_cpu_times = p.cpu_times()
     cpu_time_user_diff = current_cpu_times.user - initial_data["cpu_times"].user
     cpu_time_system_diff = current_cpu_times.system - initial_data["cpu_times"].system
