@@ -12,6 +12,7 @@ from tplib import task_pb2, task_pb2_grpc
 
 output_dir = "benchmark_results"
 
+subprocess.run(["git", "fetch", "--tags"])
 cedana_version = (
     subprocess.check_output(["git", "describe", "--tags"]).decode("utf-8").strip()
 )
@@ -169,7 +170,10 @@ async def run_checkpoint(daemonPID, jobID, output_dir, process_stats, dump_type)
 
     return dump_resp
 
-async def run_restore(daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5):
+
+async def run_restore(
+    daemonPID, jobID, checkpointID, output_dir, restore_type, max_retries=2, delay=5
+):
     channel = grpc.aio.insecure_channel("localhost:8080")
     restore_args = task_pb2.RestoreArgs()
     restore_args.Type = restore_type
