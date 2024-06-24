@@ -2,6 +2,7 @@
 
 APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
+    btrfs-progs libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf"
 
