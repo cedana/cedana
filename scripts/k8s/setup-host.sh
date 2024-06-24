@@ -4,9 +4,9 @@ chroot /host <<"EOT"
 
 # of course, there's differences in the names of some of these packages
 YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
-    protobuf-c protobuf-c-devel protobuf-compiler \
-    protobuf-devel protobuf-python libnl3-devel \
-    libcap-devel"
+    protobuf-c protobuf-c-devel protobuf-c-compiler \
+    protobuf-compiler protobuf-devel python3-protobuf \
+    libnl3-devel libcap-devel"
 
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
     libbsd-dev libcap-dev pkg-config \
@@ -19,7 +19,9 @@ install_apt_packages() {
 }
 
 install_yum_packages() {
-    yum install -y $YUM_PACKAGES
+    for pkg in $YUM_PACKAGES; do
+        yum install -y $pkg || echo "Failed to install $pkg"
+    done
     yum group install -y "Development Tools"
 }
 
