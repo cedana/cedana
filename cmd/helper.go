@@ -121,6 +121,33 @@ func startHelper(ctx context.Context, startChroot bool) {
 			}
 		}
 	}()
+
+	// scrape daemon logs for kubectl logs output
+	go func() {
+		file, err := os.Open("/var/log/cedana-daemon.log")
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to open cedana-daemon.log")
+			return
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				logger.Error().Err(err).Msg("Error reading cedana-daemon.log")
+				return
+			}
+			if len(line) > 0 {
+				logger.Info().Msg(line)
+			}
+		}
+	}()
+
 	req := &task.ContainerdQueryArgs{}
 	cts.ContainerdQuery(context.Background(), req)
 
