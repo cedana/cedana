@@ -27,7 +27,7 @@ const (
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
@@ -45,7 +45,36 @@ var helperCmd = &cobra.Command{
 			}
 		}
 		startHelper(ctx, startChroot)
+
+		return nil
 	},
+}
+
+var destroyCmd = &cobra.Command{
+	Use:   "destroy",
+	Short: "Destroy cedana from host of kubernetes worker node",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		if err := destroyCedana(ctx); err != nil {
+			logger.Error().Err(err).Msg("Unable to destroy cedana on host.")
+		}
+
+		return nil
+	},
+}
+
+func destroyCedana(ctx context.Context) error {
+	logger := ctx.Value("logger").(*zerolog.Logger)
+
+	if err := runCommand("bash", "./scripts/k8s/cleanup-host.sh"); err != nil {
+		logger.Error().Err(err).Msg("Cleanup host script failed")
+
+		return err
+	}
+
+	return nil
 }
 
 func startHelper(ctx context.Context, startChroot bool) {
@@ -159,4 +188,6 @@ func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
 	rootCmd.AddCommand(helperCmd)
+
+	helperCmd.AddCommand(destroyCmd)
 }

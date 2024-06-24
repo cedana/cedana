@@ -875,9 +875,10 @@ func (c *RuncContainer) handleRestoringExternalPidNamespace(rpcOpts *criurpc.Cri
 }
 
 func (c *RuncContainer) handleRestoringNamespaces(rpcOpts *criurpc.CriuOpts, extraFiles *[]*os.File, initPid string) error {
-
-	if err := c.handleRestoringExternalPidNamespace(rpcOpts, extraFiles, initPid); err != nil {
-		return err
+	if initPid != "" {
+		if err := c.handleRestoringExternalPidNamespace(rpcOpts, extraFiles, initPid); err != nil {
+			return err
+		}
 	}
 
 	for _, ns := range c.Config.Namespaces {
@@ -1282,8 +1283,8 @@ func logCriuErrors(dir, file string) {
 func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot string, bundle string, netPid int) error {
 	const logFile = "restore.log"
 
-	var crioPidFilePath = filepath.Join(bundle, "pidfile")
-	var containerdPidFilePath = filepath.Join(bundle, "init.pid")
+	crioPidFilePath := filepath.Join(bundle, "pidfile")
+	containerdPidFilePath := filepath.Join(bundle, "init.pid")
 
 	c.M.Lock()
 	defer c.M.Unlock()
@@ -1353,28 +1354,34 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			ManageCgroupsMode: (*criurpc.CriuCgMode)(proto.Int32(0)),
 		},
 	}
+
 	// Same as during checkpointing. If the container has a specific network namespace
 	// assigned to it, this now expects that the checkpoint will be restored in a
 	// already created network namespace.
 	// TODO BS pull this dynamically from original container
-	var pidBytes []byte
-	var readfileErr error
-	if _, err = os.Stat(crioPidFilePath); err == nil {
-		pidBytes, readfileErr = os.ReadFile(crioPidFilePath)
-	} else {
-		pidBytes, readfileErr = os.ReadFile(containerdPidFilePath)
-	}
-
-	if readfileErr != nil {
-		return readfileErr
-	}
-
-	pidStr := string(pidBytes)
+	pidStr := ""
 	if netPid != 0 {
 		pidStr = fmt.Sprint(netPid)
+	} else {
+		var pidBytes []byte
+		var readfileErr error
+		if _, err = os.Stat(crioPidFilePath); err == nil {
+			pidBytes, readfileErr = os.ReadFile(crioPidFilePath)
+		} else if _, err = os.Stat(containerdPidFilePath); err == nil {
+			pidBytes, readfileErr = os.ReadFile(containerdPidFilePath)
+		}
+
+		if readfileErr != nil {
+			return readfileErr
+		}
+
+		if pidBytes != nil {
+			pidStr = string(pidBytes)
+		}
 	}
-	nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
-	if nsPath != "" {
+
+	if pidStr != "" {
+		nsPath := fmt.Sprintf("/proc/%s/ns/net", pidStr)
 		// For this to work we need at least criu 3.11.0 => 31100.
 		// As there was already a successful version check we will
 		// not error out if it fails. runc will just behave as it used
@@ -1775,5 +1782,6 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, e
 		bundle:          context.Bundle,
 		netPid:          context.NetPid,
 	}
+
 	return r.Run(spec.Process, context.Root)
 }

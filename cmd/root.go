@@ -38,5 +38,8 @@ func Execute(ctx context.Context) error {
 
 	rootCmd.Version = GetVersion()
 
+	// only show usage when true usage error
+	rootCmd.SilenceUsage = true
+
 	return rootCmd.ExecuteContext(ctx)
 }

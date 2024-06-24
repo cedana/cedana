@@ -9,9 +9,9 @@ YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
     libcap-devel"
 
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
-    libbsd-dev python-ipaddress libcap-dev \
-    libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf"
+    libbsd-dev libcap-dev pkg-config \
+    libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler pkg-config \
+    protobuf-compiler python3-protobuf build-essential"
 
 install_apt_packages() {
     apt-get update
@@ -23,7 +23,24 @@ install_yum_packages() {
     yum group install -y "Development Tools"
 }
 
-if [ -f /etc/debian_version ]; then
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+        debian | ubuntu)
+            install_apt_packages
+            ;;
+        rhel | centos | fedora)
+            install_yum_packages
+            ;;
+        amzn)
+            install_yum_packages
+            ;;
+        *)
+            echo "Unknown distribution"
+            exit 1
+            ;;
+    esac
+elif [ -f /etc/debian_version ]; then
     install_apt_packages
 elif [ -f /etc/redhat-release ]; then
     install_yum_packages
@@ -31,6 +48,7 @@ else
     echo "Unknown distribution"
     exit 1
 fi
+
 
 wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
 tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
@@ -51,11 +69,7 @@ echo "export IS_K8S=1" >> ~/.bashrc
 source ~/.bashrc
 
 cd cedana
-git fetch
-git pull
-go build -v
-cp cedana /usr/local/bin/cedana
 
-cedana daemon start --systemctl
+./build-start-daemon.sh --systemctl
 
 EOT

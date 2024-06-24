@@ -18,6 +18,7 @@ install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
     cd bats-core
     ./install.sh /usr/local
+    cd -
 }
 
 install_docker() {
@@ -31,13 +32,13 @@ install_docker() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     sudo apt-get update
-    sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 install_sysbox() {
     wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
-    apt-get install jq
-    apt-get install ./sysbox-ce_0.6.4-0.linux_amd64.deb
+    apt-get install -y jq
+    apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
 }
 
 print_header() {
@@ -86,23 +87,26 @@ setup_ci() {
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
-    BRANCH_NAME="${CI_BRANCH:-main}"
 
-    export PATH=$PATH:/usr/local/go/bin
-    echo "export PATH=$PATH:/usr/local/go/bin" >>/root/.bashrc
+    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin
+    echo "export PATH=$PATH" >>/root/.bashrc
 
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
     sudo apt-get update && sudo apt-get install -y criu
-    # Install Cedana
-    git clone https://github.com/cedana/cedana && mkdir ~/.cedana
-    cd cedana
-    git fetch && git checkout ${BRANCH_NAME} && git pull origin ${BRANCH_NAME}
+
+    # Install recvtty
+    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
     # Install smoke & bench deps
+    cd ../../
     sudo pip3 install -r test/benchmarks/requirements
 }
 
 start_cedana() {
     ./build-start-daemon.sh
+}
+
+stop_cedana() {
+    sudo pkill -9 cedana
 }

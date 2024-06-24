@@ -25,20 +25,20 @@ var dumpProcessCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Manually checkpoint a running process [pid] to a directory [-d]",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
 			logger.Error().Msgf("Error parsing pid: %v", err)
-			return
+			return err
 		}
 
 		id := xid.New().String()
@@ -50,7 +50,7 @@ var dumpProcessCmd = &cobra.Command{
 			dir = viper.GetString("shared_storage.dump_storage_dir")
 			if dir == "" {
 				logger.Error().Msgf("no dump directory specified")
-				return
+				return err
 			}
 			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
 		}
@@ -71,9 +71,11 @@ var dumpProcessCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -86,14 +88,14 @@ var dumpJobCmd = &cobra.Command{
 		return nil
 	},
 	Short: "Manually checkpoint a running job to a directory [-d]",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		// TODO NR - this needs to be extended to include container checkpoints
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -101,7 +103,7 @@ var dumpJobCmd = &cobra.Command{
 
 		if id == "" {
 			logger.Error().Msgf("no job id specified")
-			return
+			return err
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
@@ -109,7 +111,7 @@ var dumpJobCmd = &cobra.Command{
 			dir = viper.GetString("shared_storage.dump_storage_dir")
 			if dir == "" {
 				logger.Error().Msgf("no dump directory specified")
-				return
+				return err
 			}
 			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
 		}
@@ -137,9 +139,11 @@ var dumpJobCmd = &cobra.Command{
 			} else {
 				logger.Error().Err(err).Msgf("checkpoint task failed")
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -147,13 +151,13 @@ var dumpContainerdCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -171,9 +175,11 @@ var dumpContainerdCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -181,13 +187,13 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	Use:   "rootfs",
 	Short: "Manually checkpoint a running runc container's rootfs and bundle into an image",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
@@ -216,10 +222,11 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint rootfs failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Saved rootfs and stored in new image: %s", resp.ImageRef)
 
+		return nil
 	},
 }
 
@@ -227,20 +234,20 @@ var dumpRuncCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually checkpoint a running runc container to a directory",
 	Args:  cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
-			return
+			return err
 		}
 		defer cts.Close()
 
 		root, _ := cmd.Flags().GetString(rootFlag)
 		if runcRootPath[root] == "" {
 			logger.Error().Msgf("container root %s not supported", root)
-			return
+			return err
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
@@ -296,9 +303,11 @@ var dumpRuncCmd = &cobra.Command{
 			} else {
 				logger.Error().Msgf("Checkpoint task failed: %v", err)
 			}
-			return
+			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
 	},
 }
 
@@ -337,7 +346,7 @@ func init() {
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpRuncCmd.Flags().StringP(rootFlag, "r", "k8s", "container root")
+	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")

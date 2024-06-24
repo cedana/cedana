@@ -2,16 +2,15 @@ name: Test
 
 on: [push]
 
+concurrency:
+  group: cedana-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
 
       - name: Run smoke tests
         env:
