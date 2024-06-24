@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/crio"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/xid"
@@ -84,6 +85,15 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		PID:     pid,
 		JID:     state.JID,
 	}, err
+}
+
+func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (*task.CRIORootfsDumpResp, error) {
+
+	if err := crio.Commit(args.ContainerID); err != nil {
+		return &task.CRIORootfsDumpResp{ImageRef: "success"}, err
+	}
+
+	return &task.CRIORootfsDumpResp{}, nil
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
@@ -296,13 +306,13 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
 
-    sharedLibPath := viper.GetString("gpu_shared_lib_path")
-    if sharedLibPath == "" {
-      sharedLibPath = utils.GpuSharedLibPath
-    }
-    if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
-      return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
-    }
+		sharedLibPath := viper.GetString("gpu_shared_lib_path")
+		if sharedLibPath == "" {
+			sharedLibPath = utils.GpuSharedLibPath
+		}
+		if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+			return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+		}
 		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 

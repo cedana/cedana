@@ -90,6 +90,21 @@ func (c *ServiceClient) Query(ctx context.Context, args *task.QueryArgs) (*task.
 }
 
 //////////////////////////////
+////// CRIO Rootfs Dump //////
+//////////////////////////////
+
+func (c *ServiceClient) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (*task.CRIORootfsDumpResp, error) {
+	// TODO NR - timeouts here need to be fixed
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.CRIORootfsDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+//////////////////////////////
 // Containerd Service Calls //
 //////////////////////////////
 

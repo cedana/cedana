@@ -351,6 +351,10 @@ func init() {
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
+	dumpCmd.AddCommand(dumpCRIORootfs)
+	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
+	dumpRuncCmd.MarkFlagRequired(idFlag)
+
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)

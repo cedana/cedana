@@ -1,22 +1,13 @@
 package container
 
 import (
-	gocontext "context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/cedana/cedana/utils"
 	"github.com/cedana/runc/libcontainer"
-	"github.com/containerd/console"
-	containerd "github.com/containerd/containerd"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
-	"github.com/containerd/containerd/log"
-	"github.com/docker/docker/errdefs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -40,107 +31,107 @@ type RuncOpts struct {
 	StateRoot       string
 }
 
-func Restore(imgPath string, containerID string) error {
-	err := containerdRestore(containerID, imgPath)
-	if err != nil {
-		return err
-	}
+// func Restore(imgPath string, containerID string) error {
+// 	err := containerdRestore(containerID, imgPath)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-func containerdRestore(id string, ref string) error {
-	ctx := gocontext.Background()
-	logger := utils.GetLogger()
+// func containerdRestore(id string, ref string) error {
+// 	ctx := gocontext.Background()
+// 	logger := utils.GetLogger()
 
-	logger.Info().Msgf("restoring container %s from %s", id, ref)
+// 	logger.Info().Msgf("restoring container %s from %s", id, ref)
 
-	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
-	if err != nil {
-		return err
-	}
-	defer cancel()
+// 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer cancel()
 
-	checkpoint, err := containerdClient.GetImage(ctx, ref)
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return err
-		}
-		ck, err := containerdClient.Fetch(ctx, ref)
-		if err != nil {
-			return err
-		}
-		checkpoint = containerd.NewImage(containerdClient, ck)
-	}
+// 	checkpoint, err := containerdClient.GetImage(ctx, ref)
+// 	if err != nil {
+// 		if !errdefs.IsNotFound(err) {
+// 			return err
+// 		}
+// 		ck, err := containerdClient.Fetch(ctx, ref)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		checkpoint = containerd.NewImage(containerdClient, ck)
+// 	}
 
-	opts := []containerd.RestoreOpts{
-		containerd.WithRestoreImage,
-		containerd.WithRestoreSpec,
-		containerd.WithRestoreRuntime,
-		containerd.WithRestoreRW,
-	}
+// 	opts := []containerd.RestoreOpts{
+// 		containerd.WithRestoreImage,
+// 		containerd.WithRestoreSpec,
+// 		containerd.WithRestoreRuntime,
+// 		containerd.WithRestoreRW,
+// 	}
 
-	ctr, err := containerdClient.Restore(ctx, id, checkpoint, opts...)
-	if err != nil {
-		return err
-	}
-	topts := []containerd.NewTaskOpts{}
-	topts = append(topts, containerd.WithTaskCheckpoint(checkpoint))
-	spec, err := ctr.Spec(ctx)
-	if err != nil {
-		return err
-	}
+// 	ctr, err := containerdClient.Restore(ctx, id, checkpoint, opts...)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	topts := []containerd.NewTaskOpts{}
+// 	topts = append(topts, containerd.WithTaskCheckpoint(checkpoint))
+// 	spec, err := ctr.Spec(ctx)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	useTTY := spec.Process.Terminal
-	// useTTY := true
+// 	useTTY := spec.Process.Terminal
+// 	// useTTY := true
 
-	var con console.Console
-	if useTTY {
-		con = console.Current()
-		defer con.Reset()
-		if err := con.SetRaw(); err != nil {
-			return err
-		}
-	}
+// 	var con console.Console
+// 	if useTTY {
+// 		con = console.Current()
+// 		defer con.Reset()
+// 		if err := con.SetRaw(); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	task, err := tasks.NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
-	if err != nil {
-		return err
-	}
+// 	task, err := tasks.NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	var statusC <-chan containerd.ExitStatus
-	if useTTY {
-		if statusC, err = task.Wait(ctx); err != nil {
-			return err
-		}
-	}
+// 	var statusC <-chan containerd.ExitStatus
+// 	if useTTY {
+// 		if statusC, err = task.Wait(ctx); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	if err := task.Start(ctx); err != nil {
-		return err
-	}
+// 	if err := task.Start(ctx); err != nil {
+// 		return err
+// 	}
 
-	if !useTTY {
-		return nil
-	}
+// 	if !useTTY {
+// 		return nil
+// 	}
 
-	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
-		log.G(ctx).WithError(err).Error("console resize")
-	}
+// 	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
+// 		log.G(ctx).WithError(err).Error("console resize")
+// 	}
 
-	status := <-statusC
-	code, _, err := status.Result()
-	if err != nil {
-		return err
-	}
-	if _, err := task.Delete(ctx); err != nil {
-		return err
-	}
-	if code != 0 {
-		return errors.New("exit code not 0")
-	}
+// 	status := <-statusC
+// 	code, _, err := status.Result()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if _, err := task.Delete(ctx); err != nil {
+// 		return err
+// 	}
+// 	if code != 0 {
+// 		return errors.New("exit code not 0")
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	var spec rspec.Spec

@@ -103,14 +103,14 @@ func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.Container
 func (s *service) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
 	resp := &task.ContainerdRootfsRestoreResp{}
 
-	containerdService, err := containerd.New(ctx, args.Address, s.logger)
-	if err != nil {
-		return resp, err
-	}
+	// containerdService, err := containerd.New(ctx, args.Address, s.logger)
+	// if err != nil {
+	// 	return resp, err
+	// }
 
-	if err := containerdService.RestoreRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace); err != nil {
-		return resp, err
-	}
+	// if err := containerdService.RestoreRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace); err != nil {
+	// 	return resp, err
+	// }
 
 	resp.ImageRef = args.ImageRef
 

@@ -140,10 +140,10 @@ func chmodRecursive(path string, mode os.FileMode) error {
 
 func (s *service) containerdRestore(ctx context.Context, imgPath string, containerId string) error {
 	s.logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
-	err := container.Restore(imgPath, containerId)
-	if err != nil {
-		return err
-	}
+	// err := container.Restore(imgPath, containerId)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
