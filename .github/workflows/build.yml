@@ -18,5 +18,8 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Setup CI
+        run: sudo -E make -C scripts/ci setup
+
       - name: Build
         run: go build -v ./...
