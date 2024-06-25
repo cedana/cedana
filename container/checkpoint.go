@@ -48,8 +48,6 @@ import (
 	"github.com/containerd/typeurl/v2"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	dockerTypes "github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	dockercli "github.com/docker/docker/client"
 
 	errdefs "github.com/containerd/errdefs"
 	"github.com/opencontainers/go-digest"
@@ -658,93 +656,6 @@ func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*
 	}
 	ctx, cancel := AppContext(ctx)
 	return client, ctx, cancel, err
-}
-
-// Pretty wacky function. "creates" a runc container from a docker container,
-// basically piecing it together from information we can parse out from the docker go lib
-func getContainerFromDocker(containerID string) *RuncContainer {
-	l := utils.GetLogger()
-
-	cli, err := dockercli.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		l.Fatal().Err(err).Msg("could not create docker client")
-	}
-
-	cli.NegotiateAPIVersion(gocontext.Background())
-
-	container, err := cli.ContainerInspect(gocontext.Background(), containerID)
-	if err != nil {
-		l.Fatal().Err(err).Msg("could not inspect container")
-	}
-
-	criu := criu.MakeCriu()
-	criuVersion, err := criu.GetCriuVersion()
-	if err != nil {
-		l.Fatal().Err(err).Msg("could not get criu version")
-	}
-
-	// need to build a config from the information we can parse out from the docker lib
-	// start with bare minimum
-	runcConf := &configs.Config{
-		Rootfs: container.GraphDriver.Data["MergedDir"], // does this work lol
-	}
-
-	// create a cgroup manager for cgroup freezing
-	// need c.Path, c.Parent & c.Name, c.Systemd. We can grab t his from proc/pid
-	var cgroupsConf *configs.Cgroup
-	if container.State.Pid != 0 {
-		cgroupPaths := []string{fmt.Sprintf("/proc/%d/cgroup", container.State.Pid)}
-		// assume we're in cgroup v2 unified
-		// for cgroup v2 unified hierarchy, there are no per-controller cgroup paths
-		cgroupsPaths, err := cgroups.ParseCgroupFile(cgroupPaths[0])
-		if err != nil {
-			l.Fatal().Err(err).Msg("could not parse cgroup paths")
-		}
-
-		path := cgroupsPaths[""]
-
-		// Splitting the string by / separator
-		cgroupParts := strings.Split(path, "/")
-
-		if len(cgroupParts) < 3 {
-			l.Fatal().Err(err).Msg("could not parse cgroup path")
-		}
-
-		name := cgroupParts[2]
-		parent := cgroupParts[1]
-		cgpath := "/" + parent + "/" + name
-
-		var isSystemd bool
-		if strings.Contains(path, ".slice") {
-			isSystemd = true
-		}
-
-		cgroupsConf = &configs.Cgroup{
-			Parent:  parent,
-			Name:    name,
-			Path:    cgpath,
-			Systemd: isSystemd,
-		}
-
-	}
-
-	cgroupManager, err := manager.New(cgroupsConf)
-	if err != nil {
-		l.Fatal().Err(err).Msg("could not create cgroup manager")
-	}
-
-	// this is so stupid hahahaha
-	c := &RuncContainer{
-		Id:            containerID,
-		Root:          fmt.Sprintf("%s", container.Config.WorkingDir),
-		CriuVersion:   criuVersion,
-		CgroupManager: cgroupManager,
-		DockerConfig:  &container,
-		Config:        runcConf,
-		Pid:           container.State.Pid,
-	}
-
-	return c
 }
 
 // AppContext returns the context for a command. Should only be called once per
