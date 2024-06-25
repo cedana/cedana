@@ -50,7 +50,7 @@ function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
     CEDANA_REMOTE=true
     CEDANA_OTEL_ENABLED=true
-    .test/benchmarks/entrypoint.sh
+    ./test/benchmarks/entrypoint.sh
 }
 
 main() {
