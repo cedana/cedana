@@ -49,3 +49,5 @@ main() {
     setup_ci || { echo "Failed to setup CI"; exit 1; }
     start_benchmarking || { echo "Failed to start benchmarking"; exit 1; }
 }
+
+main
