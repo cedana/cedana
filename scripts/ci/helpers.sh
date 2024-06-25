@@ -3,7 +3,9 @@
 APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf"
+    protobuf-compiler python3-protobuf software-properties-common \
+    zip
+"
 
 install_apt_packages() {
     apt-get update
@@ -41,6 +43,10 @@ install_sysbox() {
     apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
 }
 
+install_otelcol_contrib() {
+    wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
+    dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
+}
 print_header() {
     echo "############### $1 ###############"
 }

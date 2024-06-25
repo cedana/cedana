@@ -38,10 +38,19 @@ CONTAINER_CREDENTIAL_PATH=/tmp/creds.json
 echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINTSVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
 cat client_config.json
 
+
+function setup_benchmarking() {
+    cd test/benchmarks
+    pip install -r requirements
+
+    protoc --python_out=. profile.proto
+    cd ../..
+}
 function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
-    cd test/benchmarks
-    ./entrypoint.sh
+    CEDANA_REMOTE=true
+    CEDANA_OTEL_ENABLED=true
+    .test/benchmarks/entrypoint.sh
 }
 
 main() {
