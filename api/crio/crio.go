@@ -133,6 +133,7 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) error {
+
 	includeFiles := []string{
 		"bind.mounts",
 	}

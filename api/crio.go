@@ -14,7 +14,7 @@ import (
 func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (task *task.CRIORootfsDumpResp, err error) {
 	var spec *rspec.Spec
 
-	root := filepath.Join(args.ContainerStorage, args.ContainerID, "userdata/state.json")
+	root := filepath.Join("/run/runc", args.ContainerID, "userdata/state.json")
 
 	configFile, err := os.ReadFile(filepath.Join(root))
 	if err != nil {
