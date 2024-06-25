@@ -56,6 +56,7 @@ function start_benchmarking() {
 main() {
     print_env || { echo "Failed to print env"; exit 1; }
     setup_ci || { echo "Failed to setup CI"; exit 1; }
+    setup_benchmarking || { echo "Failed to setup benchmarking"; exit 1; }
     start_benchmarking || { echo "Failed to start benchmarking"; exit 1; }
 }
 
