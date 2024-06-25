@@ -43,11 +43,12 @@ service TaskService {
 
 message CRIORootfsDumpArgs {
   string ContainerID = 1;
-  string ImageRef = 2;
+  string Dest = 2;
+  string ContainerStorage = 3;
 }
 
 message CRIORootfsDumpResp {
-  string ImageRef = 1;
+  string Dest = 1;
 }
 
 /////////////////////

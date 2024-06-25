@@ -26,9 +26,19 @@ var dumpCRIORootfs = &cobra.Command{
 		if err != nil {
 			logger.Error().Msgf("Error getting container id: %v", err)
 		}
+		dest, err := cmd.Flags().GetString(destFlag)
+		if err != nil {
+			logger.Error().Msgf("Error getting destination path: %v", err)
+		}
+		containerStorage, err := cmd.Flags().GetString(containerStorageFlag)
+		if err != nil {
+			logger.Error().Msgf("Error getting container storage path: %v", err)
+		}
 
 		dumpArgs := task.CRIORootfsDumpArgs{
-			ContainerID: id,
+			ContainerID:      id,
+			Dest:             dest,
+			ContainerStorage: containerStorage,
 		}
 
 		resp, err := cts.CRIORootfsDump(ctx, &dumpArgs)
@@ -41,7 +51,7 @@ var dumpCRIORootfs = &cobra.Command{
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.ImageRef)
+		logger.Info().Msgf("Response: %v", resp)
 
 		return nil
 	},

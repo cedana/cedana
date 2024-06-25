@@ -171,3 +171,16 @@ func GetPausePid(bundlePath string) (int, error) {
 
 	return pid, nil
 }
+
+func GetSpecById(root, containerID string) (spec *rspec.Spec, err error) {
+
+	configFile, err := os.ReadFile(filepath.Join(root, containerID))
+	if err != nil {
+		return spec, err
+	}
+	if err := json.Unmarshal(configFile, &spec); err != nil {
+		return spec, err
+	}
+
+	return spec, err
+}

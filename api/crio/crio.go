@@ -132,7 +132,11 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 	return rchanges, err
 }
 
-func rootfsCheckpoint(ctx context.Context, ctrID string, specgen *rspec.Spec) error {
+func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) error {
+	includeFiles := []string{
+		"bind.mounts",
+	}
+
 	config, err := getDefaultConfig()
 	if err != nil {
 		return err
@@ -154,6 +158,15 @@ func rootfsCheckpoint(ctx context.Context, ctrID string, specgen *rspec.Spec) er
 	if err != nil {
 		return err
 	}
+
+	includeFiles = append(includeFiles, addToTarFiles...)
+
+	_, err = archive.TarWithOptions(ctrDir, &archive.TarOptions{
+		// This should be configurable via api.proti
+		Compression:      archive.Uncompressed,
+		IncludeSourceDir: true,
+		IncludeFiles:     includeFiles,
+	})
 
 	return nil
 }
