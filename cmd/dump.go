@@ -352,8 +352,12 @@ func init() {
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
 	dumpCmd.AddCommand(dumpCRIORootfs)
-	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
-	dumpRuncCmd.MarkFlagRequired(idFlag)
+	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
+	dumpCRIORootfs.MarkFlagRequired(idFlag)
+	dumpCRIORootfs.Flags().StringP(destFlag, "d", "", "directory to dump to")
+	dumpCRIORootfs.MarkFlagRequired(destFlag)
+	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
+	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
 
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 

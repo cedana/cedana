@@ -67,3 +67,11 @@ function has_buildah() {
 function run_buildah() {
     buildah --log-level debug --root "$TESTDIR/crio" "$@"
 }
+
+function rootfs_checkpoint() {
+  local container_storage="$1"
+  local destination="$2"
+  local container_id="$3"
+
+  cedana dump CRIORootfs -s "$container_storage" -i "$container_id" -d "$destination"
+}
