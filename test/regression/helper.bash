@@ -68,7 +68,7 @@ function run_buildah() {
     buildah --log-level debug --root "$TESTDIR/crio" "$@"
 }
 
-function rootfs_checkpoint() {
+function crio_rootfs_checkpoint() {
   local container_storage="$1"
   local destination="$2"
   local container_id="$3"

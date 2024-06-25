@@ -146,13 +146,11 @@ load helper.bash
 	pod_id=$(crictl runp "$TESTDATA"/sandbox_config.json)
 	ctr_id=$(crictl create "$pod_id" "$TESTDATA"/container_sleep.json "$TESTDATA"/sandbox_config.json)
 	crictl start "$ctr_id"
-	crictl checkpoint --export="$TESTDIR"/cp.tar "$ctr_id"
-
+  crio_rootfs_checkpoint "$ctr_storage" "$ctr_id" "$TESTDIR"/cp.tar
 	crictl rm -f "$ctr_id"
 	crictl rmp -f "$pod_id"
 	newimage=$(run_buildah from scratch)
 	run_buildah add "$newimage" "$TESTDIR"/cp.tar /
-	run_buildah config --annotation io.kubernetes.cri-o.annotations.checkpoint.name=sleeper "$newimage"
 	run_buildah commit "$newimage" "checkpoint-image:tag1"
 	pod_id=$(crictl runp "$TESTDATA"/sandbox_config.json)
 	# Replace original container with checkpoint image
