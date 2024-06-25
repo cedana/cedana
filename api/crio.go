@@ -2,17 +2,25 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 
 	"github.com/cedana/cedana/api/crio"
-	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
+	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (task *task.CRIORootfsDumpResp, err error) {
+	var spec *rspec.Spec
 
-	spec, err := runc.GetSpecById(filepath.Join(args.ContainerStorage, "userdata"), args.ContainerID)
+	root := filepath.Join(args.ContainerStorage, args.ContainerID, "userdata")
+
+	configFile, err := os.ReadFile(filepath.Join(root))
 	if err != nil {
+		return task, err
+	}
+	if err := json.Unmarshal(configFile, &spec); err != nil {
 		return task, err
 	}
 
