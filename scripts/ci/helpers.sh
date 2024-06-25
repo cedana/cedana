@@ -49,6 +49,14 @@ install_buildah() {
     sudo apt-get -y install buildah
 }
 
+install_crictl() {
+    VERSION="v1.30.0"
+    curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-${VERSION}-linux-amd64.tar.gz --output crictl-${VERSION}-linux-amd64.tar.gz
+    sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+    rm -f crictl-$VERSION-linux-amd64.tar.gz
+
+}
+
 print_header() {
     echo "############### $1 ###############"
 }
@@ -92,6 +100,7 @@ setup_ci() {
     install_docker
     install_sysbox
     install_buildah
+    install_crictl
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
