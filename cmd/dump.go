@@ -362,4 +362,13 @@ func init() {
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)
+
+	rootCmd.AddCommand(pushCRIOImage)
+	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
+	pushCRIOImage.MarkFlagRequired(refFlag)
+	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
+	pushCRIOImage.MarkFlagRequired(newRefFlag)
+	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
+	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
+
 }
