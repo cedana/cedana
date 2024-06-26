@@ -8,7 +8,7 @@ function start_regression() {
     echo "Running regression tests in cwd: $(pwd)"
     cd test/regression
     bats main.bats
-    cd -
+    cd ../..
 }
 
 main() {
