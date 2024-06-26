@@ -124,12 +124,14 @@ load helper.bash
   recvtty $tty_sock &
   local tty_pid=$!
   run runc_restore $bundle $dumpdir $job_id $tty_sock
-  sleep 1
+
+  # https://github.com/sstephenson/bats/issues/80#issuecomment-174101686
+  sleep 1 3>- &
 
   # check if container running correctly, count lines in output file
   [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2
+  sleep 2 3>- &
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
