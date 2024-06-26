@@ -134,9 +134,7 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) error {
 
-	includeFiles := []string{
-		"bind.mounts",
-	}
+	includeFiles := []string{}
 
 	config, err := getDefaultConfig()
 	if err != nil {
@@ -155,7 +153,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
 
-	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, dest)
+	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir)
 	if err != nil {
 		return err
 	}

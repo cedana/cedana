@@ -20,11 +20,14 @@ func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpA
 	if err != nil {
 		return task, err
 	}
+
 	if err := json.Unmarshal(configFile, &spec); err != nil {
 		return task, err
 	}
 
-	crio.RootfsCheckpoint(ctx, args.ContainerStorage, args.Dest, args.ContainerID, spec)
+	if err := crio.RootfsCheckpoint(ctx, args.ContainerStorage, args.Dest, args.ContainerID, spec); err != nil {
+		return task, err
+	}
 
 	return task, nil
 }
