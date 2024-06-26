@@ -37,6 +37,7 @@ CONTAINER_CREDENTIAL_PATH=/tmp/creds.json
 
 echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINTSVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
 cat client_config.json
+mkdir -p ~/.cedana
 cp client_config.json ~/.cedana/client_config.json
 
 
