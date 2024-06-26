@@ -11,11 +11,14 @@ YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
     libbsd-dev libcap-dev pkg-config \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler pkg-config \
-    protobuf-compiler python3-protobuf build-essential"
+    protobuf-compiler python3-protobuf build-essential \
+    libgpgme-dev libseccomp-dev libbtrfs-dev"
 
 install_apt_packages() {
     apt-get update
-    apt-get install -y $APT_PACKAGES
+    for pkg in $APT_PACKAGES; do
+        apt-get install -y $pkg || echo "Failed to install $pkg"
+    done
 }
 
 install_yum_packages() {
