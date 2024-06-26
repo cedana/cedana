@@ -52,6 +52,7 @@ function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
     CEDANA_REMOTE=true
     CEDANA_OTEL_ENABLED=true
+    CEDANA_URL=$CHECKPOINTSVC_URL
     ./test/benchmarks/entrypoint.sh
 }
 
