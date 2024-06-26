@@ -200,6 +200,8 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error
 
 	containerRootDirectory := string(output)
 
+	containerRootDirectory = strings.ReplaceAll(containerRootDirectory, "\n", "")
+
 	rootfsDiffFile, err := os.Open(rootfsDiffPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -214,7 +216,7 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error
 	}
 
 	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
-	output, err = cmd.CombinedOutput()
+	_, err = cmd.CombinedOutput()
 	if err != nil {
 		return err
 	}
