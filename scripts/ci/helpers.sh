@@ -9,7 +9,9 @@ APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
 
 install_apt_packages() {
     apt-get update
-    apt-get install -y $APT_PACKAGES
+    for pkg in $APT_PACKAGES; do
+        apt-get install -y $pkg || echo "failed to isntall $pkg"
+    done
 }
 
 install_code_server() {
