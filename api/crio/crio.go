@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/storage"
@@ -187,6 +188,8 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error
 	}
 
 	containerID := string(output)
+
+	containerID = strings.ReplaceAll(containerID, "\n", "")
 
 	//mount container
 	cmd = exec.Command("buildah", "mount", containerID)
