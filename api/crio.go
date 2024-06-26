@@ -25,9 +25,12 @@ func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpA
 		return resp, err
 	}
 
-	if err := crio.RootfsCheckpoint(ctx, args.ContainerStorage, args.Dest, args.ContainerID, spec); err != nil {
+	diffPath, err := crio.RootfsCheckpoint(ctx, args.ContainerStorage, args.Dest, args.ContainerID, spec)
+	if err != nil {
 		return resp, err
 	}
+
+	resp.Dest = diffPath
 
 	return resp, nil
 }
