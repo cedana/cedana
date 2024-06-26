@@ -14,6 +14,8 @@ import (
 func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (resp *task.CRIORootfsDumpResp, err error) {
 	var spec *rspec.Spec
 
+	resp = &task.CRIORootfsDumpResp{}
+
 	root := filepath.Join("/var/lib/containers/storage/overlay-containers/", args.ContainerID, "userdata/config.json")
 
 	configFile, err := os.ReadFile(filepath.Join(root))
