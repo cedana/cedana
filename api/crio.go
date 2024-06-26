@@ -36,3 +36,19 @@ func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpA
 
 	return resp, nil
 }
+
+func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArgs) (resp *task.CRIOImagePushResp, err error) {
+	resp = &task.CRIOImagePushResp{}
+
+	if err := crio.CRIORootfsMerge(args.OriginalImageRef, args.NewImageRef, args.RootfsDiffPath); err != nil {
+		return resp, err
+	}
+
+	if err := crio.CRIOImagePush(args.NewImageRef); err != nil {
+		return resp, err
+	}
+
+	resp.Message = "success"
+
+	return resp, nil
+}

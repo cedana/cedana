@@ -31,6 +31,7 @@ service TaskService {
 
   //CRIO
   rpc CRIORootfsDump(CRIORootfsDumpArgs) returns (CRIORootfsDumpResp);
+  rpc CRIOImagePush(CRIOImagePushArgs) returns (CRIOImagePushResp);
 
   // Streaming
   rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
@@ -40,6 +41,16 @@ service TaskService {
 /////////////////////
 /////// CRIO ////////
 /////////////////////
+
+message CRIOImagePushArgs {
+  string OriginalImageRef = 1;
+  string NewImageRef = 2;
+  string RootfsDiffPath = 3;
+}
+
+message CRIOImagePushResp {
+  string Message = 1;
+}
 
 message CRIORootfsDumpArgs {
   string ContainerID = 1;

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/containers/common/pkg/crutils"
@@ -175,6 +176,59 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	return diffPath, nil
+}
+
+func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error {
+	//buildah from original base ubuntu image
+	cmd := exec.Command("buildah", "from", originalImageRef)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	containerID := string(output)
+
+	//mount container
+	cmd = exec.Command("buildah", "mount", containerID)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	containerRootDirectory := string(output)
+
+	rootfsDiffFile, err := os.Open(rootfsDiffPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("failed to open root file-system diff file: %w", err)
+	}
+	defer rootfsDiffFile.Close()
+
+	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
+		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
+	}
+
+	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	return nil
+	//untar into storage root
+}
+
+func CRIOImagePush(newImageRef string) error {
+	//buildah push
+	cmd := exec.Command("buildah", "push", newImageRef)
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type commitInputOptions struct {

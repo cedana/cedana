@@ -7,6 +7,8 @@ const (
 	imgFlag              = "image"
 	idFlag               = "id"
 	refFlag              = "ref"
+	newRefFlag           = "new-ref"
+	rootfsDiffPathFlag   = "rootfs-diff-path"
 	addressFlag          = "address"
 	namespaceFlag        = "namespace"
 	rootFlag             = "root"

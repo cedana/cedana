@@ -104,6 +104,17 @@ func (c *ServiceClient) CRIORootfsDump(ctx context.Context, args *task.CRIORootf
 	return resp, nil
 }
 
+func (c *ServiceClient) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArgs) (*task.CRIOImagePushResp, error) {
+	// TODO NR - timeouts here need to be fixed
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.CRIOImagePush(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 //////////////////////////////
 // Containerd Service Calls //
 //////////////////////////////
