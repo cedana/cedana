@@ -4,26 +4,24 @@ package cedanagpu;
 
 option go_package = "github.com/cedana/cedana/api/services/gpu";
 
-
 service CedanaGPU {
-    rpc Checkpoint(CheckpointRequest) returns (CheckpointResponse) {};
-    rpc Restore(RestoreRequest) returns (RestoreResponse) {};
+  rpc Checkpoint(CheckpointRequest) returns (CheckpointResponse) {};
+  rpc Restore(RestoreRequest) returns (RestoreResponse) {};
+  rpc StartupPoll(StartupPollRequest) returns (StartupPollResponse) {};
 }
 
-message CheckpointRequest {
-    string directory = 1;
-}
+message CheckpointRequest { string directory = 1; }
 
 message CheckpointResponse {
-    bool success = 1;
-    string memPath = 2;
-    string ckptPath = 3;
+  bool success = 1;
+  string memPath = 2;
+  string ckptPath = 3;
 }
 
-message RestoreRequest {
-    string directory = 1;
-}
+message RestoreRequest { string directory = 1; }
 
-message RestoreResponse {
-    bool success = 1;
-}
+message RestoreResponse { bool success = 1; }
+
+message StartupPollRequest {}
+
+message StartupPollResponse { bool success = 1; }
