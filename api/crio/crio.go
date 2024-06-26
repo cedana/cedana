@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/storage"
@@ -132,30 +133,31 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 	return rchanges, err
 }
 
-func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) error {
+func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
+	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 
 	includeFiles := []string{}
 
 	config, err := getDefaultConfig()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	rootFsChanges, err := getDiff(config, ctrID, specgen)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
 
 	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	includeFiles = append(includeFiles, addToTarFiles...)
@@ -167,7 +169,12 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeFiles:     includeFiles,
 	})
 
-	return nil
+	_, err = os.Stat(diffPath)
+	if err != nil {
+		return "", err
+	}
+
+	return diffPath, nil
 }
 
 type commitInputOptions struct {

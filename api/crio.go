@@ -11,23 +11,23 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (task *task.CRIORootfsDumpResp, err error) {
+func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (resp *task.CRIORootfsDumpResp, err error) {
 	var spec *rspec.Spec
 
 	root := filepath.Join("/var/lib/containers/storage/overlay-containers/", args.ContainerID, "userdata/config.json")
 
 	configFile, err := os.ReadFile(filepath.Join(root))
 	if err != nil {
-		return task, err
+		return resp, err
 	}
 
 	if err := json.Unmarshal(configFile, &spec); err != nil {
-		return task, err
+		return resp, err
 	}
 
 	if err := crio.RootfsCheckpoint(ctx, args.ContainerStorage, args.Dest, args.ContainerID, spec); err != nil {
-		return task, err
+		return resp, err
 	}
 
-	return task, nil
+	return resp, nil
 }
