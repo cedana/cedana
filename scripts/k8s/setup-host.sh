@@ -6,7 +6,7 @@ chroot /host <<"EOT"
 YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
     protobuf-c protobuf-c-devel protobuf-c-compiler \
     protobuf-compiler protobuf-devel python3-protobuf \
-    libnl3-devel libcap-devel"
+    libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel"
 
 APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
     libbsd-dev libcap-dev pkg-config \
