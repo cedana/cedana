@@ -151,16 +151,13 @@ teardown() {
     local dumpdir="/tmp/jupyter-checkpoint"
     pid=$(sudo cat "$bundle/init.pid")
     # restore the container
-    [ -d $bundle ]
-    [ -d $dumpdir ]
-    echo $dumpdir contents:
-    ls $dumpdir
-    start_sleeping_jupyter_notebook "$checkpoint/test:latest" $job_id"
-    runc_restore_jupyter $bundle $dumpdir $job_id $pid
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" $job_id"
+    run runc_restore_jupyter "$bundle" "$dumpdir" "$job_id" "$pid"
     echo "$output"
 
     [[ "$output" == *"success"* ]]
 }
+
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
