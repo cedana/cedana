@@ -563,7 +563,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(uid, gid, s.logger)
+	gpuCmd, err := StartGPUController(ctx, uid, gid, s.logger)
 	if err != nil {
 		s.logger.Warn().Msgf("could not start gpu-controller: %v", err)
 		return nil, err
@@ -571,9 +571,6 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	// sleep a little to let the gpu controller start
-	time.Sleep(1 * time.Second)
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {

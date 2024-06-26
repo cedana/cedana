@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/api/runc"
+	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
@@ -23,6 +25,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -171,7 +174,7 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+func StartGPUController(ctx context.Context, uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
 	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d", uid, gid)
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
@@ -218,6 +221,35 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 	if err != nil {
 		logger.Fatal().Err(err)
 	}
+
+	// poll gpu controller to ensure it is running
+	var opts []grpc.DialOption
+	var gpuConn *grpc.ClientConn
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	for {
+		gpuConn, err = grpc.Dial("127.0.0.1:50051", opts...)
+		if err == nil {
+			break
+		}
+		logger.Info().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
+		time.Sleep(1 * time.Second)
+
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.StartupPollRequest{}
+	for {
+		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
+		if err == nil && resp.Success {
+			break
+		}
+		logger.Info().Msgf("Waiting for gpu-controller to start...")
+		time.Sleep(1 * time.Second)
+	}
+
 	logger.Info().Msgf("GPU controller started with pid: %d, logging to: /tmp/cedana-gpucontroller.log", gpuCmd.Process.Pid)
 	return gpuCmd, nil
 }
