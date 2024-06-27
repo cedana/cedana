@@ -40,6 +40,6 @@ jobs:
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        CHECKPOINTSVC_URL: ${{ secrets.CHECKPOINTSVC_URL }}
+        CEDANA_URL: ${{ secrets.CHECKPOINTSVC_URL }}
         CHECKPOINTSVC_TOKEN: ${{ secrets.CHECKPOINTSVC_TOKEN }}
         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
