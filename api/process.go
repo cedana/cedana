@@ -366,14 +366,14 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			outputFile.WriteString(stdoutScanner.Text() + "\n")
 		}
 		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Err(err).Msg("Error reading stdout")
+			s.logger.Info().Msgf("Finished reading stdout: %v", err)
 		}
 
 		for stderrScanner.Scan() {
 			outputFile.WriteString(stderrScanner.Text() + "\n")
 		}
 		if err := stderrScanner.Err(); err != nil {
-			s.logger.Err(err).Msg("Error reading stderr")
+			s.logger.Info().Msgf("Finished reading stderr: %v", err)
 		}
 	}()
 

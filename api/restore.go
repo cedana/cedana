@@ -565,7 +565,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (
 
 	gpuCmd, err := StartGPUController(ctx, uid, gid, s.logger)
 	if err != nil {
-		s.logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
 	}
 
