@@ -15,7 +15,7 @@ then
     exit 1
 fi 
 
-if [ -z "$CHECKPOINTSVC_URL" ]
+if [ -z "$CEDANA_URL" ]
 then
     echo "CHECKPOINTSVC_URL is not set"
     exit 1
