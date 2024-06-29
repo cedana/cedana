@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
+APT_PACKAGES="wget git make curl jq libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
