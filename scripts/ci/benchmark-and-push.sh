@@ -47,9 +47,24 @@ mkdir -p ~/.cedana
 cp client_config.json ~/.cedana/client_config.json
 
 function get_auth_token() {
-    LOGIN_URL=curl -s -X GET -H "Accept: application/json" 'https://auth.cedana.com/self-service/login/api' | jq -r '.ui.action'
-    AUTH_TOKEN=curl -s -X POST -H "Accept: application/json" -H "Content-Type: application/json" -d '{"identifier": "'$BENCHMARK_ACCOUNT'", "password": "'$BENCHMARK_ACCOUNT_PW'", "method": "password"}' "$LOGIN_URL" | jq -r '.session_token'
-    echo $AUTH_TOKEN
+    local LOGIN_URL
+    local AUTH_TOKEN
+
+    LOGIN_URL=$(curl -s -X GET -H "Accept: application/json" 'https://auth.cedana.com/self-service/login/api' | jq -r '.ui.action')
+    if [ -z "$LOGIN_URL" ]; then
+        echo "Failed to retrieve LOGIN_URL" >&2
+        return 1
+    fi
+
+    AUTH_TOKEN=$(curl -s -X POST -H "Accept: application/json" -H "Content-Type: application/json" \
+        -d '{"identifier": "'"$BENCHMARK_ACCOUNT"'", "password": "'"$BENCHMARK_ACCOUNT_PW"'", "method": "password"}' \
+        "$LOGIN_URL" | jq -r '.session_token')
+    if [ -z "$AUTH_TOKEN" ]; then
+        echo "Failed to retrieve AUTH_TOKEN" >&2
+        return 1
+    fi
+
+    echo "$AUTH_TOKEN"
 }
 
 function setup_benchmarking() {
@@ -59,6 +74,13 @@ function setup_benchmarking() {
     protoc --python_out=. profile.proto
     cd ../..
 }
+
+echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$(get_auth_token)'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
+cat client_config.json
+mkdir -p ~/.cedana
+cp client_config.json ~/.cedana/client_config.json
+
+
 function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
     export CEDANA_REMOTE=true
