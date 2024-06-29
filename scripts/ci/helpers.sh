@@ -1,13 +1,17 @@
 #!/bin/bash
 
-APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
+APT_PACKAGES="wget git make curl jq libnl-3-dev libnet-dev \
     libbsd-dev python-ipaddress libcap-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf"
+    protobuf-compiler python3-protobuf software-properties-common \
+    zip
+"
 
 install_apt_packages() {
     apt-get update
-    apt-get install -y $APT_PACKAGES
+    for pkg in $APT_PACKAGES; do
+        apt-get install -y $pkg || echo "failed to isntall $pkg"
+    done
 }
 
 install_code_server() {
@@ -41,6 +45,10 @@ install_sysbox() {
     apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
 }
 
+install_otelcol_contrib() {
+    wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
+    dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
+}
 print_header() {
     echo "############### $1 ###############"
 }
@@ -83,6 +91,7 @@ setup_ci() {
 
     install_docker
     install_sysbox
+    install_otelcol_contrib
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz

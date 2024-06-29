@@ -67,7 +67,7 @@ Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
 ExecStart=$APP_PATH daemon start --gpu-enabled=$CEDANA_GPU_ENABLED
 User=root
 Group=root
-Restart=no
+Restart=yes
 
 [Install]
 WantedBy=multi-user.target
