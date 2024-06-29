@@ -61,9 +61,9 @@ function setup_benchmarking() {
 }
 function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
-    CEDANA_REMOTE=true
-    CEDANA_OTEL_ENABLED=true
-    CEDANA_AUTH_TOKEN=$(get_auth_token)
+    export CEDANA_REMOTE=true
+    export CEDANA_OTEL_ENABLED=true
+    export CEDANA_AUTH_TOKEN=$(get_auth_token)
     ./test/benchmarks/entrypoint.sh
 }
 
