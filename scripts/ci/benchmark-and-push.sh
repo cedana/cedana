@@ -21,9 +21,15 @@ then
     exit 1
 fi
 
-if [ -z "$CHECKPOINTSVC_TOKEN" ]
+if [ -z "$BENCHMARK_ACCOUNT" ]
 then 
-    echo "CHECKPOINT_SVC_TOKEN is not set"
+    echo "BENCHMARK_ACCOUNT is not set"
+    exit 1
+fi
+
+if [ -z "$BENCHMARK_ACCOUNT_PW" ]
+then
+    echo "BENCHMARK_ACCOUNT_PW is not set"
     exit 1
 fi
 
@@ -40,6 +46,11 @@ cat client_config.json
 mkdir -p ~/.cedana
 cp client_config.json ~/.cedana/client_config.json
 
+function get_auth_token() {
+    LOGIN_URL=curl -s -X GET -H "Accept: application/json" 'https://auth.cedana.com/self-service/login/api' | jq -r '.ui.action'
+    AUTH_TOKEN=curl -s -X POST -H "Accept: application/json" -H "Content-Type: application/json" -d '{"identifier": "'$BENCHMARK_ACCOUNT'", "password": "'$BENCHMARK_ACCOUNT_PW'", "method": "password"}' "$LOGIN_URL" | jq -r '.session_token'
+    echo $AUTH_TOKEN
+}
 
 function setup_benchmarking() {
     cd test/benchmarks
@@ -52,6 +63,7 @@ function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
     CEDANA_REMOTE=true
     CEDANA_OTEL_ENABLED=true
+    CHECKPOINTSVC_TOKEN=$(get_auth_token)
     ./test/benchmarks/entrypoint.sh
 }
 
