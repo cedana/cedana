@@ -288,21 +288,19 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	var err error
 	if args.GPU {
 		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
-		gpuCmd, err = StartGPUController(args.UID, args.GID, s.logger)
+		gpuCmd, err = StartGPUController(ctx, args.UID, args.GID, s.logger)
 		if err != nil {
 			return 0, err
 		}
-		// XXX: force sleep for a few ms to allow GPU controller to start
-		time.Sleep(100 * time.Millisecond)
 		gpuStartSpan.End()
 
-    sharedLibPath := viper.GetString("gpu_shared_lib_path")
-    if sharedLibPath == "" {
-      sharedLibPath = utils.GpuSharedLibPath
-    }
-    if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
-      return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
-    }
+		sharedLibPath := viper.GetString("gpu_shared_lib_path")
+		if sharedLibPath == "" {
+			sharedLibPath = utils.GpuSharedLibPath
+		}
+		if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+			return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+		}
 		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 
@@ -368,14 +366,14 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			outputFile.WriteString(stdoutScanner.Text() + "\n")
 		}
 		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Err(err).Msg("Error reading stdout")
+			s.logger.Info().Msgf("Finished reading stdout: %v", err)
 		}
 
 		for stderrScanner.Scan() {
 			outputFile.WriteString(stderrScanner.Text() + "\n")
 		}
 		if err := stderrScanner.Err(); err != nil {
-			s.logger.Err(err).Msg("Error reading stderr")
+			s.logger.Info().Msgf("Finished reading stderr: %v", err)
 		}
 	}()
 
