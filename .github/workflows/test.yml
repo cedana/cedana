@@ -28,6 +28,4 @@ jobs:
       - name: Run regression tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
-        run: |
-          sudo -E make -C scripts/ci regression
-          cd ../..
+        run: sudo -E make -C scripts/ci regression
