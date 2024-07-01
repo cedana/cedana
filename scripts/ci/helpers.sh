@@ -1,5 +1,11 @@
 #!/bin/bash
 
+## NOTE: All scripts are being run by the makefile, which runs in the scripts/ci directory.
+## As a result, where these functions are called rely on managing directory state using pushd/popd,
+## which also means all these functions assume they're being run in the root directory.
+## Look at regression-test main for an example.
+##
+
 APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev libcap-dev libgpgme-dev \
     btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
@@ -21,8 +27,7 @@ install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
     pushd bats-core
     ./install.sh /usr/local
-    rm -rf bats-core
-    popd
+    popd && rm -rf bats-core
 }
 
 install_docker() {
@@ -124,9 +129,7 @@ setup_ci() {
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
     # Install smoke & bench deps
-    pushd ../../
     sudo pip3 install -r test/benchmarks/requirements
-    popd
 }
 
 start_cedana() {

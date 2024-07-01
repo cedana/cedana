@@ -12,11 +12,13 @@ start_smoke() {
 }
 
 main() {
+    pushd ../..
     print_env || { echo "print_env failed"; exit 1; }
     setup_ci || { echo "setup_ci failed"; exit 1; }
     start_cedana || { echo "start_cedana failed"; exit 1; }
     start_smoke || { echo "start_smoke failed"; exit 1; }
     stop_cedana || { echo "stop_cedana failed"; exit 1; }
+    popd
 }
 
 main
