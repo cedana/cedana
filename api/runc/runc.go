@@ -90,6 +90,26 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 }
 
 func GetContainerIdByName(containerName, sandboxName, root string) (string, string, error) {
+	var containerNameAnnotation string
+	var sandboxNameAnnotation string
+
+	containerdContainerName := "io.kubernetes.cri.container-name"
+	containerdSandboxName := "io.kubernetes.cri.sandbox-name"
+	crioContainerName := "io.kubernetes.container.name"
+	crioSandboxName := "io.kubernetes.pod.name"
+
+	annotations := map[string][2]string{
+		"/run/runc":     {crioContainerName, crioSandboxName},
+		"/var/run/runc": {crioContainerName, crioSandboxName},
+		"default":       {containerdContainerName, containerdSandboxName},
+	}
+
+	if val, ok := annotations[root]; ok {
+		containerNameAnnotation, sandboxNameAnnotation = val[0], val[1]
+	} else {
+		containerNameAnnotation, sandboxNameAnnotation = annotations["default"][0], annotations["default"][1]
+	}
+
 	dirs, err := os.ReadDir(root)
 	if err != nil {
 		return "", "", err
@@ -117,7 +137,6 @@ func GetContainerIdByName(containerName, sandboxName, root string) (string, stri
 			}
 		}
 
-		// TODO the prefixing here is for k3s only, or !cedana-helper. Meaning that Cedana is running inside the Cedana Daemonset deployment and not on host
 		configPath := filepath.Join(bundle, "config.json")
 		if _, err := os.Stat(configPath); err == nil {
 			configFile, err := os.ReadFile(configPath)
@@ -129,11 +148,11 @@ func GetContainerIdByName(containerName, sandboxName, root string) (string, stri
 			}
 
 			if sandboxName != "" {
-				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName && spec.Annotations["io.kubernetes.cri.sandbox-name"] == sandboxName {
+				if spec.Annotations[containerNameAnnotation] == containerName && spec.Annotations[sandboxNameAnnotation] == sandboxName {
 					return dir.Name(), bundle, nil
 				}
 			} else {
-				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
+				if spec.Annotations[containerNameAnnotation] == containerName {
 					return dir.Name(), bundle, nil
 				}
 			}
@@ -170,4 +189,17 @@ func GetPausePid(bundlePath string) (int, error) {
 	}
 
 	return pid, nil
+}
+
+func GetSpecById(root, containerID string) (spec *rspec.Spec, err error) {
+
+	configFile, err := os.ReadFile(filepath.Join(root, containerID))
+	if err != nil {
+		return spec, err
+	}
+	if err := json.Unmarshal(configFile, &spec); err != nil {
+		return spec, err
+	}
+
+	return spec, err
 }

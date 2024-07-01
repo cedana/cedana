@@ -7,10 +7,8 @@ import (
 	"github.com/containerd/console"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
-	"github.com/containerd/log"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/context"
 )
@@ -93,7 +91,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		}
 	}
 
-	task, err := tasks.NewTask(ctx, service.client, ctr, "", con, false, "", []cio.Opt{}, topts...)
+	task, err := container.NewTask(ctx, service.client, ctr, "", con, false, "", []cio.Opt{}, topts...)
 	if err != nil {
 		return err
 	}
@@ -112,9 +110,10 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		return nil
 	}
 
-	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
-		log.G(ctx).WithError(err).Error("console resize")
-	}
+	// TODO BS see what this is used for and reimplement
+	// if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
+	// 	log.G(ctx).WithError(err).Error("console resize")
+	// }
 
 	status := <-statusC
 	code, _, err := status.Result()

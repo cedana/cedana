@@ -1,10 +1,13 @@
 package container
 
 import (
+	"context"
 	gocontext "context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,9 +17,7 @@ import (
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
-	"github.com/containerd/containerd/log"
-	"github.com/docker/docker/errdefs"
+	errdefs "github.com/containerd/errdefs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -103,7 +104,7 @@ func containerdRestore(id string, ref string) error {
 		}
 	}
 
-	task, err := tasks.NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
+	task, err := NewTask(ctx, containerdClient, ctr, "", con, false, "", []cio.Opt{}, topts...)
 	if err != nil {
 		return err
 	}
@@ -123,9 +124,9 @@ func containerdRestore(id string, ref string) error {
 		return nil
 	}
 
-	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
-		log.G(ctx).WithError(err).Error("console resize")
-	}
+	// if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
+	// 	log.G(ctx).WithError(err).Error("console resize")
+	// }
 
 	status := <-statusC
 	code, _, err := status.Result()
@@ -206,6 +207,74 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 	}
 
 	return nil
+}
+
+type stdinCloser struct {
+	stdin  *os.File
+	closer func()
+}
+
+func (s *stdinCloser) Read(p []byte) (int, error) {
+	n, err := s.stdin.Read(p)
+	if err == io.EOF {
+		if s.closer != nil {
+			s.closer()
+		}
+	}
+	return n, err
+}
+
+// NewTask creates a new task
+func NewTask(ctx context.Context, client *containerd.Client, container containerd.Container, checkpoint string, con console.Console, nullIO bool, logURI string, ioOpts []cio.Opt, opts ...containerd.NewTaskOpts) (containerd.Task, error) {
+	stdinC := &stdinCloser{
+		stdin: os.Stdin,
+	}
+	if checkpoint != "" {
+		im, err := client.GetImage(ctx, checkpoint)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, containerd.WithTaskCheckpoint(im))
+	}
+
+	spec, err := container.Spec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if spec.Linux != nil {
+		if len(spec.Linux.UIDMappings) != 0 {
+			opts = append(opts, containerd.WithUIDOwner(spec.Linux.UIDMappings[0].HostID))
+		}
+		if len(spec.Linux.GIDMappings) != 0 {
+			opts = append(opts, containerd.WithGIDOwner(spec.Linux.GIDMappings[0].HostID))
+		}
+	}
+
+	var ioCreator cio.Creator
+	if con != nil {
+		if nullIO {
+			return nil, errors.New("tty and null-io cannot be used together")
+		}
+		ioCreator = cio.NewCreator(append([]cio.Opt{cio.WithStreams(con, con, nil), cio.WithTerminal}, ioOpts...)...)
+	} else if nullIO {
+		ioCreator = cio.NullIO
+	} else if logURI != "" {
+		u, err := url.Parse(logURI)
+		if err != nil {
+			return nil, err
+		}
+		ioCreator = cio.LogURI(u)
+	} else {
+		ioCreator = cio.NewCreator(append([]cio.Opt{cio.WithStreams(stdinC, os.Stdout, os.Stderr)}, ioOpts...)...)
+	}
+	t, err := container.NewTask(ctx, ioCreator, opts...)
+	if err != nil {
+		return nil, err
+	}
+	stdinC.closer = func() {
+		t.CloseIO(ctx, containerd.WithStdinCloser)
+	}
+	return t, nil
 }
 
 func readJSON[T any](path string, spec *T) error {

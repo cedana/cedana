@@ -126,7 +126,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 
 	// scrape daemon logs for kubectl logs output
 	go func() {
-		file, err := os.Open("/var/log/cedana-daemon.log")
+		file, err := os.Open("/host/var/log/cedana-daemon.log")
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to open cedana-daemon.log")
 			return

@@ -351,7 +351,24 @@ func init() {
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
+	dumpCmd.AddCommand(dumpCRIORootfs)
+	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
+	dumpCRIORootfs.MarkFlagRequired(idFlag)
+	dumpCRIORootfs.Flags().StringP(destFlag, "d", "", "directory to dump to")
+	dumpCRIORootfs.MarkFlagRequired(destFlag)
+	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
+	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
+
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)
+
+	rootCmd.AddCommand(pushCRIOImage)
+	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
+	pushCRIOImage.MarkFlagRequired(refFlag)
+	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
+	pushCRIOImage.MarkFlagRequired(newRefFlag)
+	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
+	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
+
 }

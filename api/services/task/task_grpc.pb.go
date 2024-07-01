@@ -38,6 +38,9 @@ type TaskServiceClient interface {
 	RuncRestore(ctx context.Context, in *RuncRestoreArgs, opts ...grpc.CallOption) (*RuncRestoreResp, error)
 	RuncQuery(ctx context.Context, in *RuncQueryArgs, opts ...grpc.CallOption) (*RuncQueryResp, error)
 	RuncGetPausePid(ctx context.Context, in *RuncGetPausePidArgs, opts ...grpc.CallOption) (*RuncGetPausePidResp, error)
+	// CRIO
+	CRIORootfsDump(ctx context.Context, in *CRIORootfsDumpArgs, opts ...grpc.CallOption) (*CRIORootfsDumpResp, error)
+	CRIOImagePush(ctx context.Context, in *CRIOImagePushArgs, opts ...grpc.CallOption) (*CRIOImagePushResp, error)
 	// Streaming
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
 	ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (TaskService_ProcessStateStreamingClient, error)
@@ -168,6 +171,24 @@ func (c *taskServiceClient) RuncGetPausePid(ctx context.Context, in *RuncGetPaus
 	return out, nil
 }
 
+func (c *taskServiceClient) CRIORootfsDump(ctx context.Context, in *CRIORootfsDumpArgs, opts ...grpc.CallOption) (*CRIORootfsDumpResp, error) {
+	out := new(CRIORootfsDumpResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/CRIORootfsDump", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) CRIOImagePush(ctx context.Context, in *CRIOImagePushArgs, opts ...grpc.CallOption) (*CRIOImagePushResp, error) {
+	out := new(CRIOImagePushResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/CRIOImagePush", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *taskServiceClient) LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error) {
 	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], "/cedana.services.task.TaskService/LogStreaming", opts...)
 	if err != nil {
@@ -251,6 +272,9 @@ type TaskServiceServer interface {
 	RuncRestore(context.Context, *RuncRestoreArgs) (*RuncRestoreResp, error)
 	RuncQuery(context.Context, *RuncQueryArgs) (*RuncQueryResp, error)
 	RuncGetPausePid(context.Context, *RuncGetPausePidArgs) (*RuncGetPausePidResp, error)
+	// CRIO
+	CRIORootfsDump(context.Context, *CRIORootfsDumpArgs) (*CRIORootfsDumpResp, error)
+	CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error)
 	// Streaming
 	LogStreaming(TaskService_LogStreamingServer) error
 	ProcessStateStreaming(*ProcessStateStreamingArgs, TaskService_ProcessStateStreamingServer) error
@@ -299,6 +323,12 @@ func (UnimplementedTaskServiceServer) RuncQuery(context.Context, *RuncQueryArgs)
 }
 func (UnimplementedTaskServiceServer) RuncGetPausePid(context.Context, *RuncGetPausePidArgs) (*RuncGetPausePidResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RuncGetPausePid not implemented")
+}
+func (UnimplementedTaskServiceServer) CRIORootfsDump(context.Context, *CRIORootfsDumpArgs) (*CRIORootfsDumpResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CRIORootfsDump not implemented")
+}
+func (UnimplementedTaskServiceServer) CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CRIOImagePush not implemented")
 }
 func (UnimplementedTaskServiceServer) LogStreaming(TaskService_LogStreamingServer) error {
 	return status.Errorf(codes.Unimplemented, "method LogStreaming not implemented")
@@ -553,6 +583,42 @@ func _TaskService_RuncGetPausePid_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_CRIORootfsDump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CRIORootfsDumpArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).CRIORootfsDump(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/CRIORootfsDump",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).CRIORootfsDump(ctx, req.(*CRIORootfsDumpArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_CRIOImagePush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CRIOImagePushArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).CRIOImagePush(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/CRIOImagePush",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).CRIOImagePush(ctx, req.(*CRIOImagePushArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TaskService_LogStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(TaskServiceServer).LogStreaming(&taskServiceLogStreamingServer{stream})
 }
@@ -658,6 +724,14 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RuncGetPausePid",
 			Handler:    _TaskService_RuncGetPausePid_Handler,
+		},
+		{
+			MethodName: "CRIORootfsDump",
+			Handler:    _TaskService_CRIORootfsDump_Handler,
+		},
+		{
+			MethodName: "CRIOImagePush",
+			Handler:    _TaskService_CRIOImagePush_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
