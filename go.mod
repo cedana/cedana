@@ -18,7 +18,7 @@ require (
 	github.com/containers/ocicrypt v1.1.10
 	github.com/containers/storage v1.54.0
 	github.com/coreos/go-systemd/v22 v22.5.1-0.20231103132048-7d375ecc2b09
-	github.com/cri-o/cri-o v1.30.2
+	github.com/cri-o/cri-o v1.30.3
 	github.com/cyphar/filepath-securejoin v0.2.5
 	github.com/docker/docker v26.1.3+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466

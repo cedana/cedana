@@ -1,16 +1,18 @@
 package containerd
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net/url"
+	"os"
 
 	"github.com/cedana/cedana/container"
 	"github.com/containerd/console"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
-	"github.com/containerd/log"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/context"
 )
@@ -93,7 +95,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		}
 	}
 
-	task, err := tasks.NewTask(ctx, service.client, ctr, "", con, false, "", []cio.Opt{}, topts...)
+	task, err := NewTask(ctx, service.client, ctr, "", con, false, "", []cio.Opt{}, topts...)
 	if err != nil {
 		return err
 	}
@@ -112,9 +114,9 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		return nil
 	}
 
-	if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
-		log.G(ctx).WithError(err).Error("console resize")
-	}
+	// if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
+	// 	log.G(ctx).WithError(err).Error("console resize")
+	// }
 
 	status := <-statusC
 	code, _, err := status.Result()
@@ -131,4 +133,72 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 	}
 	return nil
 
+}
+
+type stdinCloser struct {
+	stdin  *os.File
+	closer func()
+}
+
+func (s *stdinCloser) Read(p []byte) (int, error) {
+	n, err := s.stdin.Read(p)
+	if err == io.EOF {
+		if s.closer != nil {
+			s.closer()
+		}
+	}
+	return n, err
+}
+
+// NewTask creates a new task
+func NewTask(ctx context.Context, client *containerd.Client, container containerd.Container, checkpoint string, con console.Console, nullIO bool, logURI string, ioOpts []cio.Opt, opts ...containerd.NewTaskOpts) (containerd.Task, error) {
+	stdinC := &stdinCloser{
+		stdin: os.Stdin,
+	}
+	if checkpoint != "" {
+		im, err := client.GetImage(ctx, checkpoint)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, containerd.WithTaskCheckpoint(im))
+	}
+
+	spec, err := container.Spec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if spec.Linux != nil {
+		if len(spec.Linux.UIDMappings) != 0 {
+			opts = append(opts, containerd.WithUIDOwner(spec.Linux.UIDMappings[0].HostID))
+		}
+		if len(spec.Linux.GIDMappings) != 0 {
+			opts = append(opts, containerd.WithGIDOwner(spec.Linux.GIDMappings[0].HostID))
+		}
+	}
+
+	var ioCreator cio.Creator
+	if con != nil {
+		if nullIO {
+			return nil, errors.New("tty and null-io cannot be used together")
+		}
+		ioCreator = cio.NewCreator(append([]cio.Opt{cio.WithStreams(con, con, nil), cio.WithTerminal}, ioOpts...)...)
+	} else if nullIO {
+		ioCreator = cio.NullIO
+	} else if logURI != "" {
+		u, err := url.Parse(logURI)
+		if err != nil {
+			return nil, err
+		}
+		ioCreator = cio.LogURI(u)
+	} else {
+		ioCreator = cio.NewCreator(append([]cio.Opt{cio.WithStreams(stdinC, os.Stdout, os.Stderr)}, ioOpts...)...)
+	}
+	t, err := container.NewTask(ctx, ioCreator, opts...)
+	if err != nil {
+		return nil, err
+	}
+	stdinC.closer = func() {
+		t.CloseIO(ctx, containerd.WithStdinCloser)
+	}
+	return t, nil
 }
