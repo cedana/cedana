@@ -15,8 +15,5 @@ smoke:
 regression:
 	./regression-test.sh
 
-setup-full:
-	./setup-full.sh
-
-setup-build:
-	./setup-build.sh
+setup:
+	./setup.sh

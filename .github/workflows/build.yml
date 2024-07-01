@@ -19,7 +19,7 @@ jobs:
           go-version: '1.22'
 
       - name: Setup CI
-        run:  sudo -E make -C scripts/ci setup-build
+        run:  sudo -E make -C scripts/ci setup
 
       - name: Build
         run: sudo -E go build -v ./...
