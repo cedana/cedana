@@ -12,7 +12,7 @@ start_smoke() {
 }
 
 main() {
-    pushd ../..
+    pushd ../.. && echo "Starting smoke test in cwd: $(pwd)"
     print_env || { echo "print_env failed"; exit 1; }
     setup_ci || { echo "setup_ci failed"; exit 1; }
     start_cedana || { echo "start_cedana failed"; exit 1; }

@@ -5,14 +5,13 @@
 source ./helpers.sh
 
 function start_regression() {
-    pushd test/regression
-    echo "Running regression tests in cwd: $(pwd)"
+    pushd test/regression && echo "Running regression tests in cwd: $(pwd)"
     bats main.bats
     popd
 }
 
 main() {
-    pushd ../..
+    pushd ../.. && echo "Starting regression tests in cwd: $(pwd)"
     print_env || { echo "print_env failed"; exit 1; }
     start_cedana || { echo "start_cedana failed"; exit 1; }
     start_regression || { echo "start_regression failed"; exit 1; }
