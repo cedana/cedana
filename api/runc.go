@@ -125,7 +125,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	// TODO: Update state to add or use a job that exists for this container
 	return &task.RuncRestoreResp{
-		Message: fmt.Sprintf("Restored %v, succesfully", args.ContainerID),
+		Message: fmt.Sprintf("Restored %v, successfully", args.ContainerID),
 		State:   state,
 	}, nil
 }
