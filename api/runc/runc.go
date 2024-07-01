@@ -90,6 +90,26 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 }
 
 func GetContainerIdByName(containerName, sandboxName, root string) (string, string, error) {
+	var containerNameAnnotation string
+	var sandboxNameAnnotation string
+
+	containerdContainerName := "io.kubernetes.cri.container-name"
+	containerdSandboxName := "io.kubernetes.cri.sandbox-name"
+	crioContainerName := "io.kubernetes.container.name"
+	crioSandboxName := "io.kubernetes.pod.name"
+
+	annotations := map[string][2]string{
+		"/run/runc":     {crioContainerName, crioSandboxName},
+		"/var/run/runc": {crioContainerName, crioSandboxName},
+		"default":       {containerdContainerName, containerdSandboxName},
+	}
+
+	if val, ok := annotations[root]; ok {
+		containerNameAnnotation, sandboxNameAnnotation = val[0], val[1]
+	} else {
+		containerNameAnnotation, sandboxNameAnnotation = annotations["default"][0], annotations["default"][1]
+	}
+
 	dirs, err := os.ReadDir(root)
 	if err != nil {
 		return "", "", err
@@ -128,11 +148,11 @@ func GetContainerIdByName(containerName, sandboxName, root string) (string, stri
 			}
 
 			if sandboxName != "" {
-				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName && spec.Annotations["io.kubernetes.cri.sandbox-name"] == sandboxName {
+				if spec.Annotations[containerNameAnnotation] == containerName && spec.Annotations[sandboxNameAnnotation] == sandboxName {
 					return dir.Name(), bundle, nil
 				}
 			} else {
-				if spec.Annotations["io.kubernetes.cri.container-name"] == containerName {
+				if spec.Annotations[containerNameAnnotation] == containerName {
 					return dir.Name(), bundle, nil
 				}
 			}
