@@ -29,9 +29,37 @@ service TaskService {
   rpc RuncQuery(RuncQueryArgs) returns (RuncQueryResp);
   rpc RuncGetPausePid(RuncGetPausePidArgs) returns (RuncGetPausePidResp);
 
+  //CRIO
+  rpc CRIORootfsDump(CRIORootfsDumpArgs) returns (CRIORootfsDumpResp);
+  rpc CRIOImagePush(CRIOImagePushArgs) returns (CRIOImagePushResp);
+
   // Streaming
   rpc LogStreaming(stream LogStreamingResp) returns (stream LogStreamingArgs);
   rpc ProcessStateStreaming(ProcessStateStreamingArgs) returns (stream ProcessState);
+}
+
+/////////////////////
+/////// CRIO ////////
+/////////////////////
+
+message CRIOImagePushArgs {
+  string OriginalImageRef = 1;
+  string NewImageRef = 2;
+  string RootfsDiffPath = 3;
+}
+
+message CRIOImagePushResp {
+  string Message = 1;
+}
+
+message CRIORootfsDumpArgs {
+  string ContainerID = 1;
+  string Dest = 2;
+  string ContainerStorage = 3;
+}
+
+message CRIORootfsDumpResp {
+  string Dest = 1;
 }
 
 /////////////////////

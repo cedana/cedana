@@ -14,3 +14,6 @@ smoke:
 
 regression:
 	./regression-test.sh
+
+setup:
+	./setup.sh

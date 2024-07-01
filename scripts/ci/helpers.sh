@@ -1,13 +1,16 @@
 #!/bin/bash
 
 APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
-    libbsd-dev python-ipaddress libcap-dev \
+    libbsd-dev libcap-dev libgpgme-dev \
+    btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf"
 
 install_apt_packages() {
     apt-get update
-    apt-get install -y $APT_PACKAGES
+    for pkg in $APT_PACKAGES; do
+        apt-get install -y $pkg || echo "Failed to install $pkg"
+    done
 }
 
 install_code_server() {
@@ -39,6 +42,19 @@ install_sysbox() {
     wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
     apt-get install -y jq
     apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
+}
+
+install_buildah() {
+    sudo apt-get update
+    sudo apt-get -y install buildah
+}
+
+install_crictl() {
+    VERSION="v1.30.0"
+    curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-${VERSION}-linux-amd64.tar.gz --output crictl-${VERSION}-linux-amd64.tar.gz
+    sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+    rm -f crictl-$VERSION-linux-amd64.tar.gz
+
 }
 
 print_header() {
@@ -83,6 +99,8 @@ setup_ci() {
 
     install_docker
     install_sysbox
+    install_buildah
+    install_crictl
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
