@@ -93,9 +93,14 @@ print_env() {
     set -x
 }
 
-setup_ci() {
+setup_ci_build() {
+    # only CI steps needed for building
     [ -n "$SKIP_CI_SETUP" ] && return
     install_apt_packages
+}
+
+setup_ci() {
+    setup_ci_build
     install_code_server
     install_bats_core
 
