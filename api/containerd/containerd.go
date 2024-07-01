@@ -114,6 +114,7 @@ func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID
 		return nil
 	}
 
+	// TODO BS see what this is used for and reimplement
 	// if err := tasks.HandleConsoleResize(ctx, task, con); err != nil {
 	// 	log.G(ctx).WithError(err).Error("console resize")
 	// }
