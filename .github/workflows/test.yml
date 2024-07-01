@@ -7,7 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test (smoke):
+  smoke-test:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
@@ -21,7 +21,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: sudo -E make -C scripts/ci smoke
 
-  test (regression):
+  regression-test:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
