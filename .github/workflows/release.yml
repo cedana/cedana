@@ -28,7 +28,7 @@ jobs:
 
       -
         name: Install dependencies
-        run: make -C scripts/ci setup
+        run: sudo -E make -C scripts/ci setup
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
