@@ -21,6 +21,7 @@ install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
     cd bats-core
     ./install.sh /usr/local
+    rm -rf bats-core
     cd -
 }
 
@@ -42,6 +43,7 @@ install_sysbox() {
     wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
     apt-get install -y jq
     apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
+    rm -f sysbox-ce_0.6.4-0.linux_amd64.deb
 }
 
 install_buildah() {
