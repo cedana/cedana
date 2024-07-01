@@ -19,10 +19,10 @@ install_code_server() {
 
 install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
-    cd bats-core
+    pushd bats-core
     ./install.sh /usr/local
     rm -rf bats-core
-    cd -
+    popd
 }
 
 install_docker() {
@@ -124,8 +124,9 @@ setup_ci() {
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
     # Install smoke & bench deps
-    cd ../../
+    pushd ../../
     sudo pip3 install -r test/benchmarks/requirements
+    popd
 }
 
 start_cedana() {
