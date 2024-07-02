@@ -15,6 +15,9 @@ jobs:
       - name: Setup CI
         run:  sudo -E make -C scripts/ci setup-full
 
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
+
       - name: Run smoke tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
