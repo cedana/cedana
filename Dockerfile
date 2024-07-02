@@ -1,26 +1,18 @@
 FROM ubuntu:22.04
 
-# Install golang
-COPY --from=golang:1.21.1-bookworm /usr/local/go/ /usr/local/go
-ENV PATH="/usr/local/go/bin:${PATH}"
-
-# Install everything else 
+# Install essential packages
 RUN apt-get update && \
-    apt-get install -y software-properties-common git zip && \
+    apt-get install -y software-properties-common git wget zip && \
     rm -rf /var/lib/apt/lists/*
 
-RUN add-apt-repository ppa:criu/ppa
-RUN apt update && apt install -y criu python3 pip sudo iptables
+# copy from github to dockerfile
+ARG VERSION
+RUN STRIPPED_VERSION=$(echo $VERSION | sed 's/^v//') && \
+    wget "https://github.com/cedana/cedana/releases/download/${VERSION}/cedana_${STRIPPED_VERSION}_linux_amd64.tar.gz" -O /tmp/cedana.tar.gz
 
-RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
-WORKDIR /cedana
+RUN tar -xzvf /tmp/cedana.tar.gz -C /usr/local/bin/ && rm /tmp/cedana.tar.gz
 
-RUN git fetch --all --tags && \
-    LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`) && \
-    git checkout $LATEST_TAG
 
 ENV USER="root"
-RUN go build
-RUN cp cedana /usr/local/bin/cedana
 
-ENTRYPOINT /bin/bash
+ENTRYPOINT ["/bin/bash"]

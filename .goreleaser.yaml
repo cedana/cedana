@@ -4,9 +4,11 @@ before:
     - go generate ./...
 builds:
   - env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - linux
+    goarch:
+      - amd64
 checksum:
   name_template: 'checksums.txt'
 snapshot:
