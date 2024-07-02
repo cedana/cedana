@@ -102,7 +102,7 @@ jobs:
         with:
           images: cedana/cedana-helper
 
-        - name: Get the version
+      - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
