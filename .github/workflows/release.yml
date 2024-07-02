@@ -64,6 +64,10 @@ jobs:
         with:
           images: ghcr.io/cedana/cedana
 
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Build and push 
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
@@ -72,7 +76,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args:
-            VERSION=${{ steps.meta.outputs.tag }}
+            VERSION=${{ steps.get_version.outputs.VERSION }}
 
   build-and-push-image-to-dockerhub:
     runs-on: ubuntu-latest
@@ -98,6 +102,10 @@ jobs:
         with:
           images: cedana/cedana-helper
 
+        - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
@@ -106,4 +114,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args:
-            VERSION=${{ steps.meta.outputs.tag }}
+            VERSION=${{ steps.get_version.outputs.VERSION }}

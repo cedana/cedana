@@ -2,11 +2,8 @@ FROM ubuntu:22.04
 
 # Install essential packages
 RUN apt-get update && \
-    apt-get install -y software-properties-common git zip && \
+    apt-get install -y software-properties-common git wget zip && \
     rm -rf /var/lib/apt/lists/*
-
-RUN add-apt-repository ppa:criu/ppa
-RUN apt update && apt install -y criu python3 pip sudo iptables
 
 # copy from github to dockerfile
 ARG VERSION
