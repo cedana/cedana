@@ -71,6 +71,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args:
+            VERSION=${{ steps.meta.outputs.tag }}
 
   build-and-push-image-to-dockerhub:
     runs-on: ubuntu-latest
@@ -103,4 +105,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
+          build-args:
+            VERSION=${{ steps.meta.outputs.tag }}
