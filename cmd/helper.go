@@ -28,13 +28,13 @@ const (
 	clientRetryPeriod = time.Second
 )
 
-// go:embed ../scripts/k8s/setup-host.sh
+//go:embed scripts/k8s/setup-host.sh
 var setupHostScript string
 
-// go:embed ../scripts/k8s/chroot-start.sh
+//go:embed scripts/k8s/chroot-start.sh
 var chrootStartScript string
 
-// go:embed ../scripts/k8s/cleanup-host.sh
+//go:embed scripts/k8s/cleanup-host.sh
 var cleanupHostScript string
 
 var helperCmd = &cobra.Command{
