@@ -41,3 +41,6 @@ nfpms:
 
 archives:
   - id: cedana
+    files:
+      - "build-start-daemon.sh"
+      - "scripts/k8s/*"
