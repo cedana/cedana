@@ -31,7 +31,7 @@ install_yum_packages() {
     yum group install -y "Development Tools"
 }
 
-install_criu_ubuntu_2004() {
+install_criu_ubuntu_2204() {
     PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
     OUTPUT_FILE="criu_3.19-4_amd64.deb"
 
