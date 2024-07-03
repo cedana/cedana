@@ -3,6 +3,7 @@ FROM ubuntu:22.04
 # Install essential packages
 RUN apt-get update && \
     apt-get install -y software-properties-common git wget zip && \
+    apt-get install -y libgpgme-dev libseccomp-dev libbtrfs-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # copy from github to dockerfile
