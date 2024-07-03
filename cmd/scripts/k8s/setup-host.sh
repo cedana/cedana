@@ -45,7 +45,7 @@ if [ -f /etc/os-release ]; then
     case "$ID" in
         debian | ubuntu)
             install_apt_packages
-            install_criu_ubuntu_2004
+            install_criu_ubuntu_2204
             ;;
         rhel | centos | fedora)
             install_yum_packages
