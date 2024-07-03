@@ -33,6 +33,8 @@ yum install gpgme-devel libseccomp-devel btrfs-progs-devel
 
 `
 
+To build: 
+
 ```go build```
 
 
