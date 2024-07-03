@@ -11,7 +11,6 @@ require (
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.18
 	github.com/containerd/errdefs v0.1.0
-	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/containers/common v0.59.1
 	github.com/containers/image/v5 v5.31.0
@@ -73,7 +72,7 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect
 	github.com/containerd/continuity v0.4.2 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
-	github.com/containerd/go-cni v1.1.9 // indirect
+	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/nri v0.6.1 // indirect
 	github.com/containerd/otelttrpc v0.0.0-20240305015340-ea5083fda723 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.15.1 // indirect
@@ -82,7 +81,6 @@ require (
 	github.com/containernetworking/plugins v1.5.1 // indirect
 	github.com/containers/conmon v2.0.20+incompatible // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/cri-o/ocicni v0.4.2 // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20231217050601-ba74d44ecf5f // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -152,7 +150,6 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/runtime-tools v0.9.1-0.20230914150019-408c51e934dc // indirect
 	github.com/ostreedev/ostree-go v0.0.0-20210805093236-719684c64e4f // indirect
-	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
@@ -162,7 +159,6 @@ require (
 	github.com/prometheus/common v0.51.1 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.10.0 // indirect
@@ -182,7 +178,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
-	github.com/urfave/cli v1.22.14 // indirect
 	github.com/vbatts/tar-split v0.11.5 // indirect
 	github.com/vbauerster/mpb/v8 v8.7.3 // indirect
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect

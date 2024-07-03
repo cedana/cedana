@@ -118,15 +118,15 @@ setup_ci() {
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
 
+    # Install recvtty
+    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
+
     export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin
     echo "export PATH=$PATH" >>/root/.bashrc
 
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
     sudo apt-get update && sudo apt-get install -y criu
-
-    # Install recvtty
-    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
     # Install smoke & bench deps
     sudo pip3 install -r test/benchmarks/requirements
