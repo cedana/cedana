@@ -17,6 +17,22 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 ## Build
 
+Cedana needs `libgpgme`, `libbtrfs` and `libseccomp` on the machine to build against. On a debian based system, you can install them with: 
+
+``` sh
+apt install libgpgme-dev libseccomp-dev libbtrfs-dev
+```
+
+`
+
+on centOS/RHEL: 
+
+``` sh
+yum install gpgme-devel libseccomp-devel btrfs-progs-devel 
+```
+
+`
+
 ```go build```
 
 
