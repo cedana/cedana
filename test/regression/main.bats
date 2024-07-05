@@ -74,6 +74,7 @@ load helper.bash
 @test "Simple runc checkpoint" {
   local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
   local bundle=$(pwd)/bundle
+  echo bundle is $bundle
   local job_id="runc-test"
   local out_file=$bundle/rootfs/out
   local dumpdir=$(pwd)/dump
@@ -88,6 +89,8 @@ load helper.bash
   # create a runc container
   recvtty $tty_sock &
   local tty_pid=$!
+  echo bundle is $bundle
+  echo jobid is $job_id
   sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
   sudo runc list
   sleep 1
