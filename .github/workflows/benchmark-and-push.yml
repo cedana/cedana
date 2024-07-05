@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/cedana-dev' }}
 
 jobs:
-  build:
+   benchmark:
     
     permissions:
       contents: 'read'
@@ -47,3 +47,4 @@ jobs:
         BENCHMARK_ACCOUNT: ${{ secrets.BENCHMARK_ACCOUNT }}
         BENCHMARK_ACCOUNT_PW: ${{ secrets.BENCHMARK_ACCOUNT_PW }}
         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+
