@@ -1,7 +1,15 @@
 #!/bin/bash
 
-APT_PACKAGES="wget git make curl jq libnl-3-dev libnet-dev \
-    libbsd-dev python-ipaddress libcap-dev \
+
+## NOTE: All scripts are being run by the makefile, which runs in the scripts/ci directory.
+## As a result, where these functions are called rely on managing directory state using pushd/popd,
+## which also means all these functions assume they're being run in the root directory.
+## Look at regression-test main for an example.
+##
+
+APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
+    libbsd-dev runc libcap-dev libgpgme-dev \
+    btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
     zip
@@ -20,9 +28,9 @@ install_code_server() {
 
 install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
-    cd bats-core
+    pushd bats-core
     ./install.sh /usr/local
-    cd -
+    popd && rm -rf bats-core
 }
 
 install_docker() {
@@ -43,6 +51,20 @@ install_sysbox() {
     wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
     apt-get install -y jq
     apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
+    rm -f sysbox-ce_0.6.4-0.linux_amd64.deb
+}
+
+install_buildah() {
+    sudo apt-get update
+    sudo apt-get -y install buildah
+}
+
+install_crictl() {
+    VERSION="v1.30.0"
+    curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-${VERSION}-linux-amd64.tar.gz --output crictl-${VERSION}-linux-amd64.tar.gz
+    sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+    rm -f crictl-$VERSION-linux-amd64.tar.gz
+
 }
 
 install_otelcol_contrib() {
@@ -83,19 +105,29 @@ print_env() {
     set -x
 }
 
-setup_ci() {
+setup_ci_build() {
+    # only CI steps needed for building
     [ -n "$SKIP_CI_SETUP" ] && return
     install_apt_packages
+}
+
+setup_ci() {
+    setup_ci_build
     install_code_server
     install_bats_core
 
     install_docker
     install_sysbox
     install_otelcol_contrib
+    install_buildah
+    install_crictl
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
+
+    # Install recvtty
+    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
     export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin
     echo "export PATH=$PATH" >>/root/.bashrc
@@ -104,11 +136,7 @@ setup_ci() {
     sudo add-apt-repository -y ppa:criu/ppa
     sudo apt-get update && sudo apt-get install -y criu
 
-    # Install recvtty
-    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
-
     # Install smoke & bench deps
-    cd ../../
     sudo pip3 install -r test/benchmarks/requirements
 }
 

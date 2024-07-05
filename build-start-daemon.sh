@@ -12,6 +12,7 @@ CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
 CEDANA_GPU_ENABLED=false
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 USE_SYSTEMCTL=0
+NO_BUILD=0
 
 # Check for --systemctl flag
 for arg in "$@"; do
@@ -19,6 +20,14 @@ for arg in "$@"; do
         USE_SYSTEMCTL=1
     fi
 done
+
+# Check for --no-build flag
+for arg in "$@"; do
+    if [ "$arg" == "--no-build" ]; then
+        NO_BUILD=1
+    fi
+done
+
 
 # Check for --gpu flag
 for arg in "$@"; do
@@ -29,13 +38,18 @@ done
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
-echo "Building $APP_NAME..."
-go build
 
-if [ $? -ne 0 ]; then
+if [ $NO_BUILD -ne 1 ]; then
+  echo "Building $APP_NAME..."
+  go build
+
+  if [ $? -ne 0 ]; then
     echo "Build failed. Exiting."
     exit 1
+  fi
 fi
+
+
 
 sudo cp $APP_NAME $APP_PATH
 
