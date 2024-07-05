@@ -41,11 +41,6 @@ fi
 
 CONTAINER_CREDENTIAL_PATH=/tmp/creds.json 
 
-echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$CHECKPOINTSVC_TOKEN'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
-cat client_config.json
-mkdir -p ~/.cedana
-cp client_config.json ~/.cedana/client_config.json
-
 function get_auth_token() {
     local LOGIN_URL
     local AUTH_TOKEN
@@ -68,18 +63,18 @@ function get_auth_token() {
 }
 
 function setup_benchmarking() {
-    cd test/benchmarks
+    pushd test/benchmarks
     pip install -r requirements
 
     protoc --python_out=. profile.proto
-    cd ../..
+
+    echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$(get_auth_token)'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
+    cat client_config.json
+    mkdir -p ~/.cedana
+    cp client_config.json ~/.cedana/client_config.json
+
+    popd
 }
-
-echo '{"client":{"leave_running":false, "task":""}, "connection": {"cedana_auth_token": "'$(get_auth_token)'", "cedana_url": "'$CHECKPOINTSVC_URL'", "cedana_user": "benchmark"}}' > client_config.json
-cat client_config.json
-mkdir -p ~/.cedana
-cp client_config.json ~/.cedana/client_config.json
-
 
 function start_benchmarking() {
     echo "Running benchmarking script from $(pwd)"
@@ -90,10 +85,12 @@ function start_benchmarking() {
 }
 
 main() {
+    pushd ../.. && echo "Starting benchmarking in cwd $(pwd)"
     print_env || { echo "Failed to print env"; exit 1; }
     setup_ci || { echo "Failed to setup CI"; exit 1; }
     setup_benchmarking || { echo "Failed to setup benchmarking"; exit 1; }
     start_benchmarking || { echo "Failed to start benchmarking"; exit 1; }
+    popd
 }
 
 main
