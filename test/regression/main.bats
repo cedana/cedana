@@ -90,13 +90,13 @@ load helper.bash
   local tty_pid=$!
   sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
   sudo runc list
-  sleep 1 3>- &
+  sleep 1
 
   # check if container running correctly, count lines in output file
   run sudo test -f "$out_file"
   [ "$status" -eq 0 ]
   local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
-  sleep 2 3>- &
+  sleep 2
   local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
@@ -125,13 +125,12 @@ load helper.bash
   local tty_pid=$!
   run runc_restore $bundle $dumpdir $job_id $tty_sock
 
-  # https://github.com/sstephenson/bats/issues/80#issuecomment-174101686
-  sleep 1 3>- &
+  sleep 1
 
   # check if container running correctly, count lines in output file
   [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>- &
+  sleep 2
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
