@@ -185,7 +185,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 
 func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
 	// Podman run -d state
-	if !opts.Detatch {
+	if !opts.Detach {
 		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
 		if err != nil {
 			return err
@@ -522,7 +522,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID)
+				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups)
 				return err
 			},
 		}
@@ -559,11 +559,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, groups []uint32) (*exec.Cmd, error) {
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(ctx, uid, gid, s.logger)
+	gpuCmd, err := StartGPUController(ctx, uid, gid, groups, s.logger)
 	if err != nil {
 		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
