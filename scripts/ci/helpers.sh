@@ -121,8 +121,9 @@ setup_ci() {
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
-    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin
-    echo "export PATH=$PATH" >>/root/.bashrc
+    # Set GOPATH and update PATH
+    echo "export GOPATH=$HOME/go" >> /etc/environment
+    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
 
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
@@ -132,9 +133,14 @@ setup_ci() {
     sudo pip3 install -r test/benchmarks/requirements
 }
 
+source_env() {
+    source /etc/environment
+}
+
 start_cedana() {
     ./build-start-daemon.sh
 }
+
 
 stop_cedana() {
     sudo pkill -9 cedana
