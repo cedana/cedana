@@ -56,11 +56,13 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		// always self serve when invoked from CLI
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		cpuDumpArgs := task.DumpArgs{
 			PID:  int32(pid),
 			Dir:  dir,
 			JID:  id,
 			Type: task.CRType_LOCAL,
+			GPU:  gpuEnabled,
 		}
 
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -370,5 +372,4 @@ func init() {
 	pushCRIOImage.MarkFlagRequired(newRefFlag)
 	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
 	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
-
 }
