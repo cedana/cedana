@@ -33,7 +33,7 @@ type RuncOpts struct {
 	NoSubreaper     bool
 	Keep            bool
 	ConsoleSocket   string
-	Detatch         bool
+	Detach          bool
 	PidFile         string
 	PreserveFds     int
 	Pid             int
@@ -197,7 +197,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		Bundle:        opts.Bundle,
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
-		Detatch:       opts.Detatch,
+		Detach:        opts.Detach,
 		NetPid:        opts.NetPid,
 	}
 
