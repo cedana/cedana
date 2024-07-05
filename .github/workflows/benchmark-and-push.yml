@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/cedana-dev' }}
 
 jobs:
-  build:
+   benchmark:
     
     permissions:
       contents: 'read'
@@ -32,6 +32,9 @@ jobs:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: 'benchmark-uploader@cedana-benchmarking.iam.gserviceaccount.com'
 
+    - name: Setup CI
+      run:  sudo -E make -C scripts/ci setup-full
+
     - name: Run Benchmarking Script (${{ matrix.os }})
       run: sudo -E make -C scripts/ci benchmark 
       env:
@@ -40,6 +43,8 @@ jobs:
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        CHECKPOINTSVC_URL: ${{ secrets.CHECKPOINTSVC_URL }}
-        CHECKPOINTSVC_TOKEN: ${{ secrets.CHECKPOINTSVC_TOKEN }}
+        CEDANA_URL: ${{ secrets.CHECKPOINTSVC_URL }}
+        BENCHMARK_ACCOUNT: ${{ secrets.BENCHMARK_ACCOUNT }}
+        BENCHMARK_ACCOUNT_PW: ${{ secrets.BENCHMARK_ACCOUNT_PW }}
         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+

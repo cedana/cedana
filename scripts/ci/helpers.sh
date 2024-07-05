@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 ## NOTE: All scripts are being run by the makefile, which runs in the scripts/ci directory.
 ## As a result, where these functions are called rely on managing directory state using pushd/popd,
 ## which also means all these functions assume they're being run in the root directory.
@@ -10,12 +11,14 @@ APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev runc libcap-dev libgpgme-dev \
     btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf"
+    protobuf-compiler python3-protobuf software-properties-common \
+    zip
+"
 
 install_apt_packages() {
     apt-get update
     for pkg in $APT_PACKAGES; do
-        apt-get install -y $pkg || echo "Failed to install $pkg"
+        apt-get install -y $pkg || echo "failed to install $pkg"
     done
 }
 
@@ -64,6 +67,10 @@ install_crictl() {
 
 }
 
+install_otelcol_contrib() {
+    wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
+    dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
+}
 print_header() {
     echo "############### $1 ###############"
 }
@@ -111,6 +118,7 @@ setup_ci() {
 
     install_docker
     install_sysbox
+    install_otelcol_contrib
     install_buildah
     install_crictl
 
