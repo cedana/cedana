@@ -78,6 +78,7 @@ var containerMounts = map[string]bool{
 }
 
 const bindMount = "bind"
+const rwChangesFile = "cedana-rwchanges.json"
 
 func skipBindMount(mountPath string, specgen *rspec.Spec) bool {
 	for _, m := range specgen.Mounts {
@@ -137,7 +138,6 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
-	const rwChangesFile = ".cedana-rwchanges.json"
 
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 
