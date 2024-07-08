@@ -143,7 +143,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
 
 	includeFiles := []string{
-		rwChangesPath,
+		rwChangesFile,
 	}
 
 	config, err := getDefaultConfig()
@@ -165,7 +165,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	defer os.Remove(rwChangesPath)
+	// 	defer os.Remove(rwChangesPath)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
