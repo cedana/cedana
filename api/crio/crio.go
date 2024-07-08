@@ -2,6 +2,7 @@ package crio
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -136,9 +137,13 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
+	const rwChangesFile = ".cedana-rwchanges.json"
+
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 
-	includeFiles := []string{}
+	includeFiles := []string{
+		rwChangesFile,
+	}
 
 	config, err := getDefaultConfig()
 	if err != nil {
@@ -149,6 +154,17 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	if err != nil {
 		return "", err
 	}
+
+	rootFsChangesJson, err := json.Marshal(rootFsChanges)
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(rwChangesFile, rootFsChangesJson, 0777); err != nil {
+		return "", err
+	}
+
+	defer os.Remove(rwChangesFile)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
