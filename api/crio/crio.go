@@ -140,9 +140,10 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
 
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
+	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
 
 	includeFiles := []string{
-		rwChangesFile,
+		rwChangesPath,
 	}
 
 	config, err := getDefaultConfig()
@@ -160,11 +161,11 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	if err := os.WriteFile(rwChangesFile, rootFsChangesJson, 0777); err != nil {
+	if err := os.WriteFile(rwChangesPath, rootFsChangesJson, 0777); err != nil {
 		return "", err
 	}
 
-	defer os.Remove(rwChangesFile)
+	defer os.Remove(rwChangesPath)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
