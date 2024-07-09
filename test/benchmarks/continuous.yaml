@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: base-container-0
+spec:
+  selector:
+    matchLabels:
+      app: continuous
+  template:
+    metadata:
+      labels:
+        app: continuous
+    spec:
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      containers:
+        - name: base-container-0
+          image: brandonsmithai/cpu-pytorch-job:latest
+
