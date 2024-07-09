@@ -120,7 +120,8 @@ restore() {
   local checkpoint_path=$1
   envsubst < test/benchmarks/base-continuous.yaml | kubectl apply -f -
   echo "Restoring from $checkpoint_path into $restore_sandbox"
-  curl -v -X POST -H "Content-Type: application/json" -d '{
+  status=0
+  curl -o $status -v -X POST -H "Content-Type: application/json" -d '{
     "checkpoint_data": {
       "container_name": "'$restore_container'",
       "sandbox_name": "'$restore_sandbox'",
@@ -129,6 +130,7 @@ restore() {
       "root": "/run/containerd/runc/k8s.io"
     }
   }' http://localhost:1324/restore; echo
+  echo "status $status"
 }
 
 base() {
@@ -242,31 +244,45 @@ on_off () {
     seconds=$(date +"%S")
     t=$((10#$hours * 60 + 10#$minutes)) # time in minutes
     print_time "$hours" "$minutes" "$seconds" "$t"
-    if [[ $(($(($t-$stime)) % 10)) -lt 7 ]]; then u=true; else u=false; fi
-    if [[ $(($(($t-$stime)) % 10)) -eq 6 ]]; then
-      s=true
-      checkpoint_path=/tmp/ckpt-$hours-$minutes-$seconds
-      checkpoint $checkpoint_path
-    else s=false; fi
-    if [[ $(($(($t-$stime)) % 10)) -eq 0 ]]; then m=true; else m=false; fi
-    if [[ $(($(($t-$stime)) % 10)) -eq 1 ]]; then
+    if [[ $(($(($t-$stime)) % 3)) -eq 0 ]]; then m=true; else m=false; fi
+    if [[ $(($(($t-$stime)) % 3)) -eq 1 ]]; then
       r=true
       export count=$(($count+1))
       restore $checkpoint_path $count
       checkpoint_sandbox=$restore_sandbox
     else r=false; fi
-    :'if [[ $(($(($t-$stime)) % 10)) -eq 2 ]]; then
-      node_name=$(kubectl get pod -l app=continuous -o jsonpath="{.items[0].spec.nodeName}") # initial job has app=continuous
-      echo "node name - $node_name"
-      pod_name=$(kubectl get pods --all-namespaces --field-selector spec.nodeName=$node_name -o json | jq -r '.items[] | select(.metadata.name | startswith("binary-daemonset")) | .metadata.name')
-      echo "pod name - $pod_name"
-      echo "ls /host/tmp/ (pre-delete)"
-      kubectl exec -it $pod_name -n cedanacontroller-system -- ls /host/tmp
-      echo "rm -Rf /host$checkpoint_path"
-      kubectl exec -it $pod_name -n cedanacontroller-system -- rm -Rf /host$checkpoint_path /host$checkpoint_path.tar
-      echo "ls /host/tmp/ (post-delete)"
-      kubectl exec -it $pod_name -n cedanacontroller-system -- ls /host/tmp
-    fi'
+    if [[ $(($(($t-$stime)) % 3)) -eq 2 ]]; then
+      s=true
+      checkpoint_path=/tmp/ckpt-$hours-$minutes-$seconds
+      checkpoint $checkpoint_path
+    else s=false; fi
+    u=true
+
+    #if [[ $(($(($t-$stime)) % 10)) -lt 7 ]]; then u=true; else u=false; fi
+    #if [[ $(($(($t-$stime)) % 10)) -eq 6 ]]; then
+    #  s=true
+    #  checkpoint_path=/tmp/ckpt-$hours-$minutes-$seconds
+    #  checkpoint $checkpoint_path
+    #else s=false; fi
+    #if [[ $(($(($t-$stime)) % 10)) -eq 0 ]]; then m=true; else m=false; fi
+    #if [[ $(($(($t-$stime)) % 10)) -eq 1 ]]; then
+    #  r=true
+    #  export count=$(($count+1))
+    #  restore $checkpoint_path $count
+    #  checkpoint_sandbox=$restore_sandbox
+    #else r=false; fi
+#   # if [[ $(($(($t-$stime)) % 10)) -eq 2 ]]; then
+#      node_name=$(kubectl get pod -l app=continuous -o jsonpath="{.items[0].spec.nodeName}") # initial job has app=continuous
+#      echo "node name - $node_name"
+#      pod_name=$(kubectl get pods --all-namespaces --field-selector spec.nodeName=$node_name -o json | jq -r '.items[] | select(.metadata.name | startswith("binary-daemonset")) | .metadata.name')
+#      echo "pod name - $pod_name"
+#      echo "ls /host/tmp/ (pre-delete)"
+#      kubectl exec -it $pod_name -n cedanacontroller-system -- ls /host/tmp
+#      echo "rm -Rf /host$checkpoint_path"
+#      kubectl exec -it $pod_name -n cedanacontroller-system -- rm -Rf /host$checkpoint_path /host$checkpoint_path.tar
+#      echo "ls /host/tmp/ (post-delete)"
+#      kubectl exec -it $pod_name -n cedanacontroller-system -- ls /host/tmp
+#    fi
     print_utilization $t $u $s $m $r
     wait_until_next_minute
   done
