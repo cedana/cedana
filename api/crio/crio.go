@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -196,7 +197,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
-func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error {
+func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
 	//buildah from original base ubuntu image
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	output, err := cmd.CombinedOutput()
@@ -230,6 +231,31 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error
 
 	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
+	}
+
+	rwDiffJson := filepath.Join(containerStorage, rwChangesFile)
+	rwDiffJsonDest := filepath.Join(containerRootDirectory, rwChangesFile)
+
+	rwDiffFile, err := os.Open(rwDiffJson)
+	if err != nil {
+		return err
+	}
+	defer rwDiffFile.Close()
+
+	rwDiffFileDest, err := os.Create(rwDiffJsonDest)
+	if err != nil {
+		return err
+	}
+	defer rwDiffFileDest.Close()
+
+	_, err = io.Copy(rwDiffFileDest, rwDiffFile)
+	if err != nil {
+		return err
+	}
+
+	err = rwDiffFileDest.Sync()
+	if err != nil {
+		return err
 	}
 
 	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
