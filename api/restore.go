@@ -40,7 +40,7 @@ const (
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
 )
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
@@ -70,7 +70,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkp
 		}
 	}
 
-	err := utils.UntarFolder(checkpointPath, tempDir)
+	err := utils.UntarFolder(args.CheckpointPath, tempDir)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("error decompressing checkpoint")
 		return nil, nil, nil, err
@@ -118,7 +118,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkp
 
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.InheritFd = inheritFds
-	opts.TcpEstablished = proto.Bool(tcpEstablished)
+	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 		s.logger.Error().Err(err).Msg("error changing permissions")
@@ -510,7 +510,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args.CheckpointPath)
+	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args)
 	if err != nil {
 		return nil, err
 	}
