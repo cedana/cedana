@@ -309,6 +309,10 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	resp.HealthCheckStats.CriuVersion = strconv.Itoa(criuVersion)
 
 	// TODO NR - Add CRIU check to output
+	err = s.GPUHealthCheck(ctx, resp)
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("Error checking gpu health: %v", err))
+	}
 
 	return resp, nil
 }
