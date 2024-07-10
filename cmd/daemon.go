@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -94,6 +95,34 @@ var startDaemonCmd = &cobra.Command{
 	},
 }
 
+var checkDaemonCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Check if daemon is running and healthy",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		cts, err := services.NewClient()
+		if err != nil {
+			logger.Error().Err(err).Msg("error creating client")
+			return err
+		}
+
+		defer cts.Close()
+
+		// Detailed health check
+		resp, err := cts.DetailedHealthCheck(cmd.Context())
+		if err != nil {
+			logger.Error().Err(err).Msg("health check failed")
+			return err
+		}
+
+		logger.Info().Msgf("health check output: %v", resp)
+
+		return nil
+	},
+}
+
 // Used for debugging and profiling only!
 func startProfiler() {
 	utils.StartPprofServer()
@@ -102,6 +131,7 @@ func startProfiler() {
 func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
+	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 }

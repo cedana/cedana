@@ -26,6 +26,8 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -78,8 +80,13 @@ func NewServer(ctx context.Context) (*Server, error) {
 		),
 	}
 
+	healthcheck := health.NewServer()
+	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
+
 	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
+		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
+		// instead of leaving one running forever.
 		CRIU:    &Criu{},
 		fs:      &afero.Afero{Fs: afero.NewOsFs()},
 		db:      db.NewLocalDB(ctx),
@@ -88,6 +95,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		store:   utils.NewCedanaStore(tracer, logger),
 		logFile: logFile,
 	}
+
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
@@ -285,4 +293,22 @@ func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor
 
 		return resp, err
 	}
+}
+
+func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHealthCheckRequest) (*task.DetailedHealthCheckResponse, error) {
+	var unhealthyReasons []string
+	resp := &task.DetailedHealthCheckResponse{}
+
+	criuVersion, err := s.CRIU.GetCriuVersion()
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
+	}
+
+	resp.HealthCheckStats = &task.HealthCheckStats{}
+	resp.HealthCheckStats.CriuVersion = string(criuVersion)
+
+	criuCheckResp, _ := s.CRIU.Check()
+	s.logger.Info().Msgf("CRIU check response: %v", criuCheckResp)
+
+	return resp, nil
 }

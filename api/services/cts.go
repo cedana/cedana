@@ -44,6 +44,22 @@ func (c *ServiceClient) Close() {
 	c.taskConn.Close()
 }
 
+/////////////////////////////
+//      Health Check       //
+/////////////////////////////
+
+func (c *ServiceClient) DetailedHealthCheck(ctx context.Context) (*task.DetailedHealthCheckResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	req := &task.DetailedHealthCheckRequest{}
+	resp, err := c.taskService.DetailedHealthCheck(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 ///////////////////////////
 // Process Service Calls //
 ///////////////////////////
