@@ -14,6 +14,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	// Calls the reexec init function so that storage-mountfrom is able to be called in crio rootfs
+	// checkpoint. storage-mountfrom is used when the mountdata for the mount syscall is greater than
+	// the page size of the os
 	if reexec.Init() {
 		os.Exit(1)
 	}
