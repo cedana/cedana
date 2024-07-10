@@ -199,6 +199,10 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
 	//buildah from original base ubuntu image
+	if _, err := exec.LookPath("buildah"); err != nil {
+		return fmt.Errorf("buildah is not installed")
+	}
+
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

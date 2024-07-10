@@ -49,7 +49,7 @@ type Bundle struct {
 // prepareDump =/= preDump.
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, dir string, opts *rpc.CriuOpts) (string, error) {
+func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, error) {
 	_, dumpSpan := s.tracer.Start(ctx, "prepareDump")
 	dumpSpan.SetAttributes(attribute.Bool("container", false))
 	defer dumpSpan.End()
@@ -67,7 +67,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, dir
 		}
 	}
 
-	opts.TcpEstablished = proto.Bool(hasTCP)
+	opts.TcpEstablished = proto.Bool(hasTCP || args.TcpEstablished)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
 
@@ -86,7 +86,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, dir
 	// strip out non posix-compliant characters from the jobID
 	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
 	processDumpDir := strings.Join([]string{state.JID, timeString}, "_")
-	dumpDirPath := filepath.Join(dir, processDumpDir)
+	dumpDirPath := filepath.Join(args.Dir, processDumpDir)
 	_, err := os.Stat(dumpDirPath)
 	if err != nil {
 		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
@@ -232,7 +232,7 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
-	dumpdir, err := s.prepareDump(ctx, state, args.Dir, opts)
+	dumpdir, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
 	}

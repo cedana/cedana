@@ -51,12 +51,14 @@ var restoreProcessCmd = &cobra.Command{
 		}
 
 		path := args[0]
+    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			UID:            uid,
 			GID:            gid,
 			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
+      TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -120,11 +122,13 @@ var restoreJobCmd = &cobra.Command{
 		}
 		state := res.Processes[0]
 
+    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			JID:    jid,
 			UID:    uid,
 			GID:    gid,
 			Groups: groups,
+      TcpEstablished: tcpEstablished,
 		}
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
@@ -304,6 +308,9 @@ func init() {
 	// Process/jobs
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
+
+	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 
 	// Containerd
