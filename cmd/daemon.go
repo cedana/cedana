@@ -110,6 +110,15 @@ var checkDaemonCmd = &cobra.Command{
 
 		defer cts.Close()
 
+		// regular health check
+		healthy, err := cts.HealthCheck(cmd.Context())
+		if err != nil {
+			logger.Error().Err(err).Msg("health check failed")
+			return err
+		}
+
+		logger.Info().Msgf("health check returned: %v", healthy)
+
 		// Detailed health check
 		resp, err := cts.DetailedHealthCheck(cmd.Context())
 		if err != nil {

@@ -106,6 +106,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	server.listener = listener
 	server.service = service
 
+	healthcheck.SetServingStatus("task.TaskService", healthcheckgrpc.HealthCheckResponse_SERVING)
 	return server, err
 }
 
@@ -305,10 +306,9 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	}
 
 	resp.HealthCheckStats = &task.HealthCheckStats{}
-	resp.HealthCheckStats.CriuVersion = string(criuVersion)
+	resp.HealthCheckStats.CriuVersion = strconv.Itoa(criuVersion)
 
-	criuCheckResp, _ := s.CRIU.Check()
-	s.logger.Info().Msgf("CRIU check response: %v", criuCheckResp)
+	// TODO NR - Add CRIU check to output
 
 	return resp, nil
 }
