@@ -22,6 +22,7 @@ const (
 	CedanaGPU_Checkpoint_FullMethodName  = "/cedanagpu.CedanaGPU/Checkpoint"
 	CedanaGPU_Restore_FullMethodName     = "/cedanagpu.CedanaGPU/Restore"
 	CedanaGPU_StartupPoll_FullMethodName = "/cedanagpu.CedanaGPU/StartupPoll"
+	CedanaGPU_HealthCheck_FullMethodName = "/cedanagpu.CedanaGPU/HealthCheck"
 )
 
 // CedanaGPUClient is the client API for CedanaGPU service.
@@ -31,6 +32,7 @@ type CedanaGPUClient interface {
 	Checkpoint(ctx context.Context, in *CheckpointRequest, opts ...grpc.CallOption) (*CheckpointResponse, error)
 	Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreResponse, error)
 	StartupPoll(ctx context.Context, in *StartupPollRequest, opts ...grpc.CallOption) (*StartupPollResponse, error)
+	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 }
 
 type cedanaGPUClient struct {
@@ -68,6 +70,15 @@ func (c *cedanaGPUClient) StartupPoll(ctx context.Context, in *StartupPollReques
 	return out, nil
 }
 
+func (c *cedanaGPUClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
+	out := new(HealthCheckResponse)
+	err := c.cc.Invoke(ctx, CedanaGPU_HealthCheck_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CedanaGPUServer is the server API for CedanaGPU service.
 // All implementations must embed UnimplementedCedanaGPUServer
 // for forward compatibility
@@ -75,6 +86,7 @@ type CedanaGPUServer interface {
 	Checkpoint(context.Context, *CheckpointRequest) (*CheckpointResponse, error)
 	Restore(context.Context, *RestoreRequest) (*RestoreResponse, error)
 	StartupPoll(context.Context, *StartupPollRequest) (*StartupPollResponse, error)
+	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	mustEmbedUnimplementedCedanaGPUServer()
 }
 
@@ -90,6 +102,9 @@ func (UnimplementedCedanaGPUServer) Restore(context.Context, *RestoreRequest) (*
 }
 func (UnimplementedCedanaGPUServer) StartupPoll(context.Context, *StartupPollRequest) (*StartupPollResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartupPoll not implemented")
+}
+func (UnimplementedCedanaGPUServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HealthCheck not implemented")
 }
 func (UnimplementedCedanaGPUServer) mustEmbedUnimplementedCedanaGPUServer() {}
 
@@ -158,6 +173,24 @@ func _CedanaGPU_StartupPoll_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CedanaGPU_HealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CedanaGPUServer).HealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CedanaGPU_HealthCheck_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CedanaGPUServer).HealthCheck(ctx, req.(*HealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CedanaGPU_ServiceDesc is the grpc.ServiceDesc for CedanaGPU service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -176,6 +209,10 @@ var CedanaGPU_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartupPoll",
 			Handler:    _CedanaGPU_StartupPoll_Handler,
+		},
+		{
+			MethodName: "HealthCheck",
+			Handler:    _CedanaGPU_HealthCheck_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

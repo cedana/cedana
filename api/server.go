@@ -312,3 +312,74 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 
 	return resp, nil
 }
+
+func (s *service) GPUHealthCheck(ctx context.Context, resp *task.DetailedHealthCheckResponse) error {
+	gpuControllerPath := viper.GetString("gpu_controller_path")
+	if gpuControllerPath == "" {
+		gpuControllerPath = utils.GpuControllerBinaryPath
+	}
+
+	gpuSharedLibPath := viper.GetString("gpu_shared_lib_path")
+	if gpuSharedLibPath == "" {
+		gpuSharedLibPath = utils.GpuSharedLibPath
+	}
+
+	if _, err := os.Stat(gpuControllerPath); os.IsNotExist(err) {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu controller binary not found at %s", gpuControllerPath))
+	}
+
+	if _, err := os.Stat(gpuSharedLibPath); os.IsNotExist(err) {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu shared lib not found at %s", gpuSharedLibPath))
+	}
+
+	if resp.UnhealthyReasons != nil {
+		return fmt.Errorf("GPU health check failed")
+	}
+
+	// Don't really care about uid and gid here, just use caller's
+	var groups []uint32 = []uint32{}
+	uid := uint32(os.Getuid())
+	gid := uint32(os.Getgid())
+	groups_int, err := os.Getgroups()
+	if err != nil {
+		s.logger.Error().Err(err).Msg("error getting user groups")
+		return err
+	}
+	for _, g := range groups_int {
+		groups = append(groups, uint32(g))
+	}
+
+	cmd, err := StartGPUController(ctx, uid, gid, groups, s.logger)
+	if err != nil {
+		return err
+	}
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		return err
+	}
+
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.HealthCheckRequest{}
+	gpuResp, err := gpuServiceConn.HealthCheck(ctx, &args)
+	if err != nil {
+		return err
+	}
+
+	if !gpuResp.Success {
+		return fmt.Errorf("GPU health check failed")
+	}
+
+	resp.HealthCheckStats.CedanaGPUVersion = gpuResp.Version
+	resp.HealthCheckStats.GPUHealthCheck = gpuResp
+
+	defer cmd.Process.Kill()
+
+	return nil
+}
