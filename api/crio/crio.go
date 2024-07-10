@@ -17,7 +17,6 @@ import (
 	"github.com/containers/storage/pkg/unshare"
 	libconfig "github.com/cri-o/cri-o/pkg/config"
 	"github.com/docker/docker/pkg/homedir"
-	"github.com/docker/docker/pkg/reexec"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -172,10 +171,6 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	is, err := getImageService(ctx, config)
 	if err != nil {
 		return "", err
-	}
-
-	if reexec.Init() {
-		return "", fmt.Errorf("reexec already initialized")
 	}
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
