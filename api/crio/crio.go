@@ -2,8 +2,10 @@ package crio
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,6 +79,7 @@ var containerMounts = map[string]bool{
 }
 
 const bindMount = "bind"
+const rwChangesFile = "cedana-rwchanges.json"
 
 func skipBindMount(mountPath string, specgen *rspec.Spec) bool {
 	for _, m := range specgen.Mounts {
@@ -136,9 +139,13 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
-	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 
-	includeFiles := []string{}
+	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
+	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
+
+	includeFiles := []string{
+		rwChangesFile,
+	}
 
 	config, err := getDefaultConfig()
 	if err != nil {
@@ -149,6 +156,17 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	if err != nil {
 		return "", err
 	}
+
+	rootFsChangesJson, err := json.Marshal(rootFsChanges)
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(rwChangesPath, rootFsChangesJson, 0777); err != nil {
+		return "", err
+	}
+
+	// 	defer os.Remove(rwChangesPath)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
@@ -179,8 +197,12 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
-func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error {
+func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
 	//buildah from original base ubuntu image
+	if _, err := exec.LookPath("buildah"); err != nil {
+		return fmt.Errorf("buildah is not installed")
+	}
+
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -213,6 +235,31 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath string) error
 
 	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
+	}
+
+	rwDiffJson := filepath.Join(containerStorage, rwChangesFile)
+	rwDiffJsonDest := filepath.Join(containerRootDirectory, rwChangesFile)
+
+	rwDiffFile, err := os.Open(rwDiffJson)
+	if err != nil {
+		return err
+	}
+	defer rwDiffFile.Close()
+
+	rwDiffFileDest, err := os.Create(rwDiffJsonDest)
+	if err != nil {
+		return err
+	}
+	defer rwDiffFileDest.Close()
+
+	_, err = io.Copy(rwDiffFileDest, rwDiffFile)
+	if err != nil {
+		return err
+	}
+
+	err = rwDiffFileDest.Sync()
+	if err != nil {
+		return err
 	}
 
 	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
