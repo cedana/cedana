@@ -75,6 +75,7 @@ load helper.bash
   local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
   local bundle=$(pwd)/bundle
   echo bundle is $bundle
+  cp config.json $bundle/config.json
   local job_id="runc-test"
   local out_file=$bundle/rootfs/out
   local dumpdir=$(pwd)/dump
