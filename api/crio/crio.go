@@ -168,7 +168,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	defer os.Remove(rwChangesPath)
+	// 	defer os.Remove(rwChangesPath)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
@@ -218,7 +218,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	for _, change := range rootFsChanges {
 		fullPath := filepath.Join(tmpRootfsChangesDir, change.Path)
 		if err := os.Chown(fullPath, 0, 0); err != nil {
-			fmt.Printf("failed to change ownership for %s: %w", fullPath, err)
+			fmt.Printf("failed to change ownership for %s: %s", fullPath, err)
 		}
 	}
 
