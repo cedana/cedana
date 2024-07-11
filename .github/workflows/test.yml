@@ -1,6 +1,19 @@
 name: Test
 
-on: [push]
+on:
+  push:
+  workflow_dispatch:
+      inputs:
+        debug_smoke_test:
+          type: boolean
+          description: 'Run smoke test with tmate debugging enabled'
+          required: false
+          default: false
+        debug_regression_test:
+          type: boolean
+          description: 'Run regression test with tmate debugging enabled'
+          required: false
+          default: false
 
 concurrency:
   group: cedana-test-${{ github.event.pull_request.number || github.ref }}
@@ -11,6 +24,11 @@ jobs:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
+
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
 
       - name: Setup CI
         run:  sudo -E make -C scripts/ci setup-full
@@ -25,6 +43,11 @@ jobs:
     runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v3
+
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_regression_test }}
 
       - name: Setup CI
         run:  sudo -E make -C scripts/ci setup-full

@@ -1,6 +1,14 @@
 name: Build
 
-on: [push]
+on:
+  push:
+  workflow_dispatch:
+      inputs:
+        debug_build:
+          type: boolean
+          description: 'Run build with tmate debugging enabled'
+          required: false
+          default: false
 
 concurrency:
   group: cedana-build-${{ github.event.pull_request.number || github.ref }}
@@ -19,6 +27,11 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
+
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
 
       - name: Setup CI
         run:  sudo -E make -C scripts/ci setup-build
