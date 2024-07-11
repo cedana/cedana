@@ -48,6 +48,8 @@ jobs:
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_release }}
+        with:
+          limit-access-to-actor: true
 
       - name: Install dependencies
         run: sudo -E make -C scripts/ci setup-build
@@ -92,6 +94,8 @@ jobs:
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_image_to_ghcr }}
+        with:
+          limit-access-to-actor: true
 
       - name: Get the version
         id: get_version
@@ -137,6 +141,8 @@ jobs:
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_image_to_dockerhub }}
+        with:
+          limit-access-to-actor: true
 
       - name: Get the version
         id: get_version

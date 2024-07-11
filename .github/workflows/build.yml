@@ -32,6 +32,8 @@ jobs:
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
+        with:
+          limit-access-to-actor: true
 
       - name: Setup CI
         run:  sudo -E make -C scripts/ci setup-build
