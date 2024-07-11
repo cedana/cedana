@@ -250,3 +250,7 @@ func (c *Criu) IsCriuAtLeast(version int) (bool, error) {
 
 	return false, nil
 }
+
+func (c *Criu) Check() (*rpc.CriuResp, error) {
+	return c.doSwrk(rpc.CriuReqType_CHECK, nil, nil, nil)
+}
