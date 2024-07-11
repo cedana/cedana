@@ -57,14 +57,14 @@ var dumpProcessCmd = &cobra.Command{
 
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		cpuDumpArgs := task.DumpArgs{
-			PID:  int32(pid),
-			Dir:  dir,
-			JID:  id,
-			Type: task.CRType_LOCAL,
-			GPU:  gpuEnabled,
-      TcpEstablished: tcpEstablished,
+			PID:            int32(pid),
+			Dir:            dir,
+			JID:            id,
+			Type:           task.CRType_LOCAL,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -128,13 +128,13 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		dumpArgs := task.DumpArgs{
-			JID:  id,
-			Dir:  dir,
-			Type: taskType,
-			GPU:  gpuEnabled,
-      TcpEstablished: tcpEstablished,
+			JID:            id,
+			Dir:            dir,
+			Type:           taskType,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)
