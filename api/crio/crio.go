@@ -226,11 +226,20 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	_, err = archive.TarWithOptions(ctrDir, &archive.TarOptions{
+	rootfsTar, err := archive.TarWithOptions(tmpRootfsChangesDir, &archive.TarOptions{
 		// This should be configurable via api.proti
 		Compression:      archive.Uncompressed,
 		IncludeSourceDir: true,
 	})
+
+	rootfsDiffFile, err = os.Create(diffPath)
+	if err != nil {
+		return "", fmt.Errorf("creating root file-system diff file %q: %w", diffPath, err)
+	}
+	defer rootfsDiffFile.Close()
+	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
+		return "", err
+	}
 
 	_, err = os.Stat(diffPath)
 	if err != nil {
