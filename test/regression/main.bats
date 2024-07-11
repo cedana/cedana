@@ -81,10 +81,17 @@ load helper.bash
   local tty_sock=$(pwd)/tty.sock
 
   # fetch and unpack a rootfs
-  wget $rootfs
+  run wget $rootfs
+  [ "$status" -eq 0 ] || fail "Failed to download rootfs"
+
   mkdir -p $bundle/rootfs
-  sudo chown root:root $bundle
-  sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+
+  run sudo chown root:root $bundle
+  [ "$status" -eq 0 ] || fail "Failed to change ownership of bundle"
+
+  run sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+  [ "$status" -eq 0 ] || fail "Failed to extract rootfs"
+
   # cp config.json $bundle/config.json
 
   # create a runc container
@@ -92,7 +99,10 @@ load helper.bash
   local tty_pid=$!
   echo bundle is $bundle
   echo jobid is $job_id
-  sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
+
+  run sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
+  [ "$status" -eq 0 ] || fail "Failed to start runc container"
+
   sudo runc list
   sleep 1 3>- &
 
