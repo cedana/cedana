@@ -1,9 +1,26 @@
-name: Release 
+name: Release
 
 on:
-  push: 
-    tags: 
+  push:
+    tags:
       - '*'
+  workflow_dispatch:
+      inputs:
+        debug_release:
+          type: boolean
+          description: 'Run release with tmate debugging enabled'
+          required: false
+          default: false
+        debug_build_push_image_to_ghcr:
+          type: boolean
+          description: 'Run build & push (ghcr.io) with tmate debugging enabled'
+          required: false
+          default: false
+        debug_build_push_image_to_dockerhub:
+          type: boolean
+          description: 'Run build & push (dockerhub) with tmate debugging enabled'
+          required: false
+          default: false
 
 permissions:
   contents: write
@@ -27,8 +44,14 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v4
 
-      -
-        name: Install dependencies
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_release }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Install dependencies
         run: sudo -E make -C scripts/ci setup-build
       -
         name: Run GoReleaser
@@ -40,11 +63,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
-  build-and-push-image-to-ghcr: 
-    runs-on: ubuntu-latest 
+  build-and-push-image-to-ghcr:
+    runs-on: ubuntu-latest
     needs: release
 
-    permissions: 
+    permissions:
       contents: read
       packages: write
 
@@ -67,11 +90,18 @@ jobs:
         with:
           images: ghcr.io/cedana/cedana
 
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_image_to_ghcr }}
+        with:
+          limit-access-to-actor: true
+
       - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Build and push 
+      - name: Build and push
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
@@ -106,6 +136,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: cedana/cedana-helper
+
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_image_to_dockerhub }}
+        with:
+          limit-access-to-actor: true
 
       - name: Get the version
         id: get_version
