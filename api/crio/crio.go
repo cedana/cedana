@@ -205,7 +205,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
-func CRIORootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
+func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
 	//buildah from original base ubuntu image
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
@@ -290,7 +290,7 @@ func CRIORootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsD
 	//untar into storage root
 }
 
-func CRIOImagePush(ctx context.Context, newImageRef string) error {
+func ImagePush(ctx context.Context, newImageRef string) error {
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
 	out, err := cmd.CombinedOutput()
@@ -299,6 +299,10 @@ func CRIOImagePush(ctx context.Context, newImageRef string) error {
 	}
 
 	return nil
+}
+
+func SysboxChown() {
+
 }
 
 type commitInputOptions struct {
