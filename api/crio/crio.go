@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cedana/cedana/utils"
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
@@ -166,7 +167,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	// 	defer os.Remove(rwChangesPath)
+	defer os.Remove(rwChangesPath)
 
 	is, err := getImageService(ctx, config)
 	if err != nil {
@@ -174,6 +175,13 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
+
+	for _, change := range rootFsChanges {
+		fullPath := filepath.Join(mountPoint, change.Path)
+		if err := os.Chown(fullPath, 0, 0); err != nil {
+			return "", fmt.Errorf("failed to change ownership for %s: %w", fullPath, err)
+		}
+	}
 
 	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir)
 	if err != nil {
@@ -197,30 +205,37 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
-func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
+func CRIORootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
 	//buildah from original base ubuntu image
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
 	}
 
 	cmd := exec.Command("buildah", "from", originalImageRef)
-	output, err := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
 
-	containerID := string(output)
+	containerID := string(out)
 
 	containerID = strings.ReplaceAll(containerID, "\n", "")
 
 	//mount container
-	cmd = exec.Command("buildah", "mount", containerID)
-	output, err = cmd.CombinedOutput()
+	logger, err := utils.GetLoggerFromContext(ctx)
 	if err != nil {
-		return err
+		fmt.Printf(err.Error())
 	}
 
-	containerRootDirectory := string(output)
+	logger.Debug().Msgf("buildah mount of container %s", containerID)
+
+	cmd = exec.Command("buildah", "mount", containerID)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("issue mounting working container: %s, %s", err.Error(), string(out))
+	}
+
+	containerRootDirectory := string(out)
 
 	containerRootDirectory = strings.ReplaceAll(containerRootDirectory, "\n", "")
 
@@ -232,6 +247,8 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerSto
 		return fmt.Errorf("failed to open root file-system diff file: %w", err)
 	}
 	defer rootfsDiffFile.Close()
+
+	logger.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
 	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
@@ -262,22 +279,23 @@ func CRIORootfsMerge(originalImageRef, newImageRef, rootfsDiffPath, containerSto
 		return err
 	}
 
+	logger.Debug().Msgf("committing to %s", newImageRef)
 	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
-	_, err = cmd.CombinedOutput()
+	out, err = cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("issue committing image: %s, %s", err.Error(), string(out))
 	}
 
 	return nil
 	//untar into storage root
 }
 
-func CRIOImagePush(newImageRef string) error {
+func CRIOImagePush(ctx context.Context, newImageRef string) error {
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
-	_, err := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("issue pushing image: %s, %s", err.Error(), string(out))
 	}
 
 	return nil
