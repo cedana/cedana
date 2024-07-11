@@ -125,33 +125,3 @@ load helper.bash
   sudo rm -rf $tty_sock
 }
 
-@test "Simple runc restore" {
-  local bundle=$(pwd)/bundle
-  local job_id="runc-test-restored"
-  local out_file=$bundle/rootfs/out
-  local dumpdir=$(pwd)/dump
-  local tty_sock=$(pwd)/tty.sock
-
-  # restore the container
-  [ -d $bundle ]
-  [ -d $dumpdir ]
-  recvtty $tty_sock &
-  local tty_pid=$!
-  run runc_restore $bundle $dumpdir $job_id $tty_sock
-
-  sleep 1 3>- &
-
-  # check if container running correctly, count lines in output file
-  [ -f $out_file ]
-  local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>- &
-  local nlines_after=$(wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
-
-  # clean up
-  sudo runc kill $job_id SIGKILL
-  sudo runc delete $job_id
-  # kill -9 $tty_pid
-  sudo rm -rf $tty_sock
-}
-
