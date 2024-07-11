@@ -72,6 +72,7 @@ load helper.bash
 }
 
 @test "Simple runc checkpoint" {
+  set -e
   local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
   local bundle=$(pwd)/bundle
   echo bundle is $bundle
