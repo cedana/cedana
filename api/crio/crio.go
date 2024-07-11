@@ -176,13 +176,6 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
 
-	for _, change := range rootFsChanges {
-		fullPath := filepath.Join(mountPoint, change.Path)
-		if err := os.Chown(fullPath, 0, 0); err != nil {
-			return "", fmt.Errorf("failed to change ownership for %s: %w", fullPath, err)
-		}
-	}
-
 	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir)
 	if err != nil {
 		return "", err
@@ -200,6 +193,32 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	_, err = os.Stat(diffPath)
 	if err != nil {
 		return "", err
+	}
+
+	rootfsDiffFile, err := os.Open(ctrDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to open root file-system diff file: %w", err)
+	}
+	defer rootfsDiffFile.Close()
+
+	tmpRootfsChangesDir, err := os.MkdirTemp("", "untarred_directory")
+	if err != nil {
+		return "", err
+	}
+
+	defer os.RemoveAll(tmpRootfsChangesDir)
+	if err := archive.Untar(rootfsDiffFile, tmpRootfsChangesDir, nil); err != nil {
+		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", ctrDir, err)
+	}
+
+	for _, change := range rootFsChanges {
+		fullPath := filepath.Join(tmpRootfsChangesDir, change.Path)
+		if err := os.Chown(fullPath, 0, 0); err != nil {
+			return "", fmt.Errorf("failed to change ownership for %s: %w", fullPath, err)
+		}
 	}
 
 	return diffPath, nil
