@@ -86,7 +86,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Root:          args.Opts.Root,
 		Bundle:        args.Opts.Bundle,
 		ConsoleSocket: args.Opts.ConsoleSocket,
-		Detatch:       args.Opts.Detatch,
+		Detach:        args.Opts.Detach,
 		NetPid:        int(args.Opts.NetPid),
 		StateRoot:     args.Opts.Root,
 	}

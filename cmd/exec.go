@@ -38,16 +38,26 @@ var execTaskCmd = &cobra.Command{
 		jid, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
 			logger.Error().Err(err).Msg("invalid job id")
+			return err
 		}
 
 		var env []string
 		var uid uint32
 		var gid uint32
+		var groups []uint32 = []uint32{}
 
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
+			groups_int, err := os.Getgroups()
+			if err != nil {
+				logger.Error().Err(err).Msg("error getting user groups")
+				return err
+			}
+			for _, g := range groups_int {
+				groups = append(groups, uint32(g))
+			}
 		}
 
 		env = os.Environ()
@@ -66,6 +76,7 @@ var execTaskCmd = &cobra.Command{
 			Env:           env,
 			UID:           uid,
 			GID:           gid,
+			Groups:        groups,
 			JID:           jid,
 			GPU:           gpuEnabled,
 			LogOutputFile: logRedirectFile,

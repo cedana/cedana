@@ -174,8 +174,8 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func StartGPUController(ctx context.Context, uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d", uid, gid)
+func StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d, groups: %v", uid, gid, groups)
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -203,8 +203,9 @@ func StartGPUController(ctx context.Context, uid, gid uint32, logger *zerolog.Lo
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid: uid,
-			Gid: gid,
+			Uid:    uid,
+			Gid:    gid,
+			Groups: groups,
 		},
 	}
 

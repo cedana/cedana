@@ -288,7 +288,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	var err error
 	if args.GPU {
 		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
-		gpuCmd, err = StartGPUController(ctx, args.UID, args.GID, s.logger)
+		gpuCmd, err = StartGPUController(ctx, args.UID, args.GID, args.Groups, s.logger)
 		if err != nil {
 			return 0, err
 		}
@@ -313,8 +313,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid: args.UID,
-			Gid: args.GID,
+			Uid:    args.UID,
+			Gid:    args.GID,
+			Groups: args.Groups,
 		},
 	}
 

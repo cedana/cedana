@@ -36,6 +36,7 @@ const (
 	TaskService_CRIOImagePush_FullMethodName           = "/cedana.services.task.TaskService/CRIOImagePush"
 	TaskService_LogStreaming_FullMethodName            = "/cedana.services.task.TaskService/LogStreaming"
 	TaskService_ProcessStateStreaming_FullMethodName   = "/cedana.services.task.TaskService/ProcessStateStreaming"
+	TaskService_DetailedHealthCheck_FullMethodName     = "/cedana.services.task.TaskService/DetailedHealthCheck"
 )
 
 // TaskServiceClient is the client API for TaskService service.
@@ -64,6 +65,8 @@ type TaskServiceClient interface {
 	// Streaming
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
 	ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (TaskService_ProcessStateStreamingClient, error)
+	// Health
+	DetailedHealthCheck(ctx context.Context, in *DetailedHealthCheckRequest, opts ...grpc.CallOption) (*DetailedHealthCheckResponse, error)
 }
 
 type taskServiceClient struct {
@@ -272,6 +275,15 @@ func (x *taskServiceProcessStateStreamingClient) Recv() (*ProcessState, error) {
 	return m, nil
 }
 
+func (c *taskServiceClient) DetailedHealthCheck(ctx context.Context, in *DetailedHealthCheckRequest, opts ...grpc.CallOption) (*DetailedHealthCheckResponse, error) {
+	out := new(DetailedHealthCheckResponse)
+	err := c.cc.Invoke(ctx, TaskService_DetailedHealthCheck_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -298,6 +310,8 @@ type TaskServiceServer interface {
 	// Streaming
 	LogStreaming(TaskService_LogStreamingServer) error
 	ProcessStateStreaming(*ProcessStateStreamingArgs, TaskService_ProcessStateStreamingServer) error
+	// Health
+	DetailedHealthCheck(context.Context, *DetailedHealthCheckRequest) (*DetailedHealthCheckResponse, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -355,6 +369,9 @@ func (UnimplementedTaskServiceServer) LogStreaming(TaskService_LogStreamingServe
 }
 func (UnimplementedTaskServiceServer) ProcessStateStreaming(*ProcessStateStreamingArgs, TaskService_ProcessStateStreamingServer) error {
 	return status.Errorf(codes.Unimplemented, "method ProcessStateStreaming not implemented")
+}
+func (UnimplementedTaskServiceServer) DetailedHealthCheck(context.Context, *DetailedHealthCheckRequest) (*DetailedHealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DetailedHealthCheck not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -686,6 +703,24 @@ func (x *taskServiceProcessStateStreamingServer) Send(m *ProcessState) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _TaskService_DetailedHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetailedHealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).DetailedHealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_DetailedHealthCheck_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).DetailedHealthCheck(ctx, req.(*DetailedHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -752,6 +787,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CRIOImagePush",
 			Handler:    _TaskService_CRIOImagePush_Handler,
+		},
+		{
+			MethodName: "DetailedHealthCheck",
+			Handler:    _TaskService_DetailedHealthCheck_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
