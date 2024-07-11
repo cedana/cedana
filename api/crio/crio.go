@@ -218,7 +218,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	for _, change := range rootFsChanges {
 		fullPath := filepath.Join(tmpRootfsChangesDir, change.Path)
 		if err := os.Chown(fullPath, 0, 0); err != nil {
-			return "", fmt.Errorf("failed to change ownership for %s: %w", fullPath, err)
+			fmt.Printf("failed to change ownership for %s: %w", fullPath, err)
 		}
 	}
 
