@@ -70,11 +70,10 @@ func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
 	}
 }
 
-func (c *ServiceClient) DetailedHealthCheck(ctx context.Context) (*task.DetailedHealthCheckResponse, error) {
+func (c *ServiceClient) DetailedHealthCheck(ctx context.Context, args *task.DetailedHealthCheckRequest) (*task.DetailedHealthCheckResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	req := &task.DetailedHealthCheckRequest{}
-	resp, err := c.taskService.DetailedHealthCheck(ctx, req)
+	resp, err := c.taskService.DetailedHealthCheck(ctx, args)
 	if err != nil {
 		return nil, err
 	}

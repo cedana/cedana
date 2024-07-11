@@ -309,7 +309,7 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	resp.HealthCheckStats.CriuVersion = strconv.Itoa(criuVersion)
 
 	// TODO NR - Add CRIU check to output
-	err = s.GPUHealthCheck(ctx, resp)
+	err = s.GPUHealthCheck(ctx, req, resp)
 	if err != nil {
 		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("Error checking gpu health: %v", err))
 	}
@@ -317,7 +317,10 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	return resp, nil
 }
 
-func (s *service) GPUHealthCheck(ctx context.Context, resp *task.DetailedHealthCheckResponse) error {
+func (s *service) GPUHealthCheck(
+	ctx context.Context,
+	req *task.DetailedHealthCheckRequest,
+	resp *task.DetailedHealthCheckResponse) error {
 	gpuControllerPath := viper.GetString("gpu_controller_path")
 	if gpuControllerPath == "" {
 		gpuControllerPath = utils.GpuControllerBinaryPath
@@ -340,23 +343,12 @@ func (s *service) GPUHealthCheck(ctx context.Context, resp *task.DetailedHealthC
 		return fmt.Errorf("GPU health check failed")
 	}
 
-	// Don't really care about uid and gid here, just use caller's
-	var groups []uint32 = []uint32{}
-	uid := uint32(os.Getuid())
-	gid := uint32(os.Getgid())
-	groups_int, err := os.Getgroups()
+	cmd, err := StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("error getting user groups")
 		return err
-	}
-	for _, g := range groups_int {
-		groups = append(groups, uint32(g))
 	}
 
-	cmd, err := StartGPUController(ctx, uid, gid, groups, s.logger)
-	if err != nil {
-		return err
-	}
+	defer cmd.Process.Kill()
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -382,8 +374,6 @@ func (s *service) GPUHealthCheck(ctx context.Context, resp *task.DetailedHealthC
 
 	resp.HealthCheckStats.CedanaGPUVersion = gpuResp.Version
 	resp.HealthCheckStats.GPUHealthCheck = gpuResp
-
-	defer cmd.Process.Kill()
 
 	return nil
 }

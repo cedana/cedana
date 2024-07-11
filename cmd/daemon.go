@@ -13,6 +13,7 @@ import (
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
+	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -119,8 +120,30 @@ var checkDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("health check returned: %v", healthy)
 
-		// Detailed health check
-		resp, err := cts.DetailedHealthCheck(cmd.Context())
+		// Detailed health check. Need to grab uid and gid to start
+		// controller properly and with the right perms.
+		var uid uint32
+		var gid uint32
+		var groups []uint32 = []uint32{}
+
+		uid = uint32(os.Getuid())
+		gid = uint32(os.Getgid())
+		groups_int, err := os.Getgroups()
+		if err != nil {
+			logger.Error().Err(err).Msg("error getting user groups")
+			return err
+		}
+		for _, g := range groups_int {
+			groups = append(groups, uint32(g))
+		}
+
+		req := &task.DetailedHealthCheckRequest{
+			UID:    uid,
+			GID:    gid,
+			Groups: groups,
+		}
+
+		resp, err := cts.DetailedHealthCheck(cmd.Context(), req)
 		if err != nil {
 			logger.Error().Err(err).Msg("health check failed")
 			return err
