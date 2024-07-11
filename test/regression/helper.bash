@@ -60,5 +60,5 @@ function runc_restore() {
 
 function fail() {
   echo "$@" >&2
-  return 1
+  exit 1
 }
