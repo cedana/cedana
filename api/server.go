@@ -339,13 +339,14 @@ func (s *service) GPUHealthCheck(
 		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu shared lib not found at %s", gpuSharedLibPath))
 	}
 
-	if resp.UnhealthyReasons != nil {
-		return fmt.Errorf("GPU health check failed")
+	if len(resp.UnhealthyReasons) != 0 {
+		return nil
 	}
 
 	cmd, err := StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
 	if err != nil {
-		return err
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
+		return nil
 	}
 
 	defer cmd.Process.Kill()
@@ -369,10 +370,9 @@ func (s *service) GPUHealthCheck(
 	}
 
 	if !gpuResp.Success {
-		return fmt.Errorf("GPU health check failed")
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu health check did not return success"))
 	}
 
-	resp.HealthCheckStats.CedanaGPUVersion = gpuResp.Version
 	resp.HealthCheckStats.GPUHealthCheck = gpuResp
 
 	return nil

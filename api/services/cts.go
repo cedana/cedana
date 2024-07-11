@@ -51,7 +51,7 @@ func (c *ServiceClient) Close() {
 
 func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
 	healthClient := grpc_health_v1.NewHealthClient(c.taskConn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
 
 	// Health check
