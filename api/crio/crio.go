@@ -205,8 +205,8 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 	defer rootfsDiffFile.Close()
 
-	tmpRootfsChangesDir, err := os.MkdirTemp("", "untarred_directory")
-	if err != nil {
+	tmpRootfsChangesDir := filepath.Join(ctrDir, "rootfs-diff")
+	if err := os.Mkdir(tmpRootfsChangesDir, 0777); err != nil {
 		return "", err
 	}
 
@@ -220,6 +220,21 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		if err := os.Chown(fullPath, 0, 0); err != nil {
 			fmt.Printf("failed to change ownership for %s: %s", fullPath, err)
 		}
+	}
+
+	if err := os.Remove(diffPath); err != nil {
+		return "", err
+	}
+
+	_, err = archive.TarWithOptions(ctrDir, &archive.TarOptions{
+		// This should be configurable via api.proti
+		Compression:      archive.Uncompressed,
+		IncludeSourceDir: true,
+	})
+
+	_, err = os.Stat(diffPath)
+	if err != nil {
+		return "", err
 	}
 
 	return diffPath, nil
