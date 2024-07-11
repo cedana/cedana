@@ -72,7 +72,6 @@ load helper.bash
 }
 
 @test "Simple runc checkpoint" {
-  set -e
   local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
   local bundle=$(pwd)/bundle
   echo bundle is $bundle
@@ -95,13 +94,13 @@ load helper.bash
   echo jobid is $job_id
   sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
   sudo runc list
-  sleep 1 3>-
+  sleep 1 3>- &
 
   # check if container running correctly, count lines in output file
   run sudo test -f "$out_file"
   [ "$status" -eq 0 ]
   local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
-  sleep 2 3>-
+  sleep 2 3>- &
   local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
