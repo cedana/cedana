@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/utils"
+	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
@@ -195,7 +196,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	rootfsDiffFile, err := os.Open(ctrDir)
+	rootfsDiffFile, err := os.Open(filepath.Join(ctrDir, metadata.RootFsDiffTar))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
