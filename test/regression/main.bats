@@ -11,7 +11,7 @@ load helper.bash
 
     # check the output file
     [ -f /var/log/cedana-output.log ]
-    sleep 2
+    sleep 2 3>- &
     [ -s /var/log/cedana-output.log ]
 
     # kill the process
@@ -25,9 +25,9 @@ load helper.bash
 
     # execute, checkpoint and restore a job
     run exec_task $task $job_id
-    sleep 2
+    sleep 2 3>- &
     run checkpoint_task $job_id
-    sleep 2
+    sleep 2 3>- &
     run restore_task $job_id
 
     # get the post-restore log file
@@ -36,7 +36,7 @@ load helper.bash
 
     # check the post-restore log files
     [ -f $rawfile ]
-    sleep 2
+    sleep 2 3>- &
     [ -s $rawfile ]
 
     # kill the process
@@ -129,12 +129,12 @@ load helper.bash
   local tty_pid=$!
   run runc_restore $bundle $dumpdir $job_id $tty_sock
 
-  sleep 1
+  sleep 1 3>- &
 
   # check if container running correctly, count lines in output file
   [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2
+  sleep 2 3>- &
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
