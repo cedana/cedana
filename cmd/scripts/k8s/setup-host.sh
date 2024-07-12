@@ -33,8 +33,20 @@ install_yum_packages() {
 }
 
 install_criu_ubuntu_2204() {
-    PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
-    OUTPUT_FILE="criu_3.19-4_amd64.deb"
+    case $(uname -m) in
+        x86 | x86_64)
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
+            OUTPUT_FILE="criu_3.19-4_amd64.deb"
+            ;;
+        armv7 | aarch64)
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_arm64.deb"
+            OUTPUT_FILE="criu_3.19-4_arm64.deb"
+            ;;
+        *)
+            echo "Unknown platform " $(uname -m)
+            exit 1
+            ;;
+    esac
 
     wget $PACKAGE_URL -O $OUTPUT_FILE
     dpkg -i $OUTPUT_FILE
@@ -69,8 +81,20 @@ else
 fi
 
 
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+case $(uname -m) in
+    x86 | x86_64)
+        wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
+        tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+    ;;
+    armv7 | aarch64)
+        wget https://go.dev/dl/go1.22.0.linux-arm64.tar.gz && rm -rf /usr/local/go
+        tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz && rm go1.22.0.linux-arm64.tar.gz
+        ;;
+    *)
+        echo "Unknown platform " $(uname -m)
+        exit 1
+        ;;
+esac
 
 export PATH=$PATH:/usr/local/go/bin
 echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
@@ -78,9 +102,9 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
 cd /
 
 echo "export IS_K8S=1" >> ~/.bashrc
-source ~/.bashrc
-
+. ~/.bashrc
 
 ./build-start-daemon.sh --systemctl --no-build
 
 EOT
+
