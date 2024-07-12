@@ -12,6 +12,12 @@ RUN CGO_ENABLED=1 go build -o cedana
 
 FROM ubuntu:22.04
 
+# Install essential packages
+RUN apt-get update && \
+    apt-get install -y software-properties-common git wget zip && \
+    apt-get install -y libgpgme-dev libseccomp-dev libbtrfs-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/cedana /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 
