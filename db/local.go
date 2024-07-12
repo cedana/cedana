@@ -3,14 +3,14 @@ package db
 // Local implementation of sqlite DB
 
 import (
-	"database/sql"
 	"context"
-	"github.com/cedana/cedana/db/sqlite"
+	"database/sql"
 	"github.com/cedana/cedana/db/models"
+	"github.com/cedana/cedana/db/sqlite"
 )
 
 const (
-	SQLITE_DB_PATH		  = "/tmp/sqlite_cedana.db"
+	SQLITE_DB_PATH = "/tmp/sqlite_cedana.db"
 )
 
 type LocalDB struct {
@@ -48,13 +48,13 @@ func (db *LocalDB) GetJob(ctx context.Context, jid []byte) (models.Job, error) {
 
 func (db *LocalDB) PutJob(ctx context.Context, jid []byte, state []byte) error {
 	_, err := db.queries.CreateJob(ctx, sqlite.CreateJobParams{
-		Jid: jid,
-		State:  state,
+		Jid:   jid,
+		State: state,
 	})
 	if err != nil {
 		err = db.queries.UpdateJob(ctx, sqlite.UpdateJobParams{
-			Jid: jid,
-			State:  state,
+			Jid:   jid,
+			State: state,
 		})
 		return err
 	}
