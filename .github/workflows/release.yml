@@ -6,9 +6,9 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
-      push_release:
+      make_release:
         type: boolean
-        description: "Run release without pushing the image"
+        description: "Run release build without pushing the release"
         required: false
         default: true
       debug_release:
@@ -16,6 +16,11 @@ on:
         description: "Run release with tmate debugging enabled"
         required: false
         default: false
+      push_build_image:
+        type: boolean
+        description: "Run image build without pushing the image"
+        required: false
+        default: true
       debug_build_push_image:
         type: boolean
         description: "Run build & push with tmate debugging enabled"
@@ -58,6 +63,7 @@ jobs:
         run: sudo -E make -C scripts/ci setup-build
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
+        if: ${{ github.event_name != 'workflow_dispatch' && inputs.make_release }}
         with:
           distribution: goreleaser
           version: latest
@@ -121,7 +127,7 @@ jobs:
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push_release }}
+          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push_build_image }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
