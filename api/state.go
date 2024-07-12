@@ -51,7 +51,6 @@ func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState,
 	return &state, err
 }
 
-
 // TODO NR - customizable errors
 func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessState, error) {
 	if pid == 0 {
