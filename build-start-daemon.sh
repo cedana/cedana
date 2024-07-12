@@ -56,6 +56,8 @@ if [ $NO_BUILD -ne 1 ]; then
   if [ $? -ne 0 ]; then
     echo "Build failed. Exiting."
     exit 1
+  else
+    $SUDO_USE cp $APP_NAME $APP_PATH
   fi
 fi
 
