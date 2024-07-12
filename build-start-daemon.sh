@@ -108,9 +108,9 @@ EOF
 else
     echo "Starting daemon as a background process..."
     if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED"
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED"
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi
