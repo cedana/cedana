@@ -29,4 +29,5 @@ const (
 	externalFlag         = "external"
 	destFlag             = "dest"
 	containerStorageFlag = "container-storage"
+	streamFlag           = "stream"
 )

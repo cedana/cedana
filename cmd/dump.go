@@ -378,4 +378,6 @@ func init() {
 	pushCRIOImage.MarkFlagRequired(newRefFlag)
 	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
 	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
+
+	dumpCmd.Flags().BoolP(streamFlag, "", false, "dump images using criu-image-streamer")
 }
