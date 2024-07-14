@@ -133,11 +133,6 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		s.logger.Fatal().Err(err)
 	}
 
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		postDumpSpan.RecordError(err)
-		s.logger.Fatal().Err(err)
-	}
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {

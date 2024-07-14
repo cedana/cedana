@@ -41,13 +41,14 @@ const (
 )
 
 type service struct {
-	CRIU    *Criu
-	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db      db.DB
-	logger  *zerolog.Logger
-	tracer  trace.Tracer
-	store   *utils.CedanaStore
-	logFile *os.File // for streaming and storing logs
+	CRIU      *Criu
+	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db        db.DB
+	logger    *zerolog.Logger
+	tracer    trace.Tracer
+	store     *utils.CedanaStore
+	logFile   *os.File        // for streaming and storing logs
+	serverCtx context.Context // context alive for the duration of the server
 
 	task.UnimplementedTaskServiceServer
 }
@@ -87,13 +88,14 @@ func NewServer(ctx context.Context) (*Server, error) {
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
-		CRIU:    &Criu{},
-		fs:      &afero.Afero{Fs: afero.NewOsFs()},
-		db:      db.NewLocalDB(ctx),
-		logger:  &newLogger,
-		tracer:  tracer,
-		store:   utils.NewCedanaStore(tracer, logger),
-		logFile: logFile,
+		CRIU:      &Criu{},
+		fs:        &afero.Afero{Fs: afero.NewOsFs()},
+		db:        db.NewLocalDB(ctx),
+		logger:    &newLogger,
+		tracer:    tracer,
+		store:     utils.NewCedanaStore(tracer, logger),
+		logFile:   logFile,
+		serverCtx: ctx,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -183,7 +185,7 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
 	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d, groups: %v", uid, gid, groups)
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
@@ -208,7 +210,7 @@ func StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, l
 		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
 	}
 
-	gpuCmd = exec.Command("bash", "-c", controllerPath)
+	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
@@ -320,7 +322,8 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 func (s *service) GPUHealthCheck(
 	ctx context.Context,
 	req *task.DetailedHealthCheckRequest,
-	resp *task.DetailedHealthCheckResponse) error {
+	resp *task.DetailedHealthCheckResponse,
+) error {
 	gpuControllerPath := viper.GetString("gpu_controller_path")
 	if gpuControllerPath == "" {
 		gpuControllerPath = utils.GpuControllerBinaryPath
@@ -343,7 +346,7 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
 	if err != nil {
 		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
 		return nil

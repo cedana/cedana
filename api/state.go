@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -57,16 +56,16 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 		return nil, fmt.Errorf("invalid PID %d", pid)
 	}
 
-	var state task.ProcessState
+  state := &task.ProcessState{}
 
-	p, err := process.NewProcess(pid)
+	p, err := process.NewProcessWithContext(ctx, pid)
 	if err != nil {
 		return nil, fmt.Errorf("could not get gopsutil process: %v", err)
 	}
 
 	state.PID = pid
 
-	// Search for JID, if found, use it, otherwise generate a new one
+	// Search for JID, if found, use that state with existing fields
 	list, err := s.db.ListJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not list jobs: %v", err)
@@ -78,13 +77,9 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 			continue
 		}
 		if st.PID == pid {
-			state.JID = st.JID
+			state = st
 			break
 		}
-	}
-
-	if state.JID == "" {
-		state.JID = xid.New().String()
 	}
 
 	var openFiles []*task.OpenFilesStat
@@ -205,7 +200,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 		Status:          strings.Join(status, ""),
 	}
 
-	return &state, nil
+	return state, nil
 }
 
 func serializeStateToDir(dir string, state *task.ProcessState) error {

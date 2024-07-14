@@ -534,7 +534,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 	}
 
 	go func() {
-		proc, err := process.NewProcess(*pid)
+		proc, err := process.NewProcessWithContext(ctx, *pid)
 		if err != nil {
 			s.logger.Error().Msgf("could not find process: %v", err)
 			return
@@ -563,7 +563,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, g
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(ctx, uid, gid, groups, s.logger)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, s.logger)
 	if err != nil {
 		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
