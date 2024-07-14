@@ -311,7 +311,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 
 	cmd := exec.Command("bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
+		Setsid: false,
 		Credential: &syscall.Credential{
 			Uid:    args.UID,
 			Gid:    args.GID,
