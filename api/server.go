@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,6 +50,7 @@ type service struct {
 	store     *utils.CedanaStore
 	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
+  wg        sync.WaitGroup  // for waiting for all background tasks to finish
 
 	task.UnimplementedTaskServiceServer
 }
@@ -130,7 +132,7 @@ func StartServer(cmdCtx context.Context) error {
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(cmdCtx)
+	server, err := NewServer(srvCtx)
 	if err != nil {
 		return err
 	}
@@ -172,15 +174,14 @@ func StartServer(cmdCtx context.Context) error {
 		}
 	}()
 
-	select {
-	case <-srvCtx.Done():
-		err = srvCtx.Err()
-		logger.Debug().Msg("stopped RPC server unexpectedly")
-	case <-cmdCtx.Done():
-		err = cmdCtx.Err()
-		server.stop()
-		logger.Debug().Msg("stopped RPC server gracefully")
-	}
+	<-srvCtx.Done()
+	err = srvCtx.Err()
+
+  // Wait for all background go routines to finish
+  server.service.wg.Wait()
+
+	server.stop()
+	logger.Debug().Msg("stopped RPC server gracefully")
 
 	return err
 }

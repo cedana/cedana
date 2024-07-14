@@ -146,14 +146,14 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
-  // Only update state if it was a managed job
-  if args.JID != "" {
-    err = s.updateState(ctx, state.JID, state)
-    if err != nil {
-      st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
-      return nil, st.Err()
-    }
-  }
+	// Only update state if it was a managed job
+	if args.JID != "" {
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
+			return nil, st.Err()
+		}
+	}
 
 	resp.State = state
 
@@ -227,7 +227,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 
 	// Only update state if it was a managed job
 	if args.JID != "" && state != nil {
-    state.JobState = task.JobState_JOB_RUNNING
+		state.JobState = task.JobState_JOB_RUNNING
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
@@ -367,7 +367,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 
 	pid = int32(cmd.Process.Pid)
 
+  s.wg.Add(1)
 	go func() {
+    defer s.wg.Done()
 		stdoutScanner := bufio.NewScanner(stdoutPipe)
 		stderrScanner := bufio.NewScanner(stderrPipe)
 
@@ -375,18 +377,20 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			outputFile.WriteString(stdoutScanner.Text() + "\n")
 		}
 		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Info().Msgf("Finished reading stdout: %v", err)
+			s.logger.Info().Err(err).Msgf("Finished reading stdout")
 		}
 
 		for stderrScanner.Scan() {
 			outputFile.WriteString(stderrScanner.Text() + "\n")
 		}
 		if err := stderrScanner.Err(); err != nil {
-			s.logger.Info().Msgf("Finished reading stderr: %v", err)
+			s.logger.Info().Err(err).Msgf("Finished reading stderr")
 		}
 	}()
 
+  s.wg.Add(1)
 	go func() {
+    defer s.wg.Done()
 		defer outputFile.Close()
 		err := cmd.Wait()
 		if gpuCmd != nil {
@@ -394,31 +398,29 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			if err != nil {
 				s.logger.Fatal().Err(err)
 			}
-			s.logger.Info().Msgf("GPU controller killed with pid: %d", gpuCmd.Process.Pid)
+			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Msgf("GPU controller log: %v", gpuerrbuf.String())
+			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
 		if err != nil {
 			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
 		} else {
 			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
 		}
-		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
 
-    // Only update state if it was a managed job
-    if args.JID == "" {
-      state, err := s.getState(childCtx, args.JID)
-      if err != nil {
-        s.logger.Warn().Err(err).Msg("failed to get state after job done")
-        return
-      }
-      state.JobState = task.JobState_JOB_DONE
-      state.PID = pid
-      err = s.updateState(childCtx, args.JID, state)
-      if err != nil {
-        s.logger.Warn().Err(err).Msg("failed to update state after job done")
-      }
-    }
+		// Update state as it's a managed job
+	  childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		state, err := s.getState(childCtx, args.JID)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to get state after job done")
+			return
+		}
+		state.JobState = task.JobState_JOB_DONE
+		state.PID = pid
+		err = s.updateState(childCtx, args.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update state after job done")
+		}
 	}()
 
 	ppid := int32(os.Getpid())
