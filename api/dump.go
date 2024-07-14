@@ -125,7 +125,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		s.logger.Fatal().Err(err)
 	}
 
-	s.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
@@ -217,7 +217,6 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 }
 
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
-
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	s.postDump(ctx, imagePath, state)
@@ -258,7 +257,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		Logger: s.logger,
 	}
 
-	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
+	s.logger.Info().Int32("PID", state.PID).Msg("beginning dump")
 
 	_, dumpSpan := s.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", false))

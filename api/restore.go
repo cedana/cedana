@@ -180,7 +180,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 		return nil, err
 	}
 
-	s.logger.Info().Msgf("process restored: %v", resp)
+	s.logger.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
 
 	return resp.Restore.Pid, nil
 }
@@ -568,37 +568,37 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		s.logger.Info().Err(err).Int32("PID", *pid).Msg("process terminated")
 
 		// Update state if it's a managed restored job
-    if args.JID != "" {
-      childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
-      state, err := s.getState(childCtx, args.JID)
-      if err != nil {
-        s.logger.Warn().Err(err).Msg("failed to get state after job done")
-        return
-      }
-      state.JobState = task.JobState_JOB_DONE
-      state.PID = *pid
-      err = s.updateState(childCtx, args.JID, state)
-      if err != nil {
-        s.logger.Warn().Err(err).Msg("failed to update state after job done")
-      }
-    }
+		if args.JID != "" {
+			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+			state, err := s.getState(childCtx, args.JID)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to get state after job done")
+				return
+			}
+			state.JobState = task.JobState_JOB_DONE
+			state.PID = *pid
+			err = s.updateState(childCtx, args.JID, state)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to update state after job done")
+			}
+		}
 	}()
 
 	// If it's a managed restored job, kill on server shutdown
-  if args.JID != "" {
-    s.wg.Add(1)
-    go func() {
-      defer s.wg.Done()
-      <-s.serverCtx.Done()
-      s.logger.Debug().Int32("PID", *pid).Msgf("server shutting down, killing process")
-      proc, err := process.NewProcessWithContext(ctx, *pid)
-      if err != nil {
-        s.logger.Warn().Err(err).Msgf("could not find process to kill")
-        return
-      }
-      proc.Kill()
-    }()
-  }
+	if args.JID != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("server shutting down, killing process")
+			proc, err := process.NewProcessWithContext(ctx, *pid)
+			if err != nil {
+				s.logger.Warn().Err(err).Msgf("could not find process to kill")
+				return
+			}
+			proc.Kill()
+		}()
+	}
 
 	return pid, nil
 }

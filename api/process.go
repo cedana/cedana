@@ -72,7 +72,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
 	}
 
-	s.logger.Info().Msgf("managing process with pid %d", pid)
+	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
 
 	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
 		err = status.Error(codes.Internal, "Task startup failed")
@@ -367,9 +367,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 
 	pid = int32(cmd.Process.Pid)
 
-  s.wg.Add(1)
+	s.wg.Add(1)
 	go func() {
-    defer s.wg.Done()
+		defer s.wg.Done()
 		stdoutScanner := bufio.NewScanner(stdoutPipe)
 		stderrScanner := bufio.NewScanner(stderrPipe)
 
@@ -388,9 +388,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		}
 	}()
 
-  s.wg.Add(1)
+	s.wg.Add(1)
 	go func() {
-    defer s.wg.Done()
+		defer s.wg.Done()
 		defer outputFile.Close()
 		err := cmd.Wait()
 		if gpuCmd != nil {
@@ -409,7 +409,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		}
 
 		// Update state as it's a managed job
-	  childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
 		state, err := s.getState(childCtx, args.JID)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to get state after job done")

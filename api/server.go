@@ -33,12 +33,13 @@ import (
 )
 
 const (
-	ADDRESS               = "0.0.0.0:8080"
-	PROTOCOL              = "tcp"
-	CEDANA_CONTAINER_NAME = "binary-container"
-	SERVER_LOG_PATH       = "/var/log/cedana-daemon.log"
-	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
-	SERVER_LOG_PERMS      = 0o644
+	ADDRESS                 = "0.0.0.0:8080"
+	PROTOCOL                = "tcp"
+	CEDANA_CONTAINER_NAME   = "binary-container"
+	SERVER_LOG_PATH         = "/var/log/cedana-daemon.log"
+	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	SERVER_LOG_PERMS        = 0o644
+	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
 )
 
 type service struct {
@@ -50,7 +51,7 @@ type service struct {
 	store     *utils.CedanaStore
 	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
-  wg        sync.WaitGroup  // for waiting for all background tasks to finish
+	wg        sync.WaitGroup  // for waiting for all background tasks to finish
 
 	task.UnimplementedTaskServiceServer
 }
@@ -167,7 +168,7 @@ func StartServer(cmdCtx context.Context) error {
 			}
 		}
 
-		logger.Debug().Msgf("server listening at %s", ADDRESS)
+		logger.Debug().Str("Address", ADDRESS).Msgf("server listening")
 		err := server.start()
 		if err != nil {
 			cancel(err)
@@ -177,8 +178,8 @@ func StartServer(cmdCtx context.Context) error {
 	<-srvCtx.Done()
 	err = srvCtx.Err()
 
-  // Wait for all background go routines to finish
-  server.service.wg.Wait()
+	// Wait for all background go routines to finish
+	server.service.wg.Wait()
 
 	server.stop()
 	logger.Debug().Msg("stopped RPC server gracefully")
@@ -187,7 +188,7 @@ func StartServer(cmdCtx context.Context) error {
 }
 
 func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d, groups: %v", uid, gid, groups)
+	logger.Debug().Uint32("UID", uid).Uint32("GID", gid).Uints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -208,7 +209,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, group
 		},
 			" ")
 		// wrap controller path in a string
-		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
+		logger.Info().Str("Args", controllerPath).Msgf("GPU controller started")
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
@@ -263,7 +264,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, group
 		time.Sleep(1 * time.Second)
 	}
 
-	logger.Info().Msgf("GPU controller started with pid: %d, logging to: /tmp/cedana-gpucontroller.log", gpuCmd.Process.Pid)
+	logger.Info().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
 	return gpuCmd, nil
 }
 
