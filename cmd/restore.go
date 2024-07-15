@@ -53,6 +53,7 @@ var restoreProcessCmd = &cobra.Command{
 
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
 			UID:            uid,
 			GID:            gid,
@@ -60,6 +61,7 @@ var restoreProcessCmd = &cobra.Command{
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -112,12 +114,14 @@ var restoreJobCmd = &cobra.Command{
 		}
 
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
 			JID:            jid,
 			UID:            uid,
 			GID:            gid,
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)
@@ -289,7 +293,9 @@ func init() {
 	restoreCmd.AddCommand(restoreJobCmd)
 
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 
@@ -314,5 +320,6 @@ func init() {
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 
+	restoreCmd.Flags().BoolP(streamFlag, "", false, "restore images using criu-image-streamer")
 	rootCmd.AddCommand(restoreCmd)
 }

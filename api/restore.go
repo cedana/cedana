@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api/services/gpu"
+	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	CRIU_RESTORE_LOG_FILE   = "cedana-dump.log"
+	CRIU_RESTORE_LOG_FILE   = "cedana-restore.log"
 	CRIU_RESTORE_LOG_LEVEL  = 4
 	RESTORE_TEMPDIR         = "/tmp/cedana_restore"
 	RESTORE_TEMPDIR_PERMS   = 0o755
@@ -77,13 +77,17 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	err := utils.UntarFolder(args.CheckpointPath, tempDir)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("error decompressing checkpoint")
-		return nil, nil, nil, nil, err
+	if args.Stream {
+		tempDir = args.CheckpointPath
+	} else {
+		err := utils.UntarFolder(args.CheckpointPath, tempDir)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("error decompressing checkpoint")
+			return nil, nil, nil, nil, err
+		}
 	}
 
-	checkpointState, err := deserializeStateFromDir(tempDir)
+	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
@@ -152,7 +156,8 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	opts.ShellJob = proto.Bool(isShellJob)
+	opts.ShellJob = proto.Bool(isShellJob || args.Stream)
+	opts.Stream = proto.Bool(args.Stream)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
