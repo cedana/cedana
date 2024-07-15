@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/containers/common/pkg/crutils"
@@ -345,8 +346,46 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 	return nil
 }
 
-func SysboxChown() {
+func SysboxChown(ctx context.Context, containerID, root string) error {
+	rwChanges := &[]archive.Change{}
 
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	pid, err := runc.GetPidByContainerId(containerID, root)
+	if err != nil {
+		return err
+	}
+
+	processRootfs := filepath.Join("/proc", string(pid), "root")
+	rwChangesRootfs := filepath.Join(processRootfs, rwChangesFile)
+
+	rwChangesBytes, err := os.ReadFile(rwChangesRootfs)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(rwChangesBytes, &rwChanges); err != nil {
+		return err
+	}
+
+	logger.Debug().Msgf("getting guid and uid of the init process pid %v", pid)
+	guid, uid, err := getGUIDUID(pid)
+	if err != nil {
+		return err
+	}
+
+	logger.Debug().Msgf("reverting ownership of rw change files to guid %v and uid %v in %s", guid, uid, processRootfs)
+	for _, change := range *rwChanges {
+		fullPath := filepath.Join(processRootfs, change.Path)
+		if err := os.Chown(fullPath, guid, uid); err != nil {
+			fmt.Printf("failed to change ownership for %s: %s", fullPath, err)
+		}
+	}
+
+	return nil
 }
 
 type commitInputOptions struct {
