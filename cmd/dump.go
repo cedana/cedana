@@ -58,6 +58,7 @@ var dumpProcessCmd = &cobra.Command{
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		cpuDumpArgs := task.DumpArgs{
 			PID:            int32(pid),
 			Dir:            dir,
@@ -65,6 +66,7 @@ var dumpProcessCmd = &cobra.Command{
 			Type:           task.CRType_LOCAL,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -129,12 +131,14 @@ var dumpJobCmd = &cobra.Command{
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
 			Type:           taskType,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)
@@ -326,11 +330,13 @@ func init() {
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
 	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
 	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)
@@ -379,5 +385,4 @@ func init() {
 	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
 	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
 
-	dumpCmd.Flags().BoolP(streamFlag, "", false, "dump images using criu-image-streamer")
 }
