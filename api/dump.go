@@ -14,10 +14,10 @@ import (
 
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
@@ -258,6 +258,8 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(state.PID)
+	opts.ShellJob = proto.Bool(true)
+	opts.Stream = proto.Bool(true)
 
 	nfy := Notify{
 		Logger: s.logger,

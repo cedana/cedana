@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/checkpoint-restore/go-criu/v6/rpc"
+	"github.com/cedana/cedana/api/services/rpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )

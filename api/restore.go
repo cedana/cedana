@@ -16,9 +16,9 @@ import (
 
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"

@@ -18,5 +18,14 @@ generate_gpu_proto() {
        cedana-api/gpu.proto
 }
 
+
+generate_rpc_proto() {
+    protoc --go_out=rpc --go_opt=paths=source_relative \
+       --go-grpc_out=rpc --go-grpc_opt=paths=source_relative \
+       -I cedana-api \
+       cedana-api/rpc.proto
+}
+
 generate_task_proto
 generate_gpu_proto
+generate_rpc_proto
