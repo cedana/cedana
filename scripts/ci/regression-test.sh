@@ -6,7 +6,7 @@ source ./helpers.sh
 function start_regression() {
     pushd test/regression && echo "Running regression tests in cwd: $(pwd)"
     bats main.bats
-    echo "Regression tests complete"
+    echo "Regression tests complete with status: $?"
     popd
 }
 
