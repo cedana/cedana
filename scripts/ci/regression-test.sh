@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 # Used to run regression bats tests (located in tests/regression)
 
 source ./helpers.sh
@@ -9,17 +9,13 @@ function start_regression() {
     popd
 }
 
-cleanup() {
-    stop_cedana
-}
-trap cleanup EXIT
-
 main() {
-    pushd ../.. && echo "Starting regression tests in cwd: $(pwd)"
+    pushd ../..
     print_env
     source_env
     start_cedana
     start_regression
+    stop_cedana
     popd
 }
 

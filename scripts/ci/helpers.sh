@@ -149,7 +149,6 @@ start_cedana() {
     ./build-start-daemon.sh
 }
 
-
 stop_cedana() {
-    sudo pkill -9 cedana
+    ./reset.sh
 }
