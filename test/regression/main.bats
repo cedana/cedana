@@ -117,6 +117,8 @@ teardown() {
     # checkpoint the container
     runc_checkpoint $dumpdir $job_id
     [ -d $dumpdir ]
+    echo dumpdir is $dumpdir and contents:
+    ls $dumpdir
 
     # clean up
     sudo runc kill $job_id SIGKILL
