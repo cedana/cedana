@@ -117,18 +117,6 @@
 			]
 		},
 		{
-			"destination": "/sys/fs/cgroup",
-			"type": "cgroup",
-			"source": "cgroup",
-			"options": [
-				"nosuid",
-				"noexec",
-				"nodev",
-				"relatime",
-				"ro"
-			]
-		},
-		{
       			"destination": "/host-mount",
       			"source": "/",
       			"type": "bind",
@@ -161,9 +149,6 @@
 			},
 			{
 				"type": "mount"
-			},
-			{
-				"type": "cgroup"
 			}
 		],
 		"maskedPaths": [
