@@ -141,7 +141,7 @@ teardown() {
   # check if container running correctly, count lines in output file
   [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>- &
+  sleep 2 3>-
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
