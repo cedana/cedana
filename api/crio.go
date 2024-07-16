@@ -60,8 +60,8 @@ func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArg
 	return resp, nil
 }
 
-func (s *service) CRIOSysboxPatch(ctx context.Context, args *task.CRIOSysboxPatchArgs) (resp *task.CRIOSysboxPatchResp, err error) {
-	ctx = utils.WithLogger(ctx, s.logger)
+// func (s *service) CRIOSysboxPatch(ctx context.Context, args *task.CRIOSysboxPatchArgs) (resp *task.CRIOSysboxPatchResp, err error) {
+// 	ctx = utils.WithLogger(ctx, s.logger)
 
-	return resp, nil
-}
+// 	return resp, nil
+// }
