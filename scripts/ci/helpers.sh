@@ -124,13 +124,15 @@ setup_ci() {
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
-    echo '{"client":{"leave_running":false, "task":""}}' >~/.cedana/client_config.json
+    mkdir -p $HOME/.cedana
+    echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
 
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
-    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin
-    echo "export PATH=$PATH" >>/root/.bashrc
+    # Set GOPATH and update PATH
+    echo "export GOPATH=$HOME/go" >> /etc/environment
+    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
 
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
@@ -138,6 +140,10 @@ setup_ci() {
 
     # Install smoke & bench deps
     sudo pip3 install -r test/benchmarks/requirements
+}
+
+source_env() {
+    source /etc/environment
 }
 
 start_cedana() {
