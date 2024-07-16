@@ -8,7 +8,7 @@ on:
     inputs:
       make_release:
         type: boolean
-        description: "Run release build without pushing the release"
+        description: "Run & push the release"
         required: false
         default: true
       debug_release:
@@ -18,7 +18,7 @@ on:
         default: false
       push_build_image:
         type: boolean
-        description: "Run image build without pushing the image"
+        description: "Build and push the image"
         required: false
         default: true
       debug_build_push_image:
@@ -87,6 +87,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: |
+            ghcr.io/cedana/cedana
+            cedana/cedana-helper
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -99,14 +107,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
@@ -124,7 +124,7 @@ jobs:
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          push: false
+          push: true
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
@@ -170,6 +170,19 @@ jobs:
             ghcr.io/cedana/cedana
             cedana/cedana-helper
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
@@ -186,7 +199,7 @@ jobs:
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          push: false
+          push: true
           platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
