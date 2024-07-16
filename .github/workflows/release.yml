@@ -126,7 +126,6 @@ jobs:
           context: .
           push: false
           platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
@@ -189,7 +188,6 @@ jobs:
           context: .
           push: false
           platforms: linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
