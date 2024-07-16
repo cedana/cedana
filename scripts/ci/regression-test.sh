@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # Used to run regression bats tests (located in tests/regression)
 
 source ./helpers.sh
@@ -9,6 +9,14 @@ function start_regression() {
     echo "Regression tests complete"
     popd
 }
+
+cleanup() {
+    echo "Cleaning up..."
+    pushd ../..
+    stop_cedana
+    popd
+}
+trap cleanup EXIT
 
 main() {
     pushd ../..
