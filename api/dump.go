@@ -238,9 +238,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 			return err
 		}
 		GPUCheckpointed = true
-		if err != nil {
-			return err
-		}
 	}
 
 	img, err := os.Open(dumpdir)
