@@ -102,7 +102,7 @@ teardown() {
 
     sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
-    # cp config.json $bundle/config.json
+    cp config.json $bundle/config.json
 
     # create a runc container
     echo bundle is $bundle
