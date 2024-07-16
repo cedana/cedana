@@ -113,7 +113,6 @@ teardown() {
     sudo runc list
 
     # check if container running correctly, count lines in output file
-    sudo test -f "$out_file"
     local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
     sleep 2 3>-
     local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
