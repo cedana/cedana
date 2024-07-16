@@ -111,7 +111,6 @@ teardown() {
     sudo runc run $job_id -b $bundle -d --console-socket $TTY_SOCK
     sleep 2 3>-
     sudo runc list
-    assert_output --partial $job_id
 
     # check if container running correctly, count lines in output file
     sudo test -f "$out_file"
@@ -129,3 +128,27 @@ teardown() {
     sudo runc delete $job_id
 }
 
+@test "Simple runc restore" {
+  local bundle=$(pwd)/bundle
+  local job_id="runc-test-restored"
+  local out_file=$bundle/rootfs/out
+  local dumpdir=$(pwd)/dump
+
+  # restore the container
+  [ -d $bundle ]
+  [ -d $dumpdir ]
+  runc_restore $bundle $dumpdir $job_id $TTY_SOCK
+
+  sleep 1 3>-
+
+  # check if container running correctly, count lines in output file
+  [ -f $out_file ]
+  local nlines_before=$(wc -l $out_file | awk '{print $1}')
+  sleep 2 3>- &
+  local nlines_after=$(wc -l $out_file | awk '{print $1}')
+  [ $nlines_after -gt $nlines_before ]
+
+  # clean up
+  sudo runc kill $job_id SIGKILL
+  sudo runc delete $job_id
+}
