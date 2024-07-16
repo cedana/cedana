@@ -117,8 +117,6 @@ teardown() {
     # checkpoint the container
     runc_checkpoint $dumpdir $job_id
     [ -d $dumpdir ]
-    echo dumpdir is $dumpdir and contents:
-    ls $dumpdir
 
     # clean up
     sudo runc kill $job_id SIGKILL
@@ -134,6 +132,8 @@ teardown() {
   # restore the container
   [ -d $bundle ]
   [ -d $dumpdir ]
+  echo $dumpdir contents:
+  ls $dumpdir
   runc_restore $bundle $dumpdir $job_id $TTY_SOCK
 
   sleep 1 3>-
