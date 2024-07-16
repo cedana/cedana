@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -27,6 +28,36 @@ import (
 
 	"github.com/godbus/dbus/v5"
 )
+
+// getGUIDUID takes a process ID (pid) and returns the GUID and UID of the process
+func getGUIDUID(pid int32) (int, int, error) {
+	statusFile := fmt.Sprintf("/proc/%d/status", pid)
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to read status file: %v", err)
+	}
+
+	var uid, gid int
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Uid:") {
+			fields := strings.Fields(line)
+			uid, err = strconv.Atoi(fields[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("failed to parse UID: %v", err)
+			}
+		}
+		if strings.HasPrefix(line, "Gid:") {
+			fields := strings.Fields(line)
+			gid, err = strconv.Atoi(fields[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("failed to parse GID: %v", err)
+			}
+		}
+	}
+
+	return uid, gid, nil
+}
 
 // StatusToExitCode converts wait status code to an exit code
 func StatusToExitCode(status int) int {
