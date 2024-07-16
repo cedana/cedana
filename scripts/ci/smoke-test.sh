@@ -2,6 +2,7 @@
 # Used to run a quick smoke test for CI
 
 source ./helpers.sh
+CEDANA_DIR=`pwd`../../
 
 start_smoke() {
     echo "Running smoke test in cwd: $(pwd)"
@@ -14,20 +15,18 @@ start_smoke() {
 
 cleanup() {
     echo "Cleaning up..."
-    pushd ../..
+    cd $CEDANA_DIR
     stop_cedana
-    popd
 }
 trap cleanup EXIT
 
 main() {
-    pushd ../..
+    cd $CEDANA_DIR
     print_env
     setup_ci
     source_env
     start_cedana
     start_smoke
-    popd
 }
 
 main
