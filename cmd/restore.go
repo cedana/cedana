@@ -51,14 +51,14 @@ var restoreProcessCmd = &cobra.Command{
 		}
 
 		path := args[0]
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			UID:            uid,
 			GID:            gid,
 			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
-      TcpEstablished: tcpEstablished,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -122,13 +122,13 @@ var restoreJobCmd = &cobra.Command{
 		}
 		state := res.Processes[0]
 
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
-			JID:    jid,
-			UID:    uid,
-			GID:    gid,
-			Groups: groups,
-      TcpEstablished: tcpEstablished,
+			JID:            jid,
+			UID:            uid,
+			GID:            gid,
+			Groups:         groups,
+			TcpEstablished: tcpEstablished,
 		}
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
