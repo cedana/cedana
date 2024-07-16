@@ -150,5 +150,5 @@ start_cedana() {
 }
 
 stop_cedana() {
-    ./reset.sh
+    sudo pkill -9 cedana
 }
