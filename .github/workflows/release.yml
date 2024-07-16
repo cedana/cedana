@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/cedana-dev' }}
 
 jobs:
-  release_x86:
+  release:
     runs-on: ubuntu-latest
     if: ${{ inputs.make_release }}
     steps:
