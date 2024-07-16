@@ -8,7 +8,7 @@ setup() {
     # as those will point to the bats executable's location or the preprocessed file respectively
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
     TTY_SOCK=$(pwd)/tty.sock
-    recvtty $TTY_SOCK &
+    recvtty --mode null $TTY_SOCK &
 }
 
 teardown() {
@@ -98,11 +98,7 @@ teardown() {
 
     mkdir -p $bundle/rootfs
 
-    sudo chown root:root $bundle
-
     sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
-
-    cp config.json $bundle/config.json
 
     # create a runc container
     echo bundle is $bundle
