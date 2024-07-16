@@ -16,10 +16,10 @@ trap cleanup EXIT
 
 main() {
     pushd ../.. && echo "Starting regression tests in cwd: $(pwd)"
-    print_env || { echo "print_env failed"; exit 1; }
-    source_env || { echo "source_env failed"; exit 1; }
-    start_cedana || { echo "start_cedana failed"; exit 1; }
-    start_regression || { echo "start_regression failed"; exit 1; }
+    print_env
+    source_env
+    start_cedana
+    start_regression
     popd
 }
 
