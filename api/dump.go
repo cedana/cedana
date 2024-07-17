@@ -200,8 +200,9 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	if err != nil {
 		dumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
+		return err
 	}
-	dumpSpan.End()
+	defer dumpSpan.End()
 
 	if checkIfPodman(bundle) {
 		if err := patchPodmanDump(containerID, opts.ImagesDirectory); err != nil {

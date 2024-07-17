@@ -58,7 +58,7 @@ var dumpCRIORootfs = &cobra.Command{
 }
 
 var pushCRIOImage = &cobra.Command{
-	Use:   "crioPush",
+	Use:   "crio-push",
 	Short: "Manually push a crio image",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

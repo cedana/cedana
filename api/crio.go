@@ -8,11 +8,14 @@ import (
 
 	"github.com/cedana/cedana/api/crio"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/utils"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (resp *task.CRIORootfsDumpResp, err error) {
 	var spec *rspec.Spec
+
+	ctx = utils.WithLogger(ctx, s.logger)
 
 	resp = &task.CRIORootfsDumpResp{}
 
@@ -38,13 +41,17 @@ func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpA
 }
 
 func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArgs) (resp *task.CRIOImagePushResp, err error) {
+	ctx = utils.WithLogger(ctx, s.logger)
+
 	resp = &task.CRIOImagePushResp{}
 
-	if err := crio.CRIORootfsMerge(args.OriginalImageRef, args.NewImageRef, args.RootfsDiffPath, args.ContainerStorage); err != nil {
+	s.logger.Debug().Msgf("CRIO image merge started with original image: %s and new image: %s", args.OriginalImageRef, args.NewImageRef)
+	if err := crio.RootfsMerge(ctx, args.OriginalImageRef, args.NewImageRef, args.RootfsDiffPath, args.ContainerStorage); err != nil {
 		return resp, err
 	}
 
-	if err := crio.CRIOImagePush(args.NewImageRef); err != nil {
+	s.logger.Debug().Msgf("CRIO image push started with new image: %s", args.NewImageRef)
+	if err := crio.ImagePush(ctx, args.NewImageRef); err != nil {
 		return resp, err
 	}
 
@@ -52,3 +59,9 @@ func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArg
 
 	return resp, nil
 }
+
+// func (s *service) CRIOSysboxPatch(ctx context.Context, args *task.CRIOSysboxPatchArgs) (resp *task.CRIOSysboxPatchResp, err error) {
+// 	ctx = utils.WithLogger(ctx, s.logger)
+
+// 	return resp, nil
+// }
