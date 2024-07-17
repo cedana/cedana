@@ -3,6 +3,10 @@
 load helper.bash
 
 setup() {
+    # assuming WD is the root of the project
+    start_cedana
+    sleep 1 3>-
+
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
     # as those will point to the bats executable's location or the preprocessed file respectively
@@ -12,8 +16,13 @@ setup() {
 }
 
 teardown() {
+    sleep 1 3>-
+
     pkill recvtty
     rm -f $TTY_SOCK
+
+    stop_cedana
+    sleep 1 3>-
 }
 
 @test "Output file created and has some data" {
@@ -21,16 +30,13 @@ teardown() {
     local job_id="test"
 
     # execute a process as a cedana job
-    run exec_task $task $job_id
+    exec_task $task $job_id
 
     # check the output file
+    sleep 1 3>-
     [ -f /var/log/cedana-output.log ]
     sleep 2 3>-
     [ -s /var/log/cedana-output.log ]
-
-    # kill the process
-    pid=$(ps -aux | grep $task | awk '{print $2}')
-    kill -9 $pid
 }
 
 @test "Ensure correct logging post restore" {
@@ -38,24 +44,21 @@ teardown() {
     local job_id="test2"
 
     # execute, checkpoint and restore a job
-    run exec_task $task $job_id
+    exec_task $task $job_id
     sleep 2 3>-
-    run checkpoint_task $job_id
+    checkpoint_task $job_id
     sleep 2 3>-
-    run restore_task $job_id
+    restore_task $job_id
 
     # get the post-restore log file
     local file=$(ls /var/log/ | grep cedana-output- | tail -1)
     local rawfile="/var/log/$file"
 
     # check the post-restore log files
+    sleep 1 3>-
     [ -f $rawfile ]
     sleep 2 3>-
     [ -s $rawfile ]
-
-    # kill the process
-    pid=$(ps -aux | grep $task | awk '{print $2}')
-    kill -9 $pid
 }
 
 @test "Rootfs snapshot of containerd container" {
@@ -63,7 +66,6 @@ teardown() {
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
-
 
     run start_busybox $container_id
     run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
@@ -77,7 +79,6 @@ teardown() {
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
-
 
     run rootfs_restore $container_id $image_ref $containerd_sock $namespace
     echo "$output"
@@ -124,28 +125,28 @@ teardown() {
 }
 
 @test "Simple runc restore" {
-  local bundle=$(pwd)/bundle
-  local job_id="runc-test-restored"
-  local out_file=$bundle/rootfs/out
-  local dumpdir=$(pwd)/dump
+    local bundle=$(pwd)/bundle
+    local job_id="runc-test-restored"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$(pwd)/dump
 
-  # restore the container
-  [ -d $bundle ]
-  [ -d $dumpdir ]
-  echo $dumpdir contents:
-  ls $dumpdir
-  runc_restore $bundle $dumpdir $job_id $TTY_SOCK
+    # restore the container
+    [ -d $bundle ]
+    [ -d $dumpdir ]
+    echo $dumpdir contents:
+    ls $dumpdir
+    runc_restore $bundle $dumpdir $job_id $TTY_SOCK
 
-  sleep 1 3>-
+    sleep 1 3>-
 
-  # check if container running correctly, count lines in output file
-  [ -f $out_file ]
-  local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>-
-  local nlines_after=$(wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
+    # check if container running correctly, count lines in output file
+    [ -f $out_file ]
+    local nlines_before=$(wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
 
-  # clean up
-  sudo runc kill $job_id SIGKILL
-  sudo runc delete $job_id
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
 }
