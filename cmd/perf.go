@@ -28,7 +28,7 @@ var perfCritShowCmd = &cobra.Command{
 	Short: "convert criu image from binary to human-readable json",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("requires a checkpoint path (directory or image) argument, use cedana ps to see checkpoint locations\n")
+			return fmt.Errorf("requires a checkpoint path (directory or image) argument, use cedana ps to see checkpoint locations")
 		}
 		return nil
 	},
