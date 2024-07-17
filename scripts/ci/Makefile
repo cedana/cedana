@@ -7,16 +7,16 @@ endif
 export CONTAINER_TERMINAL
 
 benchmark:
-	./benchmark-and-push.sh
+	./benchmark-and-push.sh || (echo "Benchmark and push failed" && exit 1)
 
 smoke:
-	./smoke-test.sh
+	./smoke-test.sh || (echo "Smoke test failed" && exit 1)
 
 regression:
-	./regression-test.sh
+	./regression-test.sh || (echo "Regression test failed" && exit 1)
 
 setup-full:
-	./setup-full.sh
+	./setup-full.sh || (echo "Setup full failed" && exit 1)
 
 setup-build:
-	./setup-build.sh
+	./setup-build.sh || (echo "Setup build failed" && exit 1)

@@ -2,6 +2,20 @@
 
 load helper.bash
 
+setup() {
+    # get the containing directory of this file
+    # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
+    # as those will point to the bats executable's location or the preprocessed file respectively
+    DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
+    TTY_SOCK=$(pwd)/tty.sock
+    recvtty $TTY_SOCK &
+}
+
+teardown() {
+    pkill recvtty
+    rm -f $TTY_SOCK
+}
+
 @test "Output file created and has some data" {
     local task="./test.sh"
     local job_id="test"
@@ -11,7 +25,7 @@ load helper.bash
 
     # check the output file
     [ -f /var/log/cedana-output.log ]
-    sleep 2
+    sleep 2 3>-
     [ -s /var/log/cedana-output.log ]
 
     # kill the process
@@ -25,9 +39,9 @@ load helper.bash
 
     # execute, checkpoint and restore a job
     run exec_task $task $job_id
-    sleep 2
+    sleep 2 3>-
     run checkpoint_task $job_id
-    sleep 2
+    sleep 2 3>-
     run restore_task $job_id
 
     # get the post-restore log file
@@ -36,7 +50,7 @@ load helper.bash
 
     # check the post-restore log files
     [ -f $rawfile ]
-    sleep 2
+    sleep 2 3>-
     [ -s $rawfile ]
 
     # kill the process
@@ -45,70 +59,68 @@ load helper.bash
 }
 
 @test "Rootfs snapshot of containerd container" {
-  local container_id="busybox-test"
-  local image_ref="checkpoint/test:latest"
-  local containerd_sock="/run/containerd/containerd.sock"
-  local namespace="default"
+    local container_id="busybox-test"
+    local image_ref="checkpoint/test:latest"
+    local containerd_sock="/run/containerd/containerd.sock"
+    local namespace="default"
 
 
-  run start_busybox $container_id
-  run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
-  echo "$output"
+    run start_busybox $container_id
+    run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
+    echo "$output"
 
-  [[ "$output" == *"$image_ref"* ]]
+    [[ "$output" == *"$image_ref"* ]]
 }
 
 @test "Rootfs restore of containerd container" {
-  local container_id="busybox-test-restore"
-  local image_ref="checkpoint/test:latest"
-  local containerd_sock="/run/containerd/containerd.sock"
-  local namespace="default"
+    local container_id="busybox-test-restore"
+    local image_ref="checkpoint/test:latest"
+    local containerd_sock="/run/containerd/containerd.sock"
+    local namespace="default"
 
 
-  run rootfs_restore $container_id $image_ref $containerd_sock $namespace
-  echo "$output"
+    run rootfs_restore $container_id $image_ref $containerd_sock $namespace
+    echo "$output"
 
-  [[ "$output" == *"$image_ref"* ]]
+    [[ "$output" == *"$image_ref"* ]]
 }
 
 @test "Simple runc checkpoint" {
-  local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
-  local bundle=$(pwd)/bundle
-  local job_id="runc-test"
-  local out_file=$bundle/rootfs/out
-  local dumpdir=$(pwd)/dump
-  local tty_sock=$(pwd)/tty.sock
+    local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
+    local bundle=$(pwd)/bundle
+    echo bundle is $bundle
+    local job_id="runc-test"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$(pwd)/dump
 
-  # fetch and unpack a rootfs
-  wget $rootfs
-  mkdir -p $bundle/rootfs
-  sudo chown root:root $bundle
-  sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+    # fetch and unpack a rootfs
+    wget $rootfs
 
-  # create a runc container
-  recvtty $tty_sock &
-  local tty_pid=$!
-  sudo runc run $job_id -b $bundle -d --console-socket $tty_sock
-  sudo runc list
-  sleep 1
+    mkdir -p $bundle/rootfs
 
-  # check if container running correctly, count lines in output file
-  run sudo test -f "$out_file"
-  [ "$status" -eq 0 ]
-  local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
-  sleep 2
-  local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
+    sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
 
-  # checkpoint the container
-  run runc_checkpoint $dumpdir $job_id
-  [ -d $dumpdir ]
+    # create a runc container
+    echo bundle is $bundle
+    echo jobid is $job_id
 
-  # clean up
-  sudo runc kill $job_id SIGKILL
-  sudo runc delete $job_id
-  # kill -9 $tty_pid
-  sudo rm -rf $tty_sock
+    sudo runc run $job_id -b $bundle -d --console-socket $TTY_SOCK
+    sleep 2 3>-
+    sudo runc list
+
+    # check if container running correctly, count lines in output file
+    local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
+
+    # checkpoint the container
+    runc_checkpoint $dumpdir $job_id
+    [ -d $dumpdir ]
+
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
 }
 
 @test "Simple runc restore" {
@@ -116,49 +128,24 @@ load helper.bash
   local job_id="runc-test-restored"
   local out_file=$bundle/rootfs/out
   local dumpdir=$(pwd)/dump
-  local tty_sock=$(pwd)/tty.sock
 
   # restore the container
   [ -d $bundle ]
   [ -d $dumpdir ]
-  recvtty $tty_sock &
-  local tty_pid=$!
-  run runc_restore $bundle $dumpdir $job_id $tty_sock
+  echo $dumpdir contents:
+  ls $dumpdir
+  runc_restore $bundle $dumpdir $job_id $TTY_SOCK
 
-  # https://github.com/sstephenson/bats/issues/80#issuecomment-174101686
-  sleep 1 3>- &
+  sleep 1 3>-
 
   # check if container running correctly, count lines in output file
   [ -f $out_file ]
   local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>- &
+  sleep 2 3>-
   local nlines_after=$(wc -l $out_file | awk '{print $1}')
   [ $nlines_after -gt $nlines_before ]
 
   # clean up
   sudo runc kill $job_id SIGKILL
   sudo runc delete $job_id
-  # kill -9 $tty_pid
-  sudo rm -rf $tty_sock
 }
-
-# @test "checkpoint and restore one container into a new pod using --export to OCI image" {
-#   has_buildah
-# 	CONTAINER_DROP_INFRA_CTR=false CONTAINER_ENABLE_CRIU_SUPPORT=true start_crio
-# 	pod_id=$(crictl runp "$TESTDATA"/sandbox_config.json)
-# 	ctr_id=$(crictl create "$pod_id" "$TESTDATA"/container_sleep.json "$TESTDATA"/sandbox_config.json)
-# 	crictl start "$ctr_id"
-#   crio_rootfs_checkpoint "$ctr_storage" "$ctr_id" "$TESTDIR"/cp.tar
-# 	crictl rm -f "$ctr_id"
-# 	crictl rmp -f "$pod_id"
-# 	newimage=$(run_buildah from scratch)
-# 	run_buildah add "$newimage" "$TESTDIR"/cp.tar /
-# 	run_buildah commit "$newimage" "checkpoint-image:tag1"
-# 	pod_id=$(crictl runp "$TESTDATA"/sandbox_config.json)
-# 	# Replace original container with checkpoint image
-# 	RESTORE_JSON=$(mktemp)
-# 	jq ".image.image=\"localhost/checkpoint-image:tag1\"" "$TESTDATA"/container_sleep.json > "$RESTORE_JSON"
-# 	ctr_id=$(crictl create "$pod_id" "$RESTORE_JSON" "$TESTDATA"/sandbox_config.json)
-# 	rm -f "$RESTORE_JSON"
-# 	crictl start "$ctr_id"
-# }
