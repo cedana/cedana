@@ -15,6 +15,8 @@ setup() {
 }
 
 teardown() {
+    sleep 1 3>-
+
     pkill recvtty
     rm -f $TTY_SOCK
 
