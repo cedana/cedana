@@ -22,6 +22,7 @@ teardown() {
     rm -f $TTY_SOCK
 
     stop_cedana
+    sleep 1 3>-
 }
 
 @test "Output file created and has some data" {
