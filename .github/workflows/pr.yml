@@ -76,7 +76,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
+        # if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
         with:
           limit-access-to-actor: true
 
