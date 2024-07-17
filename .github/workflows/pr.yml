@@ -31,6 +31,9 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -48,7 +51,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Setup CI
-        run:  sudo -E make -C scripts/ci setup-build
+        run: sudo -E make -C scripts/ci setup-build
 
       - name: Build
         run: sudo -E go build -v ./...
