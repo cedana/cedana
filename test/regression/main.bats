@@ -11,7 +11,7 @@ setup() {
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
     # as those will point to the bats executable's location or the preprocessed file respectively
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
-    TTY_SOCK=$(pwd)/tty.sock
+    TTY_SOCK=$DIR/tty.sock
     recvtty $TTY_SOCK &
 }
 
@@ -88,11 +88,11 @@ teardown() {
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
-    local bundle=$(pwd)/bundle
+    local bundle=$DIR/bundle
     echo bundle is $bundle
     local job_id="runc-test"
     local out_file=$bundle/rootfs/out
-    local dumpdir=$(pwd)/dump
+    local dumpdir=$DIR/dump
 
     # fetch and unpack a rootfs
     wget $rootfs
@@ -125,10 +125,10 @@ teardown() {
 }
 
 @test "Simple runc restore" {
-    local bundle=$(pwd)/bundle
+    local bundle=$DIR/bundle
     local job_id="runc-test-restored"
     local out_file=$bundle/rootfs/out
-    local dumpdir=$(pwd)/dump
+    local dumpdir=$DIR/dump
 
     # restore the container
     [ -d $bundle ]
