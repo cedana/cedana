@@ -35,10 +35,6 @@ teardown() {
     [ -f /var/log/cedana-output.log ]
     sleep 2 3>-
     [ -s /var/log/cedana-output.log ]
-
-    # kill the process
-    pid=$(ps -aux | grep $task | awk '{print $2}')
-    kill -9 $pid
 }
 
 @test "Ensure correct logging post restore" {
@@ -61,10 +57,6 @@ teardown() {
     [ -f $rawfile ]
     sleep 2 3>-
     [ -s $rawfile ]
-
-    # kill the process
-    pid=$(ps -aux | grep $task | awk '{print $2}')
-    kill -9 $pid
 }
 
 @test "Rootfs snapshot of containerd container" {
