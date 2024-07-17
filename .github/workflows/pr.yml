@@ -1,0 +1,113 @@
+name: PR
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+  workflow_dispatch:
+      inputs:
+        debug_build:
+          type: boolean
+          description: 'Run build with debugging enabled'
+          required: false
+          default: false
+        debug_smoke_test:
+          type: boolean
+          description: 'Run smoke test with debugging enabled'
+          required: false
+          default: false
+        debug_regression_test:
+          type: boolean
+          description: 'Run regression test with debugging enabled'
+          required: false
+          default: false
+
+concurrency:
+  group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run:  sudo -E make -C scripts/ci setup-build
+
+      - name: Build
+        run: sudo -E go build -v ./...
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: ./cedana
+
+  smoke-test:
+    name: Smoke
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run:  sudo -E make -C scripts/ci setup-full
+
+      - name: Run smoke tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: sudo -E make -C scripts/ci smoke
+
+  regression-test:
+    name: Regression
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run:  sudo -E make -C scripts/ci setup-full
+
+      - name: Run regression tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+        run: sudo -E make -C scripts/ci regression

@@ -3,6 +3,9 @@
 load helper.bash
 
 setup() {
+    # assuming WD is the root of the project
+    start_cedana
+
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
     # as those will point to the bats executable's location or the preprocessed file respectively
@@ -14,6 +17,8 @@ setup() {
 teardown() {
     pkill recvtty
     rm -f $TTY_SOCK
+
+    stop_cedana
 }
 
 @test "Output file created and has some data" {
@@ -124,28 +129,28 @@ teardown() {
 }
 
 @test "Simple runc restore" {
-  local bundle=$(pwd)/bundle
-  local job_id="runc-test-restored"
-  local out_file=$bundle/rootfs/out
-  local dumpdir=$(pwd)/dump
+    local bundle=$(pwd)/bundle
+    local job_id="runc-test-restored"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$(pwd)/dump
 
-  # restore the container
-  [ -d $bundle ]
-  [ -d $dumpdir ]
-  echo $dumpdir contents:
-  ls $dumpdir
-  runc_restore $bundle $dumpdir $job_id $TTY_SOCK
+    # restore the container
+    [ -d $bundle ]
+    [ -d $dumpdir ]
+    echo $dumpdir contents:
+    ls $dumpdir
+    runc_restore $bundle $dumpdir $job_id $TTY_SOCK
 
-  sleep 1 3>-
+    sleep 1 3>-
 
-  # check if container running correctly, count lines in output file
-  [ -f $out_file ]
-  local nlines_before=$(wc -l $out_file | awk '{print $1}')
-  sleep 2 3>-
-  local nlines_after=$(wc -l $out_file | awk '{print $1}')
-  [ $nlines_after -gt $nlines_before ]
+    # check if container running correctly, count lines in output file
+    [ -f $out_file ]
+    local nlines_before=$(wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
 
-  # clean up
-  sudo runc kill $job_id SIGKILL
-  sudo runc delete $job_id
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
 }

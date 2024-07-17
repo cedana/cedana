@@ -14,9 +14,9 @@ main() {
     pushd ../..
     print_env
     source_env
-    start_cedana
+
     start_regression
-    stop_cedana
+
     popd
 }
 
