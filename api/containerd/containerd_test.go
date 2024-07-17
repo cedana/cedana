@@ -9,7 +9,7 @@ import (
 
 func TestDumpRootfs(t *testing.T) {
 	service := &containerd.ContainerdService{}
-	result, err := service.DumpRootfs(context.Background(), "testid", "test:latest")
+	result, err := service.DumpRootfs(context.Background(), "testid", "test:latest", "default")
 
 	if err != nil {
 		t.Errorf("DumpRootfs() returned an error: %v", err)

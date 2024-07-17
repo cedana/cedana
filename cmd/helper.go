@@ -183,7 +183,7 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 
 		if i == maxRetries-1 {
 			// If it's the last attempt, return the error
-			return nil, fmt.Errorf("Failed to create client after %d attempts", maxRetries)
+			return nil, fmt.Errorf("failed to create client after %d attempts", maxRetries)
 		}
 	}
 
