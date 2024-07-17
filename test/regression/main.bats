@@ -28,9 +28,10 @@ teardown() {
     local job_id="test"
 
     # execute a process as a cedana job
-    run exec_task $task $job_id
+    exec_task $task $job_id
 
     # check the output file
+    sleep 1 3>-
     [ -f /var/log/cedana-output.log ]
     sleep 2 3>-
     [ -s /var/log/cedana-output.log ]
@@ -45,17 +46,18 @@ teardown() {
     local job_id="test2"
 
     # execute, checkpoint and restore a job
-    run exec_task $task $job_id
+    exec_task $task $job_id
     sleep 2 3>-
-    run checkpoint_task $job_id
+    checkpoint_task $job_id
     sleep 2 3>-
-    run restore_task $job_id
+    restore_task $job_id
 
     # get the post-restore log file
     local file=$(ls /var/log/ | grep cedana-output- | tail -1)
     local rawfile="/var/log/$file"
 
     # check the post-restore log files
+    sleep 1 3>-
     [ -f $rawfile ]
     sleep 2 3>-
     [ -s $rawfile ]
@@ -71,7 +73,6 @@ teardown() {
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
 
-
     run start_busybox $container_id
     run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
     echo "$output"
@@ -84,7 +85,6 @@ teardown() {
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
-
 
     run rootfs_restore $container_id $image_ref $containerd_sock $namespace
     echo "$output"
