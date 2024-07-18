@@ -351,6 +351,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 
 	if isECRRepo(newImageRef) {
 		session, err := session.NewSession(&aws.Config{
+			// TODO BS this needs to come from the user
 			Region: aws.String("us-west-2"),
 		})
 		if err != nil {
@@ -360,15 +361,14 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		input := &ecr.GetAuthorizationTokenInput{}
 
 		ecrRegistry := ecr.New(session)
-		authTokenOutput, err := ecrRegistry.GetAuthorizationToken(input)
+		_, err = ecrRegistry.GetAuthorizationToken(input)
 		if err != nil {
 			return err
 		}
-
-		logger.Debug().Msgf("auth token output: %v", authTokenOutput)
 	} else {
-		logger.Debug().Msgf("did not detect ecr registry: %v", strings.Contains(newImageRef, ".ecr.") && strings.Contains(newImageRef, ".amazonaws.com"))
+		logger.Debug().Msg("did not detect ecr registry")
 	}
+
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
 	out, err := cmd.CombinedOutput()
