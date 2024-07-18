@@ -343,6 +343,11 @@ func isECRRepo(imageName string) bool {
 }
 
 func ImagePush(ctx context.Context, newImageRef string) error {
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+
 	if isECRRepo(newImageRef) {
 		session, err := session.NewSession()
 		if err != nil {
@@ -357,7 +362,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 			return err
 		}
 
-		authTokenOutput.AuthorizationData
+		logger.Debug().Msgf("auth token output: %v", authTokenOutput)
 	}
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
