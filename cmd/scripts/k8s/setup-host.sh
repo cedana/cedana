@@ -101,10 +101,7 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
 
 cd /
 
-echo "export IS_K8S=1" >> ~/.bashrc
-. ~/.bashrc
-
-./build-start-daemon.sh --systemctl --no-build
+IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 
 EOT
 
