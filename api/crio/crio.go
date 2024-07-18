@@ -17,7 +17,9 @@ import (
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
+	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/crutils"
+	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/unshare"
@@ -343,13 +345,35 @@ func isECRRepo(imageName string) bool {
 	return strings.Contains(imageName, ".ecr.") && strings.Contains(imageName, ".amazonaws.com")
 }
 
+func getProxyEndpointFromImageName(imageName string) (string, error) {
+	parts := strings.Split(imageName, "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid image name format")
+	}
+
+	registryURL := parts[0]
+	return "https://" + registryURL, nil
+}
+
+type loginReply struct {
+	loginOpts auth.LoginOptions
+	getLogin  bool
+	tlsVerify bool
+}
+
 func ImagePush(ctx context.Context, newImageRef string) error {
+	systemContext := &types.SystemContext{}
+
 	logger, err := utils.GetLoggerFromContext(ctx)
 	if err != nil {
 		fmt.Printf(err.Error())
 	}
 
 	if isECRRepo(newImageRef) {
+
+		loginOpts := &auth.LoginOptions{}
+		loginArgs := []string{}
+
 		session, err := session.NewSession(&aws.Config{
 			// TODO BS this needs to come from the user
 			Region: aws.String("us-west-2"),
@@ -361,10 +385,35 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		input := &ecr.GetAuthorizationTokenInput{}
 
 		ecrRegistry := ecr.New(session)
-		_, err = ecrRegistry.GetAuthorizationToken(input)
+		authTokenData, err := ecrRegistry.GetAuthorizationToken(input)
 		if err != nil {
 			return err
 		}
+
+		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+
+		authData := &ecr.AuthorizationData{}
+
+		for _, auth := range authTokenData.AuthorizationData {
+			if *auth.ProxyEndpoint == proxyEndpoint {
+				authData = auth
+			}
+		}
+
+		if authData == nil {
+			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
+		}
+
+		loginOpts.Username = "AWS"
+		loginOpts.Password = *authData.AuthorizationToken
+
+		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
+			return err
+		}
+
 	} else {
 		logger.Debug().Msg("did not detect ecr registry")
 	}
