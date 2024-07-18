@@ -4,19 +4,17 @@
 source ./helpers.sh
 
 function start_regression() {
-    pushd test/regression && echo "Running regression tests in cwd: $(pwd)"
-    bats main.bats
-    echo "Regression tests complete with exit code: $?"
-    popd
+    echo "Running regression tests in cwd: $(pwd)"
+    bats test/regression/main.bats
 }
 
 main() {
     pushd ../..
     print_env
     source_env
-    start_cedana
+
     start_regression
-    stop_cedana
+
     popd
 }
 

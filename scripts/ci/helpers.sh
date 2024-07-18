@@ -147,9 +147,9 @@ source_env() {
 }
 
 start_cedana() {
-    ./build-start-daemon.sh
+    ./build-start-daemon.sh --no-build
 }
 
 stop_cedana() {
-    sudo pkill -9 cedana
+    ./reset.sh
 }

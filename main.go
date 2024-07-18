@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Grandparent context to deal with OS interrupts
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer stop()
 
 	// Calls the reexec init function so that storage-mountfrom is able to be called in crio rootfs
