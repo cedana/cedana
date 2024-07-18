@@ -4,7 +4,7 @@ set -e
 
 SUDO_USE=sudo
 if ! which sudo &>/dev/null; then
-  SUDO_USE=""
+    SUDO_USE=""
 fi
 
 # Define variables
@@ -48,17 +48,19 @@ done
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
-
 if [ $NO_BUILD -ne 1 ]; then
-  echo "Building $APP_NAME..."
-  go build
+    echo "Building $APP_NAME..."
+    go build
 
-  if [ $? -ne 0 ]; then
-    echo "Build failed. Exiting."
-    exit 1
-  else
+    if [ $? -ne 0 ]; then
+        echo "Build failed. Exiting."
+        exit 1
+    else
+        $SUDO_USE cp $APP_NAME $APP_PATH
+    fi
+else
+    echo "Skipping build..."
     $SUDO_USE cp $APP_NAME $APP_PATH
-  fi
 fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
