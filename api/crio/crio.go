@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	ecr "github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
@@ -335,7 +337,28 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	//untar into storage root
 }
 
+// checks if the given image name is an ECR repository
+func isECRRepo(imageName string) bool {
+	return strings.Contains(imageName, ".ecr.") && strings.HasSuffix(imageName, ".amazonaws.com")
+}
+
 func ImagePush(ctx context.Context, newImageRef string) error {
+	if isECRRepo(newImageRef) {
+		session, err := session.NewSession()
+		if err != nil {
+			return err
+		}
+
+		input := &ecr.GetAuthorizationTokenInput{}
+
+		ecrRegistry := ecr.New(session)
+		authTokenOutput, err := ecrRegistry.GetAuthorizationToken(input)
+		if err != nil {
+			return err
+		}
+
+		authTokenOutput.AuthorizationData
+	}
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
 	out, err := cmd.CombinedOutput()
