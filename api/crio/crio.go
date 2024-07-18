@@ -408,17 +408,22 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
 		}
 
-		loginOpts.Username = "AWS"
-		authBytes, err := json.Marshal(authData)
+		decodedAuthBytes := []byte{}
+		_, err = base64.StdEncoding.Decode([]byte(*authData.AuthorizationToken), decodedAuthBytes)
 		if err != nil {
 			return err
 		}
-		encodedStr := base64.StdEncoding.EncodeToString(authBytes)
-		loginOpts.Password = encodedStr
+
+		decodedAuthString := string(decodedAuthBytes)
+		parts := strings.Split(decodedAuthString, ":")
+
+		loginOpts.Username = parts[0]
+		loginOpts.Password = parts[1]
+
 		loginArgs = append(loginArgs, proxyEndpoint)
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
-			logger.Debug().Msgf("auth token: %s", encodedStr)
+			logger.Debug().Msgf("auth token: %s", decodedAuthString)
 			return err
 		}
 
