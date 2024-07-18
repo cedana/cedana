@@ -19,7 +19,6 @@ import (
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/crutils"
-	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
@@ -412,10 +411,6 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		loginOpts.Password = *authData.AuthorizationToken
 		// loginOpts.Stdin = strings.NewReader(proxyEndpoint)
 		loginArgs = append(loginArgs, proxyEndpoint)
-
-		if err := docker.CheckAuth(ctx, systemContext, loginOpts.Username, loginOpts.Password, proxyEndpoint); err != nil {
-			return err
-		}
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
 			logger.Debug().Msgf("auth token: %s", *authData.AuthorizationToken)
