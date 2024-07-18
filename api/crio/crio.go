@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	ecr "github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/cedana/cedana/api/runc"
@@ -349,7 +350,9 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 	}
 
 	if isECRRepo(newImageRef) {
-		session, err := session.NewSession()
+		session, err := session.NewSession(&aws.Config{
+			Region: aws.String("us-west-2"),
+		})
 		if err != nil {
 			return err
 		}
