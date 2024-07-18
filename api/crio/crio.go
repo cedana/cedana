@@ -413,6 +413,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		loginArgs = append(loginArgs, proxyEndpoint)
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
+			logger.Debug().Msgf("auth token: %s", *authData.AuthorizationToken)
 			return err
 		}
 
