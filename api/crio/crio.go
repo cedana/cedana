@@ -413,7 +413,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		// loginOpts.Stdin = strings.NewReader(proxyEndpoint)
 		loginArgs = append(loginArgs, proxyEndpoint)
 
-		if err := docker.CheckAuth(ctx, systemContext, loginOpts.Username, loginOpts.Password, *authData.ProxyEndpoint); err != nil {
+		if err := docker.CheckAuth(ctx, systemContext, loginOpts.Username, loginOpts.Password, proxyEndpoint); err != nil {
 			return err
 		}
 
