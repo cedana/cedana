@@ -363,6 +363,8 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		}
 
 		logger.Debug().Msgf("auth token output: %v", authTokenOutput)
+	} else {
+		logger.Debug().Msgf("did not detect ecr registry: %v", strings.Contains(newImageRef, ".ecr.") && strings.HasSuffix(newImageRef, ".amazonaws.com"))
 	}
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
