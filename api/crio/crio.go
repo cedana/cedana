@@ -409,14 +409,16 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		}
 
 		loginOpts.Username = "AWS"
-		data := []byte(*authData.AuthorizationToken)
-		encodedStr := base64.StdEncoding.EncodeToString(data)
+		authBytes, err := json.Marshal(authData)
+		if err != nil {
+			return err
+		}
+		encodedStr := base64.StdEncoding.EncodeToString(authBytes)
 		loginOpts.Password = encodedStr
-		// loginOpts.Stdin = strings.NewReader(proxyEndpoint)
 		loginArgs = append(loginArgs, proxyEndpoint)
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
-			logger.Debug().Msgf("auth token: %s", *authData.AuthorizationToken)
+			logger.Debug().Msgf("auth token: %s", encodedStr)
 			return err
 		}
 
