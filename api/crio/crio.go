@@ -339,7 +339,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 // checks if the given image name is an ECR repository
 func isECRRepo(imageName string) bool {
-	return strings.Contains(imageName, ".ecr.") && strings.HasSuffix(imageName, ".amazonaws.com")
+	return strings.Contains(imageName, ".ecr.") && strings.Contains(imageName, ".amazonaws.com")
 }
 
 func ImagePush(ctx context.Context, newImageRef string) error {
