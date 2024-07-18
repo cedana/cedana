@@ -3,9 +3,11 @@ package api
 // Internal functions used by service for restoring processes and containers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -178,7 +180,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 		return nil, err
 	}
 
-	s.logger.Info().Msgf("process restored: %v", resp)
+	s.logger.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
 
 	return resp.Restore.Pid, nil
 }
@@ -528,13 +530,20 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		}
 	}
 
+	var gpuerrbuf bytes.Buffer
+	if gpuCmd != nil {
+		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
+	}
+
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
 
+	s.wg.Add(1)
 	go func() {
-		proc, err := process.NewProcess(*pid)
+		defer s.wg.Done()
+		proc, err := process.NewProcessWithContext(ctx, *pid)
 		if err != nil {
 			s.logger.Error().Msgf("could not find process: %v", err)
 			return
@@ -544,17 +553,52 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			if err != nil || !running {
 				break
 			}
-			// XXX YA: Sleeping on loop is always bad, should use a channel or cond var
 			time.Sleep(1 * time.Second)
 		}
 
 		if gpuCmd != nil {
-			s.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
-			gpuCmd.Process.Kill()
-		} else {
-			s.logger.Debug().Msgf("process %d exited", *pid)
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				s.logger.Fatal().Err(err)
+			}
+			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
+			// read last bit of data from /tmp/cedana-gpucontroller.log and print
+			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
+		}
+		s.logger.Info().Err(err).Int32("PID", *pid).Msg("process terminated")
+
+		// Update state if it's a managed restored job
+		if args.JID != "" {
+			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+			state, err := s.getState(childCtx, args.JID)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to get state after job done")
+				return
+			}
+			state.JobState = task.JobState_JOB_DONE
+			state.PID = *pid
+			err = s.updateState(childCtx, args.JID, state)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to update state after job done")
+			}
 		}
 	}()
+
+	// If it's a managed restored job, kill on server shutdown
+	if args.JID != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("server shutting down, killing process")
+			proc, err := process.NewProcessWithContext(ctx, *pid)
+			if err != nil {
+				s.logger.Warn().Err(err).Msgf("could not find process to kill")
+				return
+			}
+			proc.Kill()
+		}()
+	}
 
 	return pid, nil
 }
@@ -563,7 +607,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, g
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(ctx, uid, gid, groups, s.logger)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, s.logger)
 	if err != nil {
 		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err

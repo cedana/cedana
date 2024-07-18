@@ -70,12 +70,6 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
-		return nil, err
-	}
-
 	resp.State = state
 
 	return &resp, err
