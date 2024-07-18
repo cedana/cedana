@@ -2,6 +2,7 @@ package crio
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -408,7 +409,9 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		}
 
 		loginOpts.Username = "AWS"
-		loginOpts.Password = *authData.AuthorizationToken
+		data := []byte(*authData.AuthorizationToken)
+		encodedStr := base64.StdEncoding.EncodeToString(data)
+		loginOpts.Password = encodedStr
 		// loginOpts.Stdin = strings.NewReader(proxyEndpoint)
 		loginArgs = append(loginArgs, proxyEndpoint)
 
