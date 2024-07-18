@@ -408,13 +408,13 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
 		}
 
-		decodedAuthBytes := []byte{}
-		_, err = base64.StdEncoding.Decode([]byte(*authData.AuthorizationToken), decodedAuthBytes)
+		decodedAuthBytes, err := base64.StdEncoding.DecodeString(*authData.AuthorizationToken)
 		if err != nil {
 			return err
 		}
 
 		decodedAuthString := string(decodedAuthBytes)
+
 		parts := strings.Split(decodedAuthString, ":")
 
 		loginOpts.Username = parts[0]
