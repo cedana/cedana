@@ -30,8 +30,8 @@ teardown() {
 }
 
 @test "Output file created and has some data" {
-    local task="./test.sh"
-    local job_id="test"
+    local task="./workload.sh"
+    local job_id="workload"
 
     # execute a process as a cedana job
     exec_task $task $job_id
@@ -44,8 +44,8 @@ teardown() {
 }
 
 @test "Ensure correct logging post restore" {
-    local task="./test.sh"
-    local job_id="test2"
+    local task="./workload.sh"
+    local job_id="workload2"
 
     # execute, checkpoint and restore a job
     exec_task $task $job_id
@@ -63,6 +63,46 @@ teardown() {
     [ -f $rawfile ]
     sleep 2 3>-
     [ -s $rawfile ]
+}
+
+@test "Managed job graceful exit" {
+    local task="./workload.sh"
+    local job_id="workload3"
+
+    exec_task $task $job_id
+
+    # run for a while
+    sleep 2 3>-
+
+    # kill cedana and check if the job exits gracefully
+    stop_cedana
+    sleep 2 3>-
+
+    [ -z "$(pgrep -f $task)" ]
+}
+
+@test "Managed job graceful exit after restore" {
+    local task="./workload.sh"
+    local job_id="workload4"
+
+    exec_task $task $job_id
+
+    # run for a while
+    sleep 2 3>-
+
+    # checkpoint and restore the job
+    checkpoint_task $job_id
+    sleep 2 3>-
+    restore_task $job_id
+
+    # run for a while
+    sleep 2 3>-
+
+    # kill cedana and check if the job exits gracefully
+    stop_cedana
+    sleep 2 3>-
+
+    [ -z "$(pgrep -f $task)" ]
 }
 
 @test "Rootfs snapshot of containerd container" {
