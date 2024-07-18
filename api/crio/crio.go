@@ -409,6 +409,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 
 		loginOpts.Username = "AWS"
 		loginOpts.Password = *authData.AuthorizationToken
+		loginOpts.Stdin = strings.NewReader(proxyEndpoint)
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
 			return err
