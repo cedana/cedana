@@ -2,6 +2,10 @@
 
 load helper.bash
 
+setup_file() {
+    BATS_NO_PARALLELIZE_WITHIN_FILE=true
+}
+
 setup() {
     # assuming WD is the root of the project
     start_cedana
