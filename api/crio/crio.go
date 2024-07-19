@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -356,6 +357,15 @@ func getProxyEndpointFromImageName(imageName string) (string, error) {
 	return "https://" + registryURL, nil
 }
 
+func getRegionFromImageName(imageName string) (string, error) {
+	re := regexp.MustCompile(`\.([a-z]+-[a-z]+-\d+)\.`)
+	match := re.FindStringSubmatch(imageName)
+	if len(match) > 1 {
+		return match[1], nil
+	}
+	return "", fmt.Errorf("region not found in image name")
+}
+
 type loginReply struct {
 	loginOpts auth.LoginOptions
 	getLogin  bool
@@ -375,9 +385,13 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		loginOpts := &auth.LoginOptions{}
 		loginArgs := []string{}
 
+		region, err := getRegionFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+
 		session, err := session.NewSession(&aws.Config{
-			// TODO BS this needs to come from the user
-			Region: aws.String("us-west-2"),
+			Region: aws.String(region),
 		})
 		if err != nil {
 			return err
