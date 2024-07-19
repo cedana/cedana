@@ -415,8 +415,6 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 
 		decodedAuthString := string(decodedAuthBytes)
 
-		logger.Debug().Msgf("decoded string: %s", decodedAuthString)
-
 		parts := strings.Split(decodedAuthString, ":")
 
 		if len(parts) != 2 {
@@ -432,7 +430,6 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		loginArgs = append(loginArgs, proxyEndpoint)
 
 		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
-			logger.Debug().Msgf("auth token: %s", decodedAuthString)
 			return err
 		}
 
