@@ -2,10 +2,18 @@
 
 # Helper functions that hit the local Cedana API
 
+function start_cedana() {
+    ./build-start-daemon.sh --no-build
+}
+
+function stop_cedana() {
+    ./reset.sh
+}
+
 function exec_task() {
     local task="$1"
     local job_id="$2"
-    cedana exec -w "$PWD" "$task" -i "$job_id"
+    cedana exec -w "$DIR" "$task" -i "$job_id"
 }
 
 function checkpoint_task() {
@@ -58,3 +66,7 @@ function runc_restore() {
   cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
 }
 
+function fail() {
+  echo "$@" >&2
+  exit 1
+}

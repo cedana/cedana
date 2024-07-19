@@ -9,7 +9,6 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,9 +40,6 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
-		id := xid.New().String()
-		logger.Info().Msgf("no job id specified, using %s", id)
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		if dir == "" {
 			// TODO NR - should we default to /tmp?
@@ -57,14 +53,13 @@ var dumpProcessCmd = &cobra.Command{
 
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		cpuDumpArgs := task.DumpArgs{
-			PID:  int32(pid),
-			Dir:  dir,
-			JID:  id,
-			Type: task.CRType_LOCAL,
-			GPU:  gpuEnabled,
-      TcpEstablished: tcpEstablished,
+			PID:            int32(pid),
+			Dir:            dir,
+			Type:           task.CRType_LOCAL,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -172,13 +167,13 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-    tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		dumpArgs := task.DumpArgs{
-			JID:  id,
-			Dir:  dir,
-			Type: taskType,
-			GPU:  gpuEnabled,
-      TcpEstablished: tcpEstablished,
+			JID:            id,
+			Dir:            dir,
+			Type:           taskType,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)

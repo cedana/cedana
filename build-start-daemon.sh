@@ -1,5 +1,12 @@
 #!/bin/bash
 
+set -e
+
+SUDO_USE=sudo
+if ! which sudo &>/dev/null; then
+    SUDO_USE=""
+fi
+
 # Define variables
 APP_NAME="cedana"
 APP_PATH="/usr/local/bin/$APP_NAME"
@@ -17,6 +24,7 @@ NO_BUILD=0
 # Check for --systemctl flag
 for arg in "$@"; do
     if [ "$arg" == "--systemctl" ]; then
+        echo "Using systemctl"
         USE_SYSTEMCTL=1
     fi
 done
@@ -24,6 +32,7 @@ done
 # Check for --no-build flag
 for arg in "$@"; do
     if [ "$arg" == "--no-build" ]; then
+        echo "Skipping build"
         NO_BUILD=1
     fi
 done
@@ -32,26 +41,27 @@ done
 # Check for --gpu flag
 for arg in "$@"; do
     if [ "$arg" == "--gpu" ]; then
+        echo "GPU support enabled"
         CEDANA_GPU_ENABLED=true
     fi
 done
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
-
 if [ $NO_BUILD -ne 1 ]; then
-  echo "Building $APP_NAME..."
-  go build
+    echo "Building $APP_NAME..."
+    go build
 
-  if [ $? -ne 0 ]; then
-    echo "Build failed. Exiting."
-    exit 1
-  fi
+    if [ $? -ne 0 ]; then
+        echo "Build failed. Exiting."
+        exit 1
+    else
+        $SUDO_USE cp $APP_NAME $APP_PATH
+    fi
+else
+    echo "Skipping build..."
+    $SUDO_USE cp $APP_NAME $APP_PATH
 fi
-
-
-
-sudo cp $APP_NAME $APP_PATH
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
@@ -68,7 +78,7 @@ fi
 if [ $USE_SYSTEMCTL -eq 1 ]; then
     # create systemd file
     echo "Creating $SERVICE_FILE..."
-    cat <<EOF | sudo tee $SERVICE_FILE >/dev/null
+    cat <<EOF | $SUDO_USE tee $SERVICE_FILE >/dev/null
 [Unit]
 Description=Cedana Checkpointing Daemon
 [Service]
@@ -91,14 +101,18 @@ StandardError=append:/var/log/cedana-daemon.log
 EOF
 
     echo "Reloading systemd..."
-    sudo systemctl daemon-reload
+    $SUDO_USE systemctl daemon-reload
 
     echo "Enabling and starting $APP_NAME service..."
-    sudo systemctl enable $APP_NAME.service
-    sudo systemctl start $APP_NAME.service
+    $SUDO_USE systemctl enable $APP_NAME.service
+    $SUDO_USE systemctl start $APP_NAME.service
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    sudo -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+    if [[ ! -n "${SUDO_USE}" ]]; then
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+    else
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+    fi
     echo "$APP_NAME daemon started as a background process."
 fi

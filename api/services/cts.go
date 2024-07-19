@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 const (
@@ -78,6 +79,42 @@ func NewKataClient(vm string) (*ServiceClient, error) {
 
 func (c *ServiceClient) Close() {
 	c.taskConn.Close()
+}
+
+/////////////////////////////
+//      Health Check       //
+/////////////////////////////
+
+func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
+	healthClient := grpc_health_v1.NewHealthClient(c.taskConn)
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+
+	// Health check
+	resp, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{
+		Service: "task.TaskService",
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	if resp.Status == grpc_health_v1.HealthCheckResponse_SERVING {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
+
+func (c *ServiceClient) DetailedHealthCheck(ctx context.Context, args *task.DetailedHealthCheckRequest) (*task.DetailedHealthCheckResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.DetailedHealthCheck(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 ///////////////////////////
