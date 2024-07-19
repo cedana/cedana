@@ -417,7 +417,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 
 		logger.Debug().Msgf("decoded string: %s", decodedAuthString)
 
-		parts := strings.Split(decodedAuthString, ":")
+		parts := strings.Split(":", decodedAuthString)
 
 		if len(parts) != 2 {
 			return fmt.Errorf("decoded auth string is not correctly formatted")
