@@ -423,8 +423,11 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 			return fmt.Errorf("decoded auth string is not correctly formatted, %v", len(parts))
 		}
 
+		var stdoutBuilder strings.Builder
+
 		loginOpts.Username = parts[0]
 		loginOpts.Password = parts[1]
+		loginOpts.Stdout = &stdoutBuilder
 
 		loginArgs = append(loginArgs, proxyEndpoint)
 
