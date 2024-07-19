@@ -2,6 +2,7 @@ package crio
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,12 +10,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	ecr "github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
+	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/crutils"
+	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/unshare"
@@ -335,7 +342,115 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	//untar into storage root
 }
 
+// checks if the given image name is an ECR repository
+func isECRRepo(imageName string) bool {
+	return strings.Contains(imageName, ".ecr.") && strings.Contains(imageName, ".amazonaws.com")
+}
+
+func getProxyEndpointFromImageName(imageName string) (string, error) {
+	parts := strings.Split(imageName, "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid image name format")
+	}
+
+	registryURL := parts[0]
+	return "https://" + registryURL, nil
+}
+
+func getRegionFromImageName(imageName string) (string, error) {
+	re := regexp.MustCompile(`\.([a-z]+-[a-z]+-\d+)\.`)
+	match := re.FindStringSubmatch(imageName)
+	if len(match) > 1 {
+		return match[1], nil
+	}
+	return "", fmt.Errorf("region not found in image name")
+}
+
+type loginReply struct {
+	loginOpts auth.LoginOptions
+	getLogin  bool
+	tlsVerify bool
+}
+
 func ImagePush(ctx context.Context, newImageRef string) error {
+	systemContext := &types.SystemContext{}
+
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+
+	if isECRRepo(newImageRef) {
+
+		loginOpts := &auth.LoginOptions{}
+		loginArgs := []string{}
+
+		region, err := getRegionFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+
+		session, err := session.NewSession(&aws.Config{
+			Region: aws.String(region),
+		})
+		if err != nil {
+			return err
+		}
+
+		input := &ecr.GetAuthorizationTokenInput{}
+
+		ecrRegistry := ecr.New(session)
+		authTokenData, err := ecrRegistry.GetAuthorizationToken(input)
+		if err != nil {
+			return err
+		}
+
+		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+
+		authData := &ecr.AuthorizationData{}
+
+		for _, auth := range authTokenData.AuthorizationData {
+			if *auth.ProxyEndpoint == proxyEndpoint {
+				authData = auth
+			}
+		}
+
+		if authData == nil {
+			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
+		}
+
+		decodedAuthBytes, err := base64.StdEncoding.DecodeString(*authData.AuthorizationToken)
+		if err != nil {
+			return err
+		}
+
+		decodedAuthString := string(decodedAuthBytes)
+
+		parts := strings.Split(decodedAuthString, ":")
+
+		if len(parts) != 2 {
+			return fmt.Errorf("decoded auth string is not correctly formatted, %v", len(parts))
+		}
+
+		var stdoutBuilder strings.Builder
+
+		loginOpts.Username = parts[0]
+		loginOpts.Password = parts[1]
+		loginOpts.Stdout = &stdoutBuilder
+
+		loginArgs = append(loginArgs, proxyEndpoint)
+
+		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
+			return err
+		}
+
+	} else {
+		logger.Debug().Msg("did not detect ecr registry")
+	}
+
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
 	out, err := cmd.CombinedOutput()
