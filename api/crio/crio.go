@@ -420,7 +420,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 		parts := strings.Split(":", decodedAuthString)
 
 		if len(parts) != 2 {
-			return fmt.Errorf("decoded auth string is not correctly formatted")
+			return fmt.Errorf("decoded auth string is not correctly formatted, %v", len(parts))
 		}
 
 		loginOpts.Username = parts[0]
