@@ -37,7 +37,6 @@ func NewCedanaGPUClient(cc grpc.ClientConnInterface) CedanaGPUClient {
 }
 
 func (c *cedanaGPUClient) Checkpoint(ctx context.Context, in *CheckpointRequest, opts ...grpc.CallOption) (*CheckpointResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckpointResponse)
 	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/Checkpoint", in, out, opts...)
 	if err != nil {
@@ -47,7 +46,6 @@ func (c *cedanaGPUClient) Checkpoint(ctx context.Context, in *CheckpointRequest,
 }
 
 func (c *cedanaGPUClient) Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RestoreResponse)
 	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/Restore", in, out, opts...)
 	if err != nil {
@@ -57,7 +55,6 @@ func (c *cedanaGPUClient) Restore(ctx context.Context, in *RestoreRequest, opts 
 }
 
 func (c *cedanaGPUClient) StartupPoll(ctx context.Context, in *StartupPollRequest, opts ...grpc.CallOption) (*StartupPollResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StartupPollResponse)
 	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/StartupPoll", in, out, opts...)
 	if err != nil {
@@ -67,7 +64,6 @@ func (c *cedanaGPUClient) StartupPoll(ctx context.Context, in *StartupPollReques
 }
 
 func (c *cedanaGPUClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/HealthCheck", in, out, opts...)
 	if err != nil {
