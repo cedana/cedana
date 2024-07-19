@@ -30,6 +30,8 @@ var cudaVersions = map[string]string{
 	"12.4": "cuda12_4",
 }
 
+var kataEnabledFlag bool
+
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
@@ -84,7 +86,7 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx)
+		err = api.StartServer(ctx, kataEnabledFlag)
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err
@@ -103,6 +105,7 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(startDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
+	startDaemonCmd.Flags().BoolVarP(&kataEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 }
 

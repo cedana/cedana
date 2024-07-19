@@ -48,12 +48,13 @@ type (
 )
 
 func InitConfig() error {
-	user, err := getUser()
-	if err != nil {
-		return err
-	}
+	// user, err := getUser()
+	// if err != nil {
+	// 	return err
+	// }
 
-	homeDir := user.HomeDir
+	// homeDir := user.HomeDir
+	homeDir := "/tmp"
 	configDir := filepath.Join(homeDir, configDirName)
 
 	viper.AddConfigPath(configDir)
@@ -68,7 +69,7 @@ func InitConfig() error {
 	viper.AutomaticEnv()
 
 	// Create config directory if it does not exist
-	_, err = os.Stat(configDir)
+	_, err := os.Stat(configDir)
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(configDir, configDirPerm)
 		if err != nil {

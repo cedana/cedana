@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdlayher/vsock"
+
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
@@ -38,6 +40,10 @@ const (
 	SERVER_LOG_PERMS      = 0o644
 )
 
+const (
+	port = 9999
+)
+
 type service struct {
 	CRIU    *Criu
 	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
@@ -56,7 +62,7 @@ type Server struct {
 	listener   net.Listener
 }
 
-func NewServer(ctx context.Context) (*Server, error) {
+func NewServer(ctx context.Context, kataEnabledFlag bool) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	logFile, err := os.OpenFile(SERVER_LOG_PATH, SERVER_LOG_MODE, SERVER_LOG_PERMS)
 	if err != nil {
@@ -91,7 +97,14 @@ func NewServer(ctx context.Context) (*Server, error) {
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
-	listener, err := net.Listen(PROTOCOL, ADDRESS)
+	var listener net.Listener
+
+	if kataEnabledFlag {
+		listener, err = vsock.Listen(port, nil)
+	} else {
+		listener, err = net.Listen(PROTOCOL, ADDRESS)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -112,14 +125,14 @@ func (s *Server) stop() error {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func StartServer(cmdCtx context.Context) error {
+func StartServer(cmdCtx context.Context, kataEnabledFlag bool) error {
 	logger := cmdCtx.Value("logger").(*zerolog.Logger)
 
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(cmdCtx)
+	server, err := NewServer(cmdCtx, kataEnabledFlag)
 	if err != nil {
 		return err
 	}

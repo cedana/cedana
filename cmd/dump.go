@@ -83,6 +83,50 @@ var dumpProcessCmd = &cobra.Command{
 	},
 }
 
+var dumpKataCmd = &cobra.Command{
+	Use:   "kata",
+	Short: "Manually checkpoint a running workload in the kata-vm [vm-name] to a directory [-d]",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		vm := args[0]
+
+		cts, err := services.NewKataClient(vm)
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return err
+		}
+		defer cts.Close()
+
+		id := xid.New().String()
+		logger.Info().Msgf("no job id specified, using %s", id)
+
+		dir, _ := cmd.Flags().GetString(dirFlag)
+
+		cpuDumpArgs := task.DumpArgs{
+			Dir:  dir,
+			JID:  id,
+			Type: task.CRType_LOCAL,
+		}
+
+		resp, err := cts.KataDump(ctx, &cpuDumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			} else {
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
+			return err
+		}
+		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
+	},
+}
+
 var dumpJobCmd = &cobra.Command{
 	Use: "job",
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -331,6 +375,11 @@ func init() {
 	dumpJobCmd.MarkFlagRequired(dirFlag)
 	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+
+	// Kata
+	dumpCmd.AddCommand(dumpKataCmd)
+	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)

@@ -292,6 +292,53 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	return nil
 }
 
+func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
+	opts := s.prepareDumpOpts()
+	dumpdir, err := s.prepareDump(ctx, state, args, opts)
+	if err != nil {
+		return err
+	}
+
+	img, err := os.Open(dumpdir)
+	if err != nil {
+		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
+		return err
+	}
+	defer img.Close()
+
+	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
+	opts.Pid = proto.Int32(state.PID)
+	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	opts.LeaveRunning = proto.Bool(true)
+
+	nfy := Notify{
+		Logger: s.logger,
+	}
+
+	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
+
+	_, dumpSpan := s.tracer.Start(ctx, "dump")
+	dumpSpan.SetAttributes(attribute.Bool("container", false))
+	_, err = s.CRIU.Dump(opts, &nfy)
+	if err != nil {
+		// check for sudo error
+		if strings.Contains(err.Error(), "errno 0") {
+			s.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+			return err
+		}
+
+		dumpSpan.RecordError(err)
+		s.logger.Warn().Msgf("error dumping process: %v", err)
+		return err
+	}
+
+	dumpSpan.End()
+
+	s.postDump(ctx, dumpdir, state)
+
+	return nil
+}
+
 func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-ckpt")
 	defer gpuSpan.End()
