@@ -13,6 +13,13 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
+const (
+	containerdContainerName = "io.kubernetes.cri.container-name"
+	containerdSandboxName   = "io.kubernetes.cri.sandbox-name"
+	crioContainerName       = "io.kubernetes.container.name"
+	crioSandboxName         = "io.kubernetes.pod.name"
+)
+
 type runcContainer struct {
 	ContainerId      string
 	Bundle           string
@@ -62,19 +69,34 @@ func GetPidByContainerId(containerId, root string) (int32, error) {
 
 func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 	var containers []runcContainer
+	var containerNameAnnotation string
+	var sandboxNameAnnotation string
+
 	kubeContainers, err := kube.StateList(root)
 	if err != nil {
 		return containers, err
+	}
+
+	annotations := map[string][2]string{
+		"/run/runc":     {crioContainerName, crioSandboxName},
+		"/var/run/runc": {crioContainerName, crioSandboxName},
+		"default":       {containerdContainerName, containerdSandboxName},
+	}
+
+	if val, ok := annotations[root]; ok {
+		containerNameAnnotation, sandboxNameAnnotation = val[0], val[1]
+	} else {
+		containerNameAnnotation, sandboxNameAnnotation = annotations["default"][0], annotations["default"][1]
 	}
 
 	for _, sandbox := range kubeContainers {
 		var c runcContainer
 
 		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
-			c.ContainerName = sandbox.Annotations[kube.CONTAINER_NAME]
+			c.ContainerName = sandbox.Annotations[containerNameAnnotation]
 			c.ImageName = sandbox.Annotations[kube.IMAGE_NAME]
 			c.SandboxId = sandbox.Annotations[kube.SANDBOX_ID]
-			c.SandboxName = sandbox.Annotations[kube.SANDBOX_NAME]
+			c.SandboxName = sandbox.Annotations[sandboxNameAnnotation]
 			c.SandboxUid = sandbox.Annotations[kube.SANDBOX_UID]
 			c.SandboxNamespace = sandbox.Annotations[kube.SANDBOX_NAMESPACE]
 			c.ContainerId = sandbox.ContainerId
@@ -92,11 +114,6 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 func GetContainerIdByName(containerName, sandboxName, root string) (string, string, error) {
 	var containerNameAnnotation string
 	var sandboxNameAnnotation string
-
-	containerdContainerName := "io.kubernetes.cri.container-name"
-	containerdSandboxName := "io.kubernetes.cri.sandbox-name"
-	crioContainerName := "io.kubernetes.container.name"
-	crioSandboxName := "io.kubernetes.pod.name"
 
 	annotations := map[string][2]string{
 		"/run/runc":     {crioContainerName, crioSandboxName},
