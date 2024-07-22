@@ -293,9 +293,9 @@ func init() {
 	restoreCmd.AddCommand(restoreJobCmd)
 
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 
