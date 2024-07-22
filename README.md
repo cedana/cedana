@@ -2,7 +2,7 @@
 
 Build systems that bake real-time adaptiveness and elasticity using Cedana.
 
-Cedana-client serves as client code to the larger Cedana system. We leverage [CRIU](https://github.com/checkpoint-restore/criu) to provide checkpoint and restore functionality for most linux processes (including containers).
+This serves as client code to the larger Cedana system. We leverage [CRIU](https://github.com/checkpoint-restore/criu) to provide checkpoint and restore functionality for most linux processes (including containers).
 
 We can monitor, migrate and automate checkpoints across a real-time network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website](https://cedana.ai) for more information about our managed product.
 
