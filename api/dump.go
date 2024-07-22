@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/rpc"
@@ -84,9 +83,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 
 	// jobID + UTC time (nanoseconds)
 	// strip out non posix-compliant characters from the jobID
-	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	processDumpDir := strings.Join([]string{state.JID, timeString}, "_")
-	dumpDirPath := filepath.Join(args.Dir, processDumpDir)
+	dumpDirPath := filepath.Join(args.Dir, "aux")
 	_, err := os.Stat(dumpDirPath)
 	if err != nil {
 		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
@@ -249,7 +246,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		}
 	}
 
-	img, err := os.Open(dumpdir)
+	img, err := os.Open(args.Dir)
 	if err != nil {
 		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
 		return err
