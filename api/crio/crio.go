@@ -1,6 +1,7 @@
 package crio
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -28,6 +29,7 @@ import (
 	libconfig "github.com/cri-o/cri-o/pkg/config"
 	"github.com/docker/docker/pkg/homedir"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -257,7 +259,36 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
+func removeAllContainers(logger *zerolog.Logger) {
+	idsCmd := exec.Command("buildah", "containers", "-q")
+	var out bytes.Buffer
+	idsCmd.Stdout = &out
+
+	err := idsCmd.Run()
+	if err != nil {
+		logger.Error().Msgf("Failed to get container IDs: %s\n", err)
+	}
+
+	// Step 2: Remove each container by ID
+	ids := strings.Fields(out.String())
+	for _, id := range ids {
+		removeCmd := exec.Command("buildah", "rm", id)
+		err := removeCmd.Run()
+		if err != nil {
+			logger.Error().Msgf("Failed to remove container %s: %s\n", id, err)
+		} else {
+			logger.Error().Msgf("Successfully removed container %s\n", id)
+		}
+	}
+
+	logger.Error().Msgf("Finished removing all Buildah containers.")
+}
+
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
 	//buildah from original base ubuntu image
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
@@ -269,16 +300,23 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
 
-	containerID := string(out)
+	defer removeAllContainers(logger)
 
-	containerID = strings.ReplaceAll(containerID, "\n", "")
+	// Split the output into lines
+	lines := strings.Split(string(out), "\n")
 
-	//mount container
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		fmt.Printf(err.Error())
+	// Grab the last non-empty line
+	var containerID string
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			containerID = lines[i]
+			break
+		}
 	}
 
+	// 	containerID = strings.ReplaceAll(containerID, "\n", "")
+
+	//mount container
 	logger.Debug().Msgf("buildah mount of container %s", containerID)
 
 	cmd = exec.Command("buildah", "mount", containerID)
