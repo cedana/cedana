@@ -92,7 +92,7 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 	for _, sandbox := range kubeContainers {
 		var c runcContainer
 
-		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
+		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER || sandbox.Annotations[kube.CRIO_CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
 			c.ContainerName = sandbox.Annotations[containerNameAnnotation]
 			c.ImageName = sandbox.Annotations[kube.IMAGE_NAME]
 			c.SandboxId = sandbox.Annotations[kube.SANDBOX_ID]

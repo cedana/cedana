@@ -12,6 +12,10 @@ import (
 
 // Kube default sandbox annotation keys
 const (
+	//CRI-O
+	CRIO_CONTAINER_TYPE = "io.kubernetes.cri-o.ContainerType"
+
+	// CRI
 	CONTAINER_TYPE    = "io.kubernetes.cri.container-type"
 	SANDBOX_ID        = "io.kubernetes.cri.sandbox-id"
 	SANDBOX_NAME      = "io.kubernetes.cri.sandbox-name"
