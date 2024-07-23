@@ -111,7 +111,8 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 			c.ContainerId = sandbox.ContainerId
 			c.Bundle = sandbox.Bundle
 
-			if sandbox.Annotations[kube.SANDBOX_NAMESPACE] == namespace || namespace == "" && c.ImageName != "" {
+			sandboxNamespace := getFirstNonEmptyAnnotation(sandbox.Annotations, kube.SANDBOX_NAMESPACE, kube.CRIO_SANDBOX_NAMESPACE)
+			if sandboxNamespace == namespace || namespace == "" && c.ImageName != "" {
 				containers = append(containers, c)
 			}
 		}
