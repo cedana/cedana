@@ -31,6 +31,15 @@ type runcContainer struct {
 	SandboxUid       string
 }
 
+func getFirstNonEmptyAnnotation(annotations map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if val, exists := annotations[key]; exists && val != "" {
+			return val
+		}
+	}
+	return ""
+}
+
 func List(root string) error {
 	dir, err := os.Open(root)
 	if err != nil {
@@ -94,11 +103,11 @@ func RuncGetAll(root, namespace string) ([]runcContainer, error) {
 
 		if sandbox.Annotations[kube.CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER || sandbox.Annotations[kube.CRIO_CONTAINER_TYPE] == kube.CONTAINER_TYPE_CONTAINER {
 			c.ContainerName = sandbox.Annotations[containerNameAnnotation]
-			c.ImageName = sandbox.Annotations[kube.IMAGE_NAME]
-			c.SandboxId = sandbox.Annotations[kube.SANDBOX_ID]
+			c.ImageName = getFirstNonEmptyAnnotation(sandbox.Annotations, kube.IMAGE_NAME, kube.CRIO_IMAGE_NAME)
+			c.SandboxId = getFirstNonEmptyAnnotation(sandbox.Annotations, kube.SANDBOX_ID, kube.CRIO_SANDBOX_ID)
 			c.SandboxName = sandbox.Annotations[sandboxNameAnnotation]
 			c.SandboxUid = sandbox.Annotations[kube.SANDBOX_UID]
-			c.SandboxNamespace = sandbox.Annotations[kube.SANDBOX_NAMESPACE]
+			c.SandboxNamespace = getFirstNonEmptyAnnotation(sandbox.Annotations, kube.SANDBOX_NAMESPACE, kube.CRIO_SANDBOX_NAMESPACE)
 			c.ContainerId = sandbox.ContainerId
 			c.Bundle = sandbox.Bundle
 
