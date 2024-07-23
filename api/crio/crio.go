@@ -277,11 +277,11 @@ func removeAllContainers(logger *zerolog.Logger) {
 		if err != nil {
 			logger.Error().Msgf("Failed to remove container %s: %s\n", id, err)
 		} else {
-			logger.Error().Msgf("Successfully removed container %s\n", id)
+			logger.Debug().Msgf("Successfully removed container %s\n", id)
 		}
 	}
 
-	logger.Error().Msgf("Finished removing all Buildah containers.")
+	logger.Debug().Msgf("Finished removing all Buildah containers.")
 }
 
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
