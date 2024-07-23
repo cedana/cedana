@@ -225,6 +225,9 @@ jobs:
     name: Publish (Image)
     runs-on: ubicloud-standard-2
     needs: ["build-image-manifest-arm64", "build-image-manifest-amd64"]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
