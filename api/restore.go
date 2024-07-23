@@ -3,9 +3,11 @@ package api
 // Internal functions used by service for restoring processes and containers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -40,7 +42,7 @@ const (
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
 )
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkpointPath string) (*string, *task.ProcessState, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
@@ -70,7 +72,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkp
 		}
 	}
 
-	err := utils.UntarFolder(checkpointPath, tempDir)
+	err := utils.UntarFolder(args.CheckpointPath, tempDir)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("error decompressing checkpoint")
 		return nil, nil, nil, err
@@ -118,7 +120,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, checkp
 
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.InheritFd = inheritFds
-	opts.TcpEstablished = proto.Bool(tcpEstablished)
+	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 		s.logger.Error().Err(err).Msg("error changing permissions")
@@ -178,14 +180,14 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 		return nil, err
 	}
 
-	s.logger.Info().Msgf("process restored: %v", resp)
+	s.logger.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
 
 	return resp.Restore.Pid, nil
 }
 
 func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
 	// Podman run -d state
-	if !opts.Detatch {
+	if !opts.Detach {
 		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
 		if err != nil {
 			return err
@@ -510,7 +512,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args.CheckpointPath)
+	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args)
 	if err != nil {
 		return nil, err
 	}
@@ -522,10 +524,15 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID)
+				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups)
 				return err
 			},
 		}
+	}
+
+	var gpuerrbuf bytes.Buffer
+	if gpuCmd != nil {
+		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 	}
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
@@ -533,8 +540,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		return nil, err
 	}
 
+	s.wg.Add(1)
 	go func() {
-		proc, err := process.NewProcess(*pid)
+		defer s.wg.Done()
+		proc, err := process.NewProcessWithContext(ctx, *pid)
 		if err != nil {
 			s.logger.Error().Msgf("could not find process: %v", err)
 			return
@@ -544,36 +553,68 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			if err != nil || !running {
 				break
 			}
-			// XXX YA: Sleeping on loop is always bad, should use a channel or cond var
 			time.Sleep(1 * time.Second)
 		}
 
 		if gpuCmd != nil {
-			s.logger.Debug().Msgf("process %d exited, killing gpu-controller", *pid)
-			gpuCmd.Process.Kill()
-		} else {
-			s.logger.Debug().Msgf("process %d exited", *pid)
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				s.logger.Fatal().Err(err)
+			}
+			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
+			// read last bit of data from /tmp/cedana-gpucontroller.log and print
+			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
+		}
+		s.logger.Info().Err(err).Int32("PID", *pid).Msg("process terminated")
+
+		// Update state if it's a managed restored job
+		if args.JID != "" {
+			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+			state, err := s.getState(childCtx, args.JID)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to get state after job done")
+				return
+			}
+			state.JobState = task.JobState_JOB_DONE
+			state.PID = *pid
+			err = s.updateState(childCtx, args.JID, state)
+			if err != nil {
+				s.logger.Warn().Err(err).Msg("failed to update state after job done")
+			}
 		}
 	}()
+
+	// If it's a managed restored job, kill on server shutdown
+	if args.JID != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("server shutting down, killing process")
+			proc, err := process.NewProcessWithContext(ctx, *pid)
+			if err != nil {
+				s.logger.Warn().Err(err).Msgf("could not find process to kill")
+				return
+			}
+			proc.Kill()
+		}()
+	}
 
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, groups []uint32) (*exec.Cmd, error) {
 	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
 	defer gpuSpan.End()
 
-	gpuCmd, err := StartGPUController(uid, gid, s.logger)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, s.logger)
 	if err != nil {
-		s.logger.Warn().Msgf("could not start gpu-controller: %v", err)
+		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
 	}
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	// sleep a little to let the gpu controller start
-	time.Sleep(1 * time.Second)
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {

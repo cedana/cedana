@@ -32,10 +32,33 @@ var restoreProcessCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
+		var uid uint32
+		var gid uint32
+		var groups []uint32 = []uint32{}
+
+		asRoot, _ := cmd.Flags().GetBool(rootFlag)
+		if !asRoot {
+			uid = uint32(os.Getuid())
+			gid = uint32(os.Getgid())
+			groups_int, err := os.Getgroups()
+			if err != nil {
+				logger.Error().Err(err).Msg("error getting user groups")
+				return err
+			}
+			for _, g := range groups_int {
+				groups = append(groups, uint32(g))
+			}
+		}
+
 		path := args[0]
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
+			UID:            uid,
+			GID:            gid,
+			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -70,12 +93,21 @@ var restoreJobCmd = &cobra.Command{
 
 		var uid uint32
 		var gid uint32
+		var groups []uint32 = []uint32{}
 
 		jid := args[0]
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
 			uid = uint32(os.Getuid())
 			gid = uint32(os.Getgid())
+			groups_int, err := os.Getgroups()
+			if err != nil {
+				logger.Error().Err(err).Msg("error getting user groups")
+				return err
+			}
+			for _, g := range groups_int {
+				groups = append(groups, uint32(g))
+			}
 		}
 
 		// Query job state
@@ -90,10 +122,13 @@ var restoreJobCmd = &cobra.Command{
 		}
 		state := res.Processes[0]
 
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
-			JID: jid,
-			UID: uid,
-			GID: gid,
+			JID:            jid,
+			UID:            uid,
+			GID:            gid,
+			Groups:         groups,
+			TcpEstablished: tcpEstablished,
 		}
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
@@ -235,7 +270,7 @@ var runcRestoreCmd = &cobra.Command{
 			Root:          runcRootPath[root],
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
-			Detatch:       detach,
+			Detach:        detach,
 			NetPid:        netPid,
 		}
 
@@ -273,6 +308,9 @@ func init() {
 	// Process/jobs
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreCmd.AddCommand(restoreJobCmd)
+
+	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 
 	// Containerd

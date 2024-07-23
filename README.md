@@ -2,7 +2,7 @@
 
 Build systems that bake real-time adaptiveness and elasticity using Cedana.
 
-Cedana-client serves as client code to the larger Cedana system. We leverage CRIU to provide checkpoint and restore functionality for most linux processes (including docker containers).
+This serves as client code to the larger Cedana system. We leverage [CRIU](https://github.com/checkpoint-restore/criu) to provide checkpoint and restore functionality for most linux processes (including containers).
 
 We can monitor, migrate and automate checkpoints across a real-time network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website](https://cedana.ai) for more information about our managed product.
 
@@ -16,6 +16,20 @@ You can get started using cedana today (outside of the base checkpoint/restore f
 
 
 ## Build
+
+Cedana needs `libgpgme`, `libbtrfs` and `libseccomp` on the machine to build against. On a debian based system, you can install them with: 
+
+``` sh
+apt install libgpgme-dev libseccomp-dev libbtrfs-dev
+```
+
+on centOS/RHEL: 
+
+``` sh
+yum install gpgme-devel libseccomp-devel btrfs-progs-devel 
+```
+
+To build: 
 
 ```go build```
 
@@ -53,7 +67,7 @@ To checkpoint a running job, you can run:
 ```sh
 cedana dump job JOBID -d DIR
 ```
-A successsful `dump` creates a `process_name_datetime.tar` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint in in the config:
+A successful `dump` creates a `process_name_datetime.tar` file in the directory specified with `-d`. Alternatively, you can forego the flag by describing a folder to store the checkpoint in in the config:
 
 ```json
 "shared_storage": {
@@ -74,7 +88,7 @@ Currently, we also support `runc` and by extension Docker, `containerd` checkpoi
 Checkpointing these is as simple as prepending the `dump/restore` commands with the correct runtime. For example, to checkpoint a `containerd` container:
 
 ```sh
-sudo cedana dump containerd -i test -p test
+cedana dump containerd -i test -p test
 ```
 
 where `i` is the imageRef and `p` is the containerID.
@@ -82,14 +96,14 @@ where `i` is the imageRef and `p` is the containerID.
 For a Docker container (which generally wraps a runc runtime):
 
 ```sh
-sudo cedana dump runc -i runcID -d DIRECTORY
+cedana dump runc -i runcID -d DIRECTORY
 ```
 
 where `runcID` is the ID of the runc container (separate from what Docker daemon uses) which you can grab from `runc ps`. To restore, you'll need the container bundle, which you can pass to restore with `--bundle`. You can make a copy from a running container using `docker export CONTAINER_ID -o container_bundle.tar` and then:
 
 ```sh
-sudo cedana restore --bundle container_bundle.tar -i new_runc_id -d DIRECTORY
+cedana restore --bundle container_bundle.tar -i new_runc_id -d DIRECTORY
 ```
 
 ## Contributing
-See CONTRIBUTING.md for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

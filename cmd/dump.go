@@ -9,7 +9,6 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,9 +40,6 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
-		id := xid.New().String()
-		logger.Info().Msgf("no job id specified, using %s", id)
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		if dir == "" {
 			// TODO NR - should we default to /tmp?
@@ -56,11 +52,14 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		// always self serve when invoked from CLI
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		cpuDumpArgs := task.DumpArgs{
-			PID:  int32(pid),
-			Dir:  dir,
-			JID:  id,
-			Type: task.CRType_LOCAL,
+			PID:            int32(pid),
+			Dir:            dir,
+			Type:           task.CRType_LOCAL,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -124,11 +123,13 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		dumpArgs := task.DumpArgs{
-			JID:  id,
-			Dir:  dir,
-			Type: taskType,
-			GPU:  gpuEnabled,
+			JID:            id,
+			Dir:            dir,
+			Type:           taskType,
+			GPU:            gpuEnabled,
+			TcpEstablished: tcpEstablished,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)
@@ -319,10 +320,12 @@ func init() {
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
 	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
+	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
 	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
+	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)
@@ -351,7 +354,23 @@ func init() {
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 
+	dumpCmd.AddCommand(dumpCRIORootfs)
+	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
+	dumpCRIORootfs.MarkFlagRequired(idFlag)
+	dumpCRIORootfs.Flags().StringP(destFlag, "d", "", "directory to dump to")
+	dumpCRIORootfs.MarkFlagRequired(destFlag)
+	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
+	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
+
 	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 
 	rootCmd.AddCommand(dumpCmd)
+
+	rootCmd.AddCommand(pushCRIOImage)
+	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
+	pushCRIOImage.MarkFlagRequired(refFlag)
+	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
+	pushCRIOImage.MarkFlagRequired(newRefFlag)
+	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
+	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
 }

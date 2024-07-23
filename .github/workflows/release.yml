@@ -1,32 +1,68 @@
-name: Release 
+name: Release
 
 on:
-  push: 
-    tags: 
-      - '*'
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      make_release:
+        type: boolean
+        description: "Run & push the release"
+        required: false
+        default: true
+      push_build_image:
+        type: boolean
+        description: "Build and push the image"
+        required: false
+        default: true
+      debug_publish_go:
+        type: boolean
+        description: "Run publish (Go) with debugging enabled"
+        required: false
+        default: false
+      debug_build_amd64:
+        type: boolean
+        description: "Run build (amd64) with debugging enabled"
+        required: false
+        default: false
+      debug_build_arm64:
+        type: boolean
+        description: "Run build (arm64) with debugging enabled"
+        required: false
+        default: false
 
 permissions:
   contents: write
 
 # Cancel any preceding run on the pull request.
 concurrency:
-  group: docker-test-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/cedana-dev' }}
+  group: cedana-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  release:
+  publish-go:
+    name: Publish (Go)
     runs-on: ubuntu-latest
+    if: ${{ inputs.make_release }}
     steps:
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      -
-        name: Set up Go
+          submodules: recursive
+      - name: Set up Go
         uses: actions/setup-go@v4
-      -
-        name: Run GoReleaser
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_publish_go }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Install dependencies
+        run: sudo -E make -C scripts/ci setup-build
+      - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
           distribution: goreleaser
@@ -35,42 +71,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
-  build-and-push-image-to-ghcr: 
-    runs-on: ubuntu-latest 
-    needs: release
-
-    permissions: 
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4 
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: ghcr.io/cedana/cedana
-
-      - name: Build and push 
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  build-and-push-image-to-dockerhub:
-    runs-on: ubuntu-latest
-    needs: release
+  build-image-manifest-amd64:
+    name: Build (amd64)
+    runs-on: ubicloud-standard-2
 
     permissions:
       contents: read
@@ -79,92 +82,191 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: cedana/cedana-helper
-
-      - name: Build and push
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-
-  build-and-push-benchmarking-image-to-ghcr:
-    runs-on: ubuntu-latest
-    needs: release
-
-    permissions: 
-      contents: read
-      packages: write
-
-    steps: 
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: ghcr.io/cedana/cedana-benchmarking
+          submodules: recursive
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push (benchmarking image)
-        uses: docker/build-push-action@v5
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          context: "{{defaultContext}}:test/benchmarks"
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          images: |
+            ghcr.io/cedana/cedana
+            cedana/cedana-helper
 
-  build-and-push-benchmarking-image-to-dockerhub:
-    runs-on: ubuntu-latest
-    needs: release
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_amd64 }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build and generate manifest for amd64
+        id: build
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+          outputs: |
+            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
+            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest amd64
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-amd64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  build-image-manifest-arm64:
+    name: Build (arm64)
+    runs-on: ubicloud-standard-2-arm
 
     permissions:
       contents: read
       packages: write
 
-    steps: 
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Login to Docker Hub 
-        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: cedana/cedana-benchmarking 
+          images: |
+            ghcr.io/cedana/cedana
+            cedana/cedana-helper
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          context: "{{defaultContext}}:test/benchmarks"
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_arm64 }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build and generate manifest for arm64
+        id: build
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+          outputs: |
+            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
+            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest arm64
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-arm64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  upload-manifests:
+    name: Publish (Image)
+    runs-on: ubicloud-standard-2
+    needs: ["build-image-manifest-arm64", "build-image-manifest-amd64"]
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/cedana/cedana
+            cedana/cedana-helper
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        if: ${{ inputs.push_build_image }}
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/cedana/cedana@sha256:%s ' *)
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'cedana/cedana-helper@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect cedana/cedana-helper:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ghcr.io/cedana/cedana:${{ steps.meta.outputs.version }}

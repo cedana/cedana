@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	_ "embed"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +28,15 @@ const (
 	clientRetryPeriod = time.Second
 )
 
+//go:embed scripts/k8s/setup-host.sh
+var setupHostScript string
+
+//go:embed scripts/k8s/chroot-start.sh
+var chrootStartScript string
+
+//go:embed scripts/k8s/cleanup-host.sh
+var cleanupHostScript string
+
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
@@ -33,14 +46,14 @@ var helperCmd = &cobra.Command{
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
-			if err := runCommand("bash", "./scripts/k8s/setup-host.sh"); err != nil {
+			if err := runScript("bash", setupHostScript); err != nil {
 				logger.Error().Err(err).Msg("Error setting up host")
 			}
 		}
 
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
-			if err := runCommand("bash", "./scripts/k8s/chroot-start.sh"); err != nil {
+			if err := runScript("bash", chrootStartScript); err != nil {
 				logger.Error().Err(err).Msg("Error with chroot and starting daemon")
 			}
 		}
@@ -68,7 +81,7 @@ var destroyCmd = &cobra.Command{
 func destroyCedana(ctx context.Context) error {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 
-	if err := runCommand("bash", "./scripts/k8s/cleanup-host.sh"); err != nil {
+	if err := runScript("bash", cleanupHostScript); err != nil {
 		logger.Error().Err(err).Msg("Cleanup host script failed")
 
 		return err
@@ -121,6 +134,33 @@ func startHelper(ctx context.Context, startChroot bool) {
 			}
 		}
 	}()
+
+	// scrape daemon logs for kubectl logs output
+	go func() {
+		file, err := os.Open("/host/var/log/cedana-daemon.log")
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to open cedana-daemon.log")
+			return
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				logger.Error().Err(err).Msg("Error reading cedana-daemon.log")
+				return
+			}
+			if len(line) > 0 {
+				logger.Info().Msg(line)
+			}
+		}
+	}()
+
 	req := &task.ContainerdQueryArgs{}
 	cts.ContainerdQuery(context.Background(), req)
 
@@ -143,7 +183,7 @@ func createClientWithRetry() (*services.ServiceClient, error) {
 
 		if i == maxRetries-1 {
 			// If it's the last attempt, return the error
-			return nil, fmt.Errorf("Failed to create client after %d attempts", maxRetries)
+			return nil, fmt.Errorf("failed to create client after %d attempts", maxRetries)
 		}
 	}
 
@@ -157,9 +197,17 @@ func runCommand(command string, args ...string) error {
 	return cmd.Run()
 }
 
+func runScript(command, script string) error {
+	cmd := exec.Command(command)
+	cmd.Stdin = strings.NewReader(script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func startDaemon(startChroot bool) error {
 	if startChroot {
-		err := runCommand("bash", "./scripts/k8s/chroot-start.sh")
+		err := runScript("bash", chrootStartScript)
 		if err != nil {
 			return err
 		}
@@ -175,12 +223,14 @@ func startDaemon(startChroot bool) error {
 }
 
 func isProcessRunning() (bool, error) {
+	// TODO: Dial API is deprecated in favour of NewClient since early 2024, will be removed soon
+	// Note: NewClient defaults to idle state for connection rather than automatically trying to
+	// connect in the background
 	conn, err := grpc.Dial(api.ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return false, err
 	}
-
-	conn.Close()
+	defer conn.Close()
 	return true, nil
 }
 

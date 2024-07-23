@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -14,6 +16,22 @@ const (
 	LOG_TIME_FORMAT_FULL = time.RFC3339
 	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
+
+type contextKey string
+
+const loggerKey = contextKey("logger")
+
+func WithLogger(ctx context.Context, logger *zerolog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, logger)
+}
+
+func GetLoggerFromContext(ctx context.Context) (*zerolog.Logger, error) {
+	logger, ok := ctx.Value(loggerKey).(*zerolog.Logger)
+	if !ok {
+		return &zerolog.Logger{}, fmt.Errorf("Logger not found in context")
+	}
+	return logger, nil
+}
 
 var logger zerolog.Logger
 

@@ -12,6 +12,16 @@ import (
 
 // Kube default sandbox annotation keys
 const (
+	//CRI-O
+	CRIO_CONTAINER_TYPE    = "io.kubernetes.cri-o.ContainerType"
+	CRIO_IMAGE_NAME        = "io.kubernetes.cri-o.ImageName"
+	CRIO_SANDBOX_NAMESPACE = "io.kubernetes.pod.namespace"
+	CRIO_SANDBOX_NAME      = "io.kubernetes.pod.name"
+	CRIO_CONTAINER_NAME    = "io.kubernetes.container.name"
+	CRIO_SANDBOX_ID        = "io.kubernetes.cri-o.SandboxID"
+	CRIO_LOG_DIRECTORY     = "io.kubernetes.cri-o.LogPath"
+
+	// CRI
 	CONTAINER_TYPE    = "io.kubernetes.cri.container-type"
 	SANDBOX_ID        = "io.kubernetes.cri.sandbox-id"
 	SANDBOX_NAME      = "io.kubernetes.cri.sandbox-name"

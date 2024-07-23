@@ -1773,7 +1773,7 @@ func StartContainer(context *RuncOpts, action CtAct, criuOpts *CriuOpts) (int, e
 		listenFDs:       listenFDs,
 		notifySocket:    notifySocket,
 		consoleSocket:   context.ConsoleSocket,
-		detach:          context.Detatch,
+		detach:          context.Detach,
 		pidFile:         context.PidFile,
 		preserveFDs:     context.PreserveFds,
 		action:          action,

@@ -9,9 +9,12 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/api/runc"
+	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
@@ -23,26 +26,32 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
 const (
-	ADDRESS               = "0.0.0.0:8080"
-	PROTOCOL              = "tcp"
-	CEDANA_CONTAINER_NAME = "binary-container"
-	SERVER_LOG_PATH       = "/var/log/cedana-daemon.log"
-	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
-	SERVER_LOG_PERMS      = 0o644
+	ADDRESS                 = "0.0.0.0:8080"
+	PROTOCOL                = "tcp"
+	CEDANA_CONTAINER_NAME   = "binary-container"
+	SERVER_LOG_PATH         = "/var/log/cedana-daemon.log"
+	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	SERVER_LOG_PERMS        = 0o644
+	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
 )
 
 type service struct {
-	CRIU    *Criu
-	fs      *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db      db.DB
-	logger  *zerolog.Logger
-	tracer  trace.Tracer
-	store   *utils.CedanaStore
-	logFile *os.File // for streaming and storing logs
+	CRIU      *Criu
+	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db        db.DB
+	logger    *zerolog.Logger
+	tracer    trace.Tracer
+	store     *utils.CedanaStore
+	logFile   *os.File        // for streaming and storing logs
+	serverCtx context.Context // context alive for the duration of the server
+	wg        sync.WaitGroup  // for waiting for all background tasks to finish
 
 	task.UnimplementedTaskServiceServer
 }
@@ -75,16 +84,23 @@ func NewServer(ctx context.Context) (*Server, error) {
 		),
 	}
 
+	healthcheck := health.NewServer()
+	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
+
 	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
-		CRIU:    &Criu{},
-		fs:      &afero.Afero{Fs: afero.NewOsFs()},
-		db:      db.NewLocalDB(ctx),
-		logger:  &newLogger,
-		tracer:  tracer,
-		store:   utils.NewCedanaStore(tracer, logger),
-		logFile: logFile,
+		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
+		// instead of leaving one running forever.
+		CRIU:      &Criu{},
+		fs:        &afero.Afero{Fs: afero.NewOsFs()},
+		db:        db.NewLocalDB(ctx),
+		logger:    &newLogger,
+		tracer:    tracer,
+		store:     utils.NewCedanaStore(tracer, logger),
+		logFile:   logFile,
+		serverCtx: ctx,
 	}
+
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
@@ -95,6 +111,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	server.listener = listener
 	server.service = service
 
+	healthcheck.SetServingStatus("task.TaskService", healthcheckgrpc.HealthCheckResponse_SERVING)
 	return server, err
 }
 
@@ -116,7 +133,7 @@ func StartServer(cmdCtx context.Context) error {
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(cmdCtx)
+	server, err := NewServer(srvCtx)
 	if err != nil {
 		return err
 	}
@@ -151,28 +168,27 @@ func StartServer(cmdCtx context.Context) error {
 			}
 		}
 
-		logger.Debug().Msgf("server listening at %s", ADDRESS)
+		logger.Debug().Str("Address", ADDRESS).Msgf("server listening")
 		err := server.start()
 		if err != nil {
 			cancel(err)
 		}
 	}()
 
-	select {
-	case <-srvCtx.Done():
-		err = srvCtx.Err()
-		logger.Debug().Msg("stopped RPC server unexpectedly")
-	case <-cmdCtx.Done():
-		err = cmdCtx.Err()
-		server.stop()
-		logger.Debug().Msg("stopped RPC server gracefully")
-	}
+	<-srvCtx.Done()
+	err = srvCtx.Err()
+
+	// Wait for all background go routines to finish
+	server.service.wg.Wait()
+
+	server.stop()
+	logger.Debug().Msg("stopped RPC server gracefully")
 
 	return err
 }
 
-func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Msgf("starting gpu controller with uid: %d, gid: %d", uid, gid)
+func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Uint32("UID", uid).Uint32("GID", gid).Uints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -193,15 +209,16 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 		},
 			" ")
 		// wrap controller path in a string
-		logger.Info().Msgf("GPU controller started with args: %v", controllerPath)
+		logger.Info().Str("Args", controllerPath).Msgf("GPU controller started")
 	}
 
-	gpuCmd = exec.Command("bash", "-c", controllerPath)
+	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid: uid,
-			Gid: gid,
+			Uid:    uid,
+			Gid:    gid,
+			Groups: groups,
 		},
 	}
 
@@ -218,7 +235,36 @@ func StartGPUController(uid, gid uint32, logger *zerolog.Logger) (*exec.Cmd, err
 	if err != nil {
 		logger.Fatal().Err(err)
 	}
-	logger.Info().Msgf("GPU controller started with pid: %d, logging to: /tmp/cedana-gpucontroller.log", gpuCmd.Process.Pid)
+
+	// poll gpu controller to ensure it is running
+	var opts []grpc.DialOption
+	var gpuConn *grpc.ClientConn
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	for {
+		gpuConn, err = grpc.Dial("127.0.0.1:50051", opts...)
+		if err == nil {
+			break
+		}
+		logger.Info().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
+		time.Sleep(1 * time.Second)
+
+	}
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.StartupPollRequest{}
+	for {
+		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
+		if err == nil && resp.Success {
+			break
+		}
+		logger.Info().Msgf("Waiting for gpu-controller to start...")
+		time.Sleep(1 * time.Second)
+	}
+
+	logger.Info().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
 	return gpuCmd, nil
 }
 
@@ -252,4 +298,87 @@ func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor
 
 		return resp, err
 	}
+}
+
+func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHealthCheckRequest) (*task.DetailedHealthCheckResponse, error) {
+	var unhealthyReasons []string
+	resp := &task.DetailedHealthCheckResponse{}
+
+	criuVersion, err := s.CRIU.GetCriuVersion()
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
+	}
+
+	resp.HealthCheckStats = &task.HealthCheckStats{}
+	resp.HealthCheckStats.CriuVersion = strconv.Itoa(criuVersion)
+
+	// TODO NR - Add CRIU check to output
+	err = s.GPUHealthCheck(ctx, req, resp)
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("Error checking gpu health: %v", err))
+	}
+
+	return resp, nil
+}
+
+func (s *service) GPUHealthCheck(
+	ctx context.Context,
+	req *task.DetailedHealthCheckRequest,
+	resp *task.DetailedHealthCheckResponse,
+) error {
+	gpuControllerPath := viper.GetString("gpu_controller_path")
+	if gpuControllerPath == "" {
+		gpuControllerPath = utils.GpuControllerBinaryPath
+	}
+
+	gpuSharedLibPath := viper.GetString("gpu_shared_lib_path")
+	if gpuSharedLibPath == "" {
+		gpuSharedLibPath = utils.GpuSharedLibPath
+	}
+
+	if _, err := os.Stat(gpuControllerPath); os.IsNotExist(err) {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu controller binary not found at %s", gpuControllerPath))
+	}
+
+	if _, err := os.Stat(gpuSharedLibPath); os.IsNotExist(err) {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu shared lib not found at %s", gpuSharedLibPath))
+	}
+
+	if len(resp.UnhealthyReasons) != 0 {
+		return nil
+	}
+
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
+	if err != nil {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
+		return nil
+	}
+
+	defer cmd.Process.Kill()
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	if err != nil {
+		return err
+	}
+
+	defer gpuConn.Close()
+
+	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	args := gpu.HealthCheckRequest{}
+	gpuResp, err := gpuServiceConn.HealthCheck(ctx, &args)
+	if err != nil {
+		return err
+	}
+
+	if !gpuResp.Success {
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu health check did not return success"))
+	}
+
+	resp.HealthCheckStats.GPUHealthCheck = gpuResp
+
+	return nil
 }

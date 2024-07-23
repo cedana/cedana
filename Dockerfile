@@ -1,26 +1,26 @@
+FROM golang:1.22-bookworm as builder
+
+WORKDIR /app
+ADD . /app
+
+RUN apt-get update
+RUN apt-get install -y wget git make curl libnl-3-dev libnet-dev libbsd-dev runc libcap-dev \
+    libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev \
+    libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf software-properties-common zip
+
+RUN CGO_ENABLED=1 go build -o cedana
+
 FROM ubuntu:22.04
 
-# Install golang
-COPY --from=golang:1.21.1-bookworm /usr/local/go/ /usr/local/go
-ENV PATH="/usr/local/go/bin:${PATH}"
-
-# Install everything else 
+# Install essential packages
 RUN apt-get update && \
-    apt-get install -y software-properties-common git zip && \
+    apt-get install -y software-properties-common git wget zip && \
+    apt-get install -y libgpgme-dev libseccomp-dev libbtrfs-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN add-apt-repository ppa:criu/ppa
-RUN apt update && apt install -y criu python3 pip sudo iptables
-
-RUN git clone https://github.com/cedana/cedana && mkdir ~/.cedana
-WORKDIR /cedana
-
-RUN git fetch --all --tags && \
-    LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`) && \
-    git checkout $LATEST_TAG
+COPY --from=builder /app/cedana /usr/local/bin/
+COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 
 ENV USER="root"
-RUN go build
-RUN cp cedana /usr/local/bin/cedana
 
-ENTRYPOINT /bin/bash
+ENTRYPOINT ["/bin/bash"]

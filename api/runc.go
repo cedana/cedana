@@ -70,12 +70,6 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
-		return nil, err
-	}
-
 	resp.State = state
 
 	return &resp, err
@@ -86,7 +80,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Root:          args.Opts.Root,
 		Bundle:        args.Opts.Bundle,
 		ConsoleSocket: args.Opts.ConsoleSocket,
-		Detatch:       args.Opts.Detatch,
+		Detach:        args.Opts.Detach,
 		NetPid:        int(args.Opts.NetPid),
 		StateRoot:     args.Opts.Root,
 	}
