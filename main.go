@@ -9,6 +9,13 @@ import (
 	"github.com/containers/storage/pkg/reexec"
 )
 
+// loaded from ldflag definitions
+var (
+	version string
+	commit  string
+	date    string
+)
+
 func main() {
 	// Grandparent context to deal with OS interrupts
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
@@ -21,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := cmd.Execute(ctx); err != nil {
+	if err := cmd.Execute(ctx, cmd.GetVersion(version, commit, date)); err != nil {
 		os.Exit(1)
 	}
 }
