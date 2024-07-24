@@ -56,11 +56,17 @@ if [ $NO_BUILD -ne 1 ]; then
         echo "Build failed. Exiting."
         exit 1
     else
+        echo "Build successful. Copying the cedana binary"
         $SUDO_USE cp $APP_NAME $APP_PATH
     fi
 else
     echo "Skipping build..."
-    $SUDO_USE cp $APP_NAME $APP_PATH
+    if test -f $APP_NAME; then
+        echo "Found binary to copy."
+        $SUDO_USE cp $APP_NAME $APP_PATH
+    else
+        echo "Moving forward without copy."
+    fi
 fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
