@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
@@ -81,6 +82,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(&newLogger)),
 			grpc.UnaryInterceptor(loggingUnaryInterceptor(&newLogger)),
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	}
 
