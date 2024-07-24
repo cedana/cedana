@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -151,6 +152,10 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
 
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
@@ -227,8 +232,25 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 	for _, change := range rootFsChanges {
 		fullPath := filepath.Join(tmpRootfsChangesDir, change.Path)
-		if err := os.Chown(fullPath, 0, 0); err != nil {
-			fmt.Printf("failed to change ownership for %s: %s", fullPath, err)
+
+		fileInfo, err := os.Lstat(fullPath)
+		if err != nil {
+			logger.Debug().Msgf("failed to get file info for %s: %s", fullPath, err)
+			continue
+		}
+
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			// use syscall.Lchown to change the ownership of the link itself
+			if err := syscall.Lchown(fullPath, 0, 0); err != nil {
+				logger.Debug().Msgf("failed to change ownership of symlink %s: %s", fullPath, err)
+			}
+			logger.Debug().Msgf("\t mode is symlink: %s", fullPath)
+		} else {
+			if err := os.Chown(fullPath, 0, 0); err != nil {
+				logger.Debug().Msgf("failed to change ownership for %s: %s", fullPath, err)
+			}
+			logger.Debug().Msgf("\t mode is regular: %s", fullPath)
+
 		}
 	}
 
