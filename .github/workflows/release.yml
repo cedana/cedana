@@ -93,8 +93,7 @@ jobs:
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
+            cedana/cedana-helper-test
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -129,8 +128,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
-            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
-            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
+            type=image,name=cedana/cedana-helper-test,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -168,8 +166,7 @@ jobs:
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
+            cedana/cedana-helper-test
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -204,8 +201,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
-            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
-            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
+            type=image,name=cedana/cedana-helper-test,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -257,19 +253,15 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
+            cedana/cedana-helper-test
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
         if: ${{ inputs.push_build_image }}
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/cedana/cedana@sha256:%s ' *)
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'cedana/cedana-helper@sha256:%s ' *)
+            $(printf 'sha256:%s ' *)
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect cedana/cedana-helper:${{ steps.meta.outputs.version }}
-          docker buildx imagetools inspect ghcr.io/cedana/cedana:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect cedana/cedana-helper-test:${{ steps.meta.outputs.version }}
