@@ -1,3 +1,4 @@
 [submodule "api/services/cedana-api"]
 	path = api/services/cedana-api
 	url = https://github.com/cedana/cedana-api
+	branch = feat/CED-506
