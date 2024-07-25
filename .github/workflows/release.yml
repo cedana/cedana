@@ -268,4 +268,4 @@ jobs:
           docker buildx imagetools inspect cedana/cedana-helper-test:${{ steps.meta.outputs.version }}
           # check if commit sha matches with the latest commit sha
           # we only match docker hub image as both images should be the same
-          echo $(docker run -it --rm cedana/cedana-helper-test:${{ steps.meta.outputs.version }} -c "cedana -v") | grep -qF ${{ github.sha }}
+          echo $(docker run -i --rm cedana/cedana-helper-test:${{ steps.meta.outputs.version }} -c "cedana -v") | grep -qF ${{ github.sha }}
