@@ -323,6 +323,13 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("buildah is not installed")
 	}
 
+	systemContext := &types.SystemContext{}
+	if registryAuthToken != "" {
+
+	} else {
+		authLoginIfECR(ctx, newImageRef, systemContext)
+	}
+
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -470,17 +477,12 @@ type loginReply struct {
 	tlsVerify bool
 }
 
-func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
-	systemContext := &types.SystemContext{}
+func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.SystemContext) error {
+	logger, _ := utils.GetLoggerFromContext(ctx)
 
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
+	if isECRRepo(imageRef) {
 
-	if isECRRepo(newImageRef) {
-
-		region, err := getRegionFromImageName(newImageRef)
+		region, err := getRegionFromImageName(imageRef)
 		if err != nil {
 			return err
 		}
@@ -500,7 +502,7 @@ func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error
 			return err
 		}
 
-		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		proxyEndpoint, err := getProxyEndpointFromImageName(imageRef)
 		if err != nil {
 			return err
 		}
@@ -524,6 +526,13 @@ func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error
 	} else {
 		logger.Debug().Msg("did not detect ecr registry")
 	}
+	return nil
+}
+
+func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
+	systemContext := &types.SystemContext{}
+
+	authLoginIfECR(ctx, newImageRef, systemContext)
 
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
