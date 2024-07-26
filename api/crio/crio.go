@@ -325,9 +325,15 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 	systemContext := &types.SystemContext{}
 	if registryAuthToken != "" {
-
+		proxyEndpoint, err := getProxyEndpointFromImageName(originalImageRef)
+		if err != nil {
+			return err
+		}
+		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
+			return err
+		}
 	} else {
-		authLoginIfECR(ctx, newImageRef, systemContext)
+		authLoginIfECR(ctx, originalImageRef, systemContext)
 	}
 
 	cmd := exec.Command("buildah", "from", originalImageRef)
@@ -532,7 +538,17 @@ func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.S
 func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
 	systemContext := &types.SystemContext{}
 
-	authLoginIfECR(ctx, newImageRef, systemContext)
+	if registryAuthToken != "" {
+		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
+			return err
+		}
+	} else {
+		authLoginIfECR(ctx, newImageRef, systemContext)
+	}
 
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)
