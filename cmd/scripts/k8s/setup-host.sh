@@ -81,24 +81,6 @@ else
 fi
 
 
-case $(uname -m) in
-    x86 | x86_64)
-        wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-        tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
-    ;;
-    armv7 | aarch64)
-        wget https://go.dev/dl/go1.22.0.linux-arm64.tar.gz && rm -rf /usr/local/go
-        tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz && rm go1.22.0.linux-arm64.tar.gz
-        ;;
-    *)
-        echo "Unknown platform " $(uname -m)
-        exit 1
-        ;;
-esac
-
-export PATH=$PATH:/usr/local/go/bin
-echo "export PATH=$PATH:/usr/local/go/bin" >> /root/.bashrc
-
 cd /
 
 IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
