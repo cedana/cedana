@@ -95,7 +95,7 @@ func InitConfig(args InitConfigArgs) error {
 		reader := strings.NewReader(args.Config)
 		err = viper.MergeConfig(reader)
 	} else {
-		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist
 	}
 
 	return err
