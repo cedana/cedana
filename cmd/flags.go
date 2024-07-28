@@ -29,4 +29,6 @@ const (
 	externalFlag         = "external"
 	destFlag             = "dest"
 	containerStorageFlag = "container-storage"
+	configFlag           = "config"
+	configDirFlag        = "config-dir"
 )

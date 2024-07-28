@@ -31,11 +31,6 @@ func Execute(ctx context.Context, version string) error {
 
 	ctx = context.WithValue(ctx, "logger", logger)
 
-	if err := utils.InitConfig(); err != nil {
-		logger.Error().Err(err).Msg("failed to initialize config")
-		return err
-	}
-
 	rootCmd.Version = version
 
 	// only show usage when true usage error
