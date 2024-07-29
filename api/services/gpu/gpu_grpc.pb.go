@@ -18,6 +18,13 @@ import (
 // Requires gRPC-Go v1.62.0 or later.
 const _ = grpc.SupportPackageIsVersion8
 
+const (
+	CedanaGPU_Checkpoint_FullMethodName  = "/cedanagpu.CedanaGPU/Checkpoint"
+	CedanaGPU_Restore_FullMethodName     = "/cedanagpu.CedanaGPU/Restore"
+	CedanaGPU_StartupPoll_FullMethodName = "/cedanagpu.CedanaGPU/StartupPoll"
+	CedanaGPU_HealthCheck_FullMethodName = "/cedanagpu.CedanaGPU/HealthCheck"
+)
+
 // CedanaGPUClient is the client API for CedanaGPU service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -37,8 +44,9 @@ func NewCedanaGPUClient(cc grpc.ClientConnInterface) CedanaGPUClient {
 }
 
 func (c *cedanaGPUClient) Checkpoint(ctx context.Context, in *CheckpointRequest, opts ...grpc.CallOption) (*CheckpointResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckpointResponse)
-	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/Checkpoint", in, out, opts...)
+	err := c.cc.Invoke(ctx, CedanaGPU_Checkpoint_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +54,9 @@ func (c *cedanaGPUClient) Checkpoint(ctx context.Context, in *CheckpointRequest,
 }
 
 func (c *cedanaGPUClient) Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RestoreResponse)
-	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/Restore", in, out, opts...)
+	err := c.cc.Invoke(ctx, CedanaGPU_Restore_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +64,9 @@ func (c *cedanaGPUClient) Restore(ctx context.Context, in *RestoreRequest, opts 
 }
 
 func (c *cedanaGPUClient) StartupPoll(ctx context.Context, in *StartupPollRequest, opts ...grpc.CallOption) (*StartupPollResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StartupPollResponse)
-	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/StartupPoll", in, out, opts...)
+	err := c.cc.Invoke(ctx, CedanaGPU_StartupPoll_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +74,9 @@ func (c *cedanaGPUClient) StartupPoll(ctx context.Context, in *StartupPollReques
 }
 
 func (c *cedanaGPUClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HealthCheckResponse)
-	err := c.cc.Invoke(ctx, "/cedanagpu.CedanaGPU/HealthCheck", in, out, opts...)
+	err := c.cc.Invoke(ctx, CedanaGPU_HealthCheck_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +133,7 @@ func _CedanaGPU_Checkpoint_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/cedanagpu.CedanaGPU/Checkpoint",
+		FullMethod: CedanaGPU_Checkpoint_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CedanaGPUServer).Checkpoint(ctx, req.(*CheckpointRequest))
@@ -140,7 +151,7 @@ func _CedanaGPU_Restore_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/cedanagpu.CedanaGPU/Restore",
+		FullMethod: CedanaGPU_Restore_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CedanaGPUServer).Restore(ctx, req.(*RestoreRequest))
@@ -158,7 +169,7 @@ func _CedanaGPU_StartupPoll_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/cedanagpu.CedanaGPU/StartupPoll",
+		FullMethod: CedanaGPU_StartupPoll_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CedanaGPUServer).StartupPoll(ctx, req.(*StartupPollRequest))
@@ -176,7 +187,7 @@ func _CedanaGPU_HealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/cedanagpu.CedanaGPU/HealthCheck",
+		FullMethod: CedanaGPU_HealthCheck_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CedanaGPUServer).HealthCheck(ctx, req.(*HealthCheckRequest))

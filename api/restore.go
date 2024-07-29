@@ -35,14 +35,15 @@ import (
 )
 
 const (
-	CRIU_RESTORE_LOG_FILE   = "cedana-dump.log"
+	CRIU_RESTORE_LOG_FILE   = "cedana-restore.log"
 	CRIU_RESTORE_LOG_LEVEL  = 4
 	RESTORE_TEMPDIR         = "/tmp/cedana_restore"
 	RESTORE_TEMPDIR_PERMS   = 0o755
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
+	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
 )
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs) (*string, *task.ProcessState, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, isKata bool) (*string, *task.ProcessState, []*os.File, error) {
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
@@ -84,30 +85,32 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		return nil, nil, nil, err
 	}
 
-	open_fds := checkpointState.ProcessInfo.OpenFds
+	if !isKata {
+		open_fds := checkpointState.ProcessInfo.OpenFds
 
-	// create logfile for redirection
-	filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
-	file, err := os.Create(filename)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("error creating logfile")
-		return nil, nil, nil, err
-	}
-
-	for _, f := range open_fds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
+		// create logfile for redirection
+		filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+		file, err := os.Create(filename)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("error creating logfile")
+			return nil, nil, nil, err
 		}
-		// if stdout or stderr, always redirect fds
-		if f.Fd == 1 || f.Fd == 2 {
-			// strip leading slash from f
-			f.Path = strings.TrimPrefix(f.Path, "/")
 
-			extraFiles = append(extraFiles, file)
-			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(2 + int32(len(extraFiles))),
-				Key: proto.String(f.Path),
-			})
+		for _, f := range open_fds {
+			if strings.Contains(f.Path, "pts") {
+				isShellJob = true
+			}
+			// if stdout or stderr, always redirect fds
+			if f.Fd == 1 || f.Fd == 2 {
+				// strip leading slash from f
+				f.Path = strings.TrimPrefix(f.Path, "/")
+
+				extraFiles = append(extraFiles, file)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
+			}
 		}
 	}
 
@@ -512,7 +515,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args)
+	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args, false)
 	if err != nil {
 		return nil, err
 	}
@@ -598,6 +601,57 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			}
 			proc.Kill()
 		}()
+	}
+
+	return pid, nil
+}
+
+func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
+	var dir *string
+	var pid *int32
+
+	opts := s.prepareRestoreOpts()
+	nfy := Notify{
+		Logger: s.logger,
+	}
+
+	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args, true)
+	if err != nil {
+		return nil, err
+	}
+
+	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
+	opts.InheritFd = nil
+
+	open_fds := state.ProcessInfo.OpenFds
+
+	// create logfile for redirection
+	filename := fmt.Sprintf(KATA_RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+	file, err := os.Create(filename)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("error creating logfile")
+		return nil, err
+	}
+
+	for _, f := range open_fds {
+		if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+			// strip leading slash from f
+			f.Path = strings.TrimPrefix(f.Path, "/")
+
+			extraFiles = append(extraFiles, file)
+			opts.InheritFd = append(opts.InheritFd, &rpc.InheritFd{
+				Fd:  proto.Int32(2 + int32(len(extraFiles))),
+				Key: proto.String(f.Path),
+			})
+		}
+	}
+
+	fmt.Println(opts)
+
+	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	return pid, nil

@@ -77,6 +77,47 @@ var restoreProcessCmd = &cobra.Command{
 	},
 }
 
+var restoreKataCmd = &cobra.Command{
+	Use:   "kata",
+	Short: "Manually restore a workload in the kata-vm [vm-name] from a directory [-d]",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		vm := args[0]
+
+		cts, err := services.NewKataClient(vm)
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return err
+		}
+		defer cts.Close()
+
+		path, _ := cmd.Flags().GetString(dirFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		restoreArgs := task.RestoreArgs{
+			CheckpointID:   vm,
+			CheckpointPath: path,
+			TcpEstablished: tcpEstablished,
+		}
+
+		resp, err := cts.KataRestore(ctx, &restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			} else {
+				logger.Error().Msgf("Restore task failed: %v", err)
+			}
+			return err
+		}
+		logger.Info().Msgf("Response: %v", resp.Message)
+
+		return nil
+	},
+}
+
 var restoreJobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manually restore a previously dumped process or container from an input id",
@@ -312,6 +353,11 @@ func init() {
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
+
+	// Kata
+	restoreCmd.AddCommand(restoreKataCmd)
+	restoreKataCmd.Flags().StringP(dirFlag, "d", "", "path of tar file (inside VM) to restore from")
+	restoreKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)

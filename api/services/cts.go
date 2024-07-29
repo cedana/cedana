@@ -292,6 +292,16 @@ func (c *ServiceClient) KataDump(ctx context.Context, args *task.DumpArgs) (*tas
 	return resp, nil
 }
 
+func (c *ServiceClient) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.KataRestore(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 /////////////////////////////
 // Streaming Service Calls //
 /////////////////////////////

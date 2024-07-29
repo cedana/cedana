@@ -4450,7 +4450,7 @@ var file_task_proto_rawDesc = []byte{
 	0x43, 0x4b, 0x50, 0x4f, 0x49, 0x4e, 0x54, 0x5f, 0x46, 0x41, 0x49, 0x4c, 0x45, 0x44, 0x10, 0x01,
 	0x12, 0x0c, 0x0a, 0x08, 0x52, 0x45, 0x53, 0x54, 0x4f, 0x52, 0x45, 0x44, 0x10, 0x02, 0x12, 0x12,
 	0x0a, 0x0e, 0x52, 0x45, 0x53, 0x54, 0x4f, 0x52, 0x45, 0x5f, 0x46, 0x41, 0x49, 0x4c, 0x45, 0x44,
-	0x10, 0x03, 0x32, 0xcb, 0x0e, 0x0a, 0x0b, 0x54, 0x61, 0x73, 0x6b, 0x53, 0x65, 0x72, 0x76, 0x69,
+	0x10, 0x03, 0x32, 0xa0, 0x0f, 0x0a, 0x0b, 0x54, 0x61, 0x73, 0x6b, 0x53, 0x65, 0x72, 0x76, 0x69,
 	0x63, 0x65, 0x12, 0x49, 0x0a, 0x05, 0x53, 0x74, 0x61, 0x72, 0x74, 0x12, 0x1f, 0x2e, 0x63, 0x65,
 	0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2e, 0x74, 0x61,
 	0x73, 0x6b, 0x2e, 0x53, 0x74, 0x61, 0x72, 0x74, 0x41, 0x72, 0x67, 0x73, 0x1a, 0x1f, 0x2e, 0x63,
@@ -4567,10 +4567,15 @@ var file_task_proto_rawDesc = []byte{
 	0x65, 0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x44, 0x75, 0x6d, 0x70, 0x41, 0x72, 0x67, 0x73,
 	0x1a, 0x1e, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63,
 	0x65, 0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x44, 0x75, 0x6d, 0x70, 0x52, 0x65, 0x73, 0x70,
-	0x42, 0x2c, 0x5a, 0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63,
-	0x65, 0x64, 0x61, 0x6e, 0x61, 0x2f, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2f, 0x61, 0x70, 0x69,
-	0x2f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2f, 0x74, 0x61, 0x73, 0x6b, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x12, 0x53, 0x0a, 0x0b, 0x4b, 0x61, 0x74, 0x61, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x12,
+	0x21, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65,
+	0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x41, 0x72,
+	0x67, 0x73, 0x1a, 0x21, 0x2e, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2e, 0x73, 0x65, 0x72, 0x76,
+	0x69, 0x63, 0x65, 0x73, 0x2e, 0x74, 0x61, 0x73, 0x6b, 0x2e, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72,
+	0x65, 0x52, 0x65, 0x73, 0x70, 0x42, 0x2c, 0x5a, 0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e,
+	0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x65, 0x64, 0x61, 0x6e, 0x61, 0x2f, 0x63, 0x65, 0x64, 0x61, 0x6e,
+	0x61, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x73, 0x2f, 0x74,
+	0x61, 0x73, 0x6b, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -4696,27 +4701,29 @@ var file_task_proto_depIdxs = []int32{
 	51, // 46: cedana.services.task.TaskService.ProcessStateStreaming:input_type -> cedana.services.task.ProcessStateStreamingArgs
 	53, // 47: cedana.services.task.TaskService.DetailedHealthCheck:input_type -> cedana.services.task.DetailedHealthCheckRequest
 	12, // 48: cedana.services.task.TaskService.KataDump:input_type -> cedana.services.task.DumpArgs
-	11, // 49: cedana.services.task.TaskService.Start:output_type -> cedana.services.task.StartResp
-	13, // 50: cedana.services.task.TaskService.Dump:output_type -> cedana.services.task.DumpResp
-	15, // 51: cedana.services.task.TaskService.Restore:output_type -> cedana.services.task.RestoreResp
-	17, // 52: cedana.services.task.TaskService.Query:output_type -> cedana.services.task.QueryResp
-	19, // 53: cedana.services.task.TaskService.ContainerdDump:output_type -> cedana.services.task.ContainerdDumpResp
-	21, // 54: cedana.services.task.TaskService.ContainerdRestore:output_type -> cedana.services.task.ContainerdRestoreResp
-	23, // 55: cedana.services.task.TaskService.ContainerdQuery:output_type -> cedana.services.task.ContainerdQueryResp
-	26, // 56: cedana.services.task.TaskService.ContainerdRootfsDump:output_type -> cedana.services.task.ContainerdRootfsDumpResp
-	28, // 57: cedana.services.task.TaskService.ContainerdRootfsRestore:output_type -> cedana.services.task.ContainerdRootfsRestoreResp
-	30, // 58: cedana.services.task.TaskService.RuncDump:output_type -> cedana.services.task.RuncDumpResp
-	33, // 59: cedana.services.task.TaskService.RuncRestore:output_type -> cedana.services.task.RuncRestoreResp
-	36, // 60: cedana.services.task.TaskService.RuncQuery:output_type -> cedana.services.task.RuncQueryResp
-	39, // 61: cedana.services.task.TaskService.RuncGetPausePid:output_type -> cedana.services.task.RuncGetPausePidResp
-	9,  // 62: cedana.services.task.TaskService.CRIORootfsDump:output_type -> cedana.services.task.CRIORootfsDumpResp
-	7,  // 63: cedana.services.task.TaskService.CRIOImagePush:output_type -> cedana.services.task.CRIOImagePushResp
-	40, // 64: cedana.services.task.TaskService.LogStreaming:output_type -> cedana.services.task.LogStreamingArgs
-	42, // 65: cedana.services.task.TaskService.ProcessStateStreaming:output_type -> cedana.services.task.ProcessState
-	54, // 66: cedana.services.task.TaskService.DetailedHealthCheck:output_type -> cedana.services.task.DetailedHealthCheckResponse
-	13, // 67: cedana.services.task.TaskService.KataDump:output_type -> cedana.services.task.DumpResp
-	49, // [49:68] is the sub-list for method output_type
-	30, // [30:49] is the sub-list for method input_type
+	14, // 49: cedana.services.task.TaskService.KataRestore:input_type -> cedana.services.task.RestoreArgs
+	11, // 50: cedana.services.task.TaskService.Start:output_type -> cedana.services.task.StartResp
+	13, // 51: cedana.services.task.TaskService.Dump:output_type -> cedana.services.task.DumpResp
+	15, // 52: cedana.services.task.TaskService.Restore:output_type -> cedana.services.task.RestoreResp
+	17, // 53: cedana.services.task.TaskService.Query:output_type -> cedana.services.task.QueryResp
+	19, // 54: cedana.services.task.TaskService.ContainerdDump:output_type -> cedana.services.task.ContainerdDumpResp
+	21, // 55: cedana.services.task.TaskService.ContainerdRestore:output_type -> cedana.services.task.ContainerdRestoreResp
+	23, // 56: cedana.services.task.TaskService.ContainerdQuery:output_type -> cedana.services.task.ContainerdQueryResp
+	26, // 57: cedana.services.task.TaskService.ContainerdRootfsDump:output_type -> cedana.services.task.ContainerdRootfsDumpResp
+	28, // 58: cedana.services.task.TaskService.ContainerdRootfsRestore:output_type -> cedana.services.task.ContainerdRootfsRestoreResp
+	30, // 59: cedana.services.task.TaskService.RuncDump:output_type -> cedana.services.task.RuncDumpResp
+	33, // 60: cedana.services.task.TaskService.RuncRestore:output_type -> cedana.services.task.RuncRestoreResp
+	36, // 61: cedana.services.task.TaskService.RuncQuery:output_type -> cedana.services.task.RuncQueryResp
+	39, // 62: cedana.services.task.TaskService.RuncGetPausePid:output_type -> cedana.services.task.RuncGetPausePidResp
+	9,  // 63: cedana.services.task.TaskService.CRIORootfsDump:output_type -> cedana.services.task.CRIORootfsDumpResp
+	7,  // 64: cedana.services.task.TaskService.CRIOImagePush:output_type -> cedana.services.task.CRIOImagePushResp
+	40, // 65: cedana.services.task.TaskService.LogStreaming:output_type -> cedana.services.task.LogStreamingArgs
+	42, // 66: cedana.services.task.TaskService.ProcessStateStreaming:output_type -> cedana.services.task.ProcessState
+	54, // 67: cedana.services.task.TaskService.DetailedHealthCheck:output_type -> cedana.services.task.DetailedHealthCheckResponse
+	13, // 68: cedana.services.task.TaskService.KataDump:output_type -> cedana.services.task.DumpResp
+	15, // 69: cedana.services.task.TaskService.KataRestore:output_type -> cedana.services.task.RestoreResp
+	50, // [50:70] is the sub-list for method output_type
+	30, // [30:50] is the sub-list for method input_type
 	30, // [30:30] is the sub-list for extension type_name
 	30, // [30:30] is the sub-list for extension extendee
 	0,  // [0:30] is the sub-list for field type_name
