@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -151,6 +152,10 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
+	logger, err := utils.GetLoggerFromContext(ctx)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
 
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
@@ -225,10 +230,34 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", ctrDir, err)
 	}
 
+	// We have to iterate over changes and change the ownership of files for containers that
+	// may be user namespaced, like sysbox containers, which will have uid and gids of their init
+	// process. This is an issue on restore as those files will have nogroup and will cause errors
+	// when io is done. To avoid this we change the ownership of those files to 0:0 which will get
+	// remapped via /proc/<pid>/gid_map and /proc/<pid>/uid_map orchestrated by crio userns feature.
 	for _, change := range rootFsChanges {
 		fullPath := filepath.Join(tmpRootfsChangesDir, change.Path)
-		if err := os.Chown(fullPath, 0, 0); err != nil {
-			fmt.Printf("failed to change ownership for %s: %s", fullPath, err)
+
+		fileInfo, err := os.Lstat(fullPath)
+		if err != nil {
+			logger.Debug().Msgf("failed to get file info for %s: %s", fullPath, err)
+			continue
+		}
+
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			// use syscall.Lchown to change the ownership of the link itself
+			// syscall.chown only changes the ownership of the target file in a symlink.
+			// In order to change the ownership of the symlink itself, we must use syscall.Lchown
+			if err := syscall.Lchown(fullPath, 0, 0); err != nil {
+				logger.Debug().Msgf("failed to change ownership of symlink %s: %s", fullPath, err)
+			}
+			logger.Debug().Msgf("\t mode is symlink: %s", fullPath)
+		} else {
+			if err := os.Chown(fullPath, 0, 0); err != nil {
+				logger.Debug().Msgf("failed to change ownership for %s: %s", fullPath, err)
+			}
+			logger.Debug().Msgf("\t mode is regular: %s", fullPath)
+
 		}
 	}
 
@@ -293,6 +322,9 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
 	}
+
+	systemContext := &types.SystemContext{}
+	authLoginIfECR(ctx, newImageRef, systemContext)
 
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	out, err := cmd.CombinedOutput()
@@ -410,20 +442,15 @@ type loginReply struct {
 	tlsVerify bool
 }
 
-func ImagePush(ctx context.Context, newImageRef string) error {
-	systemContext := &types.SystemContext{}
+func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.SystemContext) error {
+	logger, _ := utils.GetLoggerFromContext(ctx)
 
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-
-	if isECRRepo(newImageRef) {
+	if isECRRepo(imageRef) {
 
 		loginOpts := &auth.LoginOptions{}
 		loginArgs := []string{}
 
-		region, err := getRegionFromImageName(newImageRef)
+		region, err := getRegionFromImageName(imageRef)
 		if err != nil {
 			return err
 		}
@@ -443,7 +470,7 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 			return err
 		}
 
-		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		proxyEndpoint, err := getProxyEndpointFromImageName(imageRef)
 		if err != nil {
 			return err
 		}
@@ -488,6 +515,13 @@ func ImagePush(ctx context.Context, newImageRef string) error {
 	} else {
 		logger.Debug().Msg("did not detect ecr registry")
 	}
+	return nil
+}
+
+func ImagePush(ctx context.Context, newImageRef string) error {
+	systemContext := &types.SystemContext{}
+
+	authLoginIfECR(ctx, newImageRef, systemContext)
 
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)

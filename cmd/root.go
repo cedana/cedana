@@ -26,7 +26,7 @@ ________  _______   ________  ________  ________   ________
 		"\n Property of Cedana, Corp.",
 }
 
-func Execute(ctx context.Context) error {
+func Execute(ctx context.Context, version string) error {
 	logger := utils.GetLogger()
 
 	ctx = context.WithValue(ctx, "logger", logger)
@@ -36,7 +36,7 @@ func Execute(ctx context.Context) error {
 		return err
 	}
 
-	rootCmd.Version = GetVersion()
+	rootCmd.Version = version
 
 	// only show usage when true usage error
 	rootCmd.SilenceUsage = true
