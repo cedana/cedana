@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -381,4 +382,19 @@ func (s *service) GPUHealthCheck(
 	resp.HealthCheckStats.GPUHealthCheck = gpuResp
 
 	return nil
+}
+
+func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*task.GetConfigResponse, error) {
+	resp := &task.GetConfigResponse{}
+	config, err := utils.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	var bytes []byte
+	bytes, err = json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	resp.JSON = string(bytes)
+	return resp, nil
 }

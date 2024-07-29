@@ -112,8 +112,9 @@ func GetConfig() (*Config, error) {
 
 // Set defaults that are used when no value is found in config/env vars
 func setDefaults() {
-	viper.SetDefault("client.process_name", "")
+	viper.SetDefault("client.task", "")
 	viper.SetDefault("client.leave_running", false)
+	viper.SetDefault("client.forward_logs", false)
 
 	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
 
