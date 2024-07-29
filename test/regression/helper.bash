@@ -3,7 +3,7 @@
 # Helper functions that hit the local Cedana API
 
 function start_cedana() {
-    ./build-start-daemon.sh --no-build
+    ./build-start-daemon.sh --no-build --args="$@"
 }
 
 function stop_cedana() {

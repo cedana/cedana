@@ -105,6 +105,20 @@ teardown() {
     [ -z "$(pgrep -f $task)" ]
 }
 
+@test "Custom config from CLI" {
+    # run for a while
+    sleep 1 3>-
+    stop_cedana
+    sleep 1 3>-
+
+    # start cedana with custom config
+    start_cedana --config '{"client":{"leave_running":true}}'
+    sleep 1 3>-
+
+    # check if the config is applied
+    cedana config show | grep leave_running | grep true
+}
+
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"
