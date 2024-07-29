@@ -106,8 +106,6 @@ teardown() {
 }
 
 @test "Custom config from CLI" {
-    # run for a while
-    sleep 1 3>-
     stop_cedana
     sleep 1 3>-
 
@@ -116,6 +114,7 @@ teardown() {
     sleep 1 3>-
 
     # check if the config is applied
+    cedana config show
     cedana config show | grep leave_running | grep true
 }
 
