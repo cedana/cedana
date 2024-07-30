@@ -41,6 +41,13 @@ jobs:
         run: |
           git submodule update --init --recursive
           git submodule update --remote --merge
+          cd api/services/cedana-api
+          git fetch --all
+          BRANCH=$(git config -f ../../.gitmodules submodule.api/services/cedana-api.branch)
+          git checkout $BRANCH
+          git pull origin $BRANCH
+          cd ../../..
+          git add api/services/cedana-api
 
       - name: Set up Go
         uses: actions/setup-go@v4
