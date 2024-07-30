@@ -36,8 +36,11 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+
+      - name: Update submodules
+        run: |
+          git submodule update --init --recursive
+          git submodule update --remote --merge
 
       - name: Set up Go
         uses: actions/setup-go@v4
