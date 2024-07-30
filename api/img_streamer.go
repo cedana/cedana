@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/binary"
-	//"encoding/json"
 	"fmt"
 	img_streamer "github.com/cedana/cedana/api/services/img_streamer"
 	"google.golang.org/protobuf/proto"
@@ -51,7 +50,7 @@ type cr_img struct {
 	_x bfd
 }
 
-func (s *service) imgStreamerInit(imageDir string, mode int, fd uintptr) error {
+func (s *service) imgStreamerInit(imageDir string, mode int, fd int) error {
 
 	socketPath := filepath.Join(imageDir, socketNameForMode(mode))
 	conn, err := net.Dial("unix", socketPath)
@@ -71,33 +70,20 @@ func (s *service) imgStreamerInit(imageDir string, mode int, fd uintptr) error {
 	} else {
 		s.logger.Info().Msgf("wrote sizeBuf %v", sizeBuf)
 	}
-	/*out := make([]byte, 1024)
-	    copy(out, data)
-	    iovec := []syscall.Iovec{
-	  		{
-	  			Base: (*byte)(unsafe.Pointer(&size)),
-	  			Len:  uint64(unsafe.Sizeof(size)),
-	  		},
-	      {
-	    			Base: &out[0],
-	  			Len:  uint64(len(out)),
-	  		},
-	  	}*/
-
-	//nw, err := vectorio.WritevRaw(fd,iovec)
-	/*if (err != nil) {
-	    s.logger.Warn().Msgf("WritevRaw(fd=%v,iovec=%v) failed",fd,iovec)
-	  } else {
-	    s.logger.Info().Msgf("WritevRaw(fd=%v,iovec=%v) succeeded: wrote %v bytes",fd,iovec,nw)
-
-	  }*/
-	s.logger.Info().Msgf("done writing to fd, going to try writing to conn instead")
 	if _, err := conn.Write(data); err != nil {
-		s.logger.Warn().Msgf("failed to write checkpoint_state.json")
+		s.logger.Warn().Msgf("failed to write filename=checkpoint_state.json")
 		return nil // err
 	} else {
-		s.logger.Info().Msgf("wrote %v to checkpoint_state.json", data)
+		s.logger.Info().Msgf("wrote filename=checkpoint_state.json as serialized: %v", data)
 	}
+	f, err := conn.(*net.UnixConn).File()
+	rights := syscall.UnixRights(fd)
+	if err = syscall.Sendmsg(int(f.Fd()), nil, rights, nil, 0); err != nil {
+		s.logger.Warn().Msgf("failed to send file descriptor with rights %v: %v", rights, err)
+	} else {
+		s.logger.Info().Msgf("sent file descriptor using rights %v", rights)
+	}
+
 	conn.Close()
 	return nil
 }

@@ -237,7 +237,7 @@ func (s *service) serializeStateToDir(dir string, state *task.ProcessState, imag
 		s.logger.Info().Msgf("writing marshaled json to CHECKPOINT_STATE_FILE succeeded")
 	}
 
-	fd := file.Fd()
+	fd := int(file.Fd())
 	s.logger.Info().Msgf("fd = %d", fd)
 	s.imgStreamerInit(images_dir, O_DUMP, fd)
 	// return err
