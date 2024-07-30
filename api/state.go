@@ -22,32 +22,38 @@ import (
 const CHECKPOINT_STATE_FILE = "checkpoint_state.json"
 
 func (s *service) updateState(ctx context.Context, jid string, state *task.ProcessState) error {
+	s.logger.Info().Msgf("api/state.go:updateState() entered")
 	marshalledState, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
+	s.logger.Info().Msgf("api/state.go:updateState() marshalledState = %s", marshalledState)
 
 	// try creating the job, which would fail
 	// in case the JID exists
 	// On error, update the job
 	err = s.db.PutJob(ctx, []byte(jid), marshalledState)
-	return err
+	s.logger.Info().Msgf("api/state.go:updateState() err = %v", err)
+	// return err
+	return nil
 }
 
 // Does not return an error if state is not found for a JID.
 // Returns nil in that case
 func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState, error) {
-
+	s.logger.Info().Msgf("api/state.go:getState() entered")
 	fetchedJob, err := s.db.GetJob(ctx, []byte(jid))
 	if err != nil {
 		return nil, err
 	}
+	s.logger.Info().Msgf("api/state.go:getState() fetchedJob = %v", fetchedJob)
 
 	state := task.ProcessState{}
 	err = json.Unmarshal(fetchedJob.State, &state)
 	if err != nil {
 		return nil, err
 	}
+	s.logger.Info().Msgf("api/state.go:getState() state = %v", state)
 	return &state, err
 }
 
@@ -57,6 +63,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 		return nil, fmt.Errorf("invalid PID %d", pid)
 	}
 
+	s.logger.Info().Msgf("api/state.go:generateState() entered")
 	var state task.ProcessState
 
 	p, err := process.NewProcess(pid)
@@ -94,6 +101,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	for _, f := range of {
 		var mode string
 		var stream task.OpenFilesStat_StreamType
+		s.logger.Info().Msgf("f.Path = %s, f.Fd = %s", f.Path, f.Fd)
 		file, err := os.Stat(f.Path)
 		if err == nil {
 			mode = file.Mode().Perm().String()
@@ -208,11 +216,13 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	return &state, nil
 }
 
-func serializeStateToDir(dir string, state *task.ProcessState) error {
+func (s *service) serializeStateToDir(dir string, state *task.ProcessState, images_dir string, stream bool) error {
 	serialized, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
+	s.logger.Info().Msgf("serialized = %v, len(serialized) = %d", serialized, len(serialized))
+
 	path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
 	file, err := os.Create(path)
 	if err != nil {
@@ -221,7 +231,17 @@ func serializeStateToDir(dir string, state *task.ProcessState) error {
 
 	defer file.Close()
 	_, err = file.Write(serialized)
-	return err
+	if err != nil {
+		s.logger.Warn().Msgf("error with writing marshaled json")
+	} else {
+		s.logger.Info().Msgf("writing marshaled json to CHECKPOINT_STATE_FILE succeeded")
+	}
+
+	fd := file.Fd()
+	s.logger.Info().Msgf("fd = %d", fd)
+	s.imgStreamerInit(images_dir, O_DUMP, fd)
+	// return err
+	return nil
 }
 
 func deserializeStateFromDir(dir string) (*task.ProcessState, error) {

@@ -26,6 +26,24 @@ generate_rpc_proto() {
        cedana-api/rpc.proto
 }
 
+
+generate_image_proto() {
+    protoc --go_out=image --go_opt=paths=source_relative \
+       --go-grpc_out=image --go-grpc_opt=paths=source_relative \
+       -I cedana-api \
+       cedana-api/image.proto
+}
+
+
+generate_img_streamer_proto() {
+    protoc --go_out=img_streamer --go_opt=paths=source_relative \
+       --go-grpc_out=img_streamer --go-grpc_opt=paths=source_relative \
+       -I cedana-api \
+       cedana-api/img-streamer.proto
+}
+
 generate_task_proto
 generate_gpu_proto
 generate_rpc_proto
+generate_image_proto
+generate_img_streamer_proto

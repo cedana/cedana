@@ -107,42 +107,55 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, images_dir string, stream bool) {
+	s.logger.Info().Msgf("entered postDump, images_dir = %s", images_dir)
 	_, postDumpSpan := s.tracer.Start(ctx, "post-dump")
 	defer postDumpSpan.End()
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
+	if stream {
+		s.logger.Info().Msgf("stream is true, starting stream serializeToDir")
+		err := s.serializeStateToDir(dumpdir, state, images_dir, stream)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		} else {
+			s.logger.Info().Msgf("serializeStateToDir succeeded")
+		}
+	} else {
 
-	state.CheckpointPath = compressedCheckpointPath
-	state.CheckpointState = task.CheckpointState_CHECKPOINTED
+		compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
-	// sneak in a serialized state obj
-	err := serializeStateToDir(dumpdir, state)
-	if err != nil {
-		postDumpSpan.RecordError(err)
-		s.logger.Fatal().Err(err)
+		state.CheckpointPath = compressedCheckpointPath
+		state.CheckpointState = task.CheckpointState_CHECKPOINTED
+
+		// sneak in a serialized state obj
+		err := s.serializeStateToDir(dumpdir, state, images_dir, stream)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+
+		s.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
+
+		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+		// get size of compressed checkpoint
+		info, err := os.Stat(compressedCheckpointPath)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+
+		postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 	}
-
-	s.logger.Info().Msgf("compressing checkpoint to %s", compressedCheckpointPath)
-
-	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
-	if err != nil {
-		postDumpSpan.RecordError(err)
-		s.logger.Fatal().Err(err)
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		postDumpSpan.RecordError(err)
-		s.logger.Fatal().Err(err)
-	}
-	// get size of compressed checkpoint
-	info, err := os.Stat(compressedCheckpointPath)
-	if err != nil {
-		postDumpSpan.RecordError(err)
-		s.logger.Fatal().Err(err)
-	}
-
-	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
 }
 
 func (s *service) prepareDumpOpts() *rpc.CriuOpts {
@@ -213,7 +226,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state)
+	s.postDump(ctx, opts.ImagesDirectory, state, "", false)
 
 	return nil
 }
@@ -222,7 +235,7 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state)
+	s.postDump(ctx, imagePath, state, "", false)
 
 	return nil
 }
@@ -233,6 +246,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	if err != nil {
 		return err
 	}
+	s.logger.Info().Msgf("prepareDump done")
 
 	var GPUCheckpointed bool
 	if args.GPU {
@@ -246,6 +260,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		}
 	}
 
+	s.logger.Info().Msgf("img = os.Open(args.Dir = %s)", args.Dir)
 	img, err := os.Open(args.Dir)
 	if err != nil {
 		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
@@ -258,15 +273,17 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	opts.ShellJob = proto.Bool(args.Stream)
 	opts.Stream = proto.Bool(args.Stream)
 
-	nfy := Notify{
+	s.logger.Info().Msgf("opts = %v", opts)
+	/*nfy := Notify{
 		Logger: s.logger,
-	}
+	}*/
 
 	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
 
 	_, dumpSpan := s.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", false))
-	_, err = s.CRIU.Dump(opts, &nfy)
+	//_, err = s.CRIU.Dump(opts, &nfy)
+	err = nil
 	if err != nil {
 		// check for sudo error
 		if strings.Contains(err.Error(), "errno 0") {
@@ -277,6 +294,8 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		dumpSpan.RecordError(err)
 		s.logger.Warn().Msgf("error dumping process: %v", err)
 		return err
+	} else {
+		s.logger.Info().Msgf("passed CRIU.Dump without calling it")
 	}
 
 	dumpSpan.End()
@@ -286,7 +305,29 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state)
+	s.logger.Info().Msgf("passed GPUCheckpointed and LeaveRunning")
+	// do not want state.PID, have no idea what that is. want cedana daemon PID
+	//must define ids, ids_len
+
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
+	if err != nil {
+		s.logger.Warn().Msgf("syscall.Socketpair failed with %v", err)
+		return err
+	} else {
+		s.logger.Info().Msgf("passed syscall.Socketpair")
+	}
+	ids, err := syscall.GetsockoptUcred(fds[1], syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	if err != nil {
+		s.logger.Warn().Msgf("syscall.GetsockoptUcred failed with %v", err)
+		return err
+	} else {
+		s.logger.Info().Msgf("passed syscall.GetsockoptUcred")
+	}
+
+	images_dir_path := fmt.Sprintf("/proc/%d/fd/%d", ids.Pid, int32(img.Fd()))
+
+	s.logger.Info().Msgf("images_dir_path = %s, opts.Pid = %d, opts.ImagesDirFd = %d, ids.Pid = %d, int32(img.Fd()) = %d", images_dir_path, opts.Pid, opts.ImagesDirFd, ids.Pid, int32(img.Fd()))
+	s.postDump(ctx, dumpdir, state, images_dir_path, *opts.Stream)
 
 	return nil
 }

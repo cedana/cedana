@@ -55,6 +55,8 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	err := s.updateState(ctx, state.JID, state)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to update state")
+	} else {
+		s.logger.Info().Msgf("updated state for job ID %d to state %s", state.JID, state)
 	}
 
 	pid, err := s.run(ctx, args)
