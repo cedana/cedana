@@ -25,7 +25,6 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
 	"github.com/shirou/gopsutil/v3/process"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -43,13 +42,16 @@ const (
 )
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs) (*string, *task.ProcessState, []*os.File, error) {
+	start := time.Now()
+	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("could not get restore stats from context")
+	}
+
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
-
-	_, prepareRestoreSpan := s.tracer.Start(ctx, "prepare_restore")
-	defer prepareRestoreSpan.End()
 
 	tempDir := RESTORE_TEMPDIR
 
@@ -127,6 +129,9 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		return nil, nil, nil, err
 	}
 
+	elapsed := time.Since(start)
+	stats.PrepareDuration = elapsed.Milliseconds()
+
 	return &tempDir, checkpointState, extraFiles, nil
 }
 
@@ -159,9 +164,11 @@ func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
 }
 
 func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
-	_, restoreSpan := s.tracer.Start(ctx, "restore")
-	restoreSpan.SetAttributes(attribute.Bool("container", false))
-	defer restoreSpan.End()
+	start := time.Now()
+	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	if !ok {
+		return nil, fmt.Errorf("could not get restore stats from context")
+	}
 
 	img, err := os.Open(dir)
 	if err != nil {
@@ -176,11 +183,13 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 		// cleanup along the way
 		os.RemoveAll(dir)
 		s.logger.Warn().Msgf("error restoring process: %v", err)
-		restoreSpan.RecordError(err)
 		return nil, err
 	}
 
 	s.logger.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
+
+	elapsed := time.Since(start)
+	stats.CRIUDuration = elapsed.Milliseconds()
 
 	return resp.Restore.Pid, nil
 }
@@ -240,9 +249,11 @@ type linkPairs struct {
 }
 
 func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
-	ctx, restoreSpan := s.tracer.Start(ctx, "restore")
-	restoreSpan.SetAttributes(attribute.Bool("container", true))
-	defer restoreSpan.End()
+	start := time.Now()
+	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	if !ok {
+		return fmt.Errorf("could not get restore stats from context")
+	}
 
 	bundle := Bundle{Bundle: opts.Bundle}
 
@@ -351,6 +362,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			}
 		}()
 	}
+
+	elapsed := time.Since(start)
+	stats.CRIUDuration = elapsed.Milliseconds()
+
 	return err
 }
 
@@ -604,8 +619,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 }
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, groups []uint32) (*exec.Cmd, error) {
-	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-restore")
-	defer gpuSpan.End()
+	start := time.Now()
+	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	if !ok {
+		return nil, fmt.Errorf("could not get restore stats from context")
+	}
 
 	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, s.logger)
 	if err != nil {
@@ -638,6 +656,9 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, g
 	if !resp.Success {
 		return nil, fmt.Errorf("could not restore gpu")
 	}
+
+	elapsed := time.Since(start)
+	stats.GPUDuration = elapsed.Milliseconds()
 
 	return gpuCmd, nil
 }

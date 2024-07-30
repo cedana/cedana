@@ -23,8 +23,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -48,7 +46,6 @@ type service struct {
 	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db        db.DB
 	logger    *zerolog.Logger
-	tracer    trace.Tracer
 	store     *utils.CedanaStore
 	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
@@ -89,7 +86,6 @@ func NewServer(ctx context.Context) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
@@ -97,8 +93,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		fs:        &afero.Afero{Fs: afero.NewOsFs()},
 		db:        db.NewLocalDB(ctx),
 		logger:    &newLogger,
-		tracer:    tracer,
-		store:     utils.NewCedanaStore(tracer, logger),
+		store:     utils.NewCedanaStore(logger),
 		logFile:   logFile,
 		serverCtx: ctx,
 	}
