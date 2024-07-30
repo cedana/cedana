@@ -4,11 +4,12 @@ import (
 	"encoding/binary"
 	//"encoding/json"
 	"fmt"
+	img_streamer "github.com/cedana/cedana/api/services/img_streamer"
+	"google.golang.org/protobuf/proto"
 	"net"
 	"path/filepath"
 	"sync"
 	"syscall"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -59,16 +60,14 @@ func (s *service) imgStreamerInit(imageDir string, mode int, fd uintptr) error {
 	} else {
 		s.logger.Info().Msgf("able to connect to image streamer socket %s", socketPath)
 	}
-	req := &ImgStreamerRequestEntry{Filename: "checkpoint_state.json"}
-	data, err := proto.Marshal(req) // writes through to criu-image-streamer with json.Marshal
-	if err != nil {
-		s.logger.Warn().Msgf("Failed to marshal req %v: %v", req, err)
-	}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: "checkpoint_state.json"}
+	// marshal the request
+	data, err := proto.Marshal(req)
 	size := uint32(len(data))
 	sizeBuf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(sizeBuf, size)
 	if _, err := conn.Write(sizeBuf); err != nil {
-    s.logger.Warn().Msgf("failed to write sizeBuf %v", sizeBuf)
+		s.logger.Warn().Msgf("failed to write sizeBuf %v", sizeBuf)
 	} else {
 		s.logger.Info().Msgf("wrote sizeBuf %v", sizeBuf)
 	}
