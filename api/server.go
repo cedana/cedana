@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -284,9 +285,21 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 	}
 }
 
+func RedactAuthToken(req interface{}) interface{} {
+	val := reflect.ValueOf(req).Elem()
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		if field.Kind() == reflect.String && (val.Type().Field(i).Name == "RegistryAuthToken") {
+			field.SetString("REDACTED")
+		}
+	}
+	return req
+}
+
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		redactedRequest := RedactAuthToken(req)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
