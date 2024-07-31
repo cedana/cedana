@@ -46,6 +46,8 @@ type TaskServiceClient interface {
 	ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (TaskService_ProcessStateStreamingClient, error)
 	// Health
 	DetailedHealthCheck(ctx context.Context, in *DetailedHealthCheckRequest, opts ...grpc.CallOption) (*DetailedHealthCheckResponse, error)
+	// Config
+	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 }
 
 type taskServiceClient struct {
@@ -263,6 +265,15 @@ func (c *taskServiceClient) DetailedHealthCheck(ctx context.Context, in *Detaile
 	return out, nil
 }
 
+func (c *taskServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+	out := new(GetConfigResponse)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/GetConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -291,6 +302,8 @@ type TaskServiceServer interface {
 	ProcessStateStreaming(*ProcessStateStreamingArgs, TaskService_ProcessStateStreamingServer) error
 	// Health
 	DetailedHealthCheck(context.Context, *DetailedHealthCheckRequest) (*DetailedHealthCheckResponse, error)
+	// Config
+	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -351,6 +364,9 @@ func (UnimplementedTaskServiceServer) ProcessStateStreaming(*ProcessStateStreami
 }
 func (UnimplementedTaskServiceServer) DetailedHealthCheck(context.Context, *DetailedHealthCheckRequest) (*DetailedHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DetailedHealthCheck not implemented")
+}
+func (UnimplementedTaskServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -700,6 +716,24 @@ func _TaskService_DetailedHealthCheck_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).GetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/GetConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).GetConfig(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -770,6 +804,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DetailedHealthCheck",
 			Handler:    _TaskService_DetailedHealthCheck_Handler,
+		},
+		{
+			MethodName: "GetConfig",
+			Handler:    _TaskService_GetConfig_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
