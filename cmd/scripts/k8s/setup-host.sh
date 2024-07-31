@@ -7,19 +7,18 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 chroot /host <<"EOT"
 
 # of course, there's differences in the names of some of these packages
-YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
-    protobuf-c protobuf-c-devel protobuf-c-compiler \
-    protobuf-compiler protobuf-devel python3-protobuf \
+YUM_PACKAGES="wget libnet-devel \
     libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu"
 
-APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
+APT_PACKAGES="wget libnl-3-dev libnet-dev \
     libbsd-dev libcap-dev pkg-config \
-    libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler pkg-config \
-    protobuf-compiler python3-protobuf build-essential \
     libgpgme-dev libseccomp-dev libbtrfs-dev buildah"
 
 install_apt_packages() {
     apt-get update
+
+    apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
+
     for pkg in $APT_PACKAGES; do
         apt-get install -y $pkg || echo "Failed to install $pkg"
     done
