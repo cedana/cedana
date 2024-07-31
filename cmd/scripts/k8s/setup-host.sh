@@ -20,6 +20,9 @@ APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
 
 install_apt_packages() {
     apt-get update
+
+    apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
+
     for pkg in $APT_PACKAGES; do
         apt-get install -y $pkg || echo "Failed to install $pkg"
     done
