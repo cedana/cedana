@@ -5,6 +5,16 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  daemonlogs:
+    include:
+      - "/var/log/cedana-daemon.log"
+      - "/host/var/log/cedana-daemon.log"
+    start_at: end
+  gpulogs:
+    include:
+      - "/tmp/cedana-gpucontroller.log"
+      - "/host/tmp/cedana-gpucontroller.log"
+    start_at: end
   hostmetrics:
     collection_interval: 60s
     scrapers:
@@ -51,8 +61,6 @@ exporters:
       insecure: false
     headers:
       "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
-  file:
-    path: "/cedana/data.json"
   logging:
     verbosity: normal
 service:
@@ -74,6 +82,6 @@ service:
       processors: [batch]
       exporters: [otlp, file]
     logs:
-      receivers: [otlp]
+      receivers: [otlp, daemonlogs, gpulogs]
       processors: [batch]
       exporters: [otlp]

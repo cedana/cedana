@@ -49,6 +49,8 @@ var startDaemonCmd = &cobra.Command{
 			return err
 		}
 
+		logger.Info().Msg("otel initialized")
+
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
