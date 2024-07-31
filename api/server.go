@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -284,9 +285,49 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 	}
 }
 
+func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface{} {
+	val := reflect.Indirect(reflect.ValueOf(req))
+	if !val.IsValid() {
+		return req
+	}
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldName := val.Type().Field(i).Name
+
+		if field.Kind() == reflect.String {
+			isSensitive := false
+			for _, substring := range sensitiveSubstrings {
+				if strings.Contains(fieldName, substring) {
+					isSensitive = true
+					break
+				}
+			}
+
+			if isSensitive {
+				field.SetString("REDACTED")
+				continue
+			}
+
+			for _, key := range keys {
+				if fieldName == key {
+					field.SetString("REDACTED")
+					break
+				}
+			}
+		}
+	}
+
+	return req
+}
+
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		redactedKeys := []string{"RegistryAuthToken"}
+		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+
+		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
