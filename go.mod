@@ -5,7 +5,9 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
+	github.com/aws/aws-sdk-go v1.54.19
 	github.com/cedana/runc v1.10.2
+	github.com/checkpoint-restore/checkpointctl v1.2.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
 	github.com/checkpoint-restore/go-criu/v7 v7.1.0
 	github.com/containerd/console v1.0.3
@@ -62,12 +64,10 @@ require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/aws/aws-sdk-go v1.54.19 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/checkpoint-restore/checkpointctl v1.2.1 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cilium/ebpf v0.12.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect
