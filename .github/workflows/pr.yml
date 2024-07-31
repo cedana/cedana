@@ -96,6 +96,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
@@ -130,4 +131,5 @@ jobs:
       - name: Run regression tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
