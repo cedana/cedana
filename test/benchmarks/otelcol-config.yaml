@@ -62,7 +62,7 @@ exporters:
     headers:
       "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
   file:
-    path: "/cedana/data.json"
+    path: "/tmp/data.json"
   logging:
     verbosity: normal
 service:
