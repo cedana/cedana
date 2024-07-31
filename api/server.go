@@ -290,7 +290,14 @@ func redactAuthToken(req interface{}, keys []string, searchForEnv bool) interfac
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		if field.Kind() == reflect.String {
-			if strings.Contains(val.Type().Field(i).Name, "KEY") && searchForEnv {
+			if strings.Contains(val.Type().Field(i).Name, "KEY") ||
+				strings.Contains(val.Type().Field(i).Name, "SECRET") ||
+				strings.Contains(val.Type().Field(i).Name, "TOKEN") ||
+				strings.Contains(val.Type().Field(i).Name, "PASSWORD") ||
+				strings.Contains(val.Type().Field(i).Name, "AUTH") ||
+				strings.Contains(val.Type().Field(i).Name, "CERT") ||
+				strings.Contains(val.Type().Field(i).Name, "API") &&
+					searchForEnv {
 				field.SetString("REDACTED")
 				continue
 			}
