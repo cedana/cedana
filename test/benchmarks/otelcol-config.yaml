@@ -5,12 +5,12 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
-  daemonlogs:
+  filelog/daemonlogs:
     include:
       - "/var/log/cedana-daemon.log"
       - "/host/var/log/cedana-daemon.log"
     start_at: end
-  gpulogs:
+  filelog/gpulogs:
     include:
       - "/tmp/cedana-gpucontroller.log"
       - "/host/tmp/cedana-gpucontroller.log"
@@ -82,6 +82,6 @@ service:
       processors: [batch]
       exporters: [otlp, file]
     logs:
-      receivers: [otlp, daemonlogs, gpulogs]
+      receivers: [otlp, filelog/daemonlogs, filelog/gpulogs]
       processors: [batch]
       exporters: [otlp]
