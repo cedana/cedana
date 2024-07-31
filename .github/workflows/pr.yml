@@ -109,8 +109,6 @@ jobs:
           git submodule update --init --recursive --force --remote
           git submodule update --remote --merge
 
-
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -126,6 +124,8 @@ jobs:
         run: |
           chmod +x cedana
           sudo -E make -C scripts/ci setup-full
+        env:
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
       - name: Run regression tests
         env:
