@@ -15,7 +15,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -56,16 +55,13 @@ type UploadResponse struct {
 type CedanaStore struct {
 	logger *zerolog.Logger
 	url    string
-
-	tracer trace.Tracer
 }
 
-func NewCedanaStore(tracer trace.Tracer, logger *zerolog.Logger) *CedanaStore {
+func NewCedanaStore(logger *zerolog.Logger) *CedanaStore {
 	url := "https://" + viper.GetString("connection.cedana_url")
 	return &CedanaStore{
 		logger: logger,
 		url:    url,
-		tracer: tracer,
 	}
 }
 
@@ -75,9 +71,6 @@ func (cs *CedanaStore) ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, 
 }
 
 func (cs *CedanaStore) FullMultipartUpload(ctx context.Context, checkpointPath string) (*UploadResponse, error) {
-	ctx, mpuSpan := cs.tracer.Start(ctx, "FullMultipartUpload")
-	defer mpuSpan.End()
-
 	file, err := os.Open(checkpointPath)
 	if err != nil {
 		err := status.Error(codes.Unavailable, "StartMultiPartUpload failed")
@@ -118,13 +111,10 @@ func (cs *CedanaStore) FullMultipartUpload(ctx context.Context, checkpointPath s
 }
 
 func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, error) {
-	_, getSpan := cs.tracer.Start(ctx, "GetCheckpoint")
-	defer getSpan.End()
 	url := cs.url + "/checkpoint/" + cid
 	downloadPath := "checkpoint.tar"
 	file, err := os.Create(downloadPath)
 	if err != nil {
-		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -134,7 +124,6 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -142,7 +131,6 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -154,7 +142,6 @@ func (cs *CedanaStore) GetCheckpoint(ctx context.Context, cid string) (*string, 
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		getSpan.RecordError(err)
 		return nil, err
 	}
 
@@ -166,8 +153,6 @@ func (cs *CedanaStore) PushCheckpoint(ctx context.Context, filepath string) erro
 }
 
 func (cs *CedanaStore) CreateMultiPartUpload(ctx context.Context, fullSize int64) (*UploadResponse, string, error) {
-	_, cmpSpan := cs.tracer.Start(ctx, "CreateMultiPartUpload")
-	defer cmpSpan.End()
 	var uploadResp UploadResponse
 
 	cid := uuid.New().String()
@@ -228,8 +213,6 @@ func (cs *CedanaStore) CreateMultiPartUpload(ctx context.Context, fullSize int64
 }
 
 func (cs *CedanaStore) StartMultiPartUpload(ctx context.Context, cid string, uploadResp *UploadResponse, checkpointPath string) error {
-	_, smpSpan := cs.tracer.Start(ctx, "StartMultiPartUpload")
-	defer smpSpan.End()
 	binaryOfFile, err := os.ReadFile(checkpointPath)
 	if err != nil {
 		fmt.Println("Error reading zip file:", err)
@@ -312,8 +295,6 @@ func (cs *CedanaStore) StartMultiPartUpload(ctx context.Context, cid string, upl
 }
 
 func (cs *CedanaStore) CompleteMultiPartUpload(ctx context.Context, uploadResp UploadResponse, cid string) error {
-	_, cmpuSpan := cs.tracer.Start(ctx, "CompleteMultiPartUpload")
-	defer cmpuSpan.End()
 	httpClient := &http.Client{}
 	url := cs.url + "/checkpoint/" + cid + "/upload/" + uploadResp.UploadID + "/complete"
 

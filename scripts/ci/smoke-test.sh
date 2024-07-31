@@ -15,8 +15,8 @@ start_smoke() {
 main() {
     pushd ../..
     print_env
-    setup_ci
     source_env
+    start_otelcol
     start_cedana
     start_smoke
     stop_cedana

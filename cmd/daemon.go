@@ -43,12 +43,13 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
+		_, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to initialize otel")
 			return err
 		}
-		defer stopOtel(ctx)
+
+		logger.Info().Msg("otel initialized")
 
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()

@@ -36,8 +36,11 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+
+      - name: Update submodules
+        run: |
+          git submodule update --init --recursive --force --remote
+          git submodule update --remote --merge
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -68,6 +71,10 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v3
+      - name: Update submodules
+        run: |
+          git submodule update --init --recursive --force --remote
+          git submodule update --remote --merge
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -89,6 +96,8 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          CEDANA_OTEL_ENABLED: true
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
@@ -97,6 +106,10 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v3
+      - name: Update submodules
+        run: |
+          git submodule update --init --recursive --force --remote
+          git submodule update --remote --merge
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -113,8 +126,11 @@ jobs:
         run: |
           chmod +x cedana
           sudo -E make -C scripts/ci setup-full
+        env:
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
       - name: Run regression tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
