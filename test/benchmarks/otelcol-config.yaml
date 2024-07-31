@@ -61,6 +61,8 @@ exporters:
       insecure: false
     headers:
       "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
+  file:
+    path: "/cedana/data.json"
   logging:
     verbosity: normal
 service:
