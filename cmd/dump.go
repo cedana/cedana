@@ -3,6 +3,7 @@ package cmd
 // This file contains all the dump-related commands when starting `cedana dump ...`
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -66,13 +67,14 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.DumpStats)
+		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},
@@ -136,13 +138,14 @@ var dumpJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("checkpoint task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("checkpoint task failed")
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.DumpStats)
+		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},
