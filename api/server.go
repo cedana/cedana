@@ -285,12 +285,20 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 	}
 }
 
-func RedactAuthToken(req interface{}) interface{} {
+func redactAuthToken(req interface{}, keys []string, searchForEnv bool) interface{} {
 	val := reflect.ValueOf(req).Elem()
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
-		if field.Kind() == reflect.String && (val.Type().Field(i).Name == "RegistryAuthToken") {
-			field.SetString("REDACTED")
+		if field.Kind() == reflect.String {
+			if strings.Contains(val.Type().Field(i).Name, "KEY") && searchForEnv {
+				field.SetString("REDACTED")
+				continue
+			}
+			for _, key := range keys {
+				if val.Type().Field(i).Name == key {
+					field.SetString("REDACTED")
+				}
+			}
 		}
 	}
 	return req
@@ -298,7 +306,9 @@ func RedactAuthToken(req interface{}) interface{} {
 
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		redactedRequest := RedactAuthToken(req)
+		redactedKeys := []string{"RegistryAuthToken"}
+
+		redactedRequest := redactAuthToken(req, redactedKeys, true)
 		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
