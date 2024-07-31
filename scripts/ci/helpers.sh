@@ -140,6 +140,8 @@ setup_ci() {
 
     # Install smoke & bench deps
     sudo pip3 install -r test/benchmarks/requirements
+
+    start_otelcol
 }
 
 source_env() {
