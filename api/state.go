@@ -33,7 +33,9 @@ func (s *service) updateState(ctx context.Context, jid string, state *task.Proce
 	// in case the JID exists
 	// On error, update the job
 	err = s.db.PutJob(ctx, []byte(jid), marshalledState)
-	s.logger.Info().Msgf("api/state.go:updateState() err = %v", err)
+	if err != nil {
+		s.logger.Warn().Msgf("api/state.go:updateState() err = %v", err)
+	}
 	// return err
 	return nil
 }
@@ -223,23 +225,45 @@ func (s *service) serializeStateToDir(dir string, state *task.ProcessState, imag
 	}
 	s.logger.Info().Msgf("serialized = %v, len(serialized) = %d", serialized, len(serialized))
 
-	path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
+	if !stream {
+		path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
+		file, err := os.Create(path)
+		if err != nil {
+			return err
+		}
 
-	defer file.Close()
-	_, err = file.Write(serialized)
-	if err != nil {
-		s.logger.Warn().Msgf("error with writing marshaled json")
+		defer file.Close()
+		_, err = file.Write(serialized)
+		if err != nil {
+			s.logger.Warn().Msgf("error with writing marshaled json")
+		} else {
+			s.logger.Info().Msgf("writing marshaled json to CHECKPOINT_STATE_FILE succeeded")
+		}
 	} else {
-		s.logger.Info().Msgf("writing marshaled json to CHECKPOINT_STATE_FILE succeeded")
-	}
+		conn, err := s.imgStreamerInit(images_dir, O_DUMP)
+		if err != nil {
+			s.logger.Warn().Msgf("s.imgStreamerInit(images_dir=%s, O_DUMP=%d) failed with error %v", images_dir, O_DUMP, err)
+		} else {
+			s.logger.Info().Msgf("s.imgStreamerInit(images_dir=%s, O_DUMP=%d) succeeded and returned conn %v", images_dir, O_DUMP, conn)
+		}
+		socket_fd, r_fd, w_fd, err := s.imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
+		if err != nil {
+			s.logger.Warn().Msgf("s.imgStreamerOpen(CHECKPOINT_STATE_FILE=%s,conn=%v) failed with error %v", CHECKPOINT_STATE_FILE, conn, err)
+		} else {
+			s.logger.Info().Msgf("s.imgStreamerOpen(CHECKPOINT_STATE_FILE=%s,conn=%v) succeeded and returned r_fd %d,w_fd %d", CHECKPOINT_STATE_FILE, conn, r_fd, w_fd)
 
-	fd := int(file.Fd())
-	s.logger.Info().Msgf("fd = %d", fd)
-	s.imgStreamerInit(images_dir, O_DUMP, fd)
+		}
+		w := os.NewFile(uintptr(w_fd), "pipe") // write to w_fd
+		_, err = w.Write(serialized)
+		if err != nil {
+			s.logger.Warn().Msgf("w.Write(serialized) to file := os.NewFile(fd=%d,\"pipe\") failed with error %v", w_fd, err)
+		} else {
+			s.logger.Info().Msgf("w.Write(serialized) to file := os.NewFile(fd=%d,\"pipe\") succeeded", w_fd)
+		}
+		s.logger.Info().Msgf("btw r_fd = %d and socket_fd = %d", r_fd, socket_fd)
+		w.Close()
+		s.imgStreamerFinish(socket_fd, r_fd, w_fd)
+	}
 	// return err
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	img_streamer "github.com/cedana/cedana/api/services/img_streamer"
 	"google.golang.org/protobuf/proto"
 	"net"
+	"os/signal"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -14,9 +15,10 @@ import (
 const (
 	IMG_STREAMER_CAPTURE_SOCKET_NAME = "streamer-capture.sock"
 	IMG_STREAMER_SERVE_SOCKET_NAME   = "streamer-serve.sock"
-	O_DUMP                           = 1
-	O_RSTR                           = 2
-	IMG_STREAMER_FD_OFF              = 3
+	O_DUMP                           = 577
+	O_RSTR                           = 578
+	READ_PIPE                        = 0
+	WRITE_PIPE                       = 1
 )
 
 var (
@@ -36,31 +38,32 @@ func socketNameForMode(mode int) string {
 	}
 }
 
-type xbuf struct {
-	mem  string /* buffer */
-	data string /* position we see bytes at */
-	sz   uint   /* bytes sitting after b->pos */
-}
-type bfd struct {
-	fd       uintptr
-	writable bool
-	b        xbuf
-}
-type cr_img struct {
-	_x bfd
-}
-
-func (s *service) imgStreamerInit(imageDir string, mode int, fd int) error {
-
+func (s *service) imgStreamerInit(imageDir string, mode int) (net.Conn, error) {
+	imgStreamerMode = mode
 	socketPath := filepath.Join(imageDir, socketNameForMode(mode))
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
-		return fmt.Errorf("unable to connect to image streamer socket: %s", socketPath)
+		s.logger.Warn().Msgf("unable to connect to image streamer socket: %s", socketPath)
+		return nil, err
 	} else {
 		s.logger.Info().Msgf("able to connect to image streamer socket %s", socketPath)
 	}
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: "checkpoint_state.json"}
-	// marshal the request
+	return conn, nil
+}
+
+func (s *service) imgStreamerFinish(socket_fd int, criu_fd int, streamer_fd int) {
+	s.logger.Info().Msgf("entered imgStreamerFinish")
+	syscall.Close(criu_fd)
+	s.logger.Info().Msgf("closed criu_fd = %d", criu_fd)
+	syscall.Close(streamer_fd)
+	s.logger.Info().Msgf("closed streamer_fd = %d", streamer_fd)
+	syscall.Close(socket_fd)
+	s.logger.Info().Msgf("closed socket_fd = %d", socket_fd)
+}
+
+func (s *service) sendFileRequest(filename string, conn net.Conn) (int, error) {
+	s.logger.Info().Msgf("entered sendFileRequest")
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: filename}
 	data, err := proto.Marshal(req)
 	size := uint32(len(data))
 	sizeBuf := make([]byte, 4)
@@ -72,62 +75,35 @@ func (s *service) imgStreamerInit(imageDir string, mode int, fd int) error {
 	}
 	if _, err := conn.Write(data); err != nil {
 		s.logger.Warn().Msgf("failed to write filename=checkpoint_state.json")
-		return nil // err
+		return -1, nil // err
 	} else {
 		s.logger.Info().Msgf("wrote filename=checkpoint_state.json as serialized: %v", data)
 	}
-	f, err := conn.(*net.UnixConn).File()
-	rights := syscall.UnixRights(fd)
-	if err = syscall.Sendmsg(int(f.Fd()), nil, rights, nil, 0); err != nil {
+	socket, err := conn.(*net.UnixConn).File()
+	socket_fd := int(socket.Fd())
+	s.logger.Info().Msgf("socket fd = %d", socket_fd)
+	signal.Ignore(syscall.SIGPIPE)
+	r_fd, w_fd, err := s.establishStreamerFilePipe()
+	if err != nil {
+		s.logger.Warn().Msgf("establishStreamerFilePipe failed with err %v", err)
+	} else {
+		s.logger.Info().Msgf("establishStreamerFilePipe succeeded with r_fd %v, w_fd %v", r_fd, w_fd)
+	}
+	rights := syscall.UnixRights(r_fd)
+
+	if err = syscall.Sendmsg(socket_fd, nil, rights, nil, 0); err != nil {
 		s.logger.Warn().Msgf("failed to send file descriptor with rights %v: %v", rights, err)
 	} else {
 		s.logger.Info().Msgf("sent file descriptor using rights %v", rights)
 	}
-
-	conn.Close()
-	return nil
+	return socket_fd, nil
 }
 
-func (s *service) imgStreamerFinish() {
-	s.logger.Info().Msgf("entered imgStreamerFinish")
-	if getServiceFd(IMG_STREAMER_FD_OFF) >= 0 {
-		fmt.Println("Dismissing the image streamer")
-		closeServiceFd(IMG_STREAMER_FD_OFF)
-	}
-}
-
-func (s *service) pbWriteOneFd(fd uintptr, obj interface{}, objType int) error {
-	s.logger.Info().Msgf("entered pbWriteOneFd(fd = %v, obj = %v, objType = %d)", fd, obj, objType)
-	img := &cr_img{_x: bfd{fd: fd}}
-	err := s.pbWriteOne(img, obj, objType)
-	if err != nil {
-		return fmt.Errorf("failed to communicate with the image streamer: %w", err)
-	} else {
-		s.logger.Info().Msgf("succeeded in pbWriteOne")
-	}
-	return nil
-}
-
-func pbReadOneFd(fd uintptr, pobj interface{}, objType int) error {
-	img := &cr_img{_x: bfd{fd: fd}}
-	err := pbReadOne(img, pobj, objType)
-	if err != nil {
-		return fmt.Errorf("failed to communicate with the image streamer: %w", err)
-	}
-	return nil
-}
-
-func (s *service) sendFileRequest(filename string, fd uintptr) error {
-	s.logger.Info().Msgf("entered sendFileRequest")
-	req := &ImgStreamerRequestEntry{Filename: filename}
-
-	return s.pbWriteOneFd(fd, req, PB_IMG_STREAMER_REQUEST)
-}
-
-func (s *service) recvFileReply(exists *bool, fd uintptr) error {
-	s.logger.Info().Msgf("entered recvFileReply(exists = %v, fd = %v)", exists, fd)
-	var reply *ImgStreamerReplyEntry
-	err := pbReadOneFd(fd, &reply, PB_IMG_STREAMER_REPLY)
+func (s *service) recvFileReply(exists *bool) error {
+	s.logger.Info().Msgf("entered recvFileReply(exists = %v)", exists)
+	var reply *img_streamer.ImgStreamerReplyEntry
+	var err error
+	err = nil // pbReadOneFd(fd, &reply, PB_IMG_STREAMER_REPLY) - TODO
 	if err != nil {
 		return err
 	}
@@ -136,155 +112,49 @@ func (s *service) recvFileReply(exists *bool, fd uintptr) error {
 	return nil
 }
 
-func (s *service) establishStreamerFilePipe() (int, error) {
+func (s *service) establishStreamerFilePipe() (int, int, error) {
 	s.logger.Info().Msgf("entered establishStreamerFilePipe")
-	var criuPipeDirection, streamerPipeDirection int
-	if imgStreamerMode == O_DUMP {
-		criuPipeDirection = syscall.O_WRONLY
-		streamerPipeDirection = syscall.O_RDONLY
-	} else {
-		criuPipeDirection = syscall.O_RDONLY
-		streamerPipeDirection = syscall.O_WRONLY
-	}
-
 	fds := make([]int, 2)
 	err := syscall.Pipe(fds)
 	if err != nil {
-		return -1, fmt.Errorf("unable to create pipe: %w", err)
+		s.logger.Warn().Msgf("unable to create pipe with fds %v, error %v", fds, err)
+		return -1, -1, fmt.Errorf("unable to create pipe: %w", err)
+	} else {
+		s.logger.Info().Msgf("successfully created pipe with fds %v", fds)
 	}
-
-	err = sendFd(getServiceFd(IMG_STREAMER_FD_OFF), nil, 0, fds[streamerPipeDirection])
-	if err != nil {
-		syscall.Close(fds[criuPipeDirection])
-		return -1, err
-	}
-
-	syscall.Close(fds[streamerPipeDirection])
-	return fds[criuPipeDirection], nil
+	return fds[0], fds[1], nil // r,w,nil
 }
 
-func (s *service) _imgStreamerOpen(filename string, fd uintptr) (int, error) {
+func (s *service) _imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
 	s.logger.Info().Msgf("entered _imgStreamerOpen")
-	err := s.sendFileRequest(filename, fd)
+	socket_fd, err := s.sendFileRequest(filename, conn)
 	if err != nil {
-		return -1, err
+		return -1, -1, -1, err
 	}
 
 	if imgStreamerMode == O_RSTR {
 		var exists bool
-		err = s.recvFileReply(&exists, fd)
+		err = s.recvFileReply(&exists)
 		if err != nil {
-			return -1, err
+			return -1, -1, -1, err
 		}
 
 		if !exists {
-			return -1, nil
+			return -1, -1, -1, nil
 		}
 	}
 
-	return s.establishStreamerFilePipe()
+	r_fd, w_fd, err := s.establishStreamerFilePipe()
+	return socket_fd, r_fd, w_fd, err
 }
 
-func (s *service) imgStreamerOpen(filename string, flags int, fd uintptr) (int, error) {
-	s.logger.Info().Msgf("entered imgStreamerOpen(filename=%s,flags=%d,fd=%v)", filename, flags, fd)
-	/*if flags != imgStreamerMode {
-	    s.logger.Warn().Msgf("flags != imgStreamerMode(%v)",imgStreamerMode)
-			panic("BUG")
-		} else {
-	    s.logger.Info().Msgf("flags = imgStreamerMode")
-	  }*/
+func (s *service) imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
+	s.logger.Info().Msgf("entered imgStreamerOpen(filename=%s)", filename)
 
 	imgStreamerFdLock.Lock()
 	defer imgStreamerFdLock.Unlock()
 
-	fd_, err := s._imgStreamerOpen(filename, fd)
-	return fd_, err
+	socket_fd, r_fd, w_fd, err := s._imgStreamerOpen(filename, conn)
+	s.logger.Info().Msgf("imgStreamerOpen returned r_fd=%v, w_fd=%v, socket_fd=%v", r_fd, w_fd, socket_fd)
+	return socket_fd, r_fd, w_fd, err
 }
-
-func installServiceFd(offset int, conn net.Conn) error {
-	// Implementation of installing service FD
-	// This is a placeholder and needs to be implemented
-	return nil
-}
-
-func getServiceFd(offset int) int {
-	// Implementation of getting service FD
-	// This is a placeholder and needs to be implemented
-	return -1
-}
-
-func closeServiceFd(offset int) {
-	// Implementation of closing service FD
-	// This is a placeholder and needs to be implemented
-}
-
-func sendFd(serviceFd int, data []byte, flags int, fd int) error {
-	// Implementation of sending file descriptor
-	// This is a placeholder and needs to be implemented
-	return nil
-}
-
-/*type crImg struct {
-	fd uintptr
-}*/
-
-func (s *service) pbWriteOne(img *cr_img, obj interface{}, objType int) error {
-	/*data, err := json.Marshal(obj)
-	if err != nil {
-		s.logger.Warn().Msgf("Failed to serialize protobuf message: %v\n", err)
-		return err
-	} else {
-		s.logger.Info().Msgf("Serialized protobuf message %v to data = %v\n", obj, data)
-
-	}
-
-	s.logger.Info().Msgf("len(data) = %d, uint32(len(data)) = %d", len(data), uint32(len(data)))
-	size := uint32(len(data))
-	s.logger.Info().Msgf("Serialized protobuf message size = %v", size)
-	sizeBuf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sizeBuf, size)
-	s.logger.Info().Msgf("sizeBuf = %v", sizeBuf)*/
-
-	/*if _, err := conn.Write(sizeBuf); err != nil {
-		s.logger.Warn().Msgf("Failed to write message size: %v", err)
-		return err
-	} else {
-		s.logger.Info().Msgf("wrote message size / why ?")
-	} */
-
-	/*if _, err := conn.Write([]byte("m")); err != nil { //checkpoint_state.json")); err != nil {
-	    s.logger.Warn().Msgf("failed to write checkpoint_state.json")
-	    return nil //err
-	  } else {
-	    s.logger.Info().Msgf("wrote checkpoint_state.json")
-	  }*/
-	//s.logger.Info().Msgf("not doing anything because failure !")
-	/*if _, err := conn.Write(data); err != nil {
-	    s.logger.Warn().Msgf("failed to write data")
-	    return err
-	  } else {
-	    s.logger.Info().Msgf("wrote data")
-	  }*/
-	return nil
-
-	//unix.Writev(fd,[][]byte{objType, obj} )
-}
-
-func pbReadOne(img *cr_img, pobj interface{}, objType int) error {
-	// Implementation of reading protobuf data
-	// This is a placeholder and needs to be implemented
-	return nil
-}
-
-type ImgStreamerRequestEntry struct {
-	Filename string
-}
-
-type ImgStreamerReplyEntry struct {
-	Exists bool
-}
-
-const (
-	PB_IMG_STREAMER_REQUEST = 1
-	PB_IMG_STREAMER_REPLY   = 2
-)

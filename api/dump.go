@@ -120,6 +120,20 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		} else {
 			s.logger.Info().Msgf("serializeStateToDir succeeded")
 		}
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+		// get size of compressed checkpoint
+		info, err := os.Stat(images_dir)
+		if err != nil {
+			postDumpSpan.RecordError(err)
+			s.logger.Fatal().Err(err)
+		}
+
+		postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
+
 	} else {
 
 		compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
