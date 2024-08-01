@@ -23,6 +23,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -326,7 +327,13 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 
 	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
 	if err != nil {
-		return err
+		st, ok := status.FromError(err)
+		if ok {
+			s.logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
+			return fmt.Errorf("gpu checkpoint failed")
+		} else {
+			return err
+		}
 	}
 
 	if !resp.Success {
