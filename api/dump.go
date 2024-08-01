@@ -97,11 +97,19 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		}
 	}
 
+	err = os.Chown(args.Dir, int(state.UIDs[0]), int(state.GIDs[0]))
+	if err != nil {
+		return "", err
+	}
 	err = chownRecursive(dumpDirPath, state.UIDs[0], state.GIDs[0])
 	if err != nil {
 		return "", err
 	}
 
+	err = os.Chmod(args.Dir, DUMP_FOLDER_PERMS)
+	if err != nil {
+		return "", err
+	}
 	err = chmodRecursive(dumpDirPath, DUMP_FOLDER_PERMS)
 	if err != nil {
 		return "", err
