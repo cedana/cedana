@@ -3,6 +3,7 @@ package cmd
 // This file contains all the restore-related commands when starting `cedana restore ...`
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/cedana/cedana/api/services"
@@ -65,13 +66,14 @@ var restoreProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.RestoreStats)
+		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},
@@ -152,13 +154,14 @@ var restoreJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.RestoreStats)
+		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},
