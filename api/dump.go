@@ -31,7 +31,7 @@ const (
 	CRIU_DUMP_LOG_FILE  = "cedana-dump.log"
 	CRIU_DUMP_LOG_LEVEL = 4
 	GHOST_LIMIT         = 10000000
-	DUMP_FOLDER_PERMS   = 0o600
+	DUMP_FOLDER_PERMS   = 0o700
 
 	K8S_RUNC_ROOT     = "/run/containerd/runc/k8s.io"
 	DOCKER_RUNC_ROOT  = "/run/docker/runtime-runc/moby"
