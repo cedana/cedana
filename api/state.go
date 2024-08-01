@@ -263,6 +263,7 @@ func (s *service) serializeStateToDir(dir string, state *task.ProcessState, imag
 		s.logger.Info().Msgf("btw r_fd = %d and socket_fd = %d", r_fd, socket_fd)
 		w.Close()
 		s.imgStreamerFinish(socket_fd, r_fd, w_fd)
+		conn.Close()
 	}
 	// return err
 	return nil

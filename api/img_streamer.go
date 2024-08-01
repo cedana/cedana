@@ -61,7 +61,7 @@ func (s *service) imgStreamerFinish(socket_fd int, criu_fd int, streamer_fd int)
 	s.logger.Info().Msgf("closed socket_fd = %d", socket_fd)
 }
 
-func (s *service) sendFileRequest(filename string, conn net.Conn) (int, error) {
+func (s *service) sendFileRequest(filename string, conn net.Conn, r_fd int) (int, error) {
 	s.logger.Info().Msgf("entered sendFileRequest")
 	req := &img_streamer.ImgStreamerRequestEntry{Filename: filename}
 	data, err := proto.Marshal(req)
@@ -82,13 +82,6 @@ func (s *service) sendFileRequest(filename string, conn net.Conn) (int, error) {
 	socket, err := conn.(*net.UnixConn).File()
 	socket_fd := int(socket.Fd())
 	s.logger.Info().Msgf("socket fd = %d", socket_fd)
-	signal.Ignore(syscall.SIGPIPE)
-	r_fd, w_fd, err := s.establishStreamerFilePipe()
-	if err != nil {
-		s.logger.Warn().Msgf("establishStreamerFilePipe failed with err %v", err)
-	} else {
-		s.logger.Info().Msgf("establishStreamerFilePipe succeeded with r_fd %v, w_fd %v", r_fd, w_fd)
-	}
 	rights := syscall.UnixRights(r_fd)
 
 	if err = syscall.Sendmsg(socket_fd, nil, rights, nil, 0); err != nil {
@@ -127,7 +120,9 @@ func (s *service) establishStreamerFilePipe() (int, int, error) {
 
 func (s *service) _imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
 	s.logger.Info().Msgf("entered _imgStreamerOpen")
-	socket_fd, err := s.sendFileRequest(filename, conn)
+	signal.Ignore(syscall.SIGPIPE)
+	r_fd, w_fd, err := s.establishStreamerFilePipe()
+	socket_fd, err := s.sendFileRequest(filename, conn, r_fd)
 	if err != nil {
 		return -1, -1, -1, err
 	}
@@ -144,7 +139,6 @@ func (s *service) _imgStreamerOpen(filename string, conn net.Conn) (int, int, in
 		}
 	}
 
-	r_fd, w_fd, err := s.establishStreamerFilePipe()
 	return socket_fd, r_fd, w_fd, err
 }
 
