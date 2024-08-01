@@ -146,6 +146,15 @@ func chmodRecursive(path string, mode os.FileMode) error {
 	})
 }
 
+func chownRecursive(path string, uid, gid int32) error {
+	return filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chown(filePath, int(uid), int(gid))
+	})
+}
+
 func (s *service) containerdRestore(ctx context.Context, imgPath string, containerId string) error {
 	s.logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)

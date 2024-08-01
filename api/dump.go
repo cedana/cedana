@@ -31,7 +31,7 @@ const (
 	CRIU_DUMP_LOG_FILE  = "cedana-dump.log"
 	CRIU_DUMP_LOG_LEVEL = 4
 	GHOST_LIMIT         = 10000000
-	DUMP_FOLDER_PERMS   = 0o600 // more secure perms, only root/cedana can read/write
+	DUMP_FOLDER_PERMS   = 0o600
 
 	K8S_RUNC_ROOT     = "/run/containerd/runc/k8s.io"
 	DOCKER_RUNC_ROOT  = "/run/docker/runtime-runc/moby"
@@ -95,6 +95,11 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
 			return "", err
 		}
+	}
+
+	err = chownRecursive(dumpDirPath, state.UIDs[0], state.GIDs[0])
+	if err != nil {
+		return "", err
 	}
 
 	err = chmodRecursive(dumpDirPath, DUMP_FOLDER_PERMS)
