@@ -27,6 +27,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -647,8 +648,13 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid uint32, g
 	}
 	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {
-		s.logger.Warn().Msgf("could not restore gpu: %v", err)
-		return nil, err
+		st, ok := status.FromError(err)
+		if ok {
+			s.logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
+			return nil, fmt.Errorf("gpu checkpoint failed")
+		} else {
+			return nil, err
+		}
 	}
 
 	s.logger.Info().Msgf("gpu controller returned %v", resp)
