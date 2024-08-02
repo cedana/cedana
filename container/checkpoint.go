@@ -1584,6 +1584,10 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
 	if process != nil {
 		cmd.Stdin = process.Stdin
 		cmd.Stdout = process.Stdout
@@ -1726,6 +1730,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 	if err != nil {
 		return err
 	}
+
+	// Try closing unix sockets
+	defer func() {
+		_ = unix.Close(fds[0])
+		_ = unix.Close(fds[1])
+	}()
 
 	// In pre-dump mode CRIU is in a loop and waits for
 	// the final DUMP command.
