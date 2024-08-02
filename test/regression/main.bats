@@ -110,7 +110,7 @@ teardown() {
     sleep 1 3>-
 
     # start cedana with custom config
-    start_cedana --config '{"client":{"leave_running":true}}'
+    start_cedana --config='{"client":{"leave_running":true}}'
     sleep 1 3>-
 
     # check if the config is applied
