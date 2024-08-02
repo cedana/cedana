@@ -310,13 +310,17 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		return 0, err
 	}
 
+	groupsUint32 := make([]uint32, len(args.Groups))
+	for i, v := range args.Groups {
+		groupsUint32[i] = uint32(v)
+	}
 	cmd := exec.CommandContext(s.serverCtx, "bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    args.UID,
-			Gid:    args.GID,
-			Groups: args.Groups,
+			Uid:    uint32(args.UID),
+			Gid:    uint32(args.GID),
+			Groups: groupsUint32,
 		},
 	}
 

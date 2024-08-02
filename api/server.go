@@ -185,8 +185,8 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Uint32("UID", uid).Uint32("GID", gid).Uints32("Groups", groups).Msgf("starting gpu controller")
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -211,12 +211,16 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, group
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
+	groupsUint32 := make([]uint32, len(groups))
+	for i, v := range groups {
+		groupsUint32[i] = uint32(v)
+	}
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    uid,
-			Gid:    gid,
-			Groups: groups,
+			Uid:    uint32(uid),
+			Gid:    uint32(gid),
+			Groups: groupsUint32,
 		},
 	}
 
