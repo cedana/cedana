@@ -37,7 +37,7 @@ for arg in "$@"; do
         CEDANA_GPU_ENABLED=true
     fi
     if [[ $arg == --args=* ]]; then
-        value="${arg#--args=}"
+        value="${arg#*=}"
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
