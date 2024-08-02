@@ -12,7 +12,6 @@ main() {
     pushd ../..
     print_env
     source_env
-
     start_regression
 
     popd

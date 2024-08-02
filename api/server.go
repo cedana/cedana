@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,8 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -48,7 +48,6 @@ type service struct {
 	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db        db.DB
 	logger    *zerolog.Logger
-	tracer    trace.Tracer
 	store     *utils.CedanaStore
 	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
@@ -82,13 +81,13 @@ func NewServer(ctx context.Context) (*Server, error) {
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(&newLogger)),
 			grpc.UnaryInterceptor(loggingUnaryInterceptor(&newLogger)),
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
@@ -96,8 +95,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		fs:        &afero.Afero{Fs: afero.NewOsFs()},
 		db:        db.NewLocalDB(ctx),
 		logger:    &newLogger,
-		tracer:    tracer,
-		store:     utils.NewCedanaStore(tracer, logger),
+		store:     utils.NewCedanaStore(logger),
 		logFile:   logFile,
 		serverCtx: ctx,
 	}
@@ -188,8 +186,8 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Uint32("UID", uid).Uint32("GID", gid).Uints32("Groups", groups).Msgf("starting gpu controller")
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -214,12 +212,16 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, group
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
+	groupsUint32 := make([]uint32, len(groups))
+	for i, v := range groups {
+		groupsUint32[i] = uint32(v)
+	}
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    uid,
-			Gid:    gid,
-			Groups: groups,
+			Uid:    uint32(uid),
+			Gid:    uint32(gid),
+			Groups: groupsUint32,
 		},
 	}
 
@@ -285,9 +287,49 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 	}
 }
 
+func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface{} {
+	val := reflect.Indirect(reflect.ValueOf(req))
+	if !val.IsValid() {
+		return req
+	}
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldName := val.Type().Field(i).Name
+
+		if field.Kind() == reflect.String {
+			isSensitive := false
+			for _, substring := range sensitiveSubstrings {
+				if strings.Contains(fieldName, substring) {
+					isSensitive = true
+					break
+				}
+			}
+
+			if isSensitive {
+				field.SetString("REDACTED")
+				continue
+			}
+
+			for _, key := range keys {
+				if fieldName == key {
+					field.SetString("REDACTED")
+					break
+				}
+			}
+		}
+	}
+
+	return req
+}
+
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		redactedKeys := []string{"RegistryAuthToken"}
+		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+
+		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 

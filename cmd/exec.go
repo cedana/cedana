@@ -42,21 +42,21 @@ var execTaskCmd = &cobra.Command{
 		}
 
 		var env []string
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
-			uid = uint32(os.Getuid())
-			gid = uint32(os.Getgid())
+			uid = int32(os.Getuid())
+			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
 				logger.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
-				groups = append(groups, uint32(g))
+				groups = append(groups, int32(g))
 			}
 		}
 

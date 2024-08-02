@@ -313,7 +313,7 @@ func removeAllContainers(logger *zerolog.Logger) {
 	logger.Debug().Msgf("Finished removing all Buildah containers.")
 }
 
-func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage string) error {
+func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
 	logger, err := utils.GetLoggerFromContext(ctx)
 	if err != nil {
 		fmt.Printf(err.Error())
@@ -324,7 +324,17 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	}
 
 	systemContext := &types.SystemContext{}
-	authLoginIfECR(ctx, newImageRef, systemContext)
+	if registryAuthToken != "" {
+		proxyEndpoint, err := getProxyEndpointFromImageName(originalImageRef)
+		if err != nil {
+			return err
+		}
+		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
+			return err
+		}
+	} else {
+		authLoginIfECR(ctx, originalImageRef, systemContext)
+	}
 
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	out, err := cmd.CombinedOutput()
@@ -417,6 +427,37 @@ func isECRRepo(imageName string) bool {
 	return strings.Contains(imageName, ".ecr.") && strings.Contains(imageName, ".amazonaws.com")
 }
 
+func registryAuthLogin(ctx context.Context, systemContext *types.SystemContext, proxyEndpoint, authorizationToken string) error {
+	loginOpts := &auth.LoginOptions{}
+	loginArgs := []string{}
+
+	decodedAuthBytes, err := base64.StdEncoding.DecodeString(authorizationToken)
+	if err != nil {
+		return err
+	}
+
+	decodedAuthString := string(decodedAuthBytes)
+
+	parts := strings.Split(decodedAuthString, ":")
+
+	if len(parts) != 2 {
+		return fmt.Errorf("decoded auth string is not correctly formatted, %v", len(parts))
+	}
+
+	var stdoutBuilder strings.Builder
+
+	loginOpts.Username = parts[0]
+	loginOpts.Password = parts[1]
+	loginOpts.Stdout = &stdoutBuilder
+
+	loginArgs = append(loginArgs, proxyEndpoint)
+
+	if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getProxyEndpointFromImageName(imageName string) (string, error) {
 	parts := strings.Split(imageName, "/")
 	if len(parts) < 2 {
@@ -446,9 +487,6 @@ func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.S
 	logger, _ := utils.GetLoggerFromContext(ctx)
 
 	if isECRRepo(imageRef) {
-
-		loginOpts := &auth.LoginOptions{}
-		loginArgs := []string{}
 
 		region, err := getRegionFromImageName(imageRef)
 		if err != nil {
@@ -487,28 +525,7 @@ func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.S
 			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
 		}
 
-		decodedAuthBytes, err := base64.StdEncoding.DecodeString(*authData.AuthorizationToken)
-		if err != nil {
-			return err
-		}
-
-		decodedAuthString := string(decodedAuthBytes)
-
-		parts := strings.Split(decodedAuthString, ":")
-
-		if len(parts) != 2 {
-			return fmt.Errorf("decoded auth string is not correctly formatted, %v", len(parts))
-		}
-
-		var stdoutBuilder strings.Builder
-
-		loginOpts.Username = parts[0]
-		loginOpts.Password = parts[1]
-		loginOpts.Stdout = &stdoutBuilder
-
-		loginArgs = append(loginArgs, proxyEndpoint)
-
-		if err := auth.Login(ctx, systemContext, loginOpts, loginArgs); err != nil {
+		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, *authData.AuthorizationToken); err != nil {
 			return err
 		}
 
@@ -518,10 +535,20 @@ func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.S
 	return nil
 }
 
-func ImagePush(ctx context.Context, newImageRef string) error {
+func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
 	systemContext := &types.SystemContext{}
 
-	authLoginIfECR(ctx, newImageRef, systemContext)
+	if registryAuthToken != "" {
+		proxyEndpoint, err := getProxyEndpointFromImageName(newImageRef)
+		if err != nil {
+			return err
+		}
+		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
+			return err
+		}
+	} else {
+		authLoginIfECR(ctx, newImageRef, systemContext)
+	}
 
 	//buildah push
 	cmd := exec.Command("buildah", "push", newImageRef)

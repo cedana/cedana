@@ -168,7 +168,7 @@ def push_to_bigquery(df: pd.DataFrame):
 def main(remote: bool, blob_id: str):
     filename = "data.json"
     if not os.path.exists(filename):
-        filename = "/cedana/data.json"
+        filename = "/tmp/data.json"
     assert os.path.exists(filename)
 
     # process data.json

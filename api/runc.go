@@ -16,6 +16,11 @@ import (
 )
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
+	dumpStats := task.DumpStats{
+		DumpType: task.DumpType_RUNC,
+	}
+	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+
 	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {
 		err = status.Error(codes.Internal, fmt.Sprintf("failed to get pid by container id: %v", err))
@@ -76,6 +81,11 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 }
 
 func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
+	restoreStats := task.RestoreStats{
+		DumpType: task.DumpType_RUNC,
+	}
+	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+
 	opts := &container.RuncOpts{
 		Root:          args.Opts.Root,
 		Bundle:        args.Opts.Bundle,

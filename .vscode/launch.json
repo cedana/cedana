@@ -26,6 +26,22 @@
       }
     },
     {
+      "name": "debug cedana daemon-grpc (GPU enabled)",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "asRoot": true,
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/cedana",
+      "console": "integratedTerminal",
+      "buildFlags": "-buildvcs=false",
+      "args": ["daemon", "start", "-g"],
+      "env": {
+        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
+        "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
+      }
+    },
+    {
       "name": "debug cedana dump",
       "type": "go",
       "asRoot": true,

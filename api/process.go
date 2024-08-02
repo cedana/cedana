@@ -20,7 +20,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -89,9 +88,10 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
-	ctx, dumpTracer := s.tracer.Start(ctx, "dump-ckpt")
-	dumpTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer dumpTracer.End()
+	dumpStats := task.DumpStats{
+		DumpType: task.DumpType_PROCESS,
+	}
+	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
 
 	state := &task.ProcessState{}
 	pid := args.PID
@@ -117,7 +117,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	err = s.dump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
-		dumpTracer.RecordError(st.Err())
 		return nil, st.Err()
 	}
 
@@ -134,7 +133,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			dumpTracer.RecordError(st.Err())
 			return nil, st.Err()
 		}
 		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
@@ -156,18 +154,20 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	}
 
 	resp.State = state
+	resp.DumpStats = &dumpStats
 
 	return &resp, err
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	ctx, restoreTracer := s.tracer.Start(ctx, "restore-ckpt")
-	restoreTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer restoreTracer.End()
-
 	var resp task.RestoreResp
 	var pid *int32
 	var err error
+
+	restoreStats := task.RestoreStats{
+		DumpType: task.DumpType_PROCESS,
+	}
+	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
 
 	switch args.Type {
 	case task.CRType_LOCAL:
@@ -181,7 +181,6 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		pid, err = s.restore(ctx, args)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
@@ -207,7 +206,6 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		})
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			restoreTracer.RecordError(staterr)
 			return nil, staterr
 		}
 
@@ -235,6 +233,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	}
 
 	resp.State = state
+	resp.RestoreStats = &restoreStats
 
 	return &resp, nil
 }
@@ -283,10 +282,6 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 //////////////////////////
 
 func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) {
-	ctx, span := s.tracer.Start(ctx, "exec")
-	span.SetAttributes(attribute.String("task", args.Task))
-	defer span.End()
-
 	var pid int32
 	if args.Task == "" {
 		return 0, fmt.Errorf("could not find task")
@@ -295,12 +290,10 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	var gpuCmd *exec.Cmd
 	var err error
 	if args.GPU {
-		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, s.logger)
 		if err != nil {
 			return 0, err
 		}
-		gpuStartSpan.End()
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")
 		if sharedLibPath == "" {
@@ -317,13 +310,17 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		return 0, err
 	}
 
+	groupsUint32 := make([]uint32, len(args.Groups))
+	for i, v := range args.Groups {
+		groupsUint32[i] = uint32(v)
+	}
 	cmd := exec.CommandContext(s.serverCtx, "bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    args.UID,
-			Gid:    args.GID,
-			Groups: args.Groups,
+			Uid:    uint32(args.UID),
+			Gid:    uint32(args.GID),
+			Groups: groupsUint32,
 		},
 	}
 
@@ -465,6 +462,12 @@ func closeCommonFds(parentPID, childPID int32) error {
 }
 
 func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, string, error) {
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return "", "", status.Error(codes.Internal, "failed to get dump stats")
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		st := status.New(codes.NotFound, "checkpoint zip not found")
@@ -490,28 +493,24 @@ func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, st
 	// zipFileSize += 4096
 	checkpointFullSize := int64(size)
 
-	_, uploadSpan := s.tracer.Start(ctx, "upload-ckpt")
 	multipartCheckpointResp, cid, err := s.store.CreateMultiPartUpload(ctx, checkpointFullSize)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
 
 	err = s.store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, path)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
 
 	err = s.store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
-	uploadSpan.End()
 
+	stats.UploadDuration = time.Since(start).Milliseconds()
 	return cid, multipartCheckpointResp.UploadID, err
 }
