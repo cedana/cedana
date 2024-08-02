@@ -1585,7 +1585,8 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 	}
 	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
+		Setsid:  true,
+		Setpgid: true,
 	}
 
 	if process != nil {
