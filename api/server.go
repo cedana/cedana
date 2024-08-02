@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/db"
@@ -23,6 +24,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -133,6 +135,43 @@ func StartServer(cmdCtx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		// Here join netns
+		// TODO find pause bundle path
+		if viper.GetBool("is_k8s") {
+			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, "", K8S_RUNC_ROOT)
+			if err != nil {
+				cancel(err)
+				return
+			}
+
+			pausePid, err := runc.GetPausePid(bundle)
+			if err != nil {
+				cancel(err)
+				return
+			}
+
+			nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
+			if err != nil {
+				cancel(fmt.Errorf("Error opening network namespace: %v", err))
+				return
+			}
+			defer unix.Close(nsFd)
+
+			// Join the network namespace of the target process
+			err = unix.Setns(nsFd, unix.CLONE_NEWNET)
+			if err != nil {
+				cancel(fmt.Errorf("Error setting network namespace: %v", err))
+			}
+		}
+
+		logger.Debug().Str("Address", ADDRESS).Msgf("server listening")
+		err := server.start()
+		if err != nil {
+			cancel(err)
+		}
+	}()
 
 	<-srvCtx.Done()
 	err = srvCtx.Err()
