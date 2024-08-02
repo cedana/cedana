@@ -6,7 +6,7 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 chroot /host <<"EOT"
 
-if [ $SKIPSETUP -eq 1 ]; then
+if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
     IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
     exit 0
@@ -18,7 +18,7 @@ APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgp
 install_apt_packages() {
     apt-get update
 
-    apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
+    apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
 
     # install all packages at once
     apt-get install -y "${APT_PACKAGES[@]}" || echo "Failed to install $pkg"
@@ -45,9 +45,10 @@ install_criu_ubuntu_2204() {
             ;;
     esac
 
-    wget $PACKAGE_URL -O $OUTPUT_FILE
-    dpkg -i $OUTPUT_FILE
-    rm $OUTPUT_FILE
+    if ! test -f $OUTPUT_FILE; then
+        wget $PACKAGE_URL -O $OUTPUT_FILE
+        dpkg -i $OUTPUT_FILE
+    fi
 }
 
 if [ -f /etc/os-release ]; then
@@ -79,7 +80,6 @@ fi
 
 
 cd /
-
 IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 
 EOT
