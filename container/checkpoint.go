@@ -383,11 +383,6 @@ func (c *RuncContainer) criuNotifications(resp *criurpc.CriuResp, process *Proce
 	logrus.Debugf("notify: %s\n", script)
 	switch script {
 	case "post-dump":
-		f, err := os.Create(filepath.Join(c.StateDir, "checkpoint"))
-		if err != nil {
-			return err
-		}
-		f.Close()
 	case "network-unlock":
 		if err := unlockNetwork(c.Config); err != nil {
 			return err
@@ -1587,7 +1582,6 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 
 	if process != nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setsid:  true,
 			Setpgid: true,
 		}
 
