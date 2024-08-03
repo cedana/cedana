@@ -898,6 +898,11 @@ type ContainerdContainer struct {
 	client *containerd.Client
 }
 
+var (
+	emptyGZLayer = digest.Digest("sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1")
+	emptyDigest  = digest.Digest("")
+)
+
 // for a full containerd checkpoint, we'd use the runc checkpointing primitives + rootfs
 func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
 
@@ -1205,23 +1210,6 @@ func writeContentsForImage(ctx context.Context, snName string, baseImg container
 	}
 
 	return newMfstDesc, configDesc.Digest, nil
-}
-
-var (
-	emptyGZLayer = digest.Digest("sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1")
-	emptyDigest  = digest.Digest("")
-)
-
-type Opts struct {
-	Author  string
-	Message string
-	Ref     string
-	Pause   bool
-	Changes Changes
-}
-
-type Changes struct {
-	CMD, Entrypoint []string
 }
 
 func generateCommitImageConfig(ctx context.Context, container containerd.Container, img containerd.Image, diffID digest.Digest) (ocispec.Image, error) {
