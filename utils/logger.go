@@ -49,20 +49,23 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 
 func init() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-
-	logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
-	logLevel, err := zerolog.ParseLevel(logLevelStr)
-	if err != nil || logLevelStr == "" { // allow turning off logging
-		logLevel = DEFAULT_LOG_LEVEL
+	var err error
+	logLevel := DEFAULT_LOG_LEVEL
+	if logLevelStr, found := os.LookupEnv("CEDANA_LOG_LEVEL"); found {
+		logLevel, err = zerolog.ParseLevel(logLevelStr)
+		if err != nil {
+			logLevel = DEFAULT_LOG_LEVEL
+		}
 	}
-
 	var output io.Writer = zerolog.ConsoleWriter{
-		Out: os.Stdout,
+		Out:        os.Stderr,
+		TimeFormat: LOG_TIME_FORMAT_FULL,
 	}
-
-	logger = zerolog.New(output).
+	logger = zerolog.
+		New(output).
 		Level(logLevel).
 		With().
 		Timestamp().
-		Logger().Hook(LineInfoHook{})
+		Logger().
+		Hook(LineInfoHook{})
 }

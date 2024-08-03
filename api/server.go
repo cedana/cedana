@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -69,12 +68,10 @@ func NewServer(ctx context.Context) (*Server, error) {
 	}
 	// Add log file to logger as a sink
 	// This will be read when streaming logs
-	newLogger := logger.With().Logger().Output(io.MultiWriter(zerolog.ConsoleWriter{
-		Out: os.Stdout,
-	}, zerolog.ConsoleWriter{
-		Out:        logFile,
+	newLogger := logger.With().Logger().Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
 		TimeFormat: utils.LOG_TIME_FORMAT_FULL,
-	}))
+	})
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
