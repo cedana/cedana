@@ -58,7 +58,6 @@ func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
 	resp, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{
 		Service: "task.TaskService",
 	})
-
 	if err != nil {
 		return false, err
 	}
@@ -234,6 +233,20 @@ func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs)
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUNC_DEADLINE)
 	defer cancel()
 	resp, err := c.taskService.RuncQuery(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+////////////////////////////
+/// Config Service Calls ///
+////////////////////////////
+
+func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigRequest) (*task.GetConfigResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.GetConfig(ctx, args)
 	if err != nil {
 		return nil, err
 	}

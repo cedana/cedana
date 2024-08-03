@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -45,16 +46,25 @@ type (
 	SharedStorage struct {
 		DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 	}
+	InitConfigArgs struct {
+		Config    string
+		ConfigDir string
+	}
 )
 
-func InitConfig() error {
+func InitConfig(args InitConfigArgs) error {
 	user, err := getUser()
 	if err != nil {
 		return err
 	}
 
-	homeDir := user.HomeDir
-	configDir := filepath.Join(homeDir, configDirName)
+	var configDir string
+	if args.ConfigDir == "" {
+		homeDir := user.HomeDir
+		configDir = filepath.Join(homeDir, configDirName)
+	} else {
+		configDir = args.ConfigDir
+	}
 
 	viper.AddConfigPath(configDir)
 	viper.SetConfigPermissions(configFilePerm)
@@ -78,10 +88,17 @@ func InitConfig() error {
 
 	setDefaults() // Only sets defaults for when no value is found in config
 	bindEnvVars()
+	viper.ReadInConfig()
 
-	viper.SafeWriteConfig() // Will only overwrite if file does not exist
+	if args.Config != "" {
+		// we don't save config to file if it's passed as a string, as it's temporary
+		reader := strings.NewReader(args.Config)
+		err = viper.MergeConfig(reader)
+	} else {
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist
+	}
 
-	return viper.ReadInConfig()
+	return err
 }
 
 func GetConfig() (*Config, error) {
@@ -95,8 +112,9 @@ func GetConfig() (*Config, error) {
 
 // Set defaults that are used when no value is found in config/env vars
 func setDefaults() {
-	viper.SetDefault("client.process_name", "")
-	viper.SetDefault("client.leave_running", "")
+	viper.SetDefault("client.task", "")
+	viper.SetDefault("client.leave_running", false)
+	viper.SetDefault("client.forward_logs", false)
 
 	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
 
