@@ -103,7 +103,7 @@ Restart=no
 WantedBy=multi-user.target
 
 [Service]
-StandardError=append:/var/log/cedana-daemon.log
+StandardError=file:/var/log/cedana-daemon.log
 EOF
 
     echo "Reloading systemd..."
