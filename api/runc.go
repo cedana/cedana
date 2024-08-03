@@ -3,8 +3,12 @@ package api
 // Implements the task service functions for runc
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cedana/cedana/api/runc"
@@ -14,6 +18,32 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// checks if the given process has any active tcp connections
+func CheckTCPConnections(pid int32) (bool, error) {
+	tcpFile := filepath.Join("/proc", fmt.Sprintf("%d", pid), "net/tcp")
+
+	file, err := os.Open(tcpFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to open %s: %v", tcpFile, err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "  sl") {
+			continue
+		}
+		return true, nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return false, fmt.Errorf("error reading %s: %v", tcpFile, err)
+	}
+
+	return false, nil
+}
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
 	dumpStats := task.DumpStats{
@@ -34,11 +64,17 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	}
 	state.JobState = task.JobState_JOB_RUNNING
 
+	isUsingTCP, err := CheckTCPConnections(pid)
+	if err != nil {
+		return nil, err
+	}
+
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
 		LeaveRunning:    true,
-		TcpEstablished:  args.CriuOpts.TcpEstablished,
+		TcpEstablished:  isUsingTCP,
+		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
 		External:        args.CriuOpts.External,
 	}
