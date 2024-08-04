@@ -37,6 +37,35 @@ func New(ctx context.Context, address string, logger *zerolog.Logger) (*Containe
 	}, nil
 }
 
+func (service *ContainerdService) CgroupFreeze(ctx context.Context, id string) (containerd.Task, error) {
+
+	container, err := service.client.LoadContainer(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	task, err := container.Task(ctx, nil)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return nil, err
+		}
+	}
+	// pause if running
+	if task != nil {
+		if err := task.Pause(ctx); err != nil {
+			return nil, err
+		}
+		// defer func() {
+		// 	if err := task.Resume(ctx); err != nil {
+		// 		fmt.Println(fmt.Errorf("error resuming task: %w", err))
+		// 	}
+		// }()
+		return task, nil
+	}
+
+	return nil, nil
+}
+
 func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, imageRef, ns string) (string, error) {
 	ctx = namespaces.WithNamespace(ctx, ns)
 
@@ -47,6 +76,7 @@ func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, i
 	return imageRef, nil
 }
 
+// NOT USED
 func (service *ContainerdService) RestoreRootfs(ctx context.Context, containerID, imageRef, ns string) error {
 	ctx = namespaces.WithNamespace(ctx, ns)
 
