@@ -111,18 +111,6 @@ var restoreJobCmd = &cobra.Command{
 			}
 		}
 
-		// Query job state
-		query := task.QueryArgs{
-			JIDs: []string{jid},
-		}
-
-		res, err := cts.Query(ctx, &query)
-		if err != nil {
-			logger.Error().Msgf("Error querying job: %v", err)
-			return err
-		}
-		state := res.Processes[0]
-
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			JID:            jid,
@@ -130,23 +118,6 @@ var restoreJobCmd = &cobra.Command{
 			GID:            gid,
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
-		}
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				logger.Error().Msgf("No remote state found for id %s", jid)
-				return err
-			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				logger.Error().Msgf("No checkpoint found for id %s", jid)
-				return err
-			}
-			restoreArgs.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			restoreArgs.Type = task.CRType_REMOTE
-		} else {
-			restoreArgs.CheckpointPath = state.GetCheckpointPath()
-			restoreArgs.Type = task.CRType_LOCAL
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
