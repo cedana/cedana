@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 )
 
