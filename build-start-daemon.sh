@@ -47,7 +47,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
 if [ $NO_BUILD -ne 1 ]; then
     echo "Building $APP_NAME..."
-    go build
+    scripts/build.sh
 
     if [ $? -ne 0 ]; then
         echo "Build failed. Exiting."
