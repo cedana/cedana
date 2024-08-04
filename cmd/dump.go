@@ -167,9 +167,15 @@ var dumpContainerdCmd = &cobra.Command{
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
-		dumpArgs := task.ContainerdDumpArgs{
+
+		rootfsArgs := task.ContainerdRootfsDumpArgs{
 			ContainerID: id,
-			Ref:         ref,
+			ImageRef:    ref,
+		}
+
+		// TODO BS missing runc dump args
+		dumpArgs := task.ContainerdDumpArgs{
+			ContainerdRootfsDumpArgs: &rootfsArgs,
 		}
 		resp, err := cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
