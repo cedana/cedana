@@ -93,6 +93,19 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	}
 	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
 
+	if args.Dir == "" {
+		args.Dir = viper.GetString("shared_storage.dump_storage_dir")
+		if args.Dir == "" {
+			return nil, status.Error(codes.InvalidArgument, "dump storage dir not provided/found in config")
+		}
+	}
+
+	if viper.GetBool("remote") {
+		args.Type = task.CRType_REMOTE
+	} else {
+		args.Type = task.CRType_LOCAL
+	}
+
 	state := &task.ProcessState{}
 	pid := args.PID
 
@@ -168,6 +181,32 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 		DumpType: task.DumpType_PROCESS,
 	}
 	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+
+	if args.JID != "" {
+		state, err := s.getState(ctx, args.JID)
+		if err != nil {
+			return nil, status.Error(codes.NotFound, "job not found")
+		}
+		if viper.GetBool("remote") {
+			remoteState := state.GetRemoteState()
+			if remoteState == nil {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote state found")
+				return nil, status.Error(codes.InvalidArgument, "no remote state found")
+			}
+			// For now just grab latest checkpoint
+			if remoteState[len(remoteState)-1].CheckpointID == "" {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
+				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
+			}
+			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
+			args.Type = task.CRType_REMOTE
+		} else {
+			args.CheckpointPath = state.GetCheckpointPath()
+			args.Type = task.CRType_LOCAL
+		}
+	} else {
+		args.Type = task.CRType_LOCAL
+	}
 
 	switch args.Type {
 	case task.CRType_LOCAL:

@@ -8,7 +8,7 @@ import (
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/types"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +37,7 @@ var showCmd = &cobra.Command{
 			return err
 		}
 
-		config := &utils.Config{}
+		config := &types.Config{}
 		err = json.Unmarshal([]byte(resp.JSON), config)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal json")

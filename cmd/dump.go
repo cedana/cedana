@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 )
 
@@ -42,15 +41,6 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-		if dir == "" {
-			// TODO NR - should we default to /tmp?
-			dir = viper.GetString("shared_storage.dump_storage_dir")
-			if dir == "" {
-				logger.Error().Msgf("no dump directory specified")
-				return err
-			}
-			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
-		}
 
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
@@ -108,28 +98,12 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-		if dir == "" {
-			dir = viper.GetString("shared_storage.dump_storage_dir")
-			if dir == "" {
-				logger.Error().Msgf("no dump directory specified")
-				return err
-			}
-			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
-		}
-
-		var taskType task.CRType
-		if viper.GetBool("remote") {
-			taskType = task.CRType_REMOTE
-		} else {
-			taskType = task.CRType_LOCAL
-		}
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
-			Type:           taskType,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
 		}
