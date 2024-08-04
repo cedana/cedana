@@ -39,6 +39,16 @@ var startDaemonCmd = &cobra.Command{
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
+		config, _ := cmd.Flags().GetString(configFlag)
+		configDir, _ := cmd.Flags().GetString(configDirFlag)
+		if err := utils.InitConfig(utils.InitConfigArgs{
+			Config:    config,
+			ConfigDir: configDir,
+		}); err != nil {
+			logger.Error().Err(err).Msg("failed to initialize config")
+			return err
+		}
+
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
 		}
@@ -167,6 +177,8 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	startDaemonCmd.Flags().String(configFlag, "", "custom config JSON string (will merge with existing/default config, and not saved")
+	startDaemonCmd.Flags().String(configDirFlag, "", "custom config directory")
 }
 
 type pullGPUBinaryRequest struct {

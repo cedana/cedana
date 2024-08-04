@@ -383,11 +383,6 @@ func (c *RuncContainer) criuNotifications(resp *criurpc.CriuResp, process *Proce
 	logrus.Debugf("notify: %s\n", script)
 	switch script {
 	case "post-dump":
-		f, err := os.Create(filepath.Join(c.StateDir, "checkpoint"))
-		if err != nil {
-			return err
-		}
-		f.Close()
 	case "network-unlock":
 		if err := unlockNetwork(c.Config); err != nil {
 			return err
@@ -1584,7 +1579,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
+
 	if process != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+
 		cmd.Stdin = process.Stdin
 		cmd.Stdout = process.Stdout
 		cmd.Stderr = process.Stderr
@@ -1726,6 +1726,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 	if err != nil {
 		return err
 	}
+
+	// Try closing unix sockets
+	defer func() {
+		_ = unix.Close(fds[0])
+		_ = unix.Close(fds[1])
+	}()
 
 	// In pre-dump mode CRIU is in a loop and waits for
 	// the final DUMP command.

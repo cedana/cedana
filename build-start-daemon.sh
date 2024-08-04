@@ -20,6 +20,7 @@ CEDANA_GPU_ENABLED=false
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 USE_SYSTEMCTL=0
 NO_BUILD=0
+DAEMON_ARGS=""
 
 # Check for --systemctl flag
 for arg in "$@"; do
@@ -27,22 +28,18 @@ for arg in "$@"; do
         echo "Using systemctl"
         USE_SYSTEMCTL=1
     fi
-done
-
-# Check for --no-build flag
-for arg in "$@"; do
     if [ "$arg" == "--no-build" ]; then
         echo "Skipping build"
         NO_BUILD=1
     fi
-done
-
-
-# Check for --gpu flag
-for arg in "$@"; do
     if [ "$arg" == "--gpu" ]; then
         echo "GPU support enabled"
         CEDANA_GPU_ENABLED=true
+    fi
+    if [[ $arg == --args=* ]]; then
+        value="${arg#*=}"
+        echo "Daemon args: $value"
+        DAEMON_ARGS="$value"
     fi
 done
 
@@ -124,9 +121,9 @@ EOF
 else
     echo "Starting daemon as a background process..."
     if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi
