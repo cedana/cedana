@@ -36,6 +36,8 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-tags: true
 
       - name: Update submodules
         run: |
@@ -71,6 +73,9 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-tags: true
+
       - name: Update submodules
         run: |
           git submodule update --init --recursive --force --remote
@@ -106,6 +111,9 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-tags: true
+
       - name: Update submodules
         run: |
           git submodule update --init --recursive --force --remote

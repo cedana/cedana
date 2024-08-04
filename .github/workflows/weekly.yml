@@ -28,6 +28,9 @@ jobs:
     steps:
       - name: Checkout cedana
         uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          fetch-tags: true
 
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
