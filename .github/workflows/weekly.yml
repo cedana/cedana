@@ -26,8 +26,8 @@ jobs:
     runs-on: ubicloud-standard-8
 
     steps:
-      - name: Checkout cedana
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-tags: true

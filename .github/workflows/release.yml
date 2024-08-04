@@ -52,6 +52,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           fetch-tags: true
+
       - name: Set up Go
         uses: actions/setup-go@v4
 
