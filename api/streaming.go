@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/cedana/cedana/api/services/task"
@@ -28,7 +29,7 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 		case <-stream.Context().Done():
 			return nil // Client disconnected
 		default:
-			n, err := s.logFile.Read(buf)
+			n, err := os.Stdout.Read(buf)
 			if err != nil {
 				break
 			}
@@ -36,7 +37,7 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 				// TODO BS Needs implementation
 				response := &task.LogStreamingArgs{
 					Timestamp: time.Now().Local().Format(time.RFC3339),
-					Source:    SERVER_LOG_PATH,
+					Source:    "stdout",
 					Level:     "INFO",
 					Msg:       string(buf[:n]),
 				}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -37,7 +36,6 @@ const (
 	ADDRESS                 = "0.0.0.0:8080"
 	PROTOCOL                = "tcp"
 	CEDANA_CONTAINER_NAME   = "binary-container"
-	SERVER_LOG_PATH         = "/var/log/cedana-daemon.log"
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
@@ -49,7 +47,6 @@ type service struct {
 	db        db.DB
 	logger    *zerolog.Logger
 	store     *utils.CedanaStore
-	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
 	wg        sync.WaitGroup  // for waiting for all background tasks to finish
 
@@ -64,23 +61,11 @@ type Server struct {
 
 func NewServer(ctx context.Context) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
-	logFile, err := os.OpenFile(SERVER_LOG_PATH, SERVER_LOG_MODE, SERVER_LOG_PERMS)
-	if err != nil {
-		logger.Warn().Msgf("failed to open log file %s", SERVER_LOG_PATH)
-	}
-	// Add log file to logger as a sink
-	// This will be read when streaming logs
-	newLogger := logger.With().Logger().Output(io.MultiWriter(zerolog.ConsoleWriter{
-		Out: os.Stdout,
-	}, zerolog.ConsoleWriter{
-		Out:        logFile,
-		TimeFormat: utils.LOG_TIME_FORMAT_FULL,
-	}))
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor(&newLogger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(&newLogger)),
+			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
 			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	}
@@ -94,9 +79,8 @@ func NewServer(ctx context.Context) (*Server, error) {
 		CRIU:      &Criu{},
 		fs:        &afero.Afero{Fs: afero.NewOsFs()},
 		db:        db.NewLocalDB(ctx),
-		logger:    &newLogger,
+		logger:    logger,
 		store:     utils.NewCedanaStore(logger),
-		logFile:   logFile,
 		serverCtx: ctx,
 	}
 
@@ -120,7 +104,6 @@ func (s *Server) start() error {
 
 func (s *Server) stop() error {
 	s.grpcServer.GracefulStop()
-	s.service.logFile.Close()
 	return s.listener.Close()
 }
 
