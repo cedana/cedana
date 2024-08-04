@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -41,7 +42,7 @@ var startDaemonCmd = &cobra.Command{
 
 		config, _ := cmd.Flags().GetString(configFlag)
 		configDir, _ := cmd.Flags().GetString(configDirFlag)
-		if err := utils.InitConfig(utils.InitConfigArgs{
+		if err := utils.InitConfig(types.InitConfigArgs{
 			Config:    config,
 			ConfigDir: configDir,
 		}); err != nil {
