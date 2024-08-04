@@ -9,6 +9,12 @@ builds:
       - linux
     goarch:
       - amd64
+    hooks:
+      pre: |
+        VERSION=$(git describe --tags)
+        echo "VERSION=$VERSION"
+    ldflags:
+      - -X main.Version=$VERSION
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -17,7 +23,7 @@ changelog:
   sort: asc
   use: github
 nfpms:
-  - 
+  -
     id: default
     package_name: cedana
     file_name_template: "{{ .ConventionalFileName }}"
@@ -35,9 +41,9 @@ nfpms:
       - deb
       - rpm
       - archlinux  # Since GoReleaser v1.13.
-    
+
     suggests:
-      - criu 
+      - criu
 
 archives:
   - id: cedana

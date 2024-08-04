@@ -10,7 +10,7 @@ RUN apt-get update \
     libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev \
     libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf software-properties-common zip
 
-RUN CGO_ENABLED=1 scripts/build.sh
+RUN CGO_ENABLED=1 /app/scripts/build.sh
 
 FROM ubuntu:22.04
 
