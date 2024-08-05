@@ -6,28 +6,26 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 chroot /host <<"EOT"
 
-# of course, there's differences in the names of some of these packages
-YUM_PACKAGES="wget libnet-devel \
-    libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu"
+if [[ $SKIPSETUP -eq 1 ]]; then
+    cd /
+    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
+    exit 0
+fi
 
-APT_PACKAGES="wget libnl-3-dev libnet-dev \
-    libbsd-dev libcap-dev pkg-config \
-    libgpgme-dev libseccomp-dev libbtrfs-dev buildah"
+YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu)
+APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgpgme-dev libseccomp-dev libbtrfs-dev buildah)
 
 install_apt_packages() {
     apt-get update
 
-    apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
+    apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
 
-    for pkg in $APT_PACKAGES; do
-        apt-get install -y $pkg || echo "Failed to install $pkg"
-    done
+    # install all packages at once
+    apt-get install -y "${APT_PACKAGES[@]}" || echo "Failed to install $pkg"
 }
 
 install_yum_packages() {
-    for pkg in $YUM_PACKAGES; do
-        yum install -y $pkg || echo "Failed to install $pkg"
-    done
+    yum install -y "${YUM_PACKAGES[@]}"
     yum group install -y "Development Tools"
 }
 
@@ -47,9 +45,10 @@ install_criu_ubuntu_2204() {
             ;;
     esac
 
-    wget $PACKAGE_URL -O $OUTPUT_FILE
-    dpkg -i $OUTPUT_FILE
-    rm $OUTPUT_FILE
+    if ! test -f $OUTPUT_FILE; then
+        wget $PACKAGE_URL -O $OUTPUT_FILE
+        dpkg -i $OUTPUT_FILE
+    fi
 }
 
 if [ -f /etc/os-release ]; then
@@ -81,7 +80,6 @@ fi
 
 
 cd /
-
 IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 
 EOT
