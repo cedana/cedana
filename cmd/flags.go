@@ -24,9 +24,12 @@ const (
 	logRedirectFlag      = "log-redirect"
 	startChrootFlag      = "start-chroot"
 	setupHostFlag        = "setup-host"
+	restartFlag          = "restart"
 	cudaVersionFlag      = "cuda"
 	pidFlag              = "pid"
 	externalFlag         = "external"
 	destFlag             = "dest"
 	containerStorageFlag = "container-storage"
+	configFlag           = "config"
+	configDirFlag        = "config-dir"
 )

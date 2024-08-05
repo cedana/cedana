@@ -2,11 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,8 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,7 +36,6 @@ const (
 	ADDRESS                 = "0.0.0.0:8080"
 	PROTOCOL                = "tcp"
 	CEDANA_CONTAINER_NAME   = "binary-container"
-	SERVER_LOG_PATH         = "/var/log/cedana-daemon.log"
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
@@ -47,9 +46,7 @@ type service struct {
 	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db        db.DB
 	logger    *zerolog.Logger
-	tracer    trace.Tracer
 	store     *utils.CedanaStore
-	logFile   *os.File        // for streaming and storing logs
 	serverCtx context.Context // context alive for the duration of the server
 	wg        sync.WaitGroup  // for waiting for all background tasks to finish
 
@@ -64,40 +61,26 @@ type Server struct {
 
 func NewServer(ctx context.Context) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
-	logFile, err := os.OpenFile(SERVER_LOG_PATH, SERVER_LOG_MODE, SERVER_LOG_PERMS)
-	if err != nil {
-		logger.Warn().Msgf("failed to open log file %s", SERVER_LOG_PATH)
-	}
-	// Add log file to logger as a sink
-	// This will be read when streaming logs
-	newLogger := logger.With().Logger().Output(io.MultiWriter(zerolog.ConsoleWriter{
-		Out: os.Stdout,
-	}, zerolog.ConsoleWriter{
-		Out:        logFile,
-		TimeFormat: utils.LOG_TIME_FORMAT_FULL,
-	}))
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor(&newLogger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(&newLogger)),
+			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	tracer := otel.GetTracerProvider().Tracer("cedana-daemon")
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
 		CRIU:      &Criu{},
 		fs:        &afero.Afero{Fs: afero.NewOsFs()},
 		db:        db.NewLocalDB(ctx),
-		logger:    &newLogger,
-		tracer:    tracer,
-		store:     utils.NewCedanaStore(tracer, logger),
-		logFile:   logFile,
+		logger:    logger,
+		store:     utils.NewCedanaStore(logger),
 		serverCtx: ctx,
 	}
 
@@ -121,7 +104,6 @@ func (s *Server) start() error {
 
 func (s *Server) stop() error {
 	s.grpcServer.GracefulStop()
-	s.service.logFile.Close()
 	return s.listener.Close()
 }
 
@@ -187,8 +169,8 @@ func StartServer(cmdCtx context.Context) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, groups []uint32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Uint32("UID", uid).Uint32("GID", gid).Uints32("Groups", groups).Msgf("starting gpu controller")
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, logger *zerolog.Logger) (*exec.Cmd, error) {
+	logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
@@ -213,12 +195,16 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid uint32, group
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
+	groupsUint32 := make([]uint32, len(groups))
+	for i, v := range groups {
+		groupsUint32[i] = uint32(v)
+	}
 	gpuCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    uid,
-			Gid:    gid,
-			Groups: groups,
+			Uid:    uint32(uid),
+			Gid:    uint32(gid),
+			Groups: groupsUint32,
 		},
 	}
 
@@ -284,9 +270,49 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 	}
 }
 
+func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface{} {
+	val := reflect.Indirect(reflect.ValueOf(req))
+	if !val.IsValid() {
+		return req
+	}
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldName := val.Type().Field(i).Name
+
+		if field.Kind() == reflect.String {
+			isSensitive := false
+			for _, substring := range sensitiveSubstrings {
+				if strings.Contains(fieldName, substring) {
+					isSensitive = true
+					break
+				}
+			}
+
+			if isSensitive {
+				field.SetString("REDACTED")
+				continue
+			}
+
+			for _, key := range keys {
+				if fieldName == key {
+					field.SetString("REDACTED")
+					break
+				}
+			}
+		}
+	}
+
+	return req
+}
+
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		redactedKeys := []string{"RegistryAuthToken"}
+		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+
+		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
@@ -381,4 +407,19 @@ func (s *service) GPUHealthCheck(
 	resp.HealthCheckStats.GPUHealthCheck = gpuResp
 
 	return nil
+}
+
+func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*task.GetConfigResponse, error) {
+	resp := &task.GetConfigResponse{}
+	config, err := utils.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	var bytes []byte
+	bytes, err = json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	resp.JSON = string(bytes)
+	return resp, nil
 }

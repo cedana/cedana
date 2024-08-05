@@ -3,6 +3,7 @@ package cmd
 // This file contains all the restore-related commands when starting `cedana restore ...`
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/cedana/cedana/api/services"
@@ -32,21 +33,21 @@ var restoreProcessCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
-			uid = uint32(os.Getuid())
-			gid = uint32(os.Getgid())
+			uid = int32(os.Getuid())
+			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
 				logger.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
-				groups = append(groups, uint32(g))
+				groups = append(groups, int32(g))
 			}
 		}
 
@@ -65,13 +66,14 @@ var restoreProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.RestoreStats)
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},
@@ -91,22 +93,22 @@ var restoreJobCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
 		jid := args[0]
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
-			uid = uint32(os.Getuid())
-			gid = uint32(os.Getgid())
+			uid = int32(os.Getuid())
+			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
 				logger.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
-				groups = append(groups, uint32(g))
+				groups = append(groups, int32(g))
 			}
 		}
 
@@ -152,13 +154,14 @@ var restoreJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		stats, _ := json.Marshal(resp.RestoreStats)
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
 
 		return nil
 	},

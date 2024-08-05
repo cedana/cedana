@@ -39,16 +39,27 @@ var startDaemonCmd = &cobra.Command{
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
 
+		config, _ := cmd.Flags().GetString(configFlag)
+		configDir, _ := cmd.Flags().GetString(configDirFlag)
+		if err := utils.InitConfig(utils.InitConfigArgs{
+			Config:    config,
+			ConfigDir: configDir,
+		}); err != nil {
+			logger.Error().Err(err).Msg("failed to initialize config")
+			return err
+		}
+
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		stopOtel, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
+		_, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to initialize otel")
 			return err
 		}
-		defer stopOtel(ctx)
+
+		logger.Info().Msg("otel initialized")
 
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
@@ -122,19 +133,19 @@ var checkDaemonCmd = &cobra.Command{
 
 		// Detailed health check. Need to grab uid and gid to start
 		// controller properly and with the right perms.
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
-		uid = uint32(os.Getuid())
-		gid = uint32(os.Getgid())
+		uid = int32(os.Getuid())
+		gid = int32(os.Getgid())
 		groups_int, err := os.Getgroups()
 		if err != nil {
 			logger.Error().Err(err).Msg("error getting user groups")
 			return err
 		}
 		for _, g := range groups_int {
-			groups = append(groups, uint32(g))
+			groups = append(groups, int32(g))
 		}
 
 		req := &task.DetailedHealthCheckRequest{
@@ -166,6 +177,8 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	startDaemonCmd.Flags().String(configFlag, "", "custom config JSON string (will merge with existing/default config, and not saved")
+	startDaemonCmd.Flags().String(configDirFlag, "", "custom config directory")
 }
 
 type pullGPUBinaryRequest struct {

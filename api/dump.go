@@ -21,9 +21,9 @@ import (
 	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -31,7 +31,7 @@ const (
 	CRIU_DUMP_LOG_FILE  = "cedana-dump.log"
 	CRIU_DUMP_LOG_LEVEL = 4
 	GHOST_LIMIT         = 10000000
-	DUMP_FOLDER_PERMS   = 0o600 // more secure perms, only root/cedana can read/write
+	DUMP_FOLDER_PERMS   = 0o700
 
 	K8S_RUNC_ROOT     = "/run/containerd/runc/k8s.io"
 	DOCKER_RUNC_ROOT  = "/run/docker/runtime-runc/moby"
@@ -50,9 +50,12 @@ type Bundle struct {
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
 func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, error) {
-	_, dumpSpan := s.tracer.Start(ctx, "prepareDump")
-	dumpSpan.SetAttributes(attribute.Bool("container", false))
-	defer dumpSpan.End()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return "", fmt.Errorf("could not get dump stats from context")
+	}
+
+	start := time.Now()
 
 	var hasTCP bool
 	var hasExtUnixSocket bool
@@ -94,6 +97,19 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		}
 	}
 
+	err = os.Chown(args.Dir, int(state.UIDs[0]), int(state.GIDs[0]))
+	if err != nil {
+		return "", err
+	}
+	err = chownRecursive(dumpDirPath, state.UIDs[0], state.GIDs[0])
+	if err != nil {
+		return "", err
+	}
+
+	err = os.Chmod(args.Dir, DUMP_FOLDER_PERMS)
+	if err != nil {
+		return "", err
+	}
 	err = chmodRecursive(dumpDirPath, DUMP_FOLDER_PERMS)
 	if err != nil {
 		return "", err
@@ -105,14 +121,19 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		return "", err
 	}
 
-	// c.copyOpenFiles(dumpDirPath, state)
+	elapsed := time.Since(start)
+	stats.PrepareDuration = elapsed.Milliseconds()
 
 	return dumpDirPath, nil
 }
 
 func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
-	_, postDumpSpan := s.tracer.Start(ctx, "post-dump")
-	defer postDumpSpan.End()
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		s.logger.Fatal().Msg("could not get dump stats from context")
+	}
+
 	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
 
 	state.CheckpointPath = compressedCheckpointPath
@@ -121,7 +142,6 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	// sneak in a serialized state obj
 	err := serializeStateToDir(dumpdir, state)
 	if err != nil {
-		postDumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
 	}
 
@@ -129,18 +149,20 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 	if err != nil {
-		postDumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
 	}
 
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
-		postDumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
 	}
 
-	postDumpSpan.SetAttributes(attribute.Int("ckpt-size", int(info.Size())))
+	elapsed := time.Since(start)
+	stats.CheckpointFileStats = &task.CheckpointFileStats{
+		Size:     info.Size(),
+		Duration: elapsed.Milliseconds(),
+	}
 }
 
 func (s *service) prepareDumpOpts() *rpc.CriuOpts {
@@ -154,8 +176,11 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 }
 
 func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
-	_, dumpSpan := s.tracer.Start(ctx, "dump")
-	dumpSpan.SetAttributes(attribute.Bool("container", true))
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return fmt.Errorf("could not get dump stats from context")
+	}
 
 	var crPid int
 
@@ -198,17 +223,18 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
-		dumpSpan.RecordError(err)
 		s.logger.Fatal().Err(err)
 		return err
 	}
-	defer dumpSpan.End()
 
 	if checkIfPodman(bundle) {
 		if err := patchPodmanDump(containerID, opts.ImagesDirectory); err != nil {
 			return err
 		}
 	}
+
+	elapsed := time.Since(start)
+	stats.CRIUDuration = elapsed.Milliseconds()
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
@@ -257,8 +283,12 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	s.logger.Info().Int32("PID", state.PID).Msg("beginning dump")
 
-	_, dumpSpan := s.tracer.Start(ctx, "dump")
-	dumpSpan.SetAttributes(attribute.Bool("container", false))
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return fmt.Errorf("could not get dump stats from context")
+	}
+
 	_, err = s.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
@@ -267,12 +297,12 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 			return err
 		}
 
-		dumpSpan.RecordError(err)
 		s.logger.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
 
-	dumpSpan.End()
+	elapsed := time.Since(start)
+	stats.CRIUDuration = elapsed.Milliseconds()
 
 	state.GPUCheckpointed = GPUCheckpointed
 	if !(*opts.LeaveRunning) {
@@ -285,8 +315,11 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 }
 
 func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
-	ctx, gpuSpan := s.tracer.Start(ctx, "gpu-ckpt")
-	defer gpuSpan.End()
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return fmt.Errorf("could not get dump stats from context")
+	}
 	// TODO NR - these should move out of here and be part of the Client lifecycle
 	// setting up a connection could be a source of slowdown for checkpointing
 	var opts []grpc.DialOption
@@ -307,7 +340,13 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 
 	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
 	if err != nil {
-		return err
+		st, ok := status.FromError(err)
+		if ok {
+			s.logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
+			return fmt.Errorf("gpu checkpoint failed")
+		} else {
+			return err
+		}
 	}
 
 	if !resp.Success {
@@ -319,6 +358,9 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	if resp.CkptPath == "" {
 		return fmt.Errorf("gpu checkpoint did not return ckptpath")
 	}
+
+	elapsed := time.Since(start)
+	stats.GPUDuration = elapsed.Milliseconds()
 
 	return nil
 }
