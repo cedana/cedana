@@ -79,11 +79,7 @@ if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
 fi
 
 if test -f $SERVICE_FILE; then
-    echo "Restarting $APP_NAME service..."
-    $SUDO_USE systemctl stop $APP_NAME.service
-    $SUDO_USE systemctl start $APP_NAME.service
-    echo "Restarted service."
-    exit 0
+    echo "Restarting $APP_NAME..."
 fi
 
 if [ $USE_SYSTEMCTL -eq 1 ]; then
