@@ -37,12 +37,22 @@ var chrootStartScript string
 //go:embed scripts/k8s/cleanup-host.sh
 var cleanupHostScript string
 
+//go:embed scripts/k8s/bump-restart.sh
+var restartScript string
+
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		restart, _ := cmd.Flags().GetBool("restart")
+		if restart {
+			if err := runScript("bash", restartScript); err != nil {
+				logger.Error().Err(err).Msg("Error restarting")
+			}
+		}
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
@@ -57,6 +67,7 @@ var helperCmd = &cobra.Command{
 				logger.Error().Err(err).Msg("Error with chroot and starting daemon")
 			}
 		}
+
 		startHelper(ctx, startChroot)
 
 		return nil
@@ -236,6 +247,7 @@ func isProcessRunning() (bool, error) {
 
 func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
+	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
 	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
 	rootCmd.AddCommand(helperCmd)
 
