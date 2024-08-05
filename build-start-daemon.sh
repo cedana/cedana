@@ -78,6 +78,10 @@ if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
 
+if test -f $SERVICE_FILE; then
+    echo "Restarting $APP_NAME..."
+fi
+
 if [ $USE_SYSTEMCTL -eq 1 ]; then
     # create systemd file
     echo "Creating $SERVICE_FILE..."
