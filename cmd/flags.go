@@ -32,4 +32,5 @@ const (
 	containerStorageFlag = "container-storage"
 	configFlag           = "config"
 	configDirFlag        = "config-dir"
+  typeFlag             = "type"
 )
