@@ -288,16 +288,15 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	opts.Stream = proto.Bool(args.Stream)
 
 	s.logger.Info().Msgf("opts = %v", opts)
-	/*nfy := Notify{
+	nfy := Notify{
 		Logger: s.logger,
-	}*/
+	}
 
 	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
 
 	_, dumpSpan := s.tracer.Start(ctx, "dump")
 	dumpSpan.SetAttributes(attribute.Bool("container", false))
-	//_, err = s.CRIU.Dump(opts, &nfy)
-	err = nil
+	_, err = s.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
 		if strings.Contains(err.Error(), "errno 0") {

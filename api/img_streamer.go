@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	IMG_STREAMER_CAPTURE_SOCKET_NAME = "streamer-capture.sock"
-	IMG_STREAMER_SERVE_SOCKET_NAME   = "streamer-serve.sock"
+	IMG_STREAMER_CAPTURE_SOCKET_NAME = "ced-capture.sock"
+	IMG_STREAMER_SERVE_SOCKET_NAME   = "ced-serve.sock"
 	O_DUMP                           = 577
 	O_RSTR                           = 578
 	READ_PIPE                        = 0

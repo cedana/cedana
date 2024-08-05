@@ -263,6 +263,25 @@ func (s *service) serializeStateToDir(dir string, state *task.ProcessState, imag
 		s.logger.Info().Msgf("btw r_fd = %d and socket_fd = %d", r_fd, socket_fd)
 		w.Close()
 		s.imgStreamerFinish(socket_fd, r_fd, w_fd)
+
+		s.logger.Info().Msgf("attempting to write another file")
+		socket_fd2, r_fd2, w_fd2, err := s.imgStreamerOpen("checkpoint_state2.json", conn)
+		if err != nil {
+			s.logger.Warn().Msgf("s.imgStreamerOpen(CHECKPOINT_STATE_FILE=%s,conn=%v) failed with error %v", "checkpoint_state2.json", conn, err)
+		} else {
+			s.logger.Info().Msgf("s.imgStreamerOpen(CHECKPOINT_STATE_FILE=%s,conn=%v) succeeded and returned r_fd %d,w_fd %d", "checkpoint_state2.json", conn, r_fd2, w_fd2)
+
+		}
+		w2 := os.NewFile(uintptr(w_fd2), "pipe") // write to w_fd
+		_, err = w2.Write(serialized)
+		if err != nil {
+			s.logger.Warn().Msgf("w.Write(serialized) to file := os.NewFile(fd=%d,\"pipe\") failed with error %v", w_fd2, err)
+		} else {
+			s.logger.Info().Msgf("w.Write(serialized) to file := os.NewFile(fd=%d,\"pipe\") succeeded", w_fd2)
+		}
+		s.logger.Info().Msgf("btw r_fd2 = %d and socket_fd2 = %d", r_fd2, socket_fd2)
+		w2.Close()
+		s.imgStreamerFinish(socket_fd2, r_fd2, w_fd2)
 		conn.Close()
 	}
 	// return err
