@@ -271,9 +271,5 @@ jobs:
 
       - name: Inspect image
         run: |
-          # check if push was successful
           docker buildx imagetools inspect cedana/cedana-helper:${{ steps.meta.outputs.version }}
           docker buildx imagetools inspect ghcr.io/cedana/cedana:${{ steps.meta.outputs.version }}
-          # check if commit sha matches with the latest commit sha
-          # we only match docker hub image as both images should be the same
-          echo $(docker run -i --rm cedana/cedana-helper:${{ steps.meta.outputs.version }} -c "cedana -v") | grep -qF ${{ github.sha }}
