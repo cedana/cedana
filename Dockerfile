@@ -22,6 +22,7 @@ RUN apt-get update && \
 
 COPY --from=builder /app/cedana /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
+COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
 
 ENV USER="root"
 
