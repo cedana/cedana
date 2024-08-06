@@ -142,7 +142,7 @@ teardown() {
     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
     echo "$output"
 
-    [[ "$output" == *"$image_ref"* ]]
+    [[ "$output" == *"success"* ]]
 }
 
 @test "Simple runc checkpoint" {

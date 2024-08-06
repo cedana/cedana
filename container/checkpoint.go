@@ -941,13 +941,14 @@ func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *container
 			if err := task.Pause(ctx); err != nil {
 				return err
 			}
+
+			defer func() {
+				if err := task.Resume(ctx); err != nil {
+					fmt.Println(fmt.Errorf("error resuming task: %w", err))
+				}
+			}()
 		}
 
-		defer func() {
-			if err := task.Resume(ctx); err != nil {
-				fmt.Println(fmt.Errorf("error resuming task: %w", err))
-			}
-		}()
 	}
 
 	if err := containerdContainer.ContainerCheckpointContainerd(ctx, ref); err != nil {

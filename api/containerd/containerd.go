@@ -51,11 +51,6 @@ func (service *ContainerdService) CgroupFreeze(ctx context.Context, id string) (
 		if err := task.Pause(ctx); err != nil {
 			return nil, err
 		}
-		// defer func() {
-		// 	if err := task.Resume(ctx); err != nil {
-		// 		fmt.Println(fmt.Errorf("error resuming task: %w", err))
-		// 	}
-		// }()
 		return task, nil
 	}
 
