@@ -78,6 +78,10 @@ if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
 
+if test -f $SERVICE_FILE; then
+    echo "Restarting $APP_NAME..."
+fi
+
 if [ $USE_SYSTEMCTL -eq 1 ]; then
     # create systemd file
     echo "Creating $SERVICE_FILE..."
@@ -101,6 +105,7 @@ WantedBy=multi-user.target
 
 [Service]
 StandardError=append:/var/log/cedana-daemon.log
+StandardOutput=append:/var/log/cedana-daemon.log
 EOF
 
     echo "Reloading systemd..."
