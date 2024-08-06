@@ -34,6 +34,20 @@ function start_busybox(){
     sudo ctr run -d docker.io/library/busybox:latest "$container_name" sh -c 'while true; do sleep 3600; done'
 }
 
+function start_jupyter_notebook(){
+    local container_name="$1"
+
+    sudo ctr image pull docker.io/cedana/jupyter-base:latest
+    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name"
+}
+
+function start_sleeping_jupyter_notebook(){
+    local container_name="$1"
+
+    sudo ctr image pull docker.io/cedana/jupyter-base:latest
+    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name" sh -c 'while true; do sleep 3600; done'
+}
+
 function rootfs_checkpoint() {
     local container_id="$1"
     local image_ref="$2"
@@ -41,6 +55,16 @@ function rootfs_checkpoint() {
     local namespace="$4"
 
     cedana dump rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
+}
+
+function containerd_checkpoint() {
+    local container_id="$1"
+    local image_ref="$2"
+    local containerd_sock="$3"
+    local namespace="$4"
+    local dir="$5"
+
+    cedana dump containerd --id "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace" --dir "$dir" --root "/run/containerd/runc/default"
 }
 
 function rootfs_restore() {

@@ -10,7 +10,6 @@ import (
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 )
 
@@ -112,18 +111,6 @@ var restoreJobCmd = &cobra.Command{
 			}
 		}
 
-		// Query job state
-		query := task.QueryArgs{
-			JIDs: []string{jid},
-		}
-
-		res, err := cts.Query(ctx, &query)
-		if err != nil {
-			logger.Error().Msgf("Error querying job: %v", err)
-			return err
-		}
-		state := res.Processes[0]
-
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			JID:            jid,
@@ -131,23 +118,6 @@ var restoreJobCmd = &cobra.Command{
 			GID:            gid,
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
-		}
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				logger.Error().Msgf("No remote state found for id %s", jid)
-				return err
-			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				logger.Error().Msgf("No checkpoint found for id %s", jid)
-				return err
-			}
-			restoreArgs.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			restoreArgs.Type = task.CRType_REMOTE
-		} else {
-			restoreArgs.CheckpointPath = state.GetCheckpointPath()
-			restoreArgs.Type = task.CRType_LOCAL
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -199,48 +169,6 @@ var containerdRestoreCmd = &cobra.Command{
 			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
-
-		return nil
-	},
-}
-
-var restoreContainerdRootfsCmd = &cobra.Command{
-	Use:   "rootfs",
-	Short: "Manually restore a container with a checkpointed rootfs",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
-		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
-
-		ref, _ := cmd.Flags().GetString(refFlag)
-		id, _ := cmd.Flags().GetString(idFlag)
-		addr, _ := cmd.Flags().GetString(addressFlag)
-		ns, _ := cmd.Flags().GetString(namespaceFlag)
-
-		restoreArgs := &task.ContainerdRootfsRestoreArgs{
-			ContainerID: id,
-			ImageRef:    ref,
-			Address:     addr,
-			Namespace:   ns,
-		}
-
-		resp, err := cts.ContainerdRootfsRestore(ctx, restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				logger.Error().Msgf("Restore rootfs container failed: %v, %v", st.Message(), st.Code())
-			} else {
-				logger.Error().Msgf("Restore rootfs container failed: %v", err)
-			}
-			return err
-		}
-		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
 
 		return nil
 	},
@@ -322,15 +250,6 @@ func init() {
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
-
-	restoreCmd.AddCommand(restoreContainerdRootfsCmd)
-	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
-	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
-	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
-	restoreContainerdRootfsCmd.MarkFlagRequired(refFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
-	restoreContainerdRootfsCmd.MarkFlagRequired(addressFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)

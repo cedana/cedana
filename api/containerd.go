@@ -4,22 +4,57 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/cedana/cedana/api/containerd"
 	"github.com/cedana/cedana/api/kube"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/container"
+	"github.com/containerd/containerd/namespaces"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
-	// XXX YA: Should be free from k8s
-	root := K8S_RUNC_ROOT
+	rootfsOpts := args.ContainerdRootfsDumpArgs
+	dumpOpts := args.RuncDumpArgs
 
-	pid, err := runc.GetPidByContainerId(args.ContainerID, root)
+	ctx = namespaces.WithNamespace(ctx, rootfsOpts.Namespace)
+
+	containerdService, err := containerd.New(ctx, rootfsOpts.Address, s.logger)
 	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
+		return nil, err
+	}
+
+	containerdTask, err := containerdService.CgroupFreeze(ctx, rootfsOpts.ContainerID)
+	if err != nil {
+		return nil, err
+	}
+	if containerdTask != nil {
+		defer func() {
+			if err := containerdTask.Resume(ctx); err != nil {
+				fmt.Println(fmt.Errorf("error resuming task: %w", err))
+			}
+		}()
+	}
+
+	_, err = containerdService.DumpRootfs(ctx, rootfsOpts.ContainerID, rootfsOpts.ImageRef, rootfsOpts.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	dumpStats := task.DumpStats{
+		DumpType: task.DumpType_RUNC,
+	}
+	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+
+	// RUNC DUMP ARGS START
+	pid, err := runc.GetPidByContainerId(dumpOpts.ContainerID, dumpOpts.Root)
+	if err != nil {
+		err = status.Error(codes.Internal, fmt.Sprintf("failed to get pid by container id: %v", err))
 		return nil, err
 	}
 
@@ -30,13 +65,54 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	}
 	state.JobState = task.JobState_JOB_RUNNING
 
-	err = s.containerdDump(ctx, args.Ref, args.ContainerID, state)
+	isUsingTCP, err := CheckTCPConnections(pid)
 	if err != nil {
-		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 
-	// TODO: Update state to add a job
+	criuOpts := &container.CriuOpts{
+		ImagesDirectory: dumpOpts.CriuOpts.ImagesDirectory,
+		WorkDirectory:   dumpOpts.CriuOpts.WorkDirectory,
+		LeaveRunning:    true,
+		TcpEstablished:  isUsingTCP,
+		TcpClose:        isUsingTCP,
+		MntnsCompatMode: false,
+		External:        dumpOpts.CriuOpts.External,
+	}
+
+	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
+	if err != nil {
+		st := status.New(codes.Internal, "Runc dump failed")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return nil, st.Err()
+	}
+
+	var resp task.RuncDumpResp
+
+	switch dumpOpts.Type {
+	case task.CRType_LOCAL:
+		resp = task.RuncDumpResp{
+			Message: fmt.Sprintf("Dumped runc process %d", pid),
+		}
+
+	case task.CRType_REMOTE:
+		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
+		if err != nil {
+			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
+			return nil, st.Err()
+		}
+		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
+		state.RemoteState = append(state.RemoteState, remoteState)
+		resp = task.RuncDumpResp{
+			Message:      fmt.Sprintf("Dumped runc process %d, multipart checkpoint id: %s", pid, uploadID),
+			CheckpointID: checkpointID,
+			UploadID:     uploadID,
+		}
+	}
+
+	resp.State = state
 
 	return &task.ContainerdDumpResp{
 		Message:        "Dumped containerd container",
@@ -98,21 +174,4 @@ func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.Container
 	}
 
 	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
-}
-
-func (s *service) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
-	resp := &task.ContainerdRootfsRestoreResp{}
-
-	containerdService, err := containerd.New(ctx, args.Address, s.logger)
-	if err != nil {
-		return resp, err
-	}
-
-	if err := containerdService.RestoreRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace); err != nil {
-		return resp, err
-	}
-
-	resp.ImageRef = args.ImageRef
-
-	return resp, nil
 }
