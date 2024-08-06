@@ -136,10 +136,27 @@ teardown() {
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
-    local dir="/tmp/test"
+    local dir="/tmp/jupyter-checkpoint"
 
     run start_jupyter_notebook $container_id
     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
+    echo "$output"
+
+    [[ "$output" == *"success"* ]]
+}
+
+@test "Full containerd restore (jupyter notebook)" {
+    local bundle="/run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore"
+    local job_id="jupyter-notebook-restore"
+    local dumpdir="/tmp/jupyter-checkpoint"
+    pid=$(sudo cat "$bundle/init.pid")
+    # restore the container
+    [ -d $bundle ]
+    [ -d $dumpdir ]
+    echo $dumpdir contents:
+    ls $dumpdir
+    start_sleeping_jupyter_notebook "$checkpoint/test:latest" $job_id"
+    runc_restore_jupyter $bundle $dumpdir $job_id $pid
     echo "$output"
 
     [[ "$output" == *"success"* ]]
