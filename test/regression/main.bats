@@ -132,13 +132,14 @@ teardown() {
 }
 
 @test "Full containerd checkpoint (jupyter notebook)" {
-    local container_id="busybox-test"
+    local container_id="jupyter-notebook"
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
+    local dir="/tmp/test"
 
     run start_jupyter_notebook $container_id
-    run rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
+    run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
     echo "$output"
 
     [[ "$output" == *"$image_ref"* ]]

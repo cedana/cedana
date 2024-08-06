@@ -57,6 +57,16 @@ function rootfs_checkpoint() {
     cedana dump rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
+function containerd_checkpoint() {
+    local container_id="$1"
+    local image_ref="$2"
+    local containerd_sock="$3"
+    local namespace="$4"
+    local dir="$5"
+
+    cedana dump containerd --id "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace" --dir "$dir" --root "/run/containerd/runc/default"
+}
+
 function rootfs_restore() {
     local container_id="$1"
     local image_ref="$2"

@@ -139,7 +139,7 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		ref, _ := cmd.Flags().GetString(imgFlag)
+		ref, _ := cmd.Flags().GetString(refFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
 		address, _ := cmd.Flags().GetString(addressFlag)
 		namespace, _ := cmd.Flags().GetString(namespaceFlag)
@@ -152,10 +152,6 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		root, _ := cmd.Flags().GetString(rootFlag)
-		if runcRootPath[root] == "" {
-			logger.Error().Msgf("container root %s not supported", root)
-			return err
-		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
@@ -185,7 +181,7 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		runcArgs := task.RuncDumpArgs{
-			Root: runcRootPath[root],
+			Root: root,
 			// CheckpointPath: checkpointPath,
 			// FIXME YA: Where does this come from?
 			Pid:         int32(pid),
@@ -201,7 +197,7 @@ var dumpContainerdCmd = &cobra.Command{
 			RuncDumpArgs:             &runcArgs,
 		}
 
-		resp, err := cts.ContainerdDump(ctx, &dumpArgs)
+		_, err = cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -211,7 +207,7 @@ var dumpContainerdCmd = &cobra.Command{
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Msgf("success")
 
 		return nil
 	},
@@ -361,11 +357,31 @@ func init() {
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 
 	// Containerd
+	// ref, _ := cmd.Flags().GetString(imgFlag)
+	// id, _ := cmd.Flags().GetString(idFlag)
+	// address, _ := cmd.Flags().GetString(addressFlag)
+	// namespace, _ := cmd.Flags().GetString(namespaceFlag)
+
+	// Runc
+	// dir, _ := cmd.Flags().GetString(dirFlag)
+	// wdPath, _ := cmd.Flags().GetString(wdFlag)
+	// pid, _ := cmd.Flags().GetInt(pidFlag)
+	// external, _ := cmd.Flags().GetString(externalFlag)
+
 	dumpCmd.AddCommand(dumpContainerdCmd)
-	dumpContainerdCmd.Flags().StringP(imgFlag, "i", "", "image checkpoint path")
-	dumpContainerdCmd.MarkFlagRequired(imgFlag)
-	dumpContainerdCmd.Flags().StringP(idFlag, "p", "", "container id")
-	dumpContainerdCmd.MarkFlagRequired(idFlag)
+	dumpContainerdCmd.Flags().String(idFlag, "", "container id")
+	dumpContainerdCmd.Flags().String(refFlag, "", "image ref")
+	dumpContainerdCmd.MarkFlagRequired(refFlag)
+	dumpContainerdCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	dumpContainerdCmd.MarkFlagRequired(addressFlag)
+	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
+
+	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpContainerdCmd.MarkFlagRequired(dirFlag)
+	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
+	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpContainerdCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
