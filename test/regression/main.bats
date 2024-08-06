@@ -151,7 +151,7 @@ teardown() {
     local dumpdir="/tmp/jupyter-checkpoint"
     pid=$(sudo cat "$bundle/init.pid")
     # restore the container
-    run start_sleeping_jupyter_notebook "checkpoint/test:latest" $job_id"
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$job_id"
     run runc_restore_jupyter "$bundle" "$dumpdir" "$job_id" "$pid"
     echo "$output"
 
