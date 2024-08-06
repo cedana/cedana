@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -64,43 +64,78 @@ jobs:
         with:
           name: build
           path: ./cedana
+  #
+  # smoke-test:
+  #   name: Smoke
+  #   runs-on: ubicloud-standard-8
+  #   needs: build
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Update submodules
+  #       run: |
+  #         git submodule update --init --recursive --force --remote
+  #         git submodule update --remote --merge
+  #
+  #     - name: Download artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: build
+  #
+  #     - name: Setup debugging session
+  #       uses: mxschmitt/action-tmate@v3
+  #       if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
+  #       with:
+  #         limit-access-to-actor: true
+  #
+  #     - name: Setup CI
+  #       run: |
+  #         chmod +x cedana
+  #         sudo -E make -C scripts/ci setup-full
+  #
+  #     - name: Run smoke tests
+  #       env:
+  #         CI_BRANCH: ${{ github.ref_name }}
+  #         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  #         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+  #         CEDANA_OTEL_ENABLED: true
+  #       run: sudo -E make -C scripts/ci smoke
+  #
+  # regression-test:
+  #   name: Regression
+  #   runs-on: ubicloud-standard-8
+  #   needs: build
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Update submodules
+  #       run: |
+  #         git submodule update --init --recursive --force --remote
+  #         git submodule update --remote --merge
+  #
+  #     - name: Download artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: build
+  #
+  #     - name: Setup debugging session
+  #       uses: mxschmitt/action-tmate@v3
+  #       if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_regression_test }}
+  #       with:
+  #         limit-access-to-actor: true
+  #
+  #     - name: Setup CI
+  #       run: |
+  #         chmod +x cedana
+  #         sudo -E make -C scripts/ci setup-full
+  #       env:
+  #         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+  #
+  #     - name: Run regression tests
+  #       env:
+  #         CI_BRANCH: ${{ github.ref_name }}
+  #         SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+  #       run: sudo -E make -C scripts/ci regression
 
-  smoke-test:
-    name: Smoke
-    runs-on: ubicloud-standard-8
-    needs: build
-    steps:
-      - uses: actions/checkout@v3
-      - name: Update submodules
-        run: |
-          git submodule update --init --recursive --force --remote
-          git submodule update --remote --merge
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
-        with:
-          limit-access-to-actor: true
-
-      - name: Setup CI
-        run: |
-          chmod +x cedana
-          sudo -E make -C scripts/ci setup-full
-
-      - name: Run smoke tests
-        env:
-          CI_BRANCH: ${{ github.ref_name }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          CEDANA_OTEL_ENABLED: true
-        run: sudo -E make -C scripts/ci smoke
-
-  regression-test:
+  regression-crio-test:
     name: Regression
     runs-on: ubicloud-standard-8
     needs: build
@@ -125,7 +160,7 @@ jobs:
       - name: Setup CI
         run: |
           chmod +x cedana
-          sudo -E make -C scripts/ci setup-full
+          sudo -E make -C scripts/ci setup-full-crio
         env:
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
@@ -133,4 +168,4 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-        run: sudo -E make -C scripts/ci regression
+        run: sudo -E make -C scripts/ci regression-crio

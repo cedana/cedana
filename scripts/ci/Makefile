@@ -20,3 +20,9 @@ setup-full:
 
 setup-build:
 	./setup-build.sh || (echo "Setup build failed" && exit 1)
+
+regression-crio:
+	./regression-test-crio.sh || (echo "CRIO regression test failed" && exit 1)
+
+setup-full-crio:
+	./setup-full-crio.sh || (echo "CRIO setup full failed" && exit 1)
