@@ -141,16 +141,66 @@ var dumpContainerdCmd = &cobra.Command{
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
+		address, _ := cmd.Flags().GetString(addressFlag)
+		namespace, _ := cmd.Flags().GetString(namespaceFlag)
 
 		rootfsArgs := task.ContainerdRootfsDumpArgs{
 			ContainerID: id,
 			ImageRef:    ref,
+			Address:     address,
+			Namespace:   namespace,
+		}
+
+		root, _ := cmd.Flags().GetString(rootFlag)
+		if runcRootPath[root] == "" {
+			logger.Error().Msgf("container root %s not supported", root)
+			return err
+		}
+
+		dir, _ := cmd.Flags().GetString(dirFlag)
+		wdPath, _ := cmd.Flags().GetString(wdFlag)
+		pid, _ := cmd.Flags().GetInt(pidFlag)
+
+		external, _ := cmd.Flags().GetString(externalFlag)
+
+		var externalNamespaces []string
+
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
+		}
+
+		criuOpts := &task.CriuOpts{
+			ImagesDirectory: dir,
+			WorkDirectory:   wdPath,
+			LeaveRunning:    true,
+			External:        externalNamespaces,
+		}
+
+		runcArgs := task.RuncDumpArgs{
+			Root: runcRootPath[root],
+			// CheckpointPath: checkpointPath,
+			// FIXME YA: Where does this come from?
+			Pid:         int32(pid),
+			ContainerID: id,
+			CriuOpts:    criuOpts,
+			// TODO BS: hard coded for now
+			Type: task.CRType_LOCAL,
 		}
 
 		// TODO BS missing runc dump args
 		dumpArgs := task.ContainerdDumpArgs{
 			ContainerdRootfsDumpArgs: &rootfsArgs,
+			RuncDumpArgs:             &runcArgs,
 		}
+
 		resp, err := cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)

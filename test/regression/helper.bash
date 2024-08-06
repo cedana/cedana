@@ -34,6 +34,20 @@ function start_busybox(){
     sudo ctr run -d docker.io/library/busybox:latest "$container_name" sh -c 'while true; do sleep 3600; done'
 }
 
+function start_jupyter_notebook(){
+    local container_name="$1"
+
+    sudo ctr image pull docker.io/cedana/jupyter-base:latest
+    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name"
+}
+
+function start_sleeping_jupyter_notebook(){
+    local container_name="$1"
+
+    sudo ctr image pull docker.io/cedana/jupyter-base:latest
+    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name" sh -c 'while true; do sleep 3600; done'
+}
+
 function rootfs_checkpoint() {
     local container_id="$1"
     local image_ref="$2"
