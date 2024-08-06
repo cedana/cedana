@@ -932,9 +932,17 @@ func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *container
 	}
 	// pause if running
 	if task != nil {
-		if err := task.Pause(ctx); err != nil {
+		currentStatus, err := task.Status(ctx)
+		if err != nil {
 			return err
 		}
+
+		if currentStatus.Status != "paused" {
+			if err := task.Pause(ctx); err != nil {
+				return err
+			}
+		}
+
 		defer func() {
 			if err := task.Resume(ctx); err != nil {
 				fmt.Println(fmt.Errorf("error resuming task: %w", err))
