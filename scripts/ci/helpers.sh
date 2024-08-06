@@ -64,7 +64,6 @@ install_crictl() {
     curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-${VERSION}-linux-amd64.tar.gz --output crictl-${VERSION}-linux-amd64.tar.gz
     sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
     rm -f crictl-$VERSION-linux-amd64.tar.gz
-
 }
 
 install_otelcol_contrib() {
@@ -121,6 +120,48 @@ setup_ci() {
     install_otelcol_contrib
     install_buildah
     install_crictl
+
+    wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
+    tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+    mkdir -p $HOME/.cedana
+    echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
+
+    # Install recvtty
+    go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
+
+    # Set GOPATH and update PATH
+    echo "export GOPATH=$HOME/go" >> /etc/environment
+    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
+
+    # Install CRIU
+    sudo add-apt-repository -y ppa:criu/ppa
+    sudo apt-get update && sudo apt-get install -y criu
+
+    # Install smoke & bench deps
+    sudo pip3 install -r test/benchmarks/requirements
+}
+
+install_crio() {
+    CRIO_VERSION="v1.30"
+    PROJECT_PATH=prerelease:/$CRIO_VERSION
+    apt-get install -y software-properties-common neovim gnupg
+
+    curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/$PROJECT_PATH/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/$PROJECT_PATH/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+    apt-get update && apt-get install -y cri-o
+}
+
+setup_ci_crio() {
+    setup_ci_build
+    install_code_server
+    install_bats_core
+
+    # install_docker
+    # install_sysbox
+    # install_otelcol_contrib
+    install_buildah
+    install_crictl
+    install_crio
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
