@@ -131,18 +131,6 @@ teardown() {
     [[ "$output" == *"$image_ref"* ]]
 }
 
-@test "Rootfs restore of containerd container" {
-    local container_id="busybox-test-restore"
-    local image_ref="checkpoint/test:latest"
-    local containerd_sock="/run/containerd/containerd.sock"
-    local namespace="default"
-
-    run rootfs_restore $container_id $image_ref $containerd_sock $namespace
-    echo "$output"
-
-    [[ "$output" == *"$image_ref"* ]]
-}
-
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
     local bundle=$DIR/bundle

@@ -174,48 +174,6 @@ var containerdRestoreCmd = &cobra.Command{
 	},
 }
 
-var restoreContainerdRootfsCmd = &cobra.Command{
-	Use:   "rootfs",
-	Short: "Manually restore a container with a checkpointed rootfs",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
-		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
-
-		ref, _ := cmd.Flags().GetString(refFlag)
-		id, _ := cmd.Flags().GetString(idFlag)
-		addr, _ := cmd.Flags().GetString(addressFlag)
-		ns, _ := cmd.Flags().GetString(namespaceFlag)
-
-		restoreArgs := &task.ContainerdRootfsRestoreArgs{
-			ContainerID: id,
-			ImageRef:    ref,
-			Address:     addr,
-			Namespace:   ns,
-		}
-
-		resp, err := cts.ContainerdRootfsRestore(ctx, restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				logger.Error().Msgf("Restore rootfs container failed: %v, %v", st.Message(), st.Code())
-			} else {
-				logger.Error().Msgf("Restore rootfs container failed: %v", err)
-			}
-			return err
-		}
-		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
-
-		return nil
-	},
-}
-
 var runcRestoreCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Manually restore a running runc container to a directory",
@@ -292,15 +250,6 @@ func init() {
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
-
-	restoreCmd.AddCommand(restoreContainerdRootfsCmd)
-	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
-	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
-	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
-	restoreContainerdRootfsCmd.MarkFlagRequired(refFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
-	restoreContainerdRootfsCmd.MarkFlagRequired(addressFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
