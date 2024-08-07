@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   build-publish-amd64:
-    name: Build & Publish (amd64 binary)
+    name: Build & Publish (amd64)
     container:
       image: golang:1.22-bookworm
     runs-on: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
   build-push-image-manifest-amd64:
-    name: Build (amd64)
+    name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
 
     permissions:
@@ -134,7 +134,7 @@ jobs:
           retention-days: 1
 
   build-push-image-manifest-arm64:
-    name: Build (arm64)
+    name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
 
     permissions:
@@ -206,7 +206,7 @@ jobs:
           retention-days: 1
 
   upload-manifests:
-    name: Publish (Image)
+    name: Upload Manifests
     runs-on: ubicloud-standard-2
     needs: ["build-push-image-manifest-arm64", "build-push-image-manifest-amd64"]
     permissions:

@@ -7,21 +7,13 @@
 ## Look at regression-test main for an example.
 ##
 
-APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
+APT_PACKAGES="sudo wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev runc libcap-dev libgpgme-dev \
     btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
     zip
 "
-
-sudo() {
-    if [ id -u -ne 0 ]; then
-        sudo "$@"
-    else
-        "$@"
-    fi
-}
 
 install_apt_packages() {
     apt-get update

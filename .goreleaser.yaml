@@ -9,16 +9,12 @@ builds:
       - linux
     goarch:
       - amd64
-    hooks:
-      pre: |
-        VERSION=$(git describe --tags)
-        echo "VERSION=$VERSION"
     ldflags:
-      - -X main.Version=$VERSION
+      - -X main.Version={{ .Summary }}
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  name_template: "{{ .Summary }}"
 changelog:
   sort: asc
   use: github

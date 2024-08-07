@@ -2,14 +2,6 @@
 
 # Helper functions that hit the local Cedana API
 
-function sudo() {
-    if [ id -u -ne 0 ]; then
-        sudo "$@"
-    else
-        "$@"
-    fi
-}
-
 function start_cedana() {
     ./build-start-daemon.sh --no-build --args="$@"
 }
