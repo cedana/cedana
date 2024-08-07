@@ -42,10 +42,10 @@ function start_jupyter_notebook(){
 }
 
 function start_sleeping_jupyter_notebook(){
-    local container_name="$1"
+    local image_ref="$1"
+    local container_name="$2"
 
-    sudo ctr image pull docker.io/cedana/jupyter-base:latest
-    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name" sh -c 'while true; do sleep 3600; done'
+    sudo ctr run -d "$image_ref" "$container_name" sh -c 'while true; do sleep 3600; done'
 }
 
 function rootfs_checkpoint() {
@@ -81,13 +81,22 @@ function runc_checkpoint() {
     local job_id="$2"
     cedana dump runc --dir "$dir" --id "$job_id"
 }
-
+# Bundle for jupyter notebook restore
+# /run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore
 function runc_restore() {
     local bundle="$1"
     local dir="$2"
     local id="$3"
     local tty="$4"
     cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
+}
+
+function runc_restore_jupyter() {
+    local bundle="$1"
+    local dir="$2"
+    local id="$3"
+    local pid="$4"
+    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id"
 }
 
 function fail() {
