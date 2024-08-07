@@ -149,7 +149,7 @@ teardown() {
     local container_id="jupyter-notebook-restore"
     local dumpdir="/tmp/jupyter-checkpoint"
 
-    runc_list_output=$(runc --root /run/containerd/runc/default list)
+    runc_list_output=$(sudo runc --root /run/containerd/runc/default list)
 
     bundle=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $4}')
     pid=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $2}')
