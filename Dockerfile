@@ -10,7 +10,7 @@ RUN apt-get update \
     libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev \
     libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf software-properties-common zip
 
-RUN CGO_ENABLED=1 /app/scripts/build.sh
+RUN /app/build.sh
 
 FROM ubuntu:22.04
 
@@ -21,6 +21,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/cedana /usr/local/bin/
+COPY --from=builder /app/build.sh /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
 
