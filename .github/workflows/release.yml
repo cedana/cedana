@@ -70,7 +70,6 @@ jobs:
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
-    needs: ["build-publish-amd64"]
 
     permissions:
       contents: read
@@ -80,7 +79,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           submodules: recursive
           fetch-tags: true
 
@@ -143,7 +142,6 @@ jobs:
   build-push-image-manifest-arm64:
     name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
-    needs: ["build-publish-amd64"]
 
     permissions:
       contents: read
@@ -153,7 +151,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           submodules: recursive
           fetch-tags: true
 
