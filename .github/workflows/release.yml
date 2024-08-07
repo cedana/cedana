@@ -6,16 +6,6 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
-      make_release:
-        type: boolean
-        description: "Run & push the release"
-        required: false
-        default: true
-      push_build_image:
-        type: boolean
-        description: "Build and push the image"
-        required: false
-        default: true
       debug_publish_go:
         type: boolean
         description: "Run publish (Go) with debugging enabled"
@@ -46,7 +36,6 @@ jobs:
     container:
       image: golang:1.22-bookworm
     runs-on: ubuntu-latest
-    if: ${{ inputs.make_release }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -257,7 +246,6 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
-        if: ${{ inputs.push_build_image }}
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf 'ghcr.io/cedana/cedana@sha256:%s ' *)
