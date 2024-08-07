@@ -3,7 +3,7 @@
 
 source ./helpers.sh
 
-function start_regression() {
+function start_regression_crio() {
     echo "Running regression tests in cwd: $(pwd)"
     bats test/regression-crio/main.bats
 }
