@@ -96,7 +96,7 @@ function runc_restore_jupyter() {
     local dir="$2"
     local id="$3"
     local pid="$4"
-    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id"  --net-pid "$pid"
+    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id"
 }
 
 function fail() {
