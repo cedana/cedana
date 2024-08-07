@@ -42,8 +42,8 @@ function start_jupyter_notebook(){
 }
 
 function start_sleeping_jupyter_notebook(){
-    local container_name="$1"
-    local image_ref="$2"
+    local image_ref="$1"
+    local container_name="$2"
 
     sudo ctr run -d "$image_ref" "$container_name" sh -c 'while true; do sleep 3600; done'
 }
