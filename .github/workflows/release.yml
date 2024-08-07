@@ -33,9 +33,9 @@ concurrency:
 jobs:
   build-publish-amd64:
     name: Build & Publish (amd64)
-    container:
-      image: golang:1.22-bookworm
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cedana/cedana:latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,12 +49,6 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_publish_amd64 }}
         with:
           limit-access-to-actor: true
-
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y sudo
-          sudo -E make -C scripts/ci setup-build
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
