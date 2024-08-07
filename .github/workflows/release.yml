@@ -36,7 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/cedana/cedana:latest
-      options: --user root
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,6 +43,9 @@ jobs:
           fetch-depth: 1
           submodules: recursive
           fetch-tags: true
+
+      # ref: https://github.com/actions/checkout/issues/1048
+      - run: git config --global --add safe.directory /__w/cedana/cedana
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
