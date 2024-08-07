@@ -1,4 +1,4 @@
 VERSION=$(git describe --tags)
 LDFLAGS="-X main.Version=$VERSION"
 
-go build -ldflags "$LDFLAGS"
+CGO_ENABLED=1 go build -ldflags "$LDFLAGS"

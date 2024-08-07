@@ -6,19 +6,19 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
-      debug_publish_go:
+      debug_build_publish_amd64:
         type: boolean
-        description: "Run publish (Go) with debugging enabled"
+        description: "Run build & publish (amd64 binary) with debugging enabled"
         required: false
         default: false
-      debug_build_amd64:
+      debug_build_push_amd64_image:
         type: boolean
-        description: "Run build (amd64) with debugging enabled"
+        description: "Run build & push (amd64 image) with debugging enabled"
         required: false
         default: false
-      debug_build_arm64:
+      debug_build_push_arm64_image:
         type: boolean
-        description: "Run build (arm64) with debugging enabled"
+        description: "Run build & push (arm64 image) with debugging enabled"
         required: false
         default: false
 
@@ -31,8 +31,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish-go:
-    name: Publish (Go)
+  build-publish-amd64:
+    name: Build & Publish (amd64 binary)
     container:
       image: golang:1.22-bookworm
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_publish_go }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_publish_amd64 }}
         with:
           limit-access-to-actor: true
 
@@ -61,7 +61,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
-  build-image-manifest-amd64:
+  build-push-image-manifest-amd64:
     name: Build (amd64)
     runs-on: ubicloud-standard-2
 
@@ -103,7 +103,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_amd64 }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_amd64_image }}
         with:
           limit-access-to-actor: true
 
@@ -133,7 +133,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  build-image-manifest-arm64:
+  build-push-image-manifest-arm64:
     name: Build (arm64)
     runs-on: ubicloud-standard-2-arm
 
@@ -175,7 +175,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_arm64 }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_arm64_image }}
         with:
           limit-access-to-actor: true
 
@@ -208,7 +208,7 @@ jobs:
   upload-manifests:
     name: Publish (Image)
     runs-on: ubicloud-standard-2
-    needs: ["build-image-manifest-arm64", "build-image-manifest-amd64"]
+    needs: ["build-push-image-manifest-arm64", "build-push-image-manifest-amd64"]
     permissions:
       contents: read
       packages: write

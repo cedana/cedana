@@ -15,6 +15,14 @@ APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     zip
 "
 
+sudo() {
+    if [ id -u -ne 0 ]; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
 install_apt_packages() {
     apt-get update
     for pkg in $APT_PACKAGES; do
