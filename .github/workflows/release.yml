@@ -45,7 +45,7 @@ jobs:
           fetch-tags: true
 
       # ref: https://github.com/actions/checkout/issues/1048
-      - run: git config --global --add safe.directory /__w/cedana/cedana
+      - run: git config --global --add safe.directory /__w/cedana/cedana && git fetch --tags
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
