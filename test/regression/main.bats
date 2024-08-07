@@ -31,8 +31,8 @@ teardown() {
 
 @test "Check cedana --version" {
     # cedana version should be same as in `git describe --tags`
-    cedana version
-    cedana version | grep -q "$(git describe --tags)"
+    cedana --version
+    cedana --version | grep -q "$(git describe --tags)"
 }
 
 @test "Output file created and has some data" {
