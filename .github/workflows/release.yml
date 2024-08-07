@@ -57,7 +57,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v4
         with:
           distribution: goreleaser
-          args: release --clean
+          args: release --clean --auto-snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
