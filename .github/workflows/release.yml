@@ -45,7 +45,7 @@ jobs:
           fetch-tags: true
 
       # issue when using custom container: https://github.com/actions/checkout/issues/1048
-      - run: git config --global --add safe.directory /__w/cedana/cedana && git fetch --tags
+      - run: git config --global --add safe.directory /__w/cedana/cedana
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
