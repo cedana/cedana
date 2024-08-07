@@ -29,6 +29,12 @@ teardown() {
     sleep 1 3>-
 }
 
+@test "Check cedana --version" {
+    # cedana version should be same as in `git describe --tags`
+    cedana --version
+    cedana --version | grep -q "$(git describe --tags --always)"
+}
+
 @test "Output file created and has some data" {
     local task="./workload.sh"
     local job_id="workload"

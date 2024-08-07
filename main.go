@@ -10,11 +10,7 @@ import (
 )
 
 // loaded from ldflag definitions
-var (
-	version string
-	commit  string
-	date    string
-)
+var Version = "dev"
 
 func main() {
 	// Grandparent context to deal with OS interrupts
@@ -28,7 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := cmd.Execute(ctx, cmd.GetVersion(version, commit, date)); err != nil {
+	if err := cmd.Execute(ctx, Version); err != nil {
 		os.Exit(1)
 	}
 }
