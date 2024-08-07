@@ -35,7 +35,7 @@ jobs:
     name: Build & Publish (amd64)
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cedana/cedana:latest
+      image: golang:1.22-bookworm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +46,12 @@ jobs:
 
       # issue when using custom container: https://github.com/actions/checkout/issues/1048
       - run: git config --global --add safe.directory /__w/cedana/cedana
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y sudo
+          sudo -E make -C scripts/ci setup-build
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
