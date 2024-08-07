@@ -151,8 +151,8 @@ teardown() {
 
     runc_list_output=$(sudo runc --root /run/containerd/runc/default list)
 
-    bundle=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $4}')
-    pid=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $2}')
+    bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
+    pid=$(cat "$bundle"/init.pid)
 
     # restore the container
     run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
