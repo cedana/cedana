@@ -43,6 +43,8 @@ concurrency:
 jobs:
   publish-go:
     name: Publish (Go)
+    container:
+      image: golang:1.23rc1-bullseye
     runs-on: ubuntu-latest
     if: ${{ inputs.make_release }}
     steps:
@@ -52,9 +54,6 @@ jobs:
           fetch-depth: 1
           submodules: recursive
           fetch-tags: true
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
