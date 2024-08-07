@@ -47,7 +47,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
 if [ $NO_BUILD -ne 1 ]; then
     echo "Building $APP_NAME..."
-    VERSION=$(git describe --tags --always --dirty)
+    VERSION=$(git describe --tags --always)
     LDFLAGS="-X main.Version=$VERSION"
 
     CGO_ENABLED=1 go build -ldflags "$LDFLAGS"
