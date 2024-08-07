@@ -13,7 +13,7 @@ if [[ $SKIPSETUP -eq 1 ]]; then
 fi
 
 YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu)
-APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgpgme-dev libseccomp-dev libbtrfs-dev buildah)
+APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgpgme-dev libseccomp-dev libbtrfs-dev buildah libgnutls30 python3:any python3-protobuf libc6 libnftables1 libprotobuf-c1)
 
 install_apt_packages() {
     apt-get update
