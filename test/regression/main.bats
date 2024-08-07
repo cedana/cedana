@@ -154,7 +154,6 @@ teardown() {
     bundle=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $4}')
     pid=$(echo "$runc_list_output" | awk -v id="$container_id" '$1 == id {print $2}')
 
-    pid=$(sudo cat "$HOME/run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore/init.pid")
     # restore the container
     run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
     run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
