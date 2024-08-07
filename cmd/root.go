@@ -23,7 +23,7 @@ ________  _______   ________  ________  ________   ________
 
     ` +
 		"\n Instance Brokerage, Orchestration and Migration System." +
-		"\n Property of Cedana, Corp.",
+		"\n Property of Cedana, Corp.\n",
 }
 
 func Execute(ctx context.Context, version string) error {
@@ -32,6 +32,8 @@ func Execute(ctx context.Context, version string) error {
 	ctx = context.WithValue(ctx, "logger", logger)
 
 	rootCmd.Version = version
+
+	rootCmd.Long = rootCmd.Long + "\n " + version
 
 	// only show usage when true usage error
 	rootCmd.SilenceUsage = true

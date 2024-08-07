@@ -1,5 +1,4 @@
 FROM golang:1.22-bookworm as builder
-ARG VERSION="dev"
 
 WORKDIR /app
 ADD . /app
@@ -11,10 +10,7 @@ RUN apt-get update \
     libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev \
     libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf software-properties-common zip
 
-RUN NOW=$(date +'%Y-%m-%d') \
-    && COMMIT=$(git rev-parse HEAD) \
-    && VERSION=$VERSION \
-    && CGO_ENABLED=1 go build -o cedana -ldflags "-X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$NOW"
+RUN /app/build.sh
 
 FROM ubuntu:22.04
 
@@ -25,6 +21,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/cedana /usr/local/bin/
+COPY --from=builder /app/build.sh /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
 

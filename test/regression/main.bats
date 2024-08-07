@@ -29,6 +29,12 @@ teardown() {
     sleep 1 3>-
 }
 
+@test "Check cedana --version" {
+    # cedana version should be same as in `git describe --tags`
+    cedana --version
+    cedana --version | grep -q "$(git describe --tags --always)"
+}
+
 @test "Output file created and has some data" {
     local task="./workload.sh"
     local job_id="workload"
@@ -136,7 +142,7 @@ teardown() {
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
-    local dir="/tmp/test"
+    local dir="/tmp/jupyter-checkpoint"
 
     run start_jupyter_notebook $container_id
     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
@@ -144,6 +150,23 @@ teardown() {
 
     [[ "$output" == *"success"* ]]
 }
+
+@test "Full containerd restore (jupyter notebook)" {
+    local container_id="jupyter-notebook-restore"
+    local dumpdir="/tmp/jupyter-checkpoint"
+
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
+
+    bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
+    pid=$(cat "$bundle"/init.pid)
+
+    # restore the container
+    run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
+    echo "$output"
+
+    [[ "$output" == *"success"* ]]
+}
+
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"

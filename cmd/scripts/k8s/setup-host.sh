@@ -4,7 +4,8 @@
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
-chroot /host <<"EOT"
+chroot /host /bin/bash -c '
+#!/bin/bash
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
@@ -15,18 +16,65 @@ fi
 YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu)
 APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgpgme-dev libseccomp-dev libbtrfs-dev buildah libgnutls30 python3:any python3-protobuf libc6 libnftables1 libprotobuf-c1)
 
-install_apt_packages() {
+check_and_install_apt_packages() {
     apt-get update
 
-    apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
+    local missing_packages=()
+    for pkg in "${APT_PACKAGES[@]}"; do
+        if ! dpkg -l | grep -qw "$pkg"; then
+            missing_packages+=("$pkg")
+        fi
+    done
 
-    # install all packages at once
-    apt-get install -y "${APT_PACKAGES[@]}" || echo "Failed to install $pkg"
+    # Check if CRIU is installed
+    if ! dpkg -l | grep -qw "criu"; then
+        if [ $(uname -m) == "x86_64" ]; then
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
+            OUTPUT_FILE="criu_3.19-4_amd64.deb"
+        elif [ $(uname -m) == "arm64" ]; then
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_arm64.deb"
+            OUTPUT_FILE="criu_3.19-4_arm64.deb"
+        else
+            echo "Unknown platform $(uname -m)"
+            exit 1
+        fi
+
+        wget "$PACKAGE_URL" -O "$OUTPUT_FILE"
+        dpkg -i "$OUTPUT_FILE"
+    else
+        echo "CRIU is already installed"
+    fi
+
+    # Install other APT packages if missing
+    if [ ${#missing_packages[@]} -gt 0 ]; then
+        apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" "${missing_packages[@]}" || echo "Failed to install some APT packages"
+    else
+        echo "All APT packages are already installed"
+    fi
 }
 
-install_yum_packages() {
-    yum install -y "${YUM_PACKAGES[@]}"
-    yum group install -y "Development Tools"
+check_and_install_yum_packages() {
+    local missing_packages=()
+    for pkg in "${YUM_PACKAGES[@]}"; do
+        if ! rpm -q "$pkg" &>/dev/null; then
+            missing_packages+=("$pkg")
+        fi
+    done
+
+    # Check if CRIU is installed
+    if ! rpm -q "criu" &>/dev/null; then
+        yum install -y criu
+    else
+        echo "CRIU is already installed"
+    fi
+
+    # Install other YUM packages if missing
+    if [ ${#missing_packages[@]} -gt 0 ]; then
+        yum install -y "${missing_packages[@]}"
+        yum group install -y "Development Tools"
+    else
+        echo "All YUM packages are already installed"
+    fi
 }
 
 install_criu_ubuntu_2204() {
@@ -40,14 +88,14 @@ install_criu_ubuntu_2204() {
             OUTPUT_FILE="criu_3.19-4_arm64.deb"
             ;;
         *)
-            echo "Unknown platform " $(uname -m)
+            echo "Unknown platform $(uname -m)"
             exit 1
             ;;
     esac
 
-    if ! test -f $OUTPUT_FILE; then
-        wget $PACKAGE_URL -O $OUTPUT_FILE
-        dpkg -i $OUTPUT_FILE
+    if ! test -f "$OUTPUT_FILE"; then
+        wget "$PACKAGE_URL" -O "$OUTPUT_FILE"
+        dpkg -i "$OUTPUT_FILE"
     fi
 }
 
@@ -55,14 +103,14 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
         debian | ubuntu)
-            install_apt_packages
+            check_and_install_apt_packages
             install_criu_ubuntu_2204
             ;;
         rhel | centos | fedora)
-            install_yum_packages
+            check_and_install_yum_packages
             ;;
         amzn)
-            install_yum_packages
+            check_and_install_yum_packages
             ;;
         *)
             echo "Unknown distribution"
@@ -70,17 +118,14 @@ if [ -f /etc/os-release ]; then
             ;;
     esac
 elif [ -f /etc/debian_version ]; then
-    install_apt_packages
+    check_and_install_apt_packages
 elif [ -f /etc/redhat-release ]; then
-    install_yum_packages
+    check_and_install_yum_packages
 else
     echo "Unknown distribution"
     exit 1
 fi
 
-
 cd /
 IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
-
-EOT
-
+'
