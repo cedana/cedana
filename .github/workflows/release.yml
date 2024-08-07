@@ -44,7 +44,7 @@ jobs:
   publish-go:
     name: Publish (Go)
     container:
-      image: golang:1.23rc1-bullseye
+      image: golang:1.22-bookworm
     runs-on: ubuntu-latest
     if: ${{ inputs.make_release }}
     steps:
