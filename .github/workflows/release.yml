@@ -51,7 +51,11 @@ jobs:
           limit-access-to-actor: true
 
       - name: Install dependencies
-        run: sudo -E make -C scripts/ci setup-build
+        run: |
+          apt-get update
+          apt-get install -y sudo
+          sudo -E make -C scripts/ci setup-build
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
