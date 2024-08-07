@@ -149,13 +149,12 @@ teardown() {
     local container_id="jupyter-notebook-restore"
     local dumpdir="/tmp/jupyter-checkpoint"
 
-    runc_list_output=$(sudo runc --root /run/containerd/runc/default list)
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
 
     bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
     pid=$(cat "$bundle"/init.pid)
 
     # restore the container
-    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
     run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
     echo "$output"
 
