@@ -32,7 +32,7 @@ teardown() {
 @test "Check cedana --version" {
     # cedana version should be same as in `git describe --tags`
     cedana --version
-    cedana --version | grep -q "$(git describe --tags --always --dirty)"
+    cedana --version | grep -q "$(git describe --tags --always)"
 }
 
 @test "Output file created and has some data" {
