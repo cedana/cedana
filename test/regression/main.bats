@@ -146,10 +146,10 @@ teardown() {
 }
 
 @test "Full containerd restore (jupyter notebook)" {
-    local bundle="/run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore"
+    local bundle="$HOME/run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore"
     local job_id="jupyter-notebook-restore"
     local dumpdir="/tmp/jupyter-checkpoint"
-    pid=$(sudo cat "$bundle/init.pid")
+    pid=$(sudo cat "$HOME/run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore/init.pid")
     # restore the container
     run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$job_id"
     run runc_restore_jupyter "$bundle" "$dumpdir" "$job_id" "$pid"
