@@ -56,6 +56,7 @@ if [ $NO_BUILD -ne 1 ]; then
 
     CGO_ENABLED=1 go build -ldflags "$LDFLAGS"
 
+    # shellcheck disable=code # I like this so not changing
     if [ $? -ne 0 ]; then
         echo "Build failed. Exiting."
         exit 1
