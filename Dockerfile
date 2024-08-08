@@ -12,6 +12,10 @@ RUN apt-get update \
 
 RUN /app/build.sh
 
+RUN curl --proto '=https' --tlsv1.2 -fOL \
+    https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.106.1/otelcol-contrib_0.106.1_linux_amd64.tar.gz && \
+    tar -xvf otelcol-contrib_0.106.1_linux_amd64.tar.gz
+
 FROM ubuntu:22.04
 
 # Install essential packages
@@ -24,6 +28,8 @@ COPY --from=builder /app/cedana /usr/local/bin/
 COPY --from=builder /app/build.sh /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
+COPY --from=builder /app/otelcol-contrib /usr/local/bin
+COPY --from=builder /app/scripts/otelcol-config.yaml /usr/local/bin
 
 ENV USER="root"
 
