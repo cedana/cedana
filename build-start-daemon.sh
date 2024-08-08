@@ -120,10 +120,10 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
+    if [[ -z "${SUDO_USE}" ]]; then
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi
