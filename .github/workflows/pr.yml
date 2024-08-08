@@ -64,6 +64,23 @@ jobs:
           name: build
           path: ./cedana
 
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          reporter: github-pr-review # Change reporter.
+          path: "." # Optional.
+          pattern: |
+            *.bash
+            *.sh
+            *.bats
+          exclude: "./.git/*" # Optional.
+          check_all_files_with_shebangs: "true" # Optional
   smoke-test:
     name: Smoke
     runs-on: ubicloud-standard-8

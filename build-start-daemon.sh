@@ -36,6 +36,10 @@ for arg in "$@"; do
         echo "GPU support enabled"
         CEDANA_GPU_ENABLED=true
     fi
+    if [ "$arg" == "-otel" ]; then
+        echo "otel enabled, starting otelcol.."
+        CEDANA_OTEL_ENABLED=true
+    fi
     if [[ $arg == --args=* ]]; then
         value="${arg#*=}"
         echo "Daemon args: $value"
@@ -71,10 +75,6 @@ fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
-fi
-
-if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
-    echo "Starting daemon with OpenTelemetry support..."
 fi
 
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
