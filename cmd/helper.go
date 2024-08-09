@@ -40,6 +40,9 @@ var cleanupHostScript string
 //go:embed scripts/k8s/bump-restart.sh
 var restartScript string
 
+//go:embed scripts/k8s/start-otelcol.sh
+var startOtelColScript string
+
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
@@ -65,6 +68,20 @@ var helperCmd = &cobra.Command{
 		if startChroot {
 			if err := runScript("bash", chrootStartScript); err != nil {
 				logger.Error().Err(err).Msg("Error with chroot and starting daemon")
+			}
+		}
+
+		startOtelCol, _ := cmd.Flags().GetBool("start-otelcol")
+		if startOtelCol {
+			// check for signoz_access_token
+			_, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
+			if !ok {
+				logger.Error().Msg("SIGNOZ_ACCESS_TOKEN not set")
+				return nil
+			}
+
+			if err := runScript("bash", startOtelColScript); err != nil {
+				logger.Error().Err(err).Msg("Error starting otelcol")
 			}
 		}
 
@@ -249,6 +266,7 @@ func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
 	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
+	helperCmd.Flags().Bool("start-otelcol", false, "Start otelcol on the host")
 	rootCmd.AddCommand(helperCmd)
 
 	helperCmd.AddCommand(destroyCmd)
