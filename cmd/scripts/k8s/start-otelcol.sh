@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#shellcheck disable=SC2016
 
 cp /usr/local/bin/otelcol-contrib /host/usr/local/bin/otelcol-contrib
 cp /usr/local/bin/otelcol-config.yaml /host/usr/local/bin/otelcol-config.yaml
