@@ -32,11 +32,15 @@ func Execute(ctx context.Context, version string) error {
 	ctx = context.WithValue(ctx, "logger", logger)
 
 	rootCmd.Version = version
-
 	rootCmd.Long = rootCmd.Long + "\n " + version
 
 	// only show usage when true usage error
 	rootCmd.SilenceUsage = true
+
+	if err := utils.InitConfigCLI(); err != nil {
+		logger.Error().Err(err).Msg("failed to initialize config")
+		return err
+	}
 
 	return rootCmd.ExecuteContext(ctx)
 }
