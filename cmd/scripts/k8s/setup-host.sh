@@ -28,16 +28,17 @@ check_and_install_apt_packages() {
 
     # Check if CRIU is installed
     if ! dpkg -l | grep -qw "criu"; then
-        if [ $(uname -m) == "x86_64" ]; then
+        case $(uname -m) in
+        x86_64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
             OUTPUT_FILE="criu_3.19-4_amd64.deb"
-        elif [ $(uname -m) == "arm64" ]; then
+        aarch64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_arm64.deb"
             OUTPUT_FILE="criu_3.19-4_arm64.deb"
-        else
+        *)
             echo "Unknown platform $(uname -m)"
             exit 1
-        fi
+        esac
 
         wget "$PACKAGE_URL" -O "$OUTPUT_FILE"
         dpkg -i "$OUTPUT_FILE"
