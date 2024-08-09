@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Install Cedana
+# Install Cedana on host from binaries installed through Dockerfile
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
@@ -9,7 +9,7 @@ chroot /host /bin/bash -c '
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
+    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
     exit 0
 fi
 
@@ -127,5 +127,5 @@ else
 fi
 
 cd /
-IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
+IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
 '
