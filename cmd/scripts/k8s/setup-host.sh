@@ -9,7 +9,7 @@ chroot /host /bin/bash -c '
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
+    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
     exit 0
 fi
 
@@ -127,5 +127,5 @@ else
 fi
 
 cd /
-IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
+IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
 '

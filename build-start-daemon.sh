@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# shellcheck disable=SC2181
+#
 set -e
 
 SUDO_USE=sudo
@@ -41,6 +42,11 @@ for arg in "$@"; do
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
+
+    if [ "$arg" == "-otel" ]; then
+        echo "otel enabled, starting otelcol.."
+        CEDANA_OTEL_ENABLED=true
+    fi
 done
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
@@ -71,10 +77,6 @@ fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
-fi
-
-if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
-    echo "Starting daemon with OpenTelemetry support..."
 fi
 
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
@@ -120,10 +122,10 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
+    if [[ -z "${SUDO_USE}" ]]; then
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi
