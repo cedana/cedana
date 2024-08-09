@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -74,12 +75,12 @@ var helperCmd = &cobra.Command{
 		startOtelCol, _ := cmd.Flags().GetBool("start-otelcol")
 		if startOtelCol {
 			// check for signoz_access_token
-			_, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
-			if !ok {
-				logger.Error().Msg("SIGNOZ_ACCESS_TOKEN not set")
-				return nil
+			apikey, err := getTelemetryAPIKey()
+			if err != nil {
+				logger.Error().Err(err).Msg("Error getting telemetry API key")
 			}
 
+			os.Setenv("SIGNOZ_ACCESS_TOKEN", apikey)
 			if err := runScript("bash", startOtelColScript); err != nil {
 				logger.Error().Err(err).Msg("Error starting otelcol")
 			}
@@ -116,6 +117,51 @@ func destroyCedana(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func getTelemetryAPIKey() (string, error) {
+	var apiKey string
+	apiKey, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
+	if !ok {
+		// try downloading from checkpointsvc
+		cedana_api_key, ok := os.LookupEnv("CEDANA_API_KEY")
+		if !ok {
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_KEY not set")
+		}
+
+		cedana_api_server, ok := os.LookupEnv("CEDANA_API_SERVER")
+		if !ok {
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_SERVER not set")
+		}
+
+		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_api_server)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", fmt.Errorf("error creating request: %v", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+cedana_api_key)
+		client := &http.Client{}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("error making request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("error getting api key: %d", resp.StatusCode)
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("error reading response body: %v", err)
+		}
+
+		apiKey = string(respBody)
+	}
+
+	return apiKey, nil
 }
 
 func startHelper(ctx context.Context, startChroot bool) {
