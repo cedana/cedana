@@ -35,7 +35,7 @@ jobs:
     name: Build & Publish (amd64)
     runs-on: ubuntu-latest
     container:
-      image: golang:1.22-bookworm
+      image: golang:1.22-bullseye
     steps:
       - name: Checkout
         uses: actions/checkout@v4
