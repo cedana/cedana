@@ -4,28 +4,28 @@ package types
 type (
 	// Daemon config
 	Config struct {
-		Client        Client        `json:"client" mapstructure:"client"`
-		Connection    Connection    `json:"connection" mapstructure:"connection"`
-		SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
+		Client        Client        `key:"client" json:"client" mapstructure:"client"`
+		Connection    Connection    `key:"connection" json:"connection" mapstructure:"connection"`
+		SharedStorage SharedStorage `key:"sharedStorage" json:"shared_storage" mapstructure:"shared_storage"`
 	}
 	Client struct {
 		// job to run
-		Task         string `json:"task" mapstructure:"task"`
-		LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
-		ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
+		Task         string `key:"task" json:"task" mapstructure:"task"`
+		LeaveRunning bool   `key:"leaveRunning" json:"leave_running" mapstructure:"leave_running"`
+		ForwardLogs  bool   `key:"forwardLogs" json:"forward_logs" mapstructure:"forward_logs"`
 	}
 	Connection struct {
 		// for cedana managed systems
-		CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
-		CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
+		CedanaUrl       string `key:"cedanaUrl" json:"cedana_url" mapstructure:"cedana_url"`
+		CedanaAuthToken string `key:"cedanaAuthToken" json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 	}
 	SharedStorage struct {
-		DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
+		DumpStorageDir string `key:"dumpStorageDir" json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 	}
 
 	// CLI config
 	ConfigCLI struct {
-		WaitForReady bool `json:"wait_for_ready" mapstructure:"wait_for_ready"`
+		WaitForReady bool `key:"waitForReady" json:"wait_for_ready" mapstructure:"wait_for_ready"`
 	}
 
 	// Misc
