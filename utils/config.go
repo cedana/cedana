@@ -12,14 +12,12 @@ import (
 )
 
 const (
-	configDirName     = ".cedana"
-	configFileName    = "client_config"
-	configFileNameCLI = "cli_config"
-	configFileType    = "json"
-	envVarPrefix      = "CEDANA"
-	envVarPrefixCLI   = "CEDANA_CLI"
-	configDirPerm     = 0755
-	configFilePerm    = 0644
+	configDirName  = ".cedana"
+	configFileName = "client_config"
+	configFileType = "json"
+	envVarPrefix   = "CEDANA"
+	configDirPerm  = 0755
+	configFilePerm = 0644
 )
 
 const (
@@ -82,49 +80,6 @@ func InitConfig(args types.InitConfigArgs) error {
 	return err
 }
 
-func InitConfigCLI() error {
-	user, err := getUser()
-	if err != nil {
-		return err
-	}
-
-	homeDir := user.HomeDir
-	configDir := filepath.Join(homeDir, configDirName)
-
-	viper.AddConfigPath(configDir)
-	viper.SetConfigPermissions(configFilePerm)
-	viper.SetConfigType(configFileType)
-	viper.SetConfigName(configFileNameCLI)
-	viper.SetEnvPrefix(envVarPrefixCLI)
-
-	// Allow environment variables to be accesses through viper *if* bound.
-	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
-	// However, viper.Get() always first checks the config file
-	viper.AutomaticEnv()
-
-	// Create config directory if it does not exist
-	_, err = os.Stat(configDir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(configDir, configDirPerm)
-		if err != nil {
-			return err
-		}
-	}
-	uid, _ := strconv.Atoi(user.Uid)
-	gid, _ := strconv.Atoi(user.Gid)
-	os.Chown(configDir, uid, gid)
-
-	setDefaultsCLI() // Only sets defaults for when no value is found in config
-	bindEnvVarsCLI()
-	viper.SetTypeByDefaultValue(true)
-	viper.ReadInConfig()
-
-	viper.SafeWriteConfig() // Will only overwrite if file does not exist
-	os.Chown(filepath.Join(configDir, configFileNameCLI+"."+configFileType), uid, gid)
-
-	return err
-}
-
 func GetConfig() (*types.Config, error) {
 	var config types.Config
 	err := viper.Unmarshal(&config)
@@ -147,9 +102,7 @@ func setDefaults() {
 	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
 
 	viper.SetDefault("connection.cedana_user", "random-user")
-}
 
-func setDefaultsCLI() {
 	viper.SetDefault("wait_for_ready", false)
 }
 
@@ -174,9 +127,7 @@ func bindEnvVars() {
 	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
 	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 	viper.BindEnv("remote", "CEDANA_REMOTE")
-}
 
-func bindEnvVarsCLI() {
 	viper.BindEnv("wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
 }
 

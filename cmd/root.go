@@ -5,6 +5,7 @@ package cmd
 import (
 	"context"
 
+	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,7 @@ var rootCmd = &cobra.Command{
 	Use:   "cedana",
 	Short: "simple criu dump/restore client",
 	Long: `
-________  _______   ________  ________  ________   ________
+ ________  _______   ________  ________  ________   ________
 |\   ____\|\  ___ \ |\   ___ \|\   __  \|\   ___  \|\   __  \
 \ \  \___|\ \   __/|\ \  \_|\ \ \  \|\  \ \  \\ \  \ \  \|\  \
  \ \  \    \ \  \_|/_\ \  \ \\ \ \   __  \ \  \\ \  \ \   __  \
@@ -37,9 +38,17 @@ func Execute(ctx context.Context, version string) error {
 	// only show usage when true usage error
 	rootCmd.SilenceUsage = true
 
-	if err := utils.InitConfigCLI(); err != nil {
-		logger.Error().Err(err).Msg("failed to initialize config")
-		return err
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		config, _ := cmd.Flags().GetString(configFlag)
+		configDir, _ := cmd.Flags().GetString(configDirFlag)
+		if err := utils.InitConfig(types.InitConfigArgs{
+			Config:    config,
+			ConfigDir: configDir,
+		}); err != nil {
+			logger.Error().Err(err).Msg("failed to initialize config")
+			return err
+		}
+		return nil
 	}
 
 	return rootCmd.ExecuteContext(ctx)

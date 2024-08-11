@@ -7,6 +7,7 @@ type (
 		Client        Client        `key:"client" json:"client" mapstructure:"client"`
 		Connection    Connection    `key:"connection" json:"connection" mapstructure:"connection"`
 		SharedStorage SharedStorage `key:"sharedStorage" json:"shared_storage" mapstructure:"shared_storage"`
+		CLI           CLI           `key:"cli" json:"cli" mapstructure:"cli"`
 	}
 	Client struct {
 		// job to run
@@ -23,8 +24,7 @@ type (
 		DumpStorageDir string `key:"dumpStorageDir" json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
 	}
 
-	// CLI config
-	ConfigCLI struct {
+	CLI struct {
 		WaitForReady bool `key:"waitForReady" json:"wait_for_ready" mapstructure:"wait_for_ready"`
 	}
 
