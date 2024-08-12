@@ -127,8 +127,6 @@ else
     exit 1
 fi
 
-pkill cdp
-
 systemctl stop cedana.service
 '
 
