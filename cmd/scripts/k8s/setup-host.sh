@@ -128,6 +128,9 @@ else
 fi
 
 systemctl stop cedana.service
+
+rm -rf /var/log/cedana*
+
 '
 
 # Install Cedana
