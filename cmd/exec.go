@@ -3,6 +3,7 @@ package cmd
 // This file contains all the exec-related commands when starting `cedana exec ...`
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 
@@ -70,6 +71,8 @@ var execTaskCmd = &cobra.Command{
 			logger.Info().Msgf("starting task w/ gpu enabled")
 		}
 
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+
 		taskArgs := &task.StartArgs{
 			Task:          executable,
 			WorkingDir:    wd,
@@ -82,17 +85,65 @@ var execTaskCmd = &cobra.Command{
 			LogOutputFile: logRedirectFile,
 		}
 
-		resp, err := cts.Start(ctx, taskArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				logger.Error().Err(st.Err()).Msg("start task failed")
-			} else {
-				logger.Error().Err(err).Msg("start task failed")
+		if attach {
+			stream, err := cts.StartAttach(ctx, &task.StartAttachArgs{Args: taskArgs})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					logger.Error().Err(st.Err()).Msg("start task failed")
+				} else {
+					logger.Error().Err(err).Msg("start task failed")
+				}
 			}
-			return err
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						logger.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.StartAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						logger.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
+		} else {
+			resp, err := cts.Start(ctx, taskArgs)
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					logger.Error().Err(st.Err()).Msg("start task failed")
+				} else {
+					logger.Error().Err(err).Msg("start task failed")
+				}
+				return err
+			}
+			logger.Info().Msgf("Task started: %v", resp)
 		}
-		logger.Info().Msgf("Task started: %v", resp)
 
 		return nil
 	},
@@ -104,6 +155,7 @@ func init() {
 	execTaskCmd.Flags().StringP(idFlag, "i", "", "job id to use")
 	execTaskCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "enable gpu checkpointing")
 	execTaskCmd.Flags().StringP(logRedirectFlag, "l", "", "log redirect file (stdout/stderr)")
+	execTaskCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 
 	rootCmd.AddCommand(execTaskCmd)
 }
