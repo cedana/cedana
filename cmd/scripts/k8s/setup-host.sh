@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Stop Cedana
+chroot /host /bin/bash -c '
+pkill cdp
+pkill otelcol-contrib
+
+systemctl stop cedana.service
+'
+
 # Install Cedana
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
