@@ -20,7 +20,6 @@ import (
 	ecr "github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/utils"
-	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/image/v5/types"
@@ -211,16 +210,17 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	rootfsDiffFile, err := os.Open(filepath.Join(ctrDir, metadata.RootFsDiffTar))
+	rootfsDiffFile, err := os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("failed to open root file-system diff file: %w", err)
+		return "", fmt.Errorf("failed to create temporary file: %v\n", err)
 	}
+
 	defer rootfsDiffFile.Close()
 
-	tmpRootfsChangesDir := filepath.Join(ctrDir, "rootfs-diff")
+	tmpRootfsChangesDir := os.TempDir()
 	if err := os.Mkdir(tmpRootfsChangesDir, 0777); err != nil {
 		return "", err
 	}
