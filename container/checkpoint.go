@@ -1680,6 +1680,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 		External:        criuOpts.External,
+		TcpSkipInFlight: proto.Bool(true),
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
