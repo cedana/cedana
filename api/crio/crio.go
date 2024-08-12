@@ -271,21 +271,21 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeSourceDir: true,
 	})
 
-	rootfsDiffFile, err = os.Create(diffPath)
+	rootfsDiffFile, err = os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
 	if err != nil {
-		return "", fmt.Errorf("creating root file-system diff file %q: %w", diffPath, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("creating root file-system diff file %q: %w", rootfsDiffFile.Name(), err)
 	}
+
 	defer rootfsDiffFile.Close()
+
 	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
 		return "", err
 	}
 
-	_, err = os.Stat(diffPath)
-	if err != nil {
-		return "", err
-	}
-
-	return diffPath, nil
+	return rootfsDiffFile.Name(), nil
 }
 
 func removeAllContainers(logger *zerolog.Logger) {
