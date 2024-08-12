@@ -64,8 +64,6 @@ check_and_install_apt_packages() {
         echo "All APT packages are already installed"
     fi
 
-    # Fix any broken dependencies
-    apt-get --fix-broken install -y
 }
 
 check_and_install_yum_packages() {
