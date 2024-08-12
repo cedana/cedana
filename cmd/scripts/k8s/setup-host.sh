@@ -1,17 +1,5 @@
 #!/bin/bash
 
-# Stop Cedana
-chroot /host /bin/bash -c '
-pkill cdp
-pkill otelcol-contrib
-
-systemctl stop cedana.service
-'
-
-# Install Cedana
-cp /usr/local/bin/cedana /host/usr/local/bin/cedana
-cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
-
 chroot /host /bin/bash -c '
 #!/bin/bash
 
@@ -139,6 +127,18 @@ else
     exit 1
 fi
 
+pkill cdp
+
+systemctl stop cedana.service
+'
+
+# Install Cedana
+cp /usr/local/bin/cedana /host/usr/local/bin/cedana
+cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
+
+
+chroot /host /bin/bash -c '
 cd /
 IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 '
+
