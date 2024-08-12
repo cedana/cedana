@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -39,16 +38,6 @@ var startDaemonCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		logger := ctx.Value("logger").(*zerolog.Logger)
-
-		config, _ := cmd.Flags().GetString(configFlag)
-		configDir, _ := cmd.Flags().GetString(configDirFlag)
-		if err := utils.InitConfig(types.InitConfigArgs{
-			Config:    config,
-			ConfigDir: configDir,
-		}); err != nil {
-			logger.Error().Err(err).Msg("failed to initialize config")
-			return err
-		}
 
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
@@ -178,8 +167,6 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
-	startDaemonCmd.Flags().String(configFlag, "", "custom config JSON string (will merge with existing/default config, and not saved")
-	startDaemonCmd.Flags().String(configDirFlag, "", "custom config directory")
 }
 
 type pullGPUBinaryRequest struct {
