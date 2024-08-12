@@ -167,8 +167,6 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
-	startDaemonCmd.Flags().String(configFlag, "", "custom config JSON string (will merge with existing/default config, and not saved")
-	startDaemonCmd.Flags().String(configDirFlag, "", "custom config directory")
 }
 
 type pullGPUBinaryRequest struct {

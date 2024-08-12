@@ -51,5 +51,8 @@ func Execute(ctx context.Context, version string) error {
 		return nil
 	}
 
+	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
+	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
+
 	return rootCmd.ExecuteContext(ctx)
 }

@@ -284,7 +284,7 @@ func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigReque
 
 func getDefaultCallOptions() []grpc.CallOption {
 	opts := []grpc.CallOption{}
-	if viper.GetBool("wait_for_ready") {
+	if viper.GetBool("cli.wait_for_ready") {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts

@@ -47,11 +47,6 @@ func InitConfig(args types.InitConfigArgs) error {
 	viper.SetConfigName(configFileName)
 	viper.SetEnvPrefix(envVarPrefix)
 
-	// Allow environment variables to be accesses through viper *if* bound.
-	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
-	// However, viper.Get() always first checks the config file
-	viper.AutomaticEnv()
-
 	// Create config directory if it does not exist
 	_, err = os.Stat(configDir)
 	if os.IsNotExist(err) {
@@ -66,6 +61,11 @@ func InitConfig(args types.InitConfigArgs) error {
 
 	setDefaults() // Only sets defaults for when no value is found in config
 	bindEnvVars()
+
+	// Allow environment variables to be accesses through viper *if* bound.
+	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
+	// However, viper.Get() always first checks the config file
+	viper.AutomaticEnv()
 	viper.SetTypeByDefaultValue(true)
 	viper.ReadInConfig()
 
@@ -74,7 +74,7 @@ func InitConfig(args types.InitConfigArgs) error {
 		reader := strings.NewReader(args.Config)
 		err = viper.MergeConfig(reader)
 	} else {
-		viper.SafeWriteConfig() // Will only overwrite if file does not exist
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore error
 	}
 
 	return err
@@ -103,7 +103,7 @@ func setDefaults() {
 
 	viper.SetDefault("connection.cedana_user", "random-user")
 
-	viper.SetDefault("wait_for_ready", false)
+	viper.SetDefault("cli.wait_for_ready", false)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -128,7 +128,8 @@ func bindEnvVars() {
 	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 	viper.BindEnv("remote", "CEDANA_REMOTE")
 
-	viper.BindEnv("wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
+  // CLI-specific
+	viper.BindEnv("cli.wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
 }
 
 func getUser() (*user.User, error) {
