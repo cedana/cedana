@@ -99,6 +99,19 @@ func (c *ServiceClient) Start(ctx context.Context, args *task.StartArgs) (*task.
 	return resp, nil
 }
 
+func (c *ServiceClient) StartAttach(ctx context.Context, args *task.StartAttachArgs) (task.TaskService_StartAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.StartAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first start request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
@@ -271,12 +284,6 @@ func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigReque
 	}
 	return resp, nil
 }
-
-/////////////////////////////
-// Streaming Service Calls //
-/////////////////////////////
-
-// TODO YA add streaming calls (move it from server.go to here)
 
 ///////////////////
 //    Helpers    //

@@ -139,6 +139,19 @@ teardown() {
     [ "$status" -ne 0 ]
 }
 
+@test "Exec --attach stdout/stderr & exit code" {
+    local task="./workload-2.sh"
+    local job_id="workload5"
+
+    # execute a process as a cedana job
+    run exec_task $task $job_id --attach
+
+    # check output of command
+    [[ "$status" -eq 99 ]]
+    [[ "$output" == *"RANDOM OUTPUT START"* ]]
+    [[ "$output" == *"RANDOM OUTPUT END"* ]]
+}
+
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"

@@ -34,59 +34,18 @@ const (
 var DB_BUCKET_JOBS = []byte("jobs")
 
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
-	if args.Task == "" {
-		args.Task = viper.GetString("client.task")
-	}
+	return s.start(ctx, args, nil)
+}
 
-	if args.GPU && s.gpuEnabled == false {
-		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-	}
-
-	state := &task.ProcessState{}
-
-	state.JobState = task.JobState_JOB_RUNNING
-	if args.JID == "" {
-		state.JID = xid.New().String()
-		args.JID = state.JID
-	} else {
-		existingState, _ := s.getState(ctx, args.JID)
-		if existingState != nil {
-			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
-		}
-		state.JID = args.JID
-	}
-	err := s.updateState(ctx, state.JID, state)
+func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
+	in, err := stream.Recv()
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to update state")
+		return err
 	}
+	args := in.GetArgs()
 
-	pid, err := s.run(ctx, args)
-	state.PID = pid
-	if err != nil {
-		// TODO BS: this should be at market level
-		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
-		state.JobState = task.JobState_JOB_STARTUP_FAILED
-		s.updateState(ctx, state.JID, state) // because it's a managed job
-		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
-	}
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
-	}
-
-	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
-
-	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
-		err = status.Error(codes.Internal, "Task startup failed")
-		return nil, err
-	}
-
-	return &task.StartResp{
-		Message: fmt.Sprint("Job started successfully"),
-		PID:     pid,
-		JID:     state.JID,
-	}, err
+	_, err = s.start(stream.Context(), args, stream)
+	return err
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
@@ -333,10 +292,70 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) {
+func (s *service) start(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
+	if args.Task == "" {
+		args.Task = viper.GetString("client.task")
+	}
+
+	if args.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+	}
+
+	state := &task.ProcessState{}
+
+	state.JobState = task.JobState_JOB_RUNNING
+	if args.JID == "" {
+		state.JID = xid.New().String()
+		args.JID = state.JID
+	} else {
+		existingState, _ := s.getState(ctx, args.JID)
+		if existingState != nil {
+			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
+		}
+		state.JID = args.JID
+	}
+	err := s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state: %s", err.Error()))
+	}
+
+	pid, done, err := s.run(ctx, args, stream)
+	state.PID = pid
+	if err != nil {
+		// TODO BS: this should be at market level
+		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		state.JobState = task.JobState_JOB_STARTUP_FAILED
+		s.updateState(ctx, state.JID, state) // because it's a managed job
+		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
+	}
+
+	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
+
+	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
+		err = status.Error(codes.Internal, "Task startup failed")
+		return nil, err
+	}
+
+	if stream != nil {
+		<-done
+	}
+
+	return &task.StartResp{
+		Message: fmt.Sprint("Job started successfully"),
+		PID:     pid,
+		JID:     state.JID,
+	}, err
+}
+
+func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (int32, chan error, error) {
 	var pid int32
 	if args.Task == "" {
-		return 0, fmt.Errorf("could not find task")
+		return 0, nil, fmt.Errorf("could not find task")
 	}
 
 	var gpuCmd *exec.Cmd
@@ -344,7 +363,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	if args.GPU {
 		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, s.logger)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")
@@ -352,21 +371,22 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			sharedLibPath = utils.GpuSharedLibPath
 		}
 		if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
-			return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+			return 0, nil, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
 		}
 		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
-	}
-
-	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		return 0, err
 	}
 
 	groupsUint32 := make([]uint32, len(args.Groups))
 	for i, v := range args.Groups {
 		groupsUint32[i] = uint32(v)
 	}
-	cmd := exec.CommandContext(s.serverCtx, "bash", "-c", args.Task)
+	var cmdCtx context.Context
+	if stream != nil {
+		cmdCtx = utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
+	} else {
+		cmdCtx = s.serverCtx
+	}
+	cmd := exec.CommandContext(cmdCtx, "bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
@@ -381,26 +401,45 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		cmd.Dir = args.WorkingDir
 	}
 
-	cmd.Stdin = nullFile
+	if stream == nil {
+		nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err != nil {
+			return 0, nil, err
+		}
+		cmd.Stdin = nullFile
+	}
+
 	if args.LogOutputFile == "" {
 		args.LogOutputFile = OUTPUT_FILE_PATH
 	}
 
 	// XXX: is this non-performant? do we need to flush at intervals instead of writing?
-	outputFile, err := os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
-	if err != nil {
-		return 0, err
+	var outputFile *os.File
+	var stdinPipe io.WriteCloser
+	var stdoutPipe, stderrPipe io.ReadCloser
+	if stream == nil {
+		outputFile, err = os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
+		if err != nil {
+			return 0, nil, err
+		}
+		os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
 	}
-	os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
 
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return 0, err
+	if stream != nil {
+		stdinPipe, err = cmd.StdinPipe()
+		if err != nil {
+			return 0, nil, err
+		}
 	}
 
-	stderrPipe, err := cmd.StderrPipe()
+	stdoutPipe, err = cmd.StdoutPipe()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
+	}
+
+	stderrPipe, err = cmd.StderrPipe()
+	if err != nil {
+		return 0, nil, err
 	}
 
 	var gpuerrbuf bytes.Buffer
@@ -411,36 +450,89 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	pid = int32(cmd.Process.Pid)
+	stdoutScanner := bufio.NewScanner(stdoutPipe)
+	stderrScanner := bufio.NewScanner(stderrPipe)
 
+	// Receive stdin from stream
+	if stream != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stdinPipe.Close()
+			for {
+				in, err := stream.Recv()
+				if err != nil {
+					s.logger.Error().Err(err).Msg("failed to receive stdin")
+					return
+				}
+				_, err = stdinPipe.Write([]byte(in.Stdin))
+				if err != nil {
+					s.logger.Error().Err(err).Msg("failed to write to stdin")
+					return
+				}
+			}
+		}()
+	}
+
+	// Scan stdout
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		stdoutScanner := bufio.NewScanner(stdoutPipe)
-		stderrScanner := bufio.NewScanner(stderrPipe)
-
+		defer stdoutPipe.Close()
 		for stdoutScanner.Scan() {
-			outputFile.WriteString(stdoutScanner.Text() + "\n")
+			if stream != nil {
+				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stdout")
+					return
+				}
+			}
+			if outputFile != nil {
+				if _, err := outputFile.WriteString(stdoutScanner.Text() + "\n"); err != nil {
+					s.logger.Error().Err(err).Msg("failed to write to output file")
+					return
+				}
+			}
 		}
 		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Info().Err(err).Msgf("Finished reading stdout")
+			s.logger.Debug().Err(err).Msgf("finished reading stdout")
 		}
+	}()
 
+	// Scan stdout
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer stderrPipe.Close()
 		for stderrScanner.Scan() {
-			outputFile.WriteString(stderrScanner.Text() + "\n")
+			if stream != nil {
+				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stderr")
+					return
+				}
+			}
+			if outputFile != nil {
+				if _, err := outputFile.WriteString(stderrScanner.Text() + "\n"); err != nil {
+					s.logger.Error().Err(err).Msg("failed to write to output file")
+					return
+				}
+			}
 		}
 		if err := stderrScanner.Err(); err != nil {
-			s.logger.Info().Err(err).Msgf("Finished reading stderr")
+			s.logger.Debug().Err(err).Msgf("finished reading stderr")
 		}
 	}()
 
 	s.wg.Add(1)
+	done := make(chan error)
 	go func() {
 		defer s.wg.Done()
-		defer outputFile.Close()
+		if outputFile != nil {
+			defer outputFile.Close()
+		}
 		err := cmd.Wait()
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
@@ -452,13 +544,19 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
 		if err != nil {
-			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
+			s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process terminated")
 		} else {
-			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+			s.logger.Info().Int("status", 0).Int32("PID", pid).Msg("process terminated")
+		}
+		if stream != nil {
+			stream.Send(&task.StartAttachResp{
+				ExitCode: int32(cmd.ProcessState.ExitCode()),
+			})
+			done <- err
 		}
 
 		// Update state as it's a managed job
-		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		childCtx := context.WithoutCancel(cmdCtx) // since this routine can outlive the parent
 		state, err := s.getState(childCtx, args.JID)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to get state after job done")
@@ -475,7 +573,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	ppid := int32(os.Getpid())
 
 	closeCommonFds(ppid, pid)
-	return pid, err
+	return pid, done, err
 }
 
 func closeCommonFds(parentPID, childPID int32) error {
