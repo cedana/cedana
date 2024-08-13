@@ -124,6 +124,21 @@ teardown() {
     cedana config show | grep leave_running | grep true
 }
 
+@test "Complain if GPU not enabled in daemon and using GPU flags" {
+    local task="./workload.sh"
+    local job_id="workload-no-gpu"
+
+    # try to run a job with GPU flags
+    run exec_task $task $job_id --gpu-enabled
+    [ "$status" -ne 0 ]
+
+    # try to dump unmanaged process with GPU flags
+    run exec_task $task $job_id
+    [ "$status" -eq 0 ]
+    run dump_task $job_id --gpu-enabled
+    [ "$status" -ne 0 ]
+}
+
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"

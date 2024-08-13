@@ -13,12 +13,14 @@ function stop_cedana() {
 function exec_task() {
     local task="$1"
     local job_id="$2"
-    cedana exec -w "$DIR" "$task" -i "$job_id"
+    shift 2
+    cedana exec -w "$DIR" "$task" -i "$job_id" $@
 }
 
 function checkpoint_task() {
     local job_id="$1"
-    cedana dump job "$job_id" -d /tmp
+    shift 1
+    cedana dump job "$job_id" -d /tmp $@
 }
 
 function restore_task() {
