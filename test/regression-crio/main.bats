@@ -31,7 +31,7 @@ teardown() {
 
 @test "CRIO setup successful" {
     # needs to successfully connect to the crio socket
-    crictl info -r "/var/run/crio/crio.sock"
+    crictl info
 }
 
 @test "Rootfs snapshot of containerd container" {

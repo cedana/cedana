@@ -34,17 +34,17 @@ install_bats_core() {
 }
 
 install_docker() {
-    sudo apt-get update
-    sudo apt-get install ca-certificates curl
-    sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    apt-get update
+    apt-get install ca-certificates curl
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
 
 # Add the repository to Apt sources:
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 install_sysbox() {
@@ -55,21 +55,23 @@ install_sysbox() {
 }
 
 install_buildah() {
-    sudo apt-get update
-    sudo apt-get -y install buildah
+    apt-get update
+    apt-get -y install buildah
 }
 
 install_crictl() {
     VERSION="v1.30.0"
     curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-${VERSION}-linux-amd64.tar.gz --output crictl-${VERSION}-linux-amd64.tar.gz
-    sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+    tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
     rm -f crictl-$VERSION-linux-amd64.tar.gz
 }
 
 install_otelcol_contrib() {
     wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
-    dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
+    dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/
+    cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
 }
+
 print_header() {
     echo "############### $1 ###############"
 }
@@ -110,6 +112,26 @@ setup_ci_build() {
     install_apt_packages
 }
 
+install_criu() {
+    case $(uname -m) in
+    x86 | x86_64)
+        PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
+        OUTPUT_FILE="criu_3.19-4_amd64.deb"
+        ;;
+    armv7 | aarch64)
+        PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_arm64.deb"
+        OUTPUT_FILE="criu_3.19-4_arm64.deb"
+        ;;
+    *)
+        echo "Unknown platform " $(uname -m)
+        exit 1
+        ;;
+    esac
+
+    wget $PACKAGE_URL -O $OUTPUT_FILE
+    dpkg -i $OUTPUT_FILE
+}
+
 setup_ci() {
     setup_ci_build
     install_code_server
@@ -126,19 +148,20 @@ setup_ci() {
     mkdir -p $HOME/.cedana
     echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
 
+    # Set GOPATH and update PATH
+    echo "export GOPATH=$HOME/go" >> /etc/environment
+    echo "export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin" >> /etc/environment
+
+    export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
-    # Set GOPATH and update PATH
-    echo "export GOPATH=$HOME/go" >> /etc/environment
-    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
-
     # Install CRIU
-    sudo add-apt-repository -y ppa:criu/ppa
-    sudo apt-get update && sudo apt-get install -y criu
+    install_criu
 
     # Install smoke & bench deps
-    sudo pip3 install -r test/benchmarks/requirements
+    pip3 install -r test/benchmarks/requirements
 }
 
 install_crio() {
@@ -148,7 +171,8 @@ install_crio() {
 
     curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/$PROJECT_PATH/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
     echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/$PROJECT_PATH/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
-    apt-get update && apt-get install -y cri-o
+    apt-get update
+    apt-get install -y cri-o
 }
 
 setup_ci_crio() {
@@ -158,7 +182,7 @@ setup_ci_crio() {
 
     # install_docker
     # install_sysbox
-    # install_otelcol_contrib
+    install_otelcol_contrib
     install_buildah
     install_crictl
     install_crio
@@ -176,11 +200,10 @@ setup_ci_crio() {
     echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
 
     # Install CRIU
-    sudo add-apt-repository -y ppa:criu/ppa
-    sudo apt-get update && sudo apt-get install -y criu
+    install_criu
 
     # Install smoke & bench deps
-    sudo pip3 install -r test/benchmarks/requirements
+    pip3 install -r test/benchmarks/requirements
 }
 
 source_env() {

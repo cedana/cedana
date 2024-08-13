@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. common-crio.sh
+. common.sh
 bats_require_minimum_version 1.9.0
 export BATS_VERBOSE_RUN=1
 
