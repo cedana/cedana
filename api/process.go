@@ -51,6 +51,15 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
+	if args.GPU {
+		if s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+		if args.JID == "" {
+			return nil, status.Error(codes.InvalidArgument, "GPU dump is only supported for managed jobs")
+		}
+	}
+
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
 	}
@@ -286,6 +295,10 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 func (s *service) start(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
+	}
+
+	if args.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 	}
 
 	state := &task.ProcessState{}
