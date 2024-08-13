@@ -38,6 +38,10 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 		args.Task = viper.GetString("client.task")
 	}
 
+	if args.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+	}
+
 	state := &task.ProcessState{}
 
 	state.JobState = task.JobState_JOB_RUNNING
@@ -87,6 +91,15 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
+
+	if args.GPU {
+		if s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+		if args.JID == "" {
+			return nil, status.Error(codes.InvalidArgument, "GPU dump is only supported for managed jobs")
+		}
+	}
 
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
