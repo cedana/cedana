@@ -10,28 +10,22 @@ function stop_cedana() {
     ./reset.sh
 }
 
-function exec_task() {
-    local task="$1"
-    local job_id="$2"
-    cedana exec -w "$DIR" "$task" -i "$job_id"
-}
-
-function checkpoint_task() {
-    local job_id="$1"
-    cedana dump job "$job_id" -d /tmp
-}
-
-function restore_task() {
-    local job_id="$1"
-    cedana restore job "$job_id"
-}
-
+# start a busybox container
 function start_busybox(){
-    local container_name="$1"
+    local pod_config_path="$1"
+    local container_config_path="$2"
 
-    sudo ctr image pull docker.io/library/busybox:latest
+    # get pod id after creation
+    local pod_id=$(crictl runp "$pod_config_path")
 
-    sudo ctr run -d docker.io/library/busybox:latest "$container_name" sh -c 'while true; do sleep 3600; done'
+    # pull the docker.io/library/busybox:latest image
+    crictl pull busybox:latest
+
+    # container creation id
+    local container_id=$(crictl create "$pod_id" "$container_config_path" "$pod_config_path")
+
+    # start the container
+    crictl start "$container_id"
 }
 
 function rootfs_checkpoint() {
@@ -52,21 +46,17 @@ function rootfs_restore() {
     cedana restore rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
-function runc_checkpoint() {
-    local dir="$1"
-    local job_id="$2"
-    cedana dump runc --dir "$dir" --id "$job_id"
-}
-
-function runc_restore() {
-    local bundle="$1"
-    local dir="$2"
-    local id="$3"
-    local tty="$4"
-    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
-}
-
 function fail() {
     echo "$@" >&2
     exit 1
+}
+
+function start_crio_no_setup() {
+    crio -l debug &>"/tmp/crio.log" &
+    CRIO_PID=$!
+    wait_until_reachable
+}
+
+function wait_until_reachable() {
+    retry 15 1 crictl info
 }

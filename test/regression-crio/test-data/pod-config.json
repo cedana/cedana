@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "name": "busybox-test",
+    "namespace": "default",
+    "attempt": 1,
+    "uid": "aewi4aeThua7ooShohbo1phoj"
+  },
+  "log_directory": "/tmp",
+  "linux": {}
+}

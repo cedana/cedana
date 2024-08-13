@@ -37,10 +37,12 @@ teardown() {
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"
-    local containerd_sock="/run/crio/crio.sock"
+    local containerd_sock="/var/run/crio/crio.sock"
+    local pod_config_path="test/regression-crio/test-data/pod-config.json"
+    local container_config_path="test/regression-crio/test-data/container-config.json"
     local namespace="default"
 
-    run start_busybox $container_id
+    run start_busybox $pod_config_path $container_config_path
     run crio_rootfs_checkpoint $container_id $image_ref $containerd_sock $namespace
     echo "$output"
 
@@ -50,7 +52,7 @@ teardown() {
 @test "Rootfs restore of containerd container" {
     local container_id="busybox-test-restore"
     local image_ref="checkpoint/test:latest"
-    local containerd_sock="/run/crio/crio.sock"
+    local containerd_sock="/var/run/crio/crio.sock"
     local namespace="default"
 
     run crio_rootfs_restore $container_id $image_ref $containerd_sock $namespace

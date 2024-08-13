@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "name": "busybox-test"
+  },
+  "image": {
+    "image": "busybox"
+  },
+  "command": ["while true; do sleep 100; done"],
+  "log_path": "busybox.log",
+  "linux": {}
+}
