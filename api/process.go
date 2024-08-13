@@ -367,7 +367,12 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	for i, v := range args.Groups {
 		groupsUint32[i] = uint32(v)
 	}
-	cmdCtx := utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
+	var cmdCtx context.Context
+	if stream != nil {
+		cmdCtx = utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
+	} else {
+		cmdCtx = s.serverCtx
+	}
 	cmd := exec.CommandContext(cmdCtx, "bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
