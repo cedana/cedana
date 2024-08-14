@@ -126,14 +126,15 @@ var checkDaemonCmd = &cobra.Command{
 			return fmt.Errorf("health failed with reasons: %v", resp.UnhealthyReasons)
 		}
 
-		fmt.Println("Daemon is running and healthy.")
+		fmt.Println("All good.")
+		fmt.Println("Cedana version: ", rootCmd.Version)
 		fmt.Println("CRIU version: ", resp.HealthCheckStats.CriuVersion)
 		if resp.HealthCheckStats.GPUHealthCheck != nil {
 			prettyJson, err := json.MarshalIndent(resp.HealthCheckStats.GPUHealthCheck, "", "  ")
 			if err != nil {
 				return err
 			}
-			fmt.Println("GPU health Check: ", string(prettyJson))
+			fmt.Println("GPU support: ", string(prettyJson))
 		}
 
 		return nil
