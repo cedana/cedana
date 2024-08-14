@@ -135,6 +135,19 @@ func (c *ServiceClient) Restore(ctx context.Context, args *task.RestoreArgs) (*t
 	return resp, nil
 }
 
+func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.RestoreAttachArgs) (task.TaskService_RestoreAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.RestoreAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first restore request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
