@@ -703,6 +703,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			if stream != nil {
+				defer ioFiles[len(ioFiles)-3].Close()
+				defer ioFiles[len(ioFiles)-2].Close()
+				defer ioFiles[len(ioFiles)-1].Close()
+			}
 			var cmdCtx context.Context
 			if stream != nil {
 				cmdCtx = utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
