@@ -3,9 +3,22 @@
 cp /usr/local/bin/stop-daemon.sh /host/stop-daemon.sh
 
 chroot /host <<"EOT"
-cd /
-chmod +x stop-daemon.sh
-IS_K8S=1 ./stop-daemon.sh --systemctl
+#!/bin/bash
+set -e
+
+SUDO_USE=sudo
+if ! which sudo &>/dev/null; then
+    SUDO_USE=""
+fi
+
+APP_NAME="cedana"
+SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
+
+echo "Stopping $APP_NAME service..."
+$SUDO_USE systemctl stop $APP_NAME.service
+
+# delete old logs
+rm -rf /var/log/cedana*
 EOT
 
 # update Cedana binary

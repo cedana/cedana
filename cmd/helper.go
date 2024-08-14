@@ -246,9 +246,9 @@ func isProcessRunning() (bool, error) {
 }
 
 func init() {
-	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
-	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
-	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
+	helperCmd.Flags().Bool(setupHostFlag, false, "Setup host for Cedana")
+	helperCmd.Flags().Bool(restartFlag, false, "Restart the cedana service on the host")
+	helperCmd.Flags().Bool(startChrootFlag, false, "Start chroot and Cedana daemon")
 	rootCmd.AddCommand(helperCmd)
 
 	helperCmd.AddCommand(destroyCmd)
