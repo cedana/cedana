@@ -280,7 +280,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		GPUCheckpointed = true
 	}
 
-	img, err := os.Open(args.Dir)
+	img, err := os.Open(dumpdir)
 	if err != nil {
 		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dumpdir)
 		return err
