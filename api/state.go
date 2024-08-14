@@ -279,7 +279,7 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 	} else {
 		_, err := os.Stat(filepath.Join(dir, CHECKPOINT_STATE_FILE))
 		if err != nil {
-			return nil, fmt.Errorf("state file not found")
+			return nil, fmt.Errorf("state file not found: %v", err)
 		}
 
 		data, err := os.ReadFile(filepath.Join(dir, CHECKPOINT_STATE_FILE))
@@ -287,9 +287,7 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 			return nil, fmt.Errorf("could not read state file: %v", err)
 		}
 
-		var checkpointState task.ProcessState
 		err = json.Unmarshal(data, &checkpointState)
-
 	}
 	return &checkpointState, err
 }
