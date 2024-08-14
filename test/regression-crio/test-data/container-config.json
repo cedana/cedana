@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "name": "busybox-test"
+    "name": "busybox-test-01"
   },
   "image": {
     "image": "busybox"
