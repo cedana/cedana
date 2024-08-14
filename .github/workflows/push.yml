@@ -1,7 +1,9 @@
-name: PR
+name: Push
 
 on:
   push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       debug_test:
