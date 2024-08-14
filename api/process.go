@@ -432,7 +432,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			for {
 				in, err := stream.Recv()
 				if err != nil {
-					s.logger.Error().Err(err).Msg("failed to receive stdin")
+					s.logger.Debug().Err(err).Msg("finished reading stdin")
 					return
 				}
 				_, err = stdinPipe.Write([]byte(in.Stdin))
