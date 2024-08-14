@@ -5,6 +5,8 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/cedana/cedana/api/containerd"
@@ -32,7 +34,16 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
 
-	isReady, err := utils.IsTCPReady(utils.GetTCPStates, 30, 100, int32(runcContainer.Pid))
+	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", runcContainer.Pid)
+	getReader := func() (io.Reader, error) {
+		file, err := os.Open(tcpPath)
+		if err != nil {
+			return nil, err
+		}
+		return file, nil
+	}
+
+	isReady, err := utils.IsTCPReady(utils.GetTCPStates, getReader, 30, 100)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +60,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		}()
 	}
 
-	isReady, err = utils.IsTCPReady(utils.GetTCPStates, 1, 0, int32(runcContainer.Pid))
+	isReady, err = utils.IsTCPReady(utils.GetTCPStates, getReader, 1, 0)
 	if err != nil {
 		return nil, err
 	}

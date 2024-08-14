@@ -2,9 +2,7 @@ package utils
 
 import (
 	"bufio"
-	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -56,22 +54,20 @@ func GetTCPStates(reader io.Reader) ([]uint64, error) {
 	return states, nil
 }
 
-func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), iteration int, timeoutInMs time.Duration, pid int32) (bool, error) {
-	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", pid)
-	file, err := os.Open(tcpPath)
-	if err != nil {
-		return false, err
-	}
-
-	defer file.Close()
-
+func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), getReader func() (io.Reader, error), iteration int, timeoutInMs time.Duration) (bool, error) {
 	isReady := true
 	for i := 0; i < iteration; i++ {
-		tcpStates, err := getTCPStates(file)
+		reader, err := getReader()
 		if err != nil {
 			return false, err
 		}
 
+		tcpStates, err := getTCPStates(reader)
+		if err != nil {
+			return false, err
+		}
+
+		isReady = true
 		for _, state := range tcpStates {
 			if state == TCP_SYN_RECV || state == TCP_SYN_SENT {
 				isReady = false
@@ -83,7 +79,7 @@ func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), iteration int, t
 			break
 		}
 
-		if iteration > 1 {
+		if i < iteration-1 {
 			time.Sleep(timeoutInMs * time.Millisecond)
 		}
 	}
