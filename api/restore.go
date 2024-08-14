@@ -3,6 +3,7 @@ package api
 // Internal functions used by service for restoring processes and containers
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -41,17 +42,18 @@ const (
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
 )
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs) (*string, *task.ProcessState, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("could not get restore stats from context")
+		return nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
 	var isShellJob bool
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
+	var ioFiles []*os.File
 	isManagedJob := args.JID != ""
 
 	tempDir := RESTORE_TEMPDIR
@@ -61,56 +63,85 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	} else {
 		// likely an old checkpoint hanging around, delete
 		err := os.RemoveAll(tempDir)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	}
 
 	err := utils.UntarFolder(args.CheckpointPath, tempDir)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("error decompressing checkpoint")
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	checkpointState, err := deserializeStateFromDir(tempDir)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("error unmarshaling checkpoint state")
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	open_fds := checkpointState.ProcessInfo.OpenFds
 
-	// create logfile for redirection
-	filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
-	file, err := os.Create(filename)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("error creating logfile")
-		return nil, nil, nil, err
+	var in_r, in_w, out_r, out_w, er_r, er_w *os.File
+	if stream == nil {
+		filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+		out_w, err = os.Create(filename)
+	} else {
+		in_r, in_w, err = os.Pipe()
+		out_r, out_w, err = os.Pipe()
+		er_r, er_w, err = os.Pipe()
 	}
+	if err != nil {
+		s.logger.Error().Err(err).Msg("error creating output file")
+		return nil, nil, nil, nil, err
+	}
+	ioFiles = append(ioFiles, in_w)
+	ioFiles = append(ioFiles, out_r)
+	ioFiles = append(ioFiles, er_r)
 
 	for _, f := range open_fds {
 		if strings.Contains(f.Path, "pts") {
 			isShellJob = true
 		}
 		// if stdout or stderr, always redirect fds
-		if f.Fd == 1 || f.Fd == 2 {
-			// strip leading slash from f
-			f.Path = strings.TrimPrefix(f.Path, "/")
-
-			extraFiles = append(extraFiles, file)
-			inheritFds = append(inheritFds, &rpc.InheritFd{
-				Fd:  proto.Int32(2 + int32(len(extraFiles))),
-				Key: proto.String(f.Path),
-			})
+		f.Path = strings.TrimPrefix(f.Path, "/")
+		if stream == nil {
+			if f.Fd == 1 || f.Fd == 2 {
+				extraFiles = append(extraFiles, out_w)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
+			}
+		} else {
+			if f.Fd == 0 {
+				extraFiles = append(extraFiles, in_r)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
+			} else if f.Fd == 1 {
+				extraFiles = append(extraFiles, out_w)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
+			} else if f.Fd == 2 {
+				extraFiles = append(extraFiles, er_w)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
+			}
 		}
 	}
 
@@ -128,13 +159,13 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 		s.logger.Error().Err(err).Msg("error changing permissions")
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-	return &tempDir, checkpointState, extraFiles, nil
+	return &tempDir, checkpointState, extraFiles, ioFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -529,7 +560,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*int32, chan error, error) {
 	var dir *string
 	var pid *int32
 
@@ -538,16 +569,16 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args)
+	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var gpuCmd *exec.Cmd
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
 		if !s.gpuEnabled {
-			return nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
+			return nil, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
 		}
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
@@ -566,11 +597,70 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// If it's a managed restored job
+	done := make(chan error)
 	if args.JID != "" {
+		if stream != nil {
+			// last 3 files of ioFiles are stdin, stdout, stderr
+			in := ioFiles[len(ioFiles)-3]
+			out := ioFiles[len(ioFiles)-2]
+			er := ioFiles[len(ioFiles)-1]
+
+			// Receive stdin from stream
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				defer in.Close()
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						s.logger.Debug().Err(err).Msg("finished reading stdin")
+						return
+					}
+					_, err = in.Write([]byte(resp.Stdin))
+					if err != nil {
+						s.logger.Error().Err(err).Msg("failed to write to stdin")
+						return
+					}
+				}
+			}()
+			// Scan stdout
+			stdoutScanner := bufio.NewScanner(out)
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				defer out.Close()
+				for stdoutScanner.Scan() {
+					if err := stream.Send(&task.RestoreAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+						s.logger.Error().Err(err).Msg("failed to send stdout")
+						return
+					}
+				}
+				if err := stdoutScanner.Err(); err != nil {
+					s.logger.Debug().Err(err).Msgf("finished reading stdout")
+				}
+			}()
+			// Scan stderr
+			stderrScanner := bufio.NewScanner(er)
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				defer er.Close()
+				for stderrScanner.Scan() {
+					if err := stream.Send(&task.RestoreAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+						s.logger.Error().Err(err).Msg("failed to send stderr")
+						return
+					}
+				}
+				if err := stderrScanner.Err(); err != nil {
+					s.logger.Debug().Err(err).Msgf("finished reading stderr")
+				}
+			}()
+		}
+
 		// Wait to cleanup
 		s.wg.Add(1)
 		go func() {
@@ -578,6 +668,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", status.ExitStatus()).Msgf("process exited")
+
+			if stream != nil {
+				stream.Send(&task.RestoreAttachResp{ExitCode: int32(status.ExitStatus())})
+				done <- nil
+			}
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -604,12 +699,18 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			}
 		}()
 
-		// Kill on server shutdown
+		// Kill on server/stream shutdown
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			<-s.serverCtx.Done()
-			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("server shutting down, killing process")
+			var cmdCtx context.Context
+			if stream != nil {
+				cmdCtx = utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
+			} else {
+				cmdCtx = s.serverCtx
+			}
+			<-cmdCtx.Done()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("killing process")
 			syscall.Kill(int(*pid), syscall.SIGKILL)
 			if err != nil {
 				s.logger.Warn().Err(err).Int32("PID", *pid).Str("JID", args.JID).Msgf("could not kill process")
@@ -618,7 +719,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		}()
 	}
 
-	return pid, nil
+	return pid, done, nil
 }
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32) (*exec.Cmd, error) {

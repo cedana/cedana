@@ -3,7 +3,9 @@ package cmd
 // This file contains all the restore-related commands when starting `cedana restore ...`
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/cedana/cedana/api/services"
@@ -118,6 +120,55 @@ var restoreJobCmd = &cobra.Command{
 			GID:            gid,
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
+		}
+
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+		if attach {
+			stream, err := cts.RestoreAttach(ctx, &task.RestoreAttachArgs{Args: &restoreArgs})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					logger.Error().Err(st.Err()).Msg("restore failed")
+				} else {
+					logger.Error().Err(err).Msg("restore failed")
+				}
+			}
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						logger.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						logger.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -243,6 +294,7 @@ func init() {
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
+	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
