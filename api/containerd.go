@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/cedana/cedana/api/containerd"
@@ -20,6 +21,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func readDumpLog(imagesDir string) (string, error) {
+	logPath := filepath.Join(imagesDir, "dump.log")
+	file, err := os.ReadFile(logPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read dump.log: %w", err)
+	}
+	return string(file), nil
+}
 
 func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
 	rootfsOpts := args.ContainerdRootfsDumpArgs
@@ -107,9 +117,14 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
 	if err != nil {
+		dumpLogContent, logErr := readDumpLog(dumpOpts.CriuOpts.ImagesDirectory)
+		if logErr != nil {
+			dumpLogContent = "Failed to read dump.log: " + logErr.Error()
+		}
+
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
-			Reason: err.Error(),
+			Reason: err.Error() + "\nDump.log content:\n" + dumpLogContent,
 		})
 		return nil, st.Err()
 	}
