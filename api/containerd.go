@@ -12,11 +12,53 @@ import (
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/utils"
 	"github.com/containerd/containerd/namespaces"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+const (
+	TCP_ESTABLISHED = iota
+	TCP_SYN_SENT
+	TCP_SYN_RECV
+	TCP_FIN_WAIT1
+	TCP_FIN_WAIT2
+	TCP_TIME_WAIT
+	TCP_CLOSE
+	TCP_CLOSE_WAIT
+	TCP_LAST_ACK
+	TCP_LISTEN
+	TCP_CLOSING
+	TCP_NEW_SYN_RECV
+)
+
+func isTCPReady(getTCPStates func(int32) ([]uint64, error), iteration int, timeoutInMs time.Duration, pid int32) (bool, error) {
+	isReady := true
+	for i := 0; i < iteration; i++ {
+		tcpStates, err := getTCPStates(pid)
+		if err != nil {
+			return false, err
+		}
+		for _, state := range tcpStates {
+			if state == TCP_SYN_RECV || state == TCP_SYN_SENT {
+				isReady = false
+				break
+			}
+		}
+
+		if isReady {
+			break
+		}
+
+		if iteration > 1 {
+			time.Sleep(timeoutInMs * time.Millisecond)
+		}
+	}
+
+	return isReady, nil
+}
 
 func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
 	rootfsOpts := args.ContainerdRootfsDumpArgs
@@ -25,6 +67,11 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	ctx = namespaces.WithNamespace(ctx, rootfsOpts.Namespace)
 
 	containerdService, err := containerd.New(ctx, rootfsOpts.Address, s.logger)
+	if err != nil {
+		return nil, err
+	}
+
+	isReady, err := isTCPReady(utils.GetTCPStates, 30, 100, args.RuncDumpArgs.Pid)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +86,11 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 				fmt.Println(fmt.Errorf("error resuming task: %w", err))
 			}
 		}()
+	}
+
+	isReady, err = isTCPReady(utils.GetTCPStates, 1, 0, args.RuncDumpArgs.Pid)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = containerdService.DumpRootfs(ctx, rootfsOpts.ContainerID, rootfsOpts.ImageRef, rootfsOpts.Namespace)
@@ -78,6 +130,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
 		External:        dumpOpts.CriuOpts.External,
+		TCPInFlight:     !isReady,
 	}
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)

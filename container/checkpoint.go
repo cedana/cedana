@@ -503,6 +503,7 @@ type CriuOpts struct {
 	External                []string           // ignore external namespaces
 	MntnsCompatMode         bool
 	TcpClose                bool
+	TCPInFlight             bool
 }
 
 type loadedState struct {
