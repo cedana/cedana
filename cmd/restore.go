@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -73,8 +72,7 @@ var restoreProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -181,8 +179,7 @@ var restoreJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},

@@ -16,10 +16,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const CRIU_VERSION_MIN = 31700
+
 // Code for interfacing with CRIU. We could use go-criu, but there are certain limitations in the abstractions
 // presented. Most of the code found here is lifted from https://github.com/checkpoint-restore/go-criu/blob/master/main.go.
-type Criu struct {
-}
+type Criu struct{}
 
 func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
 	_, err := sk.Write(reqB)
@@ -37,21 +38,18 @@ func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
 }
 
 func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
-	valid, _ := c.IsCriuAtLeast(31700)
+	valid, _ := c.IsCriuAtLeast(CRIU_VERSION_MIN)
 	if !valid {
-		return nil, errors.New("CRIU version is too old, please upgrade to at least 3.17")
+		return nil, fmt.Errorf("CRIU version is too old, must be at least %d", CRIU_VERSION_MIN)
 	}
 
 	resp, err := c.doSwrkWithResp(reqType, opts, nfy, extraFiles, nil)
-	if err != nil {
-		return nil, err
-	}
 	respType := resp.GetType()
 	if respType != reqType {
 		return nil, errors.New("unexpected CRIU RPC response")
 	}
 
-	return resp, nil
+	return resp, err
 }
 
 // WriteJSON writes the provided struct v to w using standard json marshaling
@@ -251,6 +249,12 @@ func (c *Criu) IsCriuAtLeast(version int) (bool, error) {
 	return false, nil
 }
 
-func (c *Criu) Check() (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_CHECK, nil, nil, nil)
+func (c *Criu) Check() (string, error) {
+	// call criu check and check exit code and also stderr
+	cmd := exec.Command("criu", "check")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("criu check failed: %s", string(out))
+	}
+	return string(out), nil
 }

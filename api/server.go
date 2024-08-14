@@ -371,8 +371,13 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	var unhealthyReasons []string
 	resp := &task.DetailedHealthCheckResponse{}
 
-	// TODO NR - Add CRIU check to output
 	criuVersion, err := s.CRIU.GetCriuVersion()
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
+	}
+
+	check, err := s.CRIU.Check()
+	s.logger.Debug().Str("resp", check).Msg("error checking criu")
 	if err != nil {
 		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
 	}
