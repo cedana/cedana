@@ -252,7 +252,7 @@ func (c *Criu) IsCriuAtLeast(version int) (bool, error) {
 func (c *Criu) Check() (string, error) {
 	// return c.doSwrk(rpc.CriuReqType_CHECK, nil, nil, nil)
 
-	// XXX: Since heck is not working with swrk, we directly call
+	// XXX: Since check is not working with swrk, we directly call
 	// call criu check and check exit code and also stderr
 	cmd := exec.Command("criu", "check")
 	out, err := cmd.CombinedOutput()
