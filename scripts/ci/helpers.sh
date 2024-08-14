@@ -140,10 +140,10 @@ setup_ci() {
     echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
 
     # Set GOPATH and update PATH
-    echo "export GOPATH=$HOME/go" >> /etc/environment
-    echo "export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin" >> /etc/environment
+    echo 'export GOPATH=$HOME/go' >> /etc/environment
+    echo 'export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin' >> /etc/environment
 
-    export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+    source /etc/environment
 
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
