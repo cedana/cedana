@@ -6,5 +6,11 @@
     "uid": "aewi4aeThua7ooShohbo1phoj"
   },
   "log_directory": "/tmp",
-  "linux": {}
+  "linux": {
+    "security_context": {
+      "namespace_options": {
+        "network": 2
+      }
+    }
+  }
 }
