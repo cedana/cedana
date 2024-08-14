@@ -402,63 +402,29 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	}
 
 	if stream == nil {
+		if args.LogOutputFile == "" {
+			args.LogOutputFile = OUTPUT_FILE_PATH
+		}
 		nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		defer nullFile.Close()
 		if err != nil {
 			return 0, nil, err
 		}
 		cmd.Stdin = nullFile
-	}
-
-	if args.LogOutputFile == "" {
-		args.LogOutputFile = OUTPUT_FILE_PATH
-	}
-
-	// XXX: is this non-performant? do we need to flush at intervals instead of writing?
-	var outputFile *os.File
-	var stdinPipe io.WriteCloser
-	var stdoutPipe, stderrPipe io.ReadCloser
-	if stream == nil {
-		outputFile, err = os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
-		if err != nil {
-			return 0, nil, err
-		}
+		outFile, err := os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
+		defer outFile.Close()
 		os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
-	}
-
-	if stream != nil {
-		stdinPipe, err = cmd.StdinPipe()
 		if err != nil {
 			return 0, nil, err
 		}
-	}
-
-	stdoutPipe, err = cmd.StdoutPipe()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	stderrPipe, err = cmd.StderrPipe()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	var gpuerrbuf bytes.Buffer
-	if gpuCmd != nil {
-		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
-	}
-
-	cmd.Env = args.Env
-	err = cmd.Start()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	pid = int32(cmd.Process.Pid)
-	stdoutScanner := bufio.NewScanner(stdoutPipe)
-	stderrScanner := bufio.NewScanner(stderrPipe)
-
-	// Receive stdin from stream
-	if stream != nil {
+		cmd.Stdout = outFile
+		cmd.Stderr = outFile
+	} else {
+		stdinPipe, err := cmd.StdinPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		// Receive stdin from stream
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -476,63 +442,68 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 				}
 			}
 		}()
+		// Scan stdout
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		stdoutScanner := bufio.NewScanner(stdoutPipe)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stdoutPipe.Close()
+			for stdoutScanner.Scan() {
+				if stream != nil {
+					if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+						s.logger.Error().Err(err).Msg("failed to send stdout")
+						return
+					}
+				}
+			}
+			if err := stdoutScanner.Err(); err != nil {
+				s.logger.Debug().Err(err).Msgf("finished reading stdout")
+			}
+		}()
+
+		// Scan stdout
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		stderrScanner := bufio.NewScanner(stderrPipe)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stderrPipe.Close()
+			for stderrScanner.Scan() {
+				if stream != nil {
+					if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+						s.logger.Error().Err(err).Msg("failed to send stderr")
+						return
+					}
+				}
+			}
+			if err := stderrScanner.Err(); err != nil {
+				s.logger.Debug().Err(err).Msgf("finished reading stderr")
+			}
+		}()
 	}
 
-	// Scan stdout
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer stdoutPipe.Close()
-		for stdoutScanner.Scan() {
-			if stream != nil {
-				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
-					s.logger.Error().Err(err).Msg("failed to send stdout")
-					return
-				}
-			}
-			if outputFile != nil {
-				if _, err := outputFile.WriteString(stdoutScanner.Text() + "\n"); err != nil {
-					s.logger.Error().Err(err).Msg("failed to write to output file")
-					return
-				}
-			}
-		}
-		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Debug().Err(err).Msgf("finished reading stdout")
-		}
-	}()
+	var gpuerrbuf bytes.Buffer
+	if gpuCmd != nil {
+		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
+	}
 
-	// Scan stdout
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer stderrPipe.Close()
-		for stderrScanner.Scan() {
-			if stream != nil {
-				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
-					s.logger.Error().Err(err).Msg("failed to send stderr")
-					return
-				}
-			}
-			if outputFile != nil {
-				if _, err := outputFile.WriteString(stderrScanner.Text() + "\n"); err != nil {
-					s.logger.Error().Err(err).Msg("failed to write to output file")
-					return
-				}
-			}
-		}
-		if err := stderrScanner.Err(); err != nil {
-			s.logger.Debug().Err(err).Msgf("finished reading stderr")
-		}
-	}()
+	cmd.Env = args.Env
+	err = cmd.Start()
+	if err != nil {
+		return 0, nil, err
+	}
 
 	s.wg.Add(1)
 	done := make(chan error)
 	go func() {
 		defer s.wg.Done()
-		if outputFile != nil {
-			defer outputFile.Close()
-		}
 		err := cmd.Wait()
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
@@ -571,6 +542,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	}()
 
 	ppid := int32(os.Getpid())
+	pid = int32(cmd.Process.Pid)
 
 	closeCommonFds(ppid, pid)
 	return pid, done, err
