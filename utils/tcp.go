@@ -1,0 +1,92 @@
+package utils
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	TCP_ESTABLISHED = iota
+	TCP_SYN_SENT
+	TCP_SYN_RECV
+	TCP_FIN_WAIT1
+	TCP_FIN_WAIT2
+	TCP_TIME_WAIT
+	TCP_CLOSE
+	TCP_CLOSE_WAIT
+	TCP_LAST_ACK
+	TCP_LISTEN
+	TCP_CLOSING
+	TCP_NEW_SYN_RECV
+)
+
+func GetTCPStates(reader io.Reader) ([]uint64, error) {
+	var states []uint64
+	scanner := bufio.NewScanner(reader)
+
+	// Skip the header line
+	if !scanner.Scan() {
+		return nil, scanner.Err()
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		// Ensure that we have enough fields
+		if len(fields) > 3 {
+			stateStr := fields[3]
+			stateInt, err := strconv.ParseUint(stateStr, 16, 32) // Convert hex string to uint32
+			if err != nil {
+				return nil, err
+			}
+			states = append(states, stateInt)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return states, nil
+}
+
+func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), iteration int, timeoutInMs time.Duration, pid int32) (bool, error) {
+	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", pid)
+	file, err := os.Open(tcpPath)
+	if err != nil {
+		return false, err
+	}
+
+	defer file.Close()
+
+	isReady := true
+	for i := 0; i < iteration; i++ {
+		tcpStates, err := getTCPStates(file)
+		if err != nil {
+			return false, err
+		}
+
+		for _, state := range tcpStates {
+			if state == TCP_SYN_RECV || state == TCP_SYN_SENT {
+				isReady = false
+				break
+			}
+		}
+
+		if isReady {
+			break
+		}
+
+		if iteration > 1 {
+			time.Sleep(timeoutInMs * time.Millisecond)
+		}
+	}
+
+	return isReady, nil
+}

@@ -1,55 +1,12 @@
 package utils
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	ps "github.com/shirou/gopsutil/v3/process"
 )
-
-func GetTCPStates(pid int32) ([]uint64, error) {
-	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", pid)
-
-	file, err := os.Open(tcpPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var states []uint64
-	scanner := bufio.NewScanner(file)
-
-	// Skip the header line
-	if !scanner.Scan() {
-		return nil, scanner.Err()
-	}
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-
-		// Ensure that we have enough fields
-		if len(fields) > 5 {
-			stateStr := fields[5]
-			stateInt, err := strconv.ParseUint(stateStr, 16, 32) // Convert hex string to uint32
-			if err != nil {
-				return nil, err
-			}
-			states = append(states, stateInt)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return states, nil
-}
 
 func GetPid(processName string) (int32, error) {
 	processList, err := ps.Processes()

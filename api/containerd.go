@@ -19,47 +19,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	TCP_ESTABLISHED = iota
-	TCP_SYN_SENT
-	TCP_SYN_RECV
-	TCP_FIN_WAIT1
-	TCP_FIN_WAIT2
-	TCP_TIME_WAIT
-	TCP_CLOSE
-	TCP_CLOSE_WAIT
-	TCP_LAST_ACK
-	TCP_LISTEN
-	TCP_CLOSING
-	TCP_NEW_SYN_RECV
-)
-
-func isTCPReady(getTCPStates func(int32) ([]uint64, error), iteration int, timeoutInMs time.Duration, pid int32) (bool, error) {
-	isReady := true
-	for i := 0; i < iteration; i++ {
-		tcpStates, err := getTCPStates(pid)
-		if err != nil {
-			return false, err
-		}
-		for _, state := range tcpStates {
-			if state == TCP_SYN_RECV || state == TCP_SYN_SENT {
-				isReady = false
-				break
-			}
-		}
-
-		if isReady {
-			break
-		}
-
-		if iteration > 1 {
-			time.Sleep(timeoutInMs * time.Millisecond)
-		}
-	}
-
-	return isReady, nil
-}
-
 func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
 	rootfsOpts := args.ContainerdRootfsDumpArgs
 	dumpOpts := args.RuncDumpArgs
@@ -73,7 +32,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
 
-	isReady, err := isTCPReady(utils.GetTCPStates, 30, 100, int32(runcContainer.Pid))
+	isReady, err := utils.IsTCPReady(utils.GetTCPStates, 30, 100, int32(runcContainer.Pid))
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +49,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		}()
 	}
 
-	isReady, err = isTCPReady(utils.GetTCPStates, 1, 0, args.RuncDumpArgs.Pid)
+	isReady, err = utils.IsTCPReady(utils.GetTCPStates, 1, 0, args.RuncDumpArgs.Pid)
 	if err != nil {
 		return nil, err
 	}
