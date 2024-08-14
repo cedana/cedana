@@ -289,6 +289,7 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 
 		var checkpointState task.ProcessState
 		err = json.Unmarshal(data, &checkpointState)
+
 	}
 	return &checkpointState, err
 }
