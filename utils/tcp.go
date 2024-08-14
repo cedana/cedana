@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TCP_ESTABLISHED = iota
+	TCP_ESTABLISHED = iota + 1
 	TCP_SYN_SENT
 	TCP_SYN_RECV
 	TCP_FIN_WAIT1
