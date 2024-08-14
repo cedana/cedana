@@ -34,7 +34,7 @@ const (
 var DB_BUCKET_JOBS = []byte("jobs")
 
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
-	return s.start(ctx, args, nil)
+	return s.startHelper(ctx, args, nil)
 }
 
 func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
@@ -44,7 +44,7 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 	}
 	args := in.GetArgs()
 
-	_, err = s.start(stream.Context(), args, stream)
+	_, err = s.startHelper(stream.Context(), args, stream)
 	return err
 }
 
@@ -145,108 +145,18 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	var resp task.RestoreResp
-	var pid *int32
-	var err error
+	return s.restoreHelper(ctx, args, nil)
+}
 
-	restoreStats := task.RestoreStats{
-		DumpType: task.DumpType_PROCESS,
-	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
-
-	if args.JID != "" {
-		state, err := s.getState(ctx, args.JID)
-		if err != nil {
-			return nil, status.Error(codes.NotFound, "job not found")
-		}
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				s.logger.Debug().Str("JID", args.JID).Msgf("No remote state found")
-				return nil, status.Error(codes.InvalidArgument, "no remote state found")
-			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				s.logger.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
-				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
-			}
-			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			args.Type = task.CRType_REMOTE
-		} else {
-			args.CheckpointPath = state.GetCheckpointPath()
-			args.Type = task.CRType_LOCAL
-		}
-	} else {
-		args.Type = task.CRType_LOCAL
-	}
-
-	switch args.Type {
-	case task.CRType_LOCAL:
-		if args.CheckpointPath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
-		if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
-		}
-
-		pid, err = s.restore(ctx, args)
-		if err != nil {
-			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			return nil, staterr
-		}
-
-		resp = task.RestoreResp{
-			Message: fmt.Sprintf("successfully restored process: %v", *pid),
-			NewPID:  *pid,
-		}
-
-	case task.CRType_REMOTE:
-		if args.CheckpointID == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
-		}
-
-		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
-		if err != nil {
-			return nil, err
-		}
-
-		pid, err = s.restore(ctx, &task.RestoreArgs{
-			Type:           task.CRType_REMOTE,
-			CheckpointID:   args.CheckpointID,
-			CheckpointPath: *zipFile,
-		})
-		if err != nil {
-			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			return nil, staterr
-		}
-
-		resp = task.RestoreResp{
-			Message: fmt.Sprintf("successfully restored process: %v", *pid),
-			NewPID:  *pid,
-		}
-	}
-
-	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
-	// We could be restoring on a new machine, so we update the state
-
-	state, err := s.generateState(ctx, *pid)
+func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) error {
+	in, err := stream.Recv()
 	if err != nil {
-		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
+		return err
 	}
+	args := in.GetArgs()
 
-	// Only update state if it was a managed job
-	if args.JID != "" && state != nil {
-		state.JobState = task.JobState_JOB_RUNNING
-		err = s.updateState(ctx, state.JID, state)
-		if err != nil {
-			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
-		}
-	}
-
-	resp.State = state
-	resp.RestoreStats = &restoreStats
-
-	return &resp, nil
+	_, err = s.restoreHelper(stream.Context(), args, stream)
+	return err
 }
 
 func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
@@ -292,7 +202,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) start(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
+func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
 	}
@@ -341,7 +251,7 @@ func (s *service) start(ctx context.Context, args *task.StartArgs, stream task.T
 		return nil, err
 	}
 
-	if stream != nil {
+	if stream != nil && done != nil {
 		<-done
 	}
 
@@ -350,6 +260,102 @@ func (s *service) start(ctx context.Context, args *task.StartArgs, stream task.T
 		PID:     pid,
 		JID:     state.JID,
 	}, err
+}
+
+func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*task.RestoreResp, error) {
+	var resp task.RestoreResp
+	var pid *int32
+	var err error
+
+	restoreStats := task.RestoreStats{
+		DumpType: task.DumpType_PROCESS,
+	}
+	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+
+	if args.JID != "" {
+		state, err := s.getState(ctx, args.JID)
+		if err != nil {
+			return nil, status.Error(codes.NotFound, "job not found")
+		}
+		if viper.GetBool("remote") {
+			remoteState := state.GetRemoteState()
+			if remoteState == nil {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote state found")
+				return nil, status.Error(codes.InvalidArgument, "no remote state found")
+			}
+			// For now just grab latest checkpoint
+			if remoteState[len(remoteState)-1].CheckpointID == "" {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
+				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
+			}
+			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
+			args.Type = task.CRType_REMOTE
+		} else {
+			args.CheckpointPath = state.GetCheckpointPath()
+			args.Type = task.CRType_LOCAL
+		}
+	} else {
+		args.Type = task.CRType_LOCAL
+	}
+
+	switch args.Type {
+	case task.CRType_LOCAL:
+		if args.CheckpointPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
+		if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
+		}
+
+	case task.CRType_REMOTE:
+		if args.CheckpointID == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
+		}
+
+		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
+		if err != nil {
+			return nil, err
+		}
+
+		args.CheckpointPath = *zipFile
+	}
+
+	pid, done, err := s.restore(ctx, args, stream)
+	if err != nil {
+		staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+		return nil, staterr
+	}
+
+	resp = task.RestoreResp{
+		Message: fmt.Sprintf("successfully restored process: %v", *pid),
+		NewPID:  *pid,
+	}
+
+	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
+	// We could be restoring on a new machine, so we update the state
+
+	state, err := s.generateState(ctx, *pid)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
+	}
+
+	// Only update state if it was a managed job
+	if args.JID != "" && state != nil {
+		state.JobState = task.JobState_JOB_RUNNING
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
+		}
+	}
+
+	if stream != nil && done != nil {
+		<-done
+	}
+
+	resp.State = state
+	resp.RestoreStats = &restoreStats
+
+	return &resp, nil
 }
 
 func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (int32, chan error, error) {
@@ -508,13 +514,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			}
 			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
+			s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
-		if err != nil {
-			s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process terminated")
-		} else {
-			s.logger.Info().Int("status", 0).Int32("PID", pid).Msg("process terminated")
-		}
+		s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
 		if stream != nil {
 			stream.Send(&task.StartAttachResp{
 				ExitCode: int32(cmd.ProcessState.ExitCode()),

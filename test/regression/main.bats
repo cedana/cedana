@@ -152,6 +152,22 @@ teardown() {
     [[ "$output" == *"RANDOM OUTPUT END"* ]]
 }
 
+@test "Restore --attach stdout/stderr & exit code" {
+    local task="./workload-3.sh"
+    local job_id="workload6"
+
+    # execute, checkpoint and restore a job
+    exec_task $task $job_id
+    sleep 1 3>-
+    checkpoint_task $job_id
+    sleep 1 3>-
+    run restore_task $job_id --attach
+
+    # check output of command
+    [[ "$status" -eq 99 ]]
+    [[ "$output" == *"RANDOM OUTPUT END"* ]]
+}
+
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"
