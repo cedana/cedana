@@ -24,7 +24,6 @@ import (
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
-	"github.com/shirou/gopsutil/v3/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -53,6 +52,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	var inheritFds []*rpc.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
+	isManagedJob := args.JID != ""
 
 	tempDir := RESTORE_TEMPDIR
 
@@ -124,6 +124,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
+	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 		s.logger.Error().Err(err).Msg("error changing permissions")
@@ -545,6 +546,9 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 	var gpuCmd *exec.Cmd
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
+		if !s.gpuEnabled {
+			return nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
+		}
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
@@ -565,35 +569,27 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 		return nil, err
 	}
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		proc, err := process.NewProcessWithContext(ctx, *pid)
-		if err != nil {
-			s.logger.Error().Msgf("could not find process: %v", err)
-			return
-		}
-		for {
-			running, err := proc.IsRunning()
-			if err != nil || !running {
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
+	// If it's a managed restored job
+	if args.JID != "" {
+		// Wait to cleanup
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			var status syscall.WaitStatus
+			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", status.ExitStatus()).Msgf("process exited")
 
-		if gpuCmd != nil {
-			err = gpuCmd.Process.Kill()
-			if err != nil {
-				s.logger.Fatal().Err(err)
+			if gpuCmd != nil {
+				err = gpuCmd.Process.Kill()
+				if err != nil {
+					s.logger.Fatal().Err(err).Msg("could not kill gpu controller")
+				}
+				s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
+				// read last bit of data from /tmp/cedana-gpucontroller.log and print
+				s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 			}
-			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
-			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
-		}
-		s.logger.Info().Err(err).Int32("PID", *pid).Msg("process terminated")
 
-		// Update state if it's a managed restored job
-		if args.JID != "" {
+			// Update state
 			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
 			state, err := s.getState(childCtx, args.JID)
 			if err != nil {
@@ -606,22 +602,19 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs) (*int32, 
 			if err != nil {
 				s.logger.Warn().Err(err).Msg("failed to update state after job done")
 			}
-		}
-	}()
+		}()
 
-	// If it's a managed restored job, kill on server shutdown
-	if args.JID != "" {
+		// Kill on server shutdown
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			<-s.serverCtx.Done()
 			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("server shutting down, killing process")
-			proc, err := process.NewProcessWithContext(ctx, *pid)
+			syscall.Kill(int(*pid), syscall.SIGKILL)
 			if err != nil {
-				s.logger.Warn().Err(err).Msgf("could not find process to kill")
+				s.logger.Warn().Err(err).Int32("PID", *pid).Str("JID", args.JID).Msgf("could not kill process")
 				return
 			}
-			proc.Kill()
 		}()
 	}
 

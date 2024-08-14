@@ -541,13 +541,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			}
 			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
+			s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
-		if err != nil {
-			s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process terminated")
-		} else {
-			s.logger.Info().Int("status", 0).Int32("PID", pid).Msg("process terminated")
-		}
+		s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
 		if stream != nil {
 			stream.Send(&task.StartAttachResp{
 				ExitCode: int32(cmd.ProcessState.ExitCode()),
