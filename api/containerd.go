@@ -49,7 +49,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		}()
 	}
 
-	isReady, err = utils.IsTCPReady(utils.GetTCPStates, 1, 0, args.RuncDumpArgs.Pid)
+	isReady, err = utils.IsTCPReady(utils.GetTCPStates, 1, 0, int32(runcContainer.Pid))
 	if err != nil {
 		return nil, err
 	}
