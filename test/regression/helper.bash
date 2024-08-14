@@ -25,7 +25,8 @@ function checkpoint_task() {
 
 function restore_task() {
     local job_id="$1"
-    cedana restore job "$job_id"
+    shift 1
+    cedana restore job "$job_id" $@
 }
 
 function start_busybox(){
