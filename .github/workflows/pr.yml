@@ -6,22 +6,39 @@ on:
     branches:
       - main
   workflow_dispatch:
-      inputs:
-        debug_build:
-          type: boolean
-          description: 'Run build with debugging enabled'
-          required: false
-          default: false
-        debug_smoke_test:
-          type: boolean
-          description: 'Run smoke test with debugging enabled'
-          required: false
-          default: false
-        debug_regression_test:
-          type: boolean
-          description: 'Run regression test with debugging enabled'
-          required: false
-          default: false
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+  workflow_call: # to reuse this workflow in other worflows
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -37,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
@@ -71,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
@@ -106,7 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
