@@ -453,11 +453,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stdoutPipe.Close()
 			for stdoutScanner.Scan() {
-				if stream != nil {
-					if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
-						s.logger.Error().Err(err).Msg("failed to send stdout")
-						return
-					}
+				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stdout")
+					return
 				}
 			}
 			if err := stdoutScanner.Err(); err != nil {
@@ -476,11 +474,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stderrPipe.Close()
 			for stderrScanner.Scan() {
-				if stream != nil {
-					if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
-						s.logger.Error().Err(err).Msg("failed to send stderr")
-						return
-					}
+				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stderr")
+					return
 				}
 			}
 			if err := stderrScanner.Err(); err != nil {
