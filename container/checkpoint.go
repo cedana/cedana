@@ -1681,14 +1681,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 		External:        criuOpts.External,
-		// Currently CRIU will fail if we try to checkpoint a container
-		// that has tcp connections that are not fully established. Currently
-		// there is a PR that has a quick fix which just introduces the skip
-		// in-flight connections. Ideally we wait to checkpoint until all tcp
-		// connections are in established states and we allow for setting a timeout
-		// on waiting for that in checkpoints. If we exceed the timeout, then we
-		// default to checkpointing with skip in-flight opt.
-		TcpSkipInFlight: proto.Bool(true),
+		TcpSkipInFlight: proto.Bool(criuOpts.TCPInFlight),
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
