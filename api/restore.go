@@ -666,12 +666,11 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 		}
 	}
 
-	if resp.GpuRestoreStats == nil {
-		return nil, fmt.Errorf("gpu controller returned nil stats")
-	}
-	stats.GPURestoreStats = &gpu.GPURestoreStats{
-		CopyMemTime:     resp.GpuRestoreStats.CopyMemTime,
-		ReplayCallsTime: resp.GpuRestoreStats.ReplayCallsTime,
+	if resp.GpuRestoreStats != nil {
+		stats.GPURestoreStats = &gpu.GPURestoreStats{
+			CopyMemTime:     resp.GpuRestoreStats.CopyMemTime,
+			ReplayCallsTime: resp.GpuRestoreStats.ReplayCallsTime,
+		}
 	}
 	s.logger.Info().Msgf("gpu controller returned %v", resp)
 
