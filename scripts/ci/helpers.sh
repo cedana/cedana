@@ -7,19 +7,12 @@
 ## Look at regression-test main for an example.
 ##
 
-APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
-    libbsd-dev runc libcap-dev libgpgme-dev \
-    btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
-    libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
-    protobuf-compiler python3-protobuf software-properties-common \
-    zip
-"
+APT_PACKAGES=(wget git make curl libnl-3-dev libnet-dev libbsd-dev runc libcap-dev libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf software-properties-common zip pkg-config)
+
 
 install_apt_packages() {
     apt-get update
-    for pkg in $APT_PACKAGES; do
-        apt-get install -y $pkg || echo "failed to install $pkg"
-    done
+    apt-get install -y "${APT_PACKAGES[@]}" || echo "failed to install $pkg"
 }
 
 install_code_server() {
@@ -27,22 +20,20 @@ install_code_server() {
 }
 
 install_bats_core() {
-    git clone https://github.com/bats-core/bats-core.git
-    pushd bats-core
-    ./install.sh /usr/local
-    popd && rm -rf bats-core
+    apt-get update
+    apt-get install -y bats
 }
 
 install_docker() {
     apt-get update
-    apt-get install ca-certificates curl
+    apt-get install -y ca-certificates curl
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
 
 # Add the repository to Apt sources:
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
