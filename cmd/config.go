@@ -20,7 +20,7 @@ var configCmd = &cobra.Command{
 
 var showCmd = &cobra.Command{
 	Use:   "show",
-	Short: "show currently set configuration",
+	Short: "show config that the daemon is running with",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
 		logger := cmd.Context().Value("logger").(*zerolog.Logger)

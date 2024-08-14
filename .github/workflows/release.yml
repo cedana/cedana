@@ -6,6 +6,11 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
+      debug_test:
+        type: boolean
+        description: "Run tests with debugging enabled"
+        required: false
+        default: false
       debug_build_publish_amd64:
         type: boolean
         description: "Run build & publish (amd64 binary) with debugging enabled"
@@ -31,9 +36,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/pr.yml
+    with:
+      debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+
   build-publish-amd64:
     name: Build & Publish (amd64)
     runs-on: ubuntu-latest
+    needs: test
     container:
       image: golang:1.22-bullseye
     steps:
@@ -70,6 +84,7 @@ jobs:
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
+    needs: test
 
     permissions:
       contents: read
@@ -142,6 +157,7 @@ jobs:
   build-push-image-manifest-arm64:
     name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
+    needs: test
 
     permissions:
       contents: read

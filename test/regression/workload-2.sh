@@ -1,0 +1,4 @@
+echo "RANDOM OUTPUT START"
+sleep 2
+echo "RANDOM OUTPUT END"
+exit 99

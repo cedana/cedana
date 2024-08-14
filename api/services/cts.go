@@ -8,6 +8,7 @@ import (
 
 	"github.com/cedana/cedana/api"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -54,10 +55,12 @@ func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
 
+	opts := getDefaultCallOptions()
+
 	// Health check
 	resp, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{
 		Service: "task.TaskService",
-	})
+	}, opts...)
 	if err != nil {
 		return false, err
 	}
@@ -72,7 +75,8 @@ func (c *ServiceClient) HealthCheck(ctx context.Context) (bool, error) {
 func (c *ServiceClient) DetailedHealthCheck(ctx context.Context, args *task.DetailedHealthCheckRequest) (*task.DetailedHealthCheckResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.DetailedHealthCheck(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.DetailedHealthCheck(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,18 +91,33 @@ func (c *ServiceClient) DetailedHealthCheck(ctx context.Context, args *task.Deta
 func (c *ServiceClient) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.Start(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.Start(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
+func (c *ServiceClient) StartAttach(ctx context.Context, args *task.StartAttachArgs) (task.TaskService_StartAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.StartAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first start request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.Dump(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.Dump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,17 +127,32 @@ func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.Du
 func (c *ServiceClient) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.Restore(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.Restore(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
+func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.RestoreAttachArgs) (task.TaskService_RestoreAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.RestoreAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first restore request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.Query(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.Query(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +167,8 @@ func (c *ServiceClient) CRIORootfsDump(ctx context.Context, args *task.CRIORootf
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.CRIORootfsDump(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.CRIORootfsDump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +179,8 @@ func (c *ServiceClient) CRIOImagePush(ctx context.Context, args *task.CRIOImageP
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.CRIOImagePush(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.CRIOImagePush(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +194,8 @@ func (c *ServiceClient) CRIOImagePush(ctx context.Context, args *task.CRIOImageP
 func (c *ServiceClient) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.ContainerdDump(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.ContainerdDump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +205,8 @@ func (c *ServiceClient) ContainerdDump(ctx context.Context, args *task.Container
 func (c *ServiceClient) ContainerdRestore(ctx context.Context, args *task.ContainerdRestoreArgs) (*task.ContainerdRestoreResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.ContainerdRestore(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.ContainerdRestore(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +216,8 @@ func (c *ServiceClient) ContainerdRestore(ctx context.Context, args *task.Contai
 func (c *ServiceClient) ContainerdQuery(ctx context.Context, args *task.ContainerdQueryArgs) (*task.ContainerdQueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.ContainerdQuery(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.ContainerdQuery(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +227,8 @@ func (c *ServiceClient) ContainerdQuery(ctx context.Context, args *task.Containe
 func (c *ServiceClient) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.ContainerdRootfsDump(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.ContainerdRootfsDump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +238,8 @@ func (c *ServiceClient) ContainerdRootfsDump(ctx context.Context, args *task.Con
 func (c *ServiceClient) ContainerdRootfsRestore(ctx context.Context, args *task.ContainerdRootfsRestoreArgs) (*task.ContainerdRootfsRestoreResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_CONTAINERD_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.ContainerdRootfsRestore(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.ContainerdRootfsRestore(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +253,8 @@ func (c *ServiceClient) ContainerdRootfsRestore(ctx context.Context, args *task.
 func (c *ServiceClient) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUNC_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.RuncDump(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.RuncDump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +264,8 @@ func (c *ServiceClient) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (
 func (c *ServiceClient) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (*task.RuncRestoreResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUNC_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.RuncRestore(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.RuncRestore(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +275,8 @@ func (c *ServiceClient) RuncRestore(ctx context.Context, args *task.RuncRestoreA
 func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUNC_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.RuncQuery(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.RuncQuery(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,15 +290,22 @@ func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs)
 func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigRequest) (*task.GetConfigResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
-	resp, err := c.taskService.GetConfig(ctx, args)
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.GetConfig(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-/////////////////////////////
-// Streaming Service Calls //
-/////////////////////////////
+///////////////////
+//    Helpers    //
+///////////////////
 
-// TODO YA add streaming calls (move it from server.go to here)
+func getDefaultCallOptions() []grpc.CallOption {
+	opts := []grpc.CallOption{}
+	if viper.GetBool("cli.wait_for_ready") {
+		opts = append(opts, grpc.WaitForReady(true))
+	}
+	return opts
+}
