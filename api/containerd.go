@@ -71,7 +71,9 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-	isReady, err := isTCPReady(utils.GetTCPStates, 30, 100, args.RuncDumpArgs.Pid)
+	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+
+	isReady, err := isTCPReady(utils.GetTCPStates, 30, 100, int32(runcContainer.Pid))
 	if err != nil {
 		return nil, err
 	}
