@@ -60,7 +60,11 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion]})
+		port, err := cmd.Flags().GetUint64(portFlag)
+		if err != nil {
+			port = 8080
+		}
+		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], Port: port})
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err
@@ -140,4 +144,5 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	startDaemonCmd.Flags().Uint64P(portFlag, "p", 8080, "port to use for daemon")
 }

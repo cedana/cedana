@@ -27,6 +27,7 @@ const (
 	restartFlag          = "restart"
 	cudaVersionFlag      = "cuda"
 	pidFlag              = "pid"
+	portFlag             = "port"
 	externalFlag         = "external"
 	destFlag             = "dest"
 	containerStorageFlag = "container-storage"

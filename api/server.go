@@ -67,6 +67,7 @@ type Server struct {
 type ServeOpts struct {
 	GPUEnabled  bool
 	CUDAVersion string
+	Port        uint64
 }
 
 type pullGPUBinaryRequest struct {
@@ -103,7 +104,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
-	listener, err := net.Listen(PROTOCOL, ADDRESS)
+	listener, err := net.Listen(PROTOCOL, fmt.Sprintf("localhost:%d", opts.Port))
 	if err != nil {
 		return nil, err
 	}
