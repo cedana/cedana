@@ -337,11 +337,11 @@ jobs:
       - name: Generate summary
         id: summary
         env:
-          RELEASE_TITLE: cedana ${{ steps.release-info.outputs.tag_name }}
-          RELEASE_DESCRIPTION: ${{ steps.release-info.outputs.created_at }}
+          RELEASE_TITLE: 'Release summary'
+          RELEASE_DESCRIPTION: '> **cedana ${{ steps.release-info.outputs.tag_name }}**'
           RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ steps.release-info.outputs.tag_name }}
-          RELEASE_BODY: ${{ steps.release-info.outputs.draft }}
-          TAG: ${{ github.ref }}
+          RELEASE_BODY: '${{ steps.release-info.outputs.draft }}'
+          TAG: ${{ steps.release-info.outputs.tag_name }}
           BINARY: current/cedana
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
           PREVIOUS_BINARY: previous/cedana
