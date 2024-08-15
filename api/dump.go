@@ -25,6 +25,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/mdlayher/vsock"
+	"io"
 )
 
 const (
@@ -327,6 +330,37 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	dumpSpan.End()
 
 	s.postDump(ctx, dumpdir, state)
+
+	conn, err := vsock.Dial(vsock.Host, 9999, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Open the file
+	file, err := os.Open(dumpdir + ".tar")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	buffer := make([]byte, 1024)
+
+	// Read from file and send over VSOCK connection
+	for {
+		bytesRead, err := file.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		_, err = conn.Write(buffer[:bytesRead])
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

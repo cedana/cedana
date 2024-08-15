@@ -32,6 +32,8 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/mdlayher/vsock"
 )
 
 const (
@@ -613,6 +615,43 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	opts := s.prepareRestoreOpts()
 	nfy := Notify{
 		Logger: s.logger,
+	}
+
+	listener, err := vsock.Listen(9998, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer listener.Close()
+
+	conn, err := listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Open the file for writing
+	recvFile, err := os.Create(args.CheckpointPath)
+	if err != nil {
+		return nil, err
+	}
+	defer recvFile.Close()
+
+	buffer := make([]byte, 1024)
+
+	// Receive data and write to file
+	for {
+		bytesReceived, err := conn.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		_, err = recvFile.Write(buffer[:bytesReceived])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	dir, state, extraFiles, err := s.prepareRestore(ctx, opts, args, true)

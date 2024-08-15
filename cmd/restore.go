@@ -11,6 +11,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
+
+	"github.com/mdlayher/vsock"
+	"github.com/cedana/cedana/utils"
+	"io"
+	"time"
 )
 
 var restoreCmd = &cobra.Command{
@@ -98,9 +103,50 @@ var restoreKataCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
 			CheckpointID:   vm,
-			CheckpointPath: path,
+			CheckpointPath: "/tmp/dmp.tar",
 			TcpEstablished: tcpEstablished,
 		}
+
+		go func() {
+			time.Sleep(1 * time.Second)
+
+			// extract cid from the process tree on host
+			cid, err := utils.ExtractCID(vm)
+			if err != nil {
+				return
+			}
+
+			conn, err := vsock.Dial(cid, 9998, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			// Open the file
+			file, err := os.Open(path)
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			buffer := make([]byte, 1024)
+
+			// Read from file and send over VSOCK connection
+			for {
+				bytesRead, err := file.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					return
+				}
+
+				_, err = conn.Write(buffer[:bytesRead])
+				if err != nil {
+					return
+				}
+			}
+		}()
 
 		resp, err := cts.KataRestore(ctx, &restoreArgs)
 		if err != nil {

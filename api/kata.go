@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strings"
 	"strconv"
-	"os"
 
 	"github.com/cedana/cedana/api/services/task"
 	"go.opentelemetry.io/otel/attribute"
@@ -81,9 +80,6 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 
 	if args.CheckpointPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-	}
-	if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
-		return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
 	}
 
 	pid, err = s.kataRestore(ctx, args)

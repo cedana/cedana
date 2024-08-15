@@ -14,6 +14,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
+	
+	"github.com/mdlayher/vsock"
+	"os"
+	"io"
 )
 
 var dumpCmd = &cobra.Command{
@@ -102,10 +106,49 @@ var dumpKataCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 
 		cpuDumpArgs := task.DumpArgs{
-			Dir:  dir,
+			Dir:  "/tmp",
 			JID:  id,
 			Type: task.CRType_LOCAL,
 		}
+
+		go func() {
+			listener, err := vsock.Listen(9999, nil)
+			if err != nil {
+				return
+			}
+			defer listener.Close()
+
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			// Open the file for writing
+			file, err := os.Create(dir + "/dmp.tar")
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			buffer := make([]byte, 1024)
+
+			// Receive data and write to file
+			for {
+				bytesReceived, err := conn.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					return
+				}
+
+				_, err = file.Write(buffer[:bytesReceived])
+				if err != nil {
+					return
+				}
+			}
+		}()
 
 		resp, err := cts.KataDump(ctx, &cpuDumpArgs)
 		if err != nil {
