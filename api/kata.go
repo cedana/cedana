@@ -36,6 +36,11 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 
 	state.JID = args.JID
 
+	dumpStats := task.DumpStats{
+		DumpType: task.DumpType_KATA,
+	}
+	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+
 	err = s.kataDump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -72,6 +77,11 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 	if args.CheckpointPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 	}
+
+	restoreStats := task.RestoreStats{
+		DumpType: task.DumpType_KATA,
+	}
+	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
 
 	pid, err = s.kataRestore(ctx, args)
 	if err != nil {
