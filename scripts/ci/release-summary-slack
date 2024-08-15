@@ -64,12 +64,25 @@ if TAG and PREVIOUS_TAG and BINARY and PREVIOUS_BINARY:
             'elements': [
                 {
                     'type': 'mrkdwn',
-                    'text': f'Binary size *{binary_size_mib:.2f} MiB*',
+                    'text': f'Binary size: *{binary_size_mib:.2f} MiB*',
                 },
                 {
                     'type': 'mrkdwn',
-                    'text': f'Previous size *{previous_binary_size_mib:.2f} MiB*',
+                    'text': f'Previous size: *{previous_binary_size_mib:.2f} MiB*',
                 },
+            ],
+        }
+    )
+
+if PREVIOUS_TAG:
+    blocks.append(
+        {
+            'type': 'context',
+            'elements': [
+                {
+                    'type': 'mrkdwn',
+                    'text': f'Previous patch: *{PREVIOUS_TAG}*',
+                }
             ],
         }
     )
