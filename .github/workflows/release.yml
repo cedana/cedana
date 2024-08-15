@@ -316,7 +316,7 @@ jobs:
 
       - name: Download binary
         uses: robinraju/release-downloader@v1
-        id: download-previous
+        id: download
         with:
           tag: ${{ steps.release-info.outputs.tag_name }}
           fileName: '*amd64.tar.gz'
