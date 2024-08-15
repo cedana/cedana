@@ -353,17 +353,17 @@ jobs:
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
           PREVIOUS_BINARY: previous/cedana
         run: |
-          scripts/ci/release-summary-slack > $GITHUB_STEP_SUMMARY
+          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
           echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
-#       - name: Post summary
-#         if: ${{ (github.event_name != 'workflow_dispatch') || (inputs.post_summary) }}
-#         id: slack-patch
-#         uses: slackapi/slack-github-action@v1.26.0
-#         env:
-#           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
-#           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-#         with:
-#           payload: |
-#             ${{ steps.summary-patch.outputs.slack-summary }}
+      - name: Post summary
+        if: ${{ (github.event_name != 'workflow_dispatch') || (inputs.post_summary) }}
+        id: slack-patch
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary-patch.outputs.slack-summary }}
 

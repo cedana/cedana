@@ -55,6 +55,23 @@ if BODY:
     )
     blocks.append({'type': 'divider'})
 
+if PREVIOUS_TAG:
+    blocks.append(
+        {
+            'type': 'context',
+            'elements': [
+                {
+                    'type': 'mrkdwn',
+                    'text': f'Version *{TAG}*',
+                },
+                {
+                    'type': 'mrkdwn',
+                    'text': f'_Previously {PREVIOUS_TAG}_',
+                }
+            ],
+        }
+    )
+
 if TAG and PREVIOUS_TAG and BINARY and PREVIOUS_BINARY:
     binary_size_mib = os.path.getsize(BINARY) / 1024 / 1024
     previous_binary_size_mib = os.path.getsize(PREVIOUS_BINARY) / 1024 / 1024
@@ -64,25 +81,12 @@ if TAG and PREVIOUS_TAG and BINARY and PREVIOUS_BINARY:
             'elements': [
                 {
                     'type': 'mrkdwn',
-                    'text': f'Binary size: *{binary_size_mib:.2f} MiB*',
+                    'text': f'Binary size *{binary_size_mib:.2f} MiB*',
                 },
                 {
                     'type': 'mrkdwn',
-                    'text': f'Previous size: *{previous_binary_size_mib:.2f} MiB*',
+                    'text': f'_Previously *{previous_binary_size_mib:.2f} MiB_',
                 },
-            ],
-        }
-    )
-
-if PREVIOUS_TAG:
-    blocks.append(
-        {
-            'type': 'context',
-            'elements': [
-                {
-                    'type': 'mrkdwn',
-                    'text': f'Previous patch: *{PREVIOUS_TAG}*',
-                }
             ],
         }
     )
