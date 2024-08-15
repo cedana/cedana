@@ -7,6 +7,7 @@ Using the process as a primitive, cedana supports multiple container runtimes fo
 The container ecosystem can get confusing, especially when dealing with runtimes. Currently, cedana only supports containers using the `runc` low-level runtime. Below are the ones that we have tested with and support working with.
 
 | runtime/abstraction         | level of support | well-tested? | notes                                                                                             |
+|-----------------------------|------------------|--------------|---------------------------------------------------------------------------------------------------|
 | process                     | full             | yes          | simplest abstraction level, works with everything                                                 |
 | runc                        | full             | yes          | simplest abstraction level, all other management layers need to be using runc                     |
 | containerd (runc + rootfs)  | full             | yes          | works well, works in kubernetes                                                                   |
