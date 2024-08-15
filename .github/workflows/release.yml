@@ -346,7 +346,7 @@ jobs:
         env:
           RELEASE_TITLE: 'Release summary'
           RELEASE_DESCRIPTION: '> **cedana ${{ steps.tag.outputs.tag }}**'
-          RELEASE_NOTES_URL: ${{ github.repositoryUrl }}/releases/${{ steps.tag.outputs.tag }}
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
           RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
           TAG: ${{ steps.tag.outputs.tag }}
           BINARY: current/cedana
