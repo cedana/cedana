@@ -303,22 +303,27 @@ jobs:
           submodules: recursive
           fetch-tags: true
 
-      - name: Get release info
-        id: release-info
-        uses: jossef/action-latest-release-info@v1.2.1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Get tag
+        id: tag
+        run: |
+          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
 
       - name: Get previous tag
         id: previous-tag
         run: |
           echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
 
+      - name: Get release info
+        id: release-info
+        uses: thedaviddias/publish-release-info-action@v3.3.0
+        with:
+          github_token: ${{ github.token }}
+
       - name: Download binary
         uses: robinraju/release-downloader@v1
         id: download
         with:
-          tag: ${{ steps.release-info.outputs.tag_name }}
+          tag: ${{ steps.tag.outputs.tag }}
           fileName: '*amd64.tar.gz'
           extract: true
           token: ${{ github.token }}
@@ -338,10 +343,10 @@ jobs:
         id: summary
         env:
           RELEASE_TITLE: 'Release summary'
-          RELEASE_DESCRIPTION: '> **cedana ${{ steps.release-info.outputs.tag_name }}**'
-          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ steps.release-info.outputs.tag_name }}
-          RELEASE_BODY: '${{ steps.release-info.outputs.draft }}'
-          TAG: ${{ steps.release-info.outputs.tag_name }}
+          RELEASE_DESCRIPTION: '> **${{ steps.release-info.outputs.repo }} ${{ steps.tag.outputs.tag }}**'
+          RELEASE_NOTES_URL: ${{ steps.release-info.outputs.repoLink }}/releases/${{ steps.tag.outputs.tag }}
+          RELEASE_BODY: '${{ steps.release-info.outputs.prList }}'
+          TAG: ${{ steps.tag.outputs.tag }}
           BINARY: current/cedana
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
           PREVIOUS_BINARY: previous/cedana
