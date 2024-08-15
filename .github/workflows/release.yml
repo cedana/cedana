@@ -315,9 +315,11 @@ jobs:
 
       - name: Get release info
         id: release-info
-        uses: thedaviddias/publish-release-info-action@v3.3.0
+        uses: pozetroninc/github-action-get-latest-release@master
         with:
-          github_token: ${{ github.token }}
+          token: ${{ github.token }}
+          excludes: draft # TODO: exclude prerelease
+          repository: ${{ github.repository }}
 
       - name: Download binary
         uses: robinraju/release-downloader@v1
@@ -343,9 +345,9 @@ jobs:
         id: summary
         env:
           RELEASE_TITLE: 'Release summary'
-          RELEASE_DESCRIPTION: '> **${{ steps.release-info.outputs.repo }} ${{ steps.tag.outputs.tag }}**'
-          RELEASE_NOTES_URL: ${{ steps.release-info.outputs.repoLink }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: '${{ steps.release-info.outputs.prList }}'
+          RELEASE_DESCRIPTION: '> **cedana ${{ steps.tag.outputs.tag }}**'
+          RELEASE_NOTES_URL: ${{ github.repositoryUrl }}/releases/${{ steps.tag.outputs.tag }}
+          RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
           TAG: ${{ steps.tag.outputs.tag }}
           BINARY: current/cedana
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
