@@ -1,4 +1,5 @@
 # Cedana
+![GitHub Release](https://img.shields.io/github/v/release/cedana/cedana) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/cedana/cedana/release.yml?branch=main)
 
 Build systems that bake real-time adaptiveness and elasticity using Cedana.
 
