@@ -85,7 +85,7 @@ if TAG and PREVIOUS_TAG and BINARY and PREVIOUS_BINARY:
                 },
                 {
                     'type': 'mrkdwn',
-                    'text': f'_Previously *{previous_binary_size_mib:.2f} MiB_',
+                    'text': f'_Previously {previous_binary_size_mib:.2f} MiB_',
                 },
             ],
         }

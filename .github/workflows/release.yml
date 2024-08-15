@@ -41,18 +41,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # test:
-  #   name: Test
-  #   uses: ./.github/workflows/pr.yml
-  #   with:
-  #     debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-  #     debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-  #     debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+  test:
+    name: Test
+    uses: ./.github/workflows/pr.yml
+    with:
+      debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
 
   build-publish-amd64:
     name: Build & Publish (amd64)
     runs-on: ubuntu-latest
-    # needs: test
+    needs: test
     container:
       image: golang:1.22-bullseye
     steps:
@@ -89,7 +89,7 @@ jobs:
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
-    # needs: test
+    needs: test
 
     permissions:
       contents: read
@@ -162,7 +162,7 @@ jobs:
   build-push-image-manifest-arm64:
     name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
-    # needs: test
+    needs: test
 
     permissions:
       contents: read
@@ -318,7 +318,7 @@ jobs:
         uses: pozetroninc/github-action-get-latest-release@master
         with:
           token: ${{ github.token }}
-          excludes: draft # TODO: exclude prerelease
+          excludes: draft
           repository: ${{ github.repository }}
 
       - name: Download binary
