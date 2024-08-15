@@ -6,7 +6,7 @@ fi
 USE_SYSTEMCTL=0
 
 for arg in "$@"; do
-    if [ "$arg" = "--systemctl" ]; then
+    if [ "$arg" == "--systemctl" ]; then
         echo "Using systemctl"
         USE_SYSTEMCTL=1
     fi
