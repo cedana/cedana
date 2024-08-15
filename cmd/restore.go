@@ -320,6 +320,5 @@ func init() {
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 
-	restoreCmd.Flags().BoolP(streamFlag, "", false, "restore images using criu-image-streamer")
 	rootCmd.AddCommand(restoreCmd)
 }

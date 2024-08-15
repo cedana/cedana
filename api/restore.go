@@ -570,7 +570,6 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	var pid *int32
 
 	opts := s.prepareRestoreOpts()
-	opts.Stream = proto.Bool(args.Stream)
 	nfy := Notify{
 		Logger: s.logger,
 	}
