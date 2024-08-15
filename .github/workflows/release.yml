@@ -344,8 +344,8 @@ jobs:
       - name: Generate summary
         id: summary
         env:
-          RELEASE_TITLE: 'Release summary'
-          RELEASE_DESCRIPTION: '> **cedana ${{ steps.tag.outputs.tag }}**'
+          RELEASE_TITLE: 'cedana'
+          RELEASE_DESCRIPTION: '**${{ steps.tag.outputs.tag }}**'
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
           RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
           TAG: ${{ steps.tag.outputs.tag }}
