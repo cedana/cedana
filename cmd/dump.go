@@ -12,7 +12,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 	
 	"github.com/mdlayher/vsock"
@@ -46,15 +45,6 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-		if dir == "" {
-			// TODO NR - should we default to /tmp?
-			dir = viper.GetString("shared_storage.dump_storage_dir")
-			if dir == "" {
-				logger.Error().Msgf("no dump directory specified")
-				return err
-			}
-			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
-		}
 
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
@@ -71,13 +61,13 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -194,28 +184,12 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-		if dir == "" {
-			dir = viper.GetString("shared_storage.dump_storage_dir")
-			if dir == "" {
-				logger.Error().Msgf("no dump directory specified")
-				return err
-			}
-			logger.Info().Msgf("no directory specified as input, using %s from config", dir)
-		}
-
-		var taskType task.CRType
-		if viper.GetBool("remote") {
-			taskType = task.CRType_REMOTE
-		} else {
-			taskType = task.CRType_LOCAL
-		}
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
-			Type:           taskType,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
 		}
@@ -224,13 +198,13 @@ var dumpJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("checkpoint task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("checkpoint task failed")
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -250,13 +224,65 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		ref, _ := cmd.Flags().GetString(imgFlag)
+		ref, _ := cmd.Flags().GetString(refFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
-		dumpArgs := task.ContainerdDumpArgs{
+		address, _ := cmd.Flags().GetString(addressFlag)
+		namespace, _ := cmd.Flags().GetString(namespaceFlag)
+
+		rootfsArgs := task.ContainerdRootfsDumpArgs{
 			ContainerID: id,
-			Ref:         ref,
+			ImageRef:    ref,
+			Address:     address,
+			Namespace:   namespace,
 		}
-		resp, err := cts.ContainerdDump(ctx, &dumpArgs)
+
+		root, _ := cmd.Flags().GetString(rootFlag)
+
+		dir, _ := cmd.Flags().GetString(dirFlag)
+		wdPath, _ := cmd.Flags().GetString(wdFlag)
+		pid, _ := cmd.Flags().GetInt(pidFlag)
+
+		external, _ := cmd.Flags().GetString(externalFlag)
+
+		var externalNamespaces []string
+
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
+		}
+
+		criuOpts := &task.CriuOpts{
+			ImagesDirectory: dir,
+			WorkDirectory:   wdPath,
+			LeaveRunning:    true,
+			External:        externalNamespaces,
+		}
+
+		runcArgs := task.RuncDumpArgs{
+			Root: root,
+			// CheckpointPath: checkpointPath,
+			// FIXME YA: Where does this come from?
+			Pid:         int32(pid),
+			ContainerID: id,
+			CriuOpts:    criuOpts,
+			// TODO BS: hard coded for now
+			Type: task.CRType_LOCAL,
+		}
+
+		// TODO BS missing runc dump args
+		dumpArgs := task.ContainerdDumpArgs{
+			ContainerdRootfsDumpArgs: &rootfsArgs,
+			RuncDumpArgs:             &runcArgs,
+		}
+
+		_, err = cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -266,7 +292,7 @@ var dumpContainerdCmd = &cobra.Command{
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Msgf("success")
 
 		return nil
 	},
@@ -421,11 +447,31 @@ func init() {
 	dumpKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
+	// ref, _ := cmd.Flags().GetString(imgFlag)
+	// id, _ := cmd.Flags().GetString(idFlag)
+	// address, _ := cmd.Flags().GetString(addressFlag)
+	// namespace, _ := cmd.Flags().GetString(namespaceFlag)
+
+	// Runc
+	// dir, _ := cmd.Flags().GetString(dirFlag)
+	// wdPath, _ := cmd.Flags().GetString(wdFlag)
+	// pid, _ := cmd.Flags().GetInt(pidFlag)
+	// external, _ := cmd.Flags().GetString(externalFlag)
+
 	dumpCmd.AddCommand(dumpContainerdCmd)
-	dumpContainerdCmd.Flags().StringP(imgFlag, "i", "", "image checkpoint path")
-	dumpContainerdCmd.MarkFlagRequired(imgFlag)
-	dumpContainerdCmd.Flags().StringP(idFlag, "p", "", "container id")
-	dumpContainerdCmd.MarkFlagRequired(idFlag)
+	dumpContainerdCmd.Flags().String(idFlag, "", "container id")
+	dumpContainerdCmd.Flags().String(refFlag, "", "image ref")
+	dumpContainerdCmd.MarkFlagRequired(refFlag)
+	dumpContainerdCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
+	dumpContainerdCmd.MarkFlagRequired(addressFlag)
+	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
+
+	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpContainerdCmd.MarkFlagRequired(dirFlag)
+	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
+	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
+	dumpContainerdCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)

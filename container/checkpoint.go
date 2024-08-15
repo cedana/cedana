@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	gocontext "context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -45,12 +48,16 @@ import (
 	"github.com/containerd/containerd/rootfs"
 	"github.com/containerd/containerd/runtime/linux/runctypes"
 	"github.com/containerd/containerd/runtime/v2/runc/options"
+	"github.com/containerd/containerd/snapshots"
+	"github.com/containerd/platforms"
 	"github.com/containerd/typeurl/v2"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	dockerTypes "github.com/docker/docker/api/types"
 
 	errdefs "github.com/containerd/errdefs"
 	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/identity"
+	"github.com/opencontainers/image-spec/specs-go"
 	is "github.com/opencontainers/image-spec/specs-go"
 	ver "github.com/opencontainers/image-spec/specs-go"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -383,11 +390,6 @@ func (c *RuncContainer) criuNotifications(resp *criurpc.CriuResp, process *Proce
 	logrus.Debugf("notify: %s\n", script)
 	switch script {
 	case "post-dump":
-		f, err := os.Create(filepath.Join(c.StateDir, "checkpoint"))
-		if err != nil {
-			return err
-		}
-		f.Close()
 	case "network-unlock":
 		if err := unlockNetwork(c.Config); err != nil {
 			return err
@@ -896,6 +898,11 @@ type ContainerdContainer struct {
 	client *containerd.Client
 }
 
+var (
+	emptyGZLayer = digest.Digest("sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1")
+	emptyDigest  = digest.Digest("")
+)
+
 // for a full containerd checkpoint, we'd use the runc checkpointing primitives + rootfs
 func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
 
@@ -905,13 +912,6 @@ func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *container
 	}
 	for _, container := range containers {
 		fmt.Println(container.ID())
-	}
-
-	opts := []containerd.CheckpointOpts{
-		containerd.WithCheckpointRuntime,
-		containerd.WithCheckpointImage,
-		containerd.WithCheckpointRW,
-		WithCheckpointState,
 	}
 
 	container, err := containerdClient.LoadContainer(ctx, id)
@@ -932,17 +932,26 @@ func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *container
 	}
 	// pause if running
 	if task != nil {
-		if err := task.Pause(ctx); err != nil {
+		currentStatus, err := task.Status(ctx)
+		if err != nil {
 			return err
 		}
-		defer func() {
-			if err := task.Resume(ctx); err != nil {
-				fmt.Println(fmt.Errorf("error resuming task: %w", err))
+
+		if currentStatus.Status != "paused" {
+			if err := task.Pause(ctx); err != nil {
+				return err
 			}
-		}()
+
+			defer func() {
+				if err := task.Resume(ctx); err != nil {
+					fmt.Println(fmt.Errorf("error resuming task: %w", err))
+				}
+			}()
+		}
+
 	}
 
-	if err := containerdContainer.ContainerCheckpointContainerd(ctx, ref, opts...); err != nil {
+	if err := containerdContainer.ContainerCheckpointContainerd(ctx, ref); err != nil {
 		return err
 	}
 
@@ -981,30 +990,18 @@ func WithCheckpointState(ctx context.Context, client *containerd.Client, c *cont
 	return nil
 }
 
-func (c *ContainerdContainer) ContainerCheckpointContainerd(ctx context.Context, ref string, opts ...containerd.CheckpointOpts) error {
+var Platform = "cedana/platform"
 
-	index := &ocispec.Index{
-		Versioned: ver.Versioned{
-			SchemaVersion: 2,
-		},
-		Annotations: make(map[string]string),
-	}
-	copts := &options.CheckpointOptions{
-		Exit:                false,
-		OpenTcp:             false,
-		ExternalUnixSockets: false,
-		Terminal:            false,
-		FileLocks:           true,
-		EmptyNamespaces:     nil,
-	}
+func (c *ContainerdContainer) ContainerCheckpointContainerd(ctx context.Context, ref string) error {
+
 	info, err := c.Info(ctx)
 	if err != nil {
 		return err
 	}
 
-	img, err := c.Image(ctx)
+	baseImgNoPlatform, err := c.client.ImageService().Get(ctx, info.Image)
 	if err != nil {
-		return err
+		return fmt.Errorf("container %q lacks image: %w", c.Container.ID(), err)
 	}
 
 	ctx, done, err := c.client.WithLease(ctx)
@@ -1013,37 +1010,338 @@ func (c *ContainerdContainer) ContainerCheckpointContainerd(ctx context.Context,
 	}
 	defer done(ctx)
 
-	// add image name to manifest
-	index.Annotations[ocispec.AnnotationRefName] = img.Name()
-	// add runtime info to index
-	index.Annotations[checkpointRuntimeNameLabel] = info.Runtime.Name
-	// add snapshotter info to index
-	index.Annotations[checkpointSnapshotterNameLabel] = info.Snapshotter
+	platformLabel := info.Labels[Platform]
+	if platformLabel == "" {
+		platformLabel = platforms.DefaultString()
+	}
 
-	// process remaining opts
-	for _, o := range opts {
-		if err := o(ctx, c.client, &info, index, copts); err != nil {
-			err = errdefs.FromGRPC(err)
-			if !errdefs.IsAlreadyExists(err) {
-				return err
-			}
+	ocispecPlatform, err := platforms.Parse(platformLabel)
+	if err != nil {
+		return err
+	}
+
+	platform := platforms.Only(ocispecPlatform)
+
+	baseImg := containerd.NewImageWithPlatform(c.client, baseImgNoPlatform, platform)
+
+	baseImgConfig, _, err := ReadImageConfig(ctx, baseImg)
+	if err != nil {
+		return err
+	}
+
+	var (
+		differ = c.client.DiffService()
+		snName = info.Snapshotter
+		sn     = c.client.SnapshotService(snName)
+	)
+
+	diffLayerDesc, diffID, err := createDiff(ctx, c.Container.ID(), sn, c.client.ContentStore(), differ)
+	if err != nil {
+		return fmt.Errorf("failed to export layer: %w", err)
+	}
+
+	imageConfig, err := generateCommitImageConfig(ctx, c.Container, baseImg, diffID)
+	if err != nil {
+		return fmt.Errorf("failed to generate commit image config: %w", err)
+	}
+
+	rootfsID := identity.ChainID(imageConfig.RootFS.DiffIDs).String()
+	if err := applyDiffLayer(ctx, rootfsID, baseImgConfig, sn, differ, diffLayerDesc); err != nil {
+		return fmt.Errorf("failed to apply diff: %w", err)
+	}
+
+	commitManifestDesc, _, err := writeContentsForImage(ctx, snName, baseImg, imageConfig, diffLayerDesc)
+	if err != nil {
+		return err
+	}
+
+	// image create
+	img := images.Image{
+		Name:      ref,
+		Target:    commitManifestDesc,
+		CreatedAt: time.Now(),
+	}
+
+	if _, err := c.client.ImageService().Update(ctx, img); err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+
+		if _, err := c.client.ImageService().Create(ctx, img); err != nil {
+			return fmt.Errorf("failed to create new image %s: %w", ref, err)
 		}
 	}
 
-	desc, err := writeRefIndex(ctx, index, c.client, c.ID()+"index")
+	return nil
+}
+
+func ReadImageConfig(ctx context.Context, img containerd.Image) (ocispec.Image, ocispec.Descriptor, error) {
+	var config ocispec.Image
+
+	configDesc, err := img.Config(ctx) // aware of img.platform
+	if err != nil {
+		return config, configDesc, err
+	}
+	p, err := content.ReadBlob(ctx, img.ContentStore(), configDesc)
+	if err != nil {
+		return config, configDesc, err
+	}
+	if err := json.Unmarshal(p, &config); err != nil {
+		return config, configDesc, err
+	}
+	return config, configDesc, nil
+}
+
+func ReadManifest(ctx context.Context, img containerd.Image) (*ocispec.Manifest, *ocispec.Descriptor, error) {
+	cs := img.ContentStore()
+	targetDesc := img.Target()
+	if images.IsManifestType(targetDesc.MediaType) {
+		b, err := content.ReadBlob(ctx, img.ContentStore(), targetDesc)
+		if err != nil {
+			return nil, &targetDesc, err
+		}
+		var mani ocispec.Manifest
+		if err := json.Unmarshal(b, &mani); err != nil {
+			return nil, &targetDesc, err
+		}
+		return &mani, &targetDesc, nil
+	}
+	if images.IsIndexType(targetDesc.MediaType) {
+		idx, _, err := ReadIndex(ctx, img)
+		if err != nil {
+			return nil, nil, err
+		}
+		configDesc, err := img.Config(ctx) // aware of img.platform
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, maniDesc := range idx.Manifests {
+			maniDesc := maniDesc
+			if b, err := content.ReadBlob(ctx, cs, maniDesc); err == nil {
+				var mani ocispec.Manifest
+				if err := json.Unmarshal(b, &mani); err != nil {
+					return nil, nil, err
+				}
+				if reflect.DeepEqual(configDesc, mani.Config) {
+					return &mani, &maniDesc, nil
+				}
+			}
+		}
+	}
+	// no manifest was found
+	return nil, nil, nil
+}
+
+// ReadIndex returns image index, or nil for non-indexed image.
+func ReadIndex(ctx context.Context, img containerd.Image) (*ocispec.Index, *ocispec.Descriptor, error) {
+	desc := img.Target()
+	if !images.IsIndexType(desc.MediaType) {
+		return nil, nil, nil
+	}
+	b, err := content.ReadBlob(ctx, img.ContentStore(), desc)
+	if err != nil {
+		return nil, &desc, err
+	}
+	var idx ocispec.Index
+	if err := json.Unmarshal(b, &idx); err != nil {
+		return nil, &desc, err
+	}
+
+	return &idx, &desc, nil
+}
+
+// writeContentsForImage will commit oci image config and manifest into containerd's content store.
+func writeContentsForImage(ctx context.Context, snName string, baseImg containerd.Image, newConfig ocispec.Image, diffLayerDesc ocispec.Descriptor) (ocispec.Descriptor, digest.Digest, error) {
+	newConfigJSON, err := json.Marshal(newConfig)
+	if err != nil {
+		return ocispec.Descriptor{}, emptyDigest, err
+	}
+
+	configDesc := ocispec.Descriptor{
+		MediaType: images.MediaTypeDockerSchema2Config,
+		Digest:    digest.FromBytes(newConfigJSON),
+		Size:      int64(len(newConfigJSON)),
+	}
+
+	cs := baseImg.ContentStore()
+	baseMfst, _, err := ReadManifest(ctx, baseImg)
+	if err != nil {
+		return ocispec.Descriptor{}, emptyDigest, err
+	}
+	layers := append(baseMfst.Layers, diffLayerDesc)
+
+	newMfst := struct {
+		MediaType string `json:"mediaType,omitempty"`
+		ocispec.Manifest
+	}{
+		MediaType: images.MediaTypeDockerSchema2Manifest,
+		Manifest: ocispec.Manifest{
+			Versioned: specs.Versioned{
+				SchemaVersion: 2,
+			},
+			Config: configDesc,
+			Layers: layers,
+		},
+	}
+
+	newMfstJSON, err := json.MarshalIndent(newMfst, "", "    ")
+	if err != nil {
+		return ocispec.Descriptor{}, emptyDigest, err
+	}
+
+	newMfstDesc := ocispec.Descriptor{
+		MediaType: images.MediaTypeDockerSchema2Manifest,
+		Digest:    digest.FromBytes(newMfstJSON),
+		Size:      int64(len(newMfstJSON)),
+	}
+
+	// new manifest should reference the layers and config content
+	labels := map[string]string{
+		"containerd.io/gc.ref.content.0": configDesc.Digest.String(),
+	}
+	for i, l := range layers {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i+1)] = l.Digest.String()
+	}
+
+	err = content.WriteBlob(ctx, cs, newMfstDesc.Digest.String(), bytes.NewReader(newMfstJSON), newMfstDesc, content.WithLabels(labels))
+	if err != nil {
+		return ocispec.Descriptor{}, emptyDigest, err
+	}
+
+	// config should reference to snapshotter
+	labelOpt := content.WithLabels(map[string]string{
+		fmt.Sprintf("containerd.io/gc.ref.snapshot.%s", snName): identity.ChainID(newConfig.RootFS.DiffIDs).String(),
+	})
+	err = content.WriteBlob(ctx, cs, configDesc.Digest.String(), bytes.NewReader(newConfigJSON), configDesc, labelOpt)
+	if err != nil {
+		return ocispec.Descriptor{}, emptyDigest, err
+	}
+
+	return newMfstDesc, configDesc.Digest, nil
+}
+
+func generateCommitImageConfig(ctx context.Context, container containerd.Container, img containerd.Image, diffID digest.Digest) (ocispec.Image, error) {
+	spec, err := container.Spec(ctx)
+	if err != nil {
+		return ocispec.Image{}, err
+	}
+
+	baseConfig, _, err := ReadImageConfig(ctx, img) // aware of img.platform
+	if err != nil {
+		return ocispec.Image{}, err
+	}
+
+	createdBy := ""
+	if spec.Process != nil {
+		createdBy = strings.Join(spec.Process.Args, " ")
+	}
+
+	createdTime := time.Now()
+	arch := baseConfig.Architecture
+	if arch == "" {
+		arch = runtime.GOARCH
+		// log.G(ctx).Warnf("assuming arch=%q", arch)
+	}
+	os := baseConfig.OS
+	if os == "" {
+		os = runtime.GOOS
+		// log.G(ctx).Warnf("assuming os=%q", os)
+	}
+	// log.G(ctx).Debugf("generateCommitImageConfig(): arch=%q, os=%q", arch, os)
+	return ocispec.Image{
+		Platform: ocispec.Platform{
+			Architecture: arch,
+			OS:           os,
+		},
+
+		Created: &createdTime,
+		Author:  "cedana",
+		Config:  baseConfig.Config,
+		RootFS: ocispec.RootFS{
+			Type:    "layers",
+			DiffIDs: append(baseConfig.RootFS.DiffIDs, diffID),
+		},
+		History: append(baseConfig.History, ocispec.History{
+			Created:    &createdTime,
+			CreatedBy:  createdBy,
+			Author:     "cedana",
+			Comment:    "",
+			EmptyLayer: (diffID == emptyGZLayer),
+		}),
+	}, nil
+}
+
+// createDiff creates a layer diff into containerd's content store.
+func createDiff(ctx context.Context, name string, sn snapshots.Snapshotter, cs content.Store, comparer diff.Comparer) (ocispec.Descriptor, digest.Digest, error) {
+	newDesc, err := rootfs.CreateDiff(ctx, name, sn, comparer)
+	if err != nil {
+		return ocispec.Descriptor{}, digest.Digest(""), err
+	}
+
+	info, err := cs.Info(ctx, newDesc.Digest)
+	if err != nil {
+		return ocispec.Descriptor{}, digest.Digest(""), err
+	}
+
+	diffIDStr, ok := info.Labels["containerd.io/uncompressed"]
+	if !ok {
+		return ocispec.Descriptor{}, digest.Digest(""), fmt.Errorf("invalid differ response with no diffID")
+	}
+
+	diffID, err := digest.Parse(diffIDStr)
+	if err != nil {
+		return ocispec.Descriptor{}, digest.Digest(""), err
+	}
+
+	return ocispec.Descriptor{
+		MediaType: images.MediaTypeDockerSchema2LayerGzip,
+		Digest:    newDesc.Digest,
+		Size:      info.Size,
+	}, diffID, nil
+}
+
+// copied from github.com/containerd/containerd/rootfs/apply.go
+func uniquePart() string {
+	t := time.Now()
+	var b [3]byte
+	// Ignore read failures, just decreases uniqueness
+	rand.Read(b[:])
+	return fmt.Sprintf("%d-%s", t.Nanosecond(), base64.URLEncoding.EncodeToString(b[:]))
+}
+
+// applyDiffLayer will apply diff layer content created by createDiff into the snapshotter.
+func applyDiffLayer(ctx context.Context, name string, baseImg ocispec.Image, sn snapshots.Snapshotter, differ diff.Applier, diffDesc ocispec.Descriptor) (retErr error) {
+	var (
+		key    = uniquePart() + "-" + name
+		parent = identity.ChainID(baseImg.RootFS.DiffIDs).String()
+	)
+
+	mount, err := sn.Prepare(ctx, key, parent)
 	if err != nil {
 		return err
 	}
-	i := images.Image{
-		Name:   ref,
-		Target: desc,
-	}
 
-	_, err = c.client.ImageService().Create(ctx, i)
-	if err != nil {
+	defer func() {
+		if retErr != nil {
+			// NOTE: the snapshotter should be hold by lease. Even
+			// if the cleanup fails, the containerd gc can delete it.
+			if err := sn.Remove(ctx, key); err != nil {
+				log.G(ctx).Warnf("failed to cleanup aborted apply %s: %s", key, err)
+			}
+		}
+	}()
+
+	if _, err = differ.Apply(ctx, diffDesc, mount); err != nil {
 		return err
 	}
 
+	if err = sn.Commit(ctx, name, key); err != nil {
+		if errdefs.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 
@@ -1584,7 +1882,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
+
 	if process != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+
 		cmd.Stdin = process.Stdin
 		cmd.Stdout = process.Stdout
 		cmd.Stderr = process.Stderr
@@ -1726,6 +2029,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 	if err != nil {
 		return err
 	}
+
+	// Try closing unix sockets
+	defer func() {
+		_ = unix.Close(fds[0])
+		_ = unix.Close(fds[1])
+	}()
 
 	// In pre-dump mode CRIU is in a loop and waits for
 	// the final DUMP command.

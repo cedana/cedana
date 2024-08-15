@@ -20,7 +20,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,63 +34,49 @@ const (
 var DB_BUCKET_JOBS = []byte("jobs")
 
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
-	if args.Task == "" {
-		args.Task = viper.GetString("client.task")
-	}
+	return s.startHelper(ctx, args, nil)
+}
 
-	state := &task.ProcessState{}
-
-	state.JobState = task.JobState_JOB_RUNNING
-	if args.JID == "" {
-		state.JID = xid.New().String()
-		args.JID = state.JID
-	} else {
-		existingState, _ := s.getState(ctx, args.JID)
-		if existingState != nil {
-			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
-		}
-		state.JID = args.JID
-	}
-	err := s.updateState(ctx, state.JID, state)
+func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
+	in, err := stream.Recv()
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to update state")
+		return err
 	}
+	args := in.GetArgs()
 
-	pid, err := s.run(ctx, args)
-	state.PID = pid
-	if err != nil {
-		// TODO BS: this should be at market level
-		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
-		state.JobState = task.JobState_JOB_STARTUP_FAILED
-		s.updateState(ctx, state.JID, state) // because it's a managed job
-		return nil, status.Error(codes.Internal, "failed to run task")
-		// TODO BS: replace doom loop with just retrying from market
-	}
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
-	}
-
-	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
-
-	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
-		err = status.Error(codes.Internal, "Task startup failed")
-		return nil, err
-	}
-
-	return &task.StartResp{
-		Message: fmt.Sprint("Job started successfully"),
-		PID:     pid,
-		JID:     state.JID,
-	}, err
+	_, err = s.startHelper(stream.Context(), args, stream)
+	return err
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
-	ctx, dumpTracer := s.tracer.Start(ctx, "dump-ckpt")
-	dumpTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer dumpTracer.End()
+	if args.GPU {
+		if s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+		if args.JID == "" {
+			return nil, status.Error(codes.InvalidArgument, "GPU dump is only supported for managed jobs")
+		}
+	}
+
+	dumpStats := task.DumpStats{
+		DumpType: task.DumpType_PROCESS,
+	}
+	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+
+	if args.Dir == "" {
+		args.Dir = viper.GetString("shared_storage.dump_storage_dir")
+		if args.Dir == "" {
+			return nil, status.Error(codes.InvalidArgument, "dump storage dir not provided/found in config")
+		}
+	}
+
+	if viper.GetBool("remote") {
+		args.Type = task.CRType_REMOTE
+	} else {
+		args.Type = task.CRType_LOCAL
+	}
 
 	state := &task.ProcessState{}
 	pid := args.PID
@@ -117,7 +102,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	err = s.dump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
-		dumpTracer.RecordError(st.Err())
 		return nil, st.Err()
 	}
 
@@ -134,7 +118,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
 		if err != nil {
 			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			dumpTracer.RecordError(st.Err())
 			return nil, st.Err()
 		}
 		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
@@ -156,87 +139,24 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	}
 
 	resp.State = state
+	resp.DumpStats = &dumpStats
 
 	return &resp, err
 }
 
 func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	ctx, restoreTracer := s.tracer.Start(ctx, "restore-ckpt")
-	restoreTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer restoreTracer.End()
+	return s.restoreHelper(ctx, args, nil)
+}
 
-	var resp task.RestoreResp
-	var pid *int32
-	var err error
-
-	switch args.Type {
-	case task.CRType_LOCAL:
-		if args.CheckpointPath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
-		if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
-		}
-
-		pid, err = s.restore(ctx, args)
-		if err != nil {
-			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			restoreTracer.RecordError(staterr)
-			return nil, staterr
-		}
-
-		resp = task.RestoreResp{
-			Message: fmt.Sprintf("successfully restored process: %v", *pid),
-			NewPID:  *pid,
-		}
-
-	case task.CRType_REMOTE:
-		if args.CheckpointID == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
-		}
-
-		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
-		if err != nil {
-			return nil, err
-		}
-
-		pid, err = s.restore(ctx, &task.RestoreArgs{
-			Type:           task.CRType_REMOTE,
-			CheckpointID:   args.CheckpointID,
-			CheckpointPath: *zipFile,
-		})
-		if err != nil {
-			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			restoreTracer.RecordError(staterr)
-			return nil, staterr
-		}
-
-		resp = task.RestoreResp{
-			Message: fmt.Sprintf("successfully restored process: %v", *pid),
-			NewPID:  *pid,
-		}
-	}
-
-	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
-	// We could be restoring on a new machine, so we update the state
-
-	state, err := s.generateState(ctx, *pid)
+func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) error {
+	in, err := stream.Recv()
 	if err != nil {
-		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
+		return err
 	}
+	args := in.GetArgs()
 
-	// Only update state if it was a managed job
-	if args.JID != "" && state != nil {
-		state.JobState = task.JobState_JOB_RUNNING
-		err = s.updateState(ctx, state.JID, state)
-		if err != nil {
-			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
-		}
-	}
-
-	resp.State = state
-
-	return &resp, nil
+	_, err = s.restoreHelper(stream.Context(), args, stream)
+	return err
 }
 
 func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
@@ -282,48 +202,203 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) {
-	ctx, span := s.tracer.Start(ctx, "exec")
-	span.SetAttributes(attribute.String("task", args.Task))
-	defer span.End()
+func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
+	if args.Task == "" {
+		args.Task = viper.GetString("client.task")
+	}
 
+	if args.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+	}
+
+	state := &task.ProcessState{}
+
+	state.JobState = task.JobState_JOB_RUNNING
+	if args.JID == "" {
+		state.JID = xid.New().String()
+		args.JID = state.JID
+	} else {
+		existingState, _ := s.getState(ctx, args.JID)
+		if existingState != nil {
+			return nil, status.Error(codes.AlreadyExists, "job ID already exists")
+		}
+		state.JID = args.JID
+	}
+	err := s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state: %s", err.Error()))
+	}
+
+	pid, done, err := s.run(ctx, args, stream)
+	state.PID = pid
+	if err != nil {
+		// TODO BS: this should be at market level
+		s.logger.Error().Err(err).Msgf("failed to run task, attempt %d", 1)
+		state.JobState = task.JobState_JOB_STARTUP_FAILED
+		s.updateState(ctx, state.JID, state) // because it's a managed job
+		return nil, status.Error(codes.Internal, "failed to run task")
+		// TODO BS: replace doom loop with just retrying from market
+	}
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to update state after starting job")
+	}
+
+	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
+
+	if state.JobState == task.JobState_JOB_STARTUP_FAILED {
+		err = status.Error(codes.Internal, "Task startup failed")
+		return nil, err
+	}
+
+	if stream != nil && done != nil {
+		<-done
+	}
+
+	return &task.StartResp{
+		Message: fmt.Sprint("Job started successfully"),
+		PID:     pid,
+		JID:     state.JID,
+	}, err
+}
+
+func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*task.RestoreResp, error) {
+	var resp task.RestoreResp
+	var pid *int32
+	var err error
+
+	restoreStats := task.RestoreStats{
+		DumpType: task.DumpType_PROCESS,
+	}
+	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+
+	if args.JID != "" {
+		state, err := s.getState(ctx, args.JID)
+		if err != nil {
+			return nil, status.Error(codes.NotFound, "job not found")
+		}
+		if viper.GetBool("remote") {
+			remoteState := state.GetRemoteState()
+			if remoteState == nil {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote state found")
+				return nil, status.Error(codes.InvalidArgument, "no remote state found")
+			}
+			// For now just grab latest checkpoint
+			if remoteState[len(remoteState)-1].CheckpointID == "" {
+				s.logger.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
+				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
+			}
+			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
+			args.Type = task.CRType_REMOTE
+		} else {
+			args.CheckpointPath = state.GetCheckpointPath()
+			args.Type = task.CRType_LOCAL
+		}
+	} else {
+		args.Type = task.CRType_LOCAL
+	}
+
+	switch args.Type {
+	case task.CRType_LOCAL:
+		if args.CheckpointPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+		}
+		if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
+		}
+
+	case task.CRType_REMOTE:
+		if args.CheckpointID == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
+		}
+
+		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
+		if err != nil {
+			return nil, err
+		}
+
+		args.CheckpointPath = *zipFile
+	}
+
+	pid, done, err := s.restore(ctx, args, stream)
+	if err != nil {
+		staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+		return nil, staterr
+	}
+
+	resp = task.RestoreResp{
+		Message: fmt.Sprintf("successfully restored process: %v", *pid),
+		NewPID:  *pid,
+	}
+
+	// TODO NR - watch PID for a couple seconds after exec to ensure no failure
+	// We could be restoring on a new machine, so we update the state
+
+	state, err := s.generateState(ctx, *pid)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
+	}
+
+	// Only update state if it was a managed job
+	if args.JID != "" && state != nil {
+		state.JobState = task.JobState_JOB_RUNNING
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
+		}
+	}
+
+	if stream != nil && done != nil {
+		<-done
+	}
+
+	resp.State = state
+	resp.RestoreStats = &restoreStats
+
+	return &resp, nil
+}
+
+func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (int32, chan error, error) {
 	var pid int32
 	if args.Task == "" {
-		return 0, fmt.Errorf("could not find task")
+		return 0, nil, fmt.Errorf("could not find task")
 	}
 
 	var gpuCmd *exec.Cmd
 	var err error
 	if args.GPU {
-		_, gpuStartSpan := s.tracer.Start(ctx, "start-gpu-controller")
 		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, s.logger)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
-		gpuStartSpan.End()
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")
 		if sharedLibPath == "" {
 			sharedLibPath = utils.GpuSharedLibPath
 		}
 		if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
-			return 0, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+			return 0, nil, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
 		}
 		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
 	}
 
-	nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		return 0, err
+	groupsUint32 := make([]uint32, len(args.Groups))
+	for i, v := range args.Groups {
+		groupsUint32[i] = uint32(v)
 	}
-
-	cmd := exec.CommandContext(s.serverCtx, "bash", "-c", args.Task)
+	var cmdCtx context.Context
+	if stream != nil {
+		cmdCtx = utils.CombineContexts(s.serverCtx, stream.Context()) // either should terminate the process
+	} else {
+		cmdCtx = s.serverCtx
+	}
+	cmd := exec.CommandContext(cmdCtx, "bash", "-c", args.Task)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    args.UID,
-			Gid:    args.GID,
-			Groups: args.Groups,
+			Uid:    uint32(args.UID),
+			Gid:    uint32(args.GID),
+			Groups: groupsUint32,
 		},
 	}
 
@@ -332,26 +407,88 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 		cmd.Dir = args.WorkingDir
 	}
 
-	cmd.Stdin = nullFile
-	if args.LogOutputFile == "" {
-		args.LogOutputFile = OUTPUT_FILE_PATH
-	}
+	if stream == nil {
+		if args.LogOutputFile == "" {
+			args.LogOutputFile = OUTPUT_FILE_PATH
+		}
+		nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		defer nullFile.Close()
+		if err != nil {
+			return 0, nil, err
+		}
+		cmd.Stdin = nullFile
+		outFile, err := os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
+		defer outFile.Close()
+		os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
+		if err != nil {
+			return 0, nil, err
+		}
+		cmd.Stdout = outFile
+		cmd.Stderr = outFile
+	} else {
+		stdinPipe, err := cmd.StdinPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		// Receive stdin from stream
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stdinPipe.Close()
+			for {
+				in, err := stream.Recv()
+				if err != nil {
+					s.logger.Debug().Err(err).Msg("finished reading stdin")
+					return
+				}
+				_, err = stdinPipe.Write([]byte(in.Stdin))
+				if err != nil {
+					s.logger.Error().Err(err).Msg("failed to write to stdin")
+					return
+				}
+			}
+		}()
+		// Scan stdout
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		stdoutScanner := bufio.NewScanner(stdoutPipe)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stdoutPipe.Close()
+			for stdoutScanner.Scan() {
+				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stdout")
+					return
+				}
+			}
+			if err := stdoutScanner.Err(); err != nil {
+				s.logger.Debug().Err(err).Msgf("finished reading stdout")
+			}
+		}()
 
-	// XXX: is this non-performant? do we need to flush at intervals instead of writing?
-	outputFile, err := os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
-	if err != nil {
-		return 0, err
-	}
-	os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
-
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return 0, err
-	}
-
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return 0, err
+		// Scan stdout
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		stderrScanner := bufio.NewScanner(stderrPipe)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer stderrPipe.Close()
+			for stderrScanner.Scan() {
+				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					s.logger.Error().Err(err).Msg("failed to send stderr")
+					return
+				}
+			}
+			if err := stderrScanner.Err(); err != nil {
+				s.logger.Debug().Err(err).Msgf("finished reading stderr")
+			}
+		}()
 	}
 
 	var gpuerrbuf bytes.Buffer
@@ -362,36 +499,13 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
-	pid = int32(cmd.Process.Pid)
-
 	s.wg.Add(1)
+	done := make(chan error)
 	go func() {
 		defer s.wg.Done()
-		stdoutScanner := bufio.NewScanner(stdoutPipe)
-		stderrScanner := bufio.NewScanner(stderrPipe)
-
-		for stdoutScanner.Scan() {
-			outputFile.WriteString(stdoutScanner.Text() + "\n")
-		}
-		if err := stdoutScanner.Err(); err != nil {
-			s.logger.Info().Err(err).Msgf("Finished reading stdout")
-		}
-
-		for stderrScanner.Scan() {
-			outputFile.WriteString(stderrScanner.Text() + "\n")
-		}
-		if err := stderrScanner.Err(); err != nil {
-			s.logger.Info().Err(err).Msgf("Finished reading stderr")
-		}
-	}()
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer outputFile.Close()
 		err := cmd.Wait()
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
@@ -400,16 +514,18 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 			}
 			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
 			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Str("Log", gpuerrbuf.String()).Msgf("GPU controller log")
+			s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
-		if err != nil {
-			s.logger.Info().Err(err).Int32("PID", pid).Msg("process terminated")
-		} else {
-			s.logger.Info().Int32("status", 0).Int32("PID", pid).Msg("process terminated")
+		s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
+		if stream != nil {
+			stream.Send(&task.StartAttachResp{
+				ExitCode: int32(cmd.ProcessState.ExitCode()),
+			})
+			done <- err
 		}
 
 		// Update state as it's a managed job
-		childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
+		childCtx := context.WithoutCancel(cmdCtx) // since this routine can outlive the parent
 		state, err := s.getState(childCtx, args.JID)
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("failed to get state after job done")
@@ -424,9 +540,10 @@ func (s *service) run(ctx context.Context, args *task.StartArgs) (int32, error) 
 	}()
 
 	ppid := int32(os.Getpid())
+	pid = int32(cmd.Process.Pid)
 
 	closeCommonFds(ppid, pid)
-	return pid, err
+	return pid, done, err
 }
 
 func closeCommonFds(parentPID, childPID int32) error {
@@ -465,6 +582,12 @@ func closeCommonFds(parentPID, childPID int32) error {
 }
 
 func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, string, error) {
+	start := time.Now()
+	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	if !ok {
+		return "", "", status.Error(codes.Internal, "failed to get dump stats")
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		st := status.New(codes.NotFound, "checkpoint zip not found")
@@ -490,28 +613,24 @@ func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, st
 	// zipFileSize += 4096
 	checkpointFullSize := int64(size)
 
-	_, uploadSpan := s.tracer.Start(ctx, "upload-ckpt")
 	multipartCheckpointResp, cid, err := s.store.CreateMultiPartUpload(ctx, checkpointFullSize)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
 
 	err = s.store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, path)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
 
 	err = s.store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
 	if err != nil {
 		st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
-		uploadSpan.RecordError(err)
 		return "", "", st.Err()
 	}
-	uploadSpan.End()
 
+	stats.UploadDuration = time.Since(start).Milliseconds()
 	return cid, multipartCheckpointResp.UploadID, err
 }

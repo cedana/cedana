@@ -146,6 +146,10 @@ source_env() {
     source /etc/environment
 }
 
+start_otelcol() {
+    otelcol-contrib --config test/benchmarks/otelcol-config.yaml &
+}
+
 start_cedana() {
     ./build-start-daemon.sh --no-build
 }

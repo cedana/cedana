@@ -4,7 +4,10 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
 
+	"github.com/cedana/cedana/types"
 	"github.com/spf13/viper"
 )
 
@@ -24,38 +27,19 @@ const (
 	GpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
 )
 
-// XXX: Config file should have a version field to manage future changes to schema
-type (
-	Config struct {
-		Client        Client        `json:"client" mapstructure:"client"`
-		Connection    Connection    `json:"connection" mapstructure:"connection"`
-		SharedStorage SharedStorage `json:"shared_storage" mapstructure:"shared_storage"`
+func InitConfig(args types.InitConfigArgs) error {
+	user, err := getUser()
+	if err != nil {
+		return err
 	}
-	Client struct {
-		// job to run
-		Task         string `json:"task" mapstructure:"task"`
-		LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
-		ForwardLogs  bool   `json:"forward_logs" mapstructure:"forward_logs"`
-	}
-	Connection struct {
-		// for cedana managed systems
-		CedanaUrl       string `json:"cedana_url" mapstructure:"cedana_url"`
-		CedanaAuthToken string `json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
-	}
-	SharedStorage struct {
-		DumpStorageDir string `json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
-	}
-)
 
-func InitConfig() error {
-	// user, err := getUser()
-	// if err != nil {
-	// 	return err
-	// }
-
-	// homeDir := user.HomeDir
-	homeDir := "/tmp"
-	configDir := filepath.Join(homeDir, configDirName)
+	var configDir string
+	if args.ConfigDir == "" {
+		homeDir := user.HomeDir
+		configDir = filepath.Join(homeDir, configDirName)
+	} else {
+		configDir = args.ConfigDir
+	}
 
 	viper.AddConfigPath(configDir)
 	viper.SetConfigPermissions(configFilePerm)
@@ -63,30 +47,41 @@ func InitConfig() error {
 	viper.SetConfigName(configFileName)
 	viper.SetEnvPrefix(envVarPrefix)
 
-	// Allow environment variables to be accesses through viper *if* bound.
-	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
-	// However, viper.Get() always first checks the config file
-	viper.AutomaticEnv()
-
 	// Create config directory if it does not exist
-	_, err := os.Stat(configDir)
+	_, err = os.Stat(configDir)
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(configDir, configDirPerm)
 		if err != nil {
 			return err
 		}
 	}
+	uid, _ := strconv.Atoi(user.Uid)
+	gid, _ := strconv.Atoi(user.Gid)
+	os.Chown(configDir, uid, gid)
 
 	setDefaults() // Only sets defaults for when no value is found in config
 	bindEnvVars()
 
-	viper.SafeWriteConfig() // Will only overwrite if file does not exist
+	// Allow environment variables to be accesses through viper *if* bound.
+	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
+	// However, viper.Get() always first checks the config file
+	viper.AutomaticEnv()
+	viper.SetTypeByDefaultValue(true)
+	viper.ReadInConfig()
 
-	return viper.ReadInConfig()
+	if args.Config != "" {
+		// we don't save config to file if it's passed as a string, as it's temporary
+		reader := strings.NewReader(args.Config)
+		err = viper.MergeConfig(reader)
+	} else {
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore error
+	}
+
+	return err
 }
 
-func GetConfig() (*Config, error) {
-	var config Config
+func GetConfig() (*types.Config, error) {
+	var config types.Config
 	err := viper.Unmarshal(&config)
 	if err != nil {
 		return nil, err
@@ -94,14 +89,21 @@ func GetConfig() (*Config, error) {
 	return &config, err
 }
 
+///////////////////
+//    Helpers    //
+///////////////////
+
 // Set defaults that are used when no value is found in config/env vars
 func setDefaults() {
-	viper.SetDefault("client.process_name", "")
-	viper.SetDefault("client.leave_running", "")
+	viper.SetDefault("client.task", "")
+	viper.SetDefault("client.leave_running", false)
+	viper.SetDefault("client.forward_logs", false)
 
 	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
 
 	viper.SetDefault("connection.cedana_user", "random-user")
+
+	viper.SetDefault("cli.wait_for_ready", false)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -125,11 +127,20 @@ func bindEnvVars() {
 	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
 	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 	viper.BindEnv("remote", "CEDANA_REMOTE")
+
+  // CLI-specific
+	viper.BindEnv("cli.wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
 }
 
 func getUser() (*user.User, error) {
 	username := os.Getenv("SUDO_USER")
 	if username == "" {
+		// fetch the current user
+		// it uses getpwuid_r iirc
+		u, err := user.Current()
+		if err == nil {
+			return u, nil
+		}
 		username = os.Getenv("USER")
 	}
 	return user.Lookup(username)

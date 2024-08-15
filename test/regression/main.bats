@@ -29,6 +29,16 @@ teardown() {
     sleep 1 3>-
 }
 
+@test "Check cedana --version" {
+    # cedana version should be same as in `git describe --tags`
+    cedana --version
+    cedana --version | grep -q "$(git describe --tags --always)"
+}
+
+@test "Daemon health check" {
+    cedana daemon check
+}
+
 @test "Output file created and has some data" {
     local task="./workload.sh"
     local job_id="workload"
@@ -105,6 +115,63 @@ teardown() {
     [ -z "$(pgrep -f $task)" ]
 }
 
+@test "Custom config from CLI" {
+    stop_cedana
+    sleep 1 3>-
+
+    # start cedana with custom config
+    start_cedana --config='{"client":{"leave_running":true}}'
+    sleep 1 3>-
+
+    # check if the config is applied
+    cedana config show
+    cedana config show | grep leave_running | grep true
+}
+
+@test "Complain if GPU not enabled in daemon and using GPU flags" {
+    local task="./workload.sh"
+    local job_id="workload-no-gpu"
+
+    # try to run a job with GPU flags
+    run exec_task $task $job_id --gpu-enabled
+    [ "$status" -ne 0 ]
+
+    # try to dump unmanaged process with GPU flags
+    run exec_task $task $job_id
+    [ "$status" -eq 0 ]
+    run dump_task $job_id --gpu-enabled
+    [ "$status" -ne 0 ]
+}
+
+@test "Exec --attach stdout/stderr & exit code" {
+    local task="./workload-2.sh"
+    local job_id="workload5"
+
+    # execute a process as a cedana job
+    run exec_task $task $job_id --attach
+
+    # check output of command
+    [[ "$status" -eq 99 ]]
+    [[ "$output" == *"RANDOM OUTPUT START"* ]]
+    [[ "$output" == *"RANDOM OUTPUT END"* ]]
+}
+
+@test "Restore --attach stdout/stderr & exit code" {
+    local task="./workload-3.sh"
+    local job_id="workload6"
+
+    # execute, checkpoint and restore a job
+    exec_task $task $job_id
+    sleep 1 3>-
+    checkpoint_task $job_id
+    sleep 1 3>-
+    run restore_task $job_id --attach
+
+    # check output of command
+    [[ "$status" -eq 99 ]]
+    [[ "$output" == *"RANDOM OUTPUT END"* ]]
+}
+
 @test "Rootfs snapshot of containerd container" {
     local container_id="busybox-test"
     local image_ref="checkpoint/test:latest"
@@ -118,17 +185,36 @@ teardown() {
     [[ "$output" == *"$image_ref"* ]]
 }
 
-@test "Rootfs restore of containerd container" {
-    local container_id="busybox-test-restore"
+@test "Full containerd checkpoint (jupyter notebook)" {
+    local container_id="jupyter-notebook"
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
+    local dir="/tmp/jupyter-checkpoint"
 
-    run rootfs_restore $container_id $image_ref $containerd_sock $namespace
+    run start_jupyter_notebook $container_id
+    run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
     echo "$output"
 
-    [[ "$output" == *"$image_ref"* ]]
+    [[ "$output" == *"success"* ]]
 }
+
+@test "Full containerd restore (jupyter notebook)" {
+    local container_id="jupyter-notebook-restore"
+    local dumpdir="/tmp/jupyter-checkpoint"
+
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
+
+    bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
+    pid=$(cat "$bundle"/init.pid)
+
+    # restore the container
+    run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
+    echo "$output"
+
+    [[ "$output" == *"success"* ]]
+}
+
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"

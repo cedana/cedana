@@ -34,11 +34,14 @@ const (
 	TaskService_RuncGetPausePid_FullMethodName         = "/cedana.services.task.TaskService/RuncGetPausePid"
 	TaskService_CRIORootfsDump_FullMethodName          = "/cedana.services.task.TaskService/CRIORootfsDump"
 	TaskService_CRIOImagePush_FullMethodName           = "/cedana.services.task.TaskService/CRIOImagePush"
+	TaskService_StartAttach_FullMethodName             = "/cedana.services.task.TaskService/StartAttach"
+	TaskService_RestoreAttach_FullMethodName           = "/cedana.services.task.TaskService/RestoreAttach"
 	TaskService_LogStreaming_FullMethodName            = "/cedana.services.task.TaskService/LogStreaming"
 	TaskService_ProcessStateStreaming_FullMethodName   = "/cedana.services.task.TaskService/ProcessStateStreaming"
 	TaskService_DetailedHealthCheck_FullMethodName     = "/cedana.services.task.TaskService/DetailedHealthCheck"
 	TaskService_KataDump_FullMethodName                = "/cedana.services.task.TaskService/KataDump"
 	TaskService_KataRestore_FullMethodName             = "/cedana.services.task.TaskService/KataRestore"
+	TaskService_GetConfig_FullMethodName               = "/cedana.services.task.TaskService/GetConfig"
 )
 
 // TaskServiceClient is the client API for TaskService service.
@@ -65,6 +68,8 @@ type TaskServiceClient interface {
 	CRIORootfsDump(ctx context.Context, in *CRIORootfsDumpArgs, opts ...grpc.CallOption) (*CRIORootfsDumpResp, error)
 	CRIOImagePush(ctx context.Context, in *CRIOImagePushArgs, opts ...grpc.CallOption) (*CRIOImagePushResp, error)
 	// Streaming
+	StartAttach(ctx context.Context, opts ...grpc.CallOption) (TaskService_StartAttachClient, error)
+	RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (TaskService_RestoreAttachClient, error)
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error)
 	ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (TaskService_ProcessStateStreamingClient, error)
 	// Health
@@ -72,6 +77,8 @@ type TaskServiceClient interface {
 	// Kata
 	KataDump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	KataRestore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
+	// Config
+	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 }
 
 type taskServiceClient struct {
@@ -232,9 +239,73 @@ func (c *taskServiceClient) CRIOImagePush(ctx context.Context, in *CRIOImagePush
 	return out, nil
 }
 
+func (c *taskServiceClient) StartAttach(ctx context.Context, opts ...grpc.CallOption) (TaskService_StartAttachClient, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_StartAttach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &taskServiceStartAttachClient{ClientStream: stream}
+	return x, nil
+}
+
+type TaskService_StartAttachClient interface {
+	Send(*StartAttachArgs) error
+	Recv() (*StartAttachResp, error)
+	grpc.ClientStream
+}
+
+type taskServiceStartAttachClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceStartAttachClient) Send(m *StartAttachArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *taskServiceStartAttachClient) Recv() (*StartAttachResp, error) {
+	m := new(StartAttachResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *taskServiceClient) RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (TaskService_RestoreAttachClient, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], TaskService_RestoreAttach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &taskServiceRestoreAttachClient{ClientStream: stream}
+	return x, nil
+}
+
+type TaskService_RestoreAttachClient interface {
+	Send(*RestoreAttachArgs) error
+	Recv() (*RestoreAttachResp, error)
+	grpc.ClientStream
+}
+
+type taskServiceRestoreAttachClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceRestoreAttachClient) Send(m *RestoreAttachArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *taskServiceRestoreAttachClient) Recv() (*RestoreAttachResp, error) {
+	m := new(RestoreAttachResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *taskServiceClient) LogStreaming(ctx context.Context, opts ...grpc.CallOption) (TaskService_LogStreamingClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_LogStreaming_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[2], TaskService_LogStreaming_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +337,7 @@ func (x *taskServiceLogStreamingClient) Recv() (*LogStreamingArgs, error) {
 
 func (c *taskServiceClient) ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (TaskService_ProcessStateStreamingClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], TaskService_ProcessStateStreaming_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[3], TaskService_ProcessStateStreaming_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -327,6 +398,16 @@ func (c *taskServiceClient) KataRestore(ctx context.Context, in *RestoreArgs, op
 	return out, nil
 }
 
+func (c *taskServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetConfigResponse)
+	err := c.cc.Invoke(ctx, TaskService_GetConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -351,6 +432,8 @@ type TaskServiceServer interface {
 	CRIORootfsDump(context.Context, *CRIORootfsDumpArgs) (*CRIORootfsDumpResp, error)
 	CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error)
 	// Streaming
+	StartAttach(TaskService_StartAttachServer) error
+	RestoreAttach(TaskService_RestoreAttachServer) error
 	LogStreaming(TaskService_LogStreamingServer) error
 	ProcessStateStreaming(*ProcessStateStreamingArgs, TaskService_ProcessStateStreamingServer) error
 	// Health
@@ -358,6 +441,8 @@ type TaskServiceServer interface {
 	// Kata
 	KataDump(context.Context, *DumpArgs) (*DumpResp, error)
 	KataRestore(context.Context, *RestoreArgs) (*RestoreResp, error)
+	// Config
+	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -410,6 +495,12 @@ func (UnimplementedTaskServiceServer) CRIORootfsDump(context.Context, *CRIORootf
 func (UnimplementedTaskServiceServer) CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CRIOImagePush not implemented")
 }
+func (UnimplementedTaskServiceServer) StartAttach(TaskService_StartAttachServer) error {
+	return status.Errorf(codes.Unimplemented, "method StartAttach not implemented")
+}
+func (UnimplementedTaskServiceServer) RestoreAttach(TaskService_RestoreAttachServer) error {
+	return status.Errorf(codes.Unimplemented, "method RestoreAttach not implemented")
+}
 func (UnimplementedTaskServiceServer) LogStreaming(TaskService_LogStreamingServer) error {
 	return status.Errorf(codes.Unimplemented, "method LogStreaming not implemented")
 }
@@ -424,6 +515,9 @@ func (UnimplementedTaskServiceServer) KataDump(context.Context, *DumpArgs) (*Dum
 }
 func (UnimplementedTaskServiceServer) KataRestore(context.Context, *RestoreArgs) (*RestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KataRestore not implemented")
+}
+func (UnimplementedTaskServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -708,6 +802,58 @@ func _TaskService_CRIOImagePush_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_StartAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).StartAttach(&taskServiceStartAttachServer{ServerStream: stream})
+}
+
+type TaskService_StartAttachServer interface {
+	Send(*StartAttachResp) error
+	Recv() (*StartAttachArgs, error)
+	grpc.ServerStream
+}
+
+type taskServiceStartAttachServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceStartAttachServer) Send(m *StartAttachResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *taskServiceStartAttachServer) Recv() (*StartAttachArgs, error) {
+	m := new(StartAttachArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _TaskService_RestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).RestoreAttach(&taskServiceRestoreAttachServer{ServerStream: stream})
+}
+
+type TaskService_RestoreAttachServer interface {
+	Send(*RestoreAttachResp) error
+	Recv() (*RestoreAttachArgs, error)
+	grpc.ServerStream
+}
+
+type taskServiceRestoreAttachServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceRestoreAttachServer) Send(m *RestoreAttachResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *taskServiceRestoreAttachServer) Recv() (*RestoreAttachArgs, error) {
+	m := new(RestoreAttachArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func _TaskService_LogStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(TaskServiceServer).LogStreaming(&taskServiceLogStreamingServer{ServerStream: stream})
 }
@@ -809,6 +955,24 @@ func _TaskService_KataRestore_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).GetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_GetConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).GetConfig(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -888,8 +1052,24 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "KataRestore",
 			Handler:    _TaskService_KataRestore_Handler,
 		},
+		{
+			MethodName: "GetConfig",
+			Handler:    _TaskService_GetConfig_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StartAttach",
+			Handler:       _TaskService_StartAttach_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "RestoreAttach",
+			Handler:       _TaskService_RestoreAttach_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "LogStreaming",
 			Handler:       _TaskService_LogStreaming_Handler,

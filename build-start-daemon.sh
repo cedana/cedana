@@ -20,6 +20,7 @@ CEDANA_GPU_ENABLED=false
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 USE_SYSTEMCTL=0
 NO_BUILD=0
+DAEMON_ARGS=""
 
 # Check for --systemctl flag
 for arg in "$@"; do
@@ -27,22 +28,18 @@ for arg in "$@"; do
         echo "Using systemctl"
         USE_SYSTEMCTL=1
     fi
-done
-
-# Check for --no-build flag
-for arg in "$@"; do
     if [ "$arg" == "--no-build" ]; then
         echo "Skipping build"
         NO_BUILD=1
     fi
-done
-
-
-# Check for --gpu flag
-for arg in "$@"; do
     if [ "$arg" == "--gpu" ]; then
         echo "GPU support enabled"
         CEDANA_GPU_ENABLED=true
+    fi
+    if [[ $arg == --args=* ]]; then
+        value="${arg#*=}"
+        echo "Daemon args: $value"
+        DAEMON_ARGS="$value"
     fi
 done
 
@@ -50,17 +47,26 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
 if [ $NO_BUILD -ne 1 ]; then
     echo "Building $APP_NAME..."
-    go build
+    VERSION=$(git describe --tags --always)
+    LDFLAGS="-X main.Version=$VERSION"
+
+    CGO_ENABLED=1 go build -ldflags "$LDFLAGS"
 
     if [ $? -ne 0 ]; then
         echo "Build failed. Exiting."
         exit 1
     else
+        echo "Build successful. Copying the cedana binary"
         $SUDO_USE cp $APP_NAME $APP_PATH
     fi
 else
     echo "Skipping build..."
-    $SUDO_USE cp $APP_NAME $APP_PATH
+    if test -f $APP_NAME; then
+        echo "Found binary to copy."
+        $SUDO_USE cp $APP_NAME $APP_PATH
+    else
+        echo "Moving forward without copy."
+    fi
 fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
@@ -73,6 +79,10 @@ fi
 
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
+fi
+
+if test -f $SERVICE_FILE; then
+    echo "Restarting $APP_NAME..."
 fi
 
 if [ $USE_SYSTEMCTL -eq 1 ]; then
@@ -98,6 +108,7 @@ WantedBy=multi-user.target
 
 [Service]
 StandardError=append:/var/log/cedana-daemon.log
+StandardOutput=append:/var/log/cedana-daemon.log
 EOF
 
     echo "Reloading systemd..."
@@ -110,9 +121,9 @@ EOF
 else
     echo "Starting daemon as a background process..."
     if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" &
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi

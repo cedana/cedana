@@ -6,29 +6,24 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
-      make_release:
+      debug_test:
         type: boolean
-        description: "Run & push the release"
-        required: false
-        default: true
-      push_build_image:
-        type: boolean
-        description: "Build and push the image"
-        required: false
-        default: true
-      debug_publish_go:
-        type: boolean
-        description: "Run publish (Go) with debugging enabled"
+        description: "Run tests with debugging enabled"
         required: false
         default: false
-      debug_build_amd64:
+      debug_build_publish_amd64:
         type: boolean
-        description: "Run build (amd64) with debugging enabled"
+        description: "Run build & publish (amd64 binary) with debugging enabled"
         required: false
         default: false
-      debug_build_arm64:
+      debug_build_push_amd64_image:
         type: boolean
-        description: "Run build (arm64) with debugging enabled"
+        description: "Run build & push (amd64 image) with debugging enabled"
+        required: false
+        default: false
+      debug_build_push_arm64_image:
+        type: boolean
+        description: "Run build & push (arm64 image) with debugging enabled"
         required: false
         default: false
 
@@ -41,39 +36,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish-go:
-    name: Publish (Go)
+  test:
+    name: Test
+    uses: ./.github/workflows/pr.yml
+    with:
+      debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+
+  build-publish-amd64:
+    name: Build & Publish (amd64)
     runs-on: ubuntu-latest
-    if: ${{ inputs.make_release }}
+    needs: test
+    container:
+      image: golang:1.22-bullseye
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
-      - name: Set up Go
-        uses: actions/setup-go@v4
+          fetch-tags: true
+
+      # issue when using custom container: https://github.com/actions/checkout/issues/1048
+      - run: git config --global --add safe.directory /__w/cedana/cedana
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y sudo
+          sudo -E make -C scripts/ci setup-build
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_publish_go }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_publish_amd64 }}
         with:
           limit-access-to-actor: true
 
-      - name: Install dependencies
-        run: sudo -E make -C scripts/ci setup-build
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
           distribution: goreleaser
-          version: latest
-          args: release --clean
+          args: release --clean --auto-snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
-  build-image-manifest-amd64:
-    name: Build (amd64)
+  build-push-image-manifest-amd64:
+    name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
+    needs: test
 
     permissions:
       contents: read
@@ -83,7 +94,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
+          fetch-tags: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -111,13 +124,9 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_amd64 }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_amd64_image }}
         with:
           limit-access-to-actor: true
-
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build and generate manifest for amd64
         id: build
@@ -127,7 +136,6 @@ jobs:
           push: true
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
             type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
             type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
@@ -146,9 +154,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  build-image-manifest-arm64:
-    name: Build (arm64)
+  build-push-image-manifest-arm64:
+    name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
+    needs: test
 
     permissions:
       contents: read
@@ -158,7 +167,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
+          fetch-tags: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -186,13 +197,9 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_arm64 }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_arm64_image }}
         with:
           limit-access-to-actor: true
-
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build and generate manifest for arm64
         id: build
@@ -202,7 +209,6 @@ jobs:
           push: true
           platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
           outputs: |
             type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
             type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
@@ -222,9 +228,12 @@ jobs:
           retention-days: 1
 
   upload-manifests:
-    name: Publish (Image)
+    name: Upload Manifests
     runs-on: ubicloud-standard-2
-    needs: ["build-image-manifest-arm64", "build-image-manifest-amd64"]
+    needs: ["build-push-image-manifest-arm64", "build-push-image-manifest-amd64"]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -259,7 +268,6 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
-        if: ${{ inputs.push_build_image }}
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf 'ghcr.io/cedana/cedana@sha256:%s ' *)
@@ -268,5 +276,9 @@ jobs:
 
       - name: Inspect image
         run: |
+          # check if push was successful
           docker buildx imagetools inspect cedana/cedana-helper:${{ steps.meta.outputs.version }}
           docker buildx imagetools inspect ghcr.io/cedana/cedana:${{ steps.meta.outputs.version }}
+          # check if commit sha matches with the latest commit sha
+          # we only match docker hub image as both images should be the same
+          echo $(docker run -i --rm cedana/cedana-helper:${{ steps.meta.outputs.version }} -c "cedana -v")

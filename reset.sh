@@ -1,3 +1,8 @@
+SUDO_USE=sudo
+if ! which sudo &>/dev/null; then
+    SUDO_USE=""
+fi
+
 USE_SYSTEMCTL=0
 
 for arg in "$@"; do
@@ -7,16 +12,16 @@ for arg in "$@"; do
     fi
 done
 
-sudo rm -rf /tmp/cedana*
-sudo rm -rf /tmp/sqlite_cedana*
-sudo rm -rf /var/log/cedana*
-sudo rm -rf /dev/shm/cedana*
+$SUDO_USE rm -rf /tmp/cedana*
+$SUDO_USE rm -rf /tmp/sqlite_cedana*
+$SUDO_USE rm -rf /var/log/cedana*
+$SUDO_USE rm -rf /dev/shm/cedana*
 
-sudo pkill cdp
-sudo pkill otelcol-contrib
+$SUDO_USE pkill cdp
+$SUDO_USE pkill otelcol-contrib
 
 if [ $USE_SYSTEMCTL -eq 1 ]; then
-    sudo systemctl stop cedana.service
+    $SUDO_USE systemctl stop cedana.service
 else
-    sudo pkill -2 cedana
+    $SUDO_USE pkill -2 cedana
 fi

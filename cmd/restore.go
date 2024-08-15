@@ -3,13 +3,14 @@ package cmd
 // This file contains all the restore-related commands when starting `cedana restore ...`
 
 import (
+	"bufio"
+	"fmt"
 	"os"
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/status"
 
 	"github.com/mdlayher/vsock"
@@ -37,21 +38,21 @@ var restoreProcessCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
-			uid = uint32(os.Getuid())
-			gid = uint32(os.Getgid())
+			uid = int32(os.Getuid())
+			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
 				logger.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
-				groups = append(groups, uint32(g))
+				groups = append(groups, int32(g))
 			}
 		}
 
@@ -70,13 +71,13 @@ var restoreProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -178,36 +179,24 @@ var restoreJobCmd = &cobra.Command{
 		}
 		defer cts.Close()
 
-		var uid uint32
-		var gid uint32
-		var groups []uint32 = []uint32{}
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
 
 		jid := args[0]
 		asRoot, _ := cmd.Flags().GetBool(rootFlag)
 		if !asRoot {
-			uid = uint32(os.Getuid())
-			gid = uint32(os.Getgid())
+			uid = int32(os.Getuid())
+			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
 				logger.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
-				groups = append(groups, uint32(g))
+				groups = append(groups, int32(g))
 			}
 		}
-
-		// Query job state
-		query := task.QueryArgs{
-			JIDs: []string{jid},
-		}
-
-		res, err := cts.Query(ctx, &query)
-		if err != nil {
-			logger.Error().Msgf("Error querying job: %v", err)
-			return err
-		}
-		state := res.Processes[0]
 
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		restoreArgs := task.RestoreArgs{
@@ -217,35 +206,67 @@ var restoreJobCmd = &cobra.Command{
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
 		}
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				logger.Error().Msgf("No remote state found for id %s", jid)
-				return err
+
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+		if attach {
+			stream, err := cts.RestoreAttach(ctx, &task.RestoreAttachArgs{Args: &restoreArgs})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					logger.Error().Err(st.Err()).Msg("restore failed")
+				} else {
+					logger.Error().Err(err).Msg("restore failed")
+				}
 			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				logger.Error().Msgf("No checkpoint found for id %s", jid)
-				return err
-			}
-			restoreArgs.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			restoreArgs.Type = task.CRType_REMOTE
-		} else {
-			restoreArgs.CheckpointPath = state.GetCheckpointPath()
-			restoreArgs.Type = task.CRType_LOCAL
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						logger.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						logger.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v: %v", st.Code(), st.Message())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -283,48 +304,6 @@ var containerdRestoreCmd = &cobra.Command{
 			return err
 		}
 		logger.Info().Msgf("Response: %v", resp.Message)
-
-		return nil
-	},
-}
-
-var restoreContainerdRootfsCmd = &cobra.Command{
-	Use:   "rootfs",
-	Short: "Manually restore a container with a checkpointed rootfs",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
-		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
-
-		ref, _ := cmd.Flags().GetString(refFlag)
-		id, _ := cmd.Flags().GetString(idFlag)
-		addr, _ := cmd.Flags().GetString(addressFlag)
-		ns, _ := cmd.Flags().GetString(namespaceFlag)
-
-		restoreArgs := &task.ContainerdRootfsRestoreArgs{
-			ContainerID: id,
-			ImageRef:    ref,
-			Address:     addr,
-			Namespace:   ns,
-		}
-
-		resp, err := cts.ContainerdRootfsRestore(ctx, restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				logger.Error().Msgf("Restore rootfs container failed: %v, %v", st.Message(), st.Code())
-			} else {
-				logger.Error().Msgf("Restore rootfs container failed: %v", err)
-			}
-			return err
-		}
-		logger.Info().Msgf("Successfully restored rootfs container: %v", resp.ImageRef)
 
 		return nil
 	},
@@ -399,6 +378,7 @@ func init() {
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
+	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 
 	// Kata
 	restoreCmd.AddCommand(restoreKataCmd)
@@ -411,15 +391,6 @@ func init() {
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
-
-	restoreCmd.AddCommand(restoreContainerdRootfsCmd)
-	restoreContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
-	restoreContainerdRootfsCmd.MarkFlagRequired(imgFlag)
-	restoreContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
-	restoreContainerdRootfsCmd.MarkFlagRequired(refFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
-	restoreContainerdRootfsCmd.MarkFlagRequired(addressFlag)
-	restoreContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)

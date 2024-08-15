@@ -6,22 +6,39 @@ on:
     branches:
       - main
   workflow_dispatch:
-      inputs:
-        debug_build:
-          type: boolean
-          description: 'Run build with debugging enabled'
-          required: false
-          default: false
-        debug_smoke_test:
-          type: boolean
-          description: 'Run smoke test with debugging enabled'
-          required: false
-          default: false
-        debug_regression_test:
-          type: boolean
-          description: 'Run regression test with debugging enabled'
-          required: false
-          default: false
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+  workflow_call: # to reuse this workflow in other worflows
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -35,9 +52,11 @@ jobs:
       run:
         working-directory: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -54,7 +73,7 @@ jobs:
         run: sudo -E make -C scripts/ci setup-build
 
       - name: Build
-        run: sudo -E go build -v
+        run: sudo -E ./build.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -67,7 +86,11 @@ jobs:
     runs-on: ubicloud-standard-8
     needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -89,6 +112,8 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          CEDANA_OTEL_ENABLED: true
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
@@ -96,7 +121,11 @@ jobs:
     runs-on: ubicloud-standard-8
     needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -113,8 +142,11 @@ jobs:
         run: |
           chmod +x cedana
           sudo -E make -C scripts/ci setup-full
+        env:
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
       - name: Run regression tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression

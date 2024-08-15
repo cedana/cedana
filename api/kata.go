@@ -11,7 +11,6 @@ import (
 	"strconv"
 
 	"github.com/cedana/cedana/api/services/task"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,10 +23,6 @@ import (
 
 func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
-
-	ctx, dumpTracer := s.tracer.Start(ctx, "dump-ckpt")
-	dumpTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer dumpTracer.End()
 
 	state := &task.ProcessState{}
 	kataAgentPid := childPidFromPPid(1)
@@ -44,7 +39,6 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	err = s.kataDump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
-		dumpTracer.RecordError(st.Err())
 		return nil, st.Err()
 	}
 
@@ -70,9 +64,6 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 }
 
 func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-	ctx, restoreTracer := s.tracer.Start(ctx, "restore-ckpt")
-	restoreTracer.SetAttributes(attribute.String("jobID", args.JID))
-	defer restoreTracer.End()
 
 	var resp task.RestoreResp
 	var pid *int32
@@ -85,7 +76,6 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 	pid, err = s.kataRestore(ctx, args)
 	if err != nil {
 		staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-		restoreTracer.RecordError(staterr)
 		return nil, staterr
 	}
 
