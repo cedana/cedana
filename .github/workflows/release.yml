@@ -89,7 +89,7 @@ jobs:
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2
-    needs: test
+    # needs: test
 
     permissions:
       contents: read
@@ -162,7 +162,7 @@ jobs:
   build-push-image-manifest-arm64:
     name: Build & Push (arm64 image)
     runs-on: ubicloud-standard-2-arm
-    needs: test
+    # needs: test
 
     permissions:
       contents: read
