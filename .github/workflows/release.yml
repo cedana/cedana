@@ -365,5 +365,5 @@ jobs:
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
-            ${{ steps.summary-patch.outputs.slack-summary }}
+            ${{ steps.summary.outputs.slack-summary }}
 
