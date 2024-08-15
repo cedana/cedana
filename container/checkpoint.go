@@ -1844,6 +1844,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 
 	err = c.criuSwrk(nil, req, criuOpts, nil)
 	if err != nil {
+		logCriuErrors(criuOpts.ImagesDirectory, "dump.log")
 		return err
 	}
 	return nil
