@@ -644,6 +644,8 @@ github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815213349-3073c9af5f91 h1:QN0xuAlnMNQEl7fyEHUi0Xa11BqMFbALD+shcfqPalw=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815213349-3073c9af5f91/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815214708-42964ec435bb h1:It/dBXA3kO/ubiFLMrX0rTZQM4PJtXv4IO9H2y05vlM=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815214708-42964ec435bb/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
 github.com/cedana/runc v1.10.2 h1:OaCFNdJB9ZTu2GZ5p8cBU1Y7JrqxAZ3YOCf2GwQGK3I=
 github.com/cedana/runc v1.10.2/go.mod h1:pr5Tybr5M8CWgV285LS1zR0VkMysl4h/4OzphY5BsFk=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
