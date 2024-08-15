@@ -560,7 +560,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*int32, chan error, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (int32, chan int, error) {
 	var dir *string
 	var pid *int32
 
@@ -571,14 +571,14 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	var gpuCmd *exec.Cmd
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
 		if !s.gpuEnabled {
-			return nil, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
+			return 0, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
 		}
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
@@ -597,11 +597,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	// If it's a managed restored job
-	done := make(chan error)
+	exitCode := make(chan int)
 	if args.JID != "" {
 		if stream != nil {
 			// last 3 files of ioFiles are stdin, stdout, stderr
@@ -667,12 +667,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			defer s.wg.Done()
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
-			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", status.ExitStatus()).Msgf("process exited")
-
-			if stream != nil {
-				stream.Send(&task.RestoreAttachResp{ExitCode: int32(status.ExitStatus())})
-				done <- nil
-			}
+			code := status.ExitStatus()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -684,19 +680,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 			}
 
-			// Update state
-			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
-			state, err := s.getState(childCtx, args.JID)
-			if err != nil {
-				s.logger.Warn().Err(err).Msg("failed to get state after job done")
-				return
-			}
-			state.JobState = task.JobState_JOB_DONE
-			state.PID = *pid
-			err = s.updateState(childCtx, args.JID, state)
-			if err != nil {
-				s.logger.Warn().Err(err).Msg("failed to update state after job done")
-			}
+			exitCode <- code
 		}()
 
 		// Kill on server/stream shutdown
@@ -724,7 +708,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		}()
 	}
 
-	return pid, done, nil
+	return *pid, exitCode, nil
 }
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32) (*exec.Cmd, error) {
