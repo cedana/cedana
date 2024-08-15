@@ -3,7 +3,6 @@ package cmd
 // This file contains all the dump-related commands when starting `cedana dump ...`
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -63,8 +62,7 @@ var dumpProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.DumpStats)
-		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -118,8 +116,7 @@ var dumpJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.DumpStats)
-		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},

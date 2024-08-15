@@ -35,6 +35,10 @@ teardown() {
     cedana --version | grep -q "$(git describe --tags --always)"
 }
 
+@test "Daemon health check" {
+    cedana daemon check
+}
+
 @test "Output file created and has some data" {
     local task="./workload.sh"
     local job_id="workload"
