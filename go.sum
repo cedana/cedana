@@ -646,6 +646,8 @@ github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grp
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815223957-ff33f18f3d78/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816001600-96a18cef52da h1:XMu+KN1YPABG57zk2mUo6VcQZbdGXq1lCx22FKqYUAU=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816001600-96a18cef52da/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816005429-d09c17047d76 h1:3XeRaPMxdaqeT6tEEHdQsP/BLccmGCOr4qRR1OIKBMQ=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816005429-d09c17047d76/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
 github.com/cedana/runc v1.10.2 h1:OaCFNdJB9ZTu2GZ5p8cBU1Y7JrqxAZ3YOCf2GwQGK3I=
 github.com/cedana/runc v1.10.2/go.mod h1:pr5Tybr5M8CWgV285LS1zR0VkMysl4h/4OzphY5BsFk=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
