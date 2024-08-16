@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	github.com/aws/aws-sdk-go v1.54.19
-	github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815221129-817c5f1a59ba
+	github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815223957-ff33f18f3d78
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/checkpointctl v1.2.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
