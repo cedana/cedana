@@ -642,14 +642,10 @@ github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM
 github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815213349-3073c9af5f91 h1:QN0xuAlnMNQEl7fyEHUi0Xa11BqMFbALD+shcfqPalw=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815213349-3073c9af5f91/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815214708-42964ec435bb h1:It/dBXA3kO/ubiFLMrX0rTZQM4PJtXv4IO9H2y05vlM=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815214708-42964ec435bb/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815221129-817c5f1a59ba h1:s9RjOApxelfRl9nf+Oc/5jPV7KFHn3qyDZ2xGcXMQlk=
-github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815221129-817c5f1a59ba/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815223957-ff33f18f3d78 h1:QxBP8fxMmE9qi3WA0s2bIFPak4LnuarCAG8T85oHp0E=
 github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240815223957-ff33f18f3d78/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816001600-96a18cef52da h1:XMu+KN1YPABG57zk2mUo6VcQZbdGXq1lCx22FKqYUAU=
+github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20240816001600-96a18cef52da/go.mod h1:zxYtpBWcCRDak19mbz1HChS1Psy4V91+LeZlzeH1eGA=
 github.com/cedana/runc v1.10.2 h1:OaCFNdJB9ZTu2GZ5p8cBU1Y7JrqxAZ3YOCf2GwQGK3I=
 github.com/cedana/runc v1.10.2/go.mod h1:pr5Tybr5M8CWgV285LS1zR0VkMysl4h/4OzphY5BsFk=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
