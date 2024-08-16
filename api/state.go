@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -232,12 +233,10 @@ func serializeStateToDir(dir string, state *task.ProcessState, stream bool) erro
 		if err != nil {
 			return fmt.Errorf("imgStreamerOpen failed with %v", err)
 		}
-		w := os.NewFile(uintptr(w_fd), "pipe") // write to w_fd
-		_, err = w.Write(serialized)
+		_, err = syscall.Write(w_fd, serialized)
 		if err != nil {
-			return fmt.Errorf("Write to w_fd failed with %v", err)
+			return fmt.Errorf("syscall.Write to pipe failed with %v", err)
 		}
-		w.Close()
 		imgStreamerFinish(socket_fd, r_fd, w_fd)
 		conn.Close()
 	} else {
@@ -266,13 +265,11 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 			return nil, fmt.Errorf("imgStreamerOpen failed with %v", err)
 		}
 
-		r := os.NewFile(uintptr(r_fd), "pipe") // read from r_fd
-		byte_arr := make([]byte, 2048)         // todo - can read somehow without max size?
-		n_bytes, err := r.Read(byte_arr)
+		byte_arr := make([]byte, 2048)
+		n_bytes, err := syscall.Read(r_fd, byte_arr)
 		if err != nil {
 			return nil, fmt.Errorf("Read from r_fd failed with %v", err)
 		}
-		r.Close()
 		imgStreamerFinish(socket_fd, r_fd, w_fd)
 
 		err = json.Unmarshal(byte_arr[:n_bytes], &checkpointState)
