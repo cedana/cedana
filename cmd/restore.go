@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -13,6 +12,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
+
+	"github.com/mdlayher/vsock"
+	"github.com/cedana/cedana/utils"
+	"io"
+	"time"
+	"github.com/cedana/cedana/api"
 )
 
 var restoreCmd = &cobra.Command{
@@ -73,8 +78,89 @@ var restoreProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+
+		return nil
+	},
+}
+
+var restoreKataCmd = &cobra.Command{
+	Use:   "kata",
+	Short: "Manually restore a workload in the kata-vm [vm-name] from a directory [-d]",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		vm := args[0]
+
+		cts, err := services.NewVSockClient(vm)
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return err
+		}
+		defer cts.Close()
+
+		path, _ := cmd.Flags().GetString(dirFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		restoreArgs := task.RestoreArgs{
+			CheckpointID:   vm,
+			CheckpointPath: "/tmp/dmp.tar",
+			TcpEstablished: tcpEstablished,
+		}
+
+		go func() {
+			time.Sleep(1 * time.Second)
+
+			// extract cid from the process tree on host
+			cid, err := utils.ExtractCID(vm)
+			if err != nil {
+				return
+			}
+
+			conn, err := vsock.Dial(cid, api.KATA_TAR_FILE_RECEIVER_PORT, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			// Open the file
+			file, err := os.Open(path)
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			buffer := make([]byte, 1024)
+
+			// Read from file and send over VSOCK connection
+			for {
+				bytesRead, err := file.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					return
+				}
+
+				_, err = conn.Write(buffer[:bytesRead])
+				if err != nil {
+					return
+				}
+			}
+		}()
+
+		resp, err := cts.KataRestore(ctx, &restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			} else {
+				logger.Error().Msgf("Restore task failed: %v", err)
+			}
+			return err
+		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -181,8 +267,7 @@ var restoreJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -295,6 +380,11 @@ func init() {
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
+
+	// Kata
+	restoreCmd.AddCommand(restoreKataCmd)
+	restoreKataCmd.Flags().StringP(dirFlag, "d", "", "path of tar file (inside VM) to restore from")
+	restoreKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
