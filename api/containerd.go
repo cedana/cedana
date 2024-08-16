@@ -60,6 +60,10 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
+	if !isReady {
+		return nil, fmt.Errorf("Ready loop returned false, not able to checkpoint.")
+	}
+
 	containerdTask, err := containerdService.CgroupFreeze(ctx, rootfsOpts.ContainerID)
 	if err != nil {
 		return nil, err
