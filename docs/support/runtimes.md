@@ -17,4 +17,4 @@ The container ecosystem can get confusing, especially when dealing with runtimes
 | podman                      | mid              | no           | should just work, but untested in a little bit                                                    |
 
 ## Container rootfs 
-
+To support higher level container abstractions (like containerd, docker, etc) we perform a runc + rootfs checkpoint. Currently, you can directly perform a containerd checkpoint (which is a runc + containerd store rootfs checkpoint) and a separate crio rootfs checkpoint. 
