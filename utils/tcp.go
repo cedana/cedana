@@ -2,7 +2,10 @@ package utils
 
 import (
 	"bufio"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +25,32 @@ const (
 	TCP_CLOSING
 	TCP_NEW_SYN_RECV
 )
+
+func IsUsingIoUring(fdDir string) (bool, error) {
+
+	// Read the contents of the fd directory
+	fds, err := os.ReadDir(fdDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to read fd directory: %v", err)
+	}
+
+	for _, fd := range fds {
+		fdPath := filepath.Join(fdDir, fd.Name())
+
+		// Read the symbolic link to see where it points
+		linkTarget, err := os.Readlink(fdPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to read link target for %s: %v", fdPath, err)
+		}
+
+		// Check if the link points to io_uring
+		if strings.Contains(linkTarget, "anon_inode:[io_uring]") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
 
 func GetTCPStates(reader io.Reader) ([]uint64, error) {
 	var states []uint64
@@ -54,10 +83,10 @@ func GetTCPStates(reader io.Reader) ([]uint64, error) {
 	return states, nil
 }
 
-func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), getReader func() (io.Reader, error), iteration int, timeoutInMs time.Duration) (bool, error) {
+func IsReadyLoop(getTCPStates func(io.Reader) ([]uint64, error), getTCPReader func() (io.Reader, error), IsUsingIoUring func(fdDir string) (bool, error), iteration int, timeoutInMs time.Duration, fdDir string) (bool, error) {
 	isReady := true
 	for i := 0; i < iteration; i++ {
-		reader, err := getReader()
+		reader, err := getTCPReader()
 		if err != nil {
 			return false, err
 		}
@@ -73,6 +102,19 @@ func IsTCPReady(getTCPStates func(io.Reader) ([]uint64, error), getReader func()
 				isReady = false
 				break
 			}
+		}
+
+		isUsingIoUring := false
+
+		if IsUsingIoUring != nil {
+			isUsingIoUring, err = IsUsingIoUring(fdDir)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		if isUsingIoUring {
+			isReady = false
 		}
 
 		if isReady {

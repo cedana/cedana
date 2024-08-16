@@ -5,6 +5,8 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/spf13/afero"
 )
 
 func MockReader(data string) io.Reader {
@@ -186,7 +188,15 @@ func TestIsTCPReady(t *testing.T) {
 				return file, nil
 			}
 
-			isReady, err := IsTCPReady(GetTCPStates, mockGetReader, tt.iteration, tt.timeout)
+			fs := afero.NewMemMapFs()
+
+			mockFdDir := "/proc/self/fd"
+			if err := fs.MkdirAll(mockFdDir, 0755); err != nil {
+				t.Fatalf("Failed to create mock fd directory: %v", err)
+			}
+
+			// pass nil for no io_uring check
+			isReady, err := IsReadyLoop(GetTCPStates, mockGetReader, nil, tt.iteration, tt.timeout, mockFdDir)
 			if isReady != tt.expected {
 				t.Errorf("IsTCPReady() = %v, want %v", isReady, tt.expected)
 			}

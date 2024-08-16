@@ -6,26 +6,28 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 chroot /host /bin/bash -c '
 
-if [[ $SKIPSETUP -eq 1 ]]; then
-    cd /
-    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
-    exit 0
-fi
+YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
+    protobuf-c protobuf-c-devel protobuf-c-compiler \
+    protobuf-compiler protobuf-devel python3-protobuf \
+    libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu"
 
-YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu)
-APT_PACKAGES=(wget libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libgpgme-dev libseccomp-dev libbtrfs-dev buildah)
+APT_PACKAGES="wget git make libnl-3-dev libnet-dev \
+    libbsd-dev libcap-dev pkg-config \
+    libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler pkg-config \
+    protobuf-compiler python3-protobuf build-essential \
+    libgpgme-dev libseccomp-dev libbtrfs-dev buildah"
 
 install_apt_packages() {
     apt-get update
-
-    apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" golang-github-containers-image golang-github-containers-common
-
-    # install all packages at once
-    apt-get install -y "${APT_PACKAGES[@]}" || echo "Failed to install $pkg"
+    for pkg in $APT_PACKAGES; do
+        apt-get install -y $pkg || echo "Failed to install $pkg"
+    done
 }
 
 install_yum_packages() {
-    yum install -y "${YUM_PACKAGES[@]}"
+    for pkg in $YUM_PACKAGES; do
+        yum install -y $pkg || echo "Failed to install $pkg"
+    done
     yum group install -y "Development Tools"
 }
 
@@ -45,10 +47,9 @@ install_criu_ubuntu_2204() {
             ;;
     esac
 
-    if ! test -f $OUTPUT_FILE; then
-        wget $PACKAGE_URL -O $OUTPUT_FILE
-        dpkg -i $OUTPUT_FILE
-    fi
+    wget $PACKAGE_URL -O $OUTPUT_FILE
+    dpkg -i $OUTPUT_FILE
+    rm $OUTPUT_FILE
 }
 
 if [ -f /etc/os-release ]; then
@@ -78,8 +79,7 @@ else
     exit 1
 fi
 
-
 cd /
-IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 
+IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build
 '

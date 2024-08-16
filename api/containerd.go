@@ -53,7 +53,9 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return file, nil
 	}
 
-	isReady, err := utils.IsTCPReady(utils.GetTCPStates, getReader, 30, 100)
+	fdDir := fmt.Sprintf("/proc/%d/fd/", runcContainer.Pid)
+
+	isReady, err := utils.IsReadyLoop(utils.GetTCPStates, getReader, utils.IsUsingIoUring, 30, 100, fdDir)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		}()
 	}
 
-	isReady, err = utils.IsTCPReady(utils.GetTCPStates, getReader, 1, 0)
+	isReady, err = utils.IsReadyLoop(utils.GetTCPStates, getReader, utils.IsUsingIoUring, 1, 0, fdDir)
 	if err != nil {
 		return nil, err
 	}
