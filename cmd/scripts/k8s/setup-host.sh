@@ -4,7 +4,7 @@
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
-chroot /host /bin/bash -c '
+chroot /host <<"EOT"
 YUM_PACKAGES="wget git gcc make libnet-devel protobuf \
     protobuf-c protobuf-c-devel protobuf-c-compiler \
     protobuf-compiler protobuf-devel python3-protobuf \
@@ -74,4 +74,5 @@ export PATH=$PATH:/usr/local/go/bin
 
 cd /
 
-./build-start-daemon.sh --systemctl --no-build'
+./build-start-daemon.sh --systemctl --no-build
+EOT
