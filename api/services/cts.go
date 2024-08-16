@@ -25,11 +25,6 @@ const (
 	DEFAULT_RUNC_DEADLINE       = 10 * time.Minute
 )
 
-const (
-	port = 9999
-)
-
-
 type ServiceClient struct {
 	taskService task.TaskServiceClient
 	taskConn    *grpc.ClientConn
@@ -52,7 +47,7 @@ func NewClient() (*ServiceClient, error) {
 	return client, err
 }
 
-func NewKataClient(vm string) (*ServiceClient, error) {
+func NewVSockClient(vm string) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
@@ -62,8 +57,8 @@ func NewKataClient(vm string) (*ServiceClient, error) {
 		return nil, err
 	}
 
-	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, port), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return vsock.Dial(cid, port, nil)
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, api.VSOCK_PORT), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, api.VSOCK_PORT, nil)
 	}))
 	if err != nil {
 		return nil, err

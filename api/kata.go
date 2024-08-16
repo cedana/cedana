@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"strconv"
+	"errors"
 
 	"github.com/cedana/cedana/api/services/task"
 	"google.golang.org/grpc/codes"
@@ -25,8 +26,14 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	var err error
 
 	state := &task.ProcessState{}
-	kataAgentPid := childPidFromPPid(1)
-	pid := childPidFromPPid(kataAgentPid)
+	kataAgentPid, err := childPidFromPPid(1)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := childPidFromPPid(kataAgentPid)
+	if err != nil {
+		return nil, err
+	}
 
 	state, err = s.generateState(ctx, pid)
 	if err != nil {
@@ -55,12 +62,6 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
 			CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
 		}
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
-		return nil, st.Err()
 	}
 
 	resp.State = state
@@ -99,15 +100,6 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
 	}
 
-	// Only update state if it was a managed job
-	if args.JID != "" && state != nil {
-		state.JobState = task.JobState_JOB_RUNNING
-		err = s.updateState(ctx, state.JID, state)
-		if err != nil {
-			s.logger.Warn().Err(err).Msg("failed to update managed job state after restore")
-		}
-	}
-
 	resp.State = state
 
 	return &resp, nil
@@ -117,7 +109,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 ///// Kata Utils //////
 //////////////////////////
 
-func childPidFromPPid(ppid int32) (int32) {
+func childPidFromPPid(ppid int32) (int32, error) {
 	// Replace PID with the actual parent process ID
 
 	// Run the pgrep command
@@ -126,22 +118,22 @@ func childPidFromPPid(ppid int32) (int32) {
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
 	// Get the first line of the output
 	pgrepOutput := strings.TrimSpace(out.String())
 	lines := strings.Split(pgrepOutput, "\n")
 	if len(lines) == 0 {
-		return -1
+		return -1, errors.New("No Child found")
 	}
 	firstLine := lines[0]
 
 	// Convert the first line to an integer (PID of the first child process)
 	firstChildPID, err := strconv.Atoi(firstLine)
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
-	return int32(firstChildPID)
+	return int32(firstChildPID), nil
 }

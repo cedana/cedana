@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/utils"
 	"io"
 	"time"
+	"github.com/cedana/cedana/api"
 )
 
 var restoreCmd = &cobra.Command{
@@ -93,7 +94,7 @@ var restoreKataCmd = &cobra.Command{
 
 		vm := args[0]
 
-		cts, err := services.NewKataClient(vm)
+		cts, err := services.NewVSockClient(vm)
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -117,7 +118,7 @@ var restoreKataCmd = &cobra.Command{
 				return
 			}
 
-			conn, err := vsock.Dial(cid, 9998, nil)
+			conn, err := vsock.Dial(cid, api.KATA_TAR_FILE_RECEIVER_PORT, nil)
 			if err != nil {
 				return
 			}

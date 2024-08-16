@@ -43,6 +43,7 @@ const (
 	RESTORE_TEMPDIR_PERMS   = 0o755
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
+	KATA_TAR_FILE_RECEIVER_PORT = 9998
 )
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -146,6 +147,29 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 						Key: proto.String(f.Path),
 					})
 				}
+			}
+		}
+	} else {
+		open_fds := checkpointState.ProcessInfo.OpenFds
+
+		// create logfile for redirection
+		filename := fmt.Sprintf(KATA_RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+		file, err := os.Create(filename)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("error creating logfile")
+			return nil, nil, nil, nil, err
+		}
+
+		for _, f := range open_fds {
+			if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+				// strip leading slash from f
+				f.Path = strings.TrimPrefix(f.Path, "/")
+
+				extraFiles = append(extraFiles, file)
+				inheritFds = append(inheritFds, &rpc.InheritFd{
+					Fd:  proto.Int32(2 + int32(len(extraFiles))),
+					Key: proto.String(f.Path),
+				})
 			}
 		}
 	}
@@ -741,7 +765,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 		Logger: s.logger,
 	}
 
-	listener, err := vsock.Listen(9998, nil)
+	listener, err := vsock.Listen(KATA_TAR_FILE_RECEIVER_PORT, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -778,39 +802,13 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 		}
 	}
 
-	dir, state, extraFiles, _, err := s.prepareRestore(ctx, opts, args, nil, true)
+	dir, _, extraFiles, _, err := s.prepareRestore(ctx, opts, args, nil, true)
 	if err != nil {
 		return nil, err
 	}
 
 	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
 	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
-	opts.InheritFd = nil
-
-	open_fds := state.ProcessInfo.OpenFds
-
-	// create logfile for redirection
-	filename := fmt.Sprintf(KATA_RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
-	file, err := os.Create(filename)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("error creating logfile")
-		return nil, err
-	}
-
-	for _, f := range open_fds {
-		if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
-			// strip leading slash from f
-			f.Path = strings.TrimPrefix(f.Path, "/")
-
-			extraFiles = append(extraFiles, file)
-			opts.InheritFd = append(opts.InheritFd, &rpc.InheritFd{
-				Fd:  proto.Int32(2 + int32(len(extraFiles))),
-				Key: proto.String(f.Path),
-			})
-		}
-	}
-
-	fmt.Println(opts)
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {

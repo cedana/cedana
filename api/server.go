@@ -44,10 +44,7 @@ const (
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
-)
-
-const (
-	port = 9999
+	VSOCK_PORT = 9999
 )
 
 type service struct {
@@ -73,13 +70,14 @@ type Server struct {
 type ServeOpts struct {
 	GPUEnabled  bool
 	CUDAVersion string
+	VSOCKEnabled bool
 }
 
 type pullGPUBinaryRequest struct {
 	CudaVersion string `json:"cuda_version"`
 }
 
-func NewServer(ctx context.Context, opts *ServeOpts, kataEnabledFlag bool) (*Server, error) {
+func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	var err error
 
@@ -112,8 +110,8 @@ func NewServer(ctx context.Context, opts *ServeOpts, kataEnabledFlag bool) (*Ser
 
 	var listener net.Listener
 
-	if kataEnabledFlag {
-		listener, err = vsock.Listen(port, nil)
+	if opts.VSOCKEnabled {
+		listener, err = vsock.Listen(VSOCK_PORT, nil)
 	} else {
 		listener, err = net.Listen(PROTOCOL, ADDRESS)
 	}
@@ -138,14 +136,14 @@ func (s *Server) stop() error {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func StartServer(cmdCtx context.Context, opts *ServeOpts, kataEnabledFlag bool) error {
+func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	logger := cmdCtx.Value("logger").(*zerolog.Logger)
 
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(srvCtx, opts, kataEnabledFlag)
+	server, err := NewServer(srvCtx, opts)
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,7 @@ var cudaVersions = map[string]string{
 	"12.4": "cuda12_4",
 }
 
-var kataEnabledFlag bool
+var vsockEnabledFlag bool
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
@@ -63,7 +63,7 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion]}, kataEnabledFlag)
+		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], VSOCKEnabled: vsockEnabledFlag})
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err
@@ -153,6 +153,6 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
-	startDaemonCmd.Flags().BoolVarP(&kataEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
+	startDaemonCmd.Flags().BoolVarP(&vsockEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 }

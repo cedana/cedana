@@ -83,7 +83,7 @@ var dumpKataCmd = &cobra.Command{
 
 		vm := args[0]
 
-		cts, err := services.NewKataClient(vm)
+		cts, err := services.NewVSockClient(vm)
 		if err != nil {
 			logger.Error().Msgf("Error creating client: %v", err)
 			return err
