@@ -166,6 +166,18 @@ install_crio() {
     apt-get install -y cri-o
 }
 
+install_cni_plugins() {
+    mkdir -p /etc/cni/net.d
+    cp test/regression-crio/test-data/99-loopback.conflist /etc/cni/net.d
+    mkdir -p /opt/cni/bin
+    git clone https://github.com/containernetworking/plugins --depth=1
+    cd plugins
+    git checkout v1.1.1
+    cp bin/* /opt/cni/bin/
+    cd ..
+    rm -rf plugins
+}
+
 setup_ci_crio() {
     setup_ci_build
     install_code_server
@@ -178,17 +190,21 @@ setup_ci_crio() {
     install_crictl
     install_crio
 
+    install_cni_plugins
+
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     mkdir -p $HOME/.cedana
     echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
 
+    # Set GOPATH and update PATH
+    echo 'export GOPATH=$HOME/go' >> /etc/environment
+    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin' >> /etc/environment
+
+    source /etc/environment
+
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
-
-    # Set GOPATH and update PATH
-    echo "export GOPATH=$HOME/go" >> /etc/environment
-    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
 
     # Install CRIU
     install_criu
