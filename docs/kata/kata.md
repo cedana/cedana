@@ -9,7 +9,7 @@ This doc describes the steps that have to be performed to save-migrate-resume a 
         sudo USE_DOCKER=true ./rootfs.sh ubuntu 
         ```
     2. Add the CRIU source folder and the compiled cedana binary into the `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu` directory. 
-    3. Add the CRIU installation + cedana runner script (`build_start_daemon.sh`) into the `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/bin` directory. It is critical this script is placed in the bin, so that it is runnable from anywhere when we log into the guest. 
+    3. Add the [CRIU installation + cedana daemon runner script](../../scripts/kata-utils/build_start_daemon.sh) into the `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/bin` directory. It is critical this script is placed in the bin, so that it is runnable from anywhere when we log into the guest. 
 3. Create the VM image: 
 
 ```bash
