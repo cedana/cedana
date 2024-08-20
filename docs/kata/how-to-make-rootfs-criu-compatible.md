@@ -20,3 +20,10 @@ Now that we have a rootfs, we need to create an image out of it. This step is si
 cd kata-containers/tools/osbuilder/image-builder
 sudo USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs-ubuntu/
 ```
+
+The final argument is the location of the rootfs directory created in the previous step. This creates an image file called “kata-containers.img”. We need to change the following field in 
+
+```bash
+Path : /opt/kata/share/defaults/kata-containers/configuration-qemu.toml
+image = "{Path to kata-containers.img file}"
+```

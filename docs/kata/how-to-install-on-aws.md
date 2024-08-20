@@ -35,13 +35,9 @@ This doc describes the steps to install kata-containers + containerd on AWS and 
 
     This command gives information about the configuration file and the OS image used by the guest VM. We need to change the following field in
 
-        ```bash
         Path : /opt/kata/share/defaults/kata-containers/configuration-qemu.toml
         debug_console_enabled = true
-        ```
 
     Any containers created after enabling debug-console would have the facility of connecting with the guest VM. The command to connect with the guest VM is : 
 
-        ```bash
         sudo kata-runtime exec test-kata
-        ```
