@@ -367,7 +367,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		return err
 	}
 
-	s.postDump(ctx, dumpdir, state)
+	s.postDump(ctx, dumpdir, state, false)
 
 	conn, err := vsock.Dial(vsock.Host, 9999, nil)
 	if err != nil {
