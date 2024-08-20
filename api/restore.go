@@ -32,6 +32,8 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/mdlayher/vsock"
 )
 
 const (
@@ -40,9 +42,11 @@ const (
 	RESTORE_TEMPDIR         = "/tmp/cedana_restore"
 	RESTORE_TEMPDIR_PERMS   = 0o755
 	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
+	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
+	KATA_TAR_FILE_RECEIVER_PORT = 9998
 )
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
@@ -93,54 +97,79 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		return nil, nil, nil, nil, err
 	}
 
-	open_fds := checkpointState.ProcessInfo.OpenFds
+	if !isKata {
+		open_fds := checkpointState.ProcessInfo.OpenFds
 
-	var in_r, in_w, out_r, out_w, er_r, er_w *os.File
-	if stream == nil {
-		filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
-		out_w, err = os.Create(filename)
-	} else {
-		in_r, in_w, err = os.Pipe()
-		out_r, out_w, err = os.Pipe()
-		er_r, er_w, err = os.Pipe()
-	}
-	if err != nil {
-		s.logger.Error().Err(err).Msg("error creating output file")
-		return nil, nil, nil, nil, err
-	}
-	ioFiles = append(ioFiles, in_w)
-	ioFiles = append(ioFiles, out_r)
-	ioFiles = append(ioFiles, er_r)
-
-	for _, f := range open_fds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-		}
-		// if stdout or stderr, always redirect fds
-		f.Path = strings.TrimPrefix(f.Path, "/")
+		var in_r, in_w, out_r, out_w, er_r, er_w *os.File
 		if stream == nil {
-			if f.Fd == 1 || f.Fd == 2 {
-				extraFiles = append(extraFiles, out_w)
-				inheritFds = append(inheritFds, &rpc.InheritFd{
-					Fd:  proto.Int32(2 + int32(len(extraFiles))),
-					Key: proto.String(f.Path),
-				})
-			}
+			filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+			out_w, err = os.Create(filename)
 		} else {
-			if f.Fd == 0 {
-				extraFiles = append(extraFiles, in_r)
-				inheritFds = append(inheritFds, &rpc.InheritFd{
-					Fd:  proto.Int32(2 + int32(len(extraFiles))),
-					Key: proto.String(f.Path),
-				})
-			} else if f.Fd == 1 {
-				extraFiles = append(extraFiles, out_w)
-				inheritFds = append(inheritFds, &rpc.InheritFd{
-					Fd:  proto.Int32(2 + int32(len(extraFiles))),
-					Key: proto.String(f.Path),
-				})
-			} else if f.Fd == 2 {
-				extraFiles = append(extraFiles, er_w)
+			in_r, in_w, err = os.Pipe()
+			out_r, out_w, err = os.Pipe()
+			er_r, er_w, err = os.Pipe()
+		}
+		if err != nil {
+			s.logger.Error().Err(err).Msg("error creating output file")
+			return nil, nil, nil, nil, err
+		}
+		ioFiles = append(ioFiles, in_w)
+		ioFiles = append(ioFiles, out_r)
+		ioFiles = append(ioFiles, er_r)
+
+		for _, f := range open_fds {
+			if strings.Contains(f.Path, "pts") {
+				isShellJob = true
+			}
+			// if stdout or stderr, always redirect fds
+			f.Path = strings.TrimPrefix(f.Path, "/")
+			if stream == nil {
+				if f.Fd == 1 || f.Fd == 2 {
+					extraFiles = append(extraFiles, out_w)
+					inheritFds = append(inheritFds, &rpc.InheritFd{
+						Fd:  proto.Int32(2 + int32(len(extraFiles))),
+						Key: proto.String(f.Path),
+					})
+				}
+			} else {
+				if f.Fd == 0 {
+					extraFiles = append(extraFiles, in_r)
+					inheritFds = append(inheritFds, &rpc.InheritFd{
+						Fd:  proto.Int32(2 + int32(len(extraFiles))),
+						Key: proto.String(f.Path),
+					})
+				} else if f.Fd == 1 {
+					extraFiles = append(extraFiles, out_w)
+					inheritFds = append(inheritFds, &rpc.InheritFd{
+						Fd:  proto.Int32(2 + int32(len(extraFiles))),
+						Key: proto.String(f.Path),
+					})
+				} else if f.Fd == 2 {
+					extraFiles = append(extraFiles, er_w)
+					inheritFds = append(inheritFds, &rpc.InheritFd{
+						Fd:  proto.Int32(2 + int32(len(extraFiles))),
+						Key: proto.String(f.Path),
+					})
+				}
+			}
+		}
+	} else {
+		open_fds := checkpointState.ProcessInfo.OpenFds
+
+		// create logfile for redirection
+		filename := fmt.Sprintf(KATA_RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+		file, err := os.Create(filename)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("error creating logfile")
+			return nil, nil, nil, nil, err
+		}
+
+		for _, f := range open_fds {
+			if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+				// strip leading slash from f
+				f.Path = strings.TrimPrefix(f.Path, "/")
+
+				extraFiles = append(extraFiles, file)
 				inheritFds = append(inheritFds, &rpc.InheritFd{
 					Fd:  proto.Int32(2 + int32(len(extraFiles))),
 					Key: proto.String(f.Path),
@@ -565,7 +594,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*int32, chan error, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (int32, chan int, error) {
 	var dir *string
 	var pid *int32
 
@@ -574,16 +603,16 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		Logger: s.logger,
 	}
 
-	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream)
+	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream, false)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	var gpuCmd *exec.Cmd
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
 		if !s.gpuEnabled {
-			return nil, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
+			return 0, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
 		}
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
@@ -602,11 +631,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	// If it's a managed restored job
-	done := make(chan error)
+	exitCode := make(chan int)
 	if args.JID != "" {
 		if stream != nil {
 			// last 3 files of ioFiles are stdin, stdout, stderr
@@ -672,12 +701,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			defer s.wg.Done()
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
-			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", status.ExitStatus()).Msgf("process exited")
-
-			if stream != nil {
-				stream.Send(&task.RestoreAttachResp{ExitCode: int32(status.ExitStatus())})
-				done <- nil
-			}
+			code := status.ExitStatus()
+			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -689,19 +714,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 			}
 
-			// Update state
-			childCtx := context.WithoutCancel(ctx) // since this routine can outlive the parent
-			state, err := s.getState(childCtx, args.JID)
-			if err != nil {
-				s.logger.Warn().Err(err).Msg("failed to get state after job done")
-				return
-			}
-			state.JobState = task.JobState_JOB_DONE
-			state.PID = *pid
-			err = s.updateState(childCtx, args.JID, state)
-			if err != nil {
-				s.logger.Warn().Err(err).Msg("failed to update state after job done")
-			}
+			exitCode <- code
 		}()
 
 		// Kill on server/stream shutdown
@@ -729,7 +742,69 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		}()
 	}
 
-	return pid, done, nil
+	return *pid, exitCode, nil
+}
+
+func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
+	var dir *string
+	var pid *int32
+
+	opts := s.prepareRestoreOpts()
+	nfy := Notify{
+		Logger: s.logger,
+	}
+
+	listener, err := vsock.Listen(KATA_TAR_FILE_RECEIVER_PORT, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer listener.Close()
+
+	conn, err := listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Open the file for writing
+	recvFile, err := os.Create(args.CheckpointPath)
+	if err != nil {
+		return nil, err
+	}
+	defer recvFile.Close()
+
+	buffer := make([]byte, 1024)
+
+	// Receive data and write to file
+	for {
+		bytesReceived, err := conn.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		_, err = recvFile.Write(buffer[:bytesReceived])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	dir, _, extraFiles, _, err := s.prepareRestore(ctx, opts, args, nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
+
+	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	return pid, nil
 }
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32) (*exec.Cmd, error) {
