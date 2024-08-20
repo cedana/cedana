@@ -37,13 +37,13 @@ import (
 )
 
 const (
-	CRIU_RESTORE_LOG_FILE   = "cedana-restore.log"
-	CRIU_RESTORE_LOG_LEVEL  = 4
-	RESTORE_TEMPDIR         = "/tmp/cedana_restore"
-	RESTORE_TEMPDIR_PERMS   = 0o755
-	RESTORE_OUTPUT_LOG_PATH = "/var/log/cedana-output-%s.log"
+	CRIU_RESTORE_LOG_FILE        = "cedana-restore.log"
+	CRIU_RESTORE_LOG_LEVEL       = 4
+	RESTORE_TEMPDIR              = "/tmp/cedana_restore"
+	RESTORE_TEMPDIR_PERMS        = 0o755
+	RESTORE_OUTPUT_LOG_PATH      = "/var/log/cedana-output-%s.log"
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
-	KATA_TAR_FILE_RECEIVER_PORT = 9998
+	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -185,7 +185,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	opts.ShellJob = proto.Bool(isShellJob || args.Stream)
+	opts.ShellJob = proto.Bool(isShellJob)
 	opts.Stream = proto.Bool(args.Stream)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
