@@ -29,7 +29,7 @@ This doc describes the steps that have to be performed to save-migrate-resume a 
     ./cedana dump kata test_vm -d .
     ```
 
-The mandatory argument is the VM name (test_vm) in our case. This command saves the tar file in the same folder as the cedana binary, as we have provided the argument as “.”
+    The mandatory argument is the VM name (test_vm) in our case. This command saves the tar file in the same folder as the cedana binary, as we have provided the argument as “.”
 
 9. Run a new VM, with any dummy workload. Log into the VM and run the installation scripts. Now, we can restore the previous workload into the new VM. Again, the “-d” flag corresponds to the path on the host of the tar file. 
 
@@ -37,4 +37,4 @@ The mandatory argument is the VM name (test_vm) in our case. This command saves 
     ./cedana restore kata test_vm_2 -d dmp.tar
     ```
 
-The mandatory argument is the VM name of the VM into which we wish to perform the restore. In this case, it is “test_vm_2”, which is the new VM, running the dummy workload. Since the dmp.tar from the kata dump is present in the same directory as the cedana binary, we directly use “dmp.tar” as the path of the tar file.
+    The mandatory argument is the VM name of the VM into which we wish to perform the restore. In this case, it is “test_vm_2”, which is the new VM, running the dummy workload. Since the dmp.tar from the kata dump is present in the same directory as the cedana binary, we directly use “dmp.tar” as the path of the tar file.
