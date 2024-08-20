@@ -35,14 +35,14 @@ func socketNameForMode(mode int) string {
 	}
 }
 
-func imgStreamerInit(imageDir string, mode int) (net.Conn, error) {
+func imgStreamerInit(imageDir string, mode int) (*net.UnixConn, error) {
 	imgStreamerMode = mode
 	socketPath := filepath.Join(imageDir, socketNameForMode(mode))
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to image streamer socket %s: %v", socketPath, err)
 	}
-	return conn, nil
+	return conn.(*net.UnixConn), nil
 }
 
 func imgStreamerFinish(socket_fd int, criu_fd int, streamer_fd int) {
@@ -51,7 +51,7 @@ func imgStreamerFinish(socket_fd int, criu_fd int, streamer_fd int) {
 	syscall.Close(socket_fd)
 }
 
-func sendFileRequest(filename string, conn net.Conn, r_fd int) (int, error) {
+func sendFileRequest(filename string, conn *net.UnixConn, r_fd int) (int, error) {
 	req := &img_streamer.ImgStreamerRequestEntry{Filename: filename}
 	data, err := proto.Marshal(req)
 	size := uint32(len(data))
@@ -63,7 +63,7 @@ func sendFileRequest(filename string, conn net.Conn, r_fd int) (int, error) {
 	if _, err := conn.Write(data); err != nil {
 		return 0, fmt.Errorf("failed to write filename %s: %v", filename, err)
 	}
-	socket, err := conn.(*net.UnixConn).File()
+	socket, err := conn.File()
 	socket_fd := int(socket.Fd())
 	rights := syscall.UnixRights(r_fd)
 
@@ -82,7 +82,7 @@ func establishStreamerFilePipe() (int, int, error) {
 	return fds[0], fds[1], nil // r,w,nil
 }
 
-func _imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
+func _imgStreamerOpen(filename string, conn *net.UnixConn) (int, int, int, error) {
 	signal.Ignore(syscall.SIGPIPE)
 	r_fd, w_fd, err := establishStreamerFilePipe()
 
@@ -103,7 +103,7 @@ func _imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
 	return socket_fd, r_fd, w_fd, err
 }
 
-func imgStreamerOpen(filename string, conn net.Conn) (int, int, int, error) {
+func imgStreamerOpen(filename string, conn *net.UnixConn) (int, int, int, error) {
 	imgStreamerFdLock.Lock()
 	defer imgStreamerFdLock.Unlock()
 

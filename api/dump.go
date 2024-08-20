@@ -83,7 +83,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 			break
 		}
 	}
-	opts.ShellJob = proto.Bool(isShellJob || args.Stream)
+	opts.ShellJob = proto.Bool(isShellJob)
 	opts.Stream = proto.Bool(args.Stream)
 
 	// jobID + UTC time (nanoseconds)

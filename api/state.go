@@ -229,6 +229,7 @@ func serializeStateToDir(dir string, state *task.ProcessState, stream bool) erro
 		if err != nil {
 			return fmt.Errorf("imgStreamerInit failed with %v", err)
 		}
+		defer conn.Close()
 		socket_fd, r_fd, w_fd, err := imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
 		if err != nil {
 			return fmt.Errorf("imgStreamerOpen failed with %v", err)
@@ -238,7 +239,6 @@ func serializeStateToDir(dir string, state *task.ProcessState, stream bool) erro
 			return fmt.Errorf("syscall.Write to pipe failed with %v", err)
 		}
 		imgStreamerFinish(socket_fd, r_fd, w_fd)
-		conn.Close()
 	} else {
 		path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
 		file, err := os.Create(path)
