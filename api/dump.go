@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/api/services/gpu"
+	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
 	"github.com/cedana/cedana/types"
 	"github.com/cedana/cedana/utils"
-	"github.com/checkpoint-restore/go-criu/v6/rpc"
 	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
@@ -87,12 +87,18 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
+	opts.Stream = proto.Bool(args.Stream)
 
 	// jobID + UTC time (nanoseconds)
 	// strip out non posix-compliant characters from the jobID
-	timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	processDumpDir := strings.Join([]string{state.JID, timeString}, "_")
-	dumpDirPath := filepath.Join(args.Dir, processDumpDir)
+	var dumpDirPath string
+	if args.Stream {
+		dumpDirPath = args.Dir
+	} else {
+		timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+		processDumpDir := strings.Join([]string{state.JID, timeString}, "_")
+		dumpDirPath = filepath.Join(args.Dir, processDumpDir)
+	}
 	_, err := os.Stat(dumpDirPath)
 	if err != nil {
 		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
@@ -130,29 +136,36 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, stream bool) {
 	start := time.Now()
 	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
 	if !ok {
 		s.logger.Fatal().Msg("could not get dump stats from context")
 	}
 
-	compressedCheckpointPath := strings.Join([]string{dumpdir, ".tar"}, "")
+	var compressedCheckpointPath string
+	if stream {
+		compressedCheckpointPath = dumpdir
+	} else {
+		compressedCheckpointPath = strings.Join([]string{dumpdir, ".tar"}, "")
+	}
 
 	state.CheckpointPath = compressedCheckpointPath
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 
 	// sneak in a serialized state obj
-	err := serializeStateToDir(dumpdir, state)
+	err := serializeStateToDir(dumpdir, state, stream)
 	if err != nil {
 		s.logger.Fatal().Err(err)
 	}
 
 	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
-	err = utils.TarFolder(dumpdir, compressedCheckpointPath)
-	if err != nil {
-		s.logger.Fatal().Err(err)
+	if !stream {
+		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
+		if err != nil {
+			s.logger.Fatal().Err(err)
+		}
 	}
 
 	// get size of compressed checkpoint
@@ -241,7 +254,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state)
+	s.postDump(ctx, opts.ImagesDirectory, state, false)
 
 	return nil
 }
@@ -249,7 +262,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state)
+	s.postDump(ctx, imagePath, state, false)
 
 	return nil
 }
@@ -272,7 +285,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
+		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dumpdir)
 		return err
 	}
 	defer img.Close()
@@ -312,7 +325,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state)
+	s.postDump(ctx, dumpdir, state, args.Stream)
 
 	return nil
 }
@@ -354,7 +367,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		return err
 	}
 
-	s.postDump(ctx, dumpdir, state)
+	s.postDump(ctx, dumpdir, state, false)
 
 	conn, err := vsock.Dial(vsock.Host, 9999, nil)
 	if err != nil {

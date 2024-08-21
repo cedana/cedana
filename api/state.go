@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -96,9 +97,9 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	if err != nil {
 		return nil, fmt.Errorf("could not get groups: %v", err)
 	}
-  state.UIDs = uids
-  state.GIDs = gids
-  state.Groups = groups
+	state.UIDs = uids
+	state.GIDs = gids
+	state.Groups = groups
 
 	of, err := p.OpenFiles()
 	for _, f := range of {
@@ -218,34 +219,72 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	return state, nil
 }
 
-func serializeStateToDir(dir string, state *task.ProcessState) error {
+func serializeStateToDir(dir string, state *task.ProcessState, stream bool) error {
 	serialized, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
+	if stream {
+		conn, err := imgStreamerInit(dir, O_DUMP)
+		if err != nil {
+			return fmt.Errorf("imgStreamerInit failed with %v", err)
+		}
+		defer conn.Close()
+		socket_fd, r_fd, w_fd, err := imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
+		if err != nil {
+			return fmt.Errorf("imgStreamerOpen failed with %v", err)
+		}
+		_, err = syscall.Write(w_fd, serialized)
+		if err != nil {
+			return fmt.Errorf("syscall.Write to pipe failed with %v", err)
+		}
+		imgStreamerFinish(socket_fd, r_fd, w_fd)
+	} else {
+		path := filepath.Join(dir, CHECKPOINT_STATE_FILE)
+		file, err := os.Create(path)
+		if err != nil {
+			return err
+		}
 
-	defer file.Close()
-	_, err = file.Write(serialized)
+		defer file.Close()
+		_, err = file.Write(serialized)
+	}
 	return err
 }
 
-func deserializeStateFromDir(dir string) (*task.ProcessState, error) {
-	_, err := os.Stat(filepath.Join(dir, CHECKPOINT_STATE_FILE))
-	if err != nil {
-		return nil, fmt.Errorf("state file not found")
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, CHECKPOINT_STATE_FILE))
-	if err != nil {
-		return nil, fmt.Errorf("could not read state file: %v", err)
-	}
-
+func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error) {
 	var checkpointState task.ProcessState
-	err = json.Unmarshal(data, &checkpointState)
+	var err error
+	if stream {
+		conn, err := imgStreamerInit(dir, O_RSTR)
+		if err != nil {
+			return nil, fmt.Errorf("imgStreamerInit failed with %v", err)
+		}
+		socket_fd, r_fd, w_fd, err := imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
+		if err != nil {
+			return nil, fmt.Errorf("imgStreamerOpen failed with %v", err)
+		}
+
+		byte_arr := make([]byte, 2048)
+		n_bytes, err := syscall.Read(r_fd, byte_arr)
+		if err != nil {
+			return nil, fmt.Errorf("Read from r_fd failed with %v", err)
+		}
+		imgStreamerFinish(socket_fd, r_fd, w_fd)
+
+		err = json.Unmarshal(byte_arr[:n_bytes], &checkpointState)
+	} else {
+		_, err := os.Stat(filepath.Join(dir, CHECKPOINT_STATE_FILE))
+		if err != nil {
+			return nil, fmt.Errorf("state file not found: %v", err)
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, CHECKPOINT_STATE_FILE))
+		if err != nil {
+			return nil, fmt.Errorf("could not read state file: %v", err)
+		}
+
+		err = json.Unmarshal(data, &checkpointState)
+	}
 	return &checkpointState, err
 }
