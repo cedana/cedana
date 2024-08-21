@@ -17,16 +17,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdlayher/vsock"
+
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -42,6 +44,7 @@ const (
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
+	VSOCK_PORT = 9999
 )
 
 type service struct {
@@ -67,6 +70,7 @@ type Server struct {
 type ServeOpts struct {
 	GPUEnabled  bool
 	CUDAVersion string
+	VSOCKEnabled bool
 }
 
 type pullGPUBinaryRequest struct {
@@ -75,6 +79,7 @@ type pullGPUBinaryRequest struct {
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
+	var err error
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
@@ -103,7 +108,14 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
-	listener, err := net.Listen(PROTOCOL, ADDRESS)
+	var listener net.Listener
+
+	if opts.VSOCKEnabled {
+		listener, err = vsock.Listen(VSOCK_PORT, nil)
+	} else {
+		listener, err = net.Listen(PROTOCOL, ADDRESS)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -371,8 +383,13 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	var unhealthyReasons []string
 	resp := &task.DetailedHealthCheckResponse{}
 
-	// TODO NR - Add CRIU check to output
 	criuVersion, err := s.CRIU.GetCriuVersion()
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
+	}
+
+	check, err := s.CRIU.Check()
+	s.logger.Debug().Str("resp", check).Msg("CRIU check")
 	if err != nil {
 		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
 	}

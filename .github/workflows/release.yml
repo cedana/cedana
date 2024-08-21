@@ -26,6 +26,11 @@ on:
         description: "Run build & push (arm64 image) with debugging enabled"
         required: false
         default: false
+      post_summary:
+        type: boolean
+        description: "Post summary to slack"
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -282,3 +287,83 @@ jobs:
           # check if commit sha matches with the latest commit sha
           # we only match docker hub image as both images should be the same
           echo $(docker run -i --rm cedana/cedana-helper:${{ steps.meta.outputs.version }} -c "cedana -v")
+
+  post-summary:
+    name: Post Summary
+    runs-on: ubuntu-latest
+    needs: ["build-publish-amd64"]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          fetch-tags: true
+
+      - name: Get tag
+        id: tag
+        run: |
+          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
+
+      - name: Get previous tag
+        id: previous-tag
+        run: |
+          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
+
+      - name: Get release info
+        id: release-info
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          token: ${{ github.token }}
+          excludes: draft
+          repository: ${{ github.repository }}
+
+      - name: Download binary
+        uses: robinraju/release-downloader@v1
+        id: download
+        with:
+          tag: ${{ steps.tag.outputs.tag }}
+          fileName: '*amd64.tar.gz'
+          extract: true
+          token: ${{ github.token }}
+          out-file-path: current
+
+      - name: Download previous binary
+        uses: robinraju/release-downloader@v1
+        id: download-previous
+        with:
+          tag: ${{ steps.previous-tag.outputs.tag }}
+          fileName: '*amd64.tar.gz'
+          extract: true
+          token: ${{ github.token }}
+          out-file-path: previous
+
+      - name: Generate summary
+        id: summary
+        env:
+          RELEASE_TITLE: 'cedana'
+          RELEASE_DESCRIPTION: '**${{ steps.tag.outputs.tag }}**'
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
+          RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
+          TAG: ${{ steps.tag.outputs.tag }}
+          BINARY: current/cedana
+          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
+          PREVIOUS_BINARY: previous/cedana
+        run: |
+          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
+          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
+
+      - name: Post summary
+        if: ${{ (github.event_name != 'workflow_dispatch') || (inputs.post_summary) }}
+        id: slack-patch
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary.outputs.slack-summary }}
+

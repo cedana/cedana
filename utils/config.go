@@ -128,7 +128,7 @@ func bindEnvVars() {
 	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 	viper.BindEnv("remote", "CEDANA_REMOTE")
 
-  // CLI-specific
+	// CLI-specific
 	viper.BindEnv("cli.wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
 }
 
