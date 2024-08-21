@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 chroot /host /bin/bash -c '
@@ -5,6 +6,8 @@ chroot /host /bin/bash -c '
 
 # Ensure non-interactive mode for package managers
 export DEBIAN_FRONTEND=noninteractive
+
+dpkg --configure -a || echo "Failed to configure dpkg"
 
 YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf)
 
@@ -59,10 +62,10 @@ if [ -f /etc/os-release ]; then
             exit 1
             ;;
     esac
-elif [ -f /etc/debian_version ]; then
+elif [ -f /etc.debian_version ]; then
     install_apt_packages
     install_criu_ubuntu_2204
-elif [ -f /etc/redhat-release ]; then
+elif [ -f /etc.redhat-release ]; then
     check_and_install_yum_packages
 else
     echo "Unknown distribution"
@@ -78,7 +81,6 @@ rm -rf /var/log/cedana*
 # Install Cedana
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
-
 
 chroot /host /bin/bash -c '
 cd /
