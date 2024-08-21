@@ -189,6 +189,10 @@ teardown() {
     local dir="/tmp/jupyter-checkpoint"
 
     run start_jupyter_notebook $container_id
+    echo "$output"
+
+    [[ $? -eq 0 ]] || { echo "Failed to start Jupyter Notebook"; return 1; }
+
     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
     echo "$output"
 
