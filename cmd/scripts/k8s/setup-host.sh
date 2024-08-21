@@ -8,7 +8,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 YUM_PACKAGES=(wget libnet-devel libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf)
 
-APT_PACKAGES=(wget git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler pkg-config protobuf-compiler python3-protobuf build-essential libgpgme-dev libseccomp-dev libbtrfs-dev buildah)
+APT_PACKAGES=(wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev pkg-config python3-protobuf build-essential libprotobuf-c1 buildah)
 
 install_apt_packages() {
     apt-get update
