@@ -46,6 +46,7 @@ function start_jupyter_notebook(){
     echo "$pull_output"
 
     echo "Running the container..."
+    pwd
     run_output=$(sudo ctr run --seccomp --seccomp-profile="$seccomp_profile_path" -d docker.io/cedana/jupyter-base:latest "$container_name")
     echo "$run_output"
 }
