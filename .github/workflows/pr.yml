@@ -150,3 +150,37 @@ jobs:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
+  go-test:
+    name: Go Tests
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_go_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup Go environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y golang
+          go version
+
+      - name: Run Go tests
+        run: |
+          go test ./... -v
+        env:
+          GO111MODULE: "on"
+          CI_BRANCH: ${{ github.ref_name }}
