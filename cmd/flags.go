@@ -34,4 +34,5 @@ const (
 	configDirFlag        = "config-dir"
 	typeFlag             = "type"
 	attachFlag           = "attach"
+	streamFlag           = "stream"
 )

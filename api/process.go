@@ -314,10 +314,16 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if args.CheckpointPath == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 		}
-		if stat, err := os.Stat(args.CheckpointPath); os.IsNotExist(err) || stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar") {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path")
+		stat, err := os.Stat(args.CheckpointPath)
+		if os.IsNotExist(err) {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: does not exist")
 		}
-
+		if !args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
+		}
+		if args.Stream && !stat.IsDir() {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be directory (--stream enabled)")
+		}
 	case task.CRType_REMOTE:
 		if args.CheckpointID == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
