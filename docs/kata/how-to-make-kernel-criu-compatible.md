@@ -18,6 +18,11 @@ sudo ./build-kernel.sh -v 5.15.26 install
 Since CRIU has optimizations for kernel versions post 6.x.x, we will build 6.1.62, using the configuration file directly. The configuration file contains all the flags set (as required for CRIU, mentioned [here](https://criu.org/Linux_kernel)). The configuration file is added to the Cedana fork of kata-containers, in [this](https://github.com/cedana/kata-containers/commit/34183f9b4ad0eeebffd95dc6518571b7c3ae8bd0) commit. 
 
 ```bash
+sudo ./build-kernel.sh -v 6.1.62 -c /{PATH TO kata-containers}/kata-containers/tools/packaging/kernel/configs/amd64-6.1.62-criu-compatible.conf setup
+```
+
+Example : 
+```bash
 sudo ./build-kernel.sh -v 6.1.62 -c /home/ubuntu/kata-containers/tools/packaging/kernel/configs/amd64-6.1.62-criu-compatible.conf setup
 ```
 

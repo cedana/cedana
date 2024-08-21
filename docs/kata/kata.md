@@ -1,6 +1,6 @@
 This doc describes the steps that have to be performed to save-migrate-resume a kata-container workload. It includes building a CRIU compatible kernel and rootfs, and a busy-box image which includes the cedana wrapper. These steps are also exactly what are performed by an end-to-end test for kata container workloads which are checkpointed and restored using cedana. 
 
-1. Get the fork of kata-containers, created under cedana. Switch to the rootfs-kernel branch. 
+1. Get the [fork of kata-containers](https://github.com/cedana/kata-containers), created under cedana. Switch to the rootfs-kernel branch. 
 2. Create the kernel compatible with CRIU : Steps documented [here](./how-to-make-kernel-criu-compatible.md)
 3. Create a CRIU compatible rootfs and the corresponding image : Steps documented [here](./how-to-make-rootfs-criu-compatible.md)
 4. Create a custom busybox image with the cedana wrapper and the workload : Steps documented [here](./how-to-create-custom-busybox-image.md)
