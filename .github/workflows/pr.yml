@@ -172,11 +172,11 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Setup Go environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y golang
-          go version
+      - name: Install Go 1.23
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+          check-latest: true
 
       - name: Run Go tests
         run: |
