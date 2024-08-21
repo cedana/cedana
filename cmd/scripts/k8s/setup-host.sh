@@ -45,7 +45,7 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
         debian | ubuntu)
-            check_and_install_apt_packages
+            install_apt_packages
             install_criu_ubuntu_2204
             ;;
         rhel | centos | fedora)
@@ -60,7 +60,7 @@ if [ -f /etc/os-release ]; then
             ;;
     esac
 elif [ -f /etc/debian_version ]; then
-    check_and_install_apt_packages
+    install_apt_packages
 elif [ -f /etc/redhat-release ]; then
     check_and_install_yum_packages
 else
