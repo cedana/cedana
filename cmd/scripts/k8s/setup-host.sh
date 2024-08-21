@@ -61,6 +61,7 @@ if [ -f /etc/os-release ]; then
     esac
 elif [ -f /etc/debian_version ]; then
     install_apt_packages
+    install_criu_ubuntu_2204
 elif [ -f /etc/redhat-release ]; then
     check_and_install_yum_packages
 else
