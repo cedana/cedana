@@ -6,7 +6,12 @@ import (
 	"context"
 	"time"
 
+	"fmt"
+	"net"
+	"github.com/mdlayher/vsock"
+
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/utils"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -29,6 +34,32 @@ func NewClient() (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	taskConn, err := grpc.Dial(api.ADDRESS, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	taskClient := task.NewTaskServiceClient(taskConn)
+
+	client := &ServiceClient{
+		taskService: taskClient,
+		taskConn:    taskConn,
+	}
+	return client, err
+}
+
+func NewVSockClient(vm string) (*ServiceClient, error) {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	// extract cid from the process tree on host
+	cid, err := utils.ExtractCID(vm)
+	if err != nil {
+		return nil, err
+	}
+
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, api.VSOCK_PORT), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, api.VSOCK_PORT, nil)
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -277,6 +308,30 @@ func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs)
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.taskService.RuncQuery(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+///////////////////////////
+// Kata Service Calls //
+///////////////////////////
+
+func (c *ServiceClient) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.KataDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.KataRestore(ctx, args)
 	if err != nil {
 		return nil, err
 	}

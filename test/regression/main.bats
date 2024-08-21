@@ -35,6 +35,10 @@ teardown() {
     cedana --version | grep -q "$(git describe --tags --always)"
 }
 
+@test "Daemon health check" {
+    cedana daemon check
+}
+
 @test "Output file created and has some data" {
     local task="./workload.sh"
     local job_id="workload"
@@ -214,7 +218,6 @@ teardown() {
 
     [[ "$output" == *"success"* ]]
 }
-
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"

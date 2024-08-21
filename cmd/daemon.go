@@ -3,6 +3,7 @@ package cmd
 // This file contains all the daemon-related commands when starting `cedana daemon ...`
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -26,6 +27,8 @@ var cudaVersions = map[string]string{
 	"12.2": "cuda12_2",
 	"12.4": "cuda12_4",
 }
+
+var vsockEnabledFlag bool
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
@@ -60,7 +63,7 @@ var startDaemonCmd = &cobra.Command{
 
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion]})
+		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], VSOCKEnabled: vsockEnabledFlag})
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err
@@ -88,11 +91,11 @@ var checkDaemonCmd = &cobra.Command{
 		// regular health check
 		healthy, err := cts.HealthCheck(cmd.Context())
 		if err != nil {
-			logger.Error().Err(err).Msg("health check failed")
 			return err
 		}
-
-		logger.Info().Msgf("health check returned: %v", healthy)
+		if !healthy {
+			return fmt.Errorf("health check failed")
+		}
 
 		// Detailed health check. Need to grab uid and gid to start
 		// controller properly and with the right perms.
@@ -104,8 +107,7 @@ var checkDaemonCmd = &cobra.Command{
 		gid = int32(os.Getgid())
 		groups_int, err := os.Getgroups()
 		if err != nil {
-			logger.Error().Err(err).Msg("error getting user groups")
-			return err
+			return fmt.Errorf("error getting user groups: %v", err)
 		}
 		for _, g := range groups_int {
 			groups = append(groups, int32(g))
@@ -119,11 +121,23 @@ var checkDaemonCmd = &cobra.Command{
 
 		resp, err := cts.DetailedHealthCheck(cmd.Context(), req)
 		if err != nil {
-			logger.Error().Err(err).Msg("health check failed")
-			return err
+			return fmt.Errorf("health check failed: %v", err)
 		}
 
-		logger.Info().Msgf("health check output: %v", resp)
+		if len(resp.UnhealthyReasons) > 0 {
+			return fmt.Errorf("health failed with reasons: %v", resp.UnhealthyReasons)
+		}
+
+		fmt.Println("All good.")
+		fmt.Println("Cedana version: ", rootCmd.Version)
+		fmt.Println("CRIU version: ", resp.HealthCheckStats.CriuVersion)
+		if resp.HealthCheckStats.GPUHealthCheck != nil {
+			prettyJson, err := json.MarshalIndent(resp.HealthCheckStats.GPUHealthCheck, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println("GPU support: ", string(prettyJson))
+		}
 
 		return nil
 	},
@@ -139,5 +153,6 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
+	startDaemonCmd.Flags().BoolVarP(&vsockEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
 	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 }

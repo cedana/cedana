@@ -3,16 +3,20 @@ package cmd
 // This file contains all the dump-related commands when starting `cedana dump ...`
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/cedana/cedana/api/services"
 	"github.com/cedana/cedana/api/services/task"
+	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
+	
+	"github.com/mdlayher/vsock"
+	"os"
+	"io"
 )
 
 var dumpCmd = &cobra.Command{
@@ -45,14 +49,15 @@ var dumpProcessCmd = &cobra.Command{
 		// always self serve when invoked from CLI
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		cpuDumpArgs := task.DumpArgs{
 			PID:            int32(pid),
 			Dir:            dir,
 			Type:           task.CRType_LOCAL,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
-
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
@@ -63,8 +68,90 @@ var dumpProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.DumpStats)
-		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+
+		return nil
+	},
+}
+
+var dumpKataCmd = &cobra.Command{
+	Use:   "kata",
+	Short: "Manually checkpoint a running workload in the kata-vm [vm-name] to a directory [-d]",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		vm := args[0]
+
+		cts, err := services.NewVSockClient(vm)
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return err
+		}
+		defer cts.Close()
+
+		id := xid.New().String()
+		logger.Info().Msgf("no job id specified, using %s", id)
+
+		dir, _ := cmd.Flags().GetString(dirFlag)
+
+		cpuDumpArgs := task.DumpArgs{
+			Dir:  "/tmp",
+			JID:  id,
+			Type: task.CRType_LOCAL,
+		}
+
+		go func() {
+			listener, err := vsock.Listen(9999, nil)
+			if err != nil {
+				return
+			}
+			defer listener.Close()
+
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			// Open the file for writing
+			file, err := os.Create(dir + "/dmp.tar")
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			buffer := make([]byte, 1024)
+
+			// Receive data and write to file
+			for {
+				bytesReceived, err := conn.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					return
+				}
+
+				_, err = file.Write(buffer[:bytesReceived])
+				if err != nil {
+					return
+				}
+			}
+		}()
+
+		resp, err := cts.KataDump(ctx, &cpuDumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			} else {
+				logger.Error().Msgf("Checkpoint task failed: %v", err)
+			}
+			return err
+		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -101,11 +188,13 @@ var dumpJobCmd = &cobra.Command{
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
 			GPU:            gpuEnabled,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		resp, err := cts.Dump(ctx, &dumpArgs)
@@ -118,8 +207,7 @@ var dumpJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.DumpStats)
-		logger.Info().Str("message", resp.Message).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -350,11 +438,18 @@ func init() {
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
 	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
 	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+
+	// Kata
+	dumpCmd.AddCommand(dumpKataCmd)
+	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	// ref, _ := cmd.Flags().GetString(imgFlag)
