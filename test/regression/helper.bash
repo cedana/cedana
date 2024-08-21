@@ -39,7 +39,7 @@ function start_busybox(){
 
 function start_jupyter_notebook(){
     local container_name="$1"
-    local seccomp_profile_path="./iouring-profile.json"
+    local seccomp_profile_path="./test/regression/iouring-profile.json"
 
     echo "Pulling the Docker image..."
     pull_output=$(sudo ctr image pull docker.io/cedana/jupyter-base:latest)
