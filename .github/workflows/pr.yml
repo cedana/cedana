@@ -81,25 +81,6 @@ jobs:
           name: build
           path: ./cedana
 
-  kata-test:
-    name: Kata
-    runs-on: blacksmith-2vcpu-ubuntu-2204
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: 'recursive'
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-
   smoke-test:
     name: Smoke
     runs-on: ubicloud-standard-8

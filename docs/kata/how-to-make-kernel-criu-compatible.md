@@ -37,14 +37,7 @@ sudo ./build-kernel.sh -v 6.1.62 build
 sudo ./build-kernel.sh -v 6.1.62 install
 ```
 
-This will finally create “/usr/share/kata-containers/vmlinux.container”. We would need to edit the config file to change the kernel.
-
-```bash
-Path : /opt/kata/share/defaults/kata-containers/configuration-qemu.toml
-kernel = "/usr/share/kata-containers/vmlinux.container"
-```
-
-We can now check the config by logging inside the guest VM. Example : 
+This will finally create “/usr/share/kata-containers/vmlinux.container”. We can now check the config by logging inside the guest VM. Example : 
 
 ```bash
 zcat /proc/config.gz | grep CONFIG_CHECKPOINT_RESTORE
