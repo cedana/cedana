@@ -41,8 +41,13 @@ function start_jupyter_notebook(){
     local container_name="$1"
     local seccomp_profile_path="./iouring-profile.json"
 
-    sudo ctr image pull docker.io/cedana/jupyter-base:latest
-    sudo ctr run --security-opt seccomp="$seccomp_profile_path" -d docker.io/cedana/jupyter-base:latest "$container_name"
+    echo "Pulling the Docker image..."
+    pull_output=$(sudo ctr image pull docker.io/cedana/jupyter-base:latest)
+    echo "$pull_output"
+
+    echo "Running the container..."
+    run_output=$(sudo ctr run --security-opt seccomp="$seccomp_profile_path" -d docker.io/cedana/jupyter-base:latest "$container_name")
+    echo "$run_output"
 }
 
 function start_sleeping_jupyter_notebook(){
