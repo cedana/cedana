@@ -13,6 +13,7 @@ typing_extensions
 protobuf
 google-cloud-bigquery
 google-cloud-storage
-requests 
+requests
 psutil
 pandas-gbq
+crit

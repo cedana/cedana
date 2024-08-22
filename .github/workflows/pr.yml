@@ -92,7 +92,7 @@ jobs:
           path: ./cedana
 
   smoke-test:
-    name: Smoke
+    name: Smoke Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -127,7 +127,7 @@ jobs:
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
-    name: Regression
+    name: Regression Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -162,7 +162,7 @@ jobs:
         run: sudo -E make -C scripts/ci regression
 
   correctness-test:
-    name: Correctness
+    name: Correctness Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
