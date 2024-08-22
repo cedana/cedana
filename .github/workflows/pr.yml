@@ -22,6 +22,11 @@ on:
         description: 'Run regression test with debugging enabled'
         required: false
         default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
+        required: false
+        default: false
   workflow_call: # to reuse this workflow in other worflows
     inputs:
       debug_build:
@@ -37,6 +42,11 @@ on:
       debug_regression_test:
         type: boolean
         description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
         required: false
         default: false
 
@@ -82,7 +92,7 @@ jobs:
           path: ./cedana
 
   smoke-test:
-    name: Smoke
+    name: Smoke Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -117,7 +127,7 @@ jobs:
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
-    name: Regression
+    name: Regression Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -150,8 +160,9 @@ jobs:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
-  go-test:
-    name: Go Tests
+
+  unit-test:
+    name: Unit Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -183,7 +194,7 @@ jobs:
           chmod +x cedana
           sudo -E make -C scripts/ci setup-build
 
-      - name: Run Go tests
+      - name: Run unit tests
         run: |
           go test ./utils -v
         env:
