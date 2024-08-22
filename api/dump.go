@@ -6,12 +6,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/comm"
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/api/services/task"
@@ -145,7 +147,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 	var compressedCheckpointPath string
 	if stream {
-		compressedCheckpointPath = dumpdir
+		compressedCheckpointPath = filepath.Join(dumpdir, "img.lz4")
 	} else {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".tar"}, "")
 	}
@@ -267,6 +269,37 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return nil
 }
 
+func (s *service) setupStreamerCapture(dumpdir string) {
+	cmd := exec.Command("server")
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("[::1]:6000", opts...)
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to connect to [::1]:6000: %v", err)
+	}
+
+	client := comm.NewDoCommClient(conn)
+	req := &comm.StreamRequest{ImagesDir: dumpdir}
+
+	go func() {
+		defer conn.Close()
+		resp, err := client.DoCapture(context.Background(), req)
+		if err != nil {
+			s.logger.Fatal().Msgf("streaming capture failed: %v", err)
+		}
+		if !resp.GetLz4Status() {
+			s.logger.Fatal().Msgf("streaming capture failed: lz4 compression failed")
+		}
+		s.logger.Info().Interface("response", resp).Msg("streaming capture succeeded")
+	}()
+}
+
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
 	dumpdir, err := s.prepareDump(ctx, state, args, opts)
@@ -295,6 +328,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	nfy := Notify{
 		Logger: s.logger,
+	}
+
+	if args.Stream {
+		s.setupStreamerCapture(dumpdir)
 	}
 
 	s.logger.Info().Int32("PID", state.PID).Msg("beginning dump")

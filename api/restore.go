@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/api/services/comm"
 	"github.com/cedana/cedana/api/services/gpu"
 	"github.com/cedana/cedana/api/services/rpc"
 	"github.com/cedana/cedana/api/services/task"
@@ -45,6 +46,32 @@ const (
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
+
+func (s *service) setupStreamerServe(dumpdir string) {
+	cmd := exec.Command("server")
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("[::1]:6000", opts...)
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to connect to [::1]:6000: %v", err)
+	}
+	defer conn.Close()
+
+	client := comm.NewDoCommClient(conn)
+	req := &comm.StreamRequest{ImagesDir: dumpdir}
+
+	resp, err := client.DoServe(context.Background(), req)
+	if err != nil {
+		s.logger.Fatal().Msgf("streaming serve failed: %v", err)
+	}
+	s.logger.Info().Interface("response", resp).Msgf("streaming serve succeeded")
+}
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
@@ -82,7 +109,12 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	}
 
 	if args.Stream {
-		tempDir = args.CheckpointPath
+		absPath, err := filepath.Abs(args.CheckpointPath)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		tempDir = filepath.Dir(absPath)
+		s.setupStreamerServe(tempDir)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
