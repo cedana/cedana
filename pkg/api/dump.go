@@ -296,6 +296,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	nfy := Notify{}
 
+	if args.Stream {
+		s.setupStreamerCapture(dumpdir)
+	}
+
 	log.Info().Int32("PID", state.PID).Msg("beginning dump")
 
 	start := time.Now()

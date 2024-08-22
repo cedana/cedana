@@ -99,15 +99,13 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	var cmd *exec.Cmd
 	if args.Stream {
 		absPath, err := filepath.Abs(args.CheckpointPath)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 		tempDir = filepath.Dir(absPath)
-		cmd = s.setupStreamerServe(tempDir)
-		log.Info().Msgf("cmd = %v", cmd)
+		s.setupStreamerServe(tempDir)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
