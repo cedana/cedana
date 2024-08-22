@@ -20,7 +20,7 @@ Since CRIU has optimizations for kernel versions post 6.x.x, we will build 6.1.6
 
 ```bash
 cd ~/kata-containers/tools/packaging/kernel
-sudo ./build-kernel.sh -v 6.1.62 -c configs/amd64-6.1.62-criu-compatible.conf setup
+sudo ./build-kernel.sh -v 6.1.62 -c ~/kata-containers/tools/packaging/kernel/configs/amd64-6.1.62-criu-compatible.conf setup
 ```
 
 The command above will ask certain config details, you can answer them as follows :
