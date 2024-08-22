@@ -16,3 +16,4 @@ requests
 psutil
 pandas-gbq
 crit
+protobuf==3.20.*
