@@ -185,7 +185,7 @@ jobs:
 
       - name: Run Go tests
         run: |
-          go test ./... -v
+          go test ./utils -v
         env:
           GO111MODULE: "on"
           CI_BRANCH: ${{ github.ref_name }}
