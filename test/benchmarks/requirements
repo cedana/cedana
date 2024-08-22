@@ -10,9 +10,10 @@ six==1.16.0
 torch==2.0.1
 torchvision==0.15.2
 typing_extensions
-protobuf
 google-cloud-bigquery
 google-cloud-storage
-requests 
+requests
 psutil
 pandas-gbq
+crit
+protobuf==3.20.*
