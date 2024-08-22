@@ -176,7 +176,7 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 
 		runcContainers, err := runc.RuncGetAll(args.Root, args.Namespace)
 		if err != nil {
-			return nil, status.Error(codes.NotFound, fmt.Sprint("Container \"%s\" not found"))
+			return nil, status.Error(codes.NotFound, fmt.Sprint("Container not found"))
 		}
 
 		for _, c := range runcContainers {
