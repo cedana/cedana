@@ -3,7 +3,8 @@ package cmd
 // This file contains all the restore-related commands when starting `cedana restore ...`
 
 import (
-	"encoding/json"
+	"bufio"
+	"fmt"
 	"os"
 
 	"github.com/cedana/cedana/api/services"
@@ -11,6 +12,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
+
+	"github.com/mdlayher/vsock"
+	"github.com/cedana/cedana/utils"
+	"io"
+	"time"
+	"github.com/cedana/cedana/api"
 )
 
 var restoreCmd = &cobra.Command{
@@ -52,6 +59,7 @@ var restoreProcessCmd = &cobra.Command{
 
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
 			UID:            uid,
 			GID:            gid,
@@ -59,6 +67,7 @@ var restoreProcessCmd = &cobra.Command{
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -71,8 +80,89 @@ var restoreProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+
+		return nil
+	},
+}
+
+var restoreKataCmd = &cobra.Command{
+	Use:   "kata",
+	Short: "Manually restore a workload in the kata-vm [vm-name] from a directory [-d]",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		logger := ctx.Value("logger").(*zerolog.Logger)
+
+		vm := args[0]
+
+		cts, err := services.NewVSockClient(vm)
+		if err != nil {
+			logger.Error().Msgf("Error creating client: %v", err)
+			return err
+		}
+		defer cts.Close()
+
+		path, _ := cmd.Flags().GetString(dirFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		restoreArgs := task.RestoreArgs{
+			CheckpointID:   vm,
+			CheckpointPath: "/tmp/dmp.tar",
+			TcpEstablished: tcpEstablished,
+		}
+
+		go func() {
+			time.Sleep(1 * time.Second)
+
+			// extract cid from the process tree on host
+			cid, err := utils.ExtractCID(vm)
+			if err != nil {
+				return
+			}
+
+			conn, err := vsock.Dial(cid, api.KATA_TAR_FILE_RECEIVER_PORT, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			// Open the file
+			file, err := os.Open(path)
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			buffer := make([]byte, 1024)
+
+			// Read from file and send over VSOCK connection
+			for {
+				bytesRead, err := file.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					return
+				}
+
+				_, err = conn.Write(buffer[:bytesRead])
+				if err != nil {
+					return
+				}
+			}
+		}()
+
+		resp, err := cts.KataRestore(ctx, &restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			} else {
+				logger.Error().Msgf("Restore task failed: %v", err)
+			}
+			return err
+		}
+		logger.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -112,12 +202,63 @@ var restoreJobCmd = &cobra.Command{
 		}
 
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
 			JID:            jid,
 			UID:            uid,
 			GID:            gid,
 			Groups:         groups,
 			TcpEstablished: tcpEstablished,
+			Stream:         stream,
+		}
+
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+		if attach {
+			stream, err := cts.RestoreAttach(ctx, &task.RestoreAttachArgs{Args: &restoreArgs})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					logger.Error().Err(st.Err()).Msg("restore failed")
+				} else {
+					logger.Error().Err(err).Msg("restore failed")
+				}
+			}
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						logger.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						logger.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -130,8 +271,7 @@ var restoreJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		stats, _ := json.Marshal(resp.RestoreStats)
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).RawJSON("stats", stats).Msgf("Success")
+		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -241,8 +381,16 @@ func init() {
 	restoreCmd.AddCommand(restoreJobCmd)
 
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
+	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
+
+	// Kata
+	restoreCmd.AddCommand(restoreKataCmd)
+	restoreKataCmd.Flags().StringP(dirFlag, "d", "", "path of tar file (inside VM) to restore from")
+	restoreKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)

@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
@@ -14,16 +17,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdlayher/vsock"
+
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/gpu"
 	task "github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/db"
 	"github.com/cedana/cedana/utils"
+	"github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,16 +44,19 @@ const (
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
+	VSOCK_PORT = 9999
 )
 
 type service struct {
-	CRIU      *Criu
-	fs        *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db        db.DB
-	logger    *zerolog.Logger
-	store     *utils.CedanaStore
-	serverCtx context.Context // context alive for the duration of the server
-	wg        sync.WaitGroup  // for waiting for all background tasks to finish
+	CRIU        *Criu
+	fs          *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db          db.DB
+	logger      *zerolog.Logger
+	store       *utils.CedanaStore
+	serverCtx   context.Context // context alive for the duration of the server
+	wg          sync.WaitGroup  // for waiting for all background tasks to finish
+	gpuEnabled  bool
+	cudaVersion string
 
 	task.UnimplementedTaskServiceServer
 }
@@ -59,8 +67,19 @@ type Server struct {
 	listener   net.Listener
 }
 
-func NewServer(ctx context.Context) (*Server, error) {
+type ServeOpts struct {
+	GPUEnabled  bool
+	CUDAVersion string
+	VSOCKEnabled bool
+}
+
+type pullGPUBinaryRequest struct {
+	CudaVersion string `json:"cuda_version"`
+}
+
+func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
+	var err error
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
@@ -76,18 +95,27 @@ func NewServer(ctx context.Context) (*Server, error) {
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
-		CRIU:      &Criu{},
-		fs:        &afero.Afero{Fs: afero.NewOsFs()},
-		db:        db.NewLocalDB(ctx),
-		logger:    logger,
-		store:     utils.NewCedanaStore(logger),
-		serverCtx: ctx,
+		CRIU:        &Criu{},
+		fs:          &afero.Afero{Fs: afero.NewOsFs()},
+		db:          db.NewLocalDB(ctx),
+		logger:      logger,
+		store:       utils.NewCedanaStore(logger),
+		serverCtx:   ctx,
+		gpuEnabled:  opts.GPUEnabled,
+		cudaVersion: opts.CUDAVersion,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
-	listener, err := net.Listen(PROTOCOL, ADDRESS)
+	var listener net.Listener
+
+	if opts.VSOCKEnabled {
+		listener, err = vsock.Listen(VSOCK_PORT, nil)
+	} else {
+		listener, err = net.Listen(PROTOCOL, ADDRESS)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +136,14 @@ func (s *Server) stop() error {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func StartServer(cmdCtx context.Context) error {
+func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	logger := cmdCtx.Value("logger").(*zerolog.Logger)
 
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(srvCtx)
+	server, err := NewServer(srvCtx, opts)
 	if err != nil {
 		return err
 	}
@@ -150,7 +178,32 @@ func StartServer(cmdCtx context.Context) error {
 			}
 		}
 
-		logger.Debug().Str("Address", ADDRESS).Msgf("server listening")
+		if opts.GPUEnabled {
+			if viper.GetString("gpu_controller_path") == "" {
+				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, opts.CUDAVersion)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull gpu controller")
+					cancel(err)
+					return
+				}
+			} else {
+				logger.Debug().Str("path", viper.GetString("gpu_controller_path")).Msg("using gpu controller")
+			}
+
+			if viper.GetString("gpu_shared_lib_path") == "" {
+				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, utils.GpuSharedLibPath, opts.CUDAVersion)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not pull gpu shared lib")
+					cancel(err)
+					return
+				}
+			} else {
+				logger.Debug().Str("path", viper.GetString("gpu_shared_lib_path")).Msg("using gpu shared lib")
+			}
+		}
+
+		logger.Info().Str("address", ADDRESS).Msgf("server listening")
+
 		err := server.start()
 		if err != nil {
 			cancel(err)
@@ -335,13 +388,20 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
 	}
 
+	check, err := s.CRIU.Check()
+	s.logger.Debug().Str("resp", check).Msg("CRIU check")
+	if err != nil {
+		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
+	}
+
 	resp.HealthCheckStats = &task.HealthCheckStats{}
 	resp.HealthCheckStats.CriuVersion = strconv.Itoa(criuVersion)
 
-	// TODO NR - Add CRIU check to output
-	err = s.GPUHealthCheck(ctx, req, resp)
-	if err != nil {
-		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("Error checking gpu health: %v", err))
+	if s.gpuEnabled {
+		err = s.GPUHealthCheck(ctx, req, resp)
+		if err != nil {
+			resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("Error checking gpu health: %v", err))
+		}
 	}
 
 	return resp, nil
@@ -380,7 +440,13 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	defer cmd.Process.Kill()
+	defer func() {
+		err = cmd.Process.Kill()
+		if err != nil {
+			s.logger.Fatal().Err(err)
+		}
+		s.logger.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
+	}()
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -422,4 +488,59 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 	}
 	resp.JSON = string(bytes)
 	return resp, nil
+}
+
+func pullGPUBinary(ctx context.Context, binary string, filePath string, version string) error {
+	logger := ctx.Value("logger").(*zerolog.Logger)
+	_, err := os.Stat(filePath)
+	if err == nil {
+		logger.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download another supported cuda version.")
+		// TODO NR - check version and checksum of binary?
+		return nil
+	}
+	logger.Debug().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
+
+	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
+	logger.Debug().Msgf("pulling %s from %s", binary, url)
+
+	httpClient := &http.Client{}
+
+	body := pullGPUBinaryRequest{
+		CudaVersion: version,
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		logger.Err(err).Msg("could not marshal request body")
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		logger.Err(err).Msg("gpu binary get request failed")
+		return err
+	}
+	defer resp.Body.Close()
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err == nil {
+		err = os.Chmod(filePath, 0755)
+	}
+	if err != nil {
+		logger.Err(err).Msg("could not create file")
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		logger.Err(err).Msg("could not read file from response")
+		return err
+	}
+	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
+	return err
 }

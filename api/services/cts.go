@@ -6,7 +6,12 @@ import (
 	"context"
 	"time"
 
+	"fmt"
+	"net"
+	"github.com/mdlayher/vsock"
+
 	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/utils"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -29,6 +34,32 @@ func NewClient() (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	taskConn, err := grpc.Dial(api.ADDRESS, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	taskClient := task.NewTaskServiceClient(taskConn)
+
+	client := &ServiceClient{
+		taskService: taskClient,
+		taskConn:    taskConn,
+	}
+	return client, err
+}
+
+func NewVSockClient(vm string) (*ServiceClient, error) {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	// extract cid from the process tree on host
+	cid, err := utils.ExtractCID(vm)
+	if err != nil {
+		return nil, err
+	}
+
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, api.VSOCK_PORT), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, api.VSOCK_PORT, nil)
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +130,19 @@ func (c *ServiceClient) Start(ctx context.Context, args *task.StartArgs) (*task.
 	return resp, nil
 }
 
+func (c *ServiceClient) StartAttach(ctx context.Context, args *task.StartAttachArgs) (task.TaskService_StartAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.StartAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first start request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	// TODO NR - timeouts here need to be fixed
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
@@ -120,6 +164,19 @@ func (c *ServiceClient) Restore(ctx context.Context, args *task.RestoreArgs) (*t
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.RestoreAttachArgs) (task.TaskService_RestoreAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.RestoreAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first restore request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
 }
 
 func (c *ServiceClient) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
@@ -257,6 +314,30 @@ func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs)
 	return resp, nil
 }
 
+///////////////////////////
+// Kata Service Calls //
+///////////////////////////
+
+func (c *ServiceClient) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.KataDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.KataRestore(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 ////////////////////////////
 /// Config Service Calls ///
 ////////////////////////////
@@ -271,12 +352,6 @@ func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigReque
 	}
 	return resp, nil
 }
-
-/////////////////////////////
-// Streaming Service Calls //
-/////////////////////////////
-
-// TODO YA add streaming calls (move it from server.go to here)
 
 ///////////////////
 //    Helpers    //

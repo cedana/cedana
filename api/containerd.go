@@ -5,6 +5,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/cedana/cedana/api/containerd"
@@ -12,11 +15,21 @@ import (
 	"github.com/cedana/cedana/api/runc"
 	"github.com/cedana/cedana/api/services/task"
 	"github.com/cedana/cedana/container"
+	"github.com/cedana/cedana/utils"
 	"github.com/containerd/containerd/namespaces"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func readDumpLog(imagesDir string) (string, error) {
+	logPath := filepath.Join(imagesDir, "dump.log")
+	file, err := os.ReadFile(logPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read dump.log: %w", err)
+	}
+	return string(file), nil
+}
 
 func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpArgs) (*task.ContainerdDumpResp, error) {
 	rootfsOpts := args.ContainerdRootfsDumpArgs
@@ -29,6 +42,28 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
+	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+
+	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", runcContainer.Pid)
+	getReader := func() (io.Reader, error) {
+		file, err := os.Open(tcpPath)
+		if err != nil {
+			return nil, err
+		}
+		return file, nil
+	}
+
+	fdDir := fmt.Sprintf("/proc/%d/fd/", runcContainer.Pid)
+
+	isReady, err := utils.IsReadyLoop(utils.GetTCPStates, getReader, utils.IsUsingIoUring, 30, 100, fdDir)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isReady {
+		return nil, fmt.Errorf("Ready loop returned false, not able to checkpoint.")
+	}
+
 	containerdTask, err := containerdService.CgroupFreeze(ctx, rootfsOpts.ContainerID)
 	if err != nil {
 		return nil, err
@@ -39,6 +74,11 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 				fmt.Println(fmt.Errorf("error resuming task: %w", err))
 			}
 		}()
+	}
+
+	isReady, err = utils.IsReadyLoop(utils.GetTCPStates, getReader, utils.IsUsingIoUring, 1, 0, fdDir)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = containerdService.DumpRootfs(ctx, rootfsOpts.ContainerID, rootfsOpts.ImageRef, rootfsOpts.Namespace)
@@ -78,13 +118,19 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
 		External:        dumpOpts.CriuOpts.External,
+		TCPInFlight:     !isReady,
 	}
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
 	if err != nil {
+		dumpLogContent, logErr := readDumpLog(dumpOpts.CriuOpts.ImagesDirectory)
+		if logErr != nil {
+			dumpLogContent = "Failed to read dump.log: " + logErr.Error()
+		}
+
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
-			Reason: err.Error(),
+			Reason: err.Error() + "\nDump.log content:\n" + dumpLogContent,
 		})
 		return nil, st.Err()
 	}

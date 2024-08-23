@@ -6,22 +6,59 @@ on:
     branches:
       - main
   workflow_dispatch:
-      inputs:
-        debug_build:
-          type: boolean
-          description: 'Run build with debugging enabled'
-          required: false
-          default: false
-        debug_smoke_test:
-          type: boolean
-          description: 'Run smoke test with debugging enabled'
-          required: false
-          default: false
-        debug_regression_test:
-          type: boolean
-          description: 'Run regression test with debugging enabled'
-          required: false
-          default: false
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+      debug_correctness_test:
+        type: boolean
+        description: 'Run correctness test with debugging enabled'
+        required: false
+        default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
+        required: false
+        default: false
+  workflow_call: # to reuse this workflow in other worflows
+    inputs:
+      debug_build:
+        type: boolean
+        description: 'Run build with debugging enabled'
+        required: false
+        default: false
+      debug_smoke_test:
+        type: boolean
+        description: 'Run smoke test with debugging enabled'
+        required: false
+        default: false
+      debug_regression_test:
+        type: boolean
+        description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+      debug_correctness_test:
+        type: boolean
+        description: 'Run correctness test with debugging enabled'
+        required: false
+        default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -37,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
@@ -65,13 +102,13 @@ jobs:
           path: ./cedana
 
   smoke-test:
-    name: Smoke
+    name: Smoke Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
@@ -100,13 +137,13 @@ jobs:
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
-    name: Regression
+    name: Regression Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
           submodules: 'recursive'
 
@@ -133,3 +170,78 @@ jobs:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
+
+  correctness-test:
+    name: Correctness Tests
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_correctness_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run: |
+          chmod +x cedana
+          sudo -E make -C scripts/ci setup-full
+        env:
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+
+      - name: Run correctness tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+        run: sudo -E make -C scripts/ci correctness
+
+  unit-test:
+    name: Unit Tests
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_go_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Install Go 1.23
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+          check-latest: true
+
+      - name: Setup CI
+        run: |
+          chmod +x cedana
+          sudo -E make -C scripts/ci setup-build
+
+      - name: Run unit tests
+        run: |
+          go test ./utils -v
+        env:
+          GO111MODULE: "on"
+          CI_BRANCH: ${{ github.ref_name }}

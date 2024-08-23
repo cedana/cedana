@@ -13,17 +13,20 @@ function stop_cedana() {
 function exec_task() {
     local task="$1"
     local job_id="$2"
-    cedana exec -w "$DIR" "$task" -i "$job_id"
+    shift 2
+    cedana exec -w "$DIR" "$task" -i "$job_id" $@
 }
 
 function checkpoint_task() {
     local job_id="$1"
-    cedana dump job "$job_id" -d /tmp
+    shift 1
+    cedana dump job "$job_id" -d /tmp $@
 }
 
 function restore_task() {
     local job_id="$1"
-    cedana restore job "$job_id"
+    shift 1
+    cedana restore job "$job_id" $@
 }
 
 function start_busybox(){
@@ -36,9 +39,16 @@ function start_busybox(){
 
 function start_jupyter_notebook(){
     local container_name="$1"
+    local seccomp_profile_path="./test/regression/iouring-profile.json"
 
-    sudo ctr image pull docker.io/cedana/jupyter-base:latest
-    sudo ctr run -d docker.io/cedana/jupyter-base:latest "$container_name"
+    echo "Pulling the Docker image..."
+    pull_output=$(sudo ctr image pull docker.io/cedana/jupyter-base:latest)
+    echo "$pull_output"
+
+    echo "Running the container..."
+    pwd
+    run_output=$(sudo ctr run --seccomp --seccomp-profile="$seccomp_profile_path" -d docker.io/cedana/jupyter-base:latest "$container_name")
+    echo "$run_output"
 }
 
 function start_sleeping_jupyter_notebook(){
