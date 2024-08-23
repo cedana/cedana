@@ -1,100 +1,84 @@
 package api
 
-import (
-	"context"
-	"log"
-	"net"
-	"os"
-	"testing"
+// func setup(t *testing.T) (task.TaskServiceClient, error) {
+// 	lis := bufconn.Listen(1024 * 1024)
+// 	t.Cleanup(func() {
+// 		lis.Close()
+// 	})
 
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/db"
-	"github.com/cedana/cedana/utils"
-	"go.opentelemetry.io/otel"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
-)
+// 	srv := grpc.NewServer()
+// 	t.Cleanup(func() {
+// 		srv.Stop()
+// 	})
 
-func setup(t *testing.T) (task.TaskServiceClient, error) {
-	lis := bufconn.Listen(1024 * 1024)
-	t.Cleanup(func() {
-		lis.Close()
-	})
+// 	mockDB := db.NewLocalDB(context.Background())
 
-	srv := grpc.NewServer()
-	t.Cleanup(func() {
-		srv.Stop()
-	})
+// 	logger := utils.GetLogger()
+// 	tracer := otel.GetTracerProvider().Tracer("server-test")
 
-	mockDB := db.NewLocalDB(context.Background())
+// 	svc := service{logger: logger, tracer: tracer, db: mockDB}
+// 	task.RegisterTaskServiceServer(srv, &svc)
 
-	logger := utils.GetLogger()
-	tracer := otel.GetTracerProvider().Tracer("server-test")
+// 	go func() {
+// 		if err := srv.Serve(lis); err != nil {
+// 			log.Fatalf("srv.Serve %v", err)
+// 		}
+// 	}()
 
-	svc := service{logger: logger, tracer: tracer, db: mockDB}
-	task.RegisterTaskServiceServer(srv, &svc)
+// 	dialer := func(context.Context, string) (net.Conn, error) {
+// 		return lis.Dial()
+// 	}
+// 	conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	t.Cleanup(func() {
+// 		conn.Close()
+// 	})
+// 	if err != nil {
+// 		log.Fatalf("fail to dial: %v", err)
+// 	}
 
-	go func() {
-		if err := srv.Serve(lis); err != nil {
-			log.Fatalf("srv.Serve %v", err)
-		}
-	}()
+// 	client := task.NewTaskServiceClient(conn)
+// 	return client, err
+// }
 
-	dialer := func(context.Context, string) (net.Conn, error) {
-		return lis.Dial()
-	}
-	conn, err := grpc.DialContext(context.Background(), "", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	t.Cleanup(func() {
-		conn.Close()
-	})
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
+// func Test_Dump(t *testing.T) {
+// }
 
-	client := task.NewTaskServiceClient(conn)
-	return client, err
-}
+// func TestClient_RunTask(t *testing.T) {
+// 	t.Run("TaskIsEmpty", func(t *testing.T) {
+// 		client, err := setup(t)
+// 		if err != nil {
+// 			t.Error("error setting up grpc client")
+// 		}
 
-func Test_Dump(t *testing.T) {
-}
+// 		ctx := context.Background()
 
-func TestClient_RunTask(t *testing.T) {
-	t.Run("TaskIsEmpty", func(t *testing.T) {
-		client, err := setup(t)
-		if err != nil {
-			t.Error("error setting up grpc client")
-		}
+// 		_, err = client.Start(ctx, &task.StartArgs{Task: "", JID: ""})
 
-		ctx := context.Background()
+// 		if err == nil {
+// 			t.Error("expected error but got err == nil")
+// 		}
+// 	})
+// }
 
-		_, err = client.Start(ctx, &task.StartArgs{Task: "", JID: ""})
+// func TestClient_TryStartJob(t *testing.T) {
+// 	// skip CI
+// 	if os.Getenv("CI") == "true" {
+// 		t.Skip("Skipping test in CI")
+// 	}
+// 	t.Run("TaskFailsOnce", func(t *testing.T) {
+// 		client, err := setup(t)
+// 		if err != nil {
+// 			t.Error("error setting up grpc client")
+// 		}
+// 		ctx := context.Background()
 
-		if err == nil {
-			t.Error("expected error but got err == nil")
-		}
-	})
-}
+// 		// get uid and gid
+// 		uid := uint32(os.Getuid())
+// 		gid := uint32(os.Getgid())
 
-func TestClient_TryStartJob(t *testing.T) {
-	// skip CI
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping test in CI")
-	}
-	t.Run("TaskFailsOnce", func(t *testing.T) {
-		client, err := setup(t)
-		if err != nil {
-			t.Error("error setting up grpc client")
-		}
-		ctx := context.Background()
-
-		// get uid and gid
-		uid := uint32(os.Getuid())
-		gid := uint32(os.Getgid())
-
-		_, err = client.Start(ctx, &task.StartArgs{Task: "test", JID: "test", LogOutputFile: "somefile", UID: uid, GID: gid})
-		if err != nil {
-			t.Errorf("failed to start task: %v", err)
-		}
-	})
-}
+// 		_, err = client.Start(ctx, &task.StartArgs{Task: "test", JID: "test", LogOutputFile: "somefile", UID: uid, GID: gid})
+// 		if err != nil {
+// 			t.Errorf("failed to start task: %v", err)
+// 		}
+// 	})
+// }

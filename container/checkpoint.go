@@ -503,6 +503,7 @@ type CriuOpts struct {
 	External                []string           // ignore external namespaces
 	MntnsCompatMode         bool
 	TcpClose                bool
+	TCPInFlight             bool
 }
 
 type loadedState struct {
@@ -1680,6 +1681,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		AutoDedup:       proto.Bool(criuOpts.AutoDedup),
 		LazyPages:       proto.Bool(criuOpts.LazyPages),
 		External:        criuOpts.External,
+		TcpSkipInFlight: proto.Bool(criuOpts.TCPInFlight),
 	}
 	// If the container is running in a network namespace and has
 	// a path to the network namespace configured, we will dump
@@ -1842,6 +1844,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 
 	err = c.criuSwrk(nil, req, criuOpts, nil)
 	if err != nil {
+		logCriuErrors(criuOpts.ImagesDirectory, "dump.log")
 		return err
 	}
 	return nil

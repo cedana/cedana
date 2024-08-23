@@ -185,37 +185,39 @@ teardown() {
     [[ "$output" == *"$image_ref"* ]]
 }
 
-# BS This is dropped for now as the jupyter job is causing issues...
-# @test "Full containerd checkpoint (jupyter notebook)" {
-#     local container_id="jupyter-notebook"
-#     local image_ref="checkpoint/test:latest"
-#     local containerd_sock="/run/containerd/containerd.sock"
-#     local namespace="default"
-#     local dir="/tmp/jupyter-checkpoint"
+@test "Full containerd checkpoint (jupyter notebook)" {
+    local container_id="jupyter-notebook"
+    local image_ref="checkpoint/test:latest"
+    local containerd_sock="/run/containerd/containerd.sock"
+    local namespace="default"
+    local dir="/tmp/jupyter-checkpoint"
 
-#     run start_jupyter_notebook $container_id
-#     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
-#     echo "$output"
+    run start_jupyter_notebook $container_id
+    echo "$output"
 
-#     [[ "$output" == *"success"* ]]
-# }
+    [[ $? -eq 0 ]] || { echo "Failed to start Jupyter Notebook"; return 1; }
 
-# @test "Full containerd restore (jupyter notebook)" {
-#     local container_id="jupyter-notebook-restore"
-#     local dumpdir="/tmp/jupyter-checkpoint"
+    run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
+    echo "$output"
 
-#     run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
+    [[ "$output" == *"success"* ]]
+}
 
-#     bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
-#     pid=$(cat "$bundle"/init.pid)
+@test "Full containerd restore (jupyter notebook)" {
+    local container_id="jupyter-notebook-restore"
+    local dumpdir="/tmp/jupyter-checkpoint"
 
-#     # restore the container
-#     run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
-#     echo "$output"
+    run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
 
-#     [[ "$output" == *"success"* ]]
-# }
+    bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
+    pid=$(cat "$bundle"/init.pid)
 
+    # restore the container
+    run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
+    echo "$output"
+
+    [[ "$output" == *"success"* ]]
+}
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
