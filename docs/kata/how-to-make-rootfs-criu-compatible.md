@@ -9,10 +9,22 @@ This creates a folder, “rootfs-ubuntu” which will be attached to the guest V
 
 ```bash
 cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
-git clone https://github.com/checkpoint-restore/criu.git
+sudo git clone https://github.com/checkpoint-restore/criu.git
 ```
 
 Additionally, we also need to move the [CRIU builder + daemon launcher script](../../scripts/kata-utils/build_start_daemon.sh) for the guest into the rootfs. The location in the rootfs is `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/bin`
+
+```bash
+cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
+sudo cp ~/cedana/scripts/kata-utils/build_start_daemon.sh bin/
+```
+
+We also need to move the `cedana` binary in the rootfs, so that the guest can access it. 
+
+```bash
+cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
+sudo cp ~/cedana/cedana .
+```
 
 Now that we have a rootfs, we need to create an image out of it. This step is simple. 
 
