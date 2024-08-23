@@ -3,13 +3,14 @@ package api
 import (
 	"encoding/binary"
 	"fmt"
-	img_streamer "github.com/cedana/cedana/api/services/img_streamer"
-	"google.golang.org/protobuf/proto"
 	"net"
 	"os/signal"
 	"path/filepath"
 	"sync"
 	"syscall"
+
+	img_streamer "github.com/cedana/cedana/api/services/img_streamer"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -92,7 +93,7 @@ func _imgStreamerOpen(filename string, conn *net.UnixConn) (int, int, int, error
 	} else if imgStreamerMode == O_RSTR {
 		open_fd = w_fd
 	} else {
-		return -1, -1, -1, fmt.Errorf("Unknown imgStreamerMode %s", imgStreamerMode)
+		return -1, -1, -1, fmt.Errorf("Unknown imgStreamerMode %v", imgStreamerMode)
 	}
 
 	socket_fd, err := sendFileRequest(filename, conn, open_fd)

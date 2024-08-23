@@ -15,6 +15,9 @@ smoke:
 regression:
 	./regression-test.sh || (echo "Regression test failed" && exit 1)
 
+correctness:
+	./correctness-test.sh || (echo "Correctness test failed" && exit 1)
+
 setup-full:
 	./setup-full.sh || (echo "Setup full failed" && exit 1)
 
