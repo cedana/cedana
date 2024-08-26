@@ -44,7 +44,7 @@ const (
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT = 9999
+	VSOCK_PORT              = 9999
 )
 
 type service struct {
@@ -68,8 +68,8 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	GPUEnabled  bool
-	CUDAVersion string
+	GPUEnabled   bool
+	CUDAVersion  string
 	VSOCKEnabled bool
 }
 
@@ -361,11 +361,11 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		redactedKeys := []string{"RegistryAuthToken"}
-		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+		// redactedKeys := []string{"RegistryAuthToken"}
+		// sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
 
-		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
-		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
+		// redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
