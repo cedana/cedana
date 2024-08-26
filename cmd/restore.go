@@ -7,17 +7,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
 	"github.com/mdlayher/vsock"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/utils"
 	"io"
 	"time"
-	"github.com/cedana/cedana/api"
+	"github.com/cedana/cedana/pkg/api"
 )
 
 var restoreCmd = &cobra.Command{

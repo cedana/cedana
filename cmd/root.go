@@ -5,8 +5,8 @@ package cmd
 import (
 	"context"
 
-	"github.com/cedana/cedana/types"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
