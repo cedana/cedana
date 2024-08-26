@@ -241,7 +241,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          go test ./utils -v
+          go test ./pkg/utils -v
         env:
           GO111MODULE: "on"
           CI_BRANCH: ${{ github.ref_name }}
