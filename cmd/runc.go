@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
