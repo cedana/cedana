@@ -15,9 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	ecr "github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
@@ -332,8 +329,6 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
 			return err
 		}
-	} else {
-		authLoginIfECR(ctx, originalImageRef, systemContext)
 	}
 
 	cmd := exec.Command("buildah", "from", originalImageRef)
@@ -483,58 +478,6 @@ type loginReply struct {
 	tlsVerify bool
 }
 
-func authLoginIfECR(ctx context.Context, imageRef string, systemContext *types.SystemContext) error {
-	logger, _ := utils.GetLoggerFromContext(ctx)
-
-	if isECRRepo(imageRef) {
-
-		region, err := getRegionFromImageName(imageRef)
-		if err != nil {
-			return err
-		}
-
-		session, err := session.NewSession(&aws.Config{
-			Region: aws.String(region),
-		})
-		if err != nil {
-			return err
-		}
-
-		input := &ecr.GetAuthorizationTokenInput{}
-
-		ecrRegistry := ecr.New(session)
-		authTokenData, err := ecrRegistry.GetAuthorizationToken(input)
-		if err != nil {
-			return err
-		}
-
-		proxyEndpoint, err := getProxyEndpointFromImageName(imageRef)
-		if err != nil {
-			return err
-		}
-
-		authData := &ecr.AuthorizationData{}
-
-		for _, auth := range authTokenData.AuthorizationData {
-			if *auth.ProxyEndpoint == proxyEndpoint {
-				authData = auth
-			}
-		}
-
-		if authData == nil {
-			return fmt.Errorf("not able to find ecr proxy endpoint %s authentication data", proxyEndpoint)
-		}
-
-		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, *authData.AuthorizationToken); err != nil {
-			return err
-		}
-
-	} else {
-		logger.Debug().Msg("did not detect ecr registry")
-	}
-	return nil
-}
-
 func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
 	systemContext := &types.SystemContext{}
 
@@ -546,8 +489,6 @@ func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error
 		if err := registryAuthLogin(ctx, systemContext, proxyEndpoint, registryAuthToken); err != nil {
 			return err
 		}
-	} else {
-		authLoginIfECR(ctx, newImageRef, systemContext)
 	}
 
 	//buildah push
