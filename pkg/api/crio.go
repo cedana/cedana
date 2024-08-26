@@ -46,12 +46,12 @@ func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArg
 	resp = &task.CRIOImagePushResp{}
 
 	s.logger.Debug().Msgf("CRIO image merge started with original image: %s and new image: %s", args.OriginalImageRef, args.NewImageRef)
-	if err := crio.RootfsMerge(ctx, args.OriginalImageRef, args.NewImageRef, args.RootfsDiffPath, args.ContainerStorage, args.RegistryAuthToken); err != nil {
+	if err := crio.RootfsMerge(ctx, args.OriginalImageRef, args.NewImageRef, args.RootfsDiffPath, args.ContainerStorage, args.RegistryAuthTokenPull); err != nil {
 		return resp, err
 	}
 
 	s.logger.Debug().Msgf("CRIO image push started with new image: %s", args.NewImageRef)
-	if err := crio.ImagePush(ctx, args.NewImageRef, args.RegistryAuthToken); err != nil {
+	if err := crio.ImagePush(ctx, args.NewImageRef, args.RegistryAuthTokenPush); err != nil {
 		return resp, err
 	}
 
