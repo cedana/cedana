@@ -7,8 +7,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/olekukonko/tablewriter"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"

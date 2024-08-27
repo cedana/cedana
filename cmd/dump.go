@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
-	
+
 	"github.com/mdlayher/vsock"
 	"os"
 	"io"
