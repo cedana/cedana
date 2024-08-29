@@ -94,7 +94,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, opts, machineID)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
 		),
 	}
 
@@ -369,7 +369,7 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts *ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 
 		tp := otel.GetTracerProvider()
@@ -383,6 +383,8 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts *ServeOpts, machi
 			attribute.String("grpc.request", fmt.Sprintf("%+v", req)),
 			attribute.String("server.id", machineID),
 			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
+			attribute.String("server.opts.cudaversion", serveOpts.CUDAVersion),
+			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
 		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
