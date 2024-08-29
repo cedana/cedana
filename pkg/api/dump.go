@@ -3,6 +3,7 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -13,13 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/api/services/comm"
-	"github.com/cedana/cedana/api/services/gpu"
-	"github.com/cedana/cedana/api/services/rpc"
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/container"
-	"github.com/cedana/cedana/types"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/api/services/gpu"
+	"github.com/cedana/cedana/pkg/api/services/rpc"
+	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/container"
+	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
@@ -131,14 +131,13 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	if err != nil {
 		return "", err
 	}
-
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, stream bool) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, stream bool, cmd *exec.Cmd) {
 	start := time.Now()
 	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
 	if !ok {
@@ -163,7 +162,9 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
-	if !stream {
+	if stream {
+		cmd.Wait()
+	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
 			s.logger.Fatal().Err(err)
@@ -256,7 +257,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state, false)
+	s.postDump(ctx, opts.ImagesDirectory, state, false, nil)
 
 	return nil
 }
@@ -264,40 +265,27 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state, false)
+	s.postDump(ctx, imagePath, state, false, nil)
 
 	return nil
 }
 
-func (s *service) setupStreamerCapture(dumpdir string) {
-	cmd := exec.Command("server")
+func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
+	buf := new(bytes.Buffer)
+	cmd := exec.Command("sudo", "server", "--dir", dumpdir, "capture")
+	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
 		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
+	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial("[::1]:6000", opts...)
-	if err != nil {
-		s.logger.Fatal().Msgf("unable to connect to [::1]:6000: %v", err)
+	for buf.Len() == 0 {
+		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		time.Sleep(2 * time.Millisecond)
 	}
 
-	client := comm.NewDoCommClient(conn)
-	req := &comm.StreamRequest{ImagesDir: dumpdir}
-
-	go func() {
-		defer conn.Close()
-		resp, err := client.DoCapture(context.Background(), req)
-		if err != nil {
-			s.logger.Fatal().Msgf("streaming capture failed: %v", err)
-		}
-		if !resp.GetLz4Status() {
-			s.logger.Fatal().Msgf("streaming capture failed: lz4 compression failed")
-		}
-		s.logger.Info().Interface("response", resp).Msg("streaming capture succeeded")
-	}()
+	return cmd
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -305,6 +293,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	dumpdir, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
+	}
+	var cmd *exec.Cmd
+	if args.Stream {
+		cmd = s.setupStreamerCapture(dumpdir)
 	}
 
 	var GPUCheckpointed bool
@@ -328,10 +320,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	nfy := Notify{
 		Logger: s.logger,
-	}
-
-	if args.Stream {
-		s.setupStreamerCapture(dumpdir)
 	}
 
 	s.logger.Info().Int32("PID", state.PID).Msg("beginning dump")
@@ -362,7 +350,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state, args.Stream)
+	s.postDump(ctx, dumpdir, state, args.Stream, cmd)
 
 	return nil
 }
@@ -404,7 +392,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		return err
 	}
 
-	s.postDump(ctx, dumpdir, state, false)
+	s.postDump(ctx, dumpdir, state, false, nil)
 
 	conn, err := vsock.Dial(vsock.Host, 9999, nil)
 	if err != nil {
