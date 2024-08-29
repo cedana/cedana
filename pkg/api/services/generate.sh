@@ -6,14 +6,6 @@
 PROTO_DIR="cedana-api"
 
 # Generate Go code for gpu.proto
-protoc --go_out=comm --go_opt=paths=source_relative \
-    --go-grpc_out=comm --go-grpc_opt=paths=source_relative \
-    --go_opt=Mcomm.proto=github.com/cedana/cedana/api/services/comm \
-    --go-grpc_opt=Mcomm.proto=github.com/cedana/cedana/api/services/comm \
-    -I$PROTO_DIR \
-    $PROTO_DIR/comm.proto
-
-# Generate Go code for gpu.proto
 protoc --go_out=gpu --go_opt=paths=source_relative \
     --go-grpc_out=gpu --go-grpc_opt=paths=source_relative \
     --go_opt=Mgpu.proto=github.com/cedana/cedana/pkg/api/services/gpu \
