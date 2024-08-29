@@ -61,9 +61,20 @@ var startDaemonCmd = &cobra.Command{
 			return err
 		}
 
+		cedanaURL := viper.GetString("connection.cedana_url")
+		if cedanaURL == "" {
+			cedanaURL = "unset"
+		}
+
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], VSOCKEnabled: vsockEnabledFlag})
+		err = api.StartServer(ctx, &api.ServeOpts{
+			GPUEnabled:   gpuEnabled,
+			CUDAVersion:  cudaVersions[cudaVersion],
+			VSOCKEnabled: vsockEnabledFlag,
+			CedanaURL:    cedanaURL,
+		})
+
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err

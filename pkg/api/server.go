@@ -19,6 +19,7 @@ import (
 
 	"github.com/mdlayher/vsock"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
@@ -26,7 +27,6 @@ import (
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -75,6 +75,7 @@ type ServeOpts struct {
 	GPUEnabled   bool
 	CUDAVersion  string
 	VSOCKEnabled bool
+	CedanaURL    string
 }
 
 type pullGPUBinaryRequest struct {
@@ -85,20 +86,20 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	var err error
 
+	machineID, err := utils.GetMachineID()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, opts, machineID)),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
-
-	machineID, err := utils.GetMachineID()
-	if err != nil {
-		return nil, err
-	}
 
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
@@ -368,24 +369,33 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts *ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
 
 		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
 		defer span.End()
 
-		redactedKeys := []string{"RegistryAuthToken"}
-		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+		span.SetAttributes(
+			attribute.String("grpc.method", info.FullMethod),
+			attribute.String("grpc.request", fmt.Sprintf("%+v", req)),
+			attribute.String("server.id", machineID),
+			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
+		)
 
-		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
-		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
+		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
+		span.SetAttributes(
+			attribute.String("grpc.response", fmt.Sprintf("%+v", resp)),
+		)
+
 		if err != nil {
 			logger.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			span.RecordError(err)
 		} else {
 			logger.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
 		}
