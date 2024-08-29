@@ -125,7 +125,7 @@ setup_ci() {
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     mkdir -p $HOME/.cedana
-    echo '{"client":{"leave_running":false, "task":""}}' > $HOME/.cedana/client_config.json
+    echo '{"client":{"leave_running":false, "task":""}, "connection":{"cedana_url": "https://ci.cedana.ai"}}' > $HOME/.cedana/client_config.json
 
     # Install recvtty
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
