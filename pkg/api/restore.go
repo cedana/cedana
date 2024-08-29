@@ -105,7 +105,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			return nil, nil, nil, nil, err
 		}
 		tempDir = filepath.Dir(absPath)
-    s.setupStreamerServe(tempDir)
+		s.setupStreamerServe(tempDir)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
