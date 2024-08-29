@@ -18,13 +18,15 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -35,16 +37,19 @@ import (
 	"google.golang.org/grpc/health"
 	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	ADDRESS                 = "0.0.0.0:8080"
-	PROTOCOL                = "tcp"
-	CEDANA_CONTAINER_NAME   = "binary-container"
-	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
-	SERVER_LOG_PERMS        = 0o644
-	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT = 9999
+	ADDRESS                     = "0.0.0.0:8080"
+	PROTOCOL                    = "tcp"
+	CEDANA_CONTAINER_NAME       = "binary-container"
+	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	SERVER_LOG_PERMS            = 0o644
+	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
+	VSOCK_PORT                  = 9999
+	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
 )
 
 type service struct {
@@ -57,6 +62,7 @@ type service struct {
 	wg          sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled  bool
 	cudaVersion string
+	machineID   string
 
 	task.UnimplementedTaskServiceServer
 }
@@ -68,9 +74,10 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	GPUEnabled  bool
-	CUDAVersion string
+	GPUEnabled   bool
+	CUDAVersion  string
 	VSOCKEnabled bool
+	CedanaURL    string
 }
 
 type pullGPUBinaryRequest struct {
@@ -81,11 +88,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	var err error
 
+	machineID, err := utils.GetMachineID()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
 		),
 	}
 
@@ -103,6 +114,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		serverCtx:   ctx,
 		gpuEnabled:  opts.GPUEnabled,
 		cudaVersion: opts.CUDAVersion,
+		machineID:   machineID,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -222,15 +234,15 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+	s.logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
@@ -243,8 +255,6 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 			controllerPath,
 		},
 			" ")
-		// wrap controller path in a string
-		logger.Info().Str("Args", controllerPath).Msgf("GPU controller started")
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
@@ -261,19 +271,16 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		},
 	}
 
-	gpuCmd.Stderr = nil
-	gpuCmd.Stdout = nil
+	if out != nil {
+		gpuCmd.Stderr = out
+		gpuCmd.Stdout = out
+	}
 
 	err := gpuCmd.Start()
-	go func() {
-		err := gpuCmd.Wait()
-		if err != nil {
-			logger.Fatal().Err(err)
-		}
-	}()
 	if err != nil {
-		logger.Fatal().Err(err)
+		return nil, fmt.Errorf("could not start gpu controller %v", err)
 	}
+	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller starting...")
 
 	// poll gpu controller to ensure it is running
 	var opts []grpc.DialOption
@@ -281,11 +288,11 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	for {
-		gpuConn, err = grpc.Dial("127.0.0.1:50051", opts...)
+		gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
 		if err == nil {
 			break
 		}
-		logger.Info().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
+		s.logger.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
 		time.Sleep(1 * time.Second)
 
 	}
@@ -294,16 +301,20 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.StartupPollRequest{}
+	timeout := time.Now().Add(GPU_CONTROLLER_WAIT_TIMEOUT)
 	for {
 		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
+		if time.Now().After(timeout) {
+			return nil, fmt.Errorf("gpu controller did not start in time")
+		}
 		if err == nil && resp.Success {
 			break
 		}
-		logger.Info().Msgf("Waiting for gpu-controller to start...")
+		s.logger.Debug().Msgf("Waiting for gpu-controller to start...")
 		time.Sleep(1 * time.Second)
 	}
 
-	logger.Info().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
+	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
 	return gpuCmd, nil
 }
 
@@ -359,18 +370,36 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 	return req
 }
 
-func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
+// TODO NR - this needs a deep copy to properly redact
+func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		redactedKeys := []string{"RegistryAuthToken"}
-		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
 
-		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
-		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
+		tp := otel.GetTracerProvider()
+		tracer := tp.Tracer("cedana/api")
+
+		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
+		defer span.End()
+
+		span.SetAttributes(
+			attribute.String("grpc.method", info.FullMethod),
+			attribute.String("grpc.request", payloadToJSON(req)),
+			attribute.String("server.id", machineID),
+			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
+			attribute.String("server.opts.cudaversion", serveOpts.CUDAVersion),
+			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
+		)
+
+		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
+		span.SetAttributes(
+			attribute.String("grpc.response", payloadToJSON(resp)),
+		)
+
 		if err != nil {
 			logger.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			span.RecordError(err)
 		} else {
 			logger.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
 		}
@@ -434,7 +463,7 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, nil)
 	if err != nil {
 		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
 		return nil
@@ -451,7 +480,7 @@ func (s *service) GPUHealthCheck(
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
 	if err != nil {
 		return err
 	}
@@ -543,4 +572,26 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 	}
 	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
 	return err
+}
+
+func payloadToJSON(payload any) string {
+	if payload == nil {
+		return "null"
+	}
+
+	protoMsg, ok := payload.(proto.Message)
+	if !ok {
+		return fmt.Sprintf("%+v", payload)
+	}
+
+	marshaler := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		Indent:          "  ",
+	}
+	jsonData, err := marshaler.Marshal(protoMsg)
+	if err != nil {
+		return fmt.Sprintf("Error marshaling to JSON: %v", err)
+	}
+
+	return string(jsonData)
 }

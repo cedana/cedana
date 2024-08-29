@@ -408,9 +408,11 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	}
 
 	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
 	var err error
 	if args.GPU {
-		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, s.logger)
+		gpuOut := io.Writer(gpuOutBuf)
+		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -534,11 +536,6 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		}()
 	}
 
-	var gpuerrbuf bytes.Buffer
-	if gpuCmd != nil {
-		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
-	}
-
 	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
@@ -554,19 +551,38 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	go func() {
 		defer s.wg.Done()
 		err := cmd.Wait()
+		if err != nil {
+			s.logger.Debug().Err(err).Msg("process Wait()")
+		}
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
 			if err != nil {
-				s.logger.Fatal().Err(err)
+				s.logger.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
 			}
-			s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
-			// read last bit of data from /tmp/cedana-gpucontroller.log and print
-			s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 		}
 		s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
 		code := cmd.ProcessState.ExitCode()
 		exitCode <- code
 	}()
+
+	// Clean up GPU controller and also handle premature exit
+	if gpuCmd != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			err := gpuCmd.Wait()
+			if err != nil {
+				s.logger.Debug().Err(err).Msg("GPU controller Wait()")
+			}
+			s.logger.Info().Int("PID", gpuCmd.Process.Pid).
+				Int("status", gpuCmd.ProcessState.ExitCode()).
+				Str("out/err", gpuOutBuf.String()).
+				Msg("GPU controller exited")
+
+			// Should kill process if still running since GPU controller might have exited prematurely
+			cmd.Process.Kill()
+		}()
+	}
 
 	return pid, exitCode, err
 }
