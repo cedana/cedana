@@ -133,6 +133,7 @@ setup_ci() {
     # Set GOPATH and update PATH
     echo "export GOPATH=$HOME/go" >> /etc/environment
     echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
+    echo "export CEDANA_URL=https://ci.cedana.ai" >> /etc/environment
 
     # Install CRIU
     sudo add-apt-repository -y ppa:criu/ppa
