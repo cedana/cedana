@@ -18,13 +18,15 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/cedana/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -35,6 +37,8 @@ import (
 	"google.golang.org/grpc/health"
 	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -58,6 +62,7 @@ type service struct {
 	wg          sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled  bool
 	cudaVersion string
+	machineID   string
 
 	task.UnimplementedTaskServiceServer
 }
@@ -72,6 +77,7 @@ type ServeOpts struct {
 	GPUEnabled   bool
 	CUDAVersion  string
 	VSOCKEnabled bool
+	CedanaURL    string
 }
 
 type pullGPUBinaryRequest struct {
@@ -82,11 +88,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	logger := ctx.Value("logger").(*zerolog.Logger)
 	var err error
 
+	machineID, err := utils.GetMachineID()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
 		),
 	}
 
@@ -104,6 +114,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		serverCtx:   ctx,
 		gpuEnabled:  opts.GPUEnabled,
 		cudaVersion: opts.CUDAVersion,
+		machineID:   machineID,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -359,18 +370,36 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 	return req
 }
 
-func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
+// TODO NR - this needs a deep copy to properly redact
+func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		// redactedKeys := []string{"RegistryAuthToken"}
-		// sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
 
-		// redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		tp := otel.GetTracerProvider()
+		tracer := tp.Tracer("cedana/api")
+
+		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
+		defer span.End()
+
+		span.SetAttributes(
+			attribute.String("grpc.method", info.FullMethod),
+			attribute.String("grpc.request", payloadToJSON(req)),
+			attribute.String("server.id", machineID),
+			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
+			attribute.String("server.opts.cudaversion", serveOpts.CUDAVersion),
+			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
+		)
+
 		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
+		span.SetAttributes(
+			attribute.String("grpc.response", payloadToJSON(resp)),
+		)
+
 		if err != nil {
 			logger.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			span.RecordError(err)
 		} else {
 			logger.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
 		}
@@ -543,4 +572,26 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 	}
 	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
 	return err
+}
+
+func payloadToJSON(payload any) string {
+	if payload == nil {
+		return "null"
+	}
+
+	protoMsg, ok := payload.(proto.Message)
+	if !ok {
+		return fmt.Sprintf("%+v", payload)
+	}
+
+	marshaler := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		Indent:          "  ",
+	}
+	jsonData, err := marshaler.Marshal(protoMsg)
+	if err != nil {
+		return fmt.Sprintf("Error marshaling to JSON: %v", err)
+	}
+
+	return string(jsonData)
 }
