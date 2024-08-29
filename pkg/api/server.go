@@ -361,11 +361,11 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		redactedKeys := []string{"RegistryAuthToken"}
-		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
+		// redactedKeys := []string{"RegistryAuthToken"}
+		// sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
 
-		redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
-		logger.Debug().Str("method", info.FullMethod).Interface("request", redactedRequest).Msg("gRPC request received")
+		// redactedRequest := redactValues(req, redactedKeys, sensitiveSubstrings)
+		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
