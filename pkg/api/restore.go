@@ -48,7 +48,7 @@ const (
 
 func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("sudo", "server", "--dir", dumpdir, "serve")
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "serve")
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
