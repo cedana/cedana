@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
@@ -44,7 +46,7 @@ const (
 	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS        = 0o644
 	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT = 9999
+	VSOCK_PORT              = 9999
 )
 
 type service struct {
@@ -57,6 +59,7 @@ type service struct {
 	wg          sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled  bool
 	cudaVersion string
+	machineID   string
 
 	task.UnimplementedTaskServiceServer
 }
@@ -68,8 +71,8 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	GPUEnabled  bool
-	CUDAVersion string
+	GPUEnabled   bool
+	CUDAVersion  string
 	VSOCKEnabled bool
 }
 
@@ -85,12 +88,16 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
 			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger)),
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
+
+	machineID, err := utils.GetMachineID()
+	if err != nil {
+		return nil, err
+	}
 
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
@@ -103,6 +110,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		serverCtx:   ctx,
 		gpuEnabled:  opts.GPUEnabled,
 		cudaVersion: opts.CUDAVersion,
+		machineID:   machineID,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -361,6 +369,14 @@ func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface
 
 func loggingUnaryInterceptor(logger *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		tp := otel.GetTracerProvider()
+		tracer := tp.Tracer("cedana/api")
+
+		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
+		defer span.End()
+
+		// set request attributes
+
 		redactedKeys := []string{"RegistryAuthToken"}
 		sensitiveSubstrings := []string{"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CERT", "API"}
 
