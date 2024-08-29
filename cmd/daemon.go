@@ -41,7 +41,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		_, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
+		_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to initialize otel")
 			return err
