@@ -37,6 +37,8 @@ import (
 	"google.golang.org/grpc/health"
 	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -380,7 +382,7 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machin
 
 		span.SetAttributes(
 			attribute.String("grpc.method", info.FullMethod),
-			attribute.String("grpc.request", fmt.Sprintf("%+v", req)),
+			attribute.String("grpc.request", payloadToJSON(req)),
 			attribute.String("server.id", machineID),
 			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
 			attribute.String("server.opts.cudaversion", serveOpts.CUDAVersion),
@@ -392,7 +394,7 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machin
 		resp, err := handler(ctx, req)
 
 		span.SetAttributes(
-			attribute.String("grpc.response", fmt.Sprintf("%+v", resp)),
+			attribute.String("grpc.response", payloadToJSON(resp)),
 		)
 
 		if err != nil {
@@ -570,4 +572,26 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 	}
 	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
 	return err
+}
+
+func payloadToJSON(payload any) string {
+	if payload == nil {
+		return "null"
+	}
+
+	protoMsg, ok := payload.(proto.Message)
+	if !ok {
+		return fmt.Sprintf("%+v", payload)
+	}
+
+	marshaler := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		Indent:          "  ",
+	}
+	jsonData, err := marshaler.Marshal(protoMsg)
+	if err != nil {
+		return fmt.Sprintf("Error marshaling to JSON: %v", err)
+	}
+
+	return string(jsonData)
 }
