@@ -38,13 +38,14 @@ import (
 )
 
 const (
-	ADDRESS                 = "0.0.0.0:8080"
-	PROTOCOL                = "tcp"
-	CEDANA_CONTAINER_NAME   = "binary-container"
-	SERVER_LOG_MODE         = os.O_APPEND | os.O_CREATE | os.O_WRONLY
-	SERVER_LOG_PERMS        = 0o644
-	GPU_CONTROLLER_LOG_PATH = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT              = 9999
+	ADDRESS                     = "0.0.0.0:8080"
+	PROTOCOL                    = "tcp"
+	CEDANA_CONTAINER_NAME       = "binary-container"
+	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	SERVER_LOG_PERMS            = 0o644
+	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
+	VSOCK_PORT                  = 9999
+	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
 )
 
 type service struct {
@@ -222,15 +223,15 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, logger *zerolog.Logger) (*exec.Cmd, error) {
-	logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+	s.logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		logger.Fatal().Err(err)
+		s.logger.Fatal().Err(err)
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
@@ -243,8 +244,6 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 			controllerPath,
 		},
 			" ")
-		// wrap controller path in a string
-		logger.Info().Str("Args", controllerPath).Msgf("GPU controller started")
 	}
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
@@ -261,19 +260,16 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		},
 	}
 
-	gpuCmd.Stderr = nil
-	gpuCmd.Stdout = nil
+	if out != nil {
+		gpuCmd.Stderr = out
+		gpuCmd.Stdout = out
+	}
 
 	err := gpuCmd.Start()
-	go func() {
-		err := gpuCmd.Wait()
-		if err != nil {
-			logger.Fatal().Err(err)
-		}
-	}()
 	if err != nil {
-		logger.Fatal().Err(err)
+		return nil, fmt.Errorf("could not start gpu controller %v", err)
 	}
+	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller starting...")
 
 	// poll gpu controller to ensure it is running
 	var opts []grpc.DialOption
@@ -281,11 +277,11 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	for {
-		gpuConn, err = grpc.Dial("127.0.0.1:50051", opts...)
+		gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
 		if err == nil {
 			break
 		}
-		logger.Info().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
+		s.logger.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
 		time.Sleep(1 * time.Second)
 
 	}
@@ -294,16 +290,20 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.StartupPollRequest{}
+	timeout := time.Now().Add(GPU_CONTROLLER_WAIT_TIMEOUT)
 	for {
 		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
+		if time.Now().After(timeout) {
+			return nil, fmt.Errorf("gpu controller did not start in time")
+		}
 		if err == nil && resp.Success {
 			break
 		}
-		logger.Info().Msgf("Waiting for gpu-controller to start...")
+		s.logger.Debug().Msgf("Waiting for gpu-controller to start...")
 		time.Sleep(1 * time.Second)
 	}
 
-	logger.Info().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
+	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
 	return gpuCmd, nil
 }
 
@@ -434,7 +434,7 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, s.logger)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, nil)
 	if err != nil {
 		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
 		return nil
@@ -451,7 +451,7 @@ func (s *service) GPUHealthCheck(
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
 	if err != nil {
 		return err
 	}

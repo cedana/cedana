@@ -67,9 +67,6 @@ var execTaskCmd = &cobra.Command{
 
 		wd, _ := cmd.Flags().GetString(wdFlag)
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-		if gpuEnabled {
-			logger.Info().Msgf("starting task w/ gpu enabled")
-		}
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)
 

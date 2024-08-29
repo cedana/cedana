@@ -609,6 +609,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	}
 
 	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
+
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
 	if state.GPUCheckpointed {
 		if !s.gpuEnabled {
@@ -618,15 +620,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups)
+				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
 				return err
 			},
 		}
-	}
-
-	var gpuerrbuf bytes.Buffer
-	if gpuCmd != nil {
-		gpuCmd.Stderr = io.Writer(&gpuerrbuf)
 	}
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
@@ -707,15 +704,31 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
 				if err != nil {
-					s.logger.Fatal().Err(err).Msg("could not kill gpu controller")
+					s.logger.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
 				}
-				s.logger.Info().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller killed")
-				// read last bit of data from /tmp/cedana-gpucontroller.log and print
-				s.logger.Debug().Str("stderr", gpuerrbuf.String()).Msgf("GPU controller log")
 			}
 
 			exitCode <- code
 		}()
+
+		// Clean up GPU controller and also handle premature exit
+		if gpuCmd != nil {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				err := gpuCmd.Wait()
+				if err != nil {
+					s.logger.Debug().Err(err).Msg("GPU controller Wait()")
+				}
+				s.logger.Info().Int("PID", gpuCmd.Process.Pid).
+					Int("status", gpuCmd.ProcessState.ExitCode()).
+					Str("out/err", gpuOutBuf.String()).
+					Msg("GPU controller exited")
+
+				// Should kill process if still running since GPU controller might have exited prematurely
+				syscall.Kill(int(*pid), syscall.SIGKILL)
+			}()
+		}
 
 		// Kill on server/stream shutdown
 		s.wg.Add(1)
@@ -807,14 +820,14 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, s.logger)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, nil)
 	if err != nil {
 		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
@@ -823,7 +836,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
+	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
