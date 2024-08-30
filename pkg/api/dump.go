@@ -137,7 +137,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, stream bool, cmd *exec.Cmd) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
 	start := time.Now()
 	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
 	if !ok {
@@ -145,7 +145,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	}
 
 	var compressedCheckpointPath string
-	if stream {
+	if streamCmd != nil {
 		compressedCheckpointPath = filepath.Join(dumpdir, "img.lz4")
 	} else {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".tar"}, "")
@@ -155,15 +155,15 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 
 	// sneak in a serialized state obj
-	err := serializeStateToDir(dumpdir, state, stream)
+	err := serializeStateToDir(dumpdir, state, streamCmd != nil)
 	if err != nil {
 		s.logger.Fatal().Err(err)
 	}
 
 	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
-	if stream {
-		cmd.Wait()
+	if streamCmd != nil {
+		streamCmd.Wait()
 	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
@@ -257,7 +257,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state, false, nil)
+	s.postDump(ctx, opts.ImagesDirectory, state, nil)
 
 	return nil
 }
@@ -265,7 +265,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state, false, nil)
+	s.postDump(ctx, imagePath, state, nil)
 
 	return nil
 }
@@ -350,7 +350,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state, args.Stream, cmd)
+	s.postDump(ctx, dumpdir, state, cmd)
 
 	return nil
 }
@@ -392,7 +392,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		return err
 	}
 
-	s.postDump(ctx, dumpdir, state, false, nil)
+	s.postDump(ctx, dumpdir, state, nil)
 
 	conn, err := vsock.Dial(vsock.Host, 9999, nil)
 	if err != nil {

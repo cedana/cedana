@@ -15,8 +15,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/mdlayher/vsock"
-	"os"
 	"io"
+	"os"
+	"os/exec"
 )
 
 var dumpCmd = &cobra.Command{
@@ -189,6 +190,12 @@ var dumpJobCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		if stream {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				logger.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
