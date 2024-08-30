@@ -270,6 +270,15 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 		if err != nil {
 			return nil, fmt.Errorf("Read from r_fd failed with %v", err)
 		}
+
+		err = conn.CloseWrite()
+		if err != nil {
+			return nil, fmt.Errorf("UnixConn CloseWrite failed with %v", err)
+		}
+		err = conn.Close()
+		if err != nil {
+			return nil, fmt.Errorf("UnixConn Close failed with %v", err)
+		}
 		imgStreamerFinish(socket_fd, r_fd, w_fd)
 
 		err = json.Unmarshal(byte_arr[:n_bytes], &checkpointState)
