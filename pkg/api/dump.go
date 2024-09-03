@@ -200,30 +200,31 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	var crPid int
 
-	links := []linkPairs{
-		{"/host/var/run/netns", "/var/run/netns"},
-		{"/host/run/containerd", "/run/containerd"},
-		{"/host/var/run/secrets", "/var/run/secrets"},
-		{"/host/var/lib/rancher", "/var/lib/rancher"},
-		{"/host/run/k3s", "/run/k3s"},
-		{"/host/var/lib/kubelet", "/var/lib/kubelet"},
-	}
-	// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
-	for _, link := range links {
-		// Check if the target file exists
-		if _, err := os.Stat(link.Value); os.IsNotExist(err) {
-			// Target file does not exist, attempt to create a symbolic link
-			if err := os.Symlink(link.Key, link.Value); err != nil {
-				// Handle the error if creating symlink fails
-				fmt.Println("Error creating symlink:", err)
-				// Handle the error or log it as needed
-			}
-		} else if err != nil {
-			// Handle other errors from os.Stat if any
-			fmt.Println("Error checking file info:", err)
-			// Handle the error or log it as needed
-		}
-	}
+  // XXX: Workaround for k3s runc C/R
+	// links := []linkPairs{
+	// 	{"/host/var/run/netns", "/var/run/netns"},
+	// 	{"/host/run/containerd", "/run/containerd"},
+	// 	{"/host/var/run/secrets", "/var/run/secrets"},
+	// 	{"/host/var/lib/rancher", "/var/lib/rancher"},
+	// 	{"/host/run/k3s", "/run/k3s"},
+	// 	{"/host/var/lib/kubelet", "/var/lib/kubelet"},
+	// }
+	// // Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
+	// for _, link := range links {
+	// 	// Check if the target file exists
+	// 	if _, err := os.Stat(link.Value); os.IsNotExist(err) {
+	// 		// Target file does not exist, attempt to create a symbolic link
+	// 		if err := os.Symlink(link.Key, link.Value); err != nil {
+	// 			// Handle the error if creating symlink fails
+	// 			fmt.Println("Error creating symlink:", err)
+	// 			// Handle the error or log it as needed
+	// 		}
+	// 	} else if err != nil {
+	// 		// Handle other errors from os.Stat if any
+	// 		fmt.Println("Error checking file info:", err)
+	// 		// Handle the error or log it as needed
+	// 	}
+	// }
 
 	bundle := Bundle{ContainerID: containerID}
 	runcContainer := container.GetContainerFromRunc(containerID, root)
