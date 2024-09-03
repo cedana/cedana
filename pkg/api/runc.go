@@ -112,6 +112,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	}
 
 	resp.State = state
+	resp.DumpStats = &dumpStats
 
 	return &resp, err
 }
@@ -165,8 +166,9 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	// TODO: Update state to add or use a job that exists for this container
 	return &task.RuncRestoreResp{
-		Message: fmt.Sprintf("Restored %v, successfully", args.ContainerID),
-		State:   state,
+		Message:      fmt.Sprintf("Restored %v, successfully", args.ContainerID),
+		State:        state,
+		RestoreStats: &restoreStats,
 	}, nil
 }
 
