@@ -425,13 +425,13 @@ var dumpRuncCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				logger.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
