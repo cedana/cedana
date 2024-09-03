@@ -4,6 +4,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -15,8 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/mdlayher/vsock"
-	"os"
-	"io"
 )
 
 var dumpCmd = &cobra.Command{
@@ -372,6 +372,7 @@ var dumpRuncCmd = &cobra.Command{
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		pid, _ := cmd.Flags().GetInt(pidFlag)
+		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 
 		external, _ := cmd.Flags().GetString(externalFlag)
 
@@ -392,7 +393,7 @@ var dumpRuncCmd = &cobra.Command{
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   wdPath,
-			LeaveRunning:    true,
+			LeaveRunning:    leaveRunning,
 			TcpEstablished:  tcpEstablished,
 			External:        externalNamespaces,
 		}
@@ -497,6 +498,7 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
+	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
 	dumpCmd.AddCommand(dumpCRIORootfs)
 	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
