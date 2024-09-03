@@ -46,6 +46,24 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
+func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
+	buf := new(bytes.Buffer)
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	cmd.Stderr = buf
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+
+	for buf.Len() == 0 {
+		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	return cmd
+}
+
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
@@ -81,8 +99,15 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
+	var cmd *exec.Cmd
 	if args.Stream {
-		tempDir = args.CheckpointPath
+		absPath, err := filepath.Abs(args.CheckpointPath)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		tempDir = filepath.Dir(absPath)
+		cmd = s.setupStreamerServe(tempDir)
+		s.logger.Info().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
