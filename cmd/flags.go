@@ -36,4 +36,5 @@ const (
 	attachFlag           = "attach"
 	streamFlag           = "stream"
 	leaveRunningFlag     = "leave-running"
+	fileLocksFlag        = "file-locks"
 )
