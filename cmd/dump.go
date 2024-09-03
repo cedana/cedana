@@ -412,14 +412,10 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: runcRootPath[root],
-			// CheckpointPath: checkpointPath,
-			// FIXME YA: Where does this come from?
+			Root:        runcRootPath[root],
 			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
-			// TODO BS: hard coded for now
-			Type: task.CRType_LOCAL,
 		}
 
 		resp, err := cts.RuncDump(ctx, &dumpArgs)

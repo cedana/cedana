@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	container "github.com/cedana/cedana/pkg/container"
+	"github.com/spf13/viper"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -77,6 +78,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
 		External:        args.CriuOpts.External,
+		FileLocks:       args.CriuOpts.FileLocks,
 	}
 
 	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
@@ -135,6 +137,12 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		MntnsCompatMode: false, // XXX: Should instead take value from args
 		TcpClose:        true,  // XXX: Should instead take value from args
 		FileLocks:       args.CriuOpts.FileLocks,
+	}
+
+	if viper.GetBool("remote") {
+		args.Type = task.CRType_REMOTE
+	} else {
+		args.Type = task.CRType_LOCAL
 	}
 
 	switch args.Type {
