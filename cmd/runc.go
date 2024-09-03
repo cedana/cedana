@@ -4,7 +4,7 @@ import (
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -25,10 +25,9 @@ var runcGetRuncIdByName = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -43,10 +42,10 @@ var runcGetRuncIdByName = &cobra.Command{
 		// FIXME YA: When no PID given, still returns something
 		resp, err := cts.RuncQuery(ctx, query)
 		if err != nil {
-			logger.Error().Err(err).Msgf("Container \"%s\" not found", name)
+			log.Error().Err(err).Msgf("Container \"%s\" not found", name)
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Containers[0])
+		log.Info().Msgf("Response: %v", resp.Containers[0])
 
 		return nil
 	},

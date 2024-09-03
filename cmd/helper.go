@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,7 +16,7 @@ import (
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,26 +44,25 @@ var helperCmd = &cobra.Command{
 	Short: "Helper for Cedana running in Kubernetes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 
 		restart, _ := cmd.Flags().GetBool("restart")
 		if restart {
 			if err := runScript("bash", restartScript); err != nil {
-				logger.Error().Err(err).Msg("Error restarting")
+				log.Error().Err(err).Msg("Error restarting")
 			}
 		}
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
 			if err := runScript("bash", setupHostScript); err != nil {
-				logger.Error().Err(err).Msg("Error setting up host")
+				log.Error().Err(err).Msg("Error setting up host")
 			}
 		}
 
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
 			if err := runScript("bash", chrootStartScript); err != nil {
-				logger.Error().Err(err).Msg("Error with chroot and starting daemon")
+				log.Error().Err(err).Msg("Error with chroot and starting daemon")
 			}
 		}
 
@@ -79,10 +77,8 @@ var destroyCmd = &cobra.Command{
 	Short: "Destroy cedana from host of kubernetes worker node",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		if err := destroyCedana(ctx); err != nil {
-			logger.Error().Err(err).Msg("Unable to destroy cedana on host.")
+			log.Error().Err(err).Msg("Unable to destroy cedana on host.")
 		}
 
 		return nil
@@ -90,10 +86,8 @@ var destroyCmd = &cobra.Command{
 }
 
 func destroyCedana(ctx context.Context) error {
-	logger := ctx.Value("logger").(*zerolog.Logger)
-
 	if err := runScript("bash", cleanupHostScript); err != nil {
-		logger.Error().Err(err).Msg("Cleanup host script failed")
+		log.Error().Err(err).Msg("Cleanup host script failed")
 
 		return err
 	}
@@ -102,13 +96,12 @@ func destroyCedana(ctx context.Context) error {
 }
 
 func startHelper(ctx context.Context, startChroot bool) {
-	logger := ctx.Value("logger").(*zerolog.Logger)
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
 	cts, err := createClientWithRetry()
 	if err != nil {
-		log.Fatalf("Failed to create client after %d attempts: %v", maxRetries, err)
+		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
 
 	// Goroutine to check if the daemon is running
@@ -121,26 +114,26 @@ func startHelper(ctx context.Context, startChroot bool) {
 			case <-ticker.C:
 				isRunning, err := isProcessRunning()
 				if err != nil {
-					logger.Error().Err(err).Msg("Issue checking if daemon is running")
+					log.Error().Err(err).Msg("Issue checking if daemon is running")
 				}
 				if !isRunning {
-					logger.Info().Msg("Daemon is not running. Restarting...")
+					log.Info().Msg("Daemon is not running. Restarting...")
 
 					err := startDaemon(startChroot)
 					if err != nil {
-						logger.Error().Err(err).Msg("Error restarting Cedana")
+						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
 					cts, err = createClientWithRetry()
 					if err != nil {
-						log.Fatalf("Failed to create client after %d attempts: %v", maxRetries, err)
+						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
 
-					log.Println("Daemon restarted.")
+					log.Info().Msg("Daemon restarted.")
 				}
 
 			case <-signalChannel:
-				fmt.Println("Received kill signal. Exiting...")
+				log.Info().Msg("Received kill signal. Exiting...")
 				os.Exit(0)
 			}
 		}
@@ -150,7 +143,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 	go func() {
 		file, err := os.Open("/host/var/log/cedana-daemon.log")
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to open cedana-daemon.log")
+			log.Error().Err(err).Msg("Failed to open cedana-daemon.log")
 			return
 		}
 		defer file.Close()
@@ -163,11 +156,11 @@ func startHelper(ctx context.Context, startChroot bool) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				logger.Error().Err(err).Msg("Error reading cedana-daemon.log")
+				log.Error().Err(err).Msg("Error reading cedana-daemon.log")
 				return
 			}
 			if len(line) > 0 {
-				logger.Info().Msg(line)
+				log.Info().Msg(line)
 			}
 		}
 	}()

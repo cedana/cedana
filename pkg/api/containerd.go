@@ -37,7 +37,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	ctx = namespaces.WithNamespace(ctx, rootfsOpts.Namespace)
 
-	containerdService, err := containerd.New(ctx, rootfsOpts.Address, s.logger)
+	containerdService, err := containerd.New(ctx, rootfsOpts.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	}
 
 	if !isReady {
-		return nil, fmt.Errorf("Ready loop returned false, not able to checkpoint.")
+		return nil, fmt.Errorf("ready loop returned false, not able to checkpoint")
 	}
 
 	containerdTask, err := containerdService.CgroupFreeze(ctx, rootfsOpts.ContainerID)
@@ -89,7 +89,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_RUNC,
 	}
-	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+	ctx = context.WithValue(ctx, utils.DumpStatsKey, &dumpStats)
 
 	// RUNC DUMP ARGS START
 	pid, err := runc.GetPidByContainerId(dumpOpts.ContainerID, dumpOpts.Root)
@@ -135,14 +135,8 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, st.Err()
 	}
 
-	var resp task.RuncDumpResp
-
 	switch dumpOpts.Type {
 	case task.CRType_LOCAL:
-		resp = task.RuncDumpResp{
-			Message: fmt.Sprintf("Dumped runc process %d", pid),
-		}
-
 	case task.CRType_REMOTE:
 		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
 		if err != nil {
@@ -151,14 +145,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		}
 		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
 		state.RemoteState = append(state.RemoteState, remoteState)
-		resp = task.RuncDumpResp{
-			Message:      fmt.Sprintf("Dumped runc process %d, multipart checkpoint id: %s", pid, uploadID),
-			CheckpointID: checkpointID,
-			UploadID:     uploadID,
-		}
 	}
-
-	resp.State = state
 
 	return &task.ContainerdDumpResp{
 		Message:        "Dumped containerd container",
@@ -208,16 +195,5 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 }
 
 func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
-
-	containerdService, err := containerd.New(ctx, args.Address, s.logger)
-	if err != nil {
-		return &task.ContainerdRootfsDumpResp{}, err
-	}
-
-	ref, err := containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace)
-	if err != nil {
-		return &task.ContainerdRootfsDumpResp{}, err
-	}
-
-	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
+	return containerd.ContainerdRootfsDump(ctx, args)
 }

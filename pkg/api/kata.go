@@ -5,13 +5,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
-	"strings"
 	"strconv"
-	"errors"
+	"strings"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -46,7 +48,7 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_KATA,
 	}
-	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+	ctx = context.WithValue(ctx, utils.DumpStatsKey, &dumpStats)
 
 	err = s.kataDump(ctx, state, args)
 	if err != nil {
@@ -97,7 +99,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 
 	state, err := s.generateState(ctx, *pid)
 	if err != nil {
-		s.logger.Warn().Err(err).Msg("failed to generate state after restore")
+		log.Warn().Err(err).Msg("failed to generate state after restore")
 	}
 
 	resp.State = state

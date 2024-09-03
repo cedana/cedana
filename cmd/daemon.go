@@ -11,7 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -35,19 +35,17 @@ var startDaemonCmd = &cobra.Command{
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
 		}
 
 		_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
 		if err != nil {
-			logger.Warn().Err(err).Msg("Failed to initialize otel")
+			log.Warn().Err(err).Msg("Failed to initialize otel")
 			return err
 		}
 
-		logger.Info().Msg("otel initialized")
+		log.Info().Msg("otel initialized")
 
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
@@ -57,7 +55,7 @@ var startDaemonCmd = &cobra.Command{
 		cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
 		if _, ok := cudaVersions[cudaVersion]; !ok {
 			err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
-			logger.Error().Err(err).Msg("invalid cuda version")
+			log.Error().Err(err).Msg("invalid cuda version")
 			return err
 		}
 
@@ -66,17 +64,18 @@ var startDaemonCmd = &cobra.Command{
 			cedanaURL = "unset"
 		}
 
-		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
+		log.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
 		err = api.StartServer(ctx, &api.ServeOpts{
 			GPUEnabled:   gpuEnabled,
 			CUDAVersion:  cudaVersions[cudaVersion],
 			VSOCKEnabled: vsockEnabledFlag,
 			CedanaURL:    cedanaURL,
+			GrpcPort:     8080,
 		})
 
 		if err != nil {
-			logger.Error().Err(err).Msgf("stopping daemon")
+			log.Error().Err(err).Msgf("stopping daemon")
 			return err
 		}
 
@@ -88,12 +87,9 @@ var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if daemon is running and healthy",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Err(err).Msg("error creating client")
+			log.Error().Err(err).Msg("error creating client")
 			return err
 		}
 

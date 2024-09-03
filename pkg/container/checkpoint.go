@@ -3,7 +3,6 @@ package container
 import (
 	"bytes"
 	"context"
-	gocontext "context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -15,13 +14,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	goruntime "runtime"
+	"runtime"
 
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer/cgroups"
@@ -39,7 +37,6 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/pkg/epoch"
 	"github.com/containerd/containerd/plugin"
@@ -64,6 +61,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -506,20 +504,6 @@ type CriuOpts struct {
 	TCPInFlight             bool
 }
 
-type loadedState struct {
-	c *RuncContainer
-	s Status
-}
-
-func (n *loadedState) status() Status {
-	return n.s
-}
-
-func (n *loadedState) transition(s containerState) error {
-	n.c.State = s
-	return nil
-}
-
 // func (n *loadedState) destroy() error {
 // 	if err := n.c.refreshState(); err != nil {
 // 		return err
@@ -533,18 +517,15 @@ func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 	// Docker root
 	// root := "/run/docker/runtime-runc/moby"
 	// Containerd root where "default" is the namespace
-
-	l := utils.GetLogger()
-
 	criu := criu.MakeCriu()
 	criuVersion, err := criu.GetCriuVersion()
 	if err != nil {
-		l.Fatal().Err(err).Msg("could not get criu version")
+		log.Fatal().Err(err).Msg("could not get criu version")
 	}
 	root = root + "/" + containerID
 	state, err := loadState(root)
 	if err != nil {
-		l.Fatal().Err(err).Msg("could not load state")
+		log.Fatal().Err(err).Msg("could not load state")
 	}
 
 	r := &nonChildProcess{
@@ -555,7 +536,7 @@ func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 
 	cgroupManager, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
 	if err != nil {
-		l.Fatal().Err(err).Msg("could not create cgroup manager")
+		log.Fatal().Err(err).Msg("could not create cgroup manager")
 	}
 
 	c := &RuncContainer{
@@ -645,7 +626,7 @@ func loadState(root string) (*State, error) {
 	return state, nil
 }
 
-func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
+func newContainerdClient(ctx context.Context, opts ...containerd.ClientOpt) (*containerd.Client, context.Context, context.CancelFunc, error) {
 	timeoutOpt := containerd.WithTimeout(0)
 	containerdEndpoint := "/run/containerd/containerd.sock"
 	if _, err := os.Stat(containerdEndpoint); err != nil {
@@ -666,36 +647,33 @@ func newContainerdClient(ctx gocontext.Context, opts ...containerd.ClientOpt) (*
 //
 // This will ensure the namespace is picked up and set the timeout, if one is
 // defined.
-func AppContext(context gocontext.Context) (gocontext.Context, gocontext.CancelFunc) {
+func AppContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	var (
-		ctx       = gocontext.Background()
 		timeout   = 0
 		namespace = "k8s.io"
-		cancel    gocontext.CancelFunc
+		cancel    context.CancelFunc
 	)
 	ctx = namespaces.WithNamespace(ctx, namespace)
 	if timeout > 0 {
-		ctx, cancel = gocontext.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	} else {
-		ctx, cancel = gocontext.WithCancel(ctx)
+		ctx, cancel = context.WithCancel(ctx)
 	}
 	if tm, err := epoch.SourceDateEpoch(); err != nil {
-		log.L.WithError(err).Warn("Failed to read SOURCE_DATE_EPOCH")
+		log.Warn().Err(err).Msg("Failed to read SOURCE_DATE_EPOCH")
 	} else if tm != nil {
-		log.L.Debugf("Using SOURCE_DATE_EPOCH: %v", tm)
+		log.Debug().Msgf("Using SOURCE_DATE_EPOCH: %v", tm)
 		ctx = epoch.WithSourceDateEpoch(ctx, tm)
 	}
 	return ctx, cancel
 }
 
 func containerdCheckpoint(imagePath, id string) error {
-	logger := utils.GetLogger()
-
-	ctx := gocontext.Background()
+	ctx := context.Background()
 
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
-		logger.Fatal().Err(err)
+		log.Fatal().Err(err)
 	}
 	defer cancel()
 
@@ -774,7 +752,7 @@ func getCheckpointPath(runtime string, option *ptypes.Any) (string, error) {
 	return checkpointPath, nil
 }
 
-func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
+func localCheckpointTask(ctx context.Context, client *containerd.Client, index *v1.Index, request *apiTasks.CheckpointTaskRequest, container containers.Container) (*apiTasks.CheckpointTaskResponse, error) {
 	// TODO BS get rid of marshal/unmarshal & CTR
 	v, err := typeurl.UnmarshalAny(request.Options)
 	if err != nil {
@@ -785,17 +763,6 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 		return &apiTasks.CheckpointTaskResponse{}, fmt.Errorf("invalid task checkpoint option for %s", container.Runtime.Name)
 	}
 
-	criuOpts := &CriuOpts{
-		ImagesDirectory:         opts.ImagePath,
-		WorkDirectory:           opts.WorkPath,
-		LeaveRunning:            !opts.Exit,
-		TcpEstablished:          opts.OpenTcp,
-		ExternalUnixConnections: opts.ExternalUnixSockets,
-		ShellJob:                opts.Terminal,
-		FileLocks:               opts.FileLocks,
-		StatusFd:                int(3),
-	}
-
 	image := opts.ImagePath
 
 	if image == "" {
@@ -804,7 +771,6 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 			return &apiTasks.CheckpointTaskResponse{}, err
 		}
 
-		criuOpts.ImagesDirectory = image
 		fmt.Printf("Checkpointing to %s\n", image)
 		defer os.RemoveAll(image)
 	}
@@ -830,7 +796,7 @@ func localCheckpointTask(ctx gocontext.Context, client *containerd.Client, index
 	}, nil
 }
 
-func localWriteContent(ctx gocontext.Context, client *containerd.Client, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
+func localWriteContent(ctx context.Context, client *containerd.Client, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
 	writer, err := client.ContentStore().Writer(ctx, content.WithRef(ref), content.WithDescriptor(ocispec.Descriptor{MediaType: mediaType}))
 	if err != nil {
 		return nil, err
@@ -981,8 +947,8 @@ func WithCheckpointState(ctx context.Context, client *containerd.Client, c *cont
 			Size:      d.Size,
 			Digest:    digest.Digest(d.Digest),
 			Platform: &v1.Platform{
-				OS:           goruntime.GOOS,
-				Architecture: goruntime.GOARCH,
+				OS:           runtime.GOOS,
+				Architecture: runtime.GOARCH,
 			},
 			Annotations: d.Annotations,
 		})
@@ -1328,7 +1294,7 @@ func applyDiffLayer(ctx context.Context, name string, baseImg ocispec.Image, sn 
 			// NOTE: the snapshotter should be hold by lease. Even
 			// if the cleanup fails, the containerd gc can delete it.
 			if err := sn.Remove(ctx, key); err != nil {
-				log.G(ctx).Warnf("failed to cleanup aborted apply %s: %s", key, err)
+				log.Ctx(ctx).Debug().Msgf("failed to cleanup aborted apply %s: %s", key, err)
 			}
 		}
 	}()
@@ -1346,21 +1312,9 @@ func applyDiffLayer(ctx context.Context, name string, baseImg ocispec.Image, sn 
 	return nil
 }
 
-func writeRefIndex(ctx context.Context, index *ocispec.Index, client *containerd.Client, ref string) (d ocispec.Descriptor, err error) {
-	labels := map[string]string{}
-	for i, m := range index.Manifests {
-		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
-	}
-	data, err := json.Marshal(index)
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
-	return writeContent(ctx, client.ContentStore(), ocispec.MediaTypeImageIndex, ref, bytes.NewReader(data), content.WithLabels(labels))
-}
-
-func RuncCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
+func RuncCheckpointContainerd(ctx context.Context, client *containerd.Client, task containerd.Task, opts ...CheckpointTaskOpts) (containerd.Image, error) {
 	if ctx == nil {
-		ctx = gocontext.Background()
+		ctx = context.Background()
 	}
 	// This is for garbage collection
 	ctx, done, err := client.WithLease(ctx)
@@ -1428,8 +1382,8 @@ func RuncCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 			Size:      d.Size,
 			Digest:    digest.Digest(d.Digest),
 			Platform: &v1.Platform{
-				OS:           goruntime.GOOS,
-				Architecture: goruntime.GOARCH,
+				OS:           runtime.GOOS,
+				Architecture: runtime.GOARCH,
 			},
 			Annotations: d.Annotations,
 		})
@@ -1474,7 +1428,7 @@ func RuncCheckpointContainerd(ctx gocontext.Context, client *containerd.Client, 
 	return containerd.NewImage(client, im), nil
 }
 
-func writeIndex(ctx gocontext.Context, client *containerd.Client, task containerd.Task, index *v1.Index) (d v1.Descriptor, err error) {
+func writeIndex(ctx context.Context, client *containerd.Client, task containerd.Task, index *v1.Index) (d v1.Descriptor, err error) {
 	labels := map[string]string{}
 	for i, m := range index.Manifests {
 		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
@@ -1486,7 +1440,7 @@ func writeIndex(ctx gocontext.Context, client *containerd.Client, task container
 	return writeContent(ctx, client.ContentStore(), v1.MediaTypeImageIndex, task.ID(), buf, content.WithLabels(labels))
 }
 
-func writeContent(ctx gocontext.Context, store content.Ingester, mediaType, ref string, r io.Reader, opts ...content.Opt) (d v1.Descriptor, err error) {
+func writeContent(ctx context.Context, store content.Ingester, mediaType, ref string, r io.Reader, opts ...content.Opt) (d v1.Descriptor, err error) {
 	writer, err := store.Writer(ctx, content.WithRef(ref))
 	if err != nil {
 		return d, err
@@ -1513,7 +1467,7 @@ func IsAlreadyExists(err error) bool {
 	return errors.Is(err, ErrAlreadyExists)
 }
 
-func checkpointImage(ctx gocontext.Context, client *containerd.Client, index *v1.Index, image string) error {
+func checkpointImage(ctx context.Context, client *containerd.Client, index *v1.Index, image string) error {
 	if image == "" {
 		return fmt.Errorf("cannot checkpoint image with empty name")
 	}
@@ -1525,7 +1479,7 @@ func checkpointImage(ctx gocontext.Context, client *containerd.Client, index *v1
 	return nil
 }
 
-func checkpointRWSnapshot(ctx gocontext.Context, client *containerd.Client, index *v1.Index, snapshotterName string, id string) error {
+func checkpointRWSnapshot(ctx context.Context, client *containerd.Client, index *v1.Index, snapshotterName string, id string) error {
 	opts := []diff.Opt{
 		diff.WithReference(fmt.Sprintf("checkpoint-rw-%s", id)),
 	}
@@ -1534,8 +1488,8 @@ func checkpointRWSnapshot(ctx gocontext.Context, client *containerd.Client, inde
 		return err
 	}
 	rw.Platform = &v1.Platform{
-		OS:           goruntime.GOOS,
-		Architecture: goruntime.GOARCH,
+		OS:           runtime.GOOS,
+		Architecture: runtime.GOARCH,
 	}
 	index.Manifests = append(index.Manifests, rw)
 	return nil
@@ -1828,13 +1782,21 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 			c.addCriuDumpMount(req, m)
 		}
 
+		// TODO(swarnimarun): was unused, fix in a separate PR after discussion
 		// Write the FD info to a file in the image directory
-		fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
+		// fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
+		// if err != nil {
+		// 	return err
+		// }
+		// err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
+		// if err != nil {
+		// 	return err
+		// }
+
+		fdsJSON, err := json.Marshal([]string{"/dev/null", "/dev/null", "/dev/null"})
 		if err != nil {
 			return err
 		}
-
-		fdsJSON, err = json.Marshal([]string{"/dev/null", "/dev/null", "/dev/null"})
 
 		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
 		if err != nil {

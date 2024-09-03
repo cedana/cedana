@@ -26,9 +26,11 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
+	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
@@ -52,6 +54,8 @@ const (
 	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
 )
 
+var Address = "0.0.0.0:8080"
+
 type service struct {
 	CRIU        *Criu
 	fs          *afero.Afero // for dependency-injection of filesystems (useful for testing)
@@ -63,6 +67,8 @@ type service struct {
 	gpuEnabled  bool
 	cudaVersion string
 	machineID   string
+
+	jobService *jobservice.JobService
 
 	task.UnimplementedTaskServiceServer
 }
@@ -78,6 +84,7 @@ type ServeOpts struct {
 	CUDAVersion  string
 	VSOCKEnabled bool
 	CedanaURL    string
+	GrpcPort     uint64
 }
 
 type pullGPUBinaryRequest struct {
@@ -85,7 +92,7 @@ type pullGPUBinaryRequest struct {
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	logger := ctx.Value("logger").(*zerolog.Logger)
+	logger := utils.GetLogger()
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -103,18 +110,24 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
+	js, err := jobservice.New()
+	if err != nil {
+		return nil, err
+	}
+
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
 		CRIU:        &Criu{},
 		fs:          &afero.Afero{Fs: afero.NewOsFs()},
 		db:          db.NewLocalDB(ctx),
-		logger:      logger,
-		store:       utils.NewCedanaStore(logger),
+		store:       utils.NewCedanaStore(),
 		serverCtx:   ctx,
 		gpuEnabled:  opts.GPUEnabled,
 		cudaVersion: opts.CUDAVersion,
 		machineID:   machineID,
+		jobService:  js,
+		logger:      logger,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -125,7 +138,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	if opts.VSOCKEnabled {
 		listener, err = vsock.Listen(VSOCK_PORT, nil)
 	} else {
-		listener, err = net.Listen(PROTOCOL, ADDRESS)
+		Address = fmt.Sprintf("localhost:%d", opts.GrpcPort)
+		listener, err = net.Listen(PROTOCOL, Address)
 	}
 
 	if err != nil {
@@ -138,7 +152,14 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	return server, err
 }
 
-func (s *Server) start() error {
+func (s *Server) start(ctx context.Context) error {
+	go func() {
+		if err := s.service.jobService.Start(ctx); err != nil {
+			// note: at the time of writing this comment, below is unreachable
+			// as we never return an error from the Start function
+			log.Error().Err(err).Msg("failed to run job service")
+		}
+	}()
 	return s.grpcServer.Serve(s.listener)
 }
 
@@ -149,7 +170,6 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
-	logger := cmdCtx.Value("logger").(*zerolog.Logger)
 
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
@@ -178,7 +198,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 
 			nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
 			if err != nil {
-				cancel(fmt.Errorf("Error opening network namespace: %v", err))
+				cancel(fmt.Errorf("error opening network namespace: %v", err))
 				return
 			}
 			defer unix.Close(nsFd)
@@ -186,7 +206,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			// Join the network namespace of the target process
 			err = unix.Setns(nsFd, unix.CLONE_NEWNET)
 			if err != nil {
-				cancel(fmt.Errorf("Error setting network namespace: %v", err))
+				cancel(fmt.Errorf("error setting network namespace: %v", err))
 			}
 		}
 
@@ -194,29 +214,29 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			if viper.GetString("gpu_controller_path") == "" {
 				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, opts.CUDAVersion)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not pull gpu controller")
+					log.Error().Err(err).Msg("could not pull gpu controller")
 					cancel(err)
 					return
 				}
 			} else {
-				logger.Debug().Str("path", viper.GetString("gpu_controller_path")).Msg("using gpu controller")
+				log.Debug().Str("path", viper.GetString("gpu_controller_path")).Msg("using gpu controller")
 			}
 
 			if viper.GetString("gpu_shared_lib_path") == "" {
 				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, utils.GpuSharedLibPath, opts.CUDAVersion)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not pull gpu shared lib")
+					log.Error().Err(err).Msg("could not pull gpu shared lib")
 					cancel(err)
 					return
 				}
 			} else {
-				logger.Debug().Str("path", viper.GetString("gpu_shared_lib_path")).Msg("using gpu shared lib")
+				log.Debug().Str("path", viper.GetString("gpu_shared_lib_path")).Msg("using gpu shared lib")
 			}
 		}
 
-		logger.Info().Str("address", ADDRESS).Msgf("server listening")
+		log.Info().Str("address", Address).Msgf("server listening")
 
-		err := server.start()
+		err := server.start(srvCtx)
 		if err != nil {
 			cancel(err)
 		}
@@ -229,20 +249,20 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	server.service.wg.Wait()
 
 	server.stop()
-	logger.Debug().Msg("stopped RPC server gracefully")
+	log.Debug().Msg("stopped RPC server gracefully")
 
 	return err
 }
 
 func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
-	s.logger.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
+	log.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
 	if controllerPath == "" {
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		s.logger.Fatal().Err(err)
+		log.Fatal().Err(err)
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
@@ -280,7 +300,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	if err != nil {
 		return nil, fmt.Errorf("could not start gpu controller %v", err)
 	}
-	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller starting...")
+	log.Debug().Int("PID", gpuCmd.Process.Pid).Msgf("GPU controller starting...")
 
 	// poll gpu controller to ensure it is running
 	var opts []grpc.DialOption
@@ -292,7 +312,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		if err == nil {
 			break
 		}
-		s.logger.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
+		log.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
 		time.Sleep(1 * time.Second)
 
 	}
@@ -310,24 +330,24 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		if err == nil && resp.Success {
 			break
 		}
-		s.logger.Debug().Msgf("Waiting for gpu-controller to start...")
+		log.Debug().Msgf("Waiting for gpu-controller to start...")
 		time.Sleep(1 * time.Second)
 	}
 
-	s.logger.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
+	log.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
 	return gpuCmd, nil
 }
 
 func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		logger.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
+		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
 
 		err := handler(srv, ss)
 
 		if err != nil {
-			logger.Error().Str("method", info.FullMethod).Err(err).Msg("gRPC stream failed")
+			log.Error().Str("method", info.FullMethod).Err(err).Msg("gRPC stream failed")
 		} else {
-			logger.Debug().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
+			log.Debug().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
 		}
 
 		return err
@@ -389,7 +409,7 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machin
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
-		logger.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 
 		resp, err := handler(ctx, req)
 
@@ -398,10 +418,10 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machin
 		)
 
 		if err != nil {
-			logger.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			log.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
 			span.RecordError(err)
 		} else {
-			logger.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
 		}
 
 		return resp, err
@@ -418,7 +438,7 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 	}
 
 	check, err := s.CRIU.Check()
-	s.logger.Debug().Str("resp", check).Msg("CRIU check")
+	log.Debug().Str("resp", check).Msg("CRIU check")
 	if err != nil {
 		resp.UnhealthyReasons = append(unhealthyReasons, fmt.Sprintf("CRIU: %v", err))
 	}
@@ -472,9 +492,9 @@ func (s *service) GPUHealthCheck(
 	defer func() {
 		err = cmd.Process.Kill()
 		if err != nil {
-			s.logger.Fatal().Err(err)
+			log.Fatal().Err(err)
 		}
-		s.logger.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
+		log.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
 	}()
 
 	var opts []grpc.DialOption
@@ -520,17 +540,16 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 }
 
 func pullGPUBinary(ctx context.Context, binary string, filePath string, version string) error {
-	logger := ctx.Value("logger").(*zerolog.Logger)
 	_, err := os.Stat(filePath)
 	if err == nil {
-		logger.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download another supported cuda version.")
+		log.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download another supported cuda version.")
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
-	logger.Debug().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
+	log.Debug().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
 
 	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
-	logger.Debug().Msgf("pulling %s from %s", binary, url)
+	log.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
 
@@ -540,7 +559,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		logger.Err(err).Msg("could not marshal request body")
+		log.Err(err).Msg("could not marshal request body")
 		return err
 	}
 
@@ -550,7 +569,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		logger.Err(err).Msg("gpu binary get request failed")
+		log.Err(err).Msg("gpu binary get request failed")
 		return err
 	}
 	defer resp.Body.Close()
@@ -560,17 +579,17 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		err = os.Chmod(filePath, 0755)
 	}
 	if err != nil {
-		logger.Err(err).Msg("could not create file")
+		log.Err(err).Msg("could not create file")
 		return err
 	}
 	defer file.Close()
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		logger.Err(err).Msg("could not read file from response")
+		log.Err(err).Msg("could not read file from response")
 		return err
 	}
-	logger.Debug().Msgf("%s downloaded to %s", binary, filePath)
+	log.Debug().Msgf("%s downloaded to %s", binary, filePath)
 	return err
 }
 
