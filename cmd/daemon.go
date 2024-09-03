@@ -71,7 +71,8 @@ var startDaemonCmd = &cobra.Command{
 			CUDAVersion:  cudaVersions[cudaVersion],
 			VSOCKEnabled: vsockEnabledFlag,
 			CedanaURL:    cedanaURL,
-			GrpcPort:     8080,
+			// TODO(swarnimarun): allow flag to customize the port
+			GrpcPort: 8080,
 		})
 
 		if err != nil {

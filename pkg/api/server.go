@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +25,6 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
-	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
@@ -68,8 +66,6 @@ type service struct {
 	cudaVersion string
 	machineID   string
 
-	jobService *jobservice.JobService
-
 	task.UnimplementedTaskServiceServer
 }
 
@@ -110,11 +106,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	js, err := jobservice.New()
-	if err != nil {
-		return nil, err
-	}
-
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
@@ -126,7 +117,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		gpuEnabled:  opts.GPUEnabled,
 		cudaVersion: opts.CUDAVersion,
 		machineID:   machineID,
-		jobService:  js,
 		logger:      logger,
 	}
 
@@ -153,13 +143,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 func (s *Server) start(ctx context.Context) error {
-	go func() {
-		if err := s.service.jobService.Start(ctx); err != nil {
-			// note: at the time of writing this comment, below is unreachable
-			// as we never return an error from the Start function
-			log.Error().Err(err).Msg("failed to run job service")
-		}
-	}()
 	return s.grpcServer.Serve(s.listener)
 }
 
@@ -314,7 +297,6 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		}
 		log.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
 		time.Sleep(1 * time.Second)
-
 	}
 	defer gpuConn.Close()
 
@@ -352,42 +334,6 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 
 		return err
 	}
-}
-
-func redactValues(req interface{}, keys, sensitiveSubstrings []string) interface{} {
-	val := reflect.Indirect(reflect.ValueOf(req))
-	if !val.IsValid() {
-		return req
-	}
-
-	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		fieldName := val.Type().Field(i).Name
-
-		if field.Kind() == reflect.String {
-			isSensitive := false
-			for _, substring := range sensitiveSubstrings {
-				if strings.Contains(fieldName, substring) {
-					isSensitive = true
-					break
-				}
-			}
-
-			if isSensitive {
-				field.SetString("REDACTED")
-				continue
-			}
-
-			for _, key := range keys {
-				if fieldName == key {
-					field.SetString("REDACTED")
-					break
-				}
-			}
-		}
-	}
-
-	return req
 }
 
 // TODO NR - this needs a deep copy to properly redact
@@ -516,7 +462,7 @@ func (s *service) GPUHealthCheck(
 	}
 
 	if !gpuResp.Success {
-		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("gpu health check did not return success"))
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, "gpu health check did not return success")
 	}
 
 	resp.HealthCheckStats.GPUHealthCheck = gpuResp
@@ -564,6 +510,10 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		log.Err(err).Msg("failed to build http post request with jsonBody")
+		return err
+	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 	req.Header.Set("Content-Type", "application/json")
 
