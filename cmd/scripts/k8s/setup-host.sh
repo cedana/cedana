@@ -85,11 +85,6 @@ export PATH=$PATH:/usr/local/go/bin
 
 # Run the Cedana daemon setup script
 cd /
-<<<<<<< HEAD
-IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
-'
-=======
 ./build-start-daemon.sh --systemctl --no-build
->>>>>>> main
 
 EOT
