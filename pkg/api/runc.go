@@ -72,7 +72,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
-		LeaveRunning:    true,
+		LeaveRunning:    args.CriuOpts.LeaveRunning,
 		TcpEstablished:  isUsingTCP,
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
