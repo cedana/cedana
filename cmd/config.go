@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
+	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -23,7 +23,7 @@ var showCmd = &cobra.Command{
 	Short: "show config that the daemon is running with",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err

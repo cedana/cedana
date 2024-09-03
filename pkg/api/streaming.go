@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"

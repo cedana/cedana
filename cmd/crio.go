@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
+	"github.com/cedana/cedana/pkg/api"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -14,7 +14,7 @@ var dumpCRIORootfs = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -62,7 +62,7 @@ var pushCRIOImage = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err

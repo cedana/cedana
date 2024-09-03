@@ -7,8 +7,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
+	"github.com/cedana/cedana/pkg/api"
 	"github.com/olekukonko/tablewriter"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -19,7 +19,7 @@ var psCmd = &cobra.Command{
 	Short: "List managed processes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating client")
 			return err

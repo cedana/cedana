@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/cedana/cedana/pkg/api/services/rpc"
+	"github.com/cedana/cedana-api/go/rpc"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )

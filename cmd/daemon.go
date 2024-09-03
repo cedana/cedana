@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/api"
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -88,7 +87,7 @@ var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if daemon is running and healthy",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating client")
 			return err

@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
+	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -32,7 +33,7 @@ var dumpProcessCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -83,8 +84,11 @@ var dumpKataCmd = &cobra.Command{
 		ctx := cmd.Context()
 
 		vm := args[0]
-
-		cts, err := services.NewVSockClient(vm)
+		cid, err := utils.ExtractCID(vm)
+		if err != nil {
+			log.Error().Err(err).Send()
+		}
+		cts, err := task.NewVSockClient(cid, api.VSOCK_PORT)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -103,7 +107,7 @@ var dumpKataCmd = &cobra.Command{
 		}
 
 		go func() {
-			listener, err := vsock.Listen(9999, nil)
+			listener, err := vsock.Listen(api.VSOCK_PORT, nil)
 			if err != nil {
 				return
 			}
@@ -170,7 +174,7 @@ var dumpJobCmd = &cobra.Command{
 		ctx := cmd.Context()
 
 		// TODO NR - this needs to be extended to include container checkpoints
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -226,7 +230,7 @@ var dumpContainerdCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -314,7 +318,7 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -373,7 +377,7 @@ var dumpRuncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		cts, err := task.NewClient(api.Address)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err

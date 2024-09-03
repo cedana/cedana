@@ -13,9 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/api"
-	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -171,12 +170,12 @@ func startHelper(ctx context.Context, startChroot bool) {
 	select {}
 }
 
-func createClientWithRetry() (*services.ServiceClient, error) {
-	var client *services.ServiceClient
+func createClientWithRetry() (*task.ServiceClient, error) {
+	var client *task.ServiceClient
 	var err error
 
 	for i := 0; i < maxRetries; i++ {
-		client, err = services.NewClient()
+		client, err = task.NewClient(api.Address)
 		if err == nil {
 			// Successfully created the client, break out of the loop
 			break

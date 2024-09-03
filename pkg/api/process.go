@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"

@@ -1,7 +1,7 @@
 package containerd
 
 import (
-	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"

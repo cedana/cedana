@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	container "github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"

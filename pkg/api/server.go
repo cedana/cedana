@@ -21,9 +21,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/cedana/cedana-api/go/gpu"
+	task "github.com/cedana/cedana-api/go/task"
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
