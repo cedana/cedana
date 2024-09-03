@@ -130,12 +130,12 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 
 	if err != nil {
 		// don't want to error out and break
-		return nil, nil
+		return state, nil
 	}
 	// used for network barriers (TODO: NR)
 	conns, err := p.Connections()
 	if err != nil {
-		return nil, nil
+		return state, nil
 	}
 	for _, conn := range conns {
 		Laddr := &task.Addr{
@@ -173,7 +173,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	// if it doesn't - we inheritFd it?
 	cwd, err := p.Cwd()
 	if err != nil {
-		return nil, nil
+		return state, nil
 	}
 
 	// system information
