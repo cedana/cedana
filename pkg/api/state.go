@@ -177,33 +177,39 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 	}
 
 	// system information
-	cpuinfo, _ := cpu.Info()
-	vcpus, _ := cpu.Counts(true)
-	state.CPUInfo = &task.CPUInfo{
-		Count:      int32(vcpus),
-		CPU:        cpuinfo[0].CPU,
-		VendorID:   cpuinfo[0].VendorID,
-		Family:     cpuinfo[0].Family,
-		PhysicalID: cpuinfo[0].PhysicalID,
+	cpuinfo, err := cpu.Info()
+	vcpus, err := cpu.Counts(true)
+	if err == nil {
+		state.CPUInfo = &task.CPUInfo{
+			Count:      int32(vcpus),
+			CPU:        cpuinfo[0].CPU,
+			VendorID:   cpuinfo[0].VendorID,
+			Family:     cpuinfo[0].Family,
+			PhysicalID: cpuinfo[0].PhysicalID,
+		}
 	}
 
-	mem, _ := mem.VirtualMemory()
-	state.MemoryInfo = &task.MemoryInfo{
-		Total:     mem.Total,
-		Available: mem.Available,
-		Used:      mem.Used,
+	mem, err := mem.VirtualMemory()
+	if err == nil {
+		state.MemoryInfo = &task.MemoryInfo{
+			Total:     mem.Total,
+			Available: mem.Available,
+			Used:      mem.Used,
+		}
 	}
 
-	host, _ := host.Info()
-	state.HostInfo = &task.HostInfo{
-		HostID:               host.HostID,
-		Hostname:             host.Hostname,
-		OS:                   host.OS,
-		Platform:             host.Platform,
-		KernelVersion:        host.KernelVersion,
-		KernelArch:           host.KernelArch,
-		VirtualizationSystem: host.VirtualizationSystem,
-		VirtualizationRole:   host.VirtualizationRole,
+	host, err := host.Info()
+	if err == nil {
+		state.HostInfo = &task.HostInfo{
+			HostID:               host.HostID,
+			Hostname:             host.Hostname,
+			OS:                   host.OS,
+			Platform:             host.Platform,
+			KernelVersion:        host.KernelVersion,
+			KernelArch:           host.KernelArch,
+			VirtualizationSystem: host.VirtualizationSystem,
+			VirtualizationRole:   host.VirtualizationRole,
+		}
 	}
 
 	// ignore sending network for now, little complicated
