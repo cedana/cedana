@@ -46,6 +46,24 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
+func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
+	buf := new(bytes.Buffer)
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	cmd.Stderr = buf
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+
+	for buf.Len() == 0 {
+		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	return cmd
+}
+
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
@@ -81,8 +99,15 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
+	var cmd *exec.Cmd
 	if args.Stream {
-		tempDir = args.CheckpointPath
+		absPath, err := filepath.Abs(args.CheckpointPath)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		tempDir = filepath.Dir(absPath)
+		cmd = s.setupStreamerServe(tempDir)
+		s.logger.Info().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
@@ -324,7 +349,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
@@ -381,52 +406,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = newBundle + "/userdata"
 	}
 
-	if isK3s {
-		var spec rspec.Spec
-
-		links := []linkPairs{
-			{"/host/var/run/netns", "/var/run/netns"},
-			{"/host/run/containerd", "/run/containerd"},
-			{"/host/var/run/secrets", "/var/run/secrets"},
-			{"/host/var/lib/rancher", "/var/lib/rancher"},
-			{"/host/run/k3s", "/run/k3s"},
-			{"/host/var/lib/kubelet", "/var/lib/kubelet"},
-		}
-		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
-		for _, link := range links {
-			// Check if the target file exists
-			if _, err := os.Stat(link.Value); os.IsNotExist(err) {
-				// Target file does not exist, attempt to create a symbolic link
-				if err := os.Symlink(link.Key, link.Value); err != nil {
-					// Handle the error if creating symlink fails
-					fmt.Println("Error creating symlink:", err)
-					// Handle the error or log it as needed
-				}
-			} else if err != nil {
-				// Handle other errors from os.Stat if any
-				fmt.Println("Error checking file info:", err)
-				// Handle the error or log it as needed
-			}
-		}
-		// ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
-		// parts := strings.Split(opts.Bundle, "/")
-		// oldContainerID := parts[7]
-		configPath := opts.Bundle + "/config.json" // Replace with your actual path
-
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			fmt.Println("Error reading config.json:", err)
-			return err
-		}
-
-		// Unmarshal JSON data into a map
-		if err := json.Unmarshal(data, &spec); err != nil {
-			fmt.Println("Error decoding config.json:", err)
-			return err
-		}
-	}
-
-	err := container.RuncRestore(imgPath, containerId, *opts)
+	err := container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
 		return err
 	}

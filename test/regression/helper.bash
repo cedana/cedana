@@ -89,7 +89,8 @@ function rootfs_restore() {
 function runc_checkpoint() {
     local dir="$1"
     local job_id="$2"
-    cedana dump runc --dir "$dir" --id "$job_id"
+    shift 2
+    cedana dump runc --dir "$dir" --id "$job_id" $@
 }
 # Bundle for jupyter notebook restore
 # /run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore

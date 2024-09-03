@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -189,6 +190,12 @@ var dumpJobCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		if stream {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				logger.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
@@ -373,7 +380,7 @@ var dumpRuncCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		pid, _ := cmd.Flags().GetInt(pidFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
-
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
 
 		var externalNamespaces []string
@@ -396,6 +403,7 @@ var dumpRuncCmd = &cobra.Command{
 			LeaveRunning:    leaveRunning,
 			TcpEstablished:  tcpEstablished,
 			External:        externalNamespaces,
+			FileLocks:       fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -499,6 +507,7 @@ func init() {
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
+	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 
 	dumpCmd.AddCommand(dumpCRIORootfs)
 	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")

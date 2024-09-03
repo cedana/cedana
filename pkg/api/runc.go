@@ -131,9 +131,16 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		NetPid:        int(args.Opts.NetPid),
 		StateRoot:     args.Opts.Root,
 	}
+
+	criuOpts := &container.CriuOpts{
+		MntnsCompatMode: false, // XXX: Should instead take value from args
+		TcpClose:        true,  // XXX: Should instead take value from args
+		FileLocks:       args.CriuOpts.FileLocks,
+	}
+
 	switch args.Type {
 	case task.CRType_LOCAL:
-		err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, args.IsK3S, []string{}, opts)
+		err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts)
 		if err != nil {
 			err = status.Error(codes.Internal, err.Error())
 			return nil, err
@@ -147,7 +154,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		if err != nil {
 			return nil, err
 		}
-		err = s.runcRestore(ctx, *zipFile, args.ContainerID, args.IsK3S, []string{}, opts)
+		err = s.runcRestore(ctx, *zipFile, args.ContainerID, criuOpts, opts)
 		if err != nil {
 			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
 			return nil, staterr

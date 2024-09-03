@@ -321,8 +321,8 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if !args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
 			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
 		}
-		if args.Stream && !stat.IsDir() {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be directory (--stream enabled)")
+		if args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".lz4")) {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be lz4 file (--stream enabled)")
 		}
 	case task.CRType_REMOTE:
 		if args.CheckpointID == "" {
