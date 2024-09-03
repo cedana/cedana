@@ -123,6 +123,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
 	if err != nil {
+		s.logger.Error().Err(err).Msg("Runc dump failed")
 		dumpLogContent, logErr := readDumpLog(dumpOpts.CriuOpts.ImagesDirectory)
 		if logErr != nil {
 			dumpLogContent = "Failed to read dump.log: " + logErr.Error()
@@ -208,7 +209,6 @@ func (s *service) ContainerdQuery(ctx context.Context, args *task.ContainerdQuer
 }
 
 func (s *service) ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
-
 	containerdService, err := containerd.New(ctx, args.Address, s.logger)
 	if err != nil {
 		return &task.ContainerdRootfsDumpResp{}, err
