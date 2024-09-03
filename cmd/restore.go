@@ -5,7 +5,9 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -13,11 +15,9 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/mdlayher/vsock"
-	"github.com/cedana/cedana/pkg/utils"
-	"io"
-	"time"
 	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/mdlayher/vsock"
 )
 
 var restoreCmd = &cobra.Command{
@@ -347,16 +347,16 @@ var runcRestoreCmd = &cobra.Command{
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		logger.Log().Msg(id)
-		isK3s, _ := cmd.Flags().GetBool(isK3sFlag)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
 			ContainerID: id,
-			IsK3S:       isK3s,
 			Opts:        opts,
 			Type:        task.CRType_LOCAL,
-			// CheckpointId: checkpointId,
-			// FIXME YA: Where does this come from?
+			CriuOpts: &task.CriuOpts{
+				FileLocks: fileLocks,
+			},
 		}
 
 		resp, err := cts.RuncRestore(ctx, restoreArgs)
@@ -412,6 +412,7 @@ func init() {
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
+	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
 
 	rootCmd.AddCommand(restoreCmd)
 }
