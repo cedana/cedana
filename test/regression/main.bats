@@ -193,6 +193,10 @@ teardown() {
     local dir="/tmp/jupyter-checkpoint"
 
     run start_jupyter_notebook $container_id
+    echo "$output"
+
+    [[ $? -eq 0 ]] || { echo "Failed to start Jupyter Notebook"; return 1; }
+
     run containerd_checkpoint $container_id $image_ref $containerd_sock $namespace $dir
     echo "$output"
 
@@ -214,7 +218,6 @@ teardown() {
 
     [[ "$output" == *"success"* ]]
 }
-
 
 @test "Simple runc checkpoint" {
     local rootfs="http://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"

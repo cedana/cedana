@@ -126,6 +126,9 @@ else
         $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
     else
         $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" &
+        # only systemctl writes to /var/log/cedana-daemon.log, if starting w/out systemctl
+        # still want to write logs to a file
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS 2>&1 | tee -a /var/log/cedana-daemon.log &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi

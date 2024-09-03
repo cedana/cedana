@@ -10,7 +10,7 @@ TITLE = os.getenv('RELEASE_TITLE') or 'Release summary'
 DESCRIPTION = os.getenv('RELEASE_DESCRIPTION') or os.getenv('TAG') or '...'
 RELEASE_NOTES_URL = (
     os.getenv('RELEASE_NOTES_URL')
-    or 'https://github.com/cedana/cedana/releases'
+    or 'https://github.com/cedana/cedana/pkg/releases'
 )
 BODY = os.getenv('RELEASE_BODY')
 TAG = os.getenv('TAG')

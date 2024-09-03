@@ -25,7 +25,7 @@ RUN <<EOT
 set -eux
 apt-get update
 apt-get install -y software-properties-common git wget zip
-apt-get install -y libgpgme-dev libseccomp-dev libbtrfs-dev
+apt-get install -y libgpgme-dev libseccomp-dev libbtrfs-dev btrfs-progs
 rm -rf /var/lib/apt/lists/*
 EOT
 

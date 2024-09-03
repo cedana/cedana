@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/types"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )

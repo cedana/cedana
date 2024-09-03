@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,7 +41,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		_, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
+		_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to initialize otel")
 			return err
@@ -61,9 +61,20 @@ var startDaemonCmd = &cobra.Command{
 			return err
 		}
 
+		cedanaURL := viper.GetString("connection.cedana_url")
+		if cedanaURL == "" {
+			cedanaURL = "unset"
+		}
+
 		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], VSOCKEnabled: vsockEnabledFlag})
+		err = api.StartServer(ctx, &api.ServeOpts{
+			GPUEnabled:   gpuEnabled,
+			CUDAVersion:  cudaVersions[cudaVersion],
+			VSOCKEnabled: vsockEnabledFlag,
+			CedanaURL:    cedanaURL,
+		})
+
 		if err != nil {
 			logger.Error().Err(err).Msgf("stopping daemon")
 			return err

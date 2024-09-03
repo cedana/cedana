@@ -22,6 +22,16 @@ on:
         description: 'Run regression test with debugging enabled'
         required: false
         default: false
+      debug_correctness_test:
+        type: boolean
+        description: 'Run correctness test with debugging enabled'
+        required: false
+        default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
+        required: false
+        default: false
   workflow_call: # to reuse this workflow in other worflows
     inputs:
       debug_build:
@@ -37,6 +47,16 @@ on:
       debug_regression_test:
         type: boolean
         description: 'Run regression test with debugging enabled'
+        required: false
+        default: false
+      debug_correctness_test:
+        type: boolean
+        description: 'Run correctness test with debugging enabled'
+        required: false
+        default: false
+      debug_unit_test:
+        type: boolean
+        description: 'Run unit test with debugging enabled'
         required: false
         default: false
 
@@ -100,7 +120,7 @@ jobs:
           check_all_files_with_shebangs: "true" # Optional
 
   smoke-test:
-    name: Smoke
+    name: Smoke Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -135,7 +155,7 @@ jobs:
         run: sudo -E make -C scripts/ci smoke
 
   regression-test:
-    name: Regression
+    name: Regression Tests
     runs-on: ubicloud-standard-8
     needs: build
     steps:
@@ -168,3 +188,78 @@ jobs:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
+
+  correctness-test:
+    name: Correctness Tests
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_correctness_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run: |
+          chmod +x cedana
+          sudo -E make -C scripts/ci setup-full
+        env:
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+
+      - name: Run correctness tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+        run: sudo -E make -C scripts/ci correctness
+
+  unit-test:
+    name: Unit Tests
+    runs-on: ubicloud-standard-8
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_go_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Install Go 1.23
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+          check-latest: true
+
+      - name: Setup CI
+        run: |
+          chmod +x cedana
+          sudo -E make -C scripts/ci setup-build
+
+      - name: Run unit tests
+        run: |
+          go test ./pkg/utils -v
+        env:
+          GO111MODULE: "on"
+          CI_BRANCH: ${{ github.ref_name }}
