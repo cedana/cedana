@@ -72,7 +72,7 @@ var helperCmd = &cobra.Command{
 			}
 		}
 
-		startOtelCol, _ := cmd.Flags().GetBool("start-otelcol")
+        startOtelCol, _ := os.LookupEnv("CEDANA_OTEL_ENABLED")
 		if startOtelCol {
 			// check for signoz_access_token
 			apikey, err := getTelemetryAPIKey()
