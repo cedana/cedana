@@ -35,4 +35,5 @@ const (
 	typeFlag             = "type"
 	attachFlag           = "attach"
 	streamFlag           = "stream"
+	leaveRunningFlag     = "leave-running"
 )
