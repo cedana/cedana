@@ -3,9 +3,11 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -129,14 +131,13 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	if err != nil {
 		return "", err
 	}
-
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, stream bool) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
 	start := time.Now()
 	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
 	if !ok {
@@ -144,8 +145,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	}
 
 	var compressedCheckpointPath string
-	if stream {
-		compressedCheckpointPath = dumpdir
+	if streamCmd != nil {
+		compressedCheckpointPath = filepath.Join(dumpdir, "img.lz4")
 	} else {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".tar"}, "")
 	}
@@ -154,14 +155,16 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	state.CheckpointState = task.CheckpointState_CHECKPOINTED
 
 	// sneak in a serialized state obj
-	err := serializeStateToDir(dumpdir, state, stream)
+	err := serializeStateToDir(dumpdir, state, streamCmd != nil)
 	if err != nil {
 		s.logger.Fatal().Err(err)
 	}
 
 	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
-	if !stream {
+	if streamCmd != nil {
+		streamCmd.Wait()
+	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
 			s.logger.Fatal().Err(err)
@@ -254,7 +257,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state, false)
+	s.postDump(ctx, opts.ImagesDirectory, state, nil)
 
 	return nil
 }
@@ -262,9 +265,27 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state, false)
+	s.postDump(ctx, imagePath, state, nil)
 
 	return nil
+}
+
+func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
+	buf := new(bytes.Buffer)
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "capture")
+	cmd.Stderr = buf
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+
+	for buf.Len() == 0 {
+		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	return cmd
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -272,6 +293,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	dumpdir, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
+	}
+	var cmd *exec.Cmd
+	if args.Stream {
+		cmd = s.setupStreamerCapture(dumpdir)
 	}
 
 	var GPUCheckpointed bool
@@ -325,7 +350,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state, args.Stream)
+	s.postDump(ctx, dumpdir, state, cmd)
 
 	return nil
 }
@@ -367,7 +392,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		return err
 	}
 
-	s.postDump(ctx, dumpdir, state, false)
+	s.postDump(ctx, dumpdir, state, nil)
 
 	conn, err := vsock.Dial(vsock.Host, 9999, nil)
 	if err != nil {
