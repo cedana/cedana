@@ -26,6 +26,11 @@ on:
         description: "Run build & push (arm64 image) with debugging enabled"
         required: false
         default: false
+      debug_bench:
+        type: boolean
+        description: 'Run the benchmark with debugging enabled'
+        required: false
+        default: false
       post_summary:
         type: boolean
         description: "Post summary to slack"
