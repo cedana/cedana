@@ -99,9 +99,6 @@ jobs:
         with:
           name: build
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
       - name: Get branch name
         shell: bash
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
