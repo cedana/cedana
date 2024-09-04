@@ -53,6 +53,9 @@ jobs:
       debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
       debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
       debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_correctness_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_unit_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_bench: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
 
   build-publish-amd64:
     name: Build & Publish (amd64)
