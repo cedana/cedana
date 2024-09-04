@@ -7,7 +7,6 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 # Enter chroot environment on the host
 env \
-    CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_API_SERVER="$CEDANA_API_SERVER" \
     CEDANA_API_KEY="$CEDANA_API_KEY" \
     chroot /host /bin/bash <<'EOT'
