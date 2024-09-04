@@ -51,21 +51,21 @@ var helperCmd = &cobra.Command{
 
 		restart, _ := cmd.Flags().GetBool("restart")
 		if restart {
-			if err := runScript("bash", restartScript); err != nil {
+			if err := runScript("bash", restartScript, true); err != nil {
 				log.Error().Err(err).Msg("Error restarting")
 			}
 		}
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
-			if err := runScript("bash", setupHostScript); err != nil {
+			if err := runScript("bash", setupHostScript, true); err != nil {
 				log.Error().Err(err).Msg("Error setting up host")
 			}
 		}
 
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
-			if err := runScript("bash", chrootStartScript); err != nil {
+			if err := runScript("bash", chrootStartScript, true); err != nil {
 				log.Error().Err(err).Msg("Error with chroot and starting daemon")
 			}
 		}
@@ -79,7 +79,7 @@ var helperCmd = &cobra.Command{
 			}
 
 			os.Setenv("SIGNOZ_ACCESS_TOKEN", apikey)
-			if err := runScript("bash", startOtelColScript); err != nil {
+			if err := runScript("bash", startOtelColScript, false); err != nil {
 				log.Error().Err(err).Msg("Error starting otelcol")
 			}
 		}
@@ -104,7 +104,7 @@ var destroyCmd = &cobra.Command{
 }
 
 func destroyCedana(ctx context.Context) error {
-	if err := runScript("bash", cleanupHostScript); err != nil {
+	if err := runScript("bash", cleanupHostScript, true); err != nil {
 		log.Error().Err(err).Msg("Cleanup host script failed")
 
 		return err
@@ -264,17 +264,24 @@ func runCommand(command string, args ...string) error {
 	return cmd.Run()
 }
 
-func runScript(command, script string) error {
+func runScript(command, script string, logOutput bool) error {
 	cmd := exec.Command(command)
 	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	if logOutput {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
+	}
+
 	return cmd.Run()
 }
 
 func startDaemon(startChroot bool) error {
 	if startChroot {
-		err := runScript("bash", chrootStartScript)
+		err := runScript("bash", chrootStartScript, true)
 		if err != nil {
 			return err
 		}
