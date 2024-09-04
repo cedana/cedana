@@ -78,7 +78,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --init --privileged --ipc=host --pid=host --cgroupns=host -v /var/run/docker:/var/run/docker -v /var/lib/docker:/var/lib/docker -v /var/run/containerd:/var/run/containerd
+      options: --init --privileged --ipc=host --pid=host --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/docker:/var/run/docker -v /var/lib/docker:/var/lib/docker -v /var/run/containerd:/var/run/containerd
     defaults:
       run:
         working-directory: /src
