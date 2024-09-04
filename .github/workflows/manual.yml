@@ -28,46 +28,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: 'recursive'
+  # build:
+  #   name: Build
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: ${{ github.workspace }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #         fetch-tags: true
+  #         submodules: 'recursive'
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v4
+  #       with:
+  #         go-version: '1.22'
 
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
-        with:
-          limit-access-to-actor: true
+  #     - name: Setup debugging session
+  #       uses: mxschmitt/action-tmate@v3
+  #       if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
+  #       with:
+  #         limit-access-to-actor: true
 
-      - name: Setup CI
-        run: sudo -E make -C scripts/ci setup-build
+  #     - name: Setup CI
+  #       run: sudo -E make -C scripts/ci setup-build
 
-      - name: Build
-        run: sudo -E ./build.sh
+  #     - name: Build
+  #       run: sudo -E ./build.sh
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: ./cedana
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: build
+  #         path: ./cedana
 
   benchmark:
     name: Benchmark
     # if: github.event.inputs.bench == 'true' TODO: uncomment later
-    needs: build
+    # needs: build
     permissions:
       contents: 'read'
       packages: 'read'
@@ -84,11 +84,17 @@ jobs:
         working-directory: /src
     steps:
       # Github actions unfortunately mounts the docker socket, which we don't want
-      - name: Workaround for dind
-        run: |
-          umount /var/run/docker.sock
-          sudo service supervisor start
-          supervisorctl restart dockerd
+      # - name: Workaround for dind
+      #   run: |
+      #     umount /var/run/docker.sock
+      #     sudo service supervisor start
+      #     supervisorctl restart dockerd
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        # if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench }}
+        with:
+          limit-access-to-actor: true
 
       - id: auth
         name: Authenticate to Google Cloud
@@ -125,12 +131,6 @@ jobs:
           mv temp.json bench.json
           jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        # if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench }}
-        with:
-          limit-access-to-actor: true
 
       - name: Run
         env:
