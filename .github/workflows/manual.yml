@@ -84,7 +84,7 @@ jobs:
         working-directory: /src
     steps:
       # Github actions unfortunately mounts the docker socket, which we don't want
-      - id: Workaround for dind
+      - name: Workaround for dind
         run: |
           umount /var/run/docker.sock
           sudo service supervisor start
