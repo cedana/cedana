@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Copy Cedana binaries to the host
