@@ -4,19 +4,20 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/xid"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
 	"github.com/mdlayher/vsock"
-	"os"
-	"io"
 )
 
 var dumpCmd = &cobra.Command{
@@ -30,17 +31,17 @@ var dumpProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
-			logger.Error().Msgf("Error parsing pid: %v", err)
+			log.Error().Msgf("Error parsing pid: %v", err)
 			return err
 		}
 
@@ -62,13 +63,13 @@ var dumpProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -80,19 +81,18 @@ var dumpKataCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 
 		vm := args[0]
 
 		cts, err := services.NewVSockClient(vm)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		id := xid.New().String()
-		logger.Info().Msgf("no job id specified, using %s", id)
+		log.Info().Msgf("no job id specified, using %s", id)
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 
@@ -145,13 +145,13 @@ var dumpKataCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				log.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				log.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -168,11 +168,11 @@ var dumpJobCmd = &cobra.Command{
 	Short: "Manually checkpoint a running job to a directory [-d]",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+
 		// TODO NR - this needs to be extended to include container checkpoints
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -180,7 +180,7 @@ var dumpJobCmd = &cobra.Command{
 		id := args[0]
 
 		if id == "" {
-			logger.Error().Msgf("no job id specified")
+			log.Error().Msgf("no job id specified")
 			return err
 		}
 
@@ -189,6 +189,12 @@ var dumpJobCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		if stream {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		dumpArgs := task.DumpArgs{
 			JID:            id,
 			Dir:            dir,
@@ -201,13 +207,13 @@ var dumpJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -219,10 +225,10 @@ var dumpContainerdCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -289,13 +295,13 @@ var dumpContainerdCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				log.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				log.Error().Msgf("Checkpoint task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("success")
+		log.Info().Msgf("success")
 
 		return nil
 	},
@@ -307,18 +313,30 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		id, err := cmd.Flags().GetString(idFlag)
+		if err != nil {
+			log.Warn().Err(err).Send()
+		}
 		ref, err := cmd.Flags().GetString(refFlag)
+		if err != nil {
+			log.Warn().Err(err).Send()
+		}
 		addr, err := cmd.Flags().GetString(addressFlag)
+		if err != nil {
+			log.Warn().Err(err).Send()
+		}
 		ns, err := cmd.Flags().GetString(namespaceFlag)
+		if err != nil {
+			log.Warn().Err(err).Send()
+		}
 
 		// Default to moby if ns is not provided
 		if ns == "" {
@@ -336,13 +354,13 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint rootfs failed: %v, %v", st.Message(), st.Code())
+				log.Error().Msgf("Checkpoint rootfs failed: %v, %v", st.Message(), st.Code())
 			} else {
-				logger.Error().Msgf("Checkpoint rootfs failed: %v", err)
+				log.Error().Msgf("Checkpoint rootfs failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Saved rootfs and stored in new image: %s", resp.ImageRef)
+		log.Info().Msgf("Saved rootfs and stored in new image: %s", resp.ImageRef)
 
 		return nil
 	},
@@ -354,17 +372,17 @@ var dumpRuncCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		root, _ := cmd.Flags().GetString(rootFlag)
 		if runcRootPath[root] == "" {
-			logger.Error().Msgf("container root %s not supported", root)
+			log.Error().Msgf("container root %s not supported", root)
 			return err
 		}
 
@@ -372,7 +390,8 @@ var dumpRuncCmd = &cobra.Command{
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		pid, _ := cmd.Flags().GetInt(pidFlag)
-
+		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
 
 		var externalNamespaces []string
@@ -392,38 +411,35 @@ var dumpRuncCmd = &cobra.Command{
 		criuOpts := &task.CriuOpts{
 			ImagesDirectory: dir,
 			WorkDirectory:   wdPath,
-			LeaveRunning:    true,
+			LeaveRunning:    leaveRunning,
 			TcpEstablished:  tcpEstablished,
 			External:        externalNamespaces,
+			FileLocks:       fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
-			logger.Error().Msgf("Error getting container id: %v", err)
+			log.Error().Msgf("Error getting container id: %v", err)
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root: runcRootPath[root],
-			// CheckpointPath: checkpointPath,
-			// FIXME YA: Where does this come from?
+			Root:        runcRootPath[root],
 			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
-			// TODO BS: hard coded for now
-			Type: task.CRType_LOCAL,
 		}
 
 		resp, err := cts.RuncDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Checkpoint task failed: %v", err)
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
 
 		return nil
 	},
@@ -497,6 +513,8 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
+	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
+	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 
 	dumpCmd.AddCommand(dumpCRIORootfs)
 	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")

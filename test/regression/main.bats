@@ -216,7 +216,7 @@ teardown() {
     run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
     echo "$output"
 
-    [[ "$output" == *"success"* ]]
+    [[ "$output" == *"Success"* ]]
 }
 
 @test "Simple runc checkpoint" {
@@ -249,7 +249,7 @@ teardown() {
     [ $nlines_after -gt $nlines_before ]
 
     # checkpoint the container
-    runc_checkpoint $dumpdir $job_id
+    runc_checkpoint $dumpdir $job_id --leave-running
     [ -d $dumpdir ]
 
     # clean up

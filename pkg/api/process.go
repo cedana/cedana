@@ -23,6 +23,8 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -63,7 +65,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
 	}
-	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+	ctx = context.WithValue(ctx, utils.DumpStatsKey, &dumpStats)
 
 	if args.Dir == "" {
 		args.Dir = viper.GetString("shared_storage.dump_storage_dir")
@@ -226,15 +228,15 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 
 	pid, exitCode, err := s.run(ctx, args, stream)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("failed to run task")
+		log.Error().Err(err).Msg("failed to run task")
 		return nil, status.Error(codes.Internal, "failed to run task")
 	}
-	s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
+	log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing process")
 	state.PID = pid
 	state.JobState = task.JobState_JOB_RUNNING
 	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
-		s.logger.Fatal().Err(err).Msg("failed to update state after run")
+		log.Fatal().Err(err).Msg("failed to update state after run")
 		syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
 		return nil, status.Error(codes.Internal, "failed to update state after run")
 	}
@@ -249,7 +251,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		state.JobState = task.JobState_JOB_DONE
 		err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 		if err != nil {
-			s.logger.Fatal().Err(err).Msg("failed to update state after done")
+			log.Fatal().Err(err).Msg("failed to update state after done")
 			return nil, status.Error(codes.Internal, "failed to update state after done")
 		}
 	} else {
@@ -260,7 +262,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
-				s.logger.Fatal().Err(err).Msg("failed to update state after done")
+				log.Fatal().Err(err).Msg("failed to update state after done")
 				return
 			}
 		}()
@@ -291,12 +293,12 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
 			if remoteState == nil {
-				s.logger.Debug().Str("JID", args.JID).Msgf("No remote state found")
+				log.Debug().Str("JID", args.JID).Msgf("No remote state found")
 				return nil, status.Error(codes.InvalidArgument, "no remote state found")
 			}
 			// For now just grab latest checkpoint
 			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				s.logger.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
+				log.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
 				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
 			}
 			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
@@ -321,8 +323,8 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if !args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
 			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
 		}
-		if args.Stream && !stat.IsDir() {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be directory (--stream enabled)")
+		if args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".lz4")) {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be lz4 file (--stream enabled)")
 		}
 	case task.CRType_REMOTE:
 		if args.CheckpointID == "" {
@@ -347,18 +349,18 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	if args.JID != "" {
 		state, err = s.generateState(ctx, pid)
 		if err != nil {
-			s.logger.Warn().Err(err).Msg("failed to generate state after restore, using fallback")
+			log.Warn().Err(err).Msg("failed to generate state after restore, using fallback")
 			state, err = s.getState(ctx, args.JID)
 			if err != nil {
-				s.logger.Warn().Err(err).Msg("failed to get state existing after restore")
+				log.Warn().Err(err).Msg("failed to get state existing after restore")
 			}
 		}
-		s.logger.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored process")
+		log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored process")
 		state.PID = pid
 		state.JobState = task.JobState_JOB_RUNNING
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
-			s.logger.Fatal().Err(err).Msg("failed to update state after restore")
+			log.Fatal().Err(err).Msg("failed to update state after restore")
 			syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
 			return nil, status.Error(codes.Internal, "failed to update state after restore")
 		}
@@ -373,7 +375,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
-				s.logger.Fatal().Err(err).Msg("failed to update state after done")
+				log.Fatal().Err(err).Msg("failed to update state after done")
 				return nil, status.Error(codes.Internal, "failed to update state after done")
 			}
 		} else {
@@ -384,7 +386,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 				state.JobState = task.JobState_JOB_DONE
 				err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 				if err != nil {
-					s.logger.Fatal().Err(err).Msg("failed to update state after done")
+					log.Fatal().Err(err).Msg("failed to update state after done")
 					return
 				}
 			}()
@@ -483,12 +485,12 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			for {
 				in, err := stream.Recv()
 				if err != nil {
-					s.logger.Debug().Err(err).Msg("finished reading stdin")
+					log.Debug().Err(err).Msg("finished reading stdin")
 					return
 				}
 				_, err = stdinPipe.Write([]byte(in.Stdin))
 				if err != nil {
-					s.logger.Error().Err(err).Msg("failed to write to stdin")
+					log.Error().Err(err).Msg("failed to write to stdin")
 					return
 				}
 			}
@@ -505,12 +507,12 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer stdoutPipe.Close()
 			for stdoutScanner.Scan() {
 				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
-					s.logger.Error().Err(err).Msg("failed to send stdout")
+					log.Error().Err(err).Msg("failed to send stdout")
 					return
 				}
 			}
 			if err := stdoutScanner.Err(); err != nil {
-				s.logger.Debug().Err(err).Msgf("finished reading stdout")
+				log.Debug().Err(err).Msgf("finished reading stdout")
 			}
 		}()
 
@@ -526,12 +528,12 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer stderrPipe.Close()
 			for stderrScanner.Scan() {
 				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
-					s.logger.Error().Err(err).Msg("failed to send stderr")
+					log.Error().Err(err).Msg("failed to send stderr")
 					return
 				}
 			}
 			if err := stderrScanner.Err(); err != nil {
-				s.logger.Debug().Err(err).Msgf("finished reading stderr")
+				log.Debug().Err(err).Msgf("finished reading stderr")
 			}
 		}()
 	}
@@ -552,15 +554,15 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		defer s.wg.Done()
 		err := cmd.Wait()
 		if err != nil {
-			s.logger.Debug().Err(err).Msg("process Wait()")
+			log.Debug().Err(err).Msg("process Wait()")
 		}
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
 			if err != nil {
-				s.logger.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
+				log.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
 			}
 		}
-		s.logger.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
+		log.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
 		code := cmd.ProcessState.ExitCode()
 		exitCode <- code
 	}()
@@ -572,9 +574,9 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			err := gpuCmd.Wait()
 			if err != nil {
-				s.logger.Debug().Err(err).Msg("GPU controller Wait()")
+				log.Debug().Err(err).Msg("GPU controller Wait()")
 			}
-			s.logger.Info().Int("PID", gpuCmd.Process.Pid).
+			log.Info().Int("PID", gpuCmd.Process.Pid).
 				Int("status", gpuCmd.ProcessState.ExitCode()).
 				Str("out/err", gpuOutBuf.String()).
 				Msg("GPU controller exited")
@@ -624,7 +626,7 @@ func closeCommonFds(parentPID, childPID int32) error {
 
 func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, string, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return "", "", status.Error(codes.Internal, "failed to get dump stats")
 	}

@@ -143,7 +143,7 @@ func containerdRestore(id string, ref string) error {
 	return nil
 }
 
-func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
+func RuncRestore(imgPath string, containerId string, criuOpts *CriuOpts, opts *RuncOpts) error {
 	var spec rspec.Spec
 
 	configPath := opts.Bundle + "/config.json"
@@ -183,13 +183,8 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		}
 	}
 
-	criuOpts := CriuOpts{
-		ImagesDirectory: imgPath,
-		WorkDirectory:   "",
-		External:        externalMounts,
-		MntnsCompatMode: false,
-		TcpClose:        true,
-	}
+	criuOpts.ImagesDirectory = imgPath
+	criuOpts.External = externalMounts
 
 	runcOpts := &RuncOpts{
 		Root:          opts.Root,
@@ -201,7 +196,7 @@ func RuncRestore(imgPath string, containerId string, opts RuncOpts) error {
 		NetPid:        opts.NetPid,
 	}
 
-	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, &criuOpts)
+	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, criuOpts)
 	if err != nil {
 		return err
 	}

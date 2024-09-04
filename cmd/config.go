@@ -9,7 +9,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -23,30 +23,29 @@ var showCmd = &cobra.Command{
 	Short: "show config that the daemon is running with",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
-		logger := cmd.Context().Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		resp, err := cts.GetConfig(ctx, &task.GetConfigRequest{})
 		if err != nil {
-			logger.Error().Err(err).Msgf("Error getting config")
+			log.Error().Err(err).Msgf("Error getting config")
 			return err
 		}
 
 		config := &types.Config{}
 		err = json.Unmarshal([]byte(resp.JSON), config)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal json")
+			log.Error().Err(err).Msg("failed to unmarshal json")
 			return err
 		}
 
 		prettycfg, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to parse json")
+			log.Error().Err(err).Msg("failed to parse json")
 			return err
 		}
 		fmt.Printf("config: %v\n", string(prettycfg))

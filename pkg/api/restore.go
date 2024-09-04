@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,8 +29,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
-	rspec "github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/mdlayher/vsock"
 )
@@ -45,6 +45,24 @@ const (
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
+
+func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
+	buf := new(bytes.Buffer)
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	cmd.Stderr = buf
+	err := cmd.Start()
+	if err != nil {
+		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+
+	for buf.Len() == 0 {
+		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	return cmd
+}
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
@@ -81,19 +99,26 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
+	var cmd *exec.Cmd
 	if args.Stream {
-		tempDir = args.CheckpointPath
+		absPath, err := filepath.Abs(args.CheckpointPath)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		tempDir = filepath.Dir(absPath)
+		cmd = s.setupStreamerServe(tempDir)
+		s.logger.Info().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
-			s.logger.Error().Err(err).Msg("error decompressing checkpoint")
+			log.Error().Err(err).Msg("error decompressing checkpoint")
 			return nil, nil, nil, nil, err
 		}
 	}
 
 	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("error unmarshaling checkpoint state")
+		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
 	}
 
@@ -110,7 +135,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			er_r, er_w, err = os.Pipe()
 		}
 		if err != nil {
-			s.logger.Error().Err(err).Msg("error creating output file")
+			log.Error().Err(err).Msg("error creating output file")
 			return nil, nil, nil, nil, err
 		}
 		ioFiles = append(ioFiles, in_w)
@@ -160,7 +185,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		filename := fmt.Sprintf(KATA_RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
 		file, err := os.Create(filename)
 		if err != nil {
-			s.logger.Error().Err(err).Msg("error creating logfile")
+			log.Error().Err(err).Msg("error creating logfile")
 			return nil, nil, nil, nil, err
 		}
 
@@ -192,7 +217,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
-		s.logger.Error().Err(err).Msg("error changing permissions")
+		log.Error().Err(err).Msg("error changing permissions")
 		return nil, nil, nil, nil, err
 	}
 
@@ -222,7 +247,7 @@ func chownRecursive(path string, uid, gid int32) error {
 }
 
 func (s *service) containerdRestore(ctx context.Context, imgPath string, containerId string) error {
-	s.logger.Info().Msgf("restoring container %s from %s", containerId, imgPath)
+	log.Info().Msgf("restoring container %s from %s", containerId, imgPath)
 	err := container.Restore(imgPath, containerId)
 	if err != nil {
 		return err
@@ -248,7 +273,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 
 	img, err := os.Open(dir)
 	if err != nil {
-		s.logger.Fatal().Err(err).Msg("could not open directory")
+		log.Fatal().Err(err).Msg("could not open directory")
 	}
 	defer img.Close()
 
@@ -258,11 +283,11 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 	if err != nil {
 		// cleanup along the way
 		os.RemoveAll(dir)
-		s.logger.Warn().Msgf("error restoring process: %v", err)
+		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
 
-	s.logger.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
+	log.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
 
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
@@ -324,7 +349,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, isK3s bool, sources []string, opts *container.RuncOpts) error {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
@@ -336,7 +361,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	isPodman := checkIfPodman(bundle)
 
 	if isPodman {
-		var spec rspec.Spec
+		var spec specs.Spec
 		parts := strings.Split(opts.Bundle, "/")
 		oldContainerId := parts[6]
 
@@ -381,52 +406,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = newBundle + "/userdata"
 	}
 
-	if isK3s {
-		var spec rspec.Spec
-
-		links := []linkPairs{
-			{"/host/var/run/netns", "/var/run/netns"},
-			{"/host/run/containerd", "/run/containerd"},
-			{"/host/var/run/secrets", "/var/run/secrets"},
-			{"/host/var/lib/rancher", "/var/lib/rancher"},
-			{"/host/run/k3s", "/run/k3s"},
-			{"/host/var/lib/kubelet", "/var/lib/kubelet"},
-		}
-		// Create sym links so that runc c/r can resolve config.json paths to the mounted ones in /host
-		for _, link := range links {
-			// Check if the target file exists
-			if _, err := os.Stat(link.Value); os.IsNotExist(err) {
-				// Target file does not exist, attempt to create a symbolic link
-				if err := os.Symlink(link.Key, link.Value); err != nil {
-					// Handle the error if creating symlink fails
-					fmt.Println("Error creating symlink:", err)
-					// Handle the error or log it as needed
-				}
-			} else if err != nil {
-				// Handle other errors from os.Stat if any
-				fmt.Println("Error checking file info:", err)
-				// Handle the error or log it as needed
-			}
-		}
-		// ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
-		// parts := strings.Split(opts.Bundle, "/")
-		// oldContainerID := parts[7]
-		configPath := opts.Bundle + "/config.json" // Replace with your actual path
-
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			fmt.Println("Error reading config.json:", err)
-			return err
-		}
-
-		// Unmarshal JSON data into a map
-		if err := json.Unmarshal(data, &spec); err != nil {
-			fmt.Println("Error decoding config.json:", err)
-			return err
-		}
-	}
-
-	err := container.RuncRestore(imgPath, containerId, *opts)
+	err := container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
 		return err
 	}
@@ -434,7 +414,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	if isPodman {
 		go func() {
 			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
-				log.Fatal(err)
+				log.Fatal().Err(err).Send()
 			}
 		}()
 	}
@@ -648,12 +628,12 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				for {
 					resp, err := stream.Recv()
 					if err != nil {
-						s.logger.Debug().Err(err).Msg("finished reading stdin")
+						log.Debug().Err(err).Msg("finished reading stdin")
 						return
 					}
 					_, err = in.Write([]byte(resp.Stdin))
 					if err != nil {
-						s.logger.Error().Err(err).Msg("failed to write to stdin")
+						log.Error().Err(err).Msg("failed to write to stdin")
 						return
 					}
 				}
@@ -666,12 +646,12 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer out.Close()
 				for stdoutScanner.Scan() {
 					if err := stream.Send(&task.RestoreAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
-						s.logger.Error().Err(err).Msg("failed to send stdout")
+						log.Error().Err(err).Msg("failed to send stdout")
 						return
 					}
 				}
 				if err := stdoutScanner.Err(); err != nil {
-					s.logger.Debug().Err(err).Msgf("finished reading stdout")
+					log.Debug().Err(err).Msgf("finished reading stdout")
 				}
 			}()
 			// Scan stderr
@@ -682,12 +662,12 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer er.Close()
 				for stderrScanner.Scan() {
 					if err := stream.Send(&task.RestoreAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
-						s.logger.Error().Err(err).Msg("failed to send stderr")
+						log.Error().Err(err).Msg("failed to send stderr")
 						return
 					}
 				}
 				if err := stderrScanner.Err(); err != nil {
-					s.logger.Debug().Err(err).Msgf("finished reading stderr")
+					log.Debug().Err(err).Msgf("finished reading stderr")
 				}
 			}()
 		}
@@ -699,12 +679,12 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
+			log.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
 				if err != nil {
-					s.logger.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
+					log.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
 				}
 			}
 
@@ -718,9 +698,9 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer s.wg.Done()
 				err := gpuCmd.Wait()
 				if err != nil {
-					s.logger.Debug().Err(err).Msg("GPU controller Wait()")
+					log.Debug().Err(err).Msg("GPU controller Wait()")
 				}
-				s.logger.Info().Int("PID", gpuCmd.Process.Pid).
+				log.Info().Int("PID", gpuCmd.Process.Pid).
 					Int("status", gpuCmd.ProcessState.ExitCode()).
 					Str("out/err", gpuOutBuf.String()).
 					Msg("GPU controller exited")
@@ -746,10 +726,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				cmdCtx = s.serverCtx
 			}
 			<-cmdCtx.Done()
-			s.logger.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("killing process")
+			log.Debug().Int32("PID", *pid).Str("JID", args.JID).Msgf("killing process")
 			syscall.Kill(int(*pid), syscall.SIGKILL)
 			if err != nil {
-				s.logger.Warn().Err(err).Int32("PID", *pid).Str("JID", args.JID).Msgf("could not kill process")
+				log.Warn().Err(err).Int32("PID", *pid).Str("JID", args.JID).Msgf("could not kill process")
 				return
 			}
 		}()
@@ -809,7 +789,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 		return nil, err
 	}
 
-	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	opts.External = append(opts.External, "mnt[]:m")
 	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
 
 	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
@@ -829,7 +809,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, nil)
 	if err != nil {
-		s.logger.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
+		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
 	}
 
@@ -838,7 +818,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		log.Fatal().Msgf("fail to dial: %v", err)
 	}
 	defer gpuConn.Close()
 
@@ -851,7 +831,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			s.logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
+			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
 			return nil, fmt.Errorf("gpu checkpoint failed")
 		} else {
 			return nil, err
@@ -864,7 +844,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 			ReplayCallsTime: resp.GpuRestoreStats.ReplayCallsTime,
 		}
 	}
-	s.logger.Info().Msgf("gpu controller returned %v", resp)
+	log.Info().Msgf("gpu controller returned %v", resp)
 
 	if !resp.Success {
 		return nil, fmt.Errorf("could not restore gpu")
