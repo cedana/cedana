@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -30,6 +31,7 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	}
 
 	if !telemetryOn {
+		log.Info().Msg("using noop tracer provider")
 		otel.SetTracerProvider(noop.NewTracerProvider())
 		return
 	}
