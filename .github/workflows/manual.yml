@@ -78,12 +78,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - /var/run/docker:/var/run/docker
-        - /var/lib/docker:/var/lib/docker
-        - /var/run/containerd:/var/run/containerd
-      options: --init --privileged --ipc=host --pid=host --cgroupns=host
+      options: --privileged
     defaults:
       run:
         working-directory: /src
@@ -134,11 +129,8 @@ jobs:
         env:
           CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
-        run: |
-          echo Using bench config:
-          cat bench.json
-          $CMD
+          BENCH_CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
+        run: $BENCH_CMD
 
       - name: Upload logs
         if: always()
