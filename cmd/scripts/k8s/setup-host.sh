@@ -6,8 +6,10 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 # Enter chroot environment on the host
+# TODO NR - CEDANA_URL is a hack, cleanup code to fix
 env \
     CEDANA_API_SERVER="$CEDANA_API_SERVER" \
+    CEDANA_URL="$CEDANA_API_SERVER" \
     CEDANA_API_KEY="$CEDANA_API_KEY" \
     chroot /host /bin/bash <<'EOT'
 
