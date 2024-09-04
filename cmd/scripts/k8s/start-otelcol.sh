@@ -4,7 +4,10 @@
 cp /usr/local/bin/otelcol-contrib /host/usr/local/bin/otelcol-contrib
 cp /usr/local/bin/otelcol-config.yaml /host/usr/local/bin/otelcol-config.yaml
 
-chroot /host /bin/bash -c '
+env \
+    CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
+    SIGNOZ_ACCESS_TOKEN="$SIGNOZ_ACCESS_TOKEN" \
+  chroot /host /bin/bash -c '
 #!/bin/bash
 # check for SIGNOZ_ACCESS_TOKEN env var
 
