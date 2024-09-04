@@ -11,15 +11,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Abstraction for storing and retreiving checkpoints
+// Abstraction for storing and retrieving checkpoints
 type Store interface {
 	GetCheckpoint(ctx context.Context, cid string) (*string, error) // returns filepath to downloaded chekcpoint
 	PushCheckpoint(ctx context.Context, filepath string) error
@@ -53,15 +55,13 @@ type UploadResponse struct {
 
 // For pushing and pulling from a cedana managed endpoint
 type CedanaStore struct {
-	logger *zerolog.Logger
-	url    string
+	url string
 }
 
-func NewCedanaStore(logger *zerolog.Logger) *CedanaStore {
+func NewCedanaStore() *CedanaStore {
 	url := "https://" + viper.GetString("connection.cedana_url")
 	return &CedanaStore{
-		logger: logger,
-		url:    url,
+		url: url,
 	}
 }
 
@@ -201,7 +201,7 @@ func (cs *CedanaStore) CreateMultiPartUpload(ctx context.Context, fullSize int64
 		return &uploadResp, "", err
 	}
 
-	cs.logger.Info().Msgf("response body: %s", string(respBody))
+	log.Info().Msgf("response body: %s", string(respBody))
 
 	// Parse the JSON response into the struct
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
@@ -276,7 +276,7 @@ func (cs *CedanaStore) StartMultiPartUpload(ctx context.Context, cid string, upl
 				errChan <- err
 				return
 			}
-			cs.logger.Info().Msgf("Part %d uploaded: %s", partNumber+1, string(respBody))
+			log.Info().Msgf("Part %d uploaded: %s", partNumber+1, string(respBody))
 		}(i)
 	}
 
@@ -318,8 +318,7 @@ func (cs *CedanaStore) CompleteMultiPartUpload(ctx context.Context, uploadResp U
 }
 
 type MockStore struct {
-	fs     *afero.Afero // we can use an in-memory store for testing
-	logger *zerolog.Logger
+	fs *afero.Afero // we can use an in-memory store for testing
 }
 
 func (ms *MockStore) GetCheckpoint() (*string, error) {
@@ -334,4 +333,57 @@ func (ms *MockStore) PushCheckpoint(filepath string) error {
 
 func (ms *MockStore) ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, error) {
 	return nil, nil
+}
+
+func UploadCheckpoint(ctx context.Context, path string, store *CedanaStore) (string, string, error) {
+	start := time.Now()
+	stats, ok := ctx.Value(DumpStatsKey).(*task.DumpStats)
+	if !ok {
+		return "", "", status.Error(codes.Internal, "failed to get dump stats")
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		st := status.New(codes.NotFound, "checkpoint zip not found")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return "", "", st.Err()
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		st := status.New(codes.Internal, "checkpoint zip stat failed")
+		st.WithDetails(&errdetails.ErrorInfo{
+			Reason: err.Error(),
+		})
+		return "", "", st.Err()
+	}
+
+	// Get the size
+	size := fileInfo.Size()
+
+	checkpointFullSize := int64(size)
+
+	multipartCheckpointResp, cid, err := store.CreateMultiPartUpload(ctx, checkpointFullSize)
+	if err != nil {
+		st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
+		return "", "", st.Err()
+	}
+
+	err = store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, path)
+	if err != nil {
+		st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
+		return "", "", st.Err()
+	}
+
+	err = store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
+	if err != nil {
+		st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
+		return "", "", st.Err()
+	}
+
+	stats.UploadDuration = time.Since(start).Milliseconds()
+	return cid, multipartCheckpointResp.UploadID, err
 }

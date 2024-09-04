@@ -69,14 +69,6 @@ else
     exit 1
 fi
 
-# Install Go
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
-rm -rf /usr/local/go
-tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
-rm go1.22.0.linux-amd64.tar.gz
-
-export PATH=$PATH:/usr/local/go/bin
-
 # Run the Cedana daemon setup script
 cd /
 ./build-start-daemon.sh --systemctl --no-build

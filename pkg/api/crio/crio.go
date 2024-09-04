@@ -11,57 +11,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/utils"
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/crutils"
 	"github.com/containers/image/v5/types"
-	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
-	"github.com/containers/storage/pkg/unshare"
 	libconfig "github.com/cri-o/cri-o/pkg/config"
-	"github.com/docker/docker/pkg/homedir"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
-
-var (
-	// configuration, including customizations made in containers.conf
-	needToShutdownStore = false
-)
-
-// setXDGRuntimeDir sets XDG_RUNTIME_DIR when if it is unset under rootless
-func setXDGRuntimeDir() error {
-	if unshare.IsRootless() && os.Getenv("XDG_RUNTIME_DIR") == "" {
-		runtimeDir, err := homedir.GetRuntimeDir()
-		if err != nil {
-			return err
-		}
-		if err := os.Setenv("XDG_RUNTIME_DIR", runtimeDir); err != nil {
-			return errors.New("could not set XDG_RUNTIME_DIR")
-		}
-	}
-	return nil
-}
-
-func getStore() (store storage.Store, err error) {
-	config, err := libconfig.DefaultConfig()
-	if err != nil {
-		return store, fmt.Errorf("error loading server config: %w", err)
-	}
-
-	store, err = config.GetStore()
-	if err != nil {
-		return store, err
-	}
-
-	return store, err
-}
 
 func getDefaultConfig() (*libconfig.Config, error) {
 	config, err := libconfig.DefaultConfig()
@@ -149,11 +111,6 @@ func getDiff(config *libconfig.Config, ctrID string, specgen *rspec.Spec) (rchan
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-
 	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
 
@@ -188,6 +145,9 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	mountPoint, err := is.GetStore().Mount(ctrID, specgen.Linux.MountLabel)
+	if err != nil {
+		return "", err
+	}
 
 	addToTarFiles, err := crutils.CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir)
 	if err != nil {
@@ -202,6 +162,9 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeSourceDir: true,
 		IncludeFiles:     includeFiles,
 	})
+	if err != nil {
+		return "", err
+	}
 
 	_, err = os.Stat(diffPath)
 	if err != nil {
@@ -237,7 +200,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 		fileInfo, err := os.Lstat(fullPath)
 		if err != nil {
-			logger.Debug().Msgf("failed to get file info for %s: %s", fullPath, err)
+			log.Debug().Msgf("failed to get file info for %s: %s", fullPath, err)
 			continue
 		}
 
@@ -246,14 +209,14 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			// syscall.chown only changes the ownership of the target file in a symlink.
 			// In order to change the ownership of the symlink itself, we must use syscall.Lchown
 			if err := syscall.Lchown(fullPath, 0, 0); err != nil {
-				logger.Debug().Msgf("failed to change ownership of symlink %s: %s", fullPath, err)
+				log.Debug().Msgf("failed to change ownership of symlink %s: %s", fullPath, err)
 			}
-			logger.Debug().Msgf("\t mode is symlink: %s", fullPath)
+			log.Debug().Msgf("\t mode is symlink: %s", fullPath)
 		} else {
 			if err := os.Chown(fullPath, 0, 0); err != nil {
-				logger.Debug().Msgf("failed to change ownership for %s: %s", fullPath, err)
+				log.Debug().Msgf("failed to change ownership for %s: %s", fullPath, err)
 			}
-			logger.Debug().Msgf("\t mode is regular: %s", fullPath)
+			log.Debug().Msgf("\t mode is regular: %s", fullPath)
 
 		}
 	}
@@ -267,6 +230,9 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		Compression:      archive.Uncompressed,
 		IncludeSourceDir: true,
 	})
+	if err != nil {
+		return "", fmt.Errorf("untaring for rootfs file failed %q: %w", tmpRootfsChangesDir, err)
+	}
 
 	rootfsDiffFile, err = os.Create(diffPath)
 	if err != nil {
@@ -285,14 +251,14 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	return diffPath, nil
 }
 
-func removeAllContainers(logger *zerolog.Logger) {
+func removeAllContainers() {
 	idsCmd := exec.Command("buildah", "containers", "-q")
 	var out bytes.Buffer
 	idsCmd.Stdout = &out
 
 	err := idsCmd.Run()
 	if err != nil {
-		logger.Error().Msgf("Failed to get container IDs: %s\n", err)
+		log.Error().Msgf("Failed to get container IDs: %s\n", err)
 	}
 
 	// Step 2: Remove each container by ID
@@ -301,20 +267,16 @@ func removeAllContainers(logger *zerolog.Logger) {
 		removeCmd := exec.Command("buildah", "rm", id)
 		err := removeCmd.Run()
 		if err != nil {
-			logger.Error().Msgf("Failed to remove container %s: %s\n", id, err)
+			log.Error().Msgf("Failed to remove container %s: %s\n", id, err)
 		} else {
-			logger.Debug().Msgf("Successfully removed container %s\n", id)
+			log.Debug().Msgf("Successfully removed container %s\n", id)
 		}
 	}
 
-	logger.Debug().Msgf("Finished removing all Buildah containers.")
+	log.Debug().Msgf("Finished removing all Buildah containers.")
 }
 
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
 	//buildah from original base ubuntu image
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
@@ -337,7 +299,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
 
-	defer removeAllContainers(logger)
+	defer removeAllContainers()
 
 	// Split the output into lines
 	lines := strings.Split(string(out), "\n")
@@ -354,7 +316,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	// 	containerID = strings.ReplaceAll(containerID, "\n", "")
 
 	//mount container
-	logger.Debug().Msgf("buildah mount of container %s", containerID)
+	log.Debug().Msgf("buildah mount of container %s", containerID)
 
 	cmd = exec.Command("buildah", "mount", containerID)
 	out, err = cmd.CombinedOutput()
@@ -375,7 +337,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	}
 	defer rootfsDiffFile.Close()
 
-	logger.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
+	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
 	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
@@ -406,7 +368,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return err
 	}
 
-	logger.Debug().Msgf("committing to %s", newImageRef)
+	log.Debug().Msgf("committing to %s", newImageRef)
 	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -415,11 +377,6 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 	return nil
 	//untar into storage root
-}
-
-// checks if the given image name is an ECR repository
-func isECRRepo(imageName string) bool {
-	return strings.Contains(imageName, ".ecr.") && strings.Contains(imageName, ".amazonaws.com")
 }
 
 func registryAuthLogin(ctx context.Context, systemContext *types.SystemContext, proxyEndpoint, authorizationToken string) error {
@@ -463,21 +420,6 @@ func getProxyEndpointFromImageName(imageName string) (string, error) {
 	return "https://" + registryURL, nil
 }
 
-func getRegionFromImageName(imageName string) (string, error) {
-	re := regexp.MustCompile(`\.([a-z]+-[a-z]+-\d+)\.`)
-	match := re.FindStringSubmatch(imageName)
-	if len(match) > 1 {
-		return match[1], nil
-	}
-	return "", fmt.Errorf("region not found in image name")
-}
-
-type loginReply struct {
-	loginOpts auth.LoginOptions
-	getLogin  bool
-	tlsVerify bool
-}
-
 func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error {
 	systemContext := &types.SystemContext{}
 
@@ -504,11 +446,6 @@ func ImagePush(ctx context.Context, newImageRef, registryAuthToken string) error
 func SysboxChown(ctx context.Context, containerID, root string) error {
 	rwChanges := &[]archive.Change{}
 
-	logger, err := utils.GetLoggerFromContext(ctx)
-	if err != nil {
-		return err
-	}
-
 	pid, err := runc.GetPidByContainerId(containerID, root)
 	if err != nil {
 		return err
@@ -526,13 +463,13 @@ func SysboxChown(ctx context.Context, containerID, root string) error {
 		return err
 	}
 
-	logger.Debug().Msgf("getting guid and uid of the init process pid %v", pid)
+	log.Debug().Msgf("getting guid and uid of the init process pid %v", pid)
 	guid, uid, err := getGUIDUID(pid)
 	if err != nil {
 		return err
 	}
 
-	logger.Debug().Msgf("reverting ownership of rw change files to guid %v and uid %v in %s", guid, uid, processRootfs)
+	log.Debug().Msgf("reverting ownership of rw change files to guid %v and uid %v in %s", guid, uid, processRootfs)
 	for _, change := range *rwChanges {
 		fullPath := filepath.Join(processRootfs, change.Path)
 		if err := os.Chown(fullPath, guid, uid); err != nil {
@@ -542,207 +479,3 @@ func SysboxChown(ctx context.Context, containerID, root string) error {
 
 	return nil
 }
-
-type commitInputOptions struct {
-	authfile           string
-	omitHistory        bool
-	blobCache          string
-	certDir            string
-	changes            []string
-	configFile         string
-	creds              string
-	cwOptions          string
-	disableCompression bool
-	format             string
-	iidfile            string
-	manifest           string
-	omitTimestamp      bool
-	timestamp          int64
-	quiet              bool
-	referenceTime      string
-	rm                 bool
-	pull               string
-	pullAlways         bool
-	pullNever          bool
-	sbomImgOutput      string
-	sbomImgPurlOutput  string
-	sbomMergeStrategy  string
-	sbomOutput         string
-	sbomPreset         string
-	sbomPurlOutput     string
-	sbomScannerCommand []string
-	sbomScannerImage   string
-	signaturePolicy    string
-	signBy             string
-	squash             bool
-	tlsVerify          bool
-	identityLabel      bool
-	encryptionKeys     []string
-	encryptLayers      []int
-	unsetenvs          []string
-	addFile            []string
-}
-
-// func Commit(ref string) error {
-// 	var iopts commitInputOptions
-// 	var dest imageTypes.ImageReference
-
-// 	config, err := getDefaultConfig()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	store, err := getStore()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	ctx := context.TODO()
-
-// 	builder, err := openBuilder(ctx, store, ref)
-// 	if err != nil {
-// 		return fmt.Errorf("reading build container %q: %w", ref, err)
-// 	}
-
-// 	// is, err := getImageService(ctx, config)
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-
-// 	systemContext := config.SystemContext
-// 	if err != nil {
-// 		return fmt.Errorf("building system context: %w", err)
-// 	}
-
-// 	// If the user specified an image, we may need to massage it a bit if
-// 	// no transport is specified.
-// 	if ref != "" {
-// 		if dest, err = alltransports.ParseImageName(ref); err != nil {
-// 			candidates, err2 := shortnames.ResolveLocally(systemContext, ref)
-// 			if err2 != nil {
-// 				return err2
-// 			}
-// 			if len(candidates) == 0 {
-// 				return fmt.Errorf("parsing target image name %q", ref)
-// 			}
-// 			dest2, err2 := storageTransport.Transport.ParseStoreReference(store, candidates[0].String())
-// 			if err2 != nil {
-// 				return fmt.Errorf("parsing target image name %q: %w", ref, err)
-// 			}
-// 			dest = dest2
-// 		}
-// 	}
-
-// 	// Add builder identity information.
-// 	if iopts.identityLabel {
-// 		builder.SetLabel(buildah.BuilderIdentityAnnotation, define.Version)
-// 	}
-
-// 	encConfig, encLayers, err := cli.EncryptConfig(iopts.encryptionKeys, iopts.encryptLayers)
-// 	if err != nil {
-// 		return fmt.Errorf("unable to obtain encryption config: %w", err)
-// 	}
-
-// 	var overrideConfig *manifest.Schema2Config
-
-// 	var addFiles map[string]string
-// 	if len(iopts.addFile) > 0 {
-// 		addFiles = make(map[string]string)
-// 		for _, spec := range iopts.addFile {
-// 			specSlice := strings.SplitN(spec, ":", 2)
-// 			if len(specSlice) == 1 {
-// 				specSlice = []string{specSlice[0], specSlice[0]}
-// 			}
-// 			if len(specSlice) != 2 {
-// 				return fmt.Errorf("parsing add-file argument %q: expected 1 or 2 parts, got %d", spec, len(strings.SplitN(spec, ":", 2)))
-// 			}
-// 			st, err := os.Stat(specSlice[0])
-// 			if err != nil {
-// 				return fmt.Errorf("parsing add-file argument %q: source %q: %w", spec, specSlice[0], err)
-// 			}
-// 			if st.IsDir() {
-// 				return fmt.Errorf("parsing add-file argument %q: source %q is not a regular file", spec, specSlice[0])
-// 			}
-// 			addFiles[specSlice[1]] = specSlice[0]
-// 		}
-// 	}
-
-// 	format, err := cli.GetFormat(iopts.format)
-// 	compress := define.Gzip
-
-// 	options := buildah.CommitOptions{
-// 		PreferredManifestType: format,
-// 		Manifest:              iopts.manifest,
-// 		Compression:           compress,
-// 		SignaturePolicyPath:   iopts.signaturePolicy,
-// 		SystemContext:         systemContext,
-// 		IIDFile:               iopts.iidfile,
-// 		Squash:                iopts.squash,
-// 		BlobDirectory:         iopts.blobCache,
-// 		OmitHistory:           iopts.omitHistory,
-// 		SignBy:                iopts.signBy,
-// 		OciEncryptConfig:      encConfig,
-// 		OciEncryptLayers:      encLayers,
-// 		UnsetEnvs:             iopts.unsetenvs,
-// 		OverrideChanges:       iopts.changes,
-// 		OverrideConfig:        overrideConfig,
-// 		ExtraImageContent:     addFiles,
-// 	}
-// 	exclusiveFlags := 0
-
-// 	if iopts.omitTimestamp {
-// 		exclusiveFlags++
-// 		timestamp := time.Unix(0, 0).UTC()
-// 		options.HistoryTimestamp = &timestamp
-// 	}
-
-// 	if exclusiveFlags > 1 {
-// 		return errors.New("can not use more then one timestamp option at at time")
-// 	}
-
-// 	if !iopts.quiet {
-// 		options.ReportWriter = os.Stderr
-// 	}
-// 	id, imageRef, _, err := builder.Commit(ctx, dest, options)
-// 	if err != nil {
-// 		return util.GetFailureCause(err, fmt.Errorf("committing container %q to %q: %w", builder.Container, ref, err))
-// 	}
-// 	if imageRef != nil && id != "" {
-// 		logrus.Debugf("wrote image %s with ID %s", ref, id)
-// 	} else if imageRef != nil {
-// 		logrus.Debugf("wrote image %s", ref)
-// 	} else if id != "" {
-// 		logrus.Debugf("wrote image with ID %s", id)
-// 	} else {
-// 		logrus.Debugf("wrote image")
-// 	}
-// 	if options.IIDFile == "" && id != "" {
-// 		fmt.Printf("%s\n", id)
-// 	}
-
-// 	if iopts.rm {
-// 		return builder.Delete()
-// 	}
-
-// 	return nil
-
-// }
-
-// func openBuilder(ctx context.Context, store storage.Store, name string) (builder *buildah.Builder, err error) {
-// 	if name != "" {
-// 		builder, err = buildah.OpenBuilder(store, name)
-// 		if errors.Is(err, os.ErrNotExist) {
-// 			options := buildah.ImportOptions{
-// 				Container: name,
-// 			}
-// 			builder, err = buildah.ImportBuilder(ctx, store, options)
-// 		}
-// 	}
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if builder == nil {
-// 		return nil, errors.New("finding build container")
-// 	}
-// 	return builder, nil
-// }

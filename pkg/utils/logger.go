@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -19,18 +18,10 @@ const (
 
 type contextKey string
 
-const loggerKey = contextKey("logger")
+const LoggerKey = contextKey("logger")
 
 func WithLogger(ctx context.Context, logger *zerolog.Logger) context.Context {
-	return context.WithValue(ctx, loggerKey, logger)
-}
-
-func GetLoggerFromContext(ctx context.Context) (*zerolog.Logger, error) {
-	logger, ok := ctx.Value(loggerKey).(*zerolog.Logger)
-	if !ok {
-		return &zerolog.Logger{}, fmt.Errorf("Logger not found in context")
-	}
-	return logger, nil
+	return context.WithValue(ctx, LoggerKey, logger)
 }
 
 var logger zerolog.Logger
