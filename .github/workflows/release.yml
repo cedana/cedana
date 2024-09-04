@@ -301,7 +301,6 @@ jobs:
       packages: 'read'
       id-token: 'write'
     runs-on: ubicloud-standard-8
-    needs: test
     container:
       image: ghcr.io/cedana/cedana-bench.ubuntu:latest
       credentials:
