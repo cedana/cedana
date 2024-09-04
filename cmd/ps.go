@@ -10,7 +10,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/olekukonko/tablewriter"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -19,10 +19,9 @@ var psCmd = &cobra.Command{
 	Short: "List managed processes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Err(err).Msg("error creating client")
+			log.Error().Err(err).Msg("error creating client")
 			return err
 		}
 		defer cts.Close()
@@ -32,7 +31,7 @@ var psCmd = &cobra.Command{
 
 		resp, err := cts.Query(ctx, &task.QueryArgs{}) // get all processes
 		if err != nil {
-			logger.Error().Err(err).Msgf("error querying processes")
+			log.Error().Err(err).Msgf("error querying processes")
 			return err
 		}
 

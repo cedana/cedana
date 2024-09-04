@@ -1,17 +1,16 @@
 package containerd
 
 import (
+	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
-	"github.com/rs/zerolog"
 	"golang.org/x/net/context"
 )
 
 type ContainerdService struct {
 	client *containerd.Client
-	logger *zerolog.Logger
 }
 
 //func NewClient(context *cli.Context, opts ...containerd.Opt) (*containerd.Client, gocontext.Context, gocontext.CancelFunc, error) {
@@ -19,8 +18,7 @@ type ContainerdService struct {
 //opts = append(opts, timeoutOpt)
 //kclient, err := containerd.New(context.String("address"), opts...)
 
-func New(ctx context.Context, address string, logger *zerolog.Logger) (*ContainerdService, error) {
-
+func New(ctx context.Context, address string) (*ContainerdService, error) {
 	client, err := containerd.New(address)
 
 	if err != nil {
@@ -29,7 +27,6 @@ func New(ctx context.Context, address string, logger *zerolog.Logger) (*Containe
 
 	return &ContainerdService{
 		client,
-		logger,
 	}, nil
 }
 
@@ -65,4 +62,18 @@ func (service *ContainerdService) DumpRootfs(ctx context.Context, containerID, i
 	}
 
 	return imageRef, nil
+}
+
+func ContainerdRootfsDump(ctx context.Context, args *task.ContainerdRootfsDumpArgs) (*task.ContainerdRootfsDumpResp, error) {
+	containerdService, err := New(ctx, args.Address)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	ref, err := containerdService.DumpRootfs(ctx, args.ContainerID, args.ImageRef, args.Namespace)
+	if err != nil {
+		return &task.ContainerdRootfsDumpResp{}, err
+	}
+
+	return &task.ContainerdRootfsDumpResp{ImageRef: ref}, nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	container "github.com/cedana/cedana/pkg/container"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -50,7 +51,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_RUNC,
 	}
-	ctx = context.WithValue(ctx, "dumpStats", &dumpStats)
+	ctx = context.WithValue(ctx, utils.DumpStatsKey, &dumpStats)
 
 	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {

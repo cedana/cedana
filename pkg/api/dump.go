@@ -21,6 +21,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/docker/docker/pkg/namesgenerator"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
@@ -28,8 +29,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/mdlayher/vsock"
 	"io"
+
+	"github.com/mdlayher/vsock"
 )
 
 const (
@@ -55,7 +57,7 @@ type Bundle struct {
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
 func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, error) {
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return "", fmt.Errorf("could not get dump stats from context")
 	}
@@ -139,9 +141,9 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 
 func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
 	start := time.Now()
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
-		s.logger.Fatal().Msg("could not get dump stats from context")
+		log.Fatal().Msg("could not get dump stats from context")
 	}
 
 	var compressedCheckpointPath string
@@ -157,24 +159,24 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	// sneak in a serialized state obj
 	err := serializeStateToDir(dumpdir, state, streamCmd != nil)
 	if err != nil {
-		s.logger.Fatal().Err(err)
+		log.Fatal().Err(err)
 	}
 
-	s.logger.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
+	log.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
 	if streamCmd != nil {
 		streamCmd.Wait()
 	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
-			s.logger.Fatal().Err(err)
+			log.Fatal().Err(err)
 		}
 	}
 
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
-		s.logger.Fatal().Err(err)
+		log.Fatal().Err(err)
 	}
 
 	elapsed := time.Since(start)
@@ -196,7 +198,7 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 
 func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
 	start := time.Now()
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
@@ -217,7 +219,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
-		s.logger.Fatal().Err(err)
+		log.Fatal().Err(err)
 		return err
 	}
 
@@ -285,7 +287,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dumpdir)
+		log.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", dumpdir)
 		return err
 	}
 	defer img.Close()
@@ -297,10 +299,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		Logger: s.logger,
 	}
 
-	s.logger.Info().Int32("PID", state.PID).Msg("beginning dump")
+	log.Info().Int32("PID", state.PID).Msg("beginning dump")
 
 	start := time.Now()
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
@@ -309,11 +311,11 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	if err != nil {
 		// check for sudo error
 		if strings.Contains(err.Error(), "errno 0") {
-			s.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+			log.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 			return err
 		}
 
-		s.logger.Warn().Msgf("error dumping process: %v", err)
+		log.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
 
@@ -339,7 +341,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 
 	img, err := os.Open(dumpdir)
 	if err != nil {
-		s.logger.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
+		log.Warn().Err(err).Msgf("could not open checkpoint storage dir %s", args.Dir)
 		return err
 	}
 	defer img.Close()
@@ -353,17 +355,17 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 		Logger: s.logger,
 	}
 
-	s.logger.Info().Msgf(`beginning dump of pid %d`, state.PID)
+	log.Info().Msgf(`beginning dump of pid %d`, state.PID)
 
 	_, err = s.CRIU.Dump(opts, &nfy)
 	if err != nil {
 		// check for sudo error
 		if strings.Contains(err.Error(), "errno 0") {
-			s.logger.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
+			log.Warn().Msgf("error dumping, cedana is not running as root: %v", err)
 			return err
 		}
 
-		s.logger.Warn().Msgf("error dumping process: %v", err)
+		log.Warn().Msgf("error dumping process: %v", err)
 		return err
 	}
 
@@ -405,7 +407,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 
 func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	start := time.Now()
-	stats, ok := ctx.Value("dumpStats").(*task.DumpStats)
+	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
@@ -416,7 +418,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 
 	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
 	if err != nil {
-		s.logger.Warn().Msgf("could not connect to gpu controller service: %v", err)
+		log.Warn().Msgf("could not connect to gpu controller service: %v", err)
 		return err
 	}
 	defer gpuConn.Close()
@@ -431,7 +433,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			s.logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
+			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
 			return fmt.Errorf("gpu checkpoint failed")
 		} else {
 			return err
