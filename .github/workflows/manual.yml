@@ -1,6 +1,10 @@
 name: Manual
 
 on:
+  pull_request: # TODO: remove later
+    types: [opened, synchronize]
+    branches:
+      - main
   workflow_dispatch:
       inputs:
         bench:
