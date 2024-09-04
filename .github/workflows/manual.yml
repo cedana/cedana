@@ -13,11 +13,11 @@ on:
           description: 'Push the results to database'
           required: false
           default: false
-          debug_build:
-            type: boolean
-            description: 'Run the build with debugging enabled'
-            required: false
-            default: false
+        debug_build:
+          type: boolean
+          description: 'Run the build with debugging enabled'
+          required: false
+          default: false
         debug_bench:
           type: boolean
           description: 'Run the benchmark with debugging enabled'
