@@ -43,7 +43,7 @@ for arg in "$@"; do
         DAEMON_ARGS="$value"
     fi
 
-    if [ "$arg" == "-otel" ]; then
+    if [ "$arg" == "--otel" ]; then
         echo "otel enabled, starting otelcol.."
         CEDANA_OTEL_ENABLED=true
     fi

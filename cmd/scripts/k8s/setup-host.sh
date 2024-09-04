@@ -77,6 +77,6 @@ fi
 
 # Run the Cedana daemon setup script
 cd /
-./build-start-daemon.sh --systemctl --no-build
+./build-start-daemon.sh --systemctl --no-build --otel
 
 EOT
