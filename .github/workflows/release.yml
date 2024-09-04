@@ -49,13 +49,19 @@ jobs:
   test:
     name: Test
     uses: ./.github/workflows/pr.yml
+    permissions:
+      contents: 'read'
+      packages: 'read'
+      id-token: 'write'
+      pull-requests: 'write'
     with:
-      debug_build: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-      debug_smoke_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-      debug_regression_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-      debug_correctness_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-      debug_unit_test: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
-      debug_bench: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_test }}
+      debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug_smoke_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug_correctness_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      run_bench: false # will be run in a separate job below
 
   build-publish-amd64:
     name: Build & Publish (amd64)
@@ -82,7 +88,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_publish_amd64 }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build_publish_amd64 }}
         with:
           limit-access-to-actor: true
 
@@ -137,7 +143,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_amd64_image }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build_push_amd64_image }}
         with:
           limit-access-to-actor: true
 
@@ -210,7 +216,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build_push_arm64_image }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build_push_arm64_image }}
         with:
           limit-access-to-actor: true
 
@@ -363,7 +369,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench_cuda_11_8 }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
         with:
           limit-access-to-actor: true
 
@@ -425,7 +431,7 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary (comparison w/ last patch)
-        if: ${{ (github.event_name != 'workflow_dispatch') || (inputs.post_summary) }}
+        if: ${{ (!startsWith(github.event_name, 'workflow')) || (inputs.post_summary) }}
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -504,7 +510,7 @@ jobs:
           echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
       - name: Post summary
-        if: ${{ (github.event_name != 'workflow_dispatch') || (inputs.post_summary) }}
+        if: ${{ (!startsWith(github.event_name, 'workflow')) || (inputs.post_summary) }}
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:

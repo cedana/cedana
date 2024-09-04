@@ -13,6 +13,11 @@ on:
           description: 'Push the results to database'
           required: false
           default: false
+          debug_build:
+            type: boolean
+            description: 'Run the build with debugging enabled'
+            required: false
+            default: false
         debug_bench:
           type: boolean
           description: 'Run the benchmark with debugging enabled'
@@ -44,7 +49,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
         with:
           limit-access-to-actor: true
 
@@ -125,7 +130,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench }}
+        if: ${{ inputs.debug_bench }}
         with:
           limit-access-to-actor: true
 
@@ -145,7 +150,7 @@ jobs:
           path: /src/*.log
 
       - name: Push results
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.push_results }}
+        if: ${{ inputs.push_results }}
         env:
           GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
           BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
