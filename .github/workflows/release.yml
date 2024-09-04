@@ -346,7 +346,7 @@ jobs:
       - name: Configure
         env:
           PATH_CEDANA: /src
-          TAG: ${{ steps.get_branch.outputs.branch }}
+          TAG: ${{ steps.get-tag.outputs.TAG }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
         run: |
           BINDIR=`jq -r '.crtools.list."cedana".bindir' bench.json`
