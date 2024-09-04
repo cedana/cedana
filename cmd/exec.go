@@ -9,7 +9,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 )
@@ -26,11 +26,9 @@ var execTaskCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Err(err).Msg("error creating client")
+			log.Error().Err(err).Msg("error creating client")
 			return err
 		}
 		defer cts.Close()
@@ -38,7 +36,7 @@ var execTaskCmd = &cobra.Command{
 		executable := args[0]
 		jid, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
-			logger.Error().Err(err).Msg("invalid job id")
+			log.Error().Err(err).Msg("invalid job id")
 			return err
 		}
 
@@ -53,7 +51,7 @@ var execTaskCmd = &cobra.Command{
 			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
-				logger.Error().Err(err).Msg("error getting user groups")
+				log.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
@@ -87,9 +85,9 @@ var execTaskCmd = &cobra.Command{
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
-					logger.Error().Err(st.Err()).Msg("start task failed")
+					log.Error().Err(st.Err()).Msg("start task failed")
 				} else {
-					logger.Error().Err(err).Msg("start task failed")
+					log.Error().Err(err).Msg("start task failed")
 				}
 			}
 
@@ -99,7 +97,7 @@ var execTaskCmd = &cobra.Command{
 				for {
 					resp, err := stream.Recv()
 					if err != nil {
-						logger.Error().Err(err).Msg("stream ended")
+						log.Error().Err(err).Msg("stream ended")
 						exitCode <- 1
 						return
 					}
@@ -119,7 +117,7 @@ var execTaskCmd = &cobra.Command{
 				scanner := bufio.NewScanner(os.Stdin)
 				for scanner.Scan() {
 					if err := stream.Send(&task.StartAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
-						logger.Error().Err(err).Msg("error sending stdin")
+						log.Error().Err(err).Msg("error sending stdin")
 						return
 					}
 				}
@@ -133,13 +131,13 @@ var execTaskCmd = &cobra.Command{
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
-					logger.Error().Err(st.Err()).Msg("start task failed")
+					log.Error().Err(st.Err()).Msg("start task failed")
 				} else {
-					logger.Error().Err(err).Msg("start task failed")
+					log.Error().Err(err).Msg("start task failed")
 				}
 				return err
 			}
-			logger.Info().Msgf("Task started: %v", resp)
+			log.Info().Msgf("Task started: %v", resp)
 		}
 
 		return nil

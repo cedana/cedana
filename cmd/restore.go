@@ -9,13 +9,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
 )
@@ -31,10 +31,9 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -49,7 +48,7 @@ var restoreProcessCmd = &cobra.Command{
 			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
-				logger.Error().Err(err).Msg("error getting user groups")
+				log.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
@@ -74,13 +73,13 @@ var restoreProcessCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -92,13 +91,11 @@ var restoreKataCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		vm := args[0]
 
 		cts, err := services.NewVSockClient(vm)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -156,13 +153,13 @@ var restoreKataCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				log.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				log.Error().Msgf("Restore task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -174,10 +171,9 @@ var restoreJobCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Err(err).Msgf("error creating client")
+			log.Error().Err(err).Msgf("error creating client")
 			return err
 		}
 		defer cts.Close()
@@ -193,7 +189,7 @@ var restoreJobCmd = &cobra.Command{
 			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
-				logger.Error().Err(err).Msg("error getting user groups")
+				log.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
@@ -218,9 +214,9 @@ var restoreJobCmd = &cobra.Command{
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
-					logger.Error().Err(st.Err()).Msg("restore failed")
+					log.Error().Err(st.Err()).Msg("restore failed")
 				} else {
-					logger.Error().Err(err).Msg("restore failed")
+					log.Error().Err(err).Msg("restore failed")
 				}
 			}
 
@@ -230,7 +226,7 @@ var restoreJobCmd = &cobra.Command{
 				for {
 					resp, err := stream.Recv()
 					if err != nil {
-						logger.Error().Err(err).Msg("stream ended")
+						log.Error().Err(err).Msg("stream ended")
 						exitCode <- 1
 						return
 					}
@@ -250,7 +246,7 @@ var restoreJobCmd = &cobra.Command{
 				scanner := bufio.NewScanner(os.Stdin)
 				for scanner.Scan() {
 					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
-						logger.Error().Err(err).Msg("error sending stdin")
+						log.Error().Err(err).Msg("error sending stdin")
 						return
 					}
 				}
@@ -265,13 +261,13 @@ var restoreJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -283,10 +279,9 @@ var containerdRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -302,13 +297,13 @@ var containerdRestoreCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+				log.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				log.Error().Msgf("Restore task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -320,17 +315,16 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
 		cts, err := services.NewClient()
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		root, err := cmd.Flags().GetString(rootFlag)
 		if runcRootPath[root] == "" {
-			logger.Error().Msgf("container root %s not supported", root)
+			log.Error().Msgf("container root %s not supported", root)
 			return err
 		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
@@ -362,13 +356,13 @@ var runcRestoreCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},

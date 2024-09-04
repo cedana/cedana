@@ -7,6 +7,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +30,9 @@ var rootCmd = &cobra.Command{
 
 func Execute(ctx context.Context, version string) error {
 	logger := utils.GetLogger()
+	log.Logger = *logger
 
-	ctx = context.WithValue(ctx, "logger", logger)
+	ctx = context.WithValue(ctx, utils.LoggerKey, logger)
 
 	rootCmd.Version = version
 	rootCmd.Long = rootCmd.Long + "\n " + version
