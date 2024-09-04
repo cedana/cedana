@@ -78,7 +78,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --init --privileged --ipc=host --pid=host --cgroupns=host
+      options: --init --privileged --ipc=host --pid=host --cgroupns=host -v /var/run/docker:/var/run/docker -v /var/lib/docker:/var/lib/docker -v /var/run/containerd:/var/run/containerd
     defaults:
       run:
         working-directory: /src
@@ -121,7 +121,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench }}
+        # if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench }}
         with:
           limit-access-to-actor: true
 
