@@ -425,7 +425,7 @@ jobs:
           RESULTS_BASE_URL: https://storage.googleapis.com/cedana/release-${{ steps.get-tag.outputs.TAG }}/results
           RESULTS_TITLE: "cedana"
           RESULTS_DESCRIPTION: "**${{ steps.get-tag.outputs.TAG }}** comparison w/ last patch"
-          RELEASE_NOTES_URL: https://github.com/cedana/cedana/releases/${{ steps.get-tag.outputs.TAG }}
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.get-tag.outputs.TAG }}
         run: |
           utils/results-summary > $GITHUB_STEP_SUMMARY
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
