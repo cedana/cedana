@@ -139,8 +139,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           BENCH_CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
         run: |
-          cd /src
-          bash -c $BENCH_CMD
+          ./bench run cedana --save --cpu-only
 
       - name: Upload logs
         if: always()
