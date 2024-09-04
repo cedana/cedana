@@ -83,6 +83,13 @@ jobs:
       run:
         working-directory: /src
     steps:
+      # Github actions unfortunately mounts the docker socket, which we don't want
+      - id: Workaround for dind
+        run: |
+          umount /var/run/docker.sock
+          sudo service supervisor start
+          supervisorctl restart dockerd
+
       - id: auth
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
@@ -130,7 +137,9 @@ jobs:
           CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           BENCH_CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
-        run: $BENCH_CMD
+        run: |
+          cd /src
+          $BENCH_CMD
 
       - name: Upload logs
         if: always()
