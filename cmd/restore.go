@@ -65,8 +65,10 @@ var restoreProcessCmd = &cobra.Command{
 			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
-			TcpEstablished: tcpEstablished,
 			Stream:         stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
@@ -105,7 +107,9 @@ var restoreKataCmd = &cobra.Command{
 		restoreArgs := task.RestoreArgs{
 			CheckpointID:   vm,
 			CheckpointPath: "/tmp/dmp.tar",
-			TcpEstablished: tcpEstablished,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		go func() {
@@ -200,12 +204,14 @@ var restoreJobCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
-			JID:            jid,
-			UID:            uid,
-			GID:            gid,
-			Groups:         groups,
-			TcpEstablished: tcpEstablished,
-			Stream:         stream,
+			JID:    jid,
+			UID:    uid,
+			GID:    gid,
+			Groups: groups,
+			Stream: stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)
