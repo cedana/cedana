@@ -517,7 +517,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Error().Err(err).Msg("gpu binary get request failed")
+		log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
 		return fmt.Errorf("could not get gpu binary")
 	}
 	defer resp.Body.Close()
