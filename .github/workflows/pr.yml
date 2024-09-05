@@ -69,6 +69,11 @@ on:
         description: 'Run benchmark with debugging enabled'
         required: false
         default: false
+      run_bench:
+        type: boolean
+        description: 'Run benchmark or not'
+        required: false
+        default: true
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -95,7 +100,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_build }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
         with:
           limit-access-to-actor: true
 
@@ -129,7 +134,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_smoke_test }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_smoke_test }}
         with:
           limit-access-to-actor: true
 
@@ -164,7 +169,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_regression_test }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
         with:
           limit-access-to-actor: true
 
@@ -199,7 +204,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_correctness_test }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_correctness_test }}
         with:
           limit-access-to-actor: true
 
@@ -234,7 +239,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_go_test }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_unit_test }}
         with:
           limit-access-to-actor: true
 
@@ -258,6 +263,7 @@ jobs:
 
   benchmark:
     name: Benchmark
+    if: ${{ (!startsWith(github.event_name, 'workflow')) || inputs.run_bench }}
     permissions:
       contents: 'read'
       packages: 'read'
@@ -322,7 +328,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_bench_cuda_11_8 }}
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
         with:
           limit-access-to-actor: true
 
