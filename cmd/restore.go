@@ -342,7 +342,6 @@ var runcRestoreCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
-		log.Log().Msg(id)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
 			ContainerID: id,
