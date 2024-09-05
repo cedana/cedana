@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,8 +29,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-
-	"io"
 
 	"github.com/mdlayher/vsock"
 )
@@ -77,9 +76,10 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		}
 	}
 
-	opts.TcpEstablished = proto.Bool(hasTCP || args.TcpEstablished)
+	opts.TcpEstablished = proto.Bool(hasTCP || args.CriuOpts.TcpEstablished)
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
+	opts.LeaveRunning = proto.Bool(args.CriuOpts.LeaveRunning || viper.GetBool("client.leave-running"))
 
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
@@ -188,10 +188,9 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	opts := rpc.CriuOpts{
-		LogLevel:     proto.Int32(CRIU_DUMP_LOG_LEVEL),
-		LogFile:      proto.String(CRIU_DUMP_LOG_FILE),
-		LeaveRunning: proto.Bool(viper.GetBool("client.leave_running")),
-		GhostLimit:   proto.Uint32(GHOST_LIMIT),
+		LogLevel:   proto.Int32(CRIU_DUMP_LOG_LEVEL),
+		LogFile:    proto.String(CRIU_DUMP_LOG_FILE),
+		GhostLimit: proto.Uint32(GHOST_LIMIT),
 	}
 	return &opts
 }

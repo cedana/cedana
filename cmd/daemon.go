@@ -45,7 +45,7 @@ var startDaemonCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info().Msg("otel initialized")
+		log.Debug().Msg("otel initialized")
 
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
@@ -64,7 +64,7 @@ var startDaemonCmd = &cobra.Command{
 			cedanaURL = "unset"
 		}
 
-		log.Info().Msgf("starting daemon version %s", rootCmd.Version)
+		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
 		err = api.StartServer(ctx, &api.ServeOpts{
 			GPUEnabled:   gpuEnabled,
@@ -74,7 +74,6 @@ var startDaemonCmd = &cobra.Command{
 			// TODO(swarnimarun): allow flag to customize the port
 			GrpcPort: 8080,
 		})
-
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err

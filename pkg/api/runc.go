@@ -74,8 +74,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.CriuOpts.ImagesDirectory,
 		WorkDirectory:   args.CriuOpts.WorkDirectory,
-		LeaveRunning:    args.CriuOpts.LeaveRunning,
-		TcpEstablished:  isUsingTCP,
+		LeaveRunning:    args.CriuOpts.LeaveRunning || viper.GetBool("client.leave-running"),
+		TcpEstablished:  isUsingTCP || args.CriuOpts.TcpEstablished,
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
 		External:        args.CriuOpts.External,
@@ -138,6 +138,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
 		TcpClose:        true,  // XXX: Should instead take value from args
+		TcpEstablished:  args.CriuOpts.TcpEstablished,
 		FileLocks:       args.CriuOpts.FileLocks,
 	}
 
