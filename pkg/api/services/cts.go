@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"fmt"
-	"net"
 	"github.com/mdlayher/vsock"
+	"net"
 
 	"github.com/cedana/cedana/pkg/api"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -363,4 +363,17 @@ func getDefaultCallOptions() []grpc.CallOption {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts
+}
+
+//////////////////////
+///      ASR       ///
+//////////////////////
+
+func (c *ServiceClient) GetContainerInfo(ctx context.Context, in *task.ContainerInfoRequest) (task.TaskService_GetContainerInfoClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.GetContainerInfo(ctx, in, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
 }
