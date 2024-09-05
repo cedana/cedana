@@ -213,7 +213,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.Stream = proto.Bool(args.Stream)
 	opts.InheritFd = inheritFds
-	opts.TcpEstablished = proto.Bool(tcpEstablished || args.CriuOpts.TcpEstablished)
+	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {

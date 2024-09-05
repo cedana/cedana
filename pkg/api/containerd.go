@@ -111,20 +111,20 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	}
 
 	criuOpts := &container.CriuOpts{
-		ImagesDirectory: dumpOpts.CriuOpts.ImagesDirectory,
-		WorkDirectory:   dumpOpts.CriuOpts.WorkDirectory,
+		ImagesDirectory: dumpOpts.GetCriuOpts().GetImagesDirectory(),
+		WorkDirectory:   dumpOpts.GetCriuOpts().GetWorkDirectory(),
 		LeaveRunning:    true,
 		TcpEstablished:  isUsingTCP,
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
-		External:        dumpOpts.CriuOpts.External,
+		External:        dumpOpts.GetCriuOpts().GetExternal(),
 		TCPInFlight:     !isReady,
 	}
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("Runc dump failed")
-		dumpLogContent, logErr := readDumpLog(dumpOpts.CriuOpts.ImagesDirectory)
+		dumpLogContent, logErr := readDumpLog(dumpOpts.GetCriuOpts().GetImagesDirectory())
 		if logErr != nil {
 			dumpLogContent = "Failed to read dump.log: " + logErr.Error()
 		}
