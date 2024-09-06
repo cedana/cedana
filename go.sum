@@ -654,8 +654,6 @@ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UF
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/checkpoint-restore/checkpointctl v1.2.1 h1:aYFl2CEk95bPLDvNDgif4ZLx3pjCZMJm6td+A0X1+xs=
 github.com/checkpoint-restore/checkpointctl v1.2.1/go.mod h1:8oF+AtNUFJAI13ETcbB3clnjiwvviX0QzVBhYzQ8yBA=
-github.com/checkpoint-restore/go-criu/v5 v5.3.0 h1:wpFFOoomK3389ue2lAb0Boag6XPht5QYpipxmSNL4d8=
-github.com/checkpoint-restore/go-criu/v5 v5.3.0/go.mod h1:E/eQpaFtUKGOOSEBZgmKAcn+zUUwWxqcaKZlF54wK8E=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0 h1:mIdrSO2cPNWQY1truPg6uHLXyKHk3Z5Odx4wjKOASzA=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0/go.mod h1:rrRTN/uSwY2X+BPRl/gkulo9gsKOSAeVp9/K2tv7xZI=
 github.com/checkpoint-restore/go-criu/v7 v7.1.0 h1:JbQyO4o+P8ycNTMLPiiDqXg49bAcy4WljWCzYQho35A=
@@ -1254,10 +1252,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/swarnimarun/cadvisor v0.0.0-20240905144809-67d00d5ed1d3 h1:gLyBCxE6541jGNDlRyrnbgC9seAaRmDNFsY5uw3XV2c=
-github.com/swarnimarun/cadvisor v0.0.0-20240905144809-67d00d5ed1d3/go.mod h1:5mkoGicSi8dMfJ4kCjW69jkfSTb9SCXX9GXeGxG+Vfo=
-github.com/swarnimarun/cadvisor v0.0.0-20240906171425-890159b67da2 h1:Wxw704iIqJDzAsuqi08kICy0dHVT8CLSsu0/QA4mKT0=
-github.com/swarnimarun/cadvisor v0.0.0-20240906171425-890159b67da2/go.mod h1:5mkoGicSi8dMfJ4kCjW69jkfSTb9SCXX9GXeGxG+Vfo=
+github.com/swarnimarun/cadvisor v0.0.0-20240906182420-7dde54bbd6e3 h1:F2beER/pibXSPPtmR6jQS1NUWaMnUPkYxXhUrcwfB9k=
+github.com/swarnimarun/cadvisor v0.0.0-20240906182420-7dde54bbd6e3/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
 github.com/sylabs/sif/v2 v2.16.0 h1:2eqaBaQQsn5DZTzm3QZm0HupZQEjNXfxRnCmtyCihEU=
 github.com/sylabs/sif/v2 v2.16.0/go.mod h1:d5TxgD/mhMUU3kWLmZmWJQ99Wg0asaTP0bq3ezR1xpg=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 h1:kdXcSzyDtseVEc4yCz2qF8ZrQvIDBJLl4S1c3GCXmoI=

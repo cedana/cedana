@@ -31,25 +31,26 @@ var asrStartCmd = &cobra.Command{
 			cedanaURL = "unset"
 		}
 
-		err := api.StartServer(ctx, &api.ServeOpts{
-			GPUEnabled:   false,
-			CUDAVersion:  cudaVersions["12.2"],
-			VSOCKEnabled: vsockEnabledFlag,
-			CedanaURL:    cedanaURL,
-			// TODO(swarnimarun): allow flag to customize the port
-			GrpcPort: 8080,
-		})
-
-		if err != nil {
-			log.Error().Err(err).Msgf("failed to start the daemon server, cleaning up")
-			return err
-		}
+		go func() {
+			err := api.StartServer(ctx, &api.ServeOpts{
+				GPUEnabled:   false,
+				CUDAVersion:  cudaVersions["12.2"],
+				VSOCKEnabled: vsockEnabledFlag,
+				CedanaURL:    cedanaURL,
+				// TODO(swarnimarun): allow flag to customize the port
+				GrpcPort: 8080,
+			})
+			if err != nil {
+				log.Fatal().Err(err).Msgf("failed to start the daemon server, cleaning up")
+			}
+		}()
 
 		var wg sync.WaitGroup
 		wg.Add(1)
 
 		// start the poller
 		go func() {
+			time.Sleep(5 * time.Second)
 			defer wg.Done()
 			cts, err := services.NewClient()
 			if err != nil {
@@ -58,13 +59,19 @@ var asrStartCmd = &cobra.Command{
 			}
 			defer cts.Close()
 
-			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
-			if err != nil {
-				log.Error().Msgf("error getting info: %v", err)
-				return
+			log.Info().Msg("we started polling...")
+			for {
+				conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+				if err != nil {
+					log.Error().Msgf("error getting info: %v", err)
+					return
+				}
+				log.Info().Msgf("containers")
+				for i, cont := range conts.Containers {
+					log.Info().Msgf("\t container(%d): cputime: %fs    %f bytes", i, cont.CpuTime, cont.CurrentMemory)
+				}
+				time.Sleep(1 * time.Second)
 			}
-			log.Info().Msgf("containers %v", conts)
-			time.Sleep(10 * time.Second)
 		}()
 
 		wg.Wait()
