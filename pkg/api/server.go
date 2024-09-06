@@ -130,7 +130,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	} else {
 		// NOTE: localhost requires firewall settings to disabled inside kubernetes
 		// this may or may not work without kubernetes based on firewall and network
-		// configuration, should work fine on local system
+		// configuration, should work fine on local system, hence use 0.0.0.0
 		Address = fmt.Sprintf("0.0.0.0:%d", opts.GrpcPort)
 		listener, err = net.Listen(PROTOCOL, Address)
 	}
