@@ -20,7 +20,7 @@ import (
 // Time is in milliseconds
 const CONTAINER_INFO_STREAMING_RATE int = 1000
 
-func SetupCadvisor(ctx context.Context) (*manager.Manager, error) {
+func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 	includedMetrics := container.MetricSet{
 		container.MemoryUsageMetrics: {},
 		container.CpuLoadMetrics:     {},
@@ -56,7 +56,7 @@ func SetupCadvisor(ctx context.Context) (*manager.Manager, error) {
 	return resourceManager, nil
 }
 
-func (s *service) GetContainerInfo(_ *task.ContainerInfoRequest, stream task.TaskService_GetContainerInfoServer) error {
+func (s *service) GetContainerInfo(_ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
 	// infos := []task.ContainerInfo{
 	// 	{
 	// 		CpuTime:       0,
