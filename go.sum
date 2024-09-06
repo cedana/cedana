@@ -1256,6 +1256,8 @@ github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
 github.com/swarnimarun/cadvisor v0.0.0-20240905144809-67d00d5ed1d3 h1:gLyBCxE6541jGNDlRyrnbgC9seAaRmDNFsY5uw3XV2c=
 github.com/swarnimarun/cadvisor v0.0.0-20240905144809-67d00d5ed1d3/go.mod h1:5mkoGicSi8dMfJ4kCjW69jkfSTb9SCXX9GXeGxG+Vfo=
+github.com/swarnimarun/cadvisor v0.0.0-20240906171425-890159b67da2 h1:Wxw704iIqJDzAsuqi08kICy0dHVT8CLSsu0/QA4mKT0=
+github.com/swarnimarun/cadvisor v0.0.0-20240906171425-890159b67da2/go.mod h1:5mkoGicSi8dMfJ4kCjW69jkfSTb9SCXX9GXeGxG+Vfo=
 github.com/sylabs/sif/v2 v2.16.0 h1:2eqaBaQQsn5DZTzm3QZm0HupZQEjNXfxRnCmtyCihEU=
 github.com/sylabs/sif/v2 v2.16.0/go.mod h1:d5TxgD/mhMUU3kWLmZmWJQ99Wg0asaTP0bq3ezR1xpg=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 h1:kdXcSzyDtseVEc4yCz2qF8ZrQvIDBJLl4S1c3GCXmoI=

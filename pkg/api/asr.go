@@ -55,29 +55,22 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 	return resourceManager, nil
 }
 
-func (s *service) GetContainerInfo(_ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
-	// infos := []task.ContainerInfo{
-	// 	{
-	// 		CpuTime:       0,
-	// 		CpuLoadAvg:    0,
-	// 		MaxMemory:     0,
-	// 		CurrentMemory: 0,
-	// 		NetworkIO:     0,
-	// 		DiskIO:        0,
-	// 	},
-	// }
+func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
 	containers, err := s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
 		NumStats: 1,
 	})
+	if err != nil {
+		return nil, err
+	}
 	ci := task.ContainersInfo{}
-	for container := range containers {
+	for _, container := range containers {
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
-				CpuTime:       c.Cpu.Usage.User,
-				CpuLoadAvg:    c.Cpu.LoadAverage,
-				MaxMemory:     c.Memory.Max,
-				CurrentMemory: c.Memory.Usage,
-				NetworkIO:     0,
+				CpuTime:       float64(c.Cpu.Usage.User) / 1000000000.,
+				CpuLoadAvg:    float64(c.Cpu.LoadAverage) / 1.,
+				MaxMemory:     float64(c.Memory.MaxUsage) / 1.,
+				CurrentMemory: float64(c.Memory.Usage) / 1.,
+				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
 				DiskIO:        0,
 			}
 			ci.Containers = append(ci.Containers, &info)

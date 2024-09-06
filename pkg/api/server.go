@@ -66,7 +66,7 @@ type service struct {
 	gpuEnabled      bool
 	cudaVersion     string
 	machineID       string
-	cadvisorManager *manager.Manager
+	cadvisorManager manager.Manager
 
 	task.UnimplementedTaskServiceServer
 }
