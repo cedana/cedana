@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"sync"
+	"time"
+
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -16,7 +19,7 @@ var asrCmd = &cobra.Command{
 
 var asrStartCmd = &cobra.Command{
 	Use:     "start",
-	Short:   "Start just the automatic suspend resume",
+	Short:   "Start and poll the automatic suspend resume",
 	Aliases: []string{"s"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Start automatic suspend resume")
@@ -42,8 +45,12 @@ var asrStartCmd = &cobra.Command{
 			return err
 		}
 
+		var wg sync.WaitGroup
+		wg.Add(1)
+
 		// start the poller
 		go func() {
+			defer wg.Done()
 			cts, err := services.NewClient()
 			if err != nil {
 				log.Error().Msgf("Error creating client: %v", err)
@@ -51,16 +58,16 @@ var asrStartCmd = &cobra.Command{
 			}
 			defer cts.Close()
 
-			// TODO: actually poll here
-			client, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
 			if err != nil {
 				log.Error().Msgf("error getting info: %v", err)
 				return
 			}
-
-			client.Recv()
-
+			log.Info().Msgf("containers %v", conts)
+			time.Sleep(10 * time.Second)
 		}()
+
+		wg.Wait()
 
 		return nil
 	},

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -70,6 +69,7 @@ func (s *service) GetContainerInfo(_ *task.ContainerInfoRequest) (*task.Containe
 	containers, err := s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
 		NumStats: 1,
 	})
+	ci := task.ContainersInfo{}
 	for container := range containers {
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
@@ -80,14 +80,10 @@ func (s *service) GetContainerInfo(_ *task.ContainerInfoRequest) (*task.Containe
 				NetworkIO:     0,
 				DiskIO:        0,
 			}
-			err := stream.Send(&info)
-			if err != nil {
-				return fmt.Errorf("error sending container info: %v", err)
-			}
+			ci.Containers = append(ci.Containers, &info)
 		}
 	}
-
-	return nil
+	return &ci, nil
 }
 
 var storageDriver = string("")
