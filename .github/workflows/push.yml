@@ -1,6 +1,10 @@
 name: Push
 
 on:
+  pull_request: # TODO: remove this once tested
+    types: [opened, synchronize]
+    branches:
+      - main
   push:
     branches:
       - main
