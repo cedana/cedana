@@ -69,7 +69,7 @@ on:
         description: 'Run benchmark with debugging enabled'
         required: false
         default: false
-      skip_bench::
+      skip_bench:
         type: boolean
         description: 'Skip benchmark or not'
         required: false
