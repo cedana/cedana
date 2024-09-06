@@ -69,11 +69,11 @@ on:
         description: 'Run benchmark with debugging enabled'
         required: false
         default: false
-      run_bench:
+      skip_bench::
         type: boolean
-        description: 'Run benchmark or not'
+        description: 'Skip benchmark or not'
         required: false
-        default: true
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -263,7 +263,7 @@ jobs:
 
   benchmark:
     name: Benchmark
-    if: ${{ !startsWith(github.event_name, 'workflow') || inputs.run_bench }}
+    if: inputs.skip_bench != 'true'
     permissions:
       contents: 'read'
       packages: 'read'
