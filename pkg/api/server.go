@@ -128,7 +128,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	if opts.VSOCKEnabled {
 		listener, err = vsock.Listen(VSOCK_PORT, nil)
 	} else {
-		Address = fmt.Sprintf("localhost:%d", opts.GrpcPort)
+		// NOTE: `localhost` server inside kubernetes may or may not work
+		// based on firewall and network configuration, it would only work
+		// on local system, hence for serving use 0.0.0.0
+		Address = fmt.Sprintf("0.0.0.0:%d", opts.GrpcPort)
 		listener, err = net.Listen(PROTOCOL, Address)
 	}
 
@@ -153,7 +156,6 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
-
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
@@ -339,7 +341,6 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 // TODO NR - this needs a deep copy to properly redact
 func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
 
@@ -509,7 +510,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 		return err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		log.Err(err).Msg("failed to build http post request with jsonBody")
 		return err
@@ -519,8 +520,8 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string, version 
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Err(err).Msg("gpu binary get request failed")
-		return err
+		log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
+		return fmt.Errorf("could not get gpu binary")
 	}
 	defer resp.Body.Close()
 
