@@ -281,7 +281,7 @@ jobs:
 
   benchmark:
     name: Benchmark
-    if: ${{ (!startsWith(github.event_name, 'workflow')) || inputs.run_bench }}
+    if: ${{ !startsWith(github.event_name, 'workflow') || inputs.run_bench }}
     permissions:
       contents: 'read'
       packages: 'read'
