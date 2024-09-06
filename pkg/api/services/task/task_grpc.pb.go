@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -53,6 +54,10 @@ type TaskServiceClient interface {
 	KataRestore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
 	// Config
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
+	// JobQueue
+	QueueCheckpoint(ctx context.Context, in *QueueJobCheckpointRequest, opts ...grpc.CallOption) (*wrapperspb.BoolValue, error)
+	QueueRestore(ctx context.Context, in *QueueJobRestoreRequest, opts ...grpc.CallOption) (*wrapperspb.BoolValue, error)
+	JobStatus(ctx context.Context, in *QueueJobID, opts ...grpc.CallOption) (*QueueJobStatus, error)
 	// ASR
 	GetContainerInfo(ctx context.Context, in *ContainerInfoRequest, opts ...grpc.CallOption) (*ContainersInfo, error)
 }
@@ -361,6 +366,33 @@ func (c *taskServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest,
 	return out, nil
 }
 
+func (c *taskServiceClient) QueueCheckpoint(ctx context.Context, in *QueueJobCheckpointRequest, opts ...grpc.CallOption) (*wrapperspb.BoolValue, error) {
+	out := new(wrapperspb.BoolValue)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/QueueCheckpoint", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) QueueRestore(ctx context.Context, in *QueueJobRestoreRequest, opts ...grpc.CallOption) (*wrapperspb.BoolValue, error) {
+	out := new(wrapperspb.BoolValue)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/QueueRestore", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) JobStatus(ctx context.Context, in *QueueJobID, opts ...grpc.CallOption) (*QueueJobStatus, error) {
+	out := new(QueueJobStatus)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/JobStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *taskServiceClient) GetContainerInfo(ctx context.Context, in *ContainerInfoRequest, opts ...grpc.CallOption) (*ContainersInfo, error) {
 	out := new(ContainersInfo)
 	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/GetContainerInfo", in, out, opts...)
@@ -405,6 +437,10 @@ type TaskServiceServer interface {
 	KataRestore(context.Context, *RestoreArgs) (*RestoreResp, error)
 	// Config
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
+	// JobQueue
+	QueueCheckpoint(context.Context, *QueueJobCheckpointRequest) (*wrapperspb.BoolValue, error)
+	QueueRestore(context.Context, *QueueJobRestoreRequest) (*wrapperspb.BoolValue, error)
+	JobStatus(context.Context, *QueueJobID) (*QueueJobStatus, error)
 	// ASR
 	GetContainerInfo(context.Context, *ContainerInfoRequest) (*ContainersInfo, error)
 	mustEmbedUnimplementedTaskServiceServer()
@@ -482,6 +518,15 @@ func (UnimplementedTaskServiceServer) KataRestore(context.Context, *RestoreArgs)
 }
 func (UnimplementedTaskServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
+}
+func (UnimplementedTaskServiceServer) QueueCheckpoint(context.Context, *QueueJobCheckpointRequest) (*wrapperspb.BoolValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueueCheckpoint not implemented")
+}
+func (UnimplementedTaskServiceServer) QueueRestore(context.Context, *QueueJobRestoreRequest) (*wrapperspb.BoolValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueueRestore not implemented")
+}
+func (UnimplementedTaskServiceServer) JobStatus(context.Context, *QueueJobID) (*QueueJobStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JobStatus not implemented")
 }
 func (UnimplementedTaskServiceServer) GetContainerInfo(context.Context, *ContainerInfoRequest) (*ContainersInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetContainerInfo not implemented")
@@ -940,6 +985,60 @@ func _TaskService_GetConfig_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_QueueCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueueJobCheckpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).QueueCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/QueueCheckpoint",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).QueueCheckpoint(ctx, req.(*QueueJobCheckpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_QueueRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueueJobRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).QueueRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/QueueRestore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).QueueRestore(ctx, req.(*QueueJobRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_JobStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueueJobID)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).JobStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/JobStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).JobStatus(ctx, req.(*QueueJobID))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TaskService_GetContainerInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerInfoRequest)
 	if err := dec(in); err != nil {
@@ -1040,6 +1139,18 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConfig",
 			Handler:    _TaskService_GetConfig_Handler,
+		},
+		{
+			MethodName: "QueueCheckpoint",
+			Handler:    _TaskService_QueueCheckpoint_Handler,
+		},
+		{
+			MethodName: "QueueRestore",
+			Handler:    _TaskService_QueueRestore_Handler,
+		},
+		{
+			MethodName: "JobStatus",
+			Handler:    _TaskService_JobStatus_Handler,
 		},
 		{
 			MethodName: "GetContainerInfo",
