@@ -67,8 +67,8 @@ var asrStartCmd = &cobra.Command{
 					return
 				}
 				log.Info().Msgf("containers")
-				for i, cont := range conts.Containers {
-					log.Info().Msgf("\t container(%d): cputime: %fs    %f bytes", i, cont.CpuTime, cont.CurrentMemory)
+				for _, cont := range conts.Containers {
+					log.Info().Msgf("\t container(%s): cputime: %fs    %f bytes", cont.ContainerName, cont.CpuTime, cont.CurrentMemory)
 				}
 				time.Sleep(1 * time.Second)
 			}

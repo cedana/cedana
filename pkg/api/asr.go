@@ -21,6 +21,7 @@ import (
 
 	// Register container providers
 	_ "github.com/swarnimarun/cadvisor/container/containerd/install"
+	_ "github.com/swarnimarun/cadvisor/container/crio/install"
 )
 
 var (
@@ -42,15 +43,8 @@ var (
 )
 
 func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
-	// includedMetrics := container.MetricSet{
-	// 	container.MemoryUsageMetrics: {},
-	// 	container.CpuLoadMetrics:     {},
-	// 	container.CpuUsageMetrics:    {},
-	// }
 	includedMetrics := container.AllMetrics.Difference(ignoreMetrics)
-
 	log.Info().Msgf("enabled metrics: %s", includedMetrics.String())
-	// setMaxProcs()
 
 	memoryStorage, err := NewMemoryStorage()
 	if err != nil {
@@ -87,13 +81,17 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		return nil, err
 	}
 	ci := task.ContainersInfo{}
-	for _, container := range containers {
+	for name, container := range containers {
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
-				CpuTime:       float64(c.Cpu.Usage.User) / 1000000000.,
-				CpuLoadAvg:    float64(c.Cpu.LoadAverage) / 1.,
-				MaxMemory:     float64(c.Memory.MaxUsage) / 1.,
-				CurrentMemory: float64(c.Memory.Usage) / 1.,
+				ContainerName: name,
+				// from nanoseconds in uint64 to cputime in float64
+				CpuTime:    float64(c.Cpu.Usage.User) / 1000000000.,
+				CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
+				// from bytes in uin64 to megabytes in float64
+				MaxMemory: float64(c.Memory.MaxUsage) / (1024. * 1024.),
+				// from bytes in uin64 to megabytes in float64
+				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
 				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
 				DiskIO:        0,
 			}
@@ -121,33 +119,4 @@ func NewMemoryStorage() (*memory.InMemoryCache, error) {
 	}
 	log.Info().Msgf("Caching stats in memory for %v", storageDuration)
 	return memory.New(storageDuration, backendStorages), nil
-}
-
-func setMaxProcs() {
-	// TODO(vmarmol): Consider limiting if we have a CPU mask in effect.
-	// Allow as many threads as we have cores unless the user specified a value.
-	var numProcs int
-	numProcs = runtime.NumCPU()
-	runtime.GOMAXPROCS(numProcs)
-
-	// Check if the setting was successful.
-	actualNumProcs := runtime.GOMAXPROCS(0)
-	if actualNumProcs != numProcs {
-		log.Warn().Msgf("Specified max procs of %v but using %v", numProcs, actualNumProcs)
-	}
-}
-
-func installSignalHandler(containerManager manager.Manager) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	// Block until a signal is received.
-	go func() {
-		sig := <-c
-		if err := containerManager.Stop(); err != nil {
-			log.Error().Msgf("Failed to stop container manager: %v", err)
-		}
-		log.Info().Msgf("Exiting given signal: %v", sig)
-		os.Exit(0)
-	}()
 }
