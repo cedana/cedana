@@ -213,7 +213,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.ShellJob = proto.Bool(isShellJob)
 	opts.Stream = proto.Bool(args.Stream)
 	opts.InheritFd = inheritFds
-	opts.TcpEstablished = proto.Bool(tcpEstablished || args.TcpEstablished)
+	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
 	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
@@ -807,7 +807,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, nil)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, out)
 	if err != nil {
 		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err

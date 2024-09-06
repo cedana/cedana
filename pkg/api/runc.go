@@ -72,14 +72,14 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	}
 
 	criuOpts := &container.CriuOpts{
-		ImagesDirectory: args.CriuOpts.ImagesDirectory,
-		WorkDirectory:   args.CriuOpts.WorkDirectory,
-		LeaveRunning:    args.CriuOpts.LeaveRunning,
-		TcpEstablished:  isUsingTCP,
+		ImagesDirectory: args.GetCriuOpts().GetImagesDirectory(),
+		WorkDirectory:   args.GetCriuOpts().GetWorkDirectory(),
+		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave-running"),
+		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
-		External:        args.CriuOpts.External,
-		FileLocks:       args.CriuOpts.FileLocks,
+		External:        args.GetCriuOpts().GetExternal(),
+		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
 	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
@@ -127,18 +127,19 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
 
 	opts := &container.RuncOpts{
-		Root:          args.Opts.Root,
-		Bundle:        args.Opts.Bundle,
-		ConsoleSocket: args.Opts.ConsoleSocket,
-		Detach:        args.Opts.Detach,
-		NetPid:        int(args.Opts.NetPid),
-		StateRoot:     args.Opts.Root,
+		Root:          args.GetOpts().GetRoot(),
+		Bundle:        args.GetOpts().GetBundle(),
+		ConsoleSocket: args.GetOpts().GetConsoleSocket(),
+		Detach:        args.GetOpts().GetDetach(),
+		NetPid:        int(args.GetOpts().GetNetPid()),
+		StateRoot:     args.GetOpts().GetRoot(),
 	}
 
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
 		TcpClose:        true,  // XXX: Should instead take value from args
-		FileLocks:       args.CriuOpts.FileLocks,
+		TcpEstablished:  args.GetCriuOpts().GetTcpEstablished(),
+		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
 	if viper.GetBool("remote") {
