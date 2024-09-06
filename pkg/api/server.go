@@ -128,7 +128,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	if opts.VSOCKEnabled {
 		listener, err = vsock.Listen(VSOCK_PORT, nil)
 	} else {
-		Address = fmt.Sprintf("localhost:%d", opts.GrpcPort)
+		// NOTE: localhost requires firewall settings to disabled inside kubernetes
+		// this may or may not work without kubernetes based on firewall and network
+		// configuration, should work fine on local system
+		Address = fmt.Sprintf("0.0.0.0:%d", opts.GrpcPort)
 		listener, err = net.Listen(PROTOCOL, Address)
 	}
 
