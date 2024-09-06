@@ -263,7 +263,7 @@ jobs:
 
   benchmark:
     name: Benchmark
-    if: inputs.skip_bench != 'true'
+    if: ${{ !inputs.skip_bench }}
     permissions:
       contents: 'read'
       packages: 'read'
