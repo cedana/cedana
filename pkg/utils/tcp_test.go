@@ -196,7 +196,7 @@ func TestIsTCPReady(t *testing.T) {
 			}
 
 			// pass nil for no io_uring check
-			isReady, err := IsReadyLoop(GetTCPStates, mockGetReader, nil, tt.iteration, tt.timeout, mockFdDir)
+			isReady, err := IsReadyLoop(GetTCPStates, mockGetReader, IsUsingIoUring, tt.iteration, tt.timeout, mockFdDir)
 			if isReady != tt.expected {
 				t.Errorf("IsTCPReady() = %v, want %v", isReady, tt.expected)
 			}

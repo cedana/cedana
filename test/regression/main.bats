@@ -230,11 +230,11 @@ teardown() {
     local dumpdir=$DIR/dump
 
     # fetch and unpack a rootfs
-    wget $rootfs
-
-    mkdir -p $bundle/rootfs
-
-    sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+    if [ ! -d $bundle/rootfs ]; then
+        wget $rootfs
+        mkdir -p $bundle/rootfs
+        sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+    fi
 
     # create a runc container
     echo bundle is $bundle

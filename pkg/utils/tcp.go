@@ -40,7 +40,10 @@ func IsUsingIoUring(fdDir string) (bool, error) {
 		// Read the symbolic link to see where it points
 		linkTarget, err := os.Readlink(fdPath)
 		if err != nil {
-			return false, fmt.Errorf("failed to read link target for %s: %v", fdPath, err)
+			fmt.Errorf("failed to read link target for %s: %v", fdPath, err)
+			// links changes while we are listing and reading, so can't return an error
+			// just because unable to read the link here.
+			continue
 		}
 
 		// Check if the link points to io_uring
