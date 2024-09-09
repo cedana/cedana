@@ -2,11 +2,7 @@ package api
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
