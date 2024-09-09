@@ -16,7 +16,6 @@ import (
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -162,7 +161,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	cts, err := createClientWithRetry()
+	_, err := createClientWithRetry()
 	if err != nil {
 		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
@@ -187,7 +186,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
-					cts, err = createClientWithRetry()
+					_, err = createClientWithRetry()
 					if err != nil {
 						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
@@ -204,52 +203,26 @@ func startHelper(ctx context.Context, startChroot bool) {
 
 	// scrape daemon logs for kubectl logs output
 	go func() {
-		logPath := "/host/var/log/cedana-daemon.log"
+		file, err := os.Open("/host/var/log/cedana-daemon.log")
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to open cedana-daemon.log")
+			return
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
 		for {
-			file, err := os.Open(logPath)
+			line, err := reader.ReadString('\n')
 			if err != nil {
-				log.Log().Msgf("Failed to open cedana-daemon.log: %s", err)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			defer file.Close()
-
-			reader := bufio.NewScanner(file)
-
-			watcher, err := fsnotify.NewWatcher()
-			if err != nil {
-				log.Fatal().Msgf("Failed to create file watcher: %s", err)
-			}
-			defer watcher.Close()
-
-			err = watcher.Add(logPath)
-			if err != nil {
-				log.Fatal().Msgf("Failed to watch log file: %s", err)
-			}
-
-			log.Log().Msgf("Started reading logs from %s", logPath)
-
-			for {
-				select {
-				case event := <-watcher.Events:
-					if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
-						log.Log().Msgf("Log file rotated, reopening: %s", logPath)
-						file.Close()
-						break
-					}
-				default:
-					if reader.Scan() {
-						line := reader.Text()
-						if len(line) > 0 {
-							log.Log().Msgf("Log line: %s", line)
-						}
-					} else if err := reader.Err(); err != nil && err != io.EOF {
-						log.Log().Msgf("Error reading cedana-daemon.log: %s", err)
-						break
-					}
+				if err == io.EOF {
 					time.Sleep(1 * time.Second)
+					continue
 				}
+				log.Error().Err(err).Msg("Error reading cedana-daemon.log")
+				return
+			}
+			if len(line) > 0 {
+				log.Info().Msg(line)
 			}
 		}
 	}()
