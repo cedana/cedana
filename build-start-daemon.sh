@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# shellcheck disable=SC2181
+#
 set -e
 
 SUDO_USE=sudo
@@ -12,7 +13,7 @@ APP_NAME="cedana"
 APP_PATH="/usr/local/bin/$APP_NAME"
 SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
-CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-0}
+CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-false}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
@@ -40,6 +41,11 @@ for arg in "$@"; do
         value="${arg#*=}"
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
+    fi
+
+    if [ "$arg" == "--otel" ]; then
+        echo "otel enabled, starting otelcol.."
+        CEDANA_OTEL_ENABLED=true
     fi
 done
 
@@ -71,10 +77,6 @@ fi
 
 if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
-fi
-
-if [ "$CEDANA_OTEL_ENABLED" = "true" ]; then
-    echo "Starting daemon with OpenTelemetry support..."
 fi
 
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
@@ -120,12 +122,12 @@ EOF
     echo "$APP_NAME service setup complete."
 else
     echo "Starting daemon as a background process..."
-    if [[ ! -n "${SUDO_USE}" ]]; then
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS &
-    else
+    if [[ -z "${SUDO_USE}" ]]; then
         # only systemctl writes to /var/log/cedana-daemon.log, if starting w/out systemctl
         # still want to write logs to a file
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" $DAEMON_ARGS 2>&1 | tee -a /var/log/cedana-daemon.log &
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" 2>&1 | tee -a /var/log/cedana-daemon.log &
+    else
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" 2>&1 | tee -a /var/log/cedana-daemon.log &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi

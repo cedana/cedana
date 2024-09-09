@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -39,6 +39,9 @@ var cleanupHostScript string
 //go:embed scripts/k8s/bump-restart.sh
 var restartScript string
 
+//go:embed scripts/k8s/start-otelcol.sh
+var startOtelColScript string
+
 var helperCmd = &cobra.Command{
 	Use:   "k8s-helper",
 	Short: "Helper for Cedana running in Kubernetes",
@@ -47,22 +50,36 @@ var helperCmd = &cobra.Command{
 
 		restart, _ := cmd.Flags().GetBool("restart")
 		if restart {
-			if err := runScript("bash", restartScript); err != nil {
+			if err := runScript("bash", restartScript, true); err != nil {
 				log.Error().Err(err).Msg("Error restarting")
 			}
 		}
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
-			if err := runScript("bash", setupHostScript); err != nil {
+			if err := runScript("bash", setupHostScript, true); err != nil {
 				log.Error().Err(err).Msg("Error setting up host")
 			}
 		}
 
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
-			if err := runScript("bash", chrootStartScript); err != nil {
+			if err := runScript("bash", chrootStartScript, true); err != nil {
 				log.Error().Err(err).Msg("Error with chroot and starting daemon")
+			}
+		}
+
+		startOtelCol, _ := cmd.Flags().GetBool("start-otelcol")
+		if startOtelCol {
+			// check for signoz_access_token
+			apikey, err := getTelemetryAPIKey()
+			if err != nil {
+				log.Error().Err(err).Msg("Error getting telemetry API key")
+			}
+
+			os.Setenv("SIGNOZ_ACCESS_TOKEN", apikey)
+			if err := runScript("bash", startOtelColScript, false); err != nil {
+				log.Error().Err(err).Msg("Error starting otelcol")
 			}
 		}
 
@@ -86,7 +103,7 @@ var destroyCmd = &cobra.Command{
 }
 
 func destroyCedana(ctx context.Context) error {
-	if err := runScript("bash", cleanupHostScript); err != nil {
+	if err := runScript("bash", cleanupHostScript, true); err != nil {
 		log.Error().Err(err).Msg("Cleanup host script failed")
 
 		return err
@@ -95,11 +112,56 @@ func destroyCedana(ctx context.Context) error {
 	return nil
 }
 
+func getTelemetryAPIKey() (string, error) {
+	var apiKey string
+	apiKey, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
+	if !ok {
+		// try downloading from checkpointsvc
+		cedana_api_key, ok := os.LookupEnv("CEDANA_API_KEY")
+		if !ok {
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_KEY not set")
+		}
+
+		cedana_api_server, ok := os.LookupEnv("CEDANA_API_SERVER")
+		if !ok {
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_SERVER not set")
+		}
+
+		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_api_server)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", fmt.Errorf("error creating request: %v", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+cedana_api_key)
+		client := &http.Client{}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("error making request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("error getting api key: %d", resp.StatusCode)
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("error reading response body: %v", err)
+		}
+
+		apiKey = string(respBody)
+	}
+
+	return apiKey, nil
+}
+
 func startHelper(ctx context.Context, startChroot bool) {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	cts, err := createClientWithRetry()
+	_, err := createClientWithRetry()
 	if err != nil {
 		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
@@ -124,7 +186,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
-					cts, err = createClientWithRetry()
+					_, err = createClientWithRetry()
 					if err != nil {
 						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
@@ -165,9 +227,6 @@ func startHelper(ctx context.Context, startChroot bool) {
 		}
 	}()
 
-	req := &task.ContainerdQueryArgs{}
-	cts.ContainerdQuery(context.Background(), req)
-
 	select {}
 }
 
@@ -201,17 +260,24 @@ func runCommand(command string, args ...string) error {
 	return cmd.Run()
 }
 
-func runScript(command, script string) error {
+func runScript(command, script string, logOutput bool) error {
 	cmd := exec.Command(command)
 	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	if logOutput {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
+	}
+
 	return cmd.Run()
 }
 
 func startDaemon(startChroot bool) error {
 	if startChroot {
-		err := runScript("bash", chrootStartScript)
+		err := runScript("bash", chrootStartScript, true)
 		if err != nil {
 			return err
 		}
@@ -242,6 +308,7 @@ func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
 	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
+	helperCmd.Flags().Bool("start-otelcol", false, "Start otelcol on the host")
 	rootCmd.AddCommand(helperCmd)
 
 	helperCmd.AddCommand(destroyCmd)
