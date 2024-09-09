@@ -162,7 +162,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	cts, err := createClientWithRetry()
+	_, err := createClientWithRetry()
 	if err != nil {
 		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
@@ -187,7 +187,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
-					cts, err = createClientWithRetry()
+					_, err = createClientWithRetry()
 					if err != nil {
 						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
