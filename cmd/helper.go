@@ -16,7 +16,6 @@ import (
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -254,9 +253,6 @@ func startHelper(ctx context.Context, startChroot bool) {
 			}
 		}
 	}()
-
-	req := &task.ContainerdQueryArgs{}
-	cts.ContainerdQuery(context.Background(), req)
 
 	select {}
 }
