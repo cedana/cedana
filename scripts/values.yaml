@@ -165,14 +165,25 @@ config:
       metrics:
         receivers: [otlp]
         processors: [batch]
-        exporters: [ot
-
+        exporters: [otlp]
+      metrics/internal:
+        receivers: [prometheus, hostmetrics]
+        processors: [batch]
+        exporters: [otlp]
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp]
+      logs:
+        receivers: [otlp, filelog/daemonlogs, filelog/gpulogs]
+        processors: [batch]
+        exporters: [otlp]
 # Components configured by presets will be injected in the same way they are for `config`.
 alternateConfig: {}
 
 image:
   # If you want to use the core image `otel/opentelemetry-collector`, you also need to change `command.name` value to `otelcol`.
-  repository: ""
+  repository: "otel/opentelemetry-collector-k8s"
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
