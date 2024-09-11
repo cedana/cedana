@@ -91,7 +91,6 @@ type pullGPUBinaryRequest struct {
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	logger := utils.GetLogger()
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -101,8 +100,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
+			grpc.StreamInterceptor(loggingStreamInterceptor()),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID)),
 		),
 	}
 
@@ -126,7 +125,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		cudaVersion: opts.CUDAVersion,
 		machineID:   machineID,
 		jobService:  js,
-		logger:      logger,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -172,7 +170,6 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
-
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
@@ -339,7 +336,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	return gpuCmd, nil
 }
 
-func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerInterceptor {
+func loggingStreamInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
 
@@ -356,7 +353,7 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
@@ -447,9 +444,12 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, nil)
+	gpuOutBuf := &bytes.Buffer{}
+	gpuOut := io.MultiWriter(gpuOutBuf)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, gpuOut)
 	if err != nil {
-		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
+		log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("could not start gpu controller")
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller: %v", err))
 		return nil
 	}
 
