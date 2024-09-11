@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -38,6 +41,10 @@ var (
 	}
 )
 
+// SystemIdentifier initialization defaults to using rand so that in case we fail to find and update
+// with proper machine id it still works
+var SystemIdentifier = fmt.Sprintf("%d-%d-%d", rand.Uint64(), rand.Uint64(), rand.Uint64())
+
 func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 	includedMetrics := container.AllMetrics.Difference(ignoreMetrics)
 	log.Info().Msgf("enabled metrics: %s", includedMetrics.String())
@@ -64,6 +71,16 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 	// Start the manager.
 	if err := resourceManager.Start(); err != nil {
 		log.Fatal().Msgf("Failed to start manager: %v", err)
+	}
+
+	// TODO: this only works on systemd systems
+	// on non systemd systems it might be located at /var/lib/dbus/machine-id
+	// but there are no fixed defaults
+	// if sysfs is setup then we can also read, /sys/class/dmi/id/product_uuid
+	// which has a identifier for product_uuid
+	bytes, err := os.ReadFile("/etc/machine-id")
+	if err == nil {
+		SystemIdentifier = string(bytes)
 	}
 
 	return resourceManager, nil
@@ -104,6 +121,7 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
 				ContainerName: name,
+				DaemonId:      SystemIdentifier,
 				// from nanoseconds in uint64 to cputime in float64
 				CpuTime:    float64(c.Cpu.Usage.User) / 1000000000.,
 				CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
