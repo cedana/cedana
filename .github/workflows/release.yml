@@ -61,7 +61,7 @@ jobs:
       debug_correctness_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      run_bench: false # will be run in a separate job below
+      skip_bench: true # since benchmark will be run in a separate job below
 
   build-publish-amd64:
     name: Build & Publish (amd64)

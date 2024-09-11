@@ -26,6 +26,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
+	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
@@ -67,6 +68,8 @@ type service struct {
 	cudaVersion     string
 	machineID       string
 	cadvisorManager manager.Manager
+
+	jobService *jobservice.JobService
 
 	task.UnimplementedTaskServiceServer
 }
@@ -111,6 +114,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	manager, err := SetupCadvisor(ctx)
 	if err != nil {
 		log.Error().Err(err).Send()
+    return nil, err
+  }
+
+	js, err := jobservice.New()
+	if err != nil {
 		return nil, err
 	}
 
@@ -127,6 +135,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		machineID:       machineID,
 		logger:          logger,
 		cadvisorManager: manager,
+		jobService:  js,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -155,6 +164,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 func (s *Server) start(ctx context.Context) error {
+	go func() {
+		if err := s.service.jobService.Start(ctx); err != nil {
+			// note: at the time of writing this comment, below is unreachable
+			// as we never return an error from the Start function
+			log.Error().Err(err).Msg("failed to run job service")
+		}
+	}()
 	return s.grpcServer.Serve(s.listener)
 }
 
@@ -165,6 +181,7 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
+
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)

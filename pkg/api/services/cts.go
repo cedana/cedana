@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"fmt"
-	"github.com/mdlayher/vsock"
 	"net"
+
+	"github.com/mdlayher/vsock"
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -17,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
+
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -33,7 +36,7 @@ type ServiceClient struct {
 func NewClient() (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	taskConn, err := grpc.Dial(api.ADDRESS, opts...)
+	taskConn, err := grpc.Dial(api.Address, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +51,6 @@ func NewClient() (*ServiceClient, error) {
 }
 
 func NewVSockClient(vm string) (*ServiceClient, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
 	// extract cid from the process tree on host
 	cid, err := utils.ExtractCID(vm)
 	if err != nil {
@@ -374,6 +374,43 @@ func (c *ServiceClient) GetContainerInfo(ctx context.Context, args *task.Contain
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.taskService.GetContainerInfo(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+////////////////////
+//    JobQueue    //
+////////////////////
+
+func (c *ServiceClient) QueueCheckpoint(ctx context.Context, args *task.QueueJobCheckpointRequest) (*wrapperspb.BoolValue, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.QueueCheckpoint(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) QueueRestore(ctx context.Context, args *task.QueueJobRestoreRequest) (*wrapperspb.BoolValue, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.QueueRestore(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) QueueJobStatus(ctx context.Context, args *task.QueueJobID) (*task.QueueJobStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.JobStatus(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
