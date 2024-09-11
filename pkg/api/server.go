@@ -29,7 +29,6 @@ import (
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
@@ -60,7 +59,6 @@ type service struct {
 	CRIU            *Criu
 	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db              db.DB
-	logger          *zerolog.Logger
 	store           *utils.CedanaStore
 	serverCtx       context.Context // context alive for the duration of the server
 	wg              sync.WaitGroup  // for waiting for all background tasks to finish

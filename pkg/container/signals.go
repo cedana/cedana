@@ -4,9 +4,9 @@ import (
 	"os"
 	"os/signal"
 
-	cedanaUtils "github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer/system"
 	"github.com/cedana/runc/libcontainer/utils"
+	"github.com/rs/zerolog/log"
 
 	"golang.org/x/sys/unix"
 )
@@ -18,11 +18,10 @@ const signalBufferSize = 2048
 // If notifySocket is present, use it to read systemd notifications from the container and
 // forward them to notifySocketHost.
 func newSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalHandler {
-	logger := cedanaUtils.GetLogger()
 	if enableSubreaper {
 		// set us as the subreaper before registering the signal handler for the container
 		if err := system.SetSubreaper(1); err != nil {
-			logger.Warn().Err(err)
+			log.Warn().Err(err)
 		}
 	}
 	// ensure that we have a large buffer size so that we do not miss any signals
@@ -53,7 +52,6 @@ type Fields map[string]interface{}
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
 func (h *signalHandler) forward(process *Process, tty *tty, detach bool) (int, error) {
-	logger := cedanaUtils.GetLogger()
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.
 	if detach && h.notifySocket == nil {
@@ -86,10 +84,10 @@ func (h *signalHandler) forward(process *Process, tty *tty, detach bool) (int, e
 		case unix.SIGCHLD:
 			exits, err := h.reap()
 			if err != nil {
-				logger.Err(err)
+				log.Err(err)
 			}
 			for _, e := range exits {
-				logger.Debug().Fields(Fields{
+				log.Debug().Fields(Fields{
 					"pid":    e.pid,
 					"status": e.status,
 				}).Msg("process exited")
@@ -108,9 +106,9 @@ func (h *signalHandler) forward(process *Process, tty *tty, detach bool) (int, e
 			// Do nothing.
 		default:
 			us := s.(unix.Signal)
-			logger.Debug().Msgf("forwarding signal %d (%s) to %d", int(us), unix.SignalName(us), pid1)
+			log.Debug().Msgf("forwarding signal %d (%s) to %d", int(us), unix.SignalName(us), pid1)
 			if err := unix.Kill(pid1, us); err != nil {
-				logger.Err(err)
+				log.Err(err)
 			}
 		}
 	}

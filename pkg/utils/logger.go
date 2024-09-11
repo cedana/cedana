@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"io"
 	"os"
 	"time"
@@ -16,19 +15,7 @@ const (
 	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
 
-type contextKey string
-
-const LoggerKey = contextKey("logger")
-
-func WithLogger(ctx context.Context, logger *zerolog.Logger) context.Context {
-	return context.WithValue(ctx, LoggerKey, logger)
-}
-
-var logger zerolog.Logger
-
-func GetLogger() *zerolog.Logger {
-	return &logger
-}
+var Logger zerolog.Logger
 
 type LineInfoHook struct{}
 
@@ -51,7 +38,7 @@ func init() {
 		Out: os.Stdout,
 	}
 
-	logger = zerolog.New(output).
+	Logger = zerolog.New(output).
 		Level(logLevel).
 		With().
 		Timestamp().

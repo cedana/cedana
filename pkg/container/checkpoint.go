@@ -14,12 +14,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	"runtime"
 
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer/cgroups"
@@ -872,7 +871,6 @@ var (
 
 // for a full containerd checkpoint, we'd use the runc checkpointing primitives + rootfs
 func ContainerdRootfsCheckpoint(ctx context.Context, containerdClient *containerd.Client, id, ref string) error {
-
 	containers, err := containerdClient.Containers(ctx)
 	if err != nil {
 		return err
@@ -960,7 +958,6 @@ func WithCheckpointState(ctx context.Context, client *containerd.Client, c *cont
 var Platform = "cedana/platform"
 
 func (c *ContainerdContainer) ContainerCheckpointContainerd(ctx context.Context, ref string) error {
-
 	info, err := c.Info(ctx)
 	if err != nil {
 		return err
@@ -1813,8 +1810,6 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 }
 
 func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
-	logger := utils.GetLogger()
-
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return err
@@ -1844,7 +1839,7 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 	if c.CriuVersion != 0 {
 		// If the CRIU Version is still '0' then this is probably
 		// the initial CRIU run to detect the version. Skip it.
-		logger.Debug().Msgf("Using CRIU %d", c.CriuVersion)
+		log.Debug().Msgf("Using CRIU %d", c.CriuVersion)
 	}
 	cmd := exec.Command("criu", "swrk", "3", "--verbosity=4")
 
@@ -1876,7 +1871,7 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 			criuClientCon.Close()
 			_, err := criuProcess.Wait()
 			if err != nil {
-				logger.Warn().Msgf("wait on criuProcess returned %v", err)
+				log.Warn().Msgf("wait on criuProcess returned %v", err)
 			}
 		}
 	}()
@@ -1893,12 +1888,12 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		}
 	}
 
-	logger.Debug().Msgf("Using CRIU in %s mode", req.GetType().String())
+	log.Debug().Msgf("Using CRIU in %s mode", req.GetType().String())
 	// In the case of criurpc.CriuReqType_FEATURE_CHECK req.GetOpts()
 	// should be empty. For older CRIU versions it still will be
 	// available but empty. criurpc.CriuReqType_VERSION actually
 	// has no req.GetOpts().
-	if logger.GetLevel() >= zerolog.DebugLevel &&
+	if log.Logger.GetLevel() >= zerolog.DebugLevel &&
 		!(req.GetType() == criurpc.CriuReqType_FEATURE_CHECK ||
 			req.GetType() == criurpc.CriuReqType_VERSION) {
 
@@ -1909,7 +1904,7 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 			name := st.Field(i).Name
 			if 'A' <= name[0] && name[0] <= 'Z' {
 				value := val.MethodByName("Get" + name).Call([]reflect.Value{})
-				logger.Debug().Msgf("CRIU option %s with value %v", name, value[0])
+				log.Debug().Msgf("CRIU option %s with value %v", name, value[0])
 			}
 		}
 	}

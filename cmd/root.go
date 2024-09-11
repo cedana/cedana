@@ -29,10 +29,7 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
-	logger := utils.GetLogger()
-	log.Logger = *logger
-
-	ctx = context.WithValue(ctx, utils.LoggerKey, logger)
+	log.Logger = utils.Logger
 
 	rootCmd.Version = version
 	rootCmd.Long = rootCmd.Long + "\n " + version
@@ -47,7 +44,7 @@ func Execute(ctx context.Context, version string) error {
 			Config:    config,
 			ConfigDir: configDir,
 		}); err != nil {
-			logger.Error().Err(err).Msg("failed to initialize config")
+			log.Error().Err(err).Msg("failed to initialize config")
 			return err
 		}
 		return nil
