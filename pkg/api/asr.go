@@ -16,8 +16,8 @@ import (
 	"github.com/swarnimarun/cadvisor/utils/sysfs"
 
 	// Register container providers
-	_ "github.com/swarnimarun/cadvisor/container/containerd/install"
-	_ "github.com/swarnimarun/cadvisor/container/crio/install"
+	containerd_plugin "github.com/swarnimarun/cadvisor/container/containerd/install"
+	crio_plugin "github.com/swarnimarun/cadvisor/container/crio/install"
 )
 
 var (
@@ -70,12 +70,35 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 }
 
 func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
-	containers, err := s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
-		NumStats: 1,
-	})
+  containerdService := containerd_plugin.Success
+  crioService := crio_plugin.Success
+
+  var containers map[string]v1.ContainerInfo
+  var err error
+  if containerdService {
+    containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+      NumStats: 1,
+    })
+  } else if crioService {
+    containers, err = s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+      NumStats: 1,
+    })
+  }
 	if err != nil {
 		return nil, err
 	}
+
+  // TODO: discuss how to handle this
+  // also try to fetch
+  // if containerdService && crioService {
+  //   _, err := s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+  //     NumStats: 1,
+  //   })
+  //   // if successful also add crio containers????
+  //   if err == nil {
+  //   }
+  // }
+
 	ci := task.ContainersInfo{}
 	for name, container := range containers {
 		for _, c := range container.Stats {
@@ -89,7 +112,7 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 				// from bytes in uin64 to megabytes in float64
 				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
 				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
-				DiskIO:        0,
+				DiskIO:        -1.,
 			}
 			ci.Containers = append(ci.Containers, &info)
 		}
