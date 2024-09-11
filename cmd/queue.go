@@ -59,7 +59,11 @@ var queueCheckpointCmd = &cobra.Command{
 			ImageName:     containerImage,
 			Id:            jobId,
 		})
-		_ = b.Value
+		if b.Value {
+			fmt.Print("%s", jobId)
+		} else {
+			log.Fatal().Msg("Failed to queue checkpoint")
+		}
 		return nil
 	},
 }
