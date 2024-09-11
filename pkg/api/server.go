@@ -113,8 +113,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	manager, err := SetupCadvisor(ctx)
 	if err != nil {
 		log.Error().Err(err).Send()
-    return nil, err
-  }
+		return nil, err
+	}
 
 	js, err := jobservice.New()
 	if err != nil {
@@ -132,9 +132,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		gpuEnabled:      opts.GPUEnabled,
 		cudaVersion:     opts.CUDAVersion,
 		machineID:       machineID,
-		logger:          logger,
 		cadvisorManager: manager,
-		jobService:  js,
+		jobService:      js,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
