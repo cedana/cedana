@@ -15,7 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	cedanaUtils "github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer"
 	"github.com/cedana/runc/libcontainer/cgroups"
 	"github.com/cedana/runc/libcontainer/cgroups/manager"
@@ -30,6 +29,7 @@ import (
 	"github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
+	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -78,9 +78,8 @@ func newProcess(p specs.Process) (*Process, error) {
 }
 
 func destroy(container *libcontainer.Container) {
-	logger := cedanaUtils.GetLogger()
 	if err := container.Destroy(); err != nil {
-		logger.Err(err)
+		log.Err(err)
 	}
 }
 
@@ -1540,7 +1539,6 @@ type Runner struct {
 }
 
 func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
-	logger := cedanaUtils.GetLogger()
 	var err error
 	defer func() {
 		if err != nil {
@@ -1554,7 +1552,7 @@ func (r *Runner) Run(config *specs.Process, runcRoot string) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	process.LogLevel = strconv.Itoa(int(logger.GetLevel()))
+	process.LogLevel = strconv.Itoa(int(log.Logger.GetLevel()))
 	// Populate the fields that come from runner.
 	process.Init = r.init
 	process.SubCgroupPaths = r.subCgroupPaths

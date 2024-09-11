@@ -2,7 +2,6 @@ package container
 
 import (
 	"context"
-	gocontext "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,13 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer"
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	errdefs "github.com/containerd/errdefs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/rs/zerolog/log"
 )
 
 type RuncOpts struct {
@@ -51,10 +50,9 @@ func Restore(imgPath string, containerID string) error {
 }
 
 func containerdRestore(id string, ref string) error {
-	ctx := gocontext.Background()
-	logger := utils.GetLogger()
+	ctx := context.Background() // XXX YA: Pass context from caller
 
-	logger.Info().Msgf("restoring container %s from %s", id, ref)
+	log.Info().Msgf("restoring container %s from %s", id, ref)
 
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
