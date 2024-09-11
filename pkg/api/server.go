@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"github.com/swarnimarun/cadvisor/manager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -56,16 +57,17 @@ const (
 var Address = "0.0.0.0:8080"
 
 type service struct {
-	CRIU        *Criu
-	fs          *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db          db.DB
-	logger      *zerolog.Logger
-	store       *utils.CedanaStore
-	serverCtx   context.Context // context alive for the duration of the server
-	wg          sync.WaitGroup  // for waiting for all background tasks to finish
-	gpuEnabled  bool
-	cudaVersion string
-	machineID   string
+	CRIU            *Criu
+	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db              db.DB
+	logger          *zerolog.Logger
+	store           *utils.CedanaStore
+	serverCtx       context.Context // context alive for the duration of the server
+	wg              sync.WaitGroup  // for waiting for all background tasks to finish
+	gpuEnabled      bool
+	cudaVersion     string
+	machineID       string
+	cadvisorManager manager.Manager
 
 	jobService *jobservice.JobService
 
@@ -108,6 +110,12 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
+	manager, err := SetupCadvisor(ctx)
+	if err != nil {
+		log.Error().Err(err).Send()
+    return nil, err
+  }
+
 	js, err := jobservice.New()
 	if err != nil {
 		return nil, err
@@ -116,14 +124,16 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
-		CRIU:        &Criu{},
-		fs:          &afero.Afero{Fs: afero.NewOsFs()},
-		db:          db.NewLocalDB(ctx),
-		store:       utils.NewCedanaStore(),
-		serverCtx:   ctx,
-		gpuEnabled:  opts.GPUEnabled,
-		cudaVersion: opts.CUDAVersion,
-		machineID:   machineID,
+		CRIU:            &Criu{},
+		fs:              &afero.Afero{Fs: afero.NewOsFs()},
+		db:              db.NewLocalDB(ctx),
+		store:           utils.NewCedanaStore(),
+		serverCtx:       ctx,
+		gpuEnabled:      opts.GPUEnabled,
+		cudaVersion:     opts.CUDAVersion,
+		machineID:       machineID,
+		logger:          logger,
+		cadvisorManager: manager,
 		jobService:  js,
 	}
 

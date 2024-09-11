@@ -365,6 +365,21 @@ func getDefaultCallOptions() []grpc.CallOption {
 	return opts
 }
 
+//////////////////////
+///      ASR       ///
+//////////////////////
+
+func (c *ServiceClient) GetContainerInfo(ctx context.Context, args *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.GetContainerInfo(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 ////////////////////
 //    JobQueue    //
 ////////////////////
