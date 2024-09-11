@@ -416,7 +416,8 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		gpuOut := io.Writer(gpuOutBuf)
 		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
 		if err != nil {
-			return 0, nil, err
+			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
+			return 0, nil, fmt.Errorf("failed to start GPU controller: %v", err)
 		}
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")

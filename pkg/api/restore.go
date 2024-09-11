@@ -601,6 +601,9 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Callback: func() error {
 				var err error
 				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
+				if err != nil {
+					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
+				}
 				return err
 			},
 		}
