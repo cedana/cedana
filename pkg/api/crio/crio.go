@@ -186,7 +186,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	defer os.RemoveAll(tmpRootfsChangesDir)
-	if err := archive.Untar(rootfsDiffFile, tmpRootfsChangesDir, nil); err != nil {
+	if err := UntarWithPermissions(filepath.Join(ctrDir, metadata.RootFsDiffTar), tmpRootfsChangesDir); err != nil {
 		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", ctrDir, err)
 	}
 
@@ -339,7 +339,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
-	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
+	if err := UntarWithPermissions(rootfsDiffPath, containerRootDirectory); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
 	}
 
