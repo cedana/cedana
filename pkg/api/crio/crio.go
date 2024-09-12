@@ -204,6 +204,8 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			continue
 		}
 
+		origMode := fileInfo.Mode()
+
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			// use syscall.Lchown to change the ownership of the link itself
 			// syscall.chown only changes the ownership of the target file in a symlink.
@@ -218,6 +220,13 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			}
 			log.Debug().Msgf("\t mode is regular: %s", fullPath)
 
+		}
+
+		// Always restore the original permissions after changing ownership
+		if err := os.Chmod(fullPath, origMode); err != nil {
+			log.Debug().Msgf("failed to restore permissions for %s: %s", fullPath, err)
+		} else {
+			log.Debug().Msgf("\t restored permissions for %s", fullPath)
 		}
 	}
 
