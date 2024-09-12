@@ -242,11 +242,6 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("untaring for rootfs file failed %q: %w", tmpRootfsChangesDir, err)
 	}
 
-	rootfsDiffFile, err = os.Create(diffPath)
-	if err != nil {
-		return "", fmt.Errorf("creating root file-system diff file %q: %w", diffPath, err)
-	}
-	defer rootfsDiffFile.Close()
 	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
 		return "", err
 	}
