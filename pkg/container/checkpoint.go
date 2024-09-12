@@ -1120,6 +1120,8 @@ func ReadIndex(ctx context.Context, img containerd.Image) (*ocispec.Index, *ocis
 
 // writeContentsForImage will commit oci image config and manifest into containerd's content store.
 func writeContentsForImage(ctx context.Context, snName string, baseImg containerd.Image, newConfig ocispec.Image, diffLayerDesc ocispec.Descriptor) (ocispec.Descriptor, digest.Digest, error) {
+	logger := utils.GetLogger()
+	logger.Debug().Msgf("Entering writeContentsForImage function")
 	newConfigJSON, err := json.Marshal(newConfig)
 	if err != nil {
 		return ocispec.Descriptor{}, emptyDigest, err
@@ -1189,6 +1191,8 @@ func writeContentsForImage(ctx context.Context, snName string, baseImg container
 }
 
 func generateCommitImageConfig(ctx context.Context, container containerd.Container, img containerd.Image, diffID digest.Digest) (ocispec.Image, error) {
+	logger := utils.GetLogger()
+	logger.Debug().Msgf("Entering generateCommitImageConfig function")
 	spec, err := container.Spec(ctx)
 	if err != nil {
 		return ocispec.Image{}, err
@@ -1216,6 +1220,7 @@ func generateCommitImageConfig(ctx context.Context, container containerd.Contain
 		// log.G(ctx).Warnf("assuming os=%q", os)
 	}
 	// log.G(ctx).Debugf("generateCommitImageConfig(): arch=%q, os=%q", arch, os)
+	logger.Debug().Msgf("Returning generateCommitImageConfig function")
 	return ocispec.Image{
 		Platform: ocispec.Platform{
 			Architecture: arch,
@@ -1241,6 +1246,8 @@ func generateCommitImageConfig(ctx context.Context, container containerd.Contain
 
 // createDiff creates a layer diff into containerd's content store.
 func createDiff(ctx context.Context, name string, sn snapshots.Snapshotter, cs content.Store, comparer diff.Comparer) (ocispec.Descriptor, digest.Digest, error) {
+	logger := utils.GetLogger()
+	logger.Debug().Msgf("Entering createDiff function")
 	newDesc, err := rootfs.CreateDiff(ctx, name, sn, comparer)
 	if err != nil {
 		return ocispec.Descriptor{}, digest.Digest(""), err
@@ -1260,6 +1267,7 @@ func createDiff(ctx context.Context, name string, sn snapshots.Snapshotter, cs c
 	if err != nil {
 		return ocispec.Descriptor{}, digest.Digest(""), err
 	}
+	logger.Debug().Msgf("Return createDiff function")
 
 	return ocispec.Descriptor{
 		MediaType: images.MediaTypeDockerSchema2LayerGzip,
