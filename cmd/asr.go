@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,7 +25,21 @@ var asrStartCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Start automatic suspend resume")
 		ctx := cmd.Context()
-		// start the server
+
+		var err error
+
+		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
+		// defaults to 11_8, this continues if --cuda is not specified
+		cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
+		if _, ok := cudaVersions[cudaVersion]; !ok {
+			err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
+			log.Error().Err(err).Msg("invalid cuda version")
+			return err
+		}
+		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
+		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
@@ -33,12 +48,13 @@ var asrStartCmd = &cobra.Command{
 
 		go func() {
 			err := api.StartServer(ctx, &api.ServeOpts{
-				GPUEnabled:   false,
-				CUDAVersion:  cudaVersions["12.2"],
-				VSOCKEnabled: vsockEnabledFlag,
-				CedanaURL:    cedanaURL,
-				// TODO(swarnimarun): allow flag to customize the port
-				GrpcPort: 8080,
+				GPUEnabled:        gpuEnabled,
+				CUDAVersion:       cudaVersions[cudaVersion],
+				VSOCKEnabled:      vsockEnabled,
+				CedanaURL:         cedanaURL,
+				MetricsEnabled:    metricsEnabled,
+				JobServiceEnabled: jobServiceEnabled,
+				Port:              port,
 			})
 			if err != nil {
 				log.Fatal().Err(err).Msgf("failed to start the daemon server, cleaning up")
@@ -52,7 +68,7 @@ var asrStartCmd = &cobra.Command{
 		go func() {
 			time.Sleep(5 * time.Second)
 			defer wg.Done()
-			cts, err := services.NewClient()
+			cts, err := services.NewClient(port)
 			if err != nil {
 				log.Error().Msgf("Error creating client: %v", err)
 				return
@@ -82,5 +98,11 @@ var asrStartCmd = &cobra.Command{
 
 func init() {
 	asrCmd.AddCommand(asrStartCmd)
+	asrCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start with GPU support")
+	asrCmd.Flags().Bool(vsockEnabledFlag, false, "start with vsock support")
+	asrCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	asrCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
+	asrCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
+
 	rootCmd.AddCommand(asrCmd)
 }

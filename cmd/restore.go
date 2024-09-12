@@ -31,7 +31,8 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -95,7 +96,8 @@ var restoreKataCmd = &cobra.Command{
 		ctx := cmd.Context()
 		vm := args[0]
 
-		cts, err := services.NewVSockClient(vm)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewVSockClient(vm, port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -175,7 +177,8 @@ var restoreJobCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Err(err).Msgf("error creating client")
 			return err
@@ -285,7 +288,8 @@ var containerdRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -321,7 +325,8 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err

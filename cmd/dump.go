@@ -32,7 +32,8 @@ var dumpProcessCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -88,7 +89,8 @@ var dumpKataCmd = &cobra.Command{
 
 		vm := args[0]
 
-		cts, err := services.NewVSockClient(vm)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewVSockClient(vm, port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -173,8 +175,8 @@ var dumpJobCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		// TODO NR - this needs to be extended to include container checkpoints
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -234,7 +236,8 @@ var dumpContainerdCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -322,7 +325,8 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -381,7 +385,8 @@ var dumpRuncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
