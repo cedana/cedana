@@ -171,17 +171,8 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	rootfsDiffFile, err := os.Open(filepath.Join(ctrDir, metadata.RootFsDiffTar))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
-		return "", fmt.Errorf("failed to open root file-system diff file: %w", err)
-	}
-	defer rootfsDiffFile.Close()
-
 	tmpRootfsChangesDir := filepath.Join(ctrDir, "rootfs-diff")
-	if err := os.Mkdir(tmpRootfsChangesDir, 0777); err != nil {
+	if err := os.Mkdir(tmpRootfsChangesDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -233,17 +224,12 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	rootfsTar, err := archive.TarWithOptions(tmpRootfsChangesDir, &archive.TarOptions{
-		// This should be configurable via api.proti
-		Compression:      archive.Uncompressed,
-		IncludeSourceDir: true,
-	})
-	if err != nil {
-		return "", fmt.Errorf("untaring for rootfs file failed %q: %w", tmpRootfsChangesDir, err)
+	if _, err := os.Stat(tmpRootfsChangesDir); os.IsNotExist(err) {
+		log.Error().Msgf("Source directory %s does not exist: %v", tmpRootfsChangesDir, err)
 	}
 
-	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
-		return "", err
+	if err := createTarball(tmpRootfsChangesDir, diffPath); err != nil {
+		log.Error().Msgf("Error creating tarball: %v", err)
 	}
 
 	_, err = os.Stat(diffPath)
@@ -252,6 +238,15 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	return diffPath, nil
+}
+
+func createTarball(sourceDir, tarPath string) error {
+	cmd := exec.Command("tar", "-cvf", tarPath, sourceDir)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to create tarball: %w", err)
+	}
+	return nil
 }
 
 func removeAllContainers() {
