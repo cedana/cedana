@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -139,6 +140,49 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
+func (s *service) getDumpdirSize(path string) (int64, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var size int64
+	var err error
+
+	handleFile := func(filePath string, info os.DirEntry) {
+		defer wg.Done()
+		if !info.IsDir() {
+			if strings.HasSuffix(filePath, ".lz4") {
+				fileInfo, fileErr := info.Info()
+				if fileErr != nil {
+					mu.Lock()
+					if err == nil {
+						err = fmt.Errorf("error reading file info for %s: %w", filePath, fileErr)
+					}
+					mu.Unlock()
+					return
+				}
+				mu.Lock()
+				size += fileInfo.Size()
+				mu.Unlock()
+			}
+		}
+	}
+
+	err = filepath.WalkDir(path, func(filePath string, info os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		wg.Add(1)
+		go handleFile(filePath, info)
+		return nil
+	})
+
+	wg.Wait()
+	if err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}
+
 func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
@@ -148,7 +192,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 	var compressedCheckpointPath string
 	if streamCmd != nil {
-		compressedCheckpointPath = filepath.Join(dumpdir, "img.lz4")
+		compressedCheckpointPath = dumpdir
 	} else {
 		compressedCheckpointPath = strings.Join([]string{dumpdir, ".tar"}, "")
 	}
@@ -164,24 +208,29 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 
 	log.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
 
+	var size int64
 	if streamCmd != nil {
 		streamCmd.Wait()
+		size, err = s.getDumpdirSize(compressedCheckpointPath)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
 	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
 			log.Fatal().Err(err)
 		}
-	}
-
-	// get size of compressed checkpoint
-	info, err := os.Stat(compressedCheckpointPath)
-	if err != nil {
-		log.Fatal().Err(err)
+		// get size of compressed checkpoint
+		info, err := os.Stat(compressedCheckpointPath)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+		size = info.Size()
 	}
 
 	elapsed := time.Since(start)
 	stats.CheckpointFileStats = &task.CheckpointFileStats{
-		Size:     info.Size(),
+		Size:     size,
 		Duration: elapsed.Milliseconds(),
 	}
 }
@@ -248,9 +297,25 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
 	buf := new(bytes.Buffer)
+	//out := new(bytes.Buffer)
 	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "capture")
 	cmd.Stderr = buf
+	//cmd.Stdout = out
 	err := cmd.Start()
+	/*go func() {
+		for {
+			file, err := os.Create("/var/log/cedana-image-streamer.log")
+			if err != nil {
+				panic(err)
+			}
+			_, err = file.Write(out.Bytes())
+			if err != nil {
+				panic(err)
+			}
+			file.Close()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()*/
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
@@ -277,11 +342,24 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 	var GPUCheckpointed bool
 	if args.GPU {
-		err = s.gpuDump(ctx, dumpdir)
+		err = s.gpuDump(ctx, dumpdir, args.Stream)
 		if err != nil {
 			return err
 		}
 		GPUCheckpointed = true
+	} else if args.Stream {
+		conn, err := imgStreamerInit(dumpdir, O_GPU_DUMP)
+		if err != nil {
+			return err
+		}
+		err = conn.CloseWrite()
+		if err != nil {
+			return fmt.Errorf("UnixConn CloseWrite failed with %v", err)
+		}
+		err = conn.Close()
+		if err != nil {
+			return fmt.Errorf("UnixConn Close failed with %v", err)
+		}
 	}
 
 	img, err := os.Open(dumpdir)
@@ -404,7 +482,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	return nil
 }
 
-func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
+func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
@@ -426,6 +504,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 
 	args := gpu.CheckpointRequest{
 		Directory: dumpdir,
+		Stream:    stream,
 	}
 
 	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
