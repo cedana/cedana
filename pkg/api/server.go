@@ -377,7 +377,12 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
-		log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		// log the GetContainerInfo method to trace
+		if !strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
+			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		} else {
+			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		}
 
 		resp, err := handler(ctx, req)
 
