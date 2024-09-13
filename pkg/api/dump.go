@@ -79,7 +79,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	opts.TcpEstablished = proto.Bool(hasTCP || args.GetCriuOpts().GetTcpEstablished())
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
-	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave-running"))
+	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"))
 
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
