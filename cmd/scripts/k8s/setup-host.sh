@@ -25,7 +25,7 @@ env \
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    IS_K8S=1 ./build-start-daemon.sh --systemctl --no-build --otel
+    IS_K8S=1 CEDANA_URL="$CEDANA_API_SERVER" CEDANA_API_KEY="$CEDANA_API_KEY" ./build-start-daemon.sh --systemctl --no-build --otel
     exit 0
 fi
 
