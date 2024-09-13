@@ -400,14 +400,14 @@ func init() {
 	restoreCmd.AddCommand(containerdRestoreCmd)
 	containerdRestoreCmd.Flags().StringP(imgFlag, "i", "", "image ref")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
-	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
 	runcRestoreCmd.MarkFlagRequired("dir")
-	runcRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired(bundleFlag)

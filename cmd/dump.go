@@ -509,7 +509,7 @@ func init() {
 	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
-	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
 	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
 	dumpContainerdRootfsCmd.MarkFlagRequired(refFlag)
