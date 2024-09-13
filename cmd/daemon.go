@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
@@ -65,6 +66,31 @@ var startDaemonCmd = &cobra.Command{
 		}
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
+
+		// poll for otel signoz logging
+		otel_enabled := viper.GetBool("otel_enabled")
+		if otel_enabled {
+			go func() {
+				time.Sleep(10 * time.Second)
+				cts, err := services.NewClient()
+				if err != nil {
+					log.Error().Msgf("error creating client: %v", err)
+					return
+				}
+				defer cts.Close()
+
+				log.Info().Msg("started polling...")
+				for {
+					conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+					if err != nil {
+						log.Error().Msgf("error getting info: %v", err)
+						return
+					}
+					_ = conts
+					time.Sleep(1 * time.Second)
+				}
+			}()
+		}
 
 		err = api.StartServer(ctx, &api.ServeOpts{
 			GPUEnabled:   gpuEnabled,

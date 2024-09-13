@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"github.com/swarnimarun/cadvisor/manager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -28,7 +29,6 @@ import (
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
@@ -56,16 +56,16 @@ const (
 var Address = "0.0.0.0:8080"
 
 type service struct {
-	CRIU        *Criu
-	fs          *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db          db.DB
-	logger      *zerolog.Logger
-	store       *utils.CedanaStore
-	serverCtx   context.Context // context alive for the duration of the server
-	wg          sync.WaitGroup  // for waiting for all background tasks to finish
-	gpuEnabled  bool
-	cudaVersion string
-	machineID   string
+	CRIU            *Criu
+	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db              db.DB
+	store           *utils.CedanaStore
+	serverCtx       context.Context // context alive for the duration of the server
+	wg              sync.WaitGroup  // for waiting for all background tasks to finish
+	gpuEnabled      bool
+	cudaVersion     string
+	machineID       string
+	cadvisorManager manager.Manager
 
 	jobService *jobservice.JobService
 
@@ -91,7 +91,6 @@ type pullGPUBinaryRequest struct {
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	logger := utils.GetLogger()
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -101,13 +100,19 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
+			grpc.StreamInterceptor(loggingStreamInterceptor()),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID)),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
+
+	manager, err := SetupCadvisor(ctx)
+	if err != nil {
+		log.Error().Err(err).Send()
+		return nil, err
+	}
 
 	js, err := jobservice.New()
 	if err != nil {
@@ -117,16 +122,16 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
-		CRIU:        &Criu{},
-		fs:          &afero.Afero{Fs: afero.NewOsFs()},
-		db:          db.NewLocalDB(ctx),
-		store:       utils.NewCedanaStore(),
-		serverCtx:   ctx,
-		gpuEnabled:  opts.GPUEnabled,
-		cudaVersion: opts.CUDAVersion,
-		machineID:   machineID,
-		jobService:  js,
-		logger:      logger,
+		CRIU:            &Criu{},
+		fs:              &afero.Afero{Fs: afero.NewOsFs()},
+		db:              db.NewLocalDB(ctx),
+		store:           utils.NewCedanaStore(),
+		serverCtx:       ctx,
+		gpuEnabled:      opts.GPUEnabled,
+		cudaVersion:     opts.CUDAVersion,
+		machineID:       machineID,
+		cadvisorManager: manager,
+		jobService:      js,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -172,7 +177,6 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
-
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
@@ -339,7 +343,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	return gpuCmd, nil
 }
 
-func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerInterceptor {
+func loggingStreamInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
 
@@ -356,7 +360,7 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
@@ -447,9 +451,12 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, nil)
+	gpuOutBuf := &bytes.Buffer{}
+	gpuOut := io.MultiWriter(gpuOutBuf)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, gpuOut)
 	if err != nil {
-		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
+		log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("could not start gpu controller")
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller: %v", err))
 		return nil
 	}
 

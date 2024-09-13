@@ -79,7 +79,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	opts.TcpEstablished = proto.Bool(hasTCP || args.GetCriuOpts().GetTcpEstablished())
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
-	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave-running"))
+	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"))
 
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
@@ -252,12 +252,12 @@ func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
-		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
-	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
 
@@ -294,9 +294,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(state.PID)
 
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	log.Info().Int32("PID", state.PID).Msg("beginning dump")
 
@@ -350,9 +348,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
 	opts.LeaveRunning = proto.Bool(true)
 
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	log.Info().Msgf(`beginning dump of pid %d`, state.PID)
 

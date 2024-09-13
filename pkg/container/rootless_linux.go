@@ -3,13 +3,12 @@ package container
 import (
 	"os"
 
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer/cgroups/systemd"
 	"github.com/cedana/runc/libcontainer/userns"
+	"github.com/rs/zerolog/log"
 )
 
 func shouldUseRootlessCgroupManager(context *RuncOpts) (bool, error) {
-	logger := utils.GetLogger()
 	if context != nil {
 		b, err := parseBoolOrAuto(context.Rootless)
 		if err != nil {
@@ -39,7 +38,7 @@ func shouldUseRootlessCgroupManager(context *RuncOpts) (bool, error) {
 	if context.SystemdCgroup {
 		ownerUID, err := systemd.DetectUID()
 		if err != nil {
-			logger.Debug().Err(err).Msgf("failed to get the OwnerUID value, assuming the value to be 0")
+			log.Debug().Err(err).Msgf("failed to get the OwnerUID value, assuming the value to be 0")
 			ownerUID = 0
 		}
 		return ownerUID != 0, nil

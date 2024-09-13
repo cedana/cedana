@@ -1,4 +1,4 @@
 [submodule "pkg/api/services/cedana-api"]
 	path = pkg/api/services/cedana-api
 	url = https://github.com/cedana/cedana-api
-	branch = main
+  branch = main

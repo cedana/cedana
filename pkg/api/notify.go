@@ -1,11 +1,8 @@
 package api
 
-import (
-	"github.com/rs/zerolog"
-)
+import "github.com/rs/zerolog/log"
 
 type Notify struct {
-	Logger         *zerolog.Logger
 	PreDumpFunc    NotifyFunc
 	PostDumpFunc   NotifyFunc
 	PreRestoreFunc NotifyFunc
@@ -19,10 +16,10 @@ type NotifyFunc struct {
 
 func (n Notify) PreDump() error {
 	if n.PreDumpFunc.Avail {
-		n.Logger.Debug().Msgf("executing predump anonymous function")
+		log.Debug().Msgf("executing predump anonymous function")
 		err := n.PreDumpFunc.Callback()
 		if err != nil {
-			n.Logger.Error().Err(err).Msgf("failed to execute predump anonymous function")
+			log.Error().Err(err).Msgf("failed to execute predump anonymous function")
 			return err
 		}
 	}
@@ -31,10 +28,10 @@ func (n Notify) PreDump() error {
 
 func (n Notify) PostDump() error {
 	if n.PostDumpFunc.Avail {
-		n.Logger.Debug().Msgf("executing postdump anonymous function")
+		log.Debug().Msgf("executing postdump anonymous function")
 		err := n.PostDumpFunc.Callback()
 		if err != nil {
-			n.Logger.Error().Err(err).Msgf("failed to execute postdump anonymous function")
+			log.Error().Err(err).Msgf("failed to execute postdump anonymous function")
 			return err
 		}
 	}
@@ -43,10 +40,10 @@ func (n Notify) PostDump() error {
 
 func (n Notify) PreRestore() error {
 	if n.PreRestoreFunc.Avail {
-		n.Logger.Debug().Msgf("executing prerestore anonymous function")
+		log.Debug().Msgf("executing prerestore anonymous function")
 		err := n.PreRestoreFunc.Callback()
 		if err != nil {
-			n.Logger.Error().Err(err).Msgf("failed to execute prerestore anonymous function")
+			log.Error().Err(err).Msgf("failed to execute prerestore anonymous function")
 			return err
 		}
 	}
@@ -55,10 +52,10 @@ func (n Notify) PreRestore() error {
 
 func (n Notify) PreResume() error {
 	if n.PreResumeFunc.Avail {
-		n.Logger.Debug().Msgf("executing prerestore anonymous function")
+		log.Debug().Msgf("executing prerestore anonymous function")
 		err := n.PreResumeFunc.Callback()
 		if err != nil {
-			n.Logger.Error().Err(err).Msgf("failed to execute prerestore anonymous function")
+			log.Error().Err(err).Msgf("failed to execute prerestore anonymous function")
 			return err
 		}
 	}
