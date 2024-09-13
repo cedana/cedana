@@ -93,7 +93,7 @@ var startDaemonCmd = &cobra.Command{
 						return
 					}
 					_ = conts
-					time.Sleep(1 * time.Second)
+					time.Sleep(60 * time.Second)
 				}
 			}()
 		}
