@@ -208,6 +208,11 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 		perm := originalMode.Perm()
 
+		// Extract the three missing special bits
+		setuid := originalMode & os.ModeSetuid
+		setgid := originalMode & os.ModeSetgid
+		sticky := originalMode & os.ModeSticky
+
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			// use syscall.Lchown to change the ownership of the link itself
 			// syscall.chown only changes the ownership of the target file in a symlink.
@@ -222,7 +227,8 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			}
 			log.Debug().Msgf("\t mode is regular: %s", fullPath)
 
-			if err := os.Chmod(fullPath, perm); err != nil {
+			newMode := perm | setuid | setgid | sticky
+			if err := os.Chmod(fullPath, newMode); err != nil {
 				log.Error().Msgf("failed to restore permissions for %s: %s", fullPath, err)
 			}
 		}
