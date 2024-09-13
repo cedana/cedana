@@ -4,10 +4,9 @@ package services
 
 import (
 	"context"
-	"time"
-
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/mdlayher/vsock"
 
@@ -33,10 +32,11 @@ type ServiceClient struct {
 	taskConn    *grpc.ClientConn
 }
 
-func NewClient() (*ServiceClient, error) {
+func NewClient(port uint32) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	taskConn, err := grpc.Dial(api.Address, opts...)
+	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
+	taskConn, err := grpc.Dial(address, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -50,15 +50,15 @@ func NewClient() (*ServiceClient, error) {
 	return client, err
 }
 
-func NewVSockClient(vm string) (*ServiceClient, error) {
+func NewVSockClient(vm string, port uint32) (*ServiceClient, error) {
 	// extract cid from the process tree on host
 	cid, err := utils.ExtractCID(vm)
 	if err != nil {
 		return nil, err
 	}
 
-	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, api.VSOCK_PORT), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return vsock.Dial(cid, api.VSOCK_PORT, nil)
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, port), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, port, nil)
 	}))
 	if err != nil {
 		return nil, err

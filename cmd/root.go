@@ -52,6 +52,7 @@ func Execute(ctx context.Context, version string) error {
 
 	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
 	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
+	rootCmd.PersistentFlags().Uint32P(portFlag, "p", DEFAULT_PORT, "port to listen on/connect to")
 
 	return rootCmd.ExecuteContext(ctx)
 }

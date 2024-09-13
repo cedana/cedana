@@ -83,7 +83,8 @@ var helperCmd = &cobra.Command{
 			}
 		}
 
-		startHelper(ctx, startChroot)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		startHelper(ctx, startChroot, port)
 
 		return nil
 	},
@@ -157,11 +158,11 @@ func getTelemetryAPIKey() (string, error) {
 	return apiKey, nil
 }
 
-func startHelper(ctx context.Context, startChroot bool) {
+func startHelper(ctx context.Context, startChroot bool, port uint32) {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	_, err := createClientWithRetry()
+	_, err := createClientWithRetry(port)
 	if err != nil {
 		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
@@ -174,7 +175,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 		for {
 			select {
 			case <-ticker.C:
-				isRunning, err := isProcessRunning()
+				isRunning, err := isProcessRunning(port)
 				if err != nil {
 					log.Error().Err(err).Msg("Issue checking if daemon is running")
 				}
@@ -186,7 +187,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
-					_, err = createClientWithRetry()
+					_, err = createClientWithRetry(port)
 					if err != nil {
 						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
@@ -230,12 +231,12 @@ func startHelper(ctx context.Context, startChroot bool) {
 	select {}
 }
 
-func createClientWithRetry() (*services.ServiceClient, error) {
+func createClientWithRetry(port uint32) (*services.ServiceClient, error) {
 	var client *services.ServiceClient
 	var err error
 
 	for i := 0; i < maxRetries; i++ {
-		client, err = services.NewClient()
+		client, err = services.NewClient(port)
 		if err == nil {
 			// Successfully created the client, break out of the loop
 			break
@@ -292,11 +293,12 @@ func startDaemon(startChroot bool) error {
 	return nil
 }
 
-func isProcessRunning() (bool, error) {
+func isProcessRunning(port uint32) (bool, error) {
 	// TODO: Dial API is deprecated in favour of NewClient since early 2024, will be removed soon
 	// Note: NewClient defaults to idle state for connection rather than automatically trying to
 	// connect in the background
-	conn, err := grpc.Dial(api.ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return false, err
 	}

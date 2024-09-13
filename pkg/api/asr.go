@@ -23,23 +23,21 @@ import (
 	_ "github.com/swarnimarun/cadvisor/container/crio/install"
 )
 
-var (
-	// Metrics to be ignored.
-	// Tcp metrics are ignored by default.
-	ignoreMetrics = container.MetricSet{
-		container.MemoryNumaMetrics:              struct{}{},
-		container.NetworkTcpUsageMetrics:         struct{}{},
-		container.NetworkUdpUsageMetrics:         struct{}{},
-		container.NetworkAdvancedTcpUsageMetrics: struct{}{},
-		container.ProcessSchedulerMetrics:        struct{}{},
-		container.ProcessMetrics:                 struct{}{},
-		container.HugetlbUsageMetrics:            struct{}{},
-		container.ReferencedMemoryMetrics:        struct{}{},
-		container.CPUTopologyMetrics:             struct{}{},
-		container.ResctrlMetrics:                 struct{}{},
-		container.CPUSetMetrics:                  struct{}{},
-	}
-)
+// Metrics to be ignored.
+// Tcp metrics are ignored by default.
+var ignoreMetrics = container.MetricSet{
+	container.MemoryNumaMetrics:              struct{}{},
+	container.NetworkTcpUsageMetrics:         struct{}{},
+	container.NetworkUdpUsageMetrics:         struct{}{},
+	container.NetworkAdvancedTcpUsageMetrics: struct{}{},
+	container.ProcessSchedulerMetrics:        struct{}{},
+	container.ProcessMetrics:                 struct{}{},
+	container.HugetlbUsageMetrics:            struct{}{},
+	container.ReferencedMemoryMetrics:        struct{}{},
+	container.CPUTopologyMetrics:             struct{}{},
+	container.ResctrlMetrics:                 struct{}{},
+	container.CPUSetMetrics:                  struct{}{},
+}
 
 // SystemIdentifier initialization defaults to using rand so that in case we fail to find and update
 // with proper machine id it still works
@@ -87,6 +85,9 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 }
 
 func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
+	if s.cadvisorManager == nil {
+		return nil, fmt.Errorf("cadvisor manager not enabled in daemon")
+	}
 	containers, err := s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
 		NumStats: 1,
 	})
@@ -115,8 +116,10 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 	return &ci, nil
 }
 
-var storageDriver = string("")
-var storageDuration = 2 * time.Minute
+var (
+	storageDriver   = string("")
+	storageDuration = 2 * time.Minute
+)
 
 func NewMemoryStorage() (*memory.InMemoryCache, error) {
 	backendStorages := []storage.StorageDriver{}
