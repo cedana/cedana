@@ -378,7 +378,7 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 		)
 
 		// log the GetContainerInfo method to trace
-		if !strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
+		if strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
 			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		} else {
 			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
