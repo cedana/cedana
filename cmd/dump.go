@@ -506,7 +506,7 @@ func init() {
 	dumpContainerdCmd.MarkFlagRequired(dirFlag)
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpContainerdCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
@@ -526,7 +526,7 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
