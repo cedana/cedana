@@ -190,6 +190,14 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", ctrDir, err)
 	}
 
+	specificFile := "/var/lib/containers/storage/overlay-containers/rootfs-diff/usr/bin/sudo"
+	var originalPerm os.FileMode
+	if fileInfo, err := os.Lstat(specificFile); err == nil {
+		originalPerm = fileInfo.Mode().Perm()
+	} else {
+		log.Error().Msgf("failed to get file info for %s: %s", specificFile, err)
+	}
+
 	// We have to iterate over changes and change the ownership of files for containers that
 	// may be user namespaced, like sysbox containers, which will have uid and gids of their init
 	// process. This is an issue on restore as those files will have nogroup and will cause errors
@@ -225,6 +233,17 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 
 		if err := os.Chmod(fullPath, perm); err != nil {
 			log.Error().Msgf("failed to restore permissions for %s: %s", fullPath, err)
+		}
+
+		sudoInfo, err := os.Lstat(specificFile)
+		if err != nil {
+			log.Error().Msgf("failed to get file info for %s: %s", fullPath, err)
+			break
+		}
+
+		newSudoPerms := sudoInfo.Mode().Perm()
+		if newSudoPerms != originalPerm {
+			log.Debug().Msgf("%s file perms changed after %s", specificFile, fullPath)
 		}
 
 	}
