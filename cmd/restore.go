@@ -398,7 +398,7 @@ func init() {
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
-	containerdRestoreCmd.Flags().StringP(imgFlag, "i", "", "image ref")
+	containerdRestoreCmd.Flags().String(imgFlag, "", "image ref")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
