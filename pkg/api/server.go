@@ -114,7 +114,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
-	js, err := jobservice.New()
+	js, err := jobservice.New(ctx)
 	if err != nil {
 		return nil, err
 	}

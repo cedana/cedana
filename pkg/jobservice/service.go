@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -19,12 +20,15 @@ import (
 	"github.com/rs/zerolog/log"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	srvconfig "github.com/containerd/containerd/v2/cmd/containerd/server/config"
+	libconfig "github.com/cri-o/cri-o/pkg/config"
 )
 
 //go:embed schema.sql
 var schemaSetup string
 
-func New() (*JobService, error) {
+func New(ctx context.Context) (*JobService, error) {
 	// sqlite queue
 	db, err := sql.Open("sqlite3", ":memory:?_journal=WAL&_timeout=5000&_fk=true")
 	if err != nil {
@@ -33,11 +37,11 @@ func New() (*JobService, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	if _, err := db.ExecContext(context.Background(), schemaSetup); err != nil {
+	if _, err := db.ExecContext(ctx, schemaSetup); err != nil {
 		return nil, err
 	}
 
-	config, err := detectConfig()
+	config, err := detectConfig(ctx)
 	if err != nil {
 		// couldn't figure out runtime
 		return nil, err
@@ -61,6 +65,7 @@ type LowLevelRuntime string
 
 const (
 	Runc LowLevelRuntime = "runc"
+	Crun LowLevelRuntime = "crun"
 )
 
 type ContainerConfig struct {
@@ -70,10 +75,40 @@ type ContainerConfig struct {
 	LLRoot     string
 }
 
-func detectConfig() (ContainerConfig, error) {
+// find and load the config into an acceptable format
+func findCrioConfig(ctx context.Context) (ContainerConfig, error) {
+	// just using the default config for now
+	conf, _ := libconfig.DefaultConfig()
+	llruntime := conf.DefaultRuntime
 	return ContainerConfig{
-		HLRuntime: ContainerdRuntime,
+		LLRuntime: LowLevelRuntime(llruntime),
 	}, nil
+}
+
+// find and load the config into an acceptable format
+func findContainerdConfig(ctx context.Context) (ContainerConfig, error) {
+	var conf srvconfig.Config
+	// not sure if we should search for this config
+	err := srvconfig.LoadConfig(ctx, "/etc/containerd/config.toml", &conf)
+	if err != nil {
+		return ContainerConfig{}, err
+	}
+	// TODO: use values from containerd config
+	return ContainerConfig{
+		HLRuntime:  ContainerdRuntime,
+		HLSockAddr: "/run/containerd/containerd.sock",
+		LLRuntime:  Runc,
+		LLRoot:     "/run/containerd/runc/k8s.io",
+	}, nil
+}
+
+// detectConfig identifies runtime and config for runtime
+func detectConfig(ctx context.Context) (ContainerConfig, error) {
+	conf, err := findContainerdConfig(ctx)
+	if err == nil {
+		return conf, nil
+	}
+	return findCrioConfig(ctx)
 }
 
 type JobService struct {
@@ -83,7 +118,7 @@ type JobService struct {
 
 type CheckpointResult int
 
-func (js *JobService) checkpoint(req string) (string, error) {
+func (js *JobService) checkpoint(ctx context.Context, req string) (string, error) {
 	log.Info().Msg("Starting Checkpoint")
 	cj := &task.QueueJobCheckpointRequest{}
 	err := json.Unmarshal([]byte(req), cj)
@@ -100,7 +135,7 @@ func (js *JobService) checkpoint(req string) (string, error) {
 		}
 		return res, err
 	case "containerd":
-		res, err := js.containerdCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
+		res, err := js.containerdCheckpoint(ctx, cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
 		if err != nil {
 			return "", err
 		}
@@ -140,12 +175,13 @@ func (jqs *JobService) crioCheckpoint(containerName, sandboxName, imageName, nam
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageName, namespace string) (*task.ContainerdRootfsDumpResp, error) {
-	id, _, err := runc.GetContainerIdByName(containerName, sandboxName, jqs.config.LLRoot)
+func (jqs *JobService) containerdCheckpoint(ctx context.Context, containerName, sandboxName, imageName, namespace string) (*task.ContainerdRootfsDumpResp, error) {
+	id, val, err := runc.GetContainerIdByName(containerName, sandboxName, jqs.config.LLRoot)
+	log.Ctx(ctx).Debug().Msgf("GetContainerIdByName(%s, %s, %s) -> (%s, %s, %v)", containerName, sandboxName, jqs.config.LLRoot, id, val, err)
 	if err != nil {
 		return nil, err
 	}
-	return containerd.ContainerdRootfsDump(context.Background(), &task.ContainerdRootfsDumpArgs{
+	return containerd.ContainerdRootfsDump(ctx, &task.ContainerdRootfsDumpArgs{
 		ContainerID: id,
 		ImageRef:    imageName,
 		Address:     jqs.config.HLSockAddr,
@@ -172,7 +208,7 @@ func (js *JobService) Start(ctx context.Context) error {
 			}
 			for _, chk := range chks {
 				var status int64 = 1
-				ref, err := js.checkpoint(chk.Data)
+				ref, err := js.checkpoint(ctx, chk.Data)
 				if err != nil {
 					// if err != nil then we failed
 					// status == 1 :: completed success
@@ -228,12 +264,14 @@ func (js *JobService) Start(ctx context.Context) error {
 	return nil
 }
 
+var ControllerNamespace = os.Getenv("CEDANA_CONTROLLER_NAMESPACE")
+
 func (js *JobService) GetJobQueueUrl() string {
-	return ""
+	return "http://cedana-cedana-helm-manager." + ControllerNamespace + ".svc.cluster.local:1324/api/alpha1v1/checkpoint/callback"
 }
 
 func (js *JobService) notifyJobQueue(id, ref string, failed bool) error {
-	log.Info().Msgf("Notifing the jobqueue scheduler: (failed: %v)", failed)
+	log.Info().Msgf("notifing the jobqueue scheduler about job %s failed: %v", id, failed)
 	type JobQueueCallback struct {
 		Id     string `json:"id"`
 		Ref    string `json:"ref"`
