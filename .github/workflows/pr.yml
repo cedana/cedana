@@ -74,6 +74,11 @@ on:
         description: 'Skip benchmark or not'
         required: false
         default: false
+      skip_shellcheck:
+        type: boolean
+        description: 'Skip shellcheck or not'
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -117,7 +122,8 @@ jobs:
           path: ./cedana
 
   shellcheck:
-    name: shellcheck
+    name: Shell Check
+    if: ${{ !inputs.skip_shellcheck }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
