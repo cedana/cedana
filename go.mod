@@ -40,7 +40,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
-	github.com/swarnimarun/cadvisor v0.0.0-20240911052116-814344ea82e7
+	github.com/swarnimarun/cadvisor v0.0.0-20240917060644-2cf65d2f166a
 	go.etcd.io/bbolt v1.3.11
 	go.opentelemetry.io/otel v1.29.0
 	go.opentelemetry.io/otel/sdk v1.29.0

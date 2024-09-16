@@ -1256,6 +1256,12 @@ github.com/swarnimarun/cadvisor v0.0.0-20240906182420-7dde54bbd6e3 h1:F2beER/pib
 github.com/swarnimarun/cadvisor v0.0.0-20240906182420-7dde54bbd6e3/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
 github.com/swarnimarun/cadvisor v0.0.0-20240911052116-814344ea82e7 h1:VDuIa8NAiLktS0/jbP7LZYQTRUTj/+V/5CufWuJ7rMg=
 github.com/swarnimarun/cadvisor v0.0.0-20240911052116-814344ea82e7/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
+github.com/swarnimarun/cadvisor v0.0.0-20240916203021-26ff4167f5de h1:xEcFvqxJUWn5VXDqRrtkfiP+jB5rDtfX9krtWI5d8UE=
+github.com/swarnimarun/cadvisor v0.0.0-20240916203021-26ff4167f5de/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
+github.com/swarnimarun/cadvisor v0.0.0-20240916210736-e58ece97e5cb h1:3qIU2f5zBGLEsQlwxp+SHrg0GovU/RDRvZWULjdCS2I=
+github.com/swarnimarun/cadvisor v0.0.0-20240916210736-e58ece97e5cb/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
+github.com/swarnimarun/cadvisor v0.0.0-20240917060644-2cf65d2f166a h1:ySEzmfy1imcgg3epC5eqr51B/kus013y/XlAkHRgkcI=
+github.com/swarnimarun/cadvisor v0.0.0-20240917060644-2cf65d2f166a/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
 github.com/sylabs/sif/v2 v2.16.0 h1:2eqaBaQQsn5DZTzm3QZm0HupZQEjNXfxRnCmtyCihEU=
 github.com/sylabs/sif/v2 v2.16.0/go.mod h1:d5TxgD/mhMUU3kWLmZmWJQ99Wg0asaTP0bq3ezR1xpg=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 h1:kdXcSzyDtseVEc4yCz2qF8ZrQvIDBJLl4S1c3GCXmoI=
