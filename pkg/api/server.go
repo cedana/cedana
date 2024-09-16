@@ -43,17 +43,14 @@ import (
 )
 
 const (
-	ADDRESS                     = "0.0.0.0:8080"
+	DEFAULT_HOST                = "0.0.0.0"
 	PROTOCOL                    = "tcp"
 	CEDANA_CONTAINER_NAME       = "binary-container"
 	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS            = 0o644
 	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT                  = 9999
 	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
 )
-
-var Address = "0.0.0.0:8080"
 
 type service struct {
 	CRIU            *Criu
@@ -79,11 +76,13 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	GPUEnabled   bool
-	CUDAVersion  string
-	VSOCKEnabled bool
-	CedanaURL    string
-	GrpcPort     uint64
+	GPUEnabled        bool
+	CUDAVersion       string
+	VSOCKEnabled      bool
+	CedanaURL         string
+	Port              uint32
+	MetricsEnabled    bool
+	JobServiceEnabled bool
 }
 
 type pullGPUBinaryRequest struct {
@@ -108,15 +107,21 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	manager, err := SetupCadvisor(ctx)
-	if err != nil {
-		log.Error().Err(err).Send()
-		return nil, err
+	var manager manager.Manager
+	if opts.MetricsEnabled {
+		manager, err = SetupCadvisor(ctx)
+		if err != nil {
+			log.Error().Err(err).Send()
+			return nil, err
+		}
 	}
 
-	js, err := jobservice.New()
-	if err != nil {
-		return nil, err
+	var js *jobservice.JobService
+	if opts.JobServiceEnabled {
+		js, err = jobservice.New()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	service := &service{
@@ -140,13 +145,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	var listener net.Listener
 
 	if opts.VSOCKEnabled {
-		listener, err = vsock.Listen(VSOCK_PORT, nil)
+		listener, err = vsock.Listen(opts.Port, nil)
 	} else {
 		// NOTE: `localhost` server inside kubernetes may or may not work
 		// based on firewall and network configuration, it would only work
 		// on local system, hence for serving use 0.0.0.0
-		Address = fmt.Sprintf("0.0.0.0:%d", opts.GrpcPort)
-		listener, err = net.Listen(PROTOCOL, Address)
+		address := fmt.Sprintf("%s:%d", DEFAULT_HOST, opts.Port)
+		listener, err = net.Listen(PROTOCOL, address)
 	}
 
 	if err != nil {
@@ -160,13 +165,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 func (s *Server) start(ctx context.Context) error {
-	go func() {
-		if err := s.service.jobService.Start(ctx); err != nil {
-			// note: at the time of writing this comment, below is unreachable
-			// as we never return an error from the Start function
-			log.Error().Err(err).Msg("failed to run job service")
-		}
-	}()
+	if s.service.jobService != nil {
+		go func() {
+			if err := s.service.jobService.Start(ctx); err != nil {
+				// note: at the time of writing this comment, below is unreachable
+				// as we never return an error from the Start function
+				log.Error().Err(err).Msg("failed to run job service")
+			}
+		}()
+	}
 	return s.grpcServer.Serve(s.listener)
 }
 
@@ -240,7 +247,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 		}
 
-		log.Info().Str("address", Address).Msgf("server listening")
+		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
 
 		err := server.start(srvCtx)
 		if err != nil {
@@ -377,7 +384,12 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
-		log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		// log the GetContainerInfo method to trace
+		if strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
+			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		} else {
+			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		}
 
 		resp, err := handler(ctx, req)
 

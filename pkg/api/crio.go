@@ -14,16 +14,13 @@ import (
 
 func (s *service) CRIORootfsDump(ctx context.Context, args *task.CRIORootfsDumpArgs) (resp *task.CRIORootfsDumpResp, err error) {
 	var spec *rspec.Spec
-
 	resp = &task.CRIORootfsDumpResp{}
-
 	root := filepath.Join("/var/lib/containers/storage/overlay-containers/", args.ContainerID, "userdata/config.json")
 
 	configFile, err := os.ReadFile(filepath.Join(root))
 	if err != nil {
 		return resp, err
 	}
-
 	if err := json.Unmarshal(configFile, &spec); err != nil {
 		return resp, err
 	}
@@ -55,9 +52,3 @@ func (s *service) CRIOImagePush(ctx context.Context, args *task.CRIOImagePushArg
 
 	return resp, nil
 }
-
-// func (s *service) CRIOSysboxPatch(ctx context.Context, args *task.CRIOSysboxPatchArgs) (resp *task.CRIOSysboxPatchResp, err error) {
-// 	ctx = utils.WithLogger(ctx, s.logger)
-
-// 	return resp, nil
-// }

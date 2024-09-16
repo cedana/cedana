@@ -33,3 +33,4 @@ jobs:
       debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       skip_bench: true
+      skip_shellcheck: true
