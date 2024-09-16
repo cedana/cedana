@@ -37,4 +37,8 @@ const (
 	streamFlag           = "stream"
 	leaveRunningFlag     = "leave-running"
 	fileLocksFlag        = "file-locks"
+	vsockEnabledFlag     = "vsock"
+	portFlag             = "port"
+	metricsEnabledFlag   = "metrics-enabled"
+	jobServiceFlag       = "job-service"
 )

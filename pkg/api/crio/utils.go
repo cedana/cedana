@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -447,5 +448,20 @@ func Syncfs(path string) error {
 	if err := unix.Syncfs(int(f.Fd())); err != nil {
 		return err
 	}
+	return nil
+}
+
+func UntarWithPermissions(tarFile, destDir string) error {
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create destination directory %s: %w", destDir, err)
+	}
+
+	cmd := exec.Command("tar", "-xpf", tarFile, "-C", destDir)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to extract tarball %s: %w\nOutput: %s", tarFile, err, string(output))
+	}
+
 	return nil
 }

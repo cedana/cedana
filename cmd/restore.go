@@ -31,7 +31,8 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -95,7 +96,8 @@ var restoreKataCmd = &cobra.Command{
 		ctx := cmd.Context()
 		vm := args[0]
 
-		cts, err := services.NewVSockClient(vm)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewVSockClient(vm, port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -175,7 +177,8 @@ var restoreJobCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Err(err).Msgf("error creating client")
 			return err
@@ -285,7 +288,8 @@ var containerdRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -321,7 +325,8 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -393,16 +398,16 @@ func init() {
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
-	containerdRestoreCmd.Flags().StringP(imgFlag, "i", "", "image ref")
+	containerdRestoreCmd.Flags().String(imgFlag, "", "image ref")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
-	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
 	runcRestoreCmd.MarkFlagRequired("dir")
-	runcRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired(bundleFlag)

@@ -52,12 +52,12 @@ func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
-		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
-	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
 
@@ -107,7 +107,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 		tempDir = filepath.Dir(absPath)
 		cmd = s.setupStreamerServe(tempDir)
-		s.logger.Info().Msgf("cmd = %v", cmd)
+		log.Info().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
@@ -579,9 +579,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	var pid *int32
 
 	opts := s.prepareRestoreOpts()
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream, false)
 	if err != nil {
@@ -601,6 +599,9 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Callback: func() error {
 				var err error
 				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
+				if err != nil {
+					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
+				}
 				return err
 			},
 		}
@@ -743,9 +744,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	var pid *int32
 
 	opts := s.prepareRestoreOpts()
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	listener, err := vsock.Listen(KATA_TAR_FILE_RECEIVER_PORT, nil)
 	if err != nil {

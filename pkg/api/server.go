@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
+	"github.com/swarnimarun/cadvisor/manager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -28,7 +29,6 @@ import (
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
@@ -43,29 +43,26 @@ import (
 )
 
 const (
-	ADDRESS                     = "0.0.0.0:8080"
+	DEFAULT_HOST                = "0.0.0.0"
 	PROTOCOL                    = "tcp"
 	CEDANA_CONTAINER_NAME       = "binary-container"
 	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS            = 0o644
 	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
-	VSOCK_PORT                  = 9999
 	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
 )
 
-var Address = "0.0.0.0:8080"
-
 type service struct {
-	CRIU        *Criu
-	fs          *afero.Afero // for dependency-injection of filesystems (useful for testing)
-	db          db.DB
-	logger      *zerolog.Logger
-	store       *utils.CedanaStore
-	serverCtx   context.Context // context alive for the duration of the server
-	wg          sync.WaitGroup  // for waiting for all background tasks to finish
-	gpuEnabled  bool
-	cudaVersion string
-	machineID   string
+	CRIU            *Criu
+	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	db              db.DB
+	store           *utils.CedanaStore
+	serverCtx       context.Context // context alive for the duration of the server
+	wg              sync.WaitGroup  // for waiting for all background tasks to finish
+	gpuEnabled      bool
+	cudaVersion     string
+	machineID       string
+	cadvisorManager manager.Manager
 
 	jobService *jobservice.JobService
 
@@ -79,11 +76,13 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	GPUEnabled   bool
-	CUDAVersion  string
-	VSOCKEnabled bool
-	CedanaURL    string
-	GrpcPort     uint64
+	GPUEnabled        bool
+	CUDAVersion       string
+	VSOCKEnabled      bool
+	CedanaURL         string
+	Port              uint32
+	MetricsEnabled    bool
+	JobServiceEnabled bool
 }
 
 type pullGPUBinaryRequest struct {
@@ -91,7 +90,6 @@ type pullGPUBinaryRequest struct {
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	logger := utils.GetLogger()
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -101,32 +99,44 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor(logger)),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(logger, *opts, machineID)),
+			grpc.StreamInterceptor(loggingStreamInterceptor()),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID)),
 		),
 	}
 
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	js, err := jobservice.New()
-	if err != nil {
-		return nil, err
+	var manager manager.Manager
+	if opts.MetricsEnabled {
+		manager, err = SetupCadvisor(ctx)
+		if err != nil {
+			log.Error().Err(err).Send()
+			return nil, err
+		}
+	}
+
+	var js *jobservice.JobService
+	if opts.JobServiceEnabled {
+		js, err = jobservice.New()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
-		CRIU:        &Criu{},
-		fs:          &afero.Afero{Fs: afero.NewOsFs()},
-		db:          db.NewLocalDB(ctx),
-		store:       utils.NewCedanaStore(),
-		serverCtx:   ctx,
-		gpuEnabled:  opts.GPUEnabled,
-		cudaVersion: opts.CUDAVersion,
-		machineID:   machineID,
-		jobService:  js,
-		logger:      logger,
+		CRIU:            &Criu{},
+		fs:              &afero.Afero{Fs: afero.NewOsFs()},
+		db:              db.NewLocalDB(ctx),
+		store:           utils.NewCedanaStore(),
+		serverCtx:       ctx,
+		gpuEnabled:      opts.GPUEnabled,
+		cudaVersion:     opts.CUDAVersion,
+		machineID:       machineID,
+		cadvisorManager: manager,
+		jobService:      js,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -135,13 +145,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	var listener net.Listener
 
 	if opts.VSOCKEnabled {
-		listener, err = vsock.Listen(VSOCK_PORT, nil)
+		listener, err = vsock.Listen(opts.Port, nil)
 	} else {
 		// NOTE: `localhost` server inside kubernetes may or may not work
 		// based on firewall and network configuration, it would only work
 		// on local system, hence for serving use 0.0.0.0
-		Address = fmt.Sprintf("0.0.0.0:%d", opts.GrpcPort)
-		listener, err = net.Listen(PROTOCOL, Address)
+		address := fmt.Sprintf("%s:%d", DEFAULT_HOST, opts.Port)
+		listener, err = net.Listen(PROTOCOL, address)
 	}
 
 	if err != nil {
@@ -155,13 +165,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 func (s *Server) start(ctx context.Context) error {
-	go func() {
-		if err := s.service.jobService.Start(ctx); err != nil {
-			// note: at the time of writing this comment, below is unreachable
-			// as we never return an error from the Start function
-			log.Error().Err(err).Msg("failed to run job service")
-		}
-	}()
+	if s.service.jobService != nil {
+		go func() {
+			if err := s.service.jobService.Start(ctx); err != nil {
+				// note: at the time of writing this comment, below is unreachable
+				// as we never return an error from the Start function
+				log.Error().Err(err).Msg("failed to run job service")
+			}
+		}()
+	}
 	return s.grpcServer.Serve(s.listener)
 }
 
@@ -172,7 +184,6 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
-
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
@@ -236,7 +247,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 		}
 
-		log.Info().Str("address", Address).Msgf("server listening")
+		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
 
 		err := server.start(srvCtx)
 		if err != nil {
@@ -339,7 +350,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	return gpuCmd, nil
 }
 
-func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerInterceptor {
+func loggingStreamInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
 
@@ -356,7 +367,7 @@ func loggingStreamInterceptor(logger *zerolog.Logger) grpc.StreamServerIntercept
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
@@ -373,7 +384,12 @@ func loggingUnaryInterceptor(logger *zerolog.Logger, serveOpts ServeOpts, machin
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
-		log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		// log the GetContainerInfo method to trace
+		if strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
+			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		} else {
+			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+		}
 
 		resp, err := handler(ctx, req)
 
@@ -447,9 +463,12 @@ func (s *service) GPUHealthCheck(
 		return nil
 	}
 
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, nil)
+	gpuOutBuf := &bytes.Buffer{}
+	gpuOut := io.MultiWriter(gpuOutBuf)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, gpuOut)
 	if err != nil {
-		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller %v", err))
+		log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("could not start gpu controller")
+		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller: %v", err))
 		return nil
 	}
 

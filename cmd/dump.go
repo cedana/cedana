@@ -32,7 +32,8 @@ var dumpProcessCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -88,7 +89,8 @@ var dumpKataCmd = &cobra.Command{
 
 		vm := args[0]
 
-		cts, err := services.NewVSockClient(vm)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewVSockClient(vm, port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -173,8 +175,8 @@ var dumpJobCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		// TODO NR - this needs to be extended to include container checkpoints
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -234,7 +236,8 @@ var dumpContainerdCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -322,7 +325,8 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -381,7 +385,8 @@ var dumpRuncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -501,10 +506,10 @@ func init() {
 	dumpContainerdCmd.MarkFlagRequired(dirFlag)
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpContainerdCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
-	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "p", "", "container id")
+	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
 	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
 	dumpContainerdRootfsCmd.MarkFlagRequired(refFlag)
@@ -521,7 +526,7 @@ func init() {
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpRuncCmd.Flags().IntP(pidFlag, "p", 0, "pid")
+	dumpRuncCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
