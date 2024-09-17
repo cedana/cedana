@@ -52,13 +52,13 @@ var dumpProcessCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
+		stream, _ := cmd.Flags().GetInt(streamFlag)
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
 			Type:   task.CRType_LOCAL,
 			GPU:    gpuEnabled,
-			Stream: stream,
+			Stream: int32(stream),
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
 				TcpEstablished: tcpEstablished,
@@ -195,8 +195,8 @@ var dumpJobCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
-		if stream {
+		stream, _ := cmd.Flags().GetInt(streamFlag)
+		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
@@ -206,7 +206,7 @@ var dumpJobCmd = &cobra.Command{
 			JID:    id,
 			Dir:    dir,
 			GPU:    gpuEnabled,
-			Stream: stream,
+			Stream: int32(stream),
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
 				TcpEstablished: tcpEstablished,
@@ -250,6 +250,7 @@ var dumpContainerdCmd = &cobra.Command{
 		namespace, _ := cmd.Flags().GetString(namespaceFlag)
 
 		rootfsArgs := task.ContainerdRootfsDumpArgs{
+
 			ContainerID: id,
 			ImageRef:    ref,
 			Address:     address,
@@ -467,14 +468,14 @@ func init() {
 	dumpProcessCmd.MarkFlagRequired(dirFlag)
 	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	dumpProcessCmd.Flags().IntP(streamFlag, "s", -1, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.MarkFlagRequired(dirFlag)
 	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	dumpJobCmd.Flags().IntP(streamFlag, "s", -1, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
 	// Kata

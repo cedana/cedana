@@ -46,11 +46,27 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
+func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	//out := new(bytes.Buffer)
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
+	//cmd.Stdout = out
 	err := cmd.Start()
+	/*go func() {
+		for {
+			file, err := os.Create("/var/log/cedana-image-streamer-restore.log")
+			if err != nil {
+				panic(err)
+			}
+			_, err = file.Write(out.Bytes())
+			if err != nil {
+				panic(err)
+			}
+			file.Close()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()*/
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
@@ -99,13 +115,9 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	if args.Stream {
-		absPath, err := filepath.Abs(args.CheckpointPath)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		tempDir = filepath.Dir(absPath)
-		s.setupStreamerServe(tempDir)
+	if args.Stream > 0 {
+		tempDir = args.CheckpointPath
+		s.setupStreamerServe(args.CheckpointPath, args.Stream)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
@@ -114,7 +126,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream)
+	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
@@ -209,7 +221,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	}
 
 	opts.ShellJob = proto.Bool(isShellJob)
-	opts.Stream = proto.Bool(args.Stream)
+	opts.Stream = proto.Bool(args.Stream > 0)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
@@ -596,7 +608,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
+				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, args.Stream > 0, io.Writer(gpuOutBuf))
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -797,7 +809,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer) (*exec.Cmd, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
@@ -823,6 +835,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
+		Stream:    stream,
 	}
 	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {

@@ -92,12 +92,12 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
-	opts.Stream = proto.Bool(args.Stream)
+	opts.Stream = proto.Bool(args.Stream > 0)
 
 	// jobID + UTC time (nanoseconds)
 	// strip out non posix-compliant characters from the jobID
 	var dumpDirPath string
-	if args.Stream {
+	if args.Stream > 0 {
 		dumpDirPath = args.Dir
 	} else {
 		timeString := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
@@ -295,16 +295,16 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return nil
 }
 
-func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
+func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) *exec.Cmd {
 	buf := new(bytes.Buffer)
-	//out := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "capture")
+	//ououtt := new(bytes.Buffer)
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	cmd.Stderr = buf
 	//cmd.Stdout = out
 	err := cmd.Start()
 	/*go func() {
 		for {
-			file, err := os.Create("/var/log/cedana-image-streamer.log")
+			file, err := os.Create("/var/log/cedana-image-streamer-dump.log")
 			if err != nil {
 				panic(err)
 			}
@@ -336,18 +336,18 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		return err
 	}
 	var cmd *exec.Cmd
-	if args.Stream {
-		cmd = s.setupStreamerCapture(dumpdir)
+	if args.Stream > 0 {
+		cmd = s.setupStreamerCapture(dumpdir, args.Stream)
 	}
 
 	var GPUCheckpointed bool
 	if args.GPU {
-		err = s.gpuDump(ctx, dumpdir, args.Stream)
+		err = s.gpuDump(ctx, dumpdir, args.Stream > 0)
 		if err != nil {
 			return err
 		}
 		GPUCheckpointed = true
-	} else if args.Stream {
+	} else if args.Stream > 0 {
 		conn, err := imgStreamerInit(dumpdir, O_GPU_DUMP)
 		if err != nil {
 			return err
@@ -373,10 +373,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	opts.Pid = proto.Int32(state.PID)
 
 	nfy := Notify{}
-
-	if args.Stream {
-		s.setupStreamerCapture(dumpdir)
-	}
 
 	log.Info().Int32("PID", state.PID).Msg("beginning dump")
 
