@@ -95,8 +95,27 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 	var containers map[string]v1.ContainerInfo
 	var err error
 
-	// currently defaults to containerd if both are found
-	if containerdService {
+	if containerdService && crioService {
+		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+		ccontainers, err := s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range ccontainers {
+			// |> do not duplicate names.
+			// they are unique existing in both likely is a case of bad setup or
+			// due to lack of cleanup
+			if _, f := containers[k]; !f {
+				containers[k] = v
+			} else {
+				log.Debug().Msg("found duplicate container name between containerd and crio")
+			}
+		}
+	} else if containerdService {
 		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
