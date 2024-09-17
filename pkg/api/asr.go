@@ -19,8 +19,8 @@ import (
 	"github.com/swarnimarun/cadvisor/utils/sysfs"
 
 	// Register container providers
-	_ "github.com/swarnimarun/cadvisor/container/containerd/install"
-	_ "github.com/swarnimarun/cadvisor/container/crio/install"
+	containerd_plugin "github.com/swarnimarun/cadvisor/container/containerd/install"
+	crio_plugin "github.com/swarnimarun/cadvisor/container/crio/install"
 )
 
 // Metrics to be ignored.
@@ -88,12 +88,46 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 	if s.cadvisorManager == nil {
 		return nil, fmt.Errorf("cadvisor manager not enabled in daemon")
 	}
-	containers, err := s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
-		NumStats: 1,
-	})
+
+	containerdService := containerd_plugin.Success
+	crioService := crio_plugin.Success
+
+	var containers map[string]v1.ContainerInfo
+	var err error
+
+	if containerdService && crioService {
+		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+		ccontainers, err := s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range ccontainers {
+			// |> do not duplicate names.
+			// they are unique existing in both likely is a case of bad setup or
+			// due to lack of cleanup
+			if _, f := containers[k]; !f {
+				containers[k] = v
+			} else {
+				log.Debug().Msg("found duplicate container name between containerd and crio")
+			}
+		}
+	} else if containerdService {
+		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+	} else if crioService {
+		containers, err = s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+			NumStats: 1,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	ci := task.ContainersInfo{}
 	for name, container := range containers {
 		for _, c := range container.Stats {
