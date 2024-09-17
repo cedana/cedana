@@ -125,7 +125,6 @@ func bindEnvVars() {
 	viper.BindEnv("gpu_shared_lib_path", "CEDANA_GPU_SHARED_LIB_PATH")
 	viper.BindEnv("gpu_debugging_enabled", "CEDANA_GPU_DEBUGGING_ENABLED")
 	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
-	viper.BindEnv("is_k8s", "CEDANA_IS_K8S")
 	viper.BindEnv("remote", "CEDANA_REMOTE")
 
 	// CLI-specific

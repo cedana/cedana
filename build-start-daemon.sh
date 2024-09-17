@@ -16,9 +16,10 @@ USER=$(whoami)
 CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-false}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
-CEDANA_IS_K8S=${CEDANA_IS_K8S:-0}
-CEDANA_GPU_ENABLED=false
+CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-false}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
+CEDANA_METRICS_ENABLED=${CEDANA_METRICS_ENABLED:-false}
+CEDANA_JOB_SERVICE=${CEDANA_JOB_SERVICE:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
@@ -42,10 +43,14 @@ for arg in "$@"; do
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
-
     if [ "$arg" == "--otel" ]; then
         echo "otel enabled, starting otelcol.."
         CEDANA_OTEL_ENABLED=true
+    fi
+    if [ "$arg" == "--k8s" ]; then
+        echo "k8s enabled, adding flags for running in k8s.."
+        CEDANA_METRICS_ENABLED=true
+        CEDANA_JOB_SERVICE=true
     fi
 done
 
@@ -98,9 +103,10 @@ Environment=USER=$USER
 Environment=CEDANA_GPU_CONTROLLER_PATH=$CEDANA_GPU_CONTROLLER_PATH
 Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED
-Environment=CEDANA_IS_K8S=$CEDANA_IS_K8S
 Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
-ExecStart=$APP_PATH daemon start --gpu-enabled=$CEDANA_GPU_ENABLED
+Environment=CEDANA_URL=$CEDANA_API_SERVER
+Environment=CEDANA_API_KEY=$CEDANA_API_KEY
+ExecStart=$APP_PATH daemon start $DAEMON_ARGS --gpu-enabled=$CEDANA_GPU_ENABLED --metrics-enabled=$CEDANA_METRICS_ENABLED --job-service=$CEDANA_JOB_SERVICE
 User=root
 Group=root
 Restart=no
@@ -125,9 +131,9 @@ else
     if [[ -z "${SUDO_USE}" ]]; then
         # only systemctl writes to /var/log/cedana-daemon.log, if starting w/out systemctl
         # still want to write logs to a file
-        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" 2>&1 | tee -a /var/log/cedana-daemon.log &
+        $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" --metrics-enabled="$CEDANA_METRICS_ENABLED" --job-service="$CEDANA_JOB_SERVICE" 2>&1 | tee -a /var/log/cedana-daemon.log &
     else
-        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" 2>&1 | tee -a /var/log/cedana-daemon.log &
+        $SUDO_USE -E $APP_PATH daemon start --gpu-enabled="$CEDANA_GPU_ENABLED" "$DAEMON_ARGS" --metrics-enabled="$CEDANA_METRICS_ENABLED" --job-service="$CEDANA_JOB_SERVICE" 2>&1 | tee -a /var/log/cedana-daemon.log &
     fi
     echo "$APP_NAME daemon started as a background process."
 fi

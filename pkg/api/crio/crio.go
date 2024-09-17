@@ -186,7 +186,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	defer os.RemoveAll(tmpRootfsChangesDir)
-	if err := archive.Untar(rootfsDiffFile, tmpRootfsChangesDir, nil); err != nil {
+	if err := UntarWithPermissions(filepath.Join(ctrDir, metadata.RootFsDiffTar), tmpRootfsChangesDir); err != nil {
 		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", ctrDir, err)
 	}
 
@@ -204,6 +204,15 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			continue
 		}
 
+		originalMode := fileInfo.Mode()
+
+		perm := originalMode.Perm()
+
+		// Extract the three missing special bits
+		setuid := originalMode & os.ModeSetuid
+		setgid := originalMode & os.ModeSetgid
+		sticky := originalMode & os.ModeSticky
+
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			// use syscall.Lchown to change the ownership of the link itself
 			// syscall.chown only changes the ownership of the target file in a symlink.
@@ -218,11 +227,24 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 			}
 			log.Debug().Msgf("\t mode is regular: %s", fullPath)
 
+			newMode := perm | setuid | setgid | sticky
+			if err := os.Chmod(fullPath, newMode); err != nil {
+				log.Error().Msgf("failed to restore permissions for %s: %s", fullPath, err)
+			}
 		}
 	}
 
 	if err := os.Remove(diffPath); err != nil {
 		return "", err
+	}
+
+	if _, err := os.Stat(tmpRootfsChangesDir); os.IsNotExist(err) {
+		log.Error().Msgf("Source directory %s does not exist: %v", tmpRootfsChangesDir, err)
+	}
+
+	// Create the tarball
+	if err := createTarball(tmpRootfsChangesDir, diffPath); err != nil {
+		log.Error().Msgf("Error creating tarball: %v", err)
 	}
 
 	rootfsTar, err := archive.TarWithOptions(tmpRootfsChangesDir, &archive.TarOptions{
@@ -249,6 +271,19 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	return diffPath, nil
+}
+
+func createTarball(sourceDir, tarPath string) error {
+	baseDir := filepath.Dir(sourceDir)
+	baseDirName := filepath.Base(sourceDir)
+
+	cmd := exec.Command("tar", "-cvf", tarPath, baseDirName)
+	cmd.Dir = baseDir
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to create tarball: %w", err)
+	}
+	return nil
 }
 
 func removeAllContainers() {
@@ -339,7 +374,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
-	if err := archive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
+	if err := UntarWithPermissions(rootfsDiffPath, containerRootDirectory); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
 	}
 
