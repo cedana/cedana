@@ -83,8 +83,6 @@ type ServeOpts struct {
 	JobServiceEnabled bool
 }
 
-type pullGPUBinaryRequest struct{}
-
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	var err error
 
