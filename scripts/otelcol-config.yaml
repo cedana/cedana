@@ -3,8 +3,6 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:7777
-      http:
-        endpoint: 0.0.0.0:7778
   filelog/daemonlogs:
     include:
       - "/var/log/cedana-daemon.log"
