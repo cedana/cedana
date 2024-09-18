@@ -329,6 +329,9 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	timeout := time.Now().Add(GPU_CONTROLLER_WAIT_TIMEOUT)
 	for {
 		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
+		if err != nil {
+			log.Debug().Err(err).Msg("gpu controller not started yet")
+		}
 		if time.Now().After(timeout) {
 			return nil, fmt.Errorf("gpu controller did not start in time")
 		}
