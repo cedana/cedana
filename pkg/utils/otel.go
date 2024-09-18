@@ -20,7 +20,6 @@ import (
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
 	log.Info().Msg("initializing standard otel tracer")
-	telemetryOn := viper.GetBool("otel_enabled")
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
