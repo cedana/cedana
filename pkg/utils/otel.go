@@ -69,8 +69,8 @@ func newPropagator() propagation.TextMapPropagator {
 
 func newTraceProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
 
-	grpcPort := viper.GetInt("otel_port")
-	address := fmt.Sprintf("127.0.0.1:%d", grpcPort)
+	otelGrpcPort := viper.GetInt("otel_port")
+	address := fmt.Sprintf("127.0.0.1:%d", otelGrpcPort)
 	traceExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithEndpoint(address),
