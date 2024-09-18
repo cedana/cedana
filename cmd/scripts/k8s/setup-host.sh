@@ -94,7 +94,6 @@ fi
 
 # Run the Cedana daemon setup script
 cd /
-if [[ $CEDANA_OTEL_ENABLED ]]
 ./build-start-daemon.sh --systemctl --no-build --k8s
 
 EOT
