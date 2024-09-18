@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -18,7 +19,7 @@ import (
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
-	telemetryOn := viper.GetBool("otel_enabled")
+	log.Info().Msg("initializing standard otel tracer")
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
@@ -28,12 +29,6 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 		}
 		shutdownFuncs = nil
 		return err
-	}
-
-	if !telemetryOn {
-		log.Info().Msg("using noop tracer provider")
-		otel.SetTracerProvider(noop.NewTracerProvider())
-		return
 	}
 
 	handleErr := func(inErr error) {
@@ -54,6 +49,11 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	return
 }
 
+func InitOtelNoop() {
+	log.Info().Msg("using noop tracer provider")
+	otel.SetTracerProvider(noop.NewTracerProvider())
+}
+
 func newPropagator() propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
@@ -62,8 +62,12 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTraceProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
+
+	otelGrpcPort := viper.GetInt("otel_port")
+	address := fmt.Sprintf("127.0.0.1:%d", otelGrpcPort)
 	traceExporter, err := otlptracegrpc.New(
 		ctx,
+		otlptracegrpc.WithEndpoint(address),
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
