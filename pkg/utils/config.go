@@ -120,6 +120,7 @@ func bindEnvVars() {
 
 	// Others used across the codebase
 	viper.BindEnv("log_level", "CEDANA_LOG_LEVEL")
+	viper.BindEnv("otel_port", "CEDANA_OTEL_PORT")
 	viper.BindEnv("otel_enabled", "CEDANA_OTEL_ENABLED")
 	viper.BindEnv("gpu_controller_path", "CEDANA_GPU_CONTROLLER_PATH")
 	viper.BindEnv("gpu_shared_lib_path", "CEDANA_GPU_SHARED_LIB_PATH")

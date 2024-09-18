@@ -15,6 +15,7 @@ SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 CEDANA_OTEL_ENABLED=${CEDANA_OTEL_ENABLED:-false}
 CEDANA_GPU_CONTROLLER_PATH="/usr/local/bin/cedana-gpu-controller"
+CEDANA_OTEL_PORT=${CEDANA_OTEL_PORT:-"7777"}
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-0}
 CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-false}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
@@ -43,9 +44,8 @@ for arg in "$@"; do
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
-    if [ "$arg" == "--otel" ]; then
-        echo "otel enabled, starting otelcol.."
-        CEDANA_OTEL_ENABLED=true
+    if [ "$CEDANA_OTEL_ENABLED" == "true" ]; then
+        echo "otel enabled.."
     fi
     if [ "$arg" == "--k8s" ]; then
         echo "k8s enabled, adding flags for running in k8s.."
@@ -103,6 +103,7 @@ Environment=USER=$USER
 Environment=CEDANA_GPU_CONTROLLER_PATH=$CEDANA_GPU_CONTROLLER_PATH
 Environment=CEDANA_PROFILING_ENABLED=$CEDANA_PROFILING_ENABLED
 Environment=CEDANA_OTEL_ENABLED=$CEDANA_OTEL_ENABLED
+Environment=CEDANA_OTEL_PORT=$CEDANA_OTEL_PORT
 Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
 Environment=CEDANA_URL=$CEDANA_API_SERVER
 Environment=CEDANA_API_KEY=$CEDANA_API_KEY
