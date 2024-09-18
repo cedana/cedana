@@ -18,6 +18,7 @@ import (
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
+	log.Info().Msg("initializing standard otel tracer")
 	telemetryOn := viper.GetBool("otel_enabled")
 	var shutdownFuncs []func(context.Context) error
 
@@ -52,6 +53,11 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	otel.SetTracerProvider(tracerProvider)
 
 	return
+}
+
+func InitOtelNoop() {
+	log.Info().Msg("using noop tracer provider")
+	otel.SetTracerProvider(noop.NewTracerProvider())
 }
 
 func newPropagator() propagation.TextMapPropagator {

@@ -55,13 +55,13 @@ var startDaemonCmd = &cobra.Command{
 		// poll for otel signoz logging
 		otel_enabled := viper.GetBool("otel_enabled")
 		if otel_enabled {
-			_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
+			_, err := utils.InitOtel(ctx, rootCmd.Version)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			log.Debug().Msg("otel initialized")
-
+			log.Info().Msg("initializing standard otel tracer")
+			// polling for ASR
 			go func() {
 				time.Sleep(10 * time.Second)
 				cts, err := services.NewClient(port)
@@ -82,6 +82,8 @@ var startDaemonCmd = &cobra.Command{
 					time.Sleep(60 * time.Second)
 				}
 			}()
+		} else {
+			utils.InitOtelNoop()
 		}
 
 		err = api.StartServer(ctx, &api.ServeOpts{
