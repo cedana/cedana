@@ -21,6 +21,7 @@ env \
     CEDANA_API_SERVER="$CEDANA_API_SERVER" \
     CEDANA_URL="$CEDANA_API_SERVER" \
     CEDANA_API_KEY="$CEDANA_API_KEY" \
+    CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
     chroot /host /bin/bash <<'EOT'
 
@@ -93,6 +94,7 @@ fi
 
 # Run the Cedana daemon setup script
 cd /
-./build-start-daemon.sh --systemctl --no-build --otel --k8s
+if [[ $CEDANA_OTEL_ENABLED ]]
+./build-start-daemon.sh --systemctl --no-build --k8s
 
 EOT

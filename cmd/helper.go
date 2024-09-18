@@ -55,13 +55,6 @@ var helperCmd = &cobra.Command{
 			}
 		}
 
-		setupHost, _ := cmd.Flags().GetBool("setup-host")
-		if setupHost {
-			if err := runScript("bash", setupHostScript, true); err != nil {
-				log.Error().Err(err).Msg("Error setting up host")
-			}
-		}
-
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
 			if err := runScript("bash", chrootStartScript, true); err != nil {
@@ -78,8 +71,16 @@ var helperCmd = &cobra.Command{
 			}
 
 			os.Setenv("SIGNOZ_ACCESS_TOKEN", apikey)
+			os.Setenv("CEDANA_OTEL_ENABLED", "true")
 			if err := runScript("bash", startOtelColScript, false); err != nil {
 				log.Error().Err(err).Msg("Error starting otelcol")
+			}
+		}
+
+		setupHost, _ := cmd.Flags().GetBool("setup-host")
+		if setupHost {
+			if err := runScript("bash", setupHostScript, true); err != nil {
+				log.Error().Err(err).Msg("Error setting up host")
 			}
 		}
 

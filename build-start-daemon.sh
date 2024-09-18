@@ -44,9 +44,8 @@ for arg in "$@"; do
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
-    if [ "$arg" == "--otel" ]; then
-        echo "otel enabled, starting otelcol.."
-        CEDANA_OTEL_ENABLED=true
+    if [ "$CEDANA_OTEL_ENABLED" == "true" ]; then
+    echo "otel enabled.."
     fi
     if [ "$arg" == "--k8s" ]; then
         echo "k8s enabled, adding flags for running in k8s.."
