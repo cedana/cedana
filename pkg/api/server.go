@@ -49,7 +49,7 @@ const (
 	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS            = 0o644
 	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
-	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
+	GPU_CONTROLLER_WAIT_TIMEOUT = 10 * time.Second
 )
 
 type service struct {
@@ -313,33 +313,19 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	var gpuConn *grpc.ClientConn
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	for {
-		gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
-		if err == nil {
-			break
-		}
-		log.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
-		time.Sleep(1 * time.Second)
+	gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
+	if err != nil {
+		return nil, fmt.Errorf("could not connect to gpu controller %v", err)
 	}
 	defer gpuConn.Close()
 
 	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.StartupPollRequest{}
-	timeout := time.Now().Add(GPU_CONTROLLER_WAIT_TIMEOUT)
-	for {
-		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
-		if err != nil {
-			log.Debug().Err(err).Msg("gpu controller not started yet")
-		}
-		if time.Now().After(timeout) {
-			return nil, fmt.Errorf("gpu controller did not start in time")
-		}
-		if err == nil && resp.Success {
-			break
-		}
-		log.Debug().Msgf("Waiting for gpu-controller to start...")
-		time.Sleep(1 * time.Second)
+	waitCtx, _ := context.WithTimeout(ctx, GPU_CONTROLLER_WAIT_TIMEOUT)
+	resp, err := gpuServiceConn.StartupPoll(waitCtx, &args, grpc.WaitForReady(true))
+	if err != nil || !resp.Success {
+		return nil, fmt.Errorf("gpu controller did not start: %v", err)
 	}
 
 	log.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")

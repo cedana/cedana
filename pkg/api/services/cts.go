@@ -36,7 +36,7 @@ func NewClient(port uint32) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
-	taskConn, err := grpc.Dial(address, opts...)
+	taskConn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -353,18 +353,6 @@ func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigReque
 	return resp, nil
 }
 
-///////////////////
-//    Helpers    //
-///////////////////
-
-func getDefaultCallOptions() []grpc.CallOption {
-	opts := []grpc.CallOption{}
-	if viper.GetBool("cli.wait_for_ready") {
-		opts = append(opts, grpc.WaitForReady(true))
-	}
-	return opts
-}
-
 //////////////////////
 ///      ASR       ///
 //////////////////////
@@ -415,4 +403,16 @@ func (c *ServiceClient) QueueJobStatus(ctx context.Context, args *task.QueueJobI
 		return nil, err
 	}
 	return resp, nil
+}
+
+///////////////////
+//    Helpers    //
+///////////////////
+
+func getDefaultCallOptions() []grpc.CallOption {
+	opts := []grpc.CallOption{}
+	if viper.GetBool("cli.wait_for_ready") {
+		opts = append(opts, grpc.WaitForReady(true))
+	}
+	return opts
 }
