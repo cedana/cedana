@@ -60,7 +60,7 @@ var startDaemonCmd = &cobra.Command{
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			log.Info().Msg("initializing standard otel tracer")
+			log.Info().Msg("initialized standard otel tracer")
 			// polling for ASR
 			go func() {
 				time.Sleep(10 * time.Second)
