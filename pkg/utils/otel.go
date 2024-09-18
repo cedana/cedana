@@ -31,12 +31,6 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 		return err
 	}
 
-	if !telemetryOn {
-		log.Info().Msg("using noop tracer provider")
-		otel.SetTracerProvider(noop.NewTracerProvider())
-		return
-	}
-
 	handleErr := func(inErr error) {
 		err = errors.Join(inErr, shutdown(ctx))
 	}
