@@ -21,6 +21,7 @@ env \
     CEDANA_API_SERVER="$CEDANA_API_SERVER" \
     CEDANA_URL="$CEDANA_API_SERVER" \
     CEDANA_API_KEY="$CEDANA_API_KEY" \
+    CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
     chroot /host /bin/bash <<'EOT'
 
 if [[ $SKIPSETUP -eq 1 ]]; then
