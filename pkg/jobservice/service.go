@@ -41,7 +41,7 @@ func New(ctx context.Context) (*JobService, error) {
 		return nil, err
 	}
 
-	config, err := detectConfig(ctx)
+	config, err := DetectConfig(ctx)
 	if err != nil {
 		// couldn't figure out runtime
 		return nil, err
@@ -76,7 +76,7 @@ type ContainerConfig struct {
 }
 
 // find and load the config into an acceptable format
-func findCrioConfig(ctx context.Context) (ContainerConfig, error) {
+func FindCrioConfig(ctx context.Context) (ContainerConfig, error) {
 	// just using the default config for now
 	conf, _ := libconfig.DefaultConfig()
 	llruntime := conf.DefaultRuntime
@@ -86,29 +86,48 @@ func findCrioConfig(ctx context.Context) (ContainerConfig, error) {
 }
 
 // find and load the config into an acceptable format
-func findContainerdConfig(ctx context.Context) (ContainerConfig, error) {
+func FindContainerdConfig(ctx context.Context) (ContainerConfig, error) {
 	var conf srvconfig.Config
 	// not sure if we should search for this config
 	err := srvconfig.LoadConfig(ctx, "/etc/containerd/config.toml", &conf)
 	if err != nil {
 		return ContainerConfig{}, err
 	}
+	addr := conf.GRPC.Address
+	if addr == "" {
+		addr = "/run/containerd/containerd.sock"
+	}
+	root := "/run/containerd/runc/k8s.io"
+	// against v3 of containerd
+	if v, f := conf.Plugins["io.containerd.grpc.v1.cri"]; f {
+		if v, f := v.(map[string]interface{})["containerd"]; f {
+			if v, f := v.(map[string]interface{})["runtimes"]; f {
+				if runc, f := v.(map[string]interface{})["runc"]; f {
+					c := runc.(map[string]interface{})
+					rp := c["runtime_path"].(string)
+					if rp != "" {
+						root = rp
+					}
+				}
+			}
+		}
+	}
 	// TODO: use values from containerd config
 	return ContainerConfig{
 		HLRuntime:  ContainerdRuntime,
-		HLSockAddr: "/run/containerd/containerd.sock",
+		HLSockAddr: addr,
 		LLRuntime:  Runc,
-		LLRoot:     "/run/containerd/runc/k8s.io",
+		LLRoot:     root,
 	}, nil
 }
 
-// detectConfig identifies runtime and config for runtime
-func detectConfig(ctx context.Context) (ContainerConfig, error) {
-	conf, err := findContainerdConfig(ctx)
+// DetectConfig identifies runtime and config for runtime
+func DetectConfig(ctx context.Context) (ContainerConfig, error) {
+	conf, err := FindContainerdConfig(ctx)
 	if err == nil {
 		return conf, nil
 	}
-	return findCrioConfig(ctx)
+	return FindCrioConfig(ctx)
 }
 
 type JobService struct {
