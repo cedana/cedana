@@ -49,7 +49,7 @@ const (
 	SERVER_LOG_MODE             = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	SERVER_LOG_PERMS            = 0o644
 	GPU_CONTROLLER_LOG_PATH     = "/tmp/cedana-gpucontroller.log"
-	GPU_CONTROLLER_WAIT_TIMEOUT = 5 * time.Second
+	GPU_CONTROLLER_WAIT_TIMEOUT = 10 * time.Second
 )
 
 type service struct {
@@ -60,7 +60,6 @@ type service struct {
 	serverCtx       context.Context // context alive for the duration of the server
 	wg              sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled      bool
-	cudaVersion     string
 	machineID       string
 	cadvisorManager manager.Manager
 
@@ -77,16 +76,11 @@ type Server struct {
 
 type ServeOpts struct {
 	GPUEnabled        bool
-	CUDAVersion       string
 	VSOCKEnabled      bool
 	CedanaURL         string
 	Port              uint32
 	MetricsEnabled    bool
 	JobServiceEnabled bool
-}
-
-type pullGPUBinaryRequest struct {
-	CudaVersion string `json:"cuda_version"`
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -133,7 +127,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		store:           utils.NewCedanaStore(),
 		serverCtx:       ctx,
 		gpuEnabled:      opts.GPUEnabled,
-		cudaVersion:     opts.CUDAVersion,
 		machineID:       machineID,
 		cadvisorManager: manager,
 		jobService:      js,
@@ -225,7 +218,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 
 		if opts.GPUEnabled {
 			if viper.GetString("gpu_controller_path") == "" {
-				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath, opts.CUDAVersion)
+				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
 				if err != nil {
 					log.Error().Err(err).Msg("could not pull gpu controller")
 					cancel(err)
@@ -236,7 +229,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 
 			if viper.GetString("gpu_shared_lib_path") == "" {
-				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, utils.GpuSharedLibPath, opts.CUDAVersion)
+				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, utils.GpuSharedLibPath)
 				if err != nil {
 					log.Error().Err(err).Msg("could not pull gpu shared lib")
 					cancel(err)
@@ -320,30 +313,19 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	var gpuConn *grpc.ClientConn
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	for {
-		gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
-		if err == nil {
-			break
-		}
-		log.Debug().Msgf("No connection with gpu-controller, waiting 1 sec and trying again...")
-		time.Sleep(1 * time.Second)
+	gpuConn, err = grpc.NewClient("127.0.0.1:50051", opts...)
+	if err != nil {
+		return nil, fmt.Errorf("could not connect to gpu controller %v", err)
 	}
 	defer gpuConn.Close()
 
 	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.StartupPollRequest{}
-	timeout := time.Now().Add(GPU_CONTROLLER_WAIT_TIMEOUT)
-	for {
-		resp, err := gpuServiceConn.StartupPoll(ctx, &args)
-		if time.Now().After(timeout) {
-			return nil, fmt.Errorf("gpu controller did not start in time")
-		}
-		if err == nil && resp.Success {
-			break
-		}
-		log.Debug().Msgf("Waiting for gpu-controller to start...")
-		time.Sleep(1 * time.Second)
+	waitCtx, _ := context.WithTimeout(ctx, GPU_CONTROLLER_WAIT_TIMEOUT)
+	resp, err := gpuServiceConn.StartupPoll(waitCtx, &args, grpc.WaitForReady(true))
+	if err != nil || !resp.Success {
+		return nil, fmt.Errorf("gpu controller did not start: %v", err)
 	}
 
 	log.Debug().Int("PID", gpuCmd.Process.Pid).Str("Log", GPU_CONTROLLER_LOG_PATH).Msgf("GPU controller started")
@@ -380,7 +362,6 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 			attribute.String("grpc.request", payloadToJSON(req)),
 			attribute.String("server.id", machineID),
 			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
-			attribute.String("server.opts.cudaversion", serveOpts.CUDAVersion),
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
@@ -522,31 +503,21 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 	return resp, nil
 }
 
-func pullGPUBinary(ctx context.Context, binary string, filePath string, version string) error {
+func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 	_, err := os.Stat(filePath)
 	if err == nil {
-		log.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download another supported cuda version.")
+		log.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
-	log.Debug().Msgf("pulling gpu binary %s for cuda version %s", binary, version)
+	log.Debug().Msgf("pulling gpu binary %s", binary)
 
 	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
 	log.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
 
-	body := pullGPUBinaryRequest{
-		CudaVersion: version,
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		log.Err(err).Msg("could not marshal request body")
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		log.Err(err).Msg("failed to build http post request with jsonBody")
 		return err
