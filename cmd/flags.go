@@ -25,7 +25,6 @@ const (
 	startChrootFlag      = "start-chroot"
 	setupHostFlag        = "setup-host"
 	restartFlag          = "restart"
-	cudaVersionFlag      = "cuda"
 	pidFlag              = "pid"
 	externalFlag         = "external"
 	destFlag             = "dest"

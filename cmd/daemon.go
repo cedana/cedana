@@ -22,13 +22,6 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
-var cudaVersions = map[string]string{
-	"11.8": "cuda11_8",
-	"12.1": "cuda12_1",
-	"12.2": "cuda12_2",
-	"12.4": "cuda12_4",
-}
-
 var DEFAULT_PORT uint32 = 8080
 
 var startDaemonCmd = &cobra.Command{
@@ -47,13 +40,6 @@ var startDaemonCmd = &cobra.Command{
 		var err error
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-		// defaults to 11_8, this continues if --cuda is not specified
-		cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
-		if _, ok := cudaVersions[cudaVersion]; !ok {
-			err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
-			log.Error().Err(err).Msg("invalid cuda version")
-			return err
-		}
 		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
 		port, _ := cmd.Flags().GetUint32(portFlag)
 		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
@@ -69,13 +55,13 @@ var startDaemonCmd = &cobra.Command{
 		// poll for otel signoz logging
 		otel_enabled := viper.GetBool("otel_enabled")
 		if otel_enabled {
-			_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
+			_, err := utils.InitOtel(ctx, rootCmd.Version)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			log.Debug().Msg("otel initialized")
-
+			log.Info().Msg("initialized standard otel tracer")
+			// polling for ASR
 			go func() {
 				time.Sleep(10 * time.Second)
 				cts, err := services.NewClient(port)
@@ -96,11 +82,12 @@ var startDaemonCmd = &cobra.Command{
 					time.Sleep(60 * time.Second)
 				}
 			}()
+		} else {
+			utils.InitOtelNoop()
 		}
 
 		err = api.StartServer(ctx, &api.ServeOpts{
 			GPUEnabled:        gpuEnabled,
-			CUDAVersion:       cudaVersions[cudaVersion],
 			VSOCKEnabled:      vsockEnabled,
 			CedanaURL:         cedanaURL,
 			MetricsEnabled:    metricsEnabled,
@@ -196,7 +183,6 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().Bool(vsockEnabledFlag, false, "start daemon with vsock support")
-	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
 	startDaemonCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
 	startDaemonCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
 }
