@@ -20,6 +20,7 @@ import (
 	"github.com/swarnimarun/cadvisor/manager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
@@ -392,6 +393,7 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr stri
 
 		if err != nil {
 			log.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			span.SetStatus(codes.Error, err.Error())
 			span.RecordError(err)
 		} else {
 			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
