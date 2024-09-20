@@ -91,10 +91,20 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	macAddr, err := utils.GetMACAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor()),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID, macAddr, hostname)),
 		),
 	}
 
@@ -349,7 +359,7 @@ func loggingStreamInterceptor() grpc.StreamServerInterceptor {
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr string, hostname string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
@@ -361,6 +371,8 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 			attribute.String("grpc.method", info.FullMethod),
 			attribute.String("grpc.request", payloadToJSON(req)),
 			attribute.String("server.id", machineID),
+			attribute.String("server.mac", macAddr),
+			attribute.String("server.hostname", hostname),
 			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
