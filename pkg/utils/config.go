@@ -104,6 +104,7 @@ func setDefaults() {
 	viper.SetDefault("connection.cedana_user", "random-user")
 
 	viper.SetDefault("cli.wait_for_ready", false)
+	viper.SetDefault("otel_port", 7777)
 }
 
 // Add bindings for env vars so env vars can be used as backup

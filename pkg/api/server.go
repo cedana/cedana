@@ -20,6 +20,7 @@ import (
 	"github.com/swarnimarun/cadvisor/manager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
@@ -91,10 +92,20 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	macAddr, err := utils.GetMACAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor()),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID)),
+			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID, macAddr, hostname)),
 		),
 	}
 
@@ -349,7 +360,7 @@ func loggingStreamInterceptor() grpc.StreamServerInterceptor {
 }
 
 // TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnaryServerInterceptor {
+func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr string, hostname string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		tp := otel.GetTracerProvider()
 		tracer := tp.Tracer("cedana/api")
@@ -361,12 +372,14 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 			attribute.String("grpc.method", info.FullMethod),
 			attribute.String("grpc.request", payloadToJSON(req)),
 			attribute.String("server.id", machineID),
+			attribute.String("server.mac", macAddr),
+			attribute.String("server.hostname", hostname),
 			attribute.String("server.opts.cedanaurl", serveOpts.CedanaURL),
 			attribute.Bool("server.opts.gpuenabled", serveOpts.GPUEnabled),
 		)
 
 		// log the GetContainerInfo method to trace
-		if strings.Contains(info.FullMethod, "TaskService/GetContainerInfo") {
+		if strings.Contains(info.FullMethod, "GetContainerInfo") {
 			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		} else {
 			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
@@ -380,6 +393,7 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string) grpc.UnarySe
 
 		if err != nil {
 			log.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
+			span.SetStatus(codes.Error, err.Error())
 			span.RecordError(err)
 		} else {
 			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
