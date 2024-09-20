@@ -1,13 +1,11 @@
 package jobservice
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -23,6 +21,8 @@ import (
 
 //go:embed schema.sql
 var schemaSetup string
+
+const JQCallbackSocket = "/tmp/jobqueuenotify.sock"
 
 func New() (*JobService, error) {
 	// sqlite queue
@@ -229,33 +229,9 @@ func (js *JobService) Start(ctx context.Context) error {
 }
 
 func (js *JobService) GetJobQueueUrl() string {
-	return ""
-}
-
-func (js *JobService) notifyJobQueue(id, ref string, failed bool) error {
-	log.Info().Msgf("Notifing the jobqueue scheduler: (failed: %v)", failed)
-	type JobQueueCallback struct {
-		Id     string `json:"id"`
-		Ref    string `json:"ref"`
-		Failed bool   `json:"failed"`
-	}
-	b, err := json.Marshal(JobQueueCallback{
-		Id:     id,
-		Ref:    ref,
-		Failed: failed,
-	})
-	if err != nil {
-		return err
-	}
-	res, err := http.Post(js.GetJobQueueUrl(), "application/json", bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	if res.StatusCode == 200 {
-		return nil
-	} else {
-		return fmt.Errorf("failed to notify jobqueue")
-	}
+	// this requires the cluster dns to be set
+	// hence we need to send it to the JQCallbackSocket
+	return "http://cedana-cedana-helm-manager:1324"
 }
 
 func (js *JobService) Restore(c *task.QueueJobRestoreRequest) error {

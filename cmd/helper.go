@@ -16,6 +16,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -227,6 +228,10 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 				log.Info().Msg(line)
 			}
 		}
+	}()
+
+	go func() {
+		jobservice.NotifyServer(ctx)
 	}()
 
 	select {}
