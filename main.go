@@ -13,7 +13,6 @@ import (
 var Version = "dev"
 
 func main() {
-
 	// Grandparent context to deal with OS interrupts
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer stop()
