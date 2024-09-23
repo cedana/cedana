@@ -5,19 +5,19 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/rs/zerolog"
+	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
-	"github.com/cedana/cedana/utils"
-	"io"
-	"time"
-	"github.com/cedana/cedana/api"
 )
 
 var restoreCmd = &cobra.Command{
@@ -31,10 +31,10 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -49,7 +49,7 @@ var restoreProcessCmd = &cobra.Command{
 			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
-				logger.Error().Err(err).Msg("error getting user groups")
+				log.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
@@ -66,21 +66,23 @@ var restoreProcessCmd = &cobra.Command{
 			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
-			TcpEstablished: tcpEstablished,
 			Stream:         stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		resp, err := cts.Restore(ctx, &restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -92,13 +94,12 @@ var restoreKataCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		vm := args[0]
 
-		cts, err := services.NewVSockClient(vm)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewVSockClient(vm, port)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -108,7 +109,9 @@ var restoreKataCmd = &cobra.Command{
 		restoreArgs := task.RestoreArgs{
 			CheckpointID:   vm,
 			CheckpointPath: "/tmp/dmp.tar",
-			TcpEstablished: tcpEstablished,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		go func() {
@@ -156,13 +159,13 @@ var restoreKataCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+				log.Error().Msgf("Restore task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				log.Error().Msgf("Restore task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -174,10 +177,10 @@ var restoreJobCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
-			logger.Error().Err(err).Msgf("error creating client")
+			log.Error().Err(err).Msgf("error creating client")
 			return err
 		}
 		defer cts.Close()
@@ -193,7 +196,7 @@ var restoreJobCmd = &cobra.Command{
 			gid = int32(os.Getgid())
 			groups_int, err := os.Getgroups()
 			if err != nil {
-				logger.Error().Err(err).Msg("error getting user groups")
+				log.Error().Err(err).Msg("error getting user groups")
 				return err
 			}
 			for _, g := range groups_int {
@@ -204,12 +207,14 @@ var restoreJobCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
-			JID:            jid,
-			UID:            uid,
-			GID:            gid,
-			Groups:         groups,
-			TcpEstablished: tcpEstablished,
-			Stream:         stream,
+			JID:    jid,
+			UID:    uid,
+			GID:    gid,
+			Groups: groups,
+			Stream: stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
 		}
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)
@@ -218,9 +223,9 @@ var restoreJobCmd = &cobra.Command{
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
-					logger.Error().Err(st.Err()).Msg("restore failed")
+					log.Error().Err(st.Err()).Msg("restore failed")
 				} else {
-					logger.Error().Err(err).Msg("restore failed")
+					log.Error().Err(err).Msg("restore failed")
 				}
 			}
 
@@ -230,7 +235,7 @@ var restoreJobCmd = &cobra.Command{
 				for {
 					resp, err := stream.Recv()
 					if err != nil {
-						logger.Error().Err(err).Msg("stream ended")
+						log.Error().Err(err).Msg("stream ended")
 						exitCode <- 1
 						return
 					}
@@ -250,7 +255,7 @@ var restoreJobCmd = &cobra.Command{
 				scanner := bufio.NewScanner(os.Stdin)
 				for scanner.Scan() {
 					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
-						logger.Error().Err(err).Msg("error sending stdin")
+						log.Error().Err(err).Msg("error sending stdin")
 						return
 					}
 				}
@@ -265,13 +270,13 @@ var restoreJobCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Err(err).Msgf("Failed")
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -283,10 +288,10 @@ var containerdRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
@@ -302,13 +307,13 @@ var containerdRestoreCmd = &cobra.Command{
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+				log.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				log.Error().Msgf("Restore task failed: %v", err)
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Response: %v", resp.Message)
 
 		return nil
 	},
@@ -320,17 +325,17 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
 		if err != nil {
-			logger.Error().Msgf("Error creating client: %v", err)
+			log.Error().Msgf("Error creating client: %v", err)
 			return err
 		}
 		defer cts.Close()
 
 		root, err := cmd.Flags().GetString(rootFlag)
 		if runcRootPath[root] == "" {
-			logger.Error().Msgf("container root %s not supported", root)
+			log.Error().Msgf("container root %s not supported", root)
 			return err
 		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
@@ -347,29 +352,28 @@ var runcRestoreCmd = &cobra.Command{
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
-		logger.Log().Msg(id)
-		isK3s, _ := cmd.Flags().GetBool(isK3sFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		restoreArgs := &task.RuncRestoreArgs{
 			ImagePath:   dir,
 			ContainerID: id,
-			IsK3S:       isK3s,
 			Opts:        opts,
 			Type:        task.CRType_LOCAL,
-			// CheckpointId: checkpointId,
-			// FIXME YA: Where does this come from?
+			CriuOpts: &task.CriuOpts{
+				FileLocks: fileLocks,
+			},
 		}
 
 		resp, err := cts.RuncRestore(ctx, restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
-				logger.Error().Msgf("Restore task failed: %v, %v", st.Message(), st.Code())
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
 			} else {
-				logger.Error().Msgf("Restore task failed: %v", err)
+				log.Error().Err(err).Msgf("Failed")
 			}
 			return err
 		}
-		logger.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Str("message", resp.Message).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -394,16 +398,16 @@ func init() {
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
-	containerdRestoreCmd.Flags().StringP(imgFlag, "i", "", "image ref")
+	containerdRestoreCmd.Flags().String(imgFlag, "", "image ref")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
-	containerdRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
 	// TODO Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
 	runcRestoreCmd.MarkFlagRequired("dir")
-	runcRestoreCmd.Flags().StringP(idFlag, "p", "", "container id")
+	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
 	runcRestoreCmd.MarkFlagRequired(bundleFlag)
@@ -412,6 +416,7 @@ func init() {
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
+	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
 
 	rootCmd.AddCommand(restoreCmd)
 }

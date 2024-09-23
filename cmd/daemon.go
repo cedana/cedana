@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
-	"github.com/cedana/cedana/api"
-	"github.com/cedana/cedana/api/services"
-	"github.com/cedana/cedana/api/services/task"
-	"github.com/cedana/cedana/utils"
-	"github.com/rs/zerolog"
+	"github.com/cedana/cedana/pkg/api"
+	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -21,51 +22,80 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
-var cudaVersions = map[string]string{
-	"11.8": "cuda11_8",
-	"12.1": "cuda12_1",
-	"12.2": "cuda12_2",
-	"12.4": "cuda12_4",
-}
-
-var vsockEnabledFlag bool
+var DEFAULT_PORT uint32 = 8080
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the rpc server. To run as a daemon, use the provided script (systemd) or use systemd/sysv/upstart.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
-
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		_, err := utils.InitOtel(cmd.Context(), cmd.Parent().Version)
-		if err != nil {
-			logger.Warn().Err(err).Msg("Failed to initialize otel")
-			return err
-		}
-
-		logger.Info().Msg("otel initialized")
-
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
+
+		var err error
+
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-		// defaults to 11_8, this continues if --cuda is not specified
-		cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
-		if _, ok := cudaVersions[cudaVersion]; !ok {
-			err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
-			logger.Error().Err(err).Msg("invalid cuda version")
-			return err
+		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
+		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
+
+		cedanaURL := viper.GetString("connection.cedana_url")
+		if cedanaURL == "" {
+			cedanaURL = "unset"
 		}
 
-		logger.Info().Msgf("starting daemon version %s", rootCmd.Version)
+		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		err = api.StartServer(ctx, &api.ServeOpts{GPUEnabled: gpuEnabled, CUDAVersion: cudaVersions[cudaVersion], VSOCKEnabled: vsockEnabledFlag})
+		// poll for otel signoz logging
+		otel_enabled := viper.GetBool("otel_enabled")
+		if otel_enabled {
+			_, err := utils.InitOtel(ctx, rootCmd.Version)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize otel")
+				return err
+			}
+			log.Info().Msg("initialized standard otel tracer")
+			// polling for ASR
+			go func() {
+				time.Sleep(10 * time.Second)
+				cts, err := services.NewClient(port)
+				if err != nil {
+					log.Error().Msgf("error creating client: %v", err)
+					return
+				}
+				defer cts.Close()
+
+				log.Info().Msg("started polling...")
+				for {
+					conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+					if err != nil {
+						log.Error().Msgf("error getting info: %v", err)
+						return
+					}
+					_ = conts
+					time.Sleep(60 * time.Second)
+				}
+			}()
+		} else {
+			utils.InitOtelNoop()
+		}
+
+		err = api.StartServer(ctx, &api.ServeOpts{
+			GPUEnabled:        gpuEnabled,
+			VSOCKEnabled:      vsockEnabled,
+			CedanaURL:         cedanaURL,
+			MetricsEnabled:    metricsEnabled,
+			JobServiceEnabled: jobServiceEnabled,
+			Port:              port,
+		})
 		if err != nil {
-			logger.Error().Err(err).Msgf("stopping daemon")
+			log.Error().Err(err).Msgf("stopping daemon")
 			return err
 		}
 
@@ -77,12 +107,11 @@ var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if daemon is running and healthy",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		logger := ctx.Value("logger").(*zerolog.Logger)
+		port, _ := cmd.Flags().GetUint32(portFlag)
 
-		cts, err := services.NewClient()
+		cts, err := services.NewClient(port)
 		if err != nil {
-			logger.Error().Err(err).Msg("error creating client")
+			log.Error().Err(err).Msg("error creating client")
 			return err
 		}
 
@@ -153,6 +182,7 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
-	startDaemonCmd.Flags().BoolVarP(&vsockEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
-	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	startDaemonCmd.Flags().Bool(vsockEnabledFlag, false, "start daemon with vsock support")
+	startDaemonCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
+	startDaemonCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
 }

@@ -30,9 +30,19 @@ teardown() {
 }
 
 @test "Check cedana --version" {
-    # cedana version should be same as in `git describe --tags`
-    cedana --version
-    cedana --version | grep -q "$(git describe --tags --always)"
+    expected_version=$(git describe --tags --always)
+
+    actual_version=$(cedana --version)
+
+    echo "Expected version: $expected_version"
+    echo "Actual version: $actual_version"
+
+    echo "$actual_version" | grep -q "$expected_version"
+
+    if [ $? -ne 0 ]; then
+        echo "Version mismatch: expected $expected_version but got $actual_version"
+        return 1
+    fi
 }
 
 @test "Daemon health check" {
@@ -216,7 +226,7 @@ teardown() {
     run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
     echo "$output"
 
-    [[ "$output" == *"success"* ]]
+    [[ "$output" == *"Success"* ]]
 }
 
 @test "Simple runc checkpoint" {
@@ -249,7 +259,7 @@ teardown() {
     [ $nlines_after -gt $nlines_before ]
 
     # checkpoint the container
-    runc_checkpoint $dumpdir $job_id
+    runc_checkpoint $dumpdir $job_id --leave-running
     [ -d $dumpdir ]
 
     # clean up

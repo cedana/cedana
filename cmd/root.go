@@ -5,8 +5,9 @@ package cmd
 import (
 	"context"
 
-	"github.com/cedana/cedana/types"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -28,9 +29,7 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
-	logger := utils.GetLogger()
-
-	ctx = context.WithValue(ctx, "logger", logger)
+	log.Logger = utils.Logger
 
 	rootCmd.Version = version
 	rootCmd.Long = rootCmd.Long + "\n " + version
@@ -45,7 +44,7 @@ func Execute(ctx context.Context, version string) error {
 			Config:    config,
 			ConfigDir: configDir,
 		}); err != nil {
-			logger.Error().Err(err).Msg("failed to initialize config")
+			log.Error().Err(err).Msg("failed to initialize config")
 			return err
 		}
 		return nil
@@ -53,6 +52,7 @@ func Execute(ctx context.Context, version string) error {
 
 	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
 	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
+	rootCmd.PersistentFlags().Uint32P(portFlag, "p", DEFAULT_PORT, "port to listen on/connect to")
 
 	return rootCmd.ExecuteContext(ctx)
 }

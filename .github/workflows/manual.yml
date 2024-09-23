@@ -1,0 +1,178 @@
+name: Manual
+
+on:
+  workflow_dispatch:
+      inputs:
+        bench:
+          type: boolean
+          description: 'Run the benchmark'
+          required: false
+          default: false
+        push_results:
+          type: boolean
+          description: 'Push the results to database'
+          required: false
+          default: false
+        debug_build:
+          type: boolean
+          description: 'Run the build with debugging enabled'
+          required: false
+          default: false
+        debug_bench:
+          type: boolean
+          description: 'Run the benchmark with debugging enabled'
+          required: false
+          default: false
+
+concurrency:
+  group: manual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ inputs.debug_build }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup CI
+        run: sudo -E make -C scripts/ci setup-build
+
+      - name: Build
+        run: sudo -E ./build.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: ./cedana
+
+  benchmark:
+    name: Benchmark
+    if: github.event.inputs.bench == 'true'
+    needs: build
+    permissions:
+      contents: 'read'
+      packages: 'read'
+      id-token: 'write'
+    runs-on: ubicloud-standard-8
+    container:
+      image: ghcr.io/cedana/cedana-bench.ubuntu:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --privileged
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      # Github actions unfortunately mounts the docker socket, which we don't want
+      - name: Workaround for dind
+        run: |
+          umount /var/run/docker.sock
+          sudo service supervisor start
+          sleep 1
+          supervisorctl restart dockerd
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_POOL_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Download artifacts
+        id: download-artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Get branch name
+        shell: bash
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        id: get_branch
+
+      - name: Configure
+        env:
+          PATH_CEDANA: ${{ steps.download-artifacts.outputs.download-path }}
+          TAG: ${{ steps.get_branch.outputs.branch }}
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
+        run: |
+          BINDIR=`jq -r '.crtools.list."cedana".bindir' bench.json`
+          cp $PATH_CEDANA/cedana crtools/cedana/$BINDIR/
+          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.crtools.list."cedana".tag = "'$TAG'"' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
+          mv temp.json bench.json
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ inputs.debug_bench }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run
+        env:
+          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
+        run: $CMD
+
+      - name: Upload logs
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-logs
+          path: /src/*.log
+
+      - name: Push results
+        if: ${{ inputs.push_results }}
+        env:
+          GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
+          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+        run: ./bench results push --overwrite
+
+      - name: Plot
+        run: ./bench plot --runtime cedana --save
+
+      - name: Upload plots
+        id: upload-plots
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          predefinedAcl: publicRead
+          project_id: ${{ steps.auth.outputs.project_id }}
+          path: /src/results
+          destination: cedana/bench-${{ github.ref }}
+          glob: '**/*.png'
+
+      - name: Generate summary
+        env:
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana/bench-${{ github.ref }}/results
+          RESULTS_DESCRIPTION: "> Manual run (cedana)"
+        run: |
+          utils/results-summary > summary.md
+          cat summary.md > $GITHUB_STEP_SUMMARY

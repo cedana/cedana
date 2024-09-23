@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cedana/cedana/container"
-	"github.com/cedana/cedana/utils"
+	"github.com/cedana/cedana/pkg/container"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

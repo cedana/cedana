@@ -64,7 +64,7 @@ function rootfs_checkpoint() {
     local containerd_sock="$3"
     local namespace="$4"
 
-    cedana dump rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
+    cedana dump rootfs --id "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
 function containerd_checkpoint() {
@@ -83,13 +83,14 @@ function rootfs_restore() {
     local containerd_sock="$3"
     local namespace="$4"
 
-    cedana restore rootfs -p "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
+    cedana restore rootfs --id "$container_id" --ref "$image_ref" -a "$containerd_sock" -n "$namespace"
 }
 
 function runc_checkpoint() {
     local dir="$1"
     local job_id="$2"
-    cedana dump runc --dir "$dir" --id "$job_id"
+    shift 2
+    cedana dump runc --dir "$dir" --id "$job_id" $@
 }
 # Bundle for jupyter notebook restore
 # /run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore

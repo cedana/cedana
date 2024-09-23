@@ -8,6 +8,6 @@ For detailed documentation on our managed Kubernetes or GPU checkpointing featur
 TBD 
 
 ## How-to-guides 
-- [Checkpoint/Restore Kata Containers (experimental)](kata.md)
+- [Checkpoint/Restore Kata Containers (experimental)](kata/kata.md)
 ## Developer Guides 
 - [Container support matrix](support/runtimes.md) 
