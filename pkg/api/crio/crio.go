@@ -250,7 +250,11 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	if err != nil {
 		return "", err
 	}
-	defer tmpFile.Close()
+
+	defer func() {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+	}()
 
 	addToTarFiles, err := CRCreateRootFsDiffTar(&rootFsChanges, mountPoint, ctrDir, tmpFile)
 	if err != nil {
@@ -277,7 +281,16 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("failed to create temporary file: %v\n", err)
 	}
 
-	defer rootfsDiffFile.Close()
+	log.Info().Msgf("Rootfs diff file name %s", rootfsDiffFile.Name())
+
+	defer func() {
+		if err := rootfsDiffFile.Close(); err != nil {
+			log.Error().Msgf("Unable to close rootfs diff file %v", err)
+		}
+		if err := os.RemoveAll(rootfsDiffFile.Name()); err != nil {
+			log.Error().Msgf("Unable to delete rootfs diff file %v", err)
+		}
+	}()
 
 	tmpRootfsChangesDir, err := os.MkdirTemp("", "rootfs-changes-")
 	if err != nil {
@@ -285,8 +298,8 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 	}
 
 	defer os.RemoveAll(tmpRootfsChangesDir)
-	if err := UntarWithPermissions(rootfsDiffFile.Name(), tmpRootfsChangesDir); err != nil {
-		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffFile.Name(), err)
+	if err := UntarWithPermissions(tmpFile.Name(), tmpRootfsChangesDir); err != nil {
+		return "", fmt.Errorf("failed to apply root file-system diff file %s: %w", tmpFile.Name(), err)
 	}
 
 	// We have to iterate over changes and change the ownership of files for containers that
@@ -359,7 +372,12 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("creating root file-system diff file %q: %w", rootfsDiffFile.Name(), err)
 	}
 
-	defer rootfsDiffFile.Close()
+	defer func() {
+		if err := rootfsDiffFile.Close(); err != nil {
+			log.Error().Msgf("Unable to close rootfs diff file %v", err)
+		}
+
+	}()
 
 	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
 		return "", err
@@ -407,6 +425,11 @@ func removeAllContainers() {
 }
 
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
+	defer func() {
+		if err := os.Remove(rootfsDiffPath); err != nil {
+			log.Error().Msgf("Unable to delete rootfs diff file %v", err)
+		}
+	}()
 	//buildah from original base ubuntu image
 	if _, err := exec.LookPath("buildah"); err != nil {
 		return fmt.Errorf("buildah is not installed")
@@ -465,7 +488,11 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		}
 		return fmt.Errorf("failed to open root file-system diff file: %w", err)
 	}
-	defer rootfsDiffFile.Close()
+
+	defer func() {
+		rootfsDiffFile.Close()
+		os.RemoveAll(rootfsDiffFile.Name())
+	}()
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
