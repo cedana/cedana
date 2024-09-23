@@ -364,26 +364,21 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", fmt.Errorf("untaring for rootfs file failed %q: %w", tmpRootfsChangesDir, err)
 	}
 
-	rootfsDiffFile, err = os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
+	rootfsDiffFileMerge, err := os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("creating root file-system diff file %q: %w", rootfsDiffFile.Name(), err)
+		return "", fmt.Errorf("creating root file-system diff file %q: %w", rootfsDiffFileMerge.Name(), err)
 	}
 
-	defer func() {
-		if err := rootfsDiffFile.Close(); err != nil {
-			log.Error().Msgf("Unable to close rootfs diff file %v", err)
-		}
+	log.Info().Msgf("Rootfs diff file name %s", rootfsDiffFileMerge.Name())
 
-	}()
-
-	if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
+	if _, err = io.Copy(rootfsDiffFileMerge, rootfsTar); err != nil {
 		return "", err
 	}
 
-	return rootfsDiffFile.Name(), nil
+	return rootfsDiffFileMerge.Name(), nil
 }
 
 func createTarball(sourceDir, tarPath string) error {
@@ -425,9 +420,13 @@ func removeAllContainers() {
 }
 
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
+	if _, err := os.Stat(rootfsDiffPath); err != nil {
+		return err
+	}
+
 	defer func() {
 		if err := os.Remove(rootfsDiffPath); err != nil {
-			log.Error().Msgf("Unable to delete rootfs diff file %v", err)
+			log.Error().Msgf("Unable to delete rootfs diff file %s, %v", rootfsDiffPath, err)
 		}
 	}()
 	//buildah from original base ubuntu image
@@ -491,7 +490,9 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 
 	defer func() {
 		rootfsDiffFile.Close()
-		os.RemoveAll(rootfsDiffFile.Name())
+		if err := os.Remove(rootfsDiffFile.Name()); err != nil {
+			log.Error().Msgf("Unable to delete rootfs diff file %s, %v", rootfsDiffFile.Name(), err)
+		}
 	}()
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
