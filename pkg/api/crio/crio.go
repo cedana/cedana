@@ -138,6 +138,7 @@ const (
 // state it was during checkpointing.
 // Changes to directories (owner, mode) are not handled.
 func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string, rootfsDiffFile *os.File) (includeFiles []string, err error) {
+	log.Info().Msg(rootfsDiffFile.Name())
 	if len(*changes) == 0 {
 		return includeFiles, nil
 	}
@@ -173,6 +174,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string,
 		if err != nil {
 			return includeFiles, fmt.Errorf("exporting root file-system diff to %q: %w", rootfsDiffFile.Name(), err)
 		}
+
 		if _, err = io.Copy(rootfsDiffFile, rootfsTar); err != nil {
 			return includeFiles, err
 		}
@@ -207,7 +209,6 @@ func WriteJSONFile(v interface{}, dir, file string) (string, error) {
 }
 
 func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *rspec.Spec) (string, error) {
-	diffPath := filepath.Join(ctrDir, "rootfs-diff.tar")
 	rwChangesPath := filepath.Join(ctrDir, rwChangesFile)
 
 	includeFiles := []string{
@@ -245,7 +246,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		return "", err
 	}
 
-	tmpFile, err := os.CreateTemp("", "rootfs-tar-*.tar")
+	tmpFile, err := os.CreateTemp(ctrDir, "rootfs-tar-*.tar")
 	if err != nil {
 		return "", err
 	}
@@ -264,11 +265,6 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeSourceDir: true,
 		IncludeFiles:     includeFiles,
 	})
-	if err != nil {
-		return "", err
-	}
-
-	_, err = os.Stat(diffPath)
 	if err != nil {
 		return "", err
 	}
@@ -335,10 +331,6 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 				log.Error().Msgf("failed to restore permissions for %s: %s", fullPath, err)
 			}
 		}
-	}
-
-	if err := os.Remove(diffPath); err != nil {
-		return "", err
 	}
 
 	if _, err := os.Stat(tmpRootfsChangesDir); os.IsNotExist(err) {
