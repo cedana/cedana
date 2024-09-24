@@ -119,9 +119,9 @@ func getTelemetryAPIKey() (string, error) {
 	apiKey, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
 	if !ok {
 		// try downloading from checkpointsvc
-		cedana_api_key, ok := os.LookupEnv("CEDANA_API_KEY")
+		cedana_auth_token, ok := os.LookupEnv("CEDANA_AUTH_TOKEN")
 		if !ok {
-			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_KEY not set")
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_AUTH_TOKEN not set")
 		}
 
 		cedana_api_server, ok := os.LookupEnv("CEDANA_API_SERVER")
@@ -135,7 +135,7 @@ func getTelemetryAPIKey() (string, error) {
 			return "", fmt.Errorf("error creating request: %v", err)
 		}
 
-		req.Header.Set("Authorization", "Bearer "+cedana_api_key)
+		req.Header.Set("Authorization", "Bearer "+cedana_auth_token)
 		client := &http.Client{}
 
 		resp, err := client.Do(req)

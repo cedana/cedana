@@ -20,14 +20,14 @@ cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 env \
     CEDANA_API_SERVER="$CEDANA_API_SERVER" \
     CEDANA_URL="$CEDANA_API_SERVER" \
-    CEDANA_API_KEY="$CEDANA_API_KEY" \
+    CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" \
     CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
     chroot /host /bin/bash <<'EOT'
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    CEDANA_URL="$CEDANA_API_SERVER" CEDANA_API_KEY="$CEDANA_API_KEY" ./build-start-daemon.sh --systemctl --no-build --otel --k8s
+    CEDANA_URL="$CEDANA_API_SERVER" CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" ./build-start-daemon.sh --systemctl --no-build --otel --k8s
     exit 0
 fi
 

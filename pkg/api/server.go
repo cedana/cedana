@@ -313,6 +313,8 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		gpuCmd.Stdout = out
 	}
 
+	gpuCmd.Env = append(os.Environ())
+
 	err := gpuCmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("could not start gpu controller %v", err)
