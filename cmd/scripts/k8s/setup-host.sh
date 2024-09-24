@@ -16,10 +16,8 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
 # Enter chroot environment on the host
-# TODO NR - CEDANA_URL is a hack, cleanup code to fix
 env \
-    CEDANA_API_SERVER="$CEDANA_API_SERVER" \
-    CEDANA_URL="$CEDANA_API_SERVER" \
+    CEDANA_URL="$CEDANA_URL" \
     CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" \
     CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
@@ -27,7 +25,7 @@ env \
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    CEDANA_URL="$CEDANA_API_SERVER" CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" ./build-start-daemon.sh --systemctl --no-build --otel --k8s
+    CEDANA_URL="$CEDANA_URL" CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" ./build-start-daemon.sh --systemctl --no-build --otel --k8s
     exit 0
 fi
 

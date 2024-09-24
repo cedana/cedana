@@ -124,12 +124,12 @@ func getTelemetryAPIKey() (string, error) {
 			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_AUTH_TOKEN not set")
 		}
 
-		cedana_api_server, ok := os.LookupEnv("CEDANA_API_SERVER")
+		cedana_url, ok := os.LookupEnv("CEDANA_URL")
 		if !ok {
-			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_SERVER not set")
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_URL not set")
 		}
 
-		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_api_server)
+		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_url)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating request: %v", err)
