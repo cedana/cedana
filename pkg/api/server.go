@@ -313,7 +313,11 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		gpuCmd.Stdout = out
 	}
 
-	gpuCmd.Env = append(os.Environ())
+	gpuCmd.Env = append(
+		os.Environ(),
+		"CEDANA_AUTH_TOKEN="+viper.GetString("connection.cedana_auth_token"),
+		"CEDANA_URL="+viper.GetString("connection.cedana_url"),
+	)
 
 	err := gpuCmd.Start()
 	if err != nil {
