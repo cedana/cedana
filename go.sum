@@ -652,8 +652,6 @@ github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XL
 github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/checkpoint-restore/checkpointctl v1.2.1 h1:aYFl2CEk95bPLDvNDgif4ZLx3pjCZMJm6td+A0X1+xs=
-github.com/checkpoint-restore/checkpointctl v1.2.1/go.mod h1:8oF+AtNUFJAI13ETcbB3clnjiwvviX0QzVBhYzQ8yBA=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0 h1:mIdrSO2cPNWQY1truPg6uHLXyKHk3Z5Odx4wjKOASzA=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0/go.mod h1:rrRTN/uSwY2X+BPRl/gkulo9gsKOSAeVp9/K2tv7xZI=
 github.com/checkpoint-restore/go-criu/v7 v7.1.0 h1:JbQyO4o+P8ycNTMLPiiDqXg49bAcy4WljWCzYQho35A=
@@ -1252,10 +1250,6 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/swarnimarun/cadvisor v0.0.0-20240917060644-2cf65d2f166a h1:ySEzmfy1imcgg3epC5eqr51B/kus013y/XlAkHRgkcI=
-github.com/swarnimarun/cadvisor v0.0.0-20240917060644-2cf65d2f166a/go.mod h1:Go8An2YLFSFXFbvohc8TWzaUV3QGWcabY5Mnbc94+jg=
-github.com/swarnimarun/cadvisor v0.0.0-20240925104402-3e6d964033e1 h1:VKd5x7+9Td1UPbdmUzwRAxjOhkXgwFa1b8A+4za3xjI=
-github.com/swarnimarun/cadvisor v0.0.0-20240925104402-3e6d964033e1/go.mod h1:O0VXtsoQHuofDow6oyW15tx3psHIFQ07ORuKzv4uM+A=
 github.com/swarnimarun/cadvisor v0.0.0-20240925104852-8733e076e743 h1:LkjgZ9OZkUTP+E85IXuvq2N27zSx/b77J6eIXOdD0OU=
 github.com/swarnimarun/cadvisor v0.0.0-20240925104852-8733e076e743/go.mod h1:J4EPxpVTIBFUn8ECIhtBAZH9ea5CQHSiXtgUhJTsds0=
 github.com/sylabs/sif/v2 v2.16.0 h1:2eqaBaQQsn5DZTzm3QZm0HupZQEjNXfxRnCmtyCihEU=

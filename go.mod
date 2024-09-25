@@ -6,7 +6,6 @@ toolchain go1.22.2
 
 require (
 	github.com/cedana/runc v1.10.2
-	github.com/checkpoint-restore/checkpointctl v1.2.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
 	github.com/checkpoint-restore/go-criu/v7 v7.1.0
 	github.com/containerd/console v1.0.4
@@ -24,6 +23,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.5
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -115,7 +115,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.19.1 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
