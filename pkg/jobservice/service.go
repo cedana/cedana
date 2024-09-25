@@ -92,15 +92,27 @@ func (js *JobService) checkpoint(req string) (string, error) {
 	}
 	log.Info().Msgf("checkpointing (%s) %s %s", cj.PodName, cj.ContainerName, cj.ImageName)
 	// check runtime
-	switch js.config.HLRuntime {
+	root := js.config.LLRoot
+	if cj.RuntimeRoot != nil {
+		root = *cj.RuntimeRoot
+	}
+
+	sockAddr := js.config.HLSockAddr
+	if cj.RuntimeSock != nil {
+		root = *cj.RuntimeSock
+	}
+
+	// TODO: fix CRIO support!
+	runtime := js.config.HLRuntime
+	switch runtime {
 	case "crio":
-		res, err := js.crioCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
+		res, err := js.crioCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace, root, sockAddr)
 		if err != nil {
 			return "", err
 		}
 		return res, err
 	case "containerd":
-		res, err := js.containerdCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
+		res, err := js.containerdCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace, root, sockAddr)
 		if err != nil {
 			return "", err
 		}
@@ -135,20 +147,20 @@ func (jqs *JobService) crioRestore(containerName, sandboxName, source, namespace
 	// TODO: implement this
 }
 
-func (jqs *JobService) crioCheckpoint(containerName, sandboxName, imageName, namespace string) (string, error) {
+func (jqs *JobService) crioCheckpoint(containerName, sandboxName, imageName, namespace, root, sockAddr string) (string, error) {
 	// TODO: implement this
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageName, namespace string) (*task.ContainerdRootfsDumpResp, error) {
-	id, _, err := runc.GetContainerIdByName(containerName, sandboxName, jqs.config.LLRoot)
+func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageName, namespace, root, sockAddr string) (*task.ContainerdRootfsDumpResp, error) {
+	id, _, err := runc.GetContainerIdByName(containerName, sandboxName, root)
 	if err != nil {
 		return nil, err
 	}
 	return containerd.ContainerdRootfsDump(context.Background(), &task.ContainerdRootfsDumpArgs{
 		ContainerID: id,
 		ImageRef:    imageName,
-		Address:     jqs.config.HLSockAddr,
+		Address:     sockAddr,
 		Namespace:   namespace,
 	})
 }

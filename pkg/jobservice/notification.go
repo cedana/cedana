@@ -29,7 +29,8 @@ type Reply struct {
 }
 type Notifier struct{}
 
-// RPC method that adds two numbers
+// RPC method accepts args to make requests within the clusterdns
+// and provide back the reply
 func (c *Notifier) notify(args *Args, reply *Reply) error {
 	b, err := json.Marshal(args.jqc)
 	if err != nil {
