@@ -59,8 +59,11 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 		sysFs,
 		manager.HousekeepingConfigFlags,
 		includedMetrics,
+		nil,
 		strings.Split("", ","),
 		strings.Split("", ","),
+		"",
+		time.Second*10,
 	)
 	if err != nil {
 		log.Fatal().Msgf("Failed to create a manager: %s", err)
