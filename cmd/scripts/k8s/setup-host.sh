@@ -22,26 +22,24 @@ env \
     CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
     CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
+    SKIPSETUP="$CEDANA_SKIPSETUP" \
     chroot /host /bin/bash <<'EOT'
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
-    CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" CEDANA_URL="$CEDANA_URL" CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" ./build-start-daemon.sh --systemctl --no-build --otel --k8s
+    ./build-start-daemon.sh --systemctl --no-build --otel --k8s
     exit 0
 fi
 
 # Define packages for YUM and APT
 YUM_PACKAGES=(
-    wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel
-    protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf
-    libnl3-devel libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel
-    buildah criu
+    wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf libnl3-devel
+    libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu libnftables1
 )
 
 APT_PACKAGES=(
-    wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make
-    libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config
-    libprotobuf-dev python3-protobuf build-essential libprotobuf-c1 buildah
+    wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev python3-protobuf build-essential
+    libprotobuf-c1 buildah libnftables1
 )
 
 # Function to install APT packages
