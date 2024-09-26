@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DEFAULT_LOG_LEVEL    = zerolog.DebugLevel
+	DEFAULT_LOG_LEVEL    = zerolog.InfoLevel
 	LOG_TIME_FORMAT_FULL = time.RFC3339
 	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
