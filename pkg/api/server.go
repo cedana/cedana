@@ -279,7 +279,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
