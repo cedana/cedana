@@ -46,13 +46,14 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
+func (s *service) setupStreamerServe(dumpdir string) (*exec.Cmd, error) {
 	buf := new(bytes.Buffer)
 	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
-		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
+		log.Error().Msgf("unable to exec image streamer server: %v", err)
+		return nil, err
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
@@ -61,7 +62,7 @@ func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	return cmd
+	return cmd, nil
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -106,7 +107,10 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			return nil, nil, nil, nil, err
 		}
 		tempDir = filepath.Dir(absPath)
-		cmd = s.setupStreamerServe(tempDir)
+		cmd, err = s.setupStreamerServe(tempDir)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
 		log.Info().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
@@ -273,7 +277,8 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 
 	img, err := os.Open(dir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("could not open directory")
+		log.Error().Err(err).Msg("could not open directory")
+		return nil, err
 	}
 	defer img.Close()
 
@@ -414,7 +419,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	if isPodman {
 		go func() {
 			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
-				log.Fatal().Err(err).Send()
+				log.Error().Err(err).Send()
 			}
 		}()
 	}
@@ -685,7 +690,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
 				if err != nil {
-					log.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
+					log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
 				}
 			}
 
@@ -817,7 +822,8 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
 	if err != nil {
-		log.Fatal().Msgf("fail to dial: %v", err)
+		log.Error().Msgf("fail to dial GPU controller: %v", err)
+		return nil, fmt.Errorf("fail to dial GPU controller: %v", err)
 	}
 	defer gpuConn.Close()
 

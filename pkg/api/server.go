@@ -279,7 +279,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		log.Fatal().Err(err)
+		log.Error().Err(err).Send()
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
@@ -476,9 +476,10 @@ func (s *service) GPUHealthCheck(
 	defer func() {
 		err = cmd.Process.Kill()
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Error().Err(err).Msg("could not kill gpu controller")
+		} else {
+			log.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
 		}
-		log.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
 	}()
 
 	var opts []grpc.DialOption

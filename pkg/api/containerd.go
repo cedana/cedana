@@ -43,7 +43,10 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+	runcContainer, err := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container from runc: %w", err)
+	}
 
 	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", runcContainer.Pid)
 	getReader := func() (io.Reader, error) {

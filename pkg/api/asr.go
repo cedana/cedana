@@ -49,7 +49,8 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 
 	memoryStorage, err := NewMemoryStorage()
 	if err != nil {
-		log.Fatal().Msgf("Failed to initialize storage driver: %s", err)
+		log.Error().Msgf("Failed to initialize storage driver: %s", err)
+		return nil, err
 	}
 
 	sysFs := sysfs.NewRealSysFs()
@@ -63,12 +64,14 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 		strings.Split("", ","),
 	)
 	if err != nil {
-		log.Fatal().Msgf("Failed to create a manager: %s", err)
+		log.Error().Msgf("Failed to create a manager: %s", err)
+		return nil, err
 	}
 
 	// Start the manager.
 	if err := resourceManager.Start(); err != nil {
-		log.Fatal().Msgf("Failed to start manager: %v", err)
+		log.Error().Msgf("Failed to start manager: %v", err)
+		return nil, err
 	}
 
 	// TODO: this only works on systemd systems
