@@ -675,7 +675,7 @@ func containerdCheckpoint(imagePath, id string) error {
 
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		return err
 	}
 	defer cancel()
