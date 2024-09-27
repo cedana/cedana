@@ -227,7 +227,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	err = runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		return err
 	}
 
