@@ -312,10 +312,10 @@ jobs:
       id-token: 'write'
     runs-on: ubicloud-standard-8
     container:
-      image: ghcr.io/cedana/cedana-bench.ubuntu:latest
+      image: cedana/cedana-bench:ubuntu
       credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
       options: --privileged
     defaults:
       run:

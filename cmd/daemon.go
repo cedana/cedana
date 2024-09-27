@@ -3,6 +3,7 @@ package cmd
 // This file contains all the daemon-related commands when starting `cedana daemon ...`
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -60,28 +61,9 @@ var startDaemonCmd = &cobra.Command{
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			log.Info().Msg("initialized standard otel tracer")
-			// polling for ASR
-			go func() {
-				time.Sleep(10 * time.Second)
-				cts, err := services.NewClient(port)
-				if err != nil {
-					log.Error().Msgf("error creating client: %v", err)
-					return
-				}
-				defer cts.Close()
-
-				log.Info().Msg("started polling...")
-				for {
-					conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
-					if err != nil {
-						log.Error().Msgf("error getting info: %v", err)
-						return
-					}
-					_ = conts
-					time.Sleep(60 * time.Second)
-				}
-			}()
+			if metricsEnabled {
+				pollForAsrMetricsReporting(ctx, port)
+			}
 		} else {
 			utils.InitOtelNoop()
 		}
@@ -101,6 +83,30 @@ var startDaemonCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
+	// polling for ASR
+	go func() {
+		time.Sleep(10 * time.Second)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			log.Error().Msgf("error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		log.Info().Msg("started polling...")
+		for {
+			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+			if err != nil {
+				log.Error().Msgf("error getting info: %v", err)
+				return
+			}
+			_ = conts
+			time.Sleep(60 * time.Second)
+		}
+	}()
 }
 
 var checkDaemonCmd = &cobra.Command{
