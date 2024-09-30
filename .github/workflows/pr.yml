@@ -9,74 +9,74 @@ on:
     inputs:
       debug_build:
         type: boolean
-        description: 'Run build with debugging enabled'
+        description: "Run build with debugging enabled"
         required: false
         default: false
       debug_smoke_test:
         type: boolean
-        description: 'Run smoke test with debugging enabled'
+        description: "Run smoke test with debugging enabled"
         required: false
         default: false
       debug_regression_test:
         type: boolean
-        description: 'Run regression test with debugging enabled'
+        description: "Run regression test with debugging enabled"
         required: false
         default: false
       debug_correctness_test:
         type: boolean
-        description: 'Run correctness test with debugging enabled'
+        description: "Run correctness test with debugging enabled"
         required: false
         default: false
       debug_unit_test:
         type: boolean
-        description: 'Run unit test with debugging enabled'
+        description: "Run unit test with debugging enabled"
         required: false
         default: false
       debug_bench:
         type: boolean
-        description: 'Run benchmark with debugging enabled'
+        description: "Run benchmark with debugging enabled"
         required: false
         default: false
-  workflow_call: # to reuse this workflow in other worflows
+  workflow_call: # to reuse this workflow in other workflows
     inputs:
       debug_build:
         type: boolean
-        description: 'Run build with debugging enabled'
+        description: "Run build with debugging enabled"
         required: false
         default: false
       debug_smoke_test:
         type: boolean
-        description: 'Run smoke test with debugging enabled'
+        description: "Run smoke test with debugging enabled"
         required: false
         default: false
       debug_regression_test:
         type: boolean
-        description: 'Run regression test with debugging enabled'
+        description: "Run regression test with debugging enabled"
         required: false
         default: false
       debug_correctness_test:
         type: boolean
-        description: 'Run correctness test with debugging enabled'
+        description: "Run correctness test with debugging enabled"
         required: false
         default: false
       debug_unit_test:
         type: boolean
-        description: 'Run unit test with debugging enabled'
+        description: "Run unit test with debugging enabled"
         required: false
         default: false
       debug_bench:
         type: boolean
-        description: 'Run benchmark with debugging enabled'
+        description: "Run benchmark with debugging enabled"
         required: false
         default: false
       skip_bench:
         type: boolean
-        description: 'Skip benchmark or not'
+        description: "Skip benchmark or not"
         required: false
         default: false
       skip_shellcheck:
         type: boolean
-        description: 'Skip shellcheck or not'
+        description: "Skip shellcheck or not"
         required: false
         default: false
 
@@ -96,12 +96,12 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22'
+          go-version: "1.22"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -140,6 +140,24 @@ jobs:
           exclude: "./.git/*" # Optional.
           check_all_files_with_shebangs: "true" # Optional
 
+  setup-script-tests:
+    name: Test setup scripts
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+      - name: Run script
+        run: |
+          sudo cp ./build/cedana /usr/local/bin/
+          sudo cp ./build.sh /usr/local/bin/
+          sudo cp ./build-start-daemon.sh /usr/local/bin/
+          sudo cp ./stop-daemon.sh /usr/local/bin/
+          sudo cp ./otelcol-contrib /usr/local/bin/otelcol-contrib
+          sudo cp ./scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
+
   smoke-test:
     name: Smoke Tests
     runs-on: ubicloud-standard-8
@@ -149,7 +167,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -184,7 +202,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -219,7 +237,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -254,7 +272,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -289,10 +307,10 @@ jobs:
     name: Benchmark
     if: ${{ !inputs.skip_bench }}
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
-      pull-requests: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
     runs-on: ubicloud-standard-8
     needs: build
     container:
@@ -383,7 +401,7 @@ jobs:
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
           destination: cedana/pr-${{ github.event.pull_request.number }}
-          glob: '**/*.png'
+          glob: "**/*.png"
 
       - name: Generate summary
         env:
