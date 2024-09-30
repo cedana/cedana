@@ -272,7 +272,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeFiles:     includeFiles,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to tar newly created rootfs diff: %v", err)
 	}
 
 	rootfsDiffFile, err := os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
