@@ -153,11 +153,7 @@ jobs:
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
-          sudo cp ./build.sh /usr/local/bin/
-          sudo cp ./build-start-daemon.sh /usr/local/bin/
-          sudo cp ./stop-daemon.sh /usr/local/bin/
-          sudo cp ./scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
-          bash ./cmd/scripts/k8s/setup-host.sh
+          bash ./setup-host.sh
 
   smoke-test:
     name: Smoke Tests

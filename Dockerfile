@@ -32,6 +32,7 @@ EOT
 COPY --from=builder /app/cedana /usr/local/bin/
 COPY --from=builder /app/build.sh /usr/local/bin/
 COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
+COPY --from=builder /app/setup-host.sh /usr/local/bin/
 COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
 COPY --from=builder /app/otelcol-contrib /usr/local/bin/otelcol-contrib
 COPY --from=builder /app/scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
