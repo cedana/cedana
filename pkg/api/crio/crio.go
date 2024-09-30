@@ -138,6 +138,8 @@ const (
 // state it was during checkpointing.
 // Changes to directories (owner, mode) are not handled.
 func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string, rootfsDiffFile *os.File) (includeFiles []string, err error) {
+	rootfsFileName := filepath.Base(rootfsDiffFile.Name())
+
 	log.Info().Msg(rootfsDiffFile.Name())
 	if len(*changes) == 0 {
 		return includeFiles, nil
@@ -179,7 +181,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string,
 			return includeFiles, err
 		}
 
-		includeFiles = append(includeFiles, rootfsDiffFile.Name())
+		includeFiles = append(includeFiles, rootfsFileName)
 	}
 
 	if len(deletedFiles) == 0 {
@@ -190,7 +192,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string,
 		return includeFiles, nil
 	}
 
-	includeFiles = append(includeFiles, rootfsDiffFile.Name())
+	includeFiles = append(includeFiles, rootfsFileName)
 
 	return includeFiles, nil
 }
