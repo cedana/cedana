@@ -32,12 +32,15 @@ install_criu_ubuntu_2204() {
         x86_64 | amd64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
             OUTPUT_FILE="criu_3.19-4_amd64.deb"
+            ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_amd64.deb"
             OUTPUT_FILE="criu_3.19-4_amd64.deb"
+            ;;
         *)
             echo "Unknown platform architecture $(uname -m)"
             exit 1
+            ;;
     esac
 
     wget $PACKAGE_URL -O $OUTPUT_FILE
