@@ -40,7 +40,7 @@ const (
 	CRIU_RESTORE_LOG_FILE        = "cedana-restore.log"
 	CRIU_RESTORE_LOG_LEVEL       = 4
 	RESTORE_TEMPDIR              = "/tmp/cedana_restore"
-	RESTORE_TEMPDIR_PERMS        = 0o755
+	RESTORE_TEMPDIR_PERMS        = 0o777
 	RESTORE_OUTPUT_LOG_PATH      = "/var/log/cedana-output-%s.log"
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
@@ -48,12 +48,12 @@ const (
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd {
 	buf := new(bytes.Buffer)
-	//out := new(bytes.Buffer)
+	out := new(bytes.Buffer)
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
-	//cmd.Stdout = out
+	cmd.Stdout = out
 	err := cmd.Start()
-	/*go func() {
+	go func() {
 		for {
 			file, err := os.Create("/var/log/cedana-image-streamer-restore.log")
 			if err != nil {
@@ -66,7 +66,7 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd 
 			file.Close()
 			time.Sleep(10 * time.Millisecond)
 		}
-	}()*/
+	}()
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
@@ -105,7 +105,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	} else {
 		// likely an old checkpoint hanging around, delete
-		err := os.RemoveAll(tempDir)
+		// err := os.RemoveAll(tempDir)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
@@ -292,7 +292,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		//os.RemoveAll(dir)
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}

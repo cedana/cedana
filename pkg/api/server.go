@@ -283,18 +283,33 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
+  var cmdArgs []string
 	if viper.GetBool("gpu_debugging_enabled") {
-		controllerPath = strings.Join([]string{
+    log.Info().Msgf("PATH=%s ",os.Getenv("PATH"))
+    _, err := exec.LookPath("compute-sanitizer")
+		if err != nil {
+			return nil, fmt.Errorf("compute-sanitizer not found in PATH")
+		}
+		cmdArgs = []string{
 			"compute-sanitizer",
+			"--log-file", "/tmp/cedana-sanitizer.log",
+			"--print-level", "info",
+			"--leak-check=full",
+			controllerPath,
+		}
+		/*controllerPath = strings.Join([]string{
+			"/usr/local/cuda/bin/compute-sanitizer",
 			"--log-file /tmp/cedana-sanitizer.log",
 			"--print-level info",
 			"--leak-check=full",
 			controllerPath,
 		},
-			" ")
+			" ")*/
+	} else {
+		cmdArgs = []string{controllerPath}
 	}
 
-	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
+	gpuCmd = exec.CommandContext(s.serverCtx,  cmdArgs[0], cmdArgs[1:]...)//controllerPath)
 	groupsUint32 := make([]uint32, len(groups))
 	for i, v := range groups {
 		groupsUint32[i] = uint32(v)

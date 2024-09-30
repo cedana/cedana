@@ -297,12 +297,12 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) *exec.Cmd {
 	buf := new(bytes.Buffer)
-	//ououtt := new(bytes.Buffer)
+	out := new(bytes.Buffer)
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	cmd.Stderr = buf
-	//cmd.Stdout = out
+	cmd.Stdout = out
 	err := cmd.Start()
-	/*go func() {
+	go func() {
 		for {
 			file, err := os.Create("/var/log/cedana-image-streamer-dump.log")
 			if err != nil {
@@ -315,7 +315,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) *exec.Cm
 			file.Close()
 			time.Sleep(10 * time.Millisecond)
 		}
-	}()*/
+	}()
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
