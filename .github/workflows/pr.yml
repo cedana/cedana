@@ -156,7 +156,6 @@ jobs:
           sudo cp ./build.sh /usr/local/bin/
           sudo cp ./build-start-daemon.sh /usr/local/bin/
           sudo cp ./stop-daemon.sh /usr/local/bin/
-          sudo cp ./otelcol-contrib /usr/local/bin/otelcol-contrib
           sudo cp ./scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
           bash ./cmd/scripts/k8s/setup-host.sh
 
