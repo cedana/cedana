@@ -490,12 +490,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("failed to open root file-system diff file: %w", err)
 	}
 
-	defer func() {
-		rootfsDiffFile.Close()
-		if err := os.Remove(rootfsDiffFile.Name()); err != nil {
-			log.Error().Msgf("Unable to delete rootfs diff file %s, %v", rootfsDiffFile.Name(), err)
-		}
-	}()
+	defer rootfsDiffFile.Close()
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
