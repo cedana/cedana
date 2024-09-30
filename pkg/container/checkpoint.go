@@ -510,7 +510,7 @@ type CriuOpts struct {
 // 	return n.c.state.destroy()
 // }
 
-func GetContainerFromRunc(containerID string, root string) *RuncContainer {
+func GetContainerFromRunc(containerID string, root string) (*RuncContainer, error) {
 	// Runc root
 	// root := "/var/run/runc"
 	// Docker root
@@ -519,12 +519,14 @@ func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 	criu := criu.MakeCriu()
 	criuVersion, err := criu.GetCriuVersion()
 	if err != nil {
-		log.Fatal().Err(err).Msg("could not get criu version")
+		log.Error().Err(err).Msg("could not get criu version")
+		return nil, err
 	}
 	root = root + "/" + containerID
 	state, err := loadState(root)
 	if err != nil {
-		log.Fatal().Err(err).Msg("could not load state")
+		log.Error().Err(err).Msg("could not load state")
+		return nil, err
 	}
 
 	r := &nonChildProcess{
@@ -535,7 +537,8 @@ func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 
 	cgroupManager, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
 	if err != nil {
-		log.Fatal().Err(err).Msg("could not create cgroup manager")
+		log.Error().Err(err).Msg("could not create cgroup manager")
+		return nil, err
 	}
 
 	c := &RuncContainer{
@@ -557,7 +560,7 @@ func GetContainerFromRunc(containerID string, root string) *RuncContainer {
 	// if err := c.refreshState(); err != nil {
 	// 	return nil, err
 	// }
-	return c
+	return c, nil
 }
 
 type BaseState struct {
@@ -672,7 +675,8 @@ func containerdCheckpoint(imagePath, id string) error {
 
 	containerdClient, ctx, cancel, err := newContainerdClient(ctx)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err).Send()
+		return err
 	}
 	defer cancel()
 
