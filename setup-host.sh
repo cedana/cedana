@@ -1,3 +1,8 @@
+#!/bin/bash
+# shellcheck disable=SC2181
+#
+set -e
+
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
     ./build-start-daemon.sh --systemctl --no-build --otel --k8s
