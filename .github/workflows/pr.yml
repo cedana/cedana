@@ -162,7 +162,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubicloud-standard-8
-    needs: build
+    needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -197,7 +197,7 @@ jobs:
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-8
-    needs: build
+    needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -232,7 +232,7 @@ jobs:
   correctness-test:
     name: Correctness Tests
     runs-on: ubicloud-standard-8
-    needs: build
+    needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -267,7 +267,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
-    needs: build
+    needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -313,7 +313,7 @@ jobs:
       id-token: "write"
       pull-requests: "write"
     runs-on: ubicloud-standard-8
-    needs: build
+    needs: [build, setup-script-tests]
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
