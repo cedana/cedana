@@ -1,7 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2181
-#
-set -e
 
 if [[ $SKIPSETUP -eq 1 ]]; then
     cd /
