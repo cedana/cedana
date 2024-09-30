@@ -151,7 +151,8 @@ jobs:
           name: build
       - name: Run script
         run: |
-          sudo cp ./build/cedana /usr/local/bin/
+          sudo chmod +x ./cedana
+          sudo cp ./cedana /usr/local/bin/
           sudo cp ./build.sh /usr/local/bin/
           sudo cp ./build-start-daemon.sh /usr/local/bin/
           sudo cp ./stop-daemon.sh /usr/local/bin/
