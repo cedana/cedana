@@ -52,10 +52,11 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd 
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
 	cmd.Stdout = out
+	logpath := "/var/log/cedana-image-streamer-restore.log"
 	err := cmd.Start()
 	go func() {
 		for {
-			file, err := os.Create("/var/log/cedana-image-streamer-restore.log")
+			file, err := os.Create(logpath)
 			if err != nil {
 				panic(err)
 			}
@@ -70,12 +71,13 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd 
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
-	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
-		time.Sleep(2 * time.Millisecond)
+		log.Info().Msgf("Waiting for cedana-image-streamer to setup...")
+		time.Sleep(10 * time.Millisecond)
 	}
+	log.Info().Str("Log", logpath).Msgf("Started cedana-image-streamer")
 
 	return cmd
 }
@@ -105,7 +107,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	} else {
 		// likely an old checkpoint hanging around, delete
-		// err := os.RemoveAll(tempDir)
+		err := os.RemoveAll(tempDir)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}

@@ -54,12 +54,12 @@ type Bundle struct {
 }
 
 // prepareDump =/= preDump.
-// prepareDump sets up the folders to dump into, and sets the criu options.
+// prepareDump sets up the folders to dump into, and sets the criu options
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, error) {
+func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, *exec.Cmd, error) {
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
-		return "", fmt.Errorf("could not get dump stats from context")
+		return "", nil, fmt.Errorf("could not get dump stats from context")
 	}
 
 	start := time.Now()
@@ -107,37 +107,43 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	_, err := os.Stat(dumpDirPath)
 	if err != nil {
 		if err := os.MkdirAll(dumpDirPath, DUMP_FOLDER_PERMS); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
 	err = os.Chown(args.Dir, int(state.UIDs[0]), int(state.GIDs[0]))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	err = chownRecursive(dumpDirPath, state.UIDs[0], state.GIDs[0])
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	err = os.Chmod(args.Dir, DUMP_FOLDER_PERMS)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	err = chmodRecursive(dumpDirPath, DUMP_FOLDER_PERMS)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// close common fds
 	err = closeCommonFds(int32(os.Getpid()), state.PID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+
+	var cmd *exec.Cmd
+	if args.Stream > 0 {
+		cmd = s.setupStreamerCapture(dumpDirPath, args.Stream)
+	}
+
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-	return dumpDirPath, nil
+	return dumpDirPath, cmd, nil
 }
 
 func (s *service) getDumpdirSize(path string) (int64, error) {
@@ -331,13 +337,9 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) *exec.Cm
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
-	dumpdir, err := s.prepareDump(ctx, state, args, opts)
+	dumpdir, cmd, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
-	}
-	var cmd *exec.Cmd
-	if args.Stream > 0 {
-		cmd = s.setupStreamerCapture(dumpdir, args.Stream)
 	}
 
 	var GPUCheckpointed bool
@@ -409,7 +411,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 
 func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
-	dumpdir, err := s.prepareDump(ctx, state, args, opts)
+	dumpdir, _, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
 	}
