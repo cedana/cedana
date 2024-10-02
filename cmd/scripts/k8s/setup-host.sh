@@ -15,6 +15,14 @@ EOT
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/build-start-daemon.sh
 
+[ ! -d "/cedana" ] && mkdir /cedana
+[ ! -d "/cedana/bin" ] && mkdir /cedana/bin
+
+cp /usr/local/bin/buildah /host/cedana/bin
+cp /usr/local/bin/netavark /host/cedana/bin
+cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin
+
+
 # Enter chroot environment on the host
 env \
     CEDANA_URL="$CEDANA_URL" \
