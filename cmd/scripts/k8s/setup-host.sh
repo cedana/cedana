@@ -34,12 +34,12 @@ fi
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf libnl3-devel
-    libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu libnftables1
+    libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel criu libnftables1
 )
 
 APT_PACKAGES=(
     wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev python3-protobuf build-essential
-    libprotobuf-c1 buildah libnftables1
+    libprotobuf-c1 libnftables1
 )
 
 # Function to install APT packages
