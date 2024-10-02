@@ -4,7 +4,7 @@
 // 	protoc        v3.14.0
 // source: task.proto
 
-package cedana_services_task
+package task
 
 import (
 	gpu "github.com/cedana/cedana/pkg/api/services/gpu"
