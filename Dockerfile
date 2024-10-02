@@ -11,7 +11,10 @@ apt-get install -y wget git make curl libnl-3-dev libnet-dev libbsd-dev runc lib
 apt-get install -y libgpgme-dev btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev libprotobuf-dev
 apt-get install -y libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python3-protobuf
 apt-get install -y software-properties-common zip
-apt-get install -y cargo protobuf-compiler
+apt-get install -y protobuf-compiler build-essential
+
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+. $HOME/.cargo/env
 
 curl --proto '=https' --tlsv1.2 -fOL https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.106.1/otelcol-contrib_0.106.1_linux_amd64.tar.gz
 tar -xvf otelcol-contrib_0.106.1_linux_amd64.tar.gz
@@ -25,9 +28,9 @@ git checkout v1.37.3
 cd cmd/buildah
 go build .
 
-# Build netavark
 cd /app/netavark
-make
+git checkout v1.12.2
+make V=1
 
 EOT
 
@@ -49,9 +52,9 @@ COPY --from=builder /app/build-start-daemon.sh /usr/local/bin/
 COPY --from=builder /app/stop-daemon.sh /usr/local/bin/
 COPY --from=builder /app/otelcol-contrib /usr/local/bin/otelcol-contrib
 COPY --from=builder /app/scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
+COPY --from=builder /app/buildah/cmd/buildah/buildah /usr/local/bin
 COPY --from=builder /app/netavark/bin/netavark /usr/local/bin
 COPY --from=builder /app/netavark/bin/netavark-dhcp-proxy-client /usr/local/bin
-COPY --from=builder /app/buildah/cmd/buildah/buildah /usr/local/bin
 
 ENV USER="root"
 
