@@ -108,7 +108,7 @@ Environment=CEDANA_GPU_DEBUGGING_ENABLED=$CEDANA_GPU_DEBUGGING_ENABLED
 Environment=CEDANA_LOG_LEVEL=$CEDANA_LOG_LEVEL
 Environment=CEDANA_URL=$CEDANA_URL
 Environment=CEDANA_AUTH_TOKEN=$CEDANA_AUTH_TOKEN
-Environment=CONTAINERS_HELPER_BINARY_DIR=/usr/local/bin
+Environment=CONTAINERS_HELPER_BINARY_DIR=/cedana/bin
 Environment="PATH=/cedana/bin:${PATH}"
 ExecStart=$APP_PATH daemon start $DAEMON_ARGS --gpu-enabled=$CEDANA_GPU_ENABLED --metrics-enabled=$CEDANA_METRICS_ENABLED --job-service=$CEDANA_JOB_SERVICE
 User=root
