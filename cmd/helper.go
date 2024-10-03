@@ -220,8 +220,10 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 				log.Error().Err(err).Msg("Error reading cedana-daemon.log")
 				return
 			}
-			if len(line) > 0 {
-				log.Info().Msg(line)
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 {
+				// we don't use the log function as the logs should have their own timing data
+				fmt.Println(trimmed)
 			}
 		}
 	}()
