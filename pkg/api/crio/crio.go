@@ -421,6 +421,16 @@ func removeAllContainers() {
 	log.Debug().Msgf("Finished removing all Buildah containers.")
 }
 
+func removeContainer(containerID string) error {
+	removeCmd := exec.Command("buildah", "rm", containerID)
+	err := removeCmd.Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
 	if _, err := os.Stat(rootfsDiffPath); err != nil {
 		return err
@@ -453,8 +463,6 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
 
-	defer removeAllContainers()
-
 	// Split the output into lines
 	lines := strings.Split(string(out), "\n")
 
@@ -466,6 +474,8 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 			break
 		}
 	}
+
+	defer removeContainer(containerID)
 
 	// 	containerID = strings.ReplaceAll(containerID, "\n", "")
 
