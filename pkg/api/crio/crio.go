@@ -1,7 +1,6 @@
 package crio
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -396,32 +395,7 @@ func createTarball(sourceDir, tarPath string) error {
 	return nil
 }
 
-func removeAllContainers() {
-	idsCmd := exec.Command("buildah", "containers", "-q")
-	var out bytes.Buffer
-	idsCmd.Stdout = &out
-
-	err := idsCmd.Run()
-	if err != nil {
-		log.Error().Msgf("Failed to get container IDs: %s\n", err)
-	}
-
-	// Step 2: Remove each container by ID
-	ids := strings.Fields(out.String())
-	for _, id := range ids {
-		removeCmd := exec.Command("buildah", "rm", id)
-		err := removeCmd.Run()
-		if err != nil {
-			log.Error().Msgf("Failed to remove container %s: %s\n", id, err)
-		} else {
-			log.Debug().Msgf("Successfully removed container %s\n", id)
-		}
-	}
-
-	log.Debug().Msgf("Finished removing all Buildah containers.")
-}
-
-func removeContainer(containerID string) error {
+func removeBuildahContainer(containerID string) error {
 	removeCmd := exec.Command("buildah", "rm", containerID)
 	err := removeCmd.Run()
 	if err != nil {
@@ -431,6 +405,11 @@ func removeContainer(containerID string) error {
 	return nil
 }
 
+// WARN:
+// currently we are using buildah CLI for commits to images, there are various bugs in older
+// versions of buildah, it is imperative we use the latest buildah binary (v1.37.3) which we
+// explicitly checkout and build in the cedana dockerfile. It is assumed this version of buildah
+// is used going forward.
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
 	if _, err := os.Stat(rootfsDiffPath); err != nil {
 		return err
@@ -475,7 +454,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		}
 	}
 
-	defer removeContainer(containerID)
+	defer removeBuildahContainer(containerID)
 
 	// 	containerID = strings.ReplaceAll(containerID, "\n", "")
 
