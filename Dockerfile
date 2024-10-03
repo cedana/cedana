@@ -13,14 +13,13 @@ apt-get install -y software-properties-common zip
 apt-get install -y protobuf-compiler build-essential
 EOT
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-    . $HOME/.cargo/env
-
 RUN curl --proto '=https' --tlsv1.2 -fOL https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.106.1/otelcol-contrib_0.106.1_linux_amd64.tar.gz && \
     tar -xvf otelcol-contrib_0.106.1_linux_amd64.tar.gz
 
 
 RUN <<EOT
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+. $HOME/.cargo/env
 # Buildah & Netavark (Netavark required for latest versions of buildah)
 git clone https://github.com/containers/buildah.git /app/buildah
 git clone https://github.com/containers/netavark.git /app/netavark
