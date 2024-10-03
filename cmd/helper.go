@@ -227,8 +227,10 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 		}
 	}()
 
+	log.Info().Msg("Starting notification server")
 	go func() {
-		jobservice.NotifyServer(ctx)
+		err := jobservice.NotifyServer(ctx)
+		log.Error().Err(err).Msg("failed to start json rpc notification server")
 	}()
 
 	select {}

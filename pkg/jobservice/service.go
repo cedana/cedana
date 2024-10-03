@@ -22,8 +22,6 @@ import (
 //go:embed schema.sql
 var schemaSetup string
 
-const JQCallbackSocket = "/tmp/jobqueuenotify.sock"
-
 func New() (*JobService, error) {
 	// sqlite queue
 	db, err := sql.Open("sqlite3", ":memory:?_journal=WAL&_timeout=5000&_fk=true")
@@ -40,7 +38,7 @@ func New() (*JobService, error) {
 	config, err := detectConfig()
 	if err != nil {
 		// couldn't figure out runtime
-		return nil, err
+		log.Error().Err(err).Msg("failed to detect config will *require* runtime fields in http requests")
 	}
 
 	js := &JobService{
@@ -90,7 +88,7 @@ func (js *JobService) checkpoint(req string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Info().Msgf("checkpointing (%s) %s %s", cj.PodName, cj.ContainerName, cj.ImageName)
+	log.Info().Msgf("queued checkpoint (%s) %s %s", cj.PodName, cj.ContainerName, cj.ImageName)
 	// check runtime
 	root := js.config.LLRoot
 	if cj.RuntimeRoot != nil {
@@ -195,7 +193,7 @@ func (js *JobService) Start(ctx context.Context) error {
 					Status: status,
 					ID:     chk.ID,
 				})
-				err = js.notifyJobQueue(chk.ID, ref, err != nil)
+				err = js.notifyJobQueue("checkpoint", chk.ID, ref, err != nil)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to notify the job scheduler")
 				}
@@ -228,7 +226,7 @@ func (js *JobService) Start(ctx context.Context) error {
 					Status: status,
 					ID:     chk.ID,
 				})
-				err = js.notifyJobQueue(chk.ID, ref, err != nil)
+				err = js.notifyJobQueue("restore", chk.ID, ref, err != nil)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to notify the job scheduler")
 				}
