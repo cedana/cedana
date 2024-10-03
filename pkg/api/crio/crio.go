@@ -1,7 +1,6 @@
 package crio
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -138,6 +137,8 @@ const (
 // state it was during checkpointing.
 // Changes to directories (owner, mode) are not handled.
 func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string, rootfsDiffFile *os.File) (includeFiles []string, err error) {
+	rootfsFileName := filepath.Base(rootfsDiffFile.Name())
+
 	log.Info().Msg(rootfsDiffFile.Name())
 	if len(*changes) == 0 {
 		return includeFiles, nil
@@ -179,7 +180,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string,
 			return includeFiles, err
 		}
 
-		includeFiles = append(includeFiles, rootfsDiffFile.Name())
+		includeFiles = append(includeFiles, rootfsFileName)
 	}
 
 	if len(deletedFiles) == 0 {
@@ -190,7 +191,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, ctrDir string,
 		return includeFiles, nil
 	}
 
-	includeFiles = append(includeFiles, rootfsDiffFile.Name())
+	includeFiles = append(includeFiles, rootfsFileName)
 
 	return includeFiles, nil
 }
@@ -270,7 +271,7 @@ func RootfsCheckpoint(ctx context.Context, ctrDir, dest, ctrID string, specgen *
 		IncludeFiles:     includeFiles,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to tar newly created rootfs diff: %v", err)
 	}
 
 	rootfsDiffFile, err := os.CreateTemp(ctrDir, "rootfs-diff-*.tar")
@@ -394,31 +395,21 @@ func createTarball(sourceDir, tarPath string) error {
 	return nil
 }
 
-func removeAllContainers() {
-	idsCmd := exec.Command("buildah", "containers", "-q")
-	var out bytes.Buffer
-	idsCmd.Stdout = &out
-
-	err := idsCmd.Run()
+func removeBuildahContainer(containerID string) error {
+	removeCmd := exec.Command("buildah", "rm", containerID)
+	err := removeCmd.Run()
 	if err != nil {
-		log.Error().Msgf("Failed to get container IDs: %s\n", err)
+		return err
 	}
 
-	// Step 2: Remove each container by ID
-	ids := strings.Fields(out.String())
-	for _, id := range ids {
-		removeCmd := exec.Command("buildah", "rm", id)
-		err := removeCmd.Run()
-		if err != nil {
-			log.Error().Msgf("Failed to remove container %s: %s\n", id, err)
-		} else {
-			log.Debug().Msgf("Successfully removed container %s\n", id)
-		}
-	}
-
-	log.Debug().Msgf("Finished removing all Buildah containers.")
+	return nil
 }
 
+// WARN:
+// currently we are using buildah CLI for commits to images, there are various bugs in older
+// versions of buildah, it is imperative we use the latest buildah binary (v1.37.3) which we
+// explicitly checkout and build in the cedana dockerfile. It is assumed this version of buildah
+// is used going forward.
 func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffPath, containerStorage, registryAuthToken string) error {
 	if _, err := os.Stat(rootfsDiffPath); err != nil {
 		return err
@@ -451,8 +442,6 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
 
-	defer removeAllContainers()
-
 	// Split the output into lines
 	lines := strings.Split(string(out), "\n")
 
@@ -464,6 +453,8 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 			break
 		}
 	}
+
+	defer removeBuildahContainer(containerID)
 
 	// 	containerID = strings.ReplaceAll(containerID, "\n", "")
 
@@ -488,12 +479,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		return fmt.Errorf("failed to open root file-system diff file: %w", err)
 	}
 
-	defer func() {
-		rootfsDiffFile.Close()
-		if err := os.Remove(rootfsDiffFile.Name()); err != nil {
-			log.Error().Msgf("Unable to delete rootfs diff file %s, %v", rootfsDiffFile.Name(), err)
-		}
-	}()
+	defer rootfsDiffFile.Close()
 
 	log.Debug().Msgf("applying rootfs diff to %s", containerRootDirectory)
 
