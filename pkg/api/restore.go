@@ -16,9 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/gpu"
+	gpugrpc "buf.build/gen/go/cedana/gpu/grpc/go/_gogrpc"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/services/rpc"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/identifiers"
@@ -64,7 +65,7 @@ func (s *service) setupStreamerServe(dumpdir string) *exec.Cmd {
 	return cmd
 }
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp], isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
 	if !ok {
@@ -574,7 +575,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (int32, chan int, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) (int32, chan int, error) {
 	var dir *string
 	var pid *int32
 
@@ -822,7 +823,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	}
 	defer gpuConn.Close()
 
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.RestoreRequest{
 		Directory: dir,

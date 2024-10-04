@@ -40,7 +40,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	return s.startHelper(ctx, args, nil)
 }
 
-func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
+func (s *service) StartAttach(stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -205,7 +205,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
+func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (*task.StartResp, error) {
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
 	}
@@ -404,7 +404,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	return &resp, nil
 }
 
-func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (int32, chan int, error) {
+func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (int32, chan int, error) {
 	var pid int32
 	if args.Task == "" {
 		return 0, nil, fmt.Errorf("could not find task")

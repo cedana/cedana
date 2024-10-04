@@ -59,6 +59,7 @@ require (
 replace github.com/cri-o/cri-o => github.com/cri-o/cri-o v1.30.1-0.20240625065658-9d6a596aecea
 
 require (
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241004172122-4e171827a1dd.1 // indirect
 	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2 // indirect
 	buf.build/gen/go/cedana/task/protocolbuffers/go v1.34.2-20241004172122-c5d1315e0660.2 // indirect
 	dario.cat/mergo v1.0.0 // indirect

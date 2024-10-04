@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )

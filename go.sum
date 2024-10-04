@@ -1,3 +1,5 @@
+buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241004172122-4e171827a1dd.1 h1:Ztvoi+qsUHJIvtlwr3KAUhaSmRsQ1xuf65BXNSTMVjk=
+buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241004172122-4e171827a1dd.1/go.mod h1:nuozuy/J9yVzPmN9v6O7WsoJJKkSxR8F/Ee8SSFmGLs=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2 h1:w9+z/8fO9GLsB8fkntgR4WhmjuUXyhNb+V42E9hMZd4=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2/go.mod h1:45EGKALF/Zs94w2SRKssOchJJD60BswSnZ3vDACFYCs=
 buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241004172122-c5d1315e0660.1 h1:E+7kI/fxv0cRupN533YZPU8MR7+zJc+NPcDnKuZfpPU=
