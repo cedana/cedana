@@ -2,7 +2,7 @@ package runc
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +19,8 @@ const (
 	crioContainerName       = "io.kubernetes.container.name"
 	crioSandboxName         = "io.kubernetes.pod.name"
 )
+
+var ErrContainerNotFound = errors.New("container id not found")
 
 type runcContainer struct {
 	ContainerId      string
@@ -186,7 +188,7 @@ func GetContainerIdByName(containerName, sandboxName, root string) (string, stri
 		}
 
 	}
-	return "", "", fmt.Errorf("Container id not found")
+	return "", "", ErrContainerNotFound
 }
 
 func GetPausePid(bundlePath string) (int, error) {
