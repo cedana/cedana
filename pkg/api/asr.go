@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -133,6 +134,14 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 
 	ci := task.ContainersInfo{}
 	for name, container := range containers {
+		var labels string
+		labelsJson, err := json.Marshal(container.Spec.Labels)
+		if err == nil {
+			labels = string(labelsJson)
+		} else {
+			log.Debug().Msgf("error marshalling labels: %v", err)
+		}
+
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
 				ContainerName: name,
@@ -146,6 +155,8 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
 				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
 				DiskIO:        0,
+				Image:         container.Spec.Image,
+				Labels:        labels,
 			}
 			ci.Containers = append(ci.Containers, &info)
 		}
