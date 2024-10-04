@@ -5,7 +5,10 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
-	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241004172122-c5d1315e0660.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241004172122-4e171827a1dd.1
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241004193345-5ac84ce282de.1
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.34.2-20241004193345-5ac84ce282de.2
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/checkpointctl v1.2.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
@@ -60,9 +63,6 @@ require (
 replace github.com/cri-o/cri-o => github.com/cri-o/cri-o v1.30.1-0.20240625065658-9d6a596aecea
 
 require (
-	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241004172122-4e171827a1dd.1 // indirect
-	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2 // indirect
-	buf.build/gen/go/cedana/task/protocolbuffers/go v1.34.2-20241004172122-c5d1315e0660.2 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect

@@ -15,9 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	"github.com/cedana/cedana/pkg/api/services/rpc"
+	gpugrpc "buf.build/gen/go/cedana/gpu/grpc/go/_gogrpc"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -425,7 +426,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	}
 	defer gpuConn.Close()
 
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.CheckpointRequest{
 		Directory: dumpdir,
