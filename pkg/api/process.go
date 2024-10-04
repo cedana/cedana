@@ -15,12 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -150,7 +151,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	return s.restoreHelper(ctx, args, nil)
 }
 
-func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) error {
+func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -275,7 +276,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	}, err
 }
 
-func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*task.RestoreResp, error) {
+func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) (*task.RestoreResp, error) {
 	var resp task.RestoreResp
 	var pid int32
 	var err error

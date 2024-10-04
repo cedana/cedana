@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241004172122-c5d1315e0660.1
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/checkpointctl v1.2.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
@@ -24,6 +25,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.5
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -57,6 +59,8 @@ require (
 replace github.com/cri-o/cri-o => github.com/cri-o/cri-o v1.30.1-0.20240625065658-9d6a596aecea
 
 require (
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.34.2-20241004172122-4e171827a1dd.2 // indirect
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.34.2-20241004172122-c5d1315e0660.2 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
@@ -113,7 +117,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.19.1 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect

@@ -21,9 +21,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
-	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
@@ -69,7 +69,7 @@ type service struct {
 
 	jobService *jobservice.JobService
 
-	task.UnimplementedTaskServiceServer
+	taskgrpc.UnimplementedTaskServiceServer
 }
 
 type Server struct {
@@ -129,7 +129,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		logger:      logger,
 	}
 
-	task.RegisterTaskServiceServer(server.grpcServer, service)
+	taskgrpc.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
