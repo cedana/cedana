@@ -139,7 +139,7 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		if err == nil {
 			labels = string(labelsJson)
 		} else {
-			log.Debug().Msgf("error marshalling labels: %v", err)
+			log.Info().Msgf("error marshalling labels: %v", err)
 		}
 
 		for _, c := range container.Stats {
