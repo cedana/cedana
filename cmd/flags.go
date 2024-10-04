@@ -25,7 +25,6 @@ const (
 	startChrootFlag      = "start-chroot"
 	setupHostFlag        = "setup-host"
 	restartFlag          = "restart"
-	cudaVersionFlag      = "cuda"
 	pidFlag              = "pid"
 	externalFlag         = "external"
 	destFlag             = "dest"
@@ -37,4 +36,8 @@ const (
 	streamFlag           = "stream"
 	leaveRunningFlag     = "leave-running"
 	fileLocksFlag        = "file-locks"
+	vsockEnabledFlag     = "vsock"
+	portFlag             = "port"
+	metricsEnabledFlag   = "metrics-enabled"
+	jobServiceFlag       = "job-service"
 )

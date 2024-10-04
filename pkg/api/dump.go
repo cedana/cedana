@@ -79,7 +79,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	opts.TcpEstablished = proto.Bool(hasTCP || args.GetCriuOpts().GetTcpEstablished())
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
-	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave-running"))
+	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"))
 
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
@@ -139,11 +139,12 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
-		log.Fatal().Msg("could not get dump stats from context")
+		log.Error().Msg("could not get dump stats from context")
+		return fmt.Errorf("could not get dump stats from context")
 	}
 
 	var compressedCheckpointPath string
@@ -159,7 +160,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	// sneak in a serialized state obj
 	err := serializeStateToDir(dumpdir, state, streamCmd != nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err)
+		return err
 	}
 
 	log.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
@@ -169,14 +171,16 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Error().Err(err)
+			return nil
 		}
 	}
 
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err)
+		return err
 	}
 
 	elapsed := time.Since(start)
@@ -184,6 +188,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		Size:     info.Size(),
 		Duration: elapsed.Milliseconds(),
 	}
+
+	return nil
 }
 
 func (s *service) prepareDumpOpts() *rpc.CriuOpts {
@@ -205,7 +211,10 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	var crPid int
 
 	bundle := Bundle{ContainerID: containerID}
-	runcContainer := container.GetContainerFromRunc(containerID, root)
+	runcContainer, err := container.GetContainerFromRunc(containerID, root)
+	if err != nil {
+		return fmt.Errorf("could not get container from runc: %v", err)
+	}
 
 	// TODO make into flag and describe how this redirects using container's init process pid and
 	// instead a specific pid.
@@ -216,9 +225,9 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 		crPid = runcContainer.Pid
 	}
 
-	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
+	err = runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err).Send()
 		return err
 	}
 
@@ -233,35 +242,32 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state, nil)
-
-	return nil
+	return s.postDump(ctx, opts.ImagesDirectory, state, nil)
 }
 
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state, nil)
-
-	return nil
+	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
+func (s *service) setupStreamerCapture(dumpdir string) (*exec.Cmd, error) {
 	buf := new(bytes.Buffer)
 	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "capture")
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
-		s.logger.Fatal().Msgf("unable to exec image streamer server: %v", err)
+		log.Error().Msgf("unable to exec image streamer server: %v", err)
+		return nil, err
 	}
-	s.logger.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		s.logger.Info().Msgf("waiting for cedana-image-streamer to setup...")
+		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	return cmd
+	return cmd, nil
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -272,7 +278,10 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	}
 	var cmd *exec.Cmd
 	if args.Stream {
-		cmd = s.setupStreamerCapture(dumpdir)
+		cmd, err = s.setupStreamerCapture(dumpdir)
+		if err != nil {
+			return err
+		}
 	}
 
 	var GPUCheckpointed bool
@@ -294,9 +303,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(state.PID)
 
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	log.Info().Int32("PID", state.PID).Msg("beginning dump")
 
@@ -326,9 +333,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state, cmd)
-
-	return nil
+	return s.postDump(ctx, dumpdir, state, cmd)
 }
 
 func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -350,9 +355,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
 	opts.LeaveRunning = proto.Bool(true)
 
-	nfy := Notify{
-		Logger: s.logger,
-	}
+	nfy := Notify{}
 
 	log.Info().Msgf(`beginning dump of pid %d`, state.PID)
 

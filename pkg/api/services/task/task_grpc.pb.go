@@ -58,6 +58,8 @@ type TaskServiceClient interface {
 	QueueCheckpoint(ctx context.Context, in *QueueJobCheckpointRequest, opts ...grpc.CallOption) (*wrappers.BoolValue, error)
 	QueueRestore(ctx context.Context, in *QueueJobRestoreRequest, opts ...grpc.CallOption) (*wrappers.BoolValue, error)
 	JobStatus(ctx context.Context, in *QueueJobID, opts ...grpc.CallOption) (*QueueJobStatus, error)
+	// ASR
+	GetContainerInfo(ctx context.Context, in *ContainerInfoRequest, opts ...grpc.CallOption) (*ContainersInfo, error)
 }
 
 type taskServiceClient struct {
@@ -391,6 +393,15 @@ func (c *taskServiceClient) JobStatus(ctx context.Context, in *QueueJobID, opts 
 	return out, nil
 }
 
+func (c *taskServiceClient) GetContainerInfo(ctx context.Context, in *ContainerInfoRequest, opts ...grpc.CallOption) (*ContainersInfo, error) {
+	out := new(ContainersInfo)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/GetContainerInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility
@@ -430,6 +441,8 @@ type TaskServiceServer interface {
 	QueueCheckpoint(context.Context, *QueueJobCheckpointRequest) (*wrappers.BoolValue, error)
 	QueueRestore(context.Context, *QueueJobRestoreRequest) (*wrappers.BoolValue, error)
 	JobStatus(context.Context, *QueueJobID) (*QueueJobStatus, error)
+	// ASR
+	GetContainerInfo(context.Context, *ContainerInfoRequest) (*ContainersInfo, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -514,6 +527,9 @@ func (UnimplementedTaskServiceServer) QueueRestore(context.Context, *QueueJobRes
 }
 func (UnimplementedTaskServiceServer) JobStatus(context.Context, *QueueJobID) (*QueueJobStatus, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobStatus not implemented")
+}
+func (UnimplementedTaskServiceServer) GetContainerInfo(context.Context, *ContainerInfoRequest) (*ContainersInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetContainerInfo not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 
@@ -1023,6 +1039,24 @@ func _TaskService_JobStatus_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_GetContainerInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).GetContainerInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/GetContainerInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).GetContainerInfo(ctx, req.(*ContainerInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1117,6 +1151,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "JobStatus",
 			Handler:    _TaskService_JobStatus_Handler,
+		},
+		{
+			MethodName: "GetContainerInfo",
+			Handler:    _TaskService_GetContainerInfo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

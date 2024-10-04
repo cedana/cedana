@@ -4,10 +4,9 @@ package services
 
 import (
 	"context"
-	"time"
-
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/mdlayher/vsock"
 
@@ -34,10 +33,11 @@ type ServiceClient struct {
 	taskConn    *grpc.ClientConn
 }
 
-func NewClient() (*ServiceClient, error) {
+func NewClient(port uint32) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	taskConn, err := grpc.Dial(api.Address, opts...)
+	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
+	taskConn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,15 +51,15 @@ func NewClient() (*ServiceClient, error) {
 	return client, err
 }
 
-func NewVSockClient(vm string) (*ServiceClient, error) {
+func NewVSockClient(vm string, port uint32) (*ServiceClient, error) {
 	// extract cid from the process tree on host
 	cid, err := utils.ExtractCID(vm)
 	if err != nil {
 		return nil, err
 	}
 
-	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, api.VSOCK_PORT), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return vsock.Dial(cid, api.VSOCK_PORT, nil)
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, port), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, port, nil)
 	}))
 	if err != nil {
 		return nil, err
@@ -354,16 +354,19 @@ func (c *ServiceClient) GetConfig(ctx context.Context, args *task.GetConfigReque
 	return resp, nil
 }
 
-///////////////////
-//    Helpers    //
-///////////////////
+//////////////////////
+///      ASR       ///
+//////////////////////
 
-func getDefaultCallOptions() []grpc.CallOption {
-	opts := []grpc.CallOption{}
-	if viper.GetBool("cli.wait_for_ready") {
-		opts = append(opts, grpc.WaitForReady(true))
+func (c *ServiceClient) GetContainerInfo(ctx context.Context, args *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.GetContainerInfo(ctx, args, opts...)
+	if err != nil {
+		return nil, err
 	}
-	return opts
+	return resp, nil
 }
 
 ////////////////////
@@ -401,4 +404,16 @@ func (c *ServiceClient) QueueJobStatus(ctx context.Context, args *task.QueueJobI
 		return nil, err
 	}
 	return resp, nil
+}
+
+///////////////////
+//    Helpers    //
+///////////////////
+
+func getDefaultCallOptions() []grpc.CallOption {
+	opts := []grpc.CallOption{}
+	if viper.GetBool("cli.wait_for_ready") {
+		opts = append(opts, grpc.WaitForReady(true))
+	}
+	return opts
 }

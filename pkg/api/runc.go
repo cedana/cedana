@@ -5,6 +5,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	container "github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -74,7 +76,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	criuOpts := &container.CriuOpts{
 		ImagesDirectory: args.GetCriuOpts().GetImagesDirectory(),
 		WorkDirectory:   args.GetCriuOpts().GetWorkDirectory(),
-		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave-running"),
+		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"),
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
 		TcpClose:        isUsingTCP,
 		MntnsCompatMode: false,
@@ -195,7 +197,7 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 
 		runcContainers, err := runc.RuncGetAll(args.Root, args.Namespace)
 		if err != nil {
-			return nil, status.Error(codes.NotFound, fmt.Sprint("Container not found"))
+			return nil, status.Error(codes.NotFound, err.Error())
 		}
 
 		for _, c := range runcContainers {
@@ -213,9 +215,14 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 	}
 	for i, name := range args.ContainerNames {
 		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
-		if err != nil {
-			return nil, status.Error(codes.NotFound, fmt.Sprintf("Container \"%s\" not found", name))
+		if errors.Is(err, runc.ErrContainerNotFound) {
+			log.Info().Msgf("container %s not found", name)
 		}
+
+		if !errors.Is(err, runc.ErrContainerNotFound) && err != nil {
+			return nil, err
+		}
+
 		containers = append(containers, &task.RuncContainer{
 			ID:         runcId,
 			BundlePath: bundle,

@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/runc/libcontainer/cgroups"
 	"github.com/cedana/runc/libcontainer/configs"
 	"github.com/checkpoint-restore/go-criu/v6"
 	criurpc "github.com/checkpoint-restore/go-criu/v6/rpc"
 	securejoin "github.com/cyphar/filepath-securejoin"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
@@ -93,7 +93,6 @@ func (c *RuncContainer) addCriuDumpMount(req *criurpc.CriuReq, m *configs.Mount)
 
 func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.CriuOpts, criuFeat *criurpc.CriuFeatures) error {
 	t := criurpc.CriuReqType_FEATURE_CHECK
-	logger := utils.GetLogger()
 
 	// make sure the features we are looking for are really not from
 	// some previous check
@@ -110,7 +109,7 @@ func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.C
 
 	err := c.criuSwrk(nil, req, criuOpts, nil)
 	if err != nil {
-		logger.Debug().Msgf("%s", err)
+		log.Debug().Msgf("%s", err)
 		return errors.New("CRIU feature check failed")
 	}
 
@@ -122,7 +121,7 @@ func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.C
 		// The inner if checks if they are set to true
 		if *criuFeat.MemTrack && !*criuFeatures.MemTrack {
 			missingFeatures = true
-			logger.Debug().Msgf("CRIU does not support MemTrack")
+			log.Debug().Msgf("CRIU does not support MemTrack")
 		}
 	}
 
@@ -132,7 +131,7 @@ func (c *RuncContainer) checkCriuFeatures(criuOpts *CriuOpts, rpcOpts *criurpc.C
 		(criuFeatures.LazyPages != nil) {
 		if *criuFeat.LazyPages && !*criuFeatures.LazyPages {
 			missingFeatures = true
-			logger.Debug().Msgf("CRIU does not support LazyPages")
+			log.Debug().Msgf("CRIU does not support LazyPages")
 		}
 	}
 

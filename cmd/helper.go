@@ -14,12 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -55,13 +52,6 @@ var helperCmd = &cobra.Command{
 			}
 		}
 
-		setupHost, _ := cmd.Flags().GetBool("setup-host")
-		if setupHost {
-			if err := runScript("bash", setupHostScript, true); err != nil {
-				log.Error().Err(err).Msg("Error setting up host")
-			}
-		}
-
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		if startChroot {
 			if err := runScript("bash", chrootStartScript, true); err != nil {
@@ -78,12 +68,21 @@ var helperCmd = &cobra.Command{
 			}
 
 			os.Setenv("SIGNOZ_ACCESS_TOKEN", apikey)
+			os.Setenv("CEDANA_OTEL_ENABLED", "true")
 			if err := runScript("bash", startOtelColScript, false); err != nil {
 				log.Error().Err(err).Msg("Error starting otelcol")
 			}
 		}
 
-		startHelper(ctx, startChroot)
+		setupHost, _ := cmd.Flags().GetBool("setup-host")
+		if setupHost {
+			if err := runScript("bash", setupHostScript, true); err != nil {
+				log.Error().Err(err).Msg("Error setting up host")
+			}
+		}
+
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		startHelper(ctx, startChroot, port)
 
 		return nil
 	},
@@ -117,23 +116,23 @@ func getTelemetryAPIKey() (string, error) {
 	apiKey, ok := os.LookupEnv("SIGNOZ_ACCESS_TOKEN")
 	if !ok {
 		// try downloading from checkpointsvc
-		cedana_api_key, ok := os.LookupEnv("CEDANA_API_KEY")
+		cedana_auth_token, ok := os.LookupEnv("CEDANA_AUTH_TOKEN")
 		if !ok {
-			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_KEY not set")
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_AUTH_TOKEN not set")
 		}
 
-		cedana_api_server, ok := os.LookupEnv("CEDANA_API_SERVER")
+		cedana_url, ok := os.LookupEnv("CEDANA_URL")
 		if !ok {
-			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_API_SERVER not set")
+			return "", fmt.Errorf("tried downloading API key from checkpointsvc but CEDANA_URL not set")
 		}
 
-		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_api_server)
+		url := fmt.Sprintf("%s/k8s/apikey/signoz", cedana_url)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating request: %v", err)
 		}
 
-		req.Header.Set("Authorization", "Bearer "+cedana_api_key)
+		req.Header.Set("Authorization", "Bearer "+cedana_auth_token)
 		client := &http.Client{}
 
 		resp, err := client.Do(req)
@@ -157,11 +156,11 @@ func getTelemetryAPIKey() (string, error) {
 	return apiKey, nil
 }
 
-func startHelper(ctx context.Context, startChroot bool) {
+func startHelper(ctx context.Context, startChroot bool, port uint32) {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	_, err := createClientWithRetry()
+	_, err := createClientWithRetry(port)
 	if err != nil {
 		log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 	}
@@ -174,7 +173,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 		for {
 			select {
 			case <-ticker.C:
-				isRunning, err := isProcessRunning()
+				isRunning, err := isCedanaDaemonRunning(ctx, port)
 				if err != nil {
 					log.Error().Err(err).Msg("Issue checking if daemon is running")
 				}
@@ -186,7 +185,7 @@ func startHelper(ctx context.Context, startChroot bool) {
 						log.Error().Err(err).Msg("Error restarting Cedana")
 					}
 
-					_, err = createClientWithRetry()
+					_, err = createClientWithRetry(port)
 					if err != nil {
 						log.Fatal().Msgf("Failed to create client after %d attempts: %v", maxRetries, err)
 					}
@@ -221,8 +220,10 @@ func startHelper(ctx context.Context, startChroot bool) {
 				log.Error().Err(err).Msg("Error reading cedana-daemon.log")
 				return
 			}
-			if len(line) > 0 {
-				log.Info().Msg(line)
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 {
+				// we don't use the log function as the logs should have their own timing data
+				fmt.Println(trimmed)
 			}
 		}
 	}()
@@ -230,12 +231,12 @@ func startHelper(ctx context.Context, startChroot bool) {
 	select {}
 }
 
-func createClientWithRetry() (*services.ServiceClient, error) {
+func createClientWithRetry(port uint32) (*services.ServiceClient, error) {
 	var client *services.ServiceClient
 	var err error
 
 	for i := 0; i < maxRetries; i++ {
-		client, err = services.NewClient()
+		client, err = services.NewClient(port)
 		if err == nil {
 			// Successfully created the client, break out of the loop
 			break
@@ -292,16 +293,13 @@ func startDaemon(startChroot bool) error {
 	return nil
 }
 
-func isProcessRunning() (bool, error) {
-	// TODO: Dial API is deprecated in favour of NewClient since early 2024, will be removed soon
-	// Note: NewClient defaults to idle state for connection rather than automatically trying to
-	// connect in the background
-	conn, err := grpc.Dial(api.ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func isCedanaDaemonRunning(ctx context.Context, port uint32) (bool, error) {
+	conn, err := services.NewClient(port)
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	return true, nil
+	return conn.HealthCheck(ctx)
 }
 
 func init() {

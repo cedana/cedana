@@ -23,7 +23,10 @@ var showCmd = &cobra.Command{
 	Short: "show config that the daemon is running with",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
-		cts, err := services.NewClient()
+
+		port, _ := cmd.Flags().GetUint32(portFlag)
+
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err

@@ -237,7 +237,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	state.JobState = task.JobState_JOB_RUNNING
 	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to update state after run")
+		log.Error().Err(err).Msg("failed to update state after run")
 		syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
 		return nil, status.Error(codes.Internal, "failed to update state after run")
 	}
@@ -252,7 +252,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		state.JobState = task.JobState_JOB_DONE
 		err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to update state after done")
+			log.Error().Err(err).Msg("failed to update state after done")
 			return nil, status.Error(codes.Internal, "failed to update state after done")
 		}
 	} else {
@@ -263,7 +263,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to update state after done")
+				log.Error().Err(err).Msg("failed to update state after done")
 				return
 			}
 		}()
@@ -361,7 +361,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		state.JobState = task.JobState_JOB_RUNNING
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to update state after restore")
+			log.Error().Err(err).Msg("failed to update state after restore")
 			syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
 			return nil, status.Error(codes.Internal, "failed to update state after restore")
 		}
@@ -376,7 +376,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to update state after done")
+				log.Error().Err(err).Msg("failed to update state after done")
 				return nil, status.Error(codes.Internal, "failed to update state after done")
 			}
 		} else {
@@ -387,7 +387,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 				state.JobState = task.JobState_JOB_DONE
 				err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 				if err != nil {
-					log.Fatal().Err(err).Msg("failed to update state after done")
+					log.Error().Err(err).Msg("failed to update state after done")
 					return
 				}
 			}()
@@ -417,7 +417,8 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.Bid
 		gpuOut := io.Writer(gpuOutBuf)
 		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
 		if err != nil {
-			return 0, nil, err
+			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
+			return 0, nil, fmt.Errorf("failed to start GPU controller: %v", err)
 		}
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")
@@ -560,7 +561,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.Bid
 		if gpuCmd != nil {
 			err = gpuCmd.Process.Kill()
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to kill GPU controller after process exit")
+				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
 			}
 		}
 		log.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")

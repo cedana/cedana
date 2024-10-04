@@ -62,6 +62,7 @@ jobs:
       debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       skip_bench: true # since benchmark will be run in a separate job below
+      skip_shellcheck: true
 
   build-publish-amd64:
     name: Build & Publish (amd64)
@@ -311,10 +312,10 @@ jobs:
       id-token: 'write'
     runs-on: ubicloud-standard-8
     container:
-      image: ghcr.io/cedana/cedana-bench.ubuntu:latest
+      image: cedana/cedana-bench:ubuntu
       credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
       options: --privileged
     defaults:
       run:

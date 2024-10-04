@@ -3,9 +3,11 @@ package cmd
 // This file contains all the daemon-related commands when starting `cedana daemon ...`
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
@@ -21,14 +23,7 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
-var cudaVersions = map[string]string{
-	"11.8": "cuda11_8",
-	"12.1": "cuda12_1",
-	"12.2": "cuda12_2",
-	"12.4": "cuda12_4",
-}
-
-var vsockEnabledFlag bool
+var DEFAULT_PORT uint32 = 8080
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
@@ -39,25 +34,17 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		_, err := utils.InitOtel(cmd.Context(), rootCmd.Version)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize otel")
-			return err
-		}
-
-		log.Debug().Msg("otel initialized")
-
 		if viper.GetBool("profiling_enabled") {
 			go startProfiler()
 		}
+
+		var err error
+
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
-		// defaults to 11_8, this continues if --cuda is not specified
-		cudaVersion, _ := cmd.Flags().GetString(cudaVersionFlag)
-		if _, ok := cudaVersions[cudaVersion]; !ok {
-			err = fmt.Errorf("invalid cuda version %s, must be one of %v", cudaVersion, cudaVersions)
-			log.Error().Err(err).Msg("invalid cuda version")
-			return err
-		}
+		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
+		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
@@ -66,13 +53,28 @@ var startDaemonCmd = &cobra.Command{
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
+		// poll for otel signoz logging
+		otel_enabled := viper.GetBool("otel_enabled")
+		if otel_enabled {
+			_, err := utils.InitOtel(ctx, rootCmd.Version)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize otel")
+				return err
+			}
+			if metricsEnabled {
+				pollForAsrMetricsReporting(ctx, port)
+			}
+		} else {
+			utils.InitOtelNoop()
+		}
+
 		err = api.StartServer(ctx, &api.ServeOpts{
-			GPUEnabled:   gpuEnabled,
-			CUDAVersion:  cudaVersions[cudaVersion],
-			VSOCKEnabled: vsockEnabledFlag,
-			CedanaURL:    cedanaURL,
-			// TODO(swarnimarun): allow flag to customize the port
-			GrpcPort: 8080,
+			GPUEnabled:        gpuEnabled,
+			VSOCKEnabled:      vsockEnabled,
+			CedanaURL:         cedanaURL,
+			MetricsEnabled:    metricsEnabled,
+			JobServiceEnabled: jobServiceEnabled,
+			Port:              port,
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
@@ -83,11 +85,37 @@ var startDaemonCmd = &cobra.Command{
 	},
 }
 
+func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
+	// polling for ASR
+	go func() {
+		time.Sleep(10 * time.Second)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			log.Error().Msgf("error creating client: %v", err)
+			return
+		}
+		defer cts.Close()
+
+		log.Info().Msg("started polling...")
+		for {
+			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+			if err != nil {
+				log.Error().Msgf("error getting info: %v", err)
+				return
+			}
+			_ = conts
+			time.Sleep(60 * time.Second)
+		}
+	}()
+}
+
 var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if daemon is running and healthy",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cts, err := services.NewClient()
+		port, _ := cmd.Flags().GetUint32(portFlag)
+
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating client")
 			return err
@@ -160,6 +188,7 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
-	startDaemonCmd.Flags().BoolVarP(&vsockEnabledFlag, "kata", "k", false, "start daemon inside Kata VM")
-	startDaemonCmd.Flags().String(cudaVersionFlag, "11.8", "cuda version to use")
+	startDaemonCmd.Flags().Bool(vsockEnabledFlag, false, "start daemon with vsock support")
+	startDaemonCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
+	startDaemonCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
 }

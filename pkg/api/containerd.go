@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -42,7 +43,10 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		return nil, err
 	}
 
-	runcContainer := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+	runcContainer, err := container.GetContainerFromRunc(dumpOpts.ContainerID, dumpOpts.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container from runc: %w", err)
+	}
 
 	tcpPath := fmt.Sprintf("/proc/%v/net/tcp", runcContainer.Pid)
 	getReader := func() (io.Reader, error) {
@@ -123,7 +127,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 
 	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("Runc dump failed")
+		log.Error().Err(err).Msg("Runc dump failed")
 		dumpLogContent, logErr := readDumpLog(dumpOpts.GetCriuOpts().GetImagesDirectory())
 		if logErr != nil {
 			dumpLogContent = "Failed to read dump.log: " + logErr.Error()
