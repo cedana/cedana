@@ -5020,16 +5020,16 @@ type ContainerInfo struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	CpuTime       float64  `protobuf:"fixed64,1,opt,name=CpuTime,proto3" json:"CpuTime,omitempty"`
-	CpuLoadAvg    float64  `protobuf:"fixed64,2,opt,name=CpuLoadAvg,proto3" json:"CpuLoadAvg,omitempty"`
-	MaxMemory     float64  `protobuf:"fixed64,3,opt,name=MaxMemory,proto3" json:"MaxMemory,omitempty"`
-	CurrentMemory float64  `protobuf:"fixed64,4,opt,name=CurrentMemory,proto3" json:"CurrentMemory,omitempty"`
-	NetworkIO     float64  `protobuf:"fixed64,5,opt,name=NetworkIO,proto3" json:"NetworkIO,omitempty"`
-	DiskIO        float64  `protobuf:"fixed64,6,opt,name=DiskIO,proto3" json:"DiskIO,omitempty"`
-	ContainerName string   `protobuf:"bytes,7,opt,name=ContainerName,proto3" json:"ContainerName,omitempty"`
-	DaemonId      string   `protobuf:"bytes,8,opt,name=DaemonId,proto3" json:"DaemonId,omitempty"`
-	Labels        []string `protobuf:"bytes,9,rep,name=Labels,proto3" json:"Labels,omitempty"`
-	Image         string   `protobuf:"bytes,10,opt,name=Image,proto3" json:"Image,omitempty"`
+	CpuTime       float64 `protobuf:"fixed64,1,opt,name=CpuTime,proto3" json:"CpuTime,omitempty"`
+	CpuLoadAvg    float64 `protobuf:"fixed64,2,opt,name=CpuLoadAvg,proto3" json:"CpuLoadAvg,omitempty"`
+	MaxMemory     float64 `protobuf:"fixed64,3,opt,name=MaxMemory,proto3" json:"MaxMemory,omitempty"`
+	CurrentMemory float64 `protobuf:"fixed64,4,opt,name=CurrentMemory,proto3" json:"CurrentMemory,omitempty"`
+	NetworkIO     float64 `protobuf:"fixed64,5,opt,name=NetworkIO,proto3" json:"NetworkIO,omitempty"`
+	DiskIO        float64 `protobuf:"fixed64,6,opt,name=DiskIO,proto3" json:"DiskIO,omitempty"`
+	ContainerName string  `protobuf:"bytes,7,opt,name=ContainerName,proto3" json:"ContainerName,omitempty"`
+	DaemonId      string  `protobuf:"bytes,8,opt,name=DaemonId,proto3" json:"DaemonId,omitempty"`
+	Labels        string  `protobuf:"bytes,9,opt,name=Labels,proto3" json:"Labels,omitempty"`
+	Image         string  `protobuf:"bytes,10,opt,name=Image,proto3" json:"Image,omitempty"`
 }
 
 func (x *ContainerInfo) Reset() {
@@ -5120,11 +5120,11 @@ func (x *ContainerInfo) GetDaemonId() string {
 	return ""
 }
 
-func (x *ContainerInfo) GetLabels() []string {
+func (x *ContainerInfo) GetLabels() string {
 	if x != nil {
 		return x.Labels
 	}
-	return nil
+	return ""
 }
 
 func (x *ContainerInfo) GetImage() string {
@@ -5876,7 +5876,7 @@ var file_task_proto_rawDesc = []byte{
 	0x0d, 0x43, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1a,
 	0x0a, 0x08, 0x44, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x49, 0x64, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09,
 	0x52, 0x08, 0x44, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x49, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x4c, 0x61,
-	0x62, 0x65, 0x6c, 0x73, 0x18, 0x09, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x4c, 0x61, 0x62, 0x65,
+	0x62, 0x65, 0x6c, 0x73, 0x18, 0x09, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x4c, 0x61, 0x62, 0x65,
 	0x6c, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x49, 0x6d, 0x61, 0x67, 0x65, 0x18, 0x0a, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x05, 0x49, 0x6d, 0x61, 0x67, 0x65, 0x22, 0x55, 0x0a, 0x0e, 0x43, 0x6f, 0x6e, 0x74,
 	0x61, 0x69, 0x6e, 0x65, 0x72, 0x73, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x43, 0x0a, 0x0a, 0x63, 0x6f,
