@@ -32,7 +32,6 @@ var ignoreMetrics = container.MetricSet{
 	container.NetworkUdpUsageMetrics:         struct{}{},
 	container.NetworkAdvancedTcpUsageMetrics: struct{}{},
 	container.ProcessSchedulerMetrics:        struct{}{},
-	container.ProcessMetrics:                 struct{}{},
 	container.HugetlbUsageMetrics:            struct{}{},
 	container.ReferencedMemoryMetrics:        struct{}{},
 	container.CPUTopologyMetrics:             struct{}{},
@@ -145,16 +144,12 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
 				ContainerName: name,
-				DaemonId:      SystemIdentifier,
 				// from nanoseconds in uint64 to cputime in float64
-				CpuTime:    float64(c.Cpu.Usage.User) / 1000000000.,
-				CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
-				// from bytes in uin64 to megabytes in float64
-				MaxMemory: float64(c.Memory.MaxUsage) / (1024. * 1024.),
+				CpuTime: float64(c.Cpu.Usage.Total) / 1000000000.,
 				// from bytes in uin64 to megabytes in float64
 				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
-				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
-				DiskIO:        0,
+				NetworkIO:     float64(c.Network.RxBytes + c.Network.TxBytes),
+				DiskIO:        cumulativeDiskIoTime(c.DiskIo.IoTime),
 				Image:         container.Spec.Image,
 				Labels:        labels,
 			}
@@ -162,6 +157,10 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		}
 	}
 	return &ci, nil
+}
+
+func cumulativeDiskIoTime(stats []v1.PerDiskStats) float64 {
+	return 0
 }
 
 var (
