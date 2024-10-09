@@ -54,7 +54,7 @@ var manageRuncCmd = &cobra.Command{
 func init() {
 	// process
 	manageProcessCmd.Flags().Int(pidFlag, 0, "pid")
-	manageRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "runc root")
+	manageProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "runc root")
 	manageCmd.AddCommand(manageProcessCmd)
 
 	// runc
