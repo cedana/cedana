@@ -15,12 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -39,7 +40,7 @@ func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartR
 	return s.startHelper(ctx, args, nil)
 }
 
-func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
+func (s *service) StartAttach(stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -150,7 +151,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	return s.restoreHelper(ctx, args, nil)
 }
 
-func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) error {
+func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -204,7 +205,7 @@ func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryR
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (*task.StartResp, error) {
+func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (*task.StartResp, error) {
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
 	}
@@ -275,7 +276,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	}, err
 }
 
-func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (*task.RestoreResp, error) {
+func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) (*task.RestoreResp, error) {
 	var resp task.RestoreResp
 	var pid int32
 	var err error
@@ -403,7 +404,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	return &resp, nil
 }
 
-func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.TaskService_StartAttachServer) (int32, chan int, error) {
+func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (int32, chan int, error) {
 	var pid int32
 	if args.Task == "" {
 		return 0, nil, fmt.Errorf("could not find task")

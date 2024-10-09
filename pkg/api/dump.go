@@ -15,9 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	"github.com/cedana/cedana/pkg/api/services/rpc"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
+	gpugrpc "buf.build/gen/go/cedana/gpu/grpc/go/_gogrpc"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -55,7 +56,7 @@ type Bundle struct {
 // prepareDump =/= preDump.
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, error) {
+func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *criu.CriuOpts) (string, error) {
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return "", fmt.Errorf("could not get dump stats from context")
@@ -196,8 +197,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	return nil
 }
 
-func (s *service) prepareDumpOpts() *rpc.CriuOpts {
-	opts := rpc.CriuOpts{
+func (s *service) prepareDumpOpts() *criu.CriuOpts {
+	opts := criu.CriuOpts{
 		LogLevel:   proto.Int32(CRIU_DUMP_LOG_LEVEL),
 		LogFile:    proto.String(CRIU_DUMP_LOG_FILE),
 		GhostLimit: proto.Uint32(GHOST_LIMIT),
@@ -429,7 +430,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	}
 	defer gpuConn.Close()
 
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.CheckpointRequest{
 		Directory: dumpdir,

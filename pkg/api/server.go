@@ -23,9 +23,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	gpugrpc "buf.build/gen/go/cedana/gpu/grpc/go/_gogrpc"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go"
+	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
@@ -66,7 +68,7 @@ type service struct {
 
 	jobService *jobservice.JobService
 
-	task.UnimplementedTaskServiceServer
+	taskgrpc.UnimplementedTaskServiceServer
 }
 
 type Server struct {
@@ -143,7 +145,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		jobService:      js,
 	}
 
-	task.RegisterTaskServiceServer(server.grpcServer, service)
+	taskgrpc.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
@@ -336,7 +338,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	}
 	defer gpuConn.Close()
 
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.StartupPollRequest{}
 	waitCtx, _ := context.WithTimeout(ctx, GPU_CONTROLLER_WAIT_TIMEOUT)
@@ -492,7 +494,7 @@ func (s *service) GPUHealthCheck(
 
 	defer gpuConn.Close()
 
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.HealthCheckRequest{}
 	gpuResp, err := gpuServiceConn.HealthCheck(ctx, &args)

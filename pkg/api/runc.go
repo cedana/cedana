@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	container "github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"

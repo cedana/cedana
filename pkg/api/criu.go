@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/cedana/cedana/pkg/api/services/rpc"
+	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
@@ -37,7 +37,7 @@ func (c *Criu) sendAndRecv(reqB []byte, sk *os.File) ([]byte, int, error) {
 	return respB, n, nil
 }
 
-func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
+func (c *Criu) doSwrk(reqType criu.CriuReqType, opts *criu.CriuOpts, nfy *Notify, extraFiles []*os.File) (*criu.CriuResp, error) {
 	valid, _ := c.IsCriuAtLeast(CRIU_VERSION_MIN)
 	if !valid {
 		return nil, fmt.Errorf("CRIU version is too old, must be at least %d", CRIU_VERSION_MIN)
@@ -86,10 +86,10 @@ func SendFile(socket *os.File, file *os.File) error {
 	return err
 }
 
-func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File, features *rpc.CriuFeatures) (*rpc.CriuResp, error) {
-	var resp *rpc.CriuResp
+func (c *Criu) doSwrkWithResp(reqType criu.CriuReqType, opts *criu.CriuOpts, nfy *Notify, extraFiles []*os.File, features *criu.CriuFeatures) (*criu.CriuResp, error) {
+	var resp *criu.CriuResp
 
-	req := rpc.CriuReq{
+	req := criu.CriuReq{
 		Type: &reqType,
 		Opts: opts,
 	}
@@ -135,7 +135,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			return nil, err
 		}
 
-		resp = &rpc.CriuResp{}
+		resp = &criu.CriuResp{}
 		err = proto.Unmarshal(respB[:respS], resp)
 		if err != nil {
 			return nil, err
@@ -147,7 +147,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 		}
 
 		respType := resp.GetType()
-		if respType != rpc.CriuReqType_NOTIFY {
+		if respType != criu.CriuReqType_NOTIFY {
 			break
 		}
 		if nfy == nil {
@@ -184,7 +184,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 			return resp, err
 		}
 
-		req = rpc.CriuReq{
+		req = criu.CriuReq{
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
 		}
@@ -200,22 +200,22 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy *
 }
 
 // Dump dumps a process
-func (c *Criu) Dump(opts *rpc.CriuOpts, nfy *Notify) (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy, nil)
+func (c *Criu) Dump(opts *criu.CriuOpts, nfy *Notify) (*criu.CriuResp, error) {
+	return c.doSwrk(criu.CriuReqType_DUMP, opts, nfy, nil)
 }
 
 // Restore restores a process
-func (c *Criu) Restore(opts *rpc.CriuOpts, nfy *Notify, extraFiles []*os.File) (*rpc.CriuResp, error) {
-	return c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy, extraFiles)
+func (c *Criu) Restore(opts *criu.CriuOpts, nfy *Notify, extraFiles []*os.File) (*criu.CriuResp, error) {
+	return c.doSwrk(criu.CriuReqType_RESTORE, opts, nfy, extraFiles)
 }
 
 func (c *Criu) GetCriuVersion() (int, error) {
-	resp, err := c.doSwrkWithResp(rpc.CriuReqType_VERSION, nil, nil, nil, nil)
+	resp, err := c.doSwrkWithResp(criu.CriuReqType_VERSION, nil, nil, nil, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	if resp.GetType() != rpc.CriuReqType_VERSION {
+	if resp.GetType() != criu.CriuReqType_VERSION {
 		return 0, fmt.Errorf("unexpected CRIU RPC response")
 	}
 

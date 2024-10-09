@@ -6,8 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"golang.org/x/time/rate"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -20,7 +21,7 @@ const (
 )
 
 // This is for the orchestrator
-func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error {
+func (s *service) LogStreaming(stream grpc.BidiStreamingServer[task.LogStreamingResp, task.LogStreamingArgs]) error {
 	limiter := rate.NewLimiter(rate.Every(LOG_STREAMING_RATE_SECONDS), 5)
 	buf := make([]byte, 4096)
 
@@ -50,7 +51,7 @@ func (s *service) LogStreaming(stream task.TaskService_LogStreamingServer) error
 }
 
 // This is for the orchestrator
-func (s *service) ProcessStateStreaming(args *task.ProcessStateStreamingArgs, stream task.TaskService_ProcessStateStreamingServer) error {
+func (s *service) ProcessStateStreaming(args *task.ProcessStateStreamingArgs, stream grpc.ServerStreamingServer[task.ProcessState]) error {
 	// Early return if no JID
 	jid := args.JID
 	state, err := s.getState(context.Background(), jid)

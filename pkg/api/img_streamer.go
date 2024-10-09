@@ -9,7 +9,7 @@ import (
 	"sync"
 	"syscall"
 
-	img_streamer "github.com/cedana/cedana/pkg/api/services/img_streamer"
+	img_streamer "buf.build/gen/go/cedana/img-streamer/protocolbuffers/go"
 	"google.golang.org/protobuf/proto"
 )
 
