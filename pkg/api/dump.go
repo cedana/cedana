@@ -66,9 +66,6 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	// print state object
-	log.Info().Msgf("State: %v", state)
-
 	if state.ProcessInfo != nil {
 		for _, Conn := range state.ProcessInfo.OpenConnections {
 			if Conn.Type == syscall.SOCK_STREAM { // TCP
