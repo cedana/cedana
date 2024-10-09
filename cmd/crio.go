@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -14,13 +15,7 @@ var dumpCRIORootfs = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		id, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
@@ -63,13 +58,7 @@ var pushCRIOImage = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		originalImageRef, err := cmd.Flags().GetString(refFlag)
 		if err != nil {

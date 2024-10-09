@@ -3,6 +3,7 @@ package cmd
 // This file contains all the dump-related commands when starting `cedana dump ...`
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -23,6 +25,20 @@ import (
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var dumpProcessCmd = &cobra.Command{
@@ -31,14 +47,7 @@ var dumpProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -174,24 +183,15 @@ var dumpJobCmd = &cobra.Command{
 	Short: "Manually checkpoint a running job to a directory [-d]",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		id := args[0]
-
 		if id == "" {
 			log.Error().Msgf("no job id specified")
-			return err
+			return fmt.Errorf("no job id specified")
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
@@ -202,6 +202,7 @@ var dumpJobCmd = &cobra.Command{
 				return err
 			}
 		}
+
 		dumpArgs := task.DumpArgs{
 			JID:    id,
 			Dir:    dir,
@@ -235,14 +236,7 @@ var dumpContainerdCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		ref, _ := cmd.Flags().GetString(refFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
@@ -257,11 +251,9 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		root, _ := cmd.Flags().GetString(rootFlag)
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		pid, _ := cmd.Flags().GetInt(pidFlag)
-
 		external, _ := cmd.Flags().GetString(externalFlag)
 
 		var externalNamespaces []string
@@ -286,9 +278,7 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		runcArgs := task.RuncDumpArgs{
-			Root: root,
-			// CheckpointPath: checkpointPath,
-			// FIXME YA: Where does this come from?
+			Root:        getRuncRootPath(root),
 			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
@@ -302,7 +292,7 @@ var dumpContainerdCmd = &cobra.Command{
 			RuncDumpArgs:             &runcArgs,
 		}
 
-		_, err = cts.ContainerdDump(ctx, &dumpArgs)
+		_, err := cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -324,14 +314,7 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		id, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
@@ -384,21 +367,9 @@ var dumpRuncCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		root, _ := cmd.Flags().GetString(rootFlag)
-		if runcRootPath[root] == "" {
-			log.Error().Msgf("container root %s not supported", root)
-			return err
-		}
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
@@ -436,7 +407,7 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root:        runcRootPath[root],
+			Root:        getRuncRootPath(root),
 			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
@@ -505,7 +476,6 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpContainerdCmd.MarkFlagRequired(dirFlag)
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
@@ -525,7 +495,6 @@ func init() {
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
 	dumpRuncCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")

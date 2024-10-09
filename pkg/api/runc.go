@@ -126,7 +126,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_RUNC,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	opts := &container.RuncOpts{
 		Root:          args.GetOpts().GetRoot(),

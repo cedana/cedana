@@ -72,7 +72,6 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 }
 
 func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-
 	var resp task.RestoreResp
 	var pid *int32
 	var err error
@@ -84,7 +83,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_KATA,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	pid, err = s.kataRestore(ctx, args)
 	if err != nil {

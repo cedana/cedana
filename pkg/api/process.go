@@ -283,7 +283,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_PROCESS,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	if args.JID != "" {
 		state, err := s.getState(ctx, args.JID)

@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,20 @@ import (
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var restoreProcessCmd = &cobra.Command{
@@ -31,13 +46,7 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		var uid int32
 		var gid int32
@@ -177,13 +186,7 @@ var restoreJobCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Err(err).Msgf("error creating client")
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		var uid int32
 		var gid int32
@@ -288,13 +291,7 @@ var containerdRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
@@ -325,25 +322,15 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		root, err := cmd.Flags().GetString(rootFlag)
-		if runcRootPath[root] == "" {
-			log.Error().Msgf("container root %s not supported", root)
-			return err
-		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		opts := &task.RuncOpts{
-			Root:          runcRootPath[root],
+			Root:          getRuncRootPath(root),
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detach:        detach,
