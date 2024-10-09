@@ -67,13 +67,15 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	for _, Conn := range state.ProcessInfo.OpenConnections {
-		if Conn.Type == syscall.SOCK_STREAM { // TCP
-			hasTCP = true
-		}
+	if state.ProcessInfo != nil {
+		for _, Conn := range state.ProcessInfo.OpenConnections {
+			if Conn.Type == syscall.SOCK_STREAM { // TCP
+				hasTCP = true
+			}
 
-		if Conn.Type == syscall.AF_UNIX { // Interprocess
-			hasExtUnixSocket = true
+			if Conn.Type == syscall.AF_UNIX { // Interprocess
+				hasExtUnixSocket = true
+			}
 		}
 	}
 
@@ -85,10 +87,12 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
 	var isShellJob bool
-	for _, f := range state.ProcessInfo.OpenFds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-			break
+	if state.ProcessInfo != nil {
+		for _, f := range state.ProcessInfo.OpenFds {
+			if strings.Contains(f.Path, "pts") {
+				isShellJob = true
+				break
+			}
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
