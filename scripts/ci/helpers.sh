@@ -15,6 +15,8 @@ APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
     zip
 "
 
+chmod 1777 /tmp
+
 install_apt_packages() {
     apt-get update
     for pkg in $APT_PACKAGES; do
@@ -27,10 +29,15 @@ install_code_server() {
 }
 
 install_bats_core() {
-    git clone https://github.com/bats-core/bats-core.git
-    pushd bats-core
-    ./install.sh /usr/local
-    popd && rm -rf bats-core
+    if ! command -v bats &> /dev/null; then
+        git clone https://github.com/bats-core/bats-core.git
+        pushd bats-core
+        ./install.sh /usr/local
+        popd && rm -rf bats-core
+    else
+        installed_version=`bats -v`
+        echo "BATS installed: $installed_version"
+    fi
 }
 
 install_docker() {
@@ -68,9 +75,33 @@ install_crictl() {
 }
 
 install_otelcol_contrib() {
-    wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
+    if [ ! -f otelcol-contrib_0.94.0_linux_amd64.deb ]; then
+        wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.94.0/otelcol-contrib_0.94.0_linux_amd64.deb
+    fi
     dpkg-deb -x otelcol-contrib_0.94.0_linux_amd64.deb extracted/ && cp extracted/usr/bin/otelcol-contrib /usr/bin/otelcol-contrib
 }
+
+# Function to compare Go versions
+compare_versions() {
+    printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1
+}
+
+install_golang() {
+    if ! command -v go &> /dev/null; then
+        echo "Golang is not installed. Installing Go 1.22.6..."
+        wget https://go.dev/dl/go1.22.6.linux-amd64.tar.gz
+        sudo tar -C /usr/local -xzf go1.22.6.linux-amd64.tar.gz
+        
+        # Set GOPATH and update PATH
+        echo "export GOPATH=$HOME/go" >> /etc/environment
+        echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
+        echo "Go 1.22.6 installed successfully."
+    else
+        installed_version=`go version`
+        echo "Installed Go version: $installed_version"
+    fi
+}
+
 print_header() {
     echo "############### $1 ###############"
 }
@@ -108,38 +139,49 @@ print_env() {
 setup_ci_build() {
     # only CI steps needed for building
     [ -n "$SKIP_CI_SETUP" ] && return
+    print_header "Installing APT Packages"
     install_apt_packages
+
+    print_header "Installing Golang"
+    install_golang
 }
 
 setup_ci() {
     setup_ci_build
+    print_header "Installing the VS Code Server"
     install_code_server
+
+    print_header "Installing the BATS Core"
     install_bats_core
 
+    print_header "Installing Docker"
     install_docker
+
+    print_header "Installing Sysbox"
     install_sysbox
+
+    print_header "Installing OpenTelemetry Collector"
     install_otelcol_contrib
+
+    print_header "Installing buildah"
     install_buildah
+
+    print_header "Installing Crictl"
     install_crictl
 
-    wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-    tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
     mkdir -p $HOME/.cedana
     echo '{"client":{"leave_running":false, "task":""}, "connection":{"cedana_url": "https://ci.cedana.ai"}}' > $HOME/.cedana/client_config.json
 
-    # Install recvtty
+    print_header "Installing recvtty"
     go install github.com/opencontainers/runc/contrib/cmd/recvtty@latest
 
-    # Set GOPATH and update PATH
-    echo "export GOPATH=$HOME/go" >> /etc/environment
-    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$GOPATH/bin" >> /etc/environment
     echo "export CEDANA_URL=https://ci.cedana.ai" >> /etc/environment
 
-    # Install CRIU
+    print_header "Installing CRIU"
     sudo add-apt-repository -y ppa:criu/ppa
     sudo apt-get update && sudo apt-get install -y criu
 
-    # Install smoke & bench deps
+    print_header "Installing python dependencies for benchmark and smoke"
     sudo pip3 install -r test/benchmarks/requirements
 }
 
