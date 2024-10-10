@@ -58,6 +58,18 @@ function start_sleeping_jupyter_notebook(){
     sudo ctr run -d "$image_ref" "$container_name" sh -c 'while true; do sleep 3600; done'
 }
 
+function queue_rootfs_checkpoint() {
+    local container_id="$1"
+    local image_ref="$2"
+    local namespace="$3"
+
+    cedana queue checkpoint --name "$container_id" --image "$image_ref" --ns "$namespace"
+}
+
+function queue_wait_for_success() {
+    cedana queue wait --status success $@
+}
+
 function rootfs_checkpoint() {
     local container_id="$1"
     local image_ref="$2"
