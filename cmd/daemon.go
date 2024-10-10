@@ -89,28 +89,7 @@ var startDaemonCmd = &cobra.Command{
 
 func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 	// polling for ASR
-	go func() {
-		time.Sleep(10 * time.Second)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("error creating client: %v", err)
-			return
-		}
-		defer cts.Close()
-
-		log.Info().Msg("started polling...")
-		for {
-			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
-			if err != nil {
-				log.Error().Msgf("error getting info: %v", err)
-				return
-			}
-			_ = conts
-			time.Sleep(60 * time.Second)
-		}
-	}()
-
-	// pub-sub reporting
+	// and pub-sub reporting
 	go func() {
 		time.Sleep(10 * time.Second)
 		// Create a Pub/Sub client
