@@ -109,7 +109,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	}
 	state.JobState = task.JobState_JOB_RUNNING
 
-	isUsingTCP, err := CheckTCPConnections(pid)
+	isUsingTCP, err := utils.CheckTCPConnections(pid)
 	if err != nil {
 		return nil, err
 	}

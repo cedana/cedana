@@ -648,7 +648,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer s.wg.Done()
 				defer out.Close()
 				for stdoutScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stdout")
 						return
 					}
@@ -664,7 +664,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer s.wg.Done()
 				defer er.Close()
 				for stderrScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stderr")
 						return
 					}

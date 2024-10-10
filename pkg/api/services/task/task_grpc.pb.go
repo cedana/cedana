@@ -61,14 +61,14 @@ type TaskServiceClient interface {
 	// Managed Job
 	JobDump(ctx context.Context, in *JobDumpArgs, opts ...grpc.CallOption) (*JobDumpResp, error)
 	JobRestore(ctx context.Context, in *JobRestoreArgs, opts ...grpc.CallOption) (*JobRestoreResp, error)
-	JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp], error)
+	JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error)
 	JobQuery(ctx context.Context, in *JobQueryArgs, opts ...grpc.CallOption) (*JobQueryResp, error)
 	// Process
 	Start(ctx context.Context, in *StartArgs, opts ...grpc.CallOption) (*StartResp, error)
-	StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error)
+	StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error)
 	Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
-	RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error)
+	RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error)
 	Manage(ctx context.Context, in *ManageArgs, opts ...grpc.CallOption) (*ManageResp, error)
 	// Containerd
 	ContainerdDump(ctx context.Context, in *ContainerdDumpArgs, opts ...grpc.CallOption) (*ContainerdDumpResp, error)
@@ -131,18 +131,18 @@ func (c *taskServiceClient) JobRestore(ctx context.Context, in *JobRestoreArgs, 
 	return out, nil
 }
 
-func (c *taskServiceClient) JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp], error) {
+func (c *taskServiceClient) JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_JobRestoreAttach_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[JobRestoreAttachArgs, JobRestoreAttachResp]{ClientStream: stream}
+	x := &grpc.GenericClientStream[AttachArgs, AttachResp]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_JobRestoreAttachClient = grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp]
+type TaskService_JobRestoreAttachClient = grpc.BidiStreamingClient[AttachArgs, AttachResp]
 
 func (c *taskServiceClient) JobQuery(ctx context.Context, in *JobQueryArgs, opts ...grpc.CallOption) (*JobQueryResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -164,18 +164,18 @@ func (c *taskServiceClient) Start(ctx context.Context, in *StartArgs, opts ...gr
 	return out, nil
 }
 
-func (c *taskServiceClient) StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error) {
+func (c *taskServiceClient) StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], TaskService_StartAttach_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[StartAttachArgs, StartAttachResp]{ClientStream: stream}
+	x := &grpc.GenericClientStream[AttachArgs, AttachResp]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_StartAttachClient = grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp]
+type TaskService_StartAttachClient = grpc.BidiStreamingClient[AttachArgs, AttachResp]
 
 func (c *taskServiceClient) Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -197,18 +197,18 @@ func (c *taskServiceClient) Restore(ctx context.Context, in *RestoreArgs, opts .
 	return out, nil
 }
 
-func (c *taskServiceClient) RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error) {
+func (c *taskServiceClient) RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachArgs, AttachResp], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[2], TaskService_RestoreAttach_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[RestoreAttachArgs, RestoreAttachResp]{ClientStream: stream}
+	x := &grpc.GenericClientStream[AttachArgs, AttachResp]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_RestoreAttachClient = grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp]
+type TaskService_RestoreAttachClient = grpc.BidiStreamingClient[AttachArgs, AttachResp]
 
 func (c *taskServiceClient) Manage(ctx context.Context, in *ManageArgs, opts ...grpc.CallOption) (*ManageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -459,14 +459,14 @@ type TaskServiceServer interface {
 	// Managed Job
 	JobDump(context.Context, *JobDumpArgs) (*JobDumpResp, error)
 	JobRestore(context.Context, *JobRestoreArgs) (*JobRestoreResp, error)
-	JobRestoreAttach(grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]) error
+	JobRestoreAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error
 	JobQuery(context.Context, *JobQueryArgs) (*JobQueryResp, error)
 	// Process
 	Start(context.Context, *StartArgs) (*StartResp, error)
-	StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error
+	StartAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error
 	Dump(context.Context, *DumpArgs) (*DumpResp, error)
 	Restore(context.Context, *RestoreArgs) (*RestoreResp, error)
-	RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error
+	RestoreAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error
 	Manage(context.Context, *ManageArgs) (*ManageResp, error)
 	// Containerd
 	ContainerdDump(context.Context, *ContainerdDumpArgs) (*ContainerdDumpResp, error)
@@ -515,7 +515,7 @@ func (UnimplementedTaskServiceServer) JobDump(context.Context, *JobDumpArgs) (*J
 func (UnimplementedTaskServiceServer) JobRestore(context.Context, *JobRestoreArgs) (*JobRestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobRestore not implemented")
 }
-func (UnimplementedTaskServiceServer) JobRestoreAttach(grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]) error {
+func (UnimplementedTaskServiceServer) JobRestoreAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error {
 	return status.Errorf(codes.Unimplemented, "method JobRestoreAttach not implemented")
 }
 func (UnimplementedTaskServiceServer) JobQuery(context.Context, *JobQueryArgs) (*JobQueryResp, error) {
@@ -524,7 +524,7 @@ func (UnimplementedTaskServiceServer) JobQuery(context.Context, *JobQueryArgs) (
 func (UnimplementedTaskServiceServer) Start(context.Context, *StartArgs) (*StartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
 }
-func (UnimplementedTaskServiceServer) StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error {
+func (UnimplementedTaskServiceServer) StartAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error {
 	return status.Errorf(codes.Unimplemented, "method StartAttach not implemented")
 }
 func (UnimplementedTaskServiceServer) Dump(context.Context, *DumpArgs) (*DumpResp, error) {
@@ -533,7 +533,7 @@ func (UnimplementedTaskServiceServer) Dump(context.Context, *DumpArgs) (*DumpRes
 func (UnimplementedTaskServiceServer) Restore(context.Context, *RestoreArgs) (*RestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
 }
-func (UnimplementedTaskServiceServer) RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error {
+func (UnimplementedTaskServiceServer) RestoreAttach(grpc.BidiStreamingServer[AttachArgs, AttachResp]) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreAttach not implemented")
 }
 func (UnimplementedTaskServiceServer) Manage(context.Context, *ManageArgs) (*ManageResp, error) {
@@ -663,11 +663,11 @@ func _TaskService_JobRestore_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _TaskService_JobRestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskServiceServer).JobRestoreAttach(&grpc.GenericServerStream[JobRestoreAttachArgs, JobRestoreAttachResp]{ServerStream: stream})
+	return srv.(TaskServiceServer).JobRestoreAttach(&grpc.GenericServerStream[AttachArgs, AttachResp]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_JobRestoreAttachServer = grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]
+type TaskService_JobRestoreAttachServer = grpc.BidiStreamingServer[AttachArgs, AttachResp]
 
 func _TaskService_JobQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(JobQueryArgs)
@@ -706,11 +706,11 @@ func _TaskService_Start_Handler(srv interface{}, ctx context.Context, dec func(i
 }
 
 func _TaskService_StartAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskServiceServer).StartAttach(&grpc.GenericServerStream[StartAttachArgs, StartAttachResp]{ServerStream: stream})
+	return srv.(TaskServiceServer).StartAttach(&grpc.GenericServerStream[AttachArgs, AttachResp]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_StartAttachServer = grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]
+type TaskService_StartAttachServer = grpc.BidiStreamingServer[AttachArgs, AttachResp]
 
 func _TaskService_Dump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DumpArgs)
@@ -749,11 +749,11 @@ func _TaskService_Restore_Handler(srv interface{}, ctx context.Context, dec func
 }
 
 func _TaskService_RestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskServiceServer).RestoreAttach(&grpc.GenericServerStream[RestoreAttachArgs, RestoreAttachResp]{ServerStream: stream})
+	return srv.(TaskServiceServer).RestoreAttach(&grpc.GenericServerStream[AttachArgs, AttachResp]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_RestoreAttachServer = grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]
+type TaskService_RestoreAttachServer = grpc.BidiStreamingServer[AttachArgs, AttachResp]
 
 func _TaskService_Manage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ManageArgs)

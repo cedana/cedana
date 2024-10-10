@@ -76,6 +76,92 @@ var restoreProcessCmd = &cobra.Command{
 	},
 }
 
+var restoreJobCmd = &cobra.Command{
+	Use:   "job",
+	Short: "Manually restore a previously dumped process or container from an input id",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+
+		jid := args[0]
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
+
+		restoreArgs := &task.JobRestoreArgs{
+			JID:    jid,
+			Stream: stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
+		}
+
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+		if attach {
+			stream, err := cts.JobRestoreAttach(ctx, &task.AttachArgs{Args: &task.AttachArgs_JobRestoreArgs{JobRestoreArgs: restoreArgs}})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					log.Error().Err(st.Err()).Msg("restore failed")
+				} else {
+					log.Error().Err(err).Msg("restore failed")
+				}
+				return err
+			}
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						log.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.AttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						log.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
+		}
+
+		resp, err := cts.JobRestore(ctx, restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+			} else {
+				log.Error().Err(err).Msgf("Failed")
+			}
+			return err
+		}
+		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
+
+		return nil
+	},
+}
+
 var restoreKataCmd = &cobra.Command{
 	Use:   "kata",
 	Short: "Manually restore a workload in the kata-vm [vm-name] from a directory [-d]",
@@ -154,91 +240,6 @@ var restoreKataCmd = &cobra.Command{
 			return err
 		}
 		log.Info().Msgf("Response: %v", resp.Message)
-
-		return nil
-	},
-}
-
-var restoreJobCmd = &cobra.Command{
-	Use:   "job",
-	Short: "Manually restore a previously dumped process or container from an input id",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
-
-		jid := args[0]
-		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
-
-		restoreArgs := task.JobRestoreArgs{
-			JID:    jid,
-			Stream: stream,
-			CriuOpts: &task.CriuOpts{
-				TcpEstablished: tcpEstablished,
-			},
-		}
-
-		attach, _ := cmd.Flags().GetBool(attachFlag)
-		if attach {
-			stream, err := cts.JobRestoreAttach(ctx, &task.JobRestoreAttachArgs{Args: &restoreArgs})
-			if err != nil {
-				st, ok := status.FromError(err)
-				if ok {
-					log.Error().Err(st.Err()).Msg("restore failed")
-				} else {
-					log.Error().Err(err).Msg("restore failed")
-				}
-			}
-
-			// Handler stdout, stderr
-			exitCode := make(chan int)
-			go func() {
-				for {
-					resp, err := stream.Recv()
-					if err != nil {
-						log.Error().Err(err).Msg("stream ended")
-						exitCode <- 1
-						return
-					}
-					if resp.Stdout != "" {
-						fmt.Print(resp.Stdout)
-					} else if resp.Stderr != "" {
-						fmt.Fprint(os.Stderr, resp.Stderr)
-					} else {
-						exitCode <- int(resp.GetExitCode())
-						return
-					}
-				}
-			}()
-
-			// Handle stdin
-			go func() {
-				scanner := bufio.NewScanner(os.Stdin)
-				for scanner.Scan() {
-					if err := stream.Send(&task.JobRestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
-						log.Error().Err(err).Msg("error sending stdin")
-						return
-					}
-				}
-			}()
-
-			os.Exit(<-exitCode)
-
-			// TODO: Add signal handling properly
-		}
-
-		resp, err := cts.JobRestore(ctx, &restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
-			} else {
-				log.Error().Err(err).Msgf("Failed")
-			}
-			return err
-		}
-		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},

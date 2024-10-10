@@ -43,7 +43,7 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 	if err != nil {
 		return err
 	}
-	args := in.GetArgs()
+	args := in.GetStartArgs()
 
 	_, err = s.startHelper(stream.Context(), args, stream)
 	return err
@@ -89,22 +89,8 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
-
-			sharedLibPath := viper.GetString("gpu_shared_lib_path")
-			if sharedLibPath == "" {
-				sharedLibPath = utils.GpuSharedLibPath
-			}
-			if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
-				return nil, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
-			}
 		}
 		state.GPU = true
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		err = status.Error(codes.Internal, "failed to update state")
-		return nil, err
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
@@ -150,9 +136,15 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				Str("out/err", gpuOutBuf.String()).
 				Msg("GPU controller exited")
 
-				// Should kill process if still running since GPU controller might have exited prematurely
+			// Should kill process if still running since GPU controller might have exited prematurely
 			syscall.Kill(int(state.PID), syscall.SIGKILL)
 		}()
+	}
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		err = status.Error(codes.Internal, "failed to update state")
+		return nil, err
 	}
 
 	return &task.ManageResp{Message: "success", State: state}, nil
@@ -254,7 +246,7 @@ func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) err
 	if err != nil {
 		return err
 	}
-	args := in.GetArgs()
+	args := in.GetRestoreArgs()
 
 	_, err = s.restoreHelper(stream.Context(), args, stream)
 	return err
@@ -307,7 +299,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	if stream != nil && exitCode != nil {
 		code := <-exitCode // if streaming, wait for process to finish
 		if stream != nil {
-			stream.Send(&task.StartAttachResp{
+			stream.Send(&task.AttachResp{
 				ExitCode: int32(code),
 			})
 		}
@@ -436,7 +428,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if stream != nil && exitCode != nil {
 			code := <-exitCode // if streaming, wait for process to finish
 			if stream != nil {
-				stream.Send(&task.RestoreAttachResp{
+				stream.Send(&task.AttachResp{
 					ExitCode: int32(code),
 				})
 			}
@@ -574,7 +566,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stdoutPipe.Close()
 			for stdoutScanner.Scan() {
-				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+				if err := stream.Send(&task.AttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
 					log.Error().Err(err).Msg("failed to send stdout")
 					return
 				}
@@ -595,7 +587,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stderrPipe.Close()
 			for stderrScanner.Scan() {
-				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+				if err := stream.Send(&task.AttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
 					log.Error().Err(err).Msg("failed to send stderr")
 					return
 				}

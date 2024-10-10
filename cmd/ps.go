@@ -28,7 +28,7 @@ var psCmd = &cobra.Command{
 		defer cts.Close()
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Job ID", "PID", "Status", "Checkpoint", "GPU?"})
+		table.SetHeader([]string{"Job ID", "Type", "PID", "Status", "Checkpoint", "GPU?"})
 
 		resp, err := cts.JobQuery(ctx, &task.JobQueryArgs{}) // get all processes
 		if err != nil {
@@ -53,8 +53,14 @@ var psCmd = &cobra.Command{
 			status = v.JobState.String()
 			pid := strconv.Itoa(int(v.PID))
 			gpu := strconv.FormatBool(v.GPU)
+			var typ string
+			if v.ContainerID == "" {
+				typ = "process"
+			} else {
+				typ = "runc"
+			}
 
-			table.Append([]string{v.JID, pid, status, checkpoint, gpu})
+			table.Append([]string{v.JID, typ, pid, status, checkpoint, gpu})
 		}
 
 		table.Render()

@@ -88,7 +88,7 @@ var execTaskCmd = &cobra.Command{
 		}
 
 		if attach {
-			stream, err := cts.StartAttach(ctx, &task.StartAttachArgs{Args: taskArgs})
+			stream, err := cts.StartAttach(ctx, &task.AttachArgs{Args: &task.AttachArgs_StartArgs{StartArgs: taskArgs}})
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
@@ -123,7 +123,7 @@ var execTaskCmd = &cobra.Command{
 			go func() {
 				scanner := bufio.NewScanner(os.Stdin)
 				for scanner.Scan() {
-					if err := stream.Send(&task.StartAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("error sending stdin")
 						return
 					}

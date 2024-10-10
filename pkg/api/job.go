@@ -54,11 +54,9 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 	// Check if normal process or container
 	if state.ContainerID == "" {
 		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
-			JID:            args.JID,
-			CheckpointID:   args.CheckpointID,
-			CheckpointPath: args.CheckpointPath,
-			Stream:         args.Stream,
-			CriuOpts:       args.CriuOpts,
+			JID:      args.JID,
+			Stream:   args.Stream,
+			CriuOpts: args.CriuOpts,
 		})
 		if err != nil {
 			return nil, err
@@ -71,6 +69,34 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 	}
 
 	return res, nil
+}
+
+func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServer) error {
+	in, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	args := in.GetJobRestoreArgs()
+
+	state, err := s.getState(stream.Context(), args.JID)
+	if err != nil {
+		err = status.Error(codes.NotFound, err.Error())
+		return err
+	}
+
+	// Check if normal process or container
+	if state.ContainerID == "" {
+		_, err = s.restoreHelper(stream.Context(), &task.RestoreArgs{
+			JID:      args.JID,
+			Stream:   args.Stream,
+			CriuOpts: args.CriuOpts,
+			Type:     args.Type,
+		}, stream)
+	} else {
+		err = status.Error(codes.Unimplemented, "restore attach for runc is not supported")
+	}
+
+	return err
 }
 
 func (s *service) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
