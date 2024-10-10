@@ -92,12 +92,11 @@ func WaitForPid(pid int32) chan int {
 				exitCh <- -1
 				return
 			}
-			status, err := p.Status()
+			_, err = p.Status()
 			if err != nil {
 				exitCh <- -1
 				return
 			}
-			fmt.Printf("%v", status)
 			time.Sleep(200 * time.Millisecond)
 		}
 	}()
