@@ -247,7 +247,6 @@ var dumpContainerdCmd = &cobra.Command{
 		root, _ := cmd.Flags().GetString(rootFlag)
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
-		pid, _ := cmd.Flags().GetInt(pidFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
 
 		var externalNamespaces []string
@@ -273,7 +272,6 @@ var dumpContainerdCmd = &cobra.Command{
 
 		runcArgs := task.RuncDumpArgs{
 			Root:        getRuncRootPath(root),
-			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
@@ -367,7 +365,6 @@ var dumpRuncCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
-		pid, _ := cmd.Flags().GetInt(pidFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -402,7 +399,6 @@ var dumpRuncCmd = &cobra.Command{
 
 		dumpArgs := task.RuncDumpArgs{
 			Root:        getRuncRootPath(root),
-			Pid:         int32(pid),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 		}
@@ -443,17 +439,6 @@ func init() {
 	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 
 	// Containerd
-	// ref, _ := cmd.Flags().GetString(imgFlag)
-	// id, _ := cmd.Flags().GetString(idFlag)
-	// address, _ := cmd.Flags().GetString(addressFlag)
-	// namespace, _ := cmd.Flags().GetString(namespaceFlag)
-
-	// Runc
-	// dir, _ := cmd.Flags().GetString(dirFlag)
-	// wdPath, _ := cmd.Flags().GetString(wdFlag)
-	// pid, _ := cmd.Flags().GetInt(pidFlag)
-	// external, _ := cmd.Flags().GetString(externalFlag)
-
 	dumpCmd.AddCommand(dumpContainerdCmd)
 	dumpContainerdCmd.Flags().String(idFlag, "", "container id")
 	dumpContainerdCmd.Flags().String(refFlag, "", "image ref")
@@ -463,7 +448,6 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
 
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
@@ -481,7 +465,6 @@ func init() {
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpRuncCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")

@@ -125,7 +125,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		TCPInFlight:     !isReady,
 	}
 
-	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
+	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, pid, criuOpts, state)
 	if err != nil {
 		log.Error().Err(err).Msg("Runc dump failed")
 		dumpLogContent, logErr := readDumpLog(dumpOpts.GetCriuOpts().GetImagesDirectory())

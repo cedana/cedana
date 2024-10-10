@@ -361,10 +361,33 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return fmt.Errorf("could not get restore stats from context")
 	}
 
+	isManagedJob := false
+	_, err := s.getState(ctx, containerId) // as container ID is used as JID for runc containers
+	if err == nil {
+		isManagedJob = true
+	}
+
+	dir := imgPath
+
+	state, err := deserializeStateFromDir(dir, false)
+
+	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
+
+	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
+	if state.GPU {
+		var err error
+		gpuCmd, err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+		if err != nil {
+			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
+		}
+		return err
+	}
+
 	bundle := Bundle{Bundle: opts.Bundle}
 
 	isPodman := checkIfPodman(bundle)
-
+	// XXX YA: Podman should not be a concern of runc level functions, as it's higher level
 	if isPodman {
 		var spec specs.Spec
 		parts := strings.Split(opts.Bundle, "/")
@@ -411,7 +434,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = newBundle + "/userdata"
 	}
 
-	err := container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
 		return err
 	}
@@ -422,6 +445,56 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 				log.Error().Err(err).Send()
 			}
 		}()
+	}
+
+	if isManagedJob {
+		// Wait for server shutdown to gracefully exit, since job is now managed
+		// Wait for process exit, to update state, and clean up GPU controller
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			select {
+			case <-s.serverCtx.Done():
+				<-s.serverCtx.Done()
+				log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
+				err := syscall.Kill(int(state.PID), syscall.SIGKILL)
+				if err != nil {
+					log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process")
+				}
+			case <-utils.WaitForPid(state.PID):
+				log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
+			}
+			state.JobState = task.JobState_JOB_DONE
+			err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to update state after done")
+			}
+			if gpuCmd != nil {
+				err = gpuCmd.Process.Kill()
+				if err != nil {
+					log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
+				}
+			}
+		}()
+
+		// Clean up GPU controller and also handle premature exit
+		if gpuCmd != nil {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				err := gpuCmd.Wait()
+				if err != nil {
+					log.Debug().Err(err).Msg("GPU controller Wait()")
+				}
+				log.Info().Int("PID", gpuCmd.Process.Pid).
+					Int("status", gpuCmd.ProcessState.ExitCode()).
+					Str("out/err", gpuOutBuf.String()).
+					Msg("GPU controller exited")
+
+				// Should kill process if still running since GPU controller might have exited prematurely
+				syscall.Kill(int(state.PID), syscall.SIGKILL)
+			}()
+		}
 	}
 
 	elapsed := time.Since(start)
@@ -594,7 +667,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
 
-	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
+	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,

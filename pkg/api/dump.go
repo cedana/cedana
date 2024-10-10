@@ -229,6 +229,13 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 		crPid = runcContainer.Pid
 	}
 
+	if state.GPU {
+		err = s.gpuDump(ctx, opts.ImagesDirectory)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
 	if err != nil {
 		log.Error().Err(err).Send()

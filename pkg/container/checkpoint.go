@@ -1599,12 +1599,6 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot str
 		return errors.New("invalid directory to save checkpoint")
 	}
 
-	// Since a container can be C/R'ed multiple times,
-	// the checkpoint directory may already exist.
-	if err := os.Mkdir(criuOpts.ImagesDirectory, 0o777); err != nil && !os.IsExist(err) {
-		return err
-	}
-
 	imageDir, err := os.Open(criuOpts.ImagesDirectory)
 	if err != nil {
 		return err

@@ -36,7 +36,20 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.UploadID = dumpResp.UploadID
 		res.Message = dumpResp.Message
 	} else {
-		// Runc
+		dumpResp, err := s.RuncDump(ctx, &task.RuncDumpArgs{
+			Root:        state.ContainerRoot,
+			ContainerID: state.ContainerID,
+			CriuOpts:    args.CriuOpts,
+			Type:        args.Type,
+		})
+		if err != nil {
+			return nil, err
+		}
+		res.State = dumpResp.State
+		res.DumpStats = dumpResp.DumpStats
+		res.CheckpointID = dumpResp.CheckpointID
+		res.UploadID = dumpResp.UploadID
+		res.Message = dumpResp.Message
 	}
 
 	return res, nil

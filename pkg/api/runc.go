@@ -51,6 +51,8 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 		return nil, err
 	}
 	state.JID = args.ContainerID
+	state.ContainerID = args.ContainerID
+	state.ContainerRoot = args.Root
 	state.JobState = task.JobState_JOB_RUNNING
 
 	var gpuCmd *exec.Cmd
@@ -69,7 +71,7 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
-	// Also wait for process exit, to update state
+	// Wait for process exit, to update state, and clean up GPU controller
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -160,7 +162,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
-	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
+	err = s.runcDump(ctx, args.Root, args.ContainerID, pid, criuOpts, state)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed")
 		st.WithDetails(&errdetails.ErrorInfo{
