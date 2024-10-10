@@ -149,7 +149,6 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 				AcceleratorMemory: cumulativeAcceleratorsMem(c.Accelerators),
 				CurrentMemory:     float64(c.Memory.Usage) / (1024. * 1024.),
 				NetworkIO:         float64(c.Network.RxBytes + c.Network.TxBytes),
-				DiskIO:            cumulativeDiskIoTime(c.DiskIo.IoTime),
 				ContainerName:     name,
 				Processes:         strconv.FormatUint(c.Processes.ProcessCount, 10),
 				Labels:            labels,
