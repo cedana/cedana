@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"cloud.google.com/go/pubsub"
 )
 
 var daemonCmd = &cobra.Command{
@@ -87,23 +89,42 @@ var startDaemonCmd = &cobra.Command{
 
 func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 	// polling for ASR
+	// and pub-sub reporting
 	go func() {
 		time.Sleep(10 * time.Second)
-		cts, err := services.NewClient(port)
+		// Create a Pub/Sub client
+		client, err := pubsub.NewClient(ctx, os.Getenv("GOOGLE_CLOUD_PROJECT"))
 		if err != nil {
-			log.Error().Msgf("error creating client: %v", err)
-			return
+			log.Error().Msgf("Failed to create Pub/Sub client: %v", err)
 		}
-		defer cts.Close()
+		defer client.Close()
 
-		log.Info().Msg("started polling...")
+		// Get the topic
+		topic := client.Topic("asr-metrics")
+
 		for {
+			cts, err := services.NewClient(port)
+			if err != nil {
+				log.Error().Msgf("error creating client: %v", err)
+				return
+			}
+			defer cts.Close()
 			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
 			if err != nil {
 				log.Error().Msgf("error getting info: %v", err)
 				return
 			}
-			_ = conts
+			b, err := json.Marshal(conts)
+			// Publish a message
+			result := topic.Publish(ctx, &pubsub.Message{
+				Data: b,
+			})
+			// Get the server-assigned message ID
+			id, err := result.Get(ctx)
+			if err != nil {
+				log.Error().Msgf("Failed to publish message: %v", err)
+			}
+			log.Info().Msgf("Published message with ID: %v\n", id)
 			time.Sleep(60 * time.Second)
 		}
 	}()
