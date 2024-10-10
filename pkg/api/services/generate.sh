@@ -46,4 +46,4 @@ protoc --go_out=task --go_opt=paths=source_relative \
     --go-grpc_opt=Mtask.proto=github.com/cedana/cedana/pkg/api/services/task \
     --experimental_allow_proto3_optional \
     -I$PROTO_DIR \
-    $PROTO_DIR/task.proto
+    $PROTO_DIR/task.proto --experimental_allow_proto3_optional
