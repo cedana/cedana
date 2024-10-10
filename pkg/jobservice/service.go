@@ -1,13 +1,12 @@
 package jobservice
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -40,7 +39,7 @@ func New() (*JobService, error) {
 	config, err := detectConfig()
 	if err != nil {
 		// couldn't figure out runtime
-		return nil, err
+		log.Error().Err(err).Msg("failed to detect config will *require* runtime fields in http requests")
 	}
 
 	js := &JobService{
@@ -90,17 +89,29 @@ func (js *JobService) checkpoint(req string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Info().Msgf("checkpointing (%s) %s %s", cj.PodName, cj.ContainerName, cj.ImageName)
+	log.Info().Msgf("queued checkpoint (%s) %s %s", cj.PodName, cj.ContainerName, cj.ImageName)
 	// check runtime
-	switch js.config.HLRuntime {
+	root := js.config.LLRoot
+	if cj.RuntimeRoot != nil {
+		root = *cj.RuntimeRoot
+	}
+
+	sockAddr := js.config.HLSockAddr
+	if cj.RuntimeSock != nil {
+		root = *cj.RuntimeSock
+	}
+
+	// TODO: fix CRIO support!
+	runtime := js.config.HLRuntime
+	switch runtime {
 	case "crio":
-		res, err := js.crioCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
+		res, err := js.crioCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace, root, sockAddr)
 		if err != nil {
 			return "", err
 		}
 		return res, err
 	case "containerd":
-		res, err := js.containerdCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace)
+		res, err := js.containerdCheckpoint(cj.ContainerName, cj.PodName, cj.ImageName, cj.Namespace, root, sockAddr)
 		if err != nil {
 			return "", err
 		}
@@ -135,20 +146,20 @@ func (jqs *JobService) crioRestore(containerName, sandboxName, source, namespace
 	// TODO: implement this
 }
 
-func (jqs *JobService) crioCheckpoint(containerName, sandboxName, imageName, namespace string) (string, error) {
+func (jqs *JobService) crioCheckpoint(containerName, sandboxName, imageName, namespace, root, sockAddr string) (string, error) {
 	// TODO: implement this
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageName, namespace string) (*task.ContainerdRootfsDumpResp, error) {
-	id, _, err := runc.GetContainerIdByName(containerName, sandboxName, jqs.config.LLRoot)
+func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageName, namespace, root, sockAddr string) (*task.ContainerdRootfsDumpResp, error) {
+	id, _, err := runc.GetContainerIdByName(containerName, sandboxName, root)
 	if err != nil {
 		return nil, err
 	}
 	return containerd.ContainerdRootfsDump(context.Background(), &task.ContainerdRootfsDumpArgs{
 		ContainerID: id,
 		ImageRef:    imageName,
-		Address:     jqs.config.HLSockAddr,
+		Address:     sockAddr,
 		Namespace:   namespace,
 	})
 }
@@ -183,7 +194,7 @@ func (js *JobService) Start(ctx context.Context) error {
 					Status: status,
 					ID:     chk.ID,
 				})
-				err = js.notifyJobQueue(chk.ID, ref, err != nil)
+				err = js.notifyJobQueue("checkpoint", chk.ID, ref, err != nil)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to notify the job scheduler")
 				}
@@ -216,7 +227,7 @@ func (js *JobService) Start(ctx context.Context) error {
 					Status: status,
 					ID:     chk.ID,
 				})
-				err = js.notifyJobQueue(chk.ID, ref, err != nil)
+				err = js.notifyJobQueue("restore", chk.ID, ref, err != nil)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to notify the job scheduler")
 				}
@@ -228,34 +239,17 @@ func (js *JobService) Start(ctx context.Context) error {
 	return nil
 }
 
-func (js *JobService) GetJobQueueUrl() string {
-	return ""
+func getenv(k, d string) string {
+	if v, f := os.LookupEnv(k); f {
+		return v
+	}
+	return d
 }
 
-func (js *JobService) notifyJobQueue(id, ref string, failed bool) error {
-	log.Info().Msgf("Notifing the jobqueue scheduler: (failed: %v)", failed)
-	type JobQueueCallback struct {
-		Id     string `json:"id"`
-		Ref    string `json:"ref"`
-		Failed bool   `json:"failed"`
-	}
-	b, err := json.Marshal(JobQueueCallback{
-		Id:     id,
-		Ref:    ref,
-		Failed: failed,
-	})
-	if err != nil {
-		return err
-	}
-	res, err := http.Post(js.GetJobQueueUrl(), "application/json", bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	if res.StatusCode == 200 {
-		return nil
-	} else {
-		return fmt.Errorf("failed to notify jobqueue")
-	}
+func (js *JobService) GetJobQueueUrl() string {
+	// this requires the cluster dns to be set
+	// hence we need to send it to the JQCallbackSocket
+	return "http://" + getenv("CEDANA_CONTROLLER_SERVICE", "cedana-cedana-helm-manager-service") + ":1324"
 }
 
 func (js *JobService) Restore(c *task.QueueJobRestoreRequest) error {

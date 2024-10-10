@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -226,6 +227,12 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 				fmt.Println(trimmed)
 			}
 		}
+	}()
+
+	log.Info().Msg("Starting notification server")
+	go func() {
+		err := jobservice.NotifyServer(ctx)
+		log.Error().Err(err).Msg("failed to start json rpc notification server")
 	}()
 
 	select {}
