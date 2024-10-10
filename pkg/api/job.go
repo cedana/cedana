@@ -42,6 +42,37 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 	return res, nil
 }
 
+func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*task.JobRestoreResp, error) {
+	res := &task.JobRestoreResp{}
+
+	state, err := s.getState(ctx, args.JID)
+	if err != nil {
+		err = status.Error(codes.NotFound, err.Error())
+		return nil, err
+	}
+
+	// Check if normal process or container
+	if state.ContainerID == "" {
+		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
+			JID:            args.JID,
+			CheckpointID:   args.CheckpointID,
+			CheckpointPath: args.CheckpointPath,
+			Stream:         args.Stream,
+			CriuOpts:       args.CriuOpts,
+		})
+		if err != nil {
+			return nil, err
+		}
+		res.State = restoreResp.State
+		res.RestoreStats = restoreResp.RestoreStats
+		res.Message = restoreResp.Message
+	} else {
+		// Runc
+	}
+
+	return res, nil
+}
+
 func (s *service) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
 	res := &task.JobQueryResp{}
 
