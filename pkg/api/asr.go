@@ -145,12 +145,12 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
 				ContainerName: name,
-				DaemonId:      SystemIdentifier,
+				// DaemonId:      SystemIdentifier,
 				// from nanoseconds in uint64 to cputime in float64
-				CpuTime:    float64(c.Cpu.Usage.User) / 1000000000.,
-				CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
+				CpuTime: float64(c.Cpu.Usage.User) / 1000000000.,
+				// CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
 				// from bytes in uin64 to megabytes in float64
-				MaxMemory: float64(c.Memory.MaxUsage) / (1024. * 1024.),
+				// MaxMemory: float64(c.Memory.MaxUsage) / (1024. * 1024.),
 				// from bytes in uin64 to megabytes in float64
 				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
 				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,

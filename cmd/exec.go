@@ -65,6 +65,12 @@ var execTaskCmd = &cobra.Command{
 		logRedirectFile, _ := cmd.Flags().GetString(logRedirectFlag)
 
 		wd, _ := cmd.Flags().GetString(wdFlag)
+		if wd == "" {
+			wd, err = os.Getwd()
+			if err != nil {
+				return fmt.Errorf("error getting working directory: %v", err)
+			}
+		}
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)

@@ -28,9 +28,9 @@ var psCmd = &cobra.Command{
 		defer cts.Close()
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Job ID", "PID", "Status", "Checkpoint"})
+		table.SetHeader([]string{"Job ID", "PID", "Status", "Checkpoint", "GPU?"})
 
-		resp, err := cts.Query(ctx, &task.QueryArgs{}) // get all processes
+		resp, err := cts.JobQuery(ctx, &task.JobQueryArgs{}) // get all processes
 		if err != nil {
 			log.Error().Err(err).Msgf("error querying processes")
 			return err
@@ -51,10 +51,10 @@ var psCmd = &cobra.Command{
 			}
 
 			status = v.JobState.String()
-
 			pid := strconv.Itoa(int(v.PID))
+			gpu := strconv.FormatBool(v.GPU)
 
-			table.Append([]string{v.JID, pid, status, checkpoint})
+			table.Append([]string{v.JID, pid, status, checkpoint, gpu})
 		}
 
 		table.Render()

@@ -288,13 +288,11 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		}
 	}
 
-	var GPUCheckpointed bool
-	if args.GPU {
+	if state.GPU {
 		err = s.gpuDump(ctx, dumpdir)
 		if err != nil {
 			return err
 		}
-		GPUCheckpointed = true
 	}
 
 	img, err := os.Open(dumpdir)
@@ -332,7 +330,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
-	state.GPUCheckpointed = GPUCheckpointed
 	if !(*opts.LeaveRunning) {
 		state.JobState = task.JobState_JOB_KILLED
 	}

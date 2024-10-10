@@ -67,7 +67,7 @@ func (s *service) setupStreamerServe(dumpdir string) (*exec.Cmd, error) {
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -270,7 +270,7 @@ func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
 
 func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -356,7 +356,7 @@ type linkPairs struct {
 
 func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return fmt.Errorf("could not get restore stats from context")
 	}
@@ -595,10 +595,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	gpuOutBuf := &bytes.Buffer{}
 
 	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
-	if state.GPUCheckpointed {
-		if !s.gpuEnabled {
-			return 0, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
-		}
+	if state.GPU {
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
@@ -806,7 +803,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}

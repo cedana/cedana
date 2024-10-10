@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -53,15 +52,6 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
-	if args.GPU {
-		if s.gpuEnabled == false {
-			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-		}
-		if args.JID == "" {
-			return nil, status.Error(codes.InvalidArgument, "GPU dump is only supported for managed jobs")
-		}
-	}
-
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
 	}
@@ -85,6 +75,9 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	if args.JID != "" { // if job
 		state, err = s.getState(ctx, args.JID)
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
 		if err != nil {
 			err = status.Error(codes.NotFound, err.Error())
 			return nil, err
@@ -161,45 +154,6 @@ func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) err
 	return err
 }
 
-func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
-	res := &task.QueryResp{}
-
-	if len(args.JIDs) > 0 {
-		for _, jid := range args.JIDs {
-			state, err := s.getState(ctx, jid)
-			if err != nil {
-				return nil, status.Error(codes.NotFound, "job not found")
-			}
-			if state != nil {
-				res.Processes = append(res.Processes, state)
-			}
-		}
-	} else {
-		pidSet := make(map[int32]bool)
-		for _, pid := range args.PIDs {
-			pidSet[pid] = true
-		}
-
-		list, err := s.db.ListJobs(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
-		}
-		for _, job := range list {
-			state := task.ProcessState{}
-			err = json.Unmarshal(job.State, &state)
-			if err != nil {
-				return nil, status.Error(codes.Internal, "failed to unmarshal state")
-			}
-			if len(pidSet) > 0 && !pidSet[state.PID] {
-				continue
-			}
-			res.Processes = append(res.Processes, &state)
-		}
-	}
-
-	return res, nil
-}
-
 //////////////////////////
 ///// Process Utils //////
 //////////////////////////
@@ -209,11 +163,14 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		args.Task = viper.GetString("client.task")
 	}
 
-	if args.GPU && s.gpuEnabled == false {
-		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-	}
-
 	state := &task.ProcessState{}
+
+	if args.GPU {
+		if s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+		state.GPU = true
+	}
 
 	if args.JID == "" {
 		state.JID = xid.New().String()
@@ -287,6 +244,9 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	if args.JID != "" {
 		state, err := s.getState(ctx, args.JID)
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
+		}
 		if err != nil {
 			return nil, status.Error(codes.NotFound, "job not found")
 		}
@@ -395,7 +355,6 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	resp = task.RestoreResp{
 		Message:      fmt.Sprintf("successfully restored process: %v", pid),
-		NewPID:       pid,
 		State:        state,
 		RestoreStats: &restoreStats,
 	}

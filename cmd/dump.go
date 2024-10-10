@@ -56,9 +56,6 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-
-		// always self serve when invoked from CLI
-		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
@@ -66,7 +63,6 @@ var dumpProcessCmd = &cobra.Command{
 			PID:    int32(pid),
 			Dir:    dir,
 			Type:   task.CRType_LOCAL,
-			GPU:    gpuEnabled,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
@@ -192,7 +188,6 @@ var dumpJobCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
@@ -206,7 +201,6 @@ var dumpJobCmd = &cobra.Command{
 		dumpArgs := task.DumpArgs{
 			JID:    id,
 			Dir:    dir,
-			GPU:    gpuEnabled,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
@@ -435,15 +429,11 @@ func init() {
 	dumpCmd.AddCommand(dumpJobCmd)
 
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpProcessCmd.MarkFlagRequired(dirFlag)
-	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpJobCmd.MarkFlagRequired(dirFlag)
-	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
@@ -451,7 +441,6 @@ func init() {
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
 	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
 	// ref, _ := cmd.Flags().GetString(imgFlag)
@@ -472,9 +461,7 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
 	dumpContainerdCmd.MarkFlagRequired(addressFlag)
 	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
-
 	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpContainerdCmd.MarkFlagRequired(dirFlag)
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
@@ -490,7 +477,6 @@ func init() {
 	// TODO Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
 	dumpRuncCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpRuncCmd.MarkFlagRequired(dirFlag)
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")

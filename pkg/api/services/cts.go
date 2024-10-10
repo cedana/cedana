@@ -179,11 +179,48 @@ func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.RestoreAtt
 	return stream, nil
 }
 
-func (c *ServiceClient) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
+func (c *ServiceClient) Manage(ctx context.Context, args *task.ManageArgs) (*task.ManageResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
 	opts := getDefaultCallOptions()
-	resp, err := c.taskService.Query(ctx, args, opts...)
+	resp, err := c.taskService.Manage(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+///////////////////////////
+//// Job Service Calls ////
+///////////////////////////
+
+func (c *ServiceClient) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.JobDump(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*task.JobRestoreResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.JobRestore(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.JobQuery(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -308,6 +345,17 @@ func (c *ServiceClient) RuncQuery(ctx context.Context, args *task.RuncQueryArgs)
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.taskService.RuncQuery(ctx, args, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *ServiceClient) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*task.RuncManageResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUNC_DEADLINE)
+	defer cancel()
+	opts := getDefaultCallOptions()
+	resp, err := c.taskService.RuncManage(ctx, args, opts...)
 	if err != nil {
 		return nil, err
 	}

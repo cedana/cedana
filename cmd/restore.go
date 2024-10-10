@@ -91,7 +91,7 @@ var restoreProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -279,7 +279,7 @@ var restoreJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},

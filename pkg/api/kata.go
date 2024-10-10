@@ -91,14 +91,14 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 		return nil, staterr
 	}
 
-	resp = task.RestoreResp{
-		Message: fmt.Sprintf("successfully restored process: %v", *pid),
-		NewPID:  *pid,
-	}
-
 	state, err := s.generateState(ctx, *pid)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to generate state after restore")
+	}
+
+	resp = task.RestoreResp{
+		Message: fmt.Sprintf("successfully restored process: %v", *pid),
+		State:   state,
 	}
 
 	resp.State = state
