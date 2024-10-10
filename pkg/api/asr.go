@@ -178,10 +178,6 @@ func cumulativeFsTime(stats []v1.FsStats) float64 {
 	return sum
 }
 
-func cumulativeDiskIoTime(stats []v1.PerDiskStats) float64 {
-	return 0
-}
-
 var (
 	storageDriver   = string("")
 	storageDuration = 2 * time.Minute
