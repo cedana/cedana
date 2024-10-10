@@ -18,7 +18,26 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		return nil, err
 	}
 
-	res.State = state
+	// Check if normal process or container
+	if state.ContainerID == "" {
+		dumpResp, err := s.Dump(ctx, &task.DumpArgs{
+			JID:      args.JID,
+			Type:     args.Type,
+			Stream:   args.Stream,
+			Dir:      args.Dir,
+			CriuOpts: args.CriuOpts,
+		})
+		if err != nil {
+			return nil, err
+		}
+		res.State = dumpResp.State
+		res.DumpStats = dumpResp.DumpStats
+		res.CheckpointID = dumpResp.CheckpointID
+		res.UploadID = dumpResp.UploadID
+		res.Message = dumpResp.Message
+	} else {
+		// Runc
+	}
 
 	return res, nil
 }

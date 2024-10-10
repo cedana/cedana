@@ -79,7 +79,7 @@ var dumpProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
 
 		return nil
 	},
@@ -218,7 +218,7 @@ var dumpJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
 
 		return nil
 	},
@@ -417,7 +417,7 @@ var dumpRuncCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
 
 		return nil
 	},
