@@ -20,7 +20,6 @@ func GetPid(processName string) (int32, error) {
 	}
 
 	return pid, nil
-
 }
 
 func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, error) {
@@ -66,7 +65,6 @@ func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, e
 func GetProcessName(pid int32) (*string, error) {
 	// new process checks if exists as well
 	p, err := ps.NewProcess(pid)
-
 	if err != nil {
 		return nil, err
 	}
@@ -74,4 +72,30 @@ func GetProcessName(pid int32) (*string, error) {
 	name, _ := p.Exe()
 
 	return &name, nil
+}
+
+// Returns a channel that will be closed when a non-child process exits
+// Since, we cannot use the process.Wait() method to wait for a non-child process to exit
+func WaitForPid(pid int32) chan struct{} {
+	exitCh := make(chan struct{})
+
+	go func() {
+		for {
+			// wait for the process to exit
+			_, err := ps.NewProcess(pid)
+			if err != nil {
+				close(exitCh)
+				return
+			}
+			// status, err := p.Status()
+			// if err != nil {
+			// 	close(exitCh)
+			// return
+			// }
+			// fmt.Printf("%v", status)
+			// time.Sleep(1 * time.Second)
+		}
+	}()
+
+	return exitCh
 }

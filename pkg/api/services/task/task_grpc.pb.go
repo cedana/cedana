@@ -22,10 +22,13 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	TaskService_JobDump_FullMethodName                 = "/cedana.services.task.TaskService/JobDump"
 	TaskService_JobRestore_FullMethodName              = "/cedana.services.task.TaskService/JobRestore"
+	TaskService_JobRestoreAttach_FullMethodName        = "/cedana.services.task.TaskService/JobRestoreAttach"
 	TaskService_JobQuery_FullMethodName                = "/cedana.services.task.TaskService/JobQuery"
 	TaskService_Start_FullMethodName                   = "/cedana.services.task.TaskService/Start"
+	TaskService_StartAttach_FullMethodName             = "/cedana.services.task.TaskService/StartAttach"
 	TaskService_Dump_FullMethodName                    = "/cedana.services.task.TaskService/Dump"
 	TaskService_Restore_FullMethodName                 = "/cedana.services.task.TaskService/Restore"
+	TaskService_RestoreAttach_FullMethodName           = "/cedana.services.task.TaskService/RestoreAttach"
 	TaskService_Manage_FullMethodName                  = "/cedana.services.task.TaskService/Manage"
 	TaskService_ContainerdDump_FullMethodName          = "/cedana.services.task.TaskService/ContainerdDump"
 	TaskService_ContainerdRestore_FullMethodName       = "/cedana.services.task.TaskService/ContainerdRestore"
@@ -39,8 +42,6 @@ const (
 	TaskService_RuncManage_FullMethodName              = "/cedana.services.task.TaskService/RuncManage"
 	TaskService_CRIORootfsDump_FullMethodName          = "/cedana.services.task.TaskService/CRIORootfsDump"
 	TaskService_CRIOImagePush_FullMethodName           = "/cedana.services.task.TaskService/CRIOImagePush"
-	TaskService_StartAttach_FullMethodName             = "/cedana.services.task.TaskService/StartAttach"
-	TaskService_RestoreAttach_FullMethodName           = "/cedana.services.task.TaskService/RestoreAttach"
 	TaskService_LogStreaming_FullMethodName            = "/cedana.services.task.TaskService/LogStreaming"
 	TaskService_ProcessStateStreaming_FullMethodName   = "/cedana.services.task.TaskService/ProcessStateStreaming"
 	TaskService_DetailedHealthCheck_FullMethodName     = "/cedana.services.task.TaskService/DetailedHealthCheck"
@@ -60,11 +61,14 @@ type TaskServiceClient interface {
 	// Managed Job
 	JobDump(ctx context.Context, in *JobDumpArgs, opts ...grpc.CallOption) (*JobDumpResp, error)
 	JobRestore(ctx context.Context, in *JobRestoreArgs, opts ...grpc.CallOption) (*JobRestoreResp, error)
+	JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp], error)
 	JobQuery(ctx context.Context, in *JobQueryArgs, opts ...grpc.CallOption) (*JobQueryResp, error)
 	// Process
 	Start(ctx context.Context, in *StartArgs, opts ...grpc.CallOption) (*StartResp, error)
+	StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error)
 	Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
+	RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error)
 	Manage(ctx context.Context, in *ManageArgs, opts ...grpc.CallOption) (*ManageResp, error)
 	// Containerd
 	ContainerdDump(ctx context.Context, in *ContainerdDumpArgs, opts ...grpc.CallOption) (*ContainerdDumpResp, error)
@@ -82,8 +86,6 @@ type TaskServiceClient interface {
 	CRIORootfsDump(ctx context.Context, in *CRIORootfsDumpArgs, opts ...grpc.CallOption) (*CRIORootfsDumpResp, error)
 	CRIOImagePush(ctx context.Context, in *CRIOImagePushArgs, opts ...grpc.CallOption) (*CRIOImagePushResp, error)
 	// Streaming
-	StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error)
-	RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error)
 	LogStreaming(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LogStreamingResp, LogStreamingArgs], error)
 	ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ProcessState], error)
 	// Health
@@ -129,6 +131,19 @@ func (c *taskServiceClient) JobRestore(ctx context.Context, in *JobRestoreArgs, 
 	return out, nil
 }
 
+func (c *taskServiceClient) JobRestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_JobRestoreAttach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[JobRestoreAttachArgs, JobRestoreAttachResp]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_JobRestoreAttachClient = grpc.BidiStreamingClient[JobRestoreAttachArgs, JobRestoreAttachResp]
+
 func (c *taskServiceClient) JobQuery(ctx context.Context, in *JobQueryArgs, opts ...grpc.CallOption) (*JobQueryResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(JobQueryResp)
@@ -149,6 +164,19 @@ func (c *taskServiceClient) Start(ctx context.Context, in *StartArgs, opts ...gr
 	return out, nil
 }
 
+func (c *taskServiceClient) StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], TaskService_StartAttach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StartAttachArgs, StartAttachResp]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_StartAttachClient = grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp]
+
 func (c *taskServiceClient) Dump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DumpResp)
@@ -168,6 +196,19 @@ func (c *taskServiceClient) Restore(ctx context.Context, in *RestoreArgs, opts .
 	}
 	return out, nil
 }
+
+func (c *taskServiceClient) RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[2], TaskService_RestoreAttach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreAttachArgs, RestoreAttachResp]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_RestoreAttachClient = grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp]
 
 func (c *taskServiceClient) Manage(ctx context.Context, in *ManageArgs, opts ...grpc.CallOption) (*ManageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -299,35 +340,9 @@ func (c *taskServiceClient) CRIOImagePush(ctx context.Context, in *CRIOImagePush
 	return out, nil
 }
 
-func (c *taskServiceClient) StartAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_StartAttach_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[StartAttachArgs, StartAttachResp]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_StartAttachClient = grpc.BidiStreamingClient[StartAttachArgs, StartAttachResp]
-
-func (c *taskServiceClient) RestoreAttach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[1], TaskService_RestoreAttach_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[RestoreAttachArgs, RestoreAttachResp]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_RestoreAttachClient = grpc.BidiStreamingClient[RestoreAttachArgs, RestoreAttachResp]
-
 func (c *taskServiceClient) LogStreaming(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LogStreamingResp, LogStreamingArgs], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[2], TaskService_LogStreaming_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[3], TaskService_LogStreaming_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +355,7 @@ type TaskService_LogStreamingClient = grpc.BidiStreamingClient[LogStreamingResp,
 
 func (c *taskServiceClient) ProcessStateStreaming(ctx context.Context, in *ProcessStateStreamingArgs, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ProcessState], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[3], TaskService_ProcessStateStreaming_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[4], TaskService_ProcessStateStreaming_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -444,11 +459,14 @@ type TaskServiceServer interface {
 	// Managed Job
 	JobDump(context.Context, *JobDumpArgs) (*JobDumpResp, error)
 	JobRestore(context.Context, *JobRestoreArgs) (*JobRestoreResp, error)
+	JobRestoreAttach(grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]) error
 	JobQuery(context.Context, *JobQueryArgs) (*JobQueryResp, error)
 	// Process
 	Start(context.Context, *StartArgs) (*StartResp, error)
+	StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error
 	Dump(context.Context, *DumpArgs) (*DumpResp, error)
 	Restore(context.Context, *RestoreArgs) (*RestoreResp, error)
+	RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error
 	Manage(context.Context, *ManageArgs) (*ManageResp, error)
 	// Containerd
 	ContainerdDump(context.Context, *ContainerdDumpArgs) (*ContainerdDumpResp, error)
@@ -466,8 +484,6 @@ type TaskServiceServer interface {
 	CRIORootfsDump(context.Context, *CRIORootfsDumpArgs) (*CRIORootfsDumpResp, error)
 	CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error)
 	// Streaming
-	StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error
-	RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error
 	LogStreaming(grpc.BidiStreamingServer[LogStreamingResp, LogStreamingArgs]) error
 	ProcessStateStreaming(*ProcessStateStreamingArgs, grpc.ServerStreamingServer[ProcessState]) error
 	// Health
@@ -499,17 +515,26 @@ func (UnimplementedTaskServiceServer) JobDump(context.Context, *JobDumpArgs) (*J
 func (UnimplementedTaskServiceServer) JobRestore(context.Context, *JobRestoreArgs) (*JobRestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobRestore not implemented")
 }
+func (UnimplementedTaskServiceServer) JobRestoreAttach(grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]) error {
+	return status.Errorf(codes.Unimplemented, "method JobRestoreAttach not implemented")
+}
 func (UnimplementedTaskServiceServer) JobQuery(context.Context, *JobQueryArgs) (*JobQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobQuery not implemented")
 }
 func (UnimplementedTaskServiceServer) Start(context.Context, *StartArgs) (*StartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
 }
+func (UnimplementedTaskServiceServer) StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error {
+	return status.Errorf(codes.Unimplemented, "method StartAttach not implemented")
+}
 func (UnimplementedTaskServiceServer) Dump(context.Context, *DumpArgs) (*DumpResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Dump not implemented")
 }
 func (UnimplementedTaskServiceServer) Restore(context.Context, *RestoreArgs) (*RestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
+}
+func (UnimplementedTaskServiceServer) RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error {
+	return status.Errorf(codes.Unimplemented, "method RestoreAttach not implemented")
 }
 func (UnimplementedTaskServiceServer) Manage(context.Context, *ManageArgs) (*ManageResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Manage not implemented")
@@ -549,12 +574,6 @@ func (UnimplementedTaskServiceServer) CRIORootfsDump(context.Context, *CRIORootf
 }
 func (UnimplementedTaskServiceServer) CRIOImagePush(context.Context, *CRIOImagePushArgs) (*CRIOImagePushResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CRIOImagePush not implemented")
-}
-func (UnimplementedTaskServiceServer) StartAttach(grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]) error {
-	return status.Errorf(codes.Unimplemented, "method StartAttach not implemented")
-}
-func (UnimplementedTaskServiceServer) RestoreAttach(grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]) error {
-	return status.Errorf(codes.Unimplemented, "method RestoreAttach not implemented")
 }
 func (UnimplementedTaskServiceServer) LogStreaming(grpc.BidiStreamingServer[LogStreamingResp, LogStreamingArgs]) error {
 	return status.Errorf(codes.Unimplemented, "method LogStreaming not implemented")
@@ -643,6 +662,13 @@ func _TaskService_JobRestore_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_JobRestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).JobRestoreAttach(&grpc.GenericServerStream[JobRestoreAttachArgs, JobRestoreAttachResp]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_JobRestoreAttachServer = grpc.BidiStreamingServer[JobRestoreAttachArgs, JobRestoreAttachResp]
+
 func _TaskService_JobQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(JobQueryArgs)
 	if err := dec(in); err != nil {
@@ -679,6 +705,13 @@ func _TaskService_Start_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_StartAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).StartAttach(&grpc.GenericServerStream[StartAttachArgs, StartAttachResp]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_StartAttachServer = grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]
+
 func _TaskService_Dump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DumpArgs)
 	if err := dec(in); err != nil {
@@ -714,6 +747,13 @@ func _TaskService_Restore_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _TaskService_RestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TaskServiceServer).RestoreAttach(&grpc.GenericServerStream[RestoreAttachArgs, RestoreAttachResp]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TaskService_RestoreAttachServer = grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]
 
 func _TaskService_Manage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ManageArgs)
@@ -948,20 +988,6 @@ func _TaskService_CRIOImagePush_Handler(srv interface{}, ctx context.Context, de
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _TaskService_StartAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskServiceServer).StartAttach(&grpc.GenericServerStream[StartAttachArgs, StartAttachResp]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_StartAttachServer = grpc.BidiStreamingServer[StartAttachArgs, StartAttachResp]
-
-func _TaskService_RestoreAttach_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskServiceServer).RestoreAttach(&grpc.GenericServerStream[RestoreAttachArgs, RestoreAttachResp]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskService_RestoreAttachServer = grpc.BidiStreamingServer[RestoreAttachArgs, RestoreAttachResp]
 
 func _TaskService_LogStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(TaskServiceServer).LogStreaming(&grpc.GenericServerStream[LogStreamingResp, LogStreamingArgs]{ServerStream: stream})
@@ -1242,6 +1268,12 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "JobRestoreAttach",
+			Handler:       _TaskService_JobRestoreAttach_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "StartAttach",
 			Handler:       _TaskService_StartAttach_Handler,

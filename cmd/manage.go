@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -39,14 +40,32 @@ var manageProcessCmd = &cobra.Command{
 		ctx := cmd.Context()
 		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
+		var uid int32
+		var gid int32
+		var groups []int32 = []int32{}
+
+		uid = int32(os.Getuid())
+		gid = int32(os.Getgid())
+		groups_int, err := os.Getgroups()
+		if err != nil {
+			log.Error().Err(err).Msg("error getting user groups")
+			return err
+		}
+		for _, g := range groups_int {
+			groups = append(groups, int32(g))
+		}
+
 		pid, _ := cmd.Flags().GetInt(pidFlag)
 		jid, _ := cmd.Flags().GetString(idFlag)
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 
 		manageArgs := &task.ManageArgs{
-			JID: jid,
-			PID: int32(pid),
-			GPU: gpuEnabled,
+			UID:    uid,
+			GID:    gid,
+			Groups: groups,
+			JID:    jid,
+			PID:    int32(pid),
+			GPU:    gpuEnabled,
 		}
 
 		resp, err := cts.Manage(ctx, manageArgs)
@@ -59,7 +78,7 @@ var manageProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Msgf("Managing process: %v", resp)
+		log.Info().Str("JID", resp.State.JID).Int32("PID", resp.State.PID).Msgf("Managing process")
 
 		return nil
 	},

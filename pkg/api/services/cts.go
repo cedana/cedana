@@ -216,6 +216,19 @@ func (c *ServiceClient) JobRestore(ctx context.Context, args *task.JobRestoreArg
 	return resp, nil
 }
 
+func (c *ServiceClient) JobRestoreAttach(ctx context.Context, args *task.JobRestoreAttachArgs) (task.TaskService_JobRestoreAttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.taskService.JobRestoreAttach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first restore request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (c *ServiceClient) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()

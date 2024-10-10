@@ -49,6 +49,115 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 	return err
 }
 
+func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.ManageResp, error) {
+	if args.JID == "" {
+		args.JID = xid.New().String()
+	} else {
+		// Check if job ID is already in use
+		state, err := s.getState(ctx, args.JID)
+		if state != nil {
+			err = status.Error(codes.AlreadyExists, "job ID already exists")
+			return nil, err
+		}
+	}
+
+	// Check if process PID already exists as a managed job
+	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{args.PID}})
+	if len(queryResp.Processes) > 0 {
+		if queryResp.Processes[0].JobState == task.JobState_JOB_RUNNING {
+			err = status.Error(codes.AlreadyExists, "PID already exists as a managed job")
+			return nil, err
+		}
+	}
+
+	state, err := s.generateState(ctx, args.PID)
+	if state == nil || state.ProcessInfo.IsRunning == false {
+		err = status.Error(codes.NotFound, "process not running")
+		return nil, err
+	}
+	state.JID = args.JID
+	state.JobState = task.JobState_JOB_RUNNING
+
+	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
+	if args.GPU {
+		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
+		if args.GPU {
+			gpuOut := io.Writer(gpuOutBuf)
+			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
+			if err != nil {
+				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
+				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
+			}
+
+			sharedLibPath := viper.GetString("gpu_shared_lib_path")
+			if sharedLibPath == "" {
+				sharedLibPath = utils.GpuSharedLibPath
+			}
+			if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
+				return nil, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
+			}
+		}
+		state.GPU = true
+	}
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		err = status.Error(codes.Internal, "failed to update state")
+		return nil, err
+	}
+
+	// Wait for server shutdown to gracefully exit, since job is now managed
+	// Also wait for process exit, to update state
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		select {
+		case <-s.serverCtx.Done():
+			<-s.serverCtx.Done()
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
+			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
+			if err != nil {
+				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process")
+			}
+		case <-utils.WaitForPid(state.PID):
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
+		}
+		state.JobState = task.JobState_JOB_DONE
+		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update state after done")
+		}
+		if gpuCmd != nil {
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
+			}
+		}
+	}()
+
+	// Clean up GPU controller and also handle premature exit
+	if gpuCmd != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			err := gpuCmd.Wait()
+			if err != nil {
+				log.Debug().Err(err).Msg("GPU controller Wait()")
+			}
+			log.Info().Int("PID", gpuCmd.Process.Pid).
+				Int("status", gpuCmd.ProcessState.ExitCode()).
+				Str("out/err", gpuOutBuf.String()).
+				Msg("GPU controller exited")
+
+				// Should kill process if still running since GPU controller might have exited prematurely
+			syscall.Kill(int(state.PID), syscall.SIGKILL)
+		}()
+	}
+
+	return &task.ManageResp{Message: "success", State: state}, nil
+}
+
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
@@ -75,15 +184,12 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 
 	if args.JID != "" { // if job
 		state, err = s.getState(ctx, args.JID)
-		if state.GPU && s.gpuEnabled == false {
-			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-		}
 		if err != nil {
 			err = status.Error(codes.NotFound, err.Error())
 			return nil, err
 		}
-		if state == nil {
-			return nil, status.Error(codes.NotFound, "job not found")
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 		}
 		pid = state.PID
 	}
@@ -244,11 +350,12 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	if args.JID != "" {
 		state, err := s.getState(ctx, args.JID)
+		if err != nil {
+			err = status.Error(codes.NotFound, err.Error())
+			return nil, err
+		}
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
-		}
-		if err != nil {
-			return nil, status.Error(codes.NotFound, "job not found")
 		}
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
@@ -312,7 +419,8 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			log.Warn().Err(err).Msg("failed to generate state after restore, using fallback")
 			state, err = s.getState(ctx, args.JID)
 			if err != nil {
-				log.Warn().Err(err).Msg("failed to get state existing after restore")
+				err = status.Error(codes.NotFound, err.Error())
+				return nil, err
 			}
 		}
 		log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored process")

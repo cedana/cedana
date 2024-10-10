@@ -9,6 +9,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
+	res := &task.JobDumpResp{}
+
+	state, err := s.getState(ctx, args.JID)
+	if err != nil {
+		err = status.Error(codes.NotFound, err.Error())
+		return nil, err
+	}
+
+	res.State = state
+
+	return res, nil
+}
+
 func (s *service) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
 	res := &task.JobQueryResp{}
 

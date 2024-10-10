@@ -198,7 +198,7 @@ var dumpJobCmd = &cobra.Command{
 			}
 		}
 
-		dumpArgs := task.DumpArgs{
+		dumpArgs := task.JobDumpArgs{
 			JID:    id,
 			Dir:    dir,
 			Stream: stream,
@@ -208,7 +208,7 @@ var dumpJobCmd = &cobra.Command{
 			},
 		}
 
-		resp, err := cts.Dump(ctx, &dumpArgs)
+		resp, err := cts.JobDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {

@@ -48,31 +48,10 @@ var restoreProcessCmd = &cobra.Command{
 		ctx := cmd.Context()
 		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
-		var uid int32
-		var gid int32
-		var groups []int32 = []int32{}
-
-		asRoot, _ := cmd.Flags().GetBool(rootFlag)
-		if !asRoot {
-			uid = int32(os.Getuid())
-			gid = int32(os.Getgid())
-			groups_int, err := os.Getgroups()
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user groups")
-				return err
-			}
-			for _, g := range groups_int {
-				groups = append(groups, int32(g))
-			}
-		}
-
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
-			UID:            uid,
-			GID:            gid,
-			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 			Stream:         stream,
@@ -188,32 +167,12 @@ var restoreJobCmd = &cobra.Command{
 		ctx := cmd.Context()
 		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
-		var uid int32
-		var gid int32
-		var groups []int32 = []int32{}
-
 		jid := args[0]
-		asRoot, _ := cmd.Flags().GetBool(rootFlag)
-		if !asRoot {
-			uid = int32(os.Getuid())
-			gid = int32(os.Getgid())
-			groups_int, err := os.Getgroups()
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user groups")
-				return err
-			}
-			for _, g := range groups_int {
-				groups = append(groups, int32(g))
-			}
-		}
-
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
-		restoreArgs := task.RestoreArgs{
+
+		restoreArgs := task.JobRestoreArgs{
 			JID:    jid,
-			UID:    uid,
-			GID:    gid,
-			Groups: groups,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
@@ -222,7 +181,7 @@ var restoreJobCmd = &cobra.Command{
 
 		attach, _ := cmd.Flags().GetBool(attachFlag)
 		if attach {
-			stream, err := cts.RestoreAttach(ctx, &task.RestoreAttachArgs{Args: &restoreArgs})
+			stream, err := cts.JobRestoreAttach(ctx, &task.JobRestoreAttachArgs{Args: &restoreArgs})
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok {
@@ -257,7 +216,7 @@ var restoreJobCmd = &cobra.Command{
 			go func() {
 				scanner := bufio.NewScanner(os.Stdin)
 				for scanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.JobRestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("error sending stdin")
 						return
 					}
@@ -269,7 +228,7 @@ var restoreJobCmd = &cobra.Command{
 			// TODO: Add signal handling properly
 		}
 
-		resp, err := cts.Restore(ctx, &restoreArgs)
+		resp, err := cts.JobRestore(ctx, &restoreArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
