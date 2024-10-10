@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -238,10 +239,17 @@ func (js *JobService) Start(ctx context.Context) error {
 	return nil
 }
 
+func getenv(k, d string) string {
+	if v, f := os.LookupEnv(k); f {
+		return v
+	}
+	return d
+}
+
 func (js *JobService) GetJobQueueUrl() string {
 	// this requires the cluster dns to be set
 	// hence we need to send it to the JQCallbackSocket
-	return "http://cedana-cedana-helm-manager:1324"
+	return "http://" + getenv("CEDANA_CONTROLLER_SERVICE", "cedana-cedana-helm-manager-service") + ":1324"
 }
 
 func (js *JobService) Restore(c *task.QueueJobRestoreRequest) error {
