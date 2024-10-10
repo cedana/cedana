@@ -86,13 +86,23 @@ var restoreJobCmd = &cobra.Command{
 
 		jid := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		root, _ := cmd.Flags().GetString(rootFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		bundle, err := cmd.Flags().GetString(bundleFlag)
+		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
+		detach, err := cmd.Flags().GetBool(detachFlag)
 
 		restoreArgs := &task.JobRestoreArgs{
 			JID:    jid,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
+			},
+			RuncOpts: &task.RuncOpts{
+				Root:          getRuncRootPath(root),
+				Bundle:        bundle,
+				ConsoleSocket: consoleSocket,
+				Detach:        detach,
 			},
 		}
 
@@ -327,16 +337,20 @@ var runcRestoreCmd = &cobra.Command{
 }
 
 func init() {
-	// Process/jobs
+	// Process
 	restoreCmd.AddCommand(restoreProcessCmd)
-	restoreCmd.AddCommand(restoreJobCmd)
-
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
+
+	// Job
+	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
-	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
+	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
+	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")
+	restoreJobCmd.Flags().BoolP(detachFlag, "e", false, "(runc) restore detached")
+	restoreJobCmd.Flags().StringP(rootFlag, "r", "default", "(runc) root")
 
 	// Kata
 	restoreCmd.AddCommand(restoreKataCmd)
@@ -357,7 +371,6 @@ func init() {
 	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
-	runcRestoreCmd.MarkFlagRequired(bundleFlag)
 	runcRestoreCmd.Flags().StringP(consoleSocketFlag, "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringP(rootFlag, "r", "default", "runc root directory")
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")

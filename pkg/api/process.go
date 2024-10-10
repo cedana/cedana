@@ -50,11 +50,13 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 }
 
 func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.ManageResp, error) {
+	state := &task.ProcessState{}
+	var err error
 	if args.JID == "" {
 		args.JID = xid.New().String()
 	} else {
 		// Check if job ID is already in use
-		state, err := s.getState(ctx, args.JID)
+		state, err = s.getState(ctx, args.JID)
 		if state != nil {
 			err = status.Error(codes.AlreadyExists, "job ID already exists")
 			return nil, err
@@ -70,7 +72,9 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 		}
 	}
 
-	state, err := s.generateState(ctx, args.PID)
+	exitCode := utils.WaitForPid(args.PID)
+
+	state, err = s.generateState(ctx, args.PID)
 	if state == nil || state.ProcessInfo.IsRunning == false {
 		err = status.Error(codes.NotFound, "process not running")
 		return nil, err
@@ -93,6 +97,13 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 		state.GPU = true
 	}
 
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update state after manage")
+		syscall.Kill(int(args.PID), syscall.SIGKILL) // kill cuz inconsistent state
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
+	}
+
 	// Wait for server shutdown to gracefully exit, since job is now managed
 	// Also wait for process exit, to update state
 	s.wg.Add(1)
@@ -106,8 +117,12 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 			if err != nil {
 				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process")
 			}
-		case <-utils.WaitForPid(state.PID):
+		case <-exitCode:
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
+		}
+		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
 		state.JobState = task.JobState_JOB_DONE
 		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
@@ -139,12 +154,6 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 			// Should kill process if still running since GPU controller might have exited prematurely
 			syscall.Kill(int(state.PID), syscall.SIGKILL)
 		}()
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		err = status.Error(codes.Internal, "failed to update state")
-		return nil, err
 	}
 
 	return &task.ManageResp{Message: "success", State: state}, nil
@@ -303,6 +312,10 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 				ExitCode: int32(code),
 			})
 		}
+		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+		}
 		state.JobState = task.JobState_JOB_DONE
 		err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 		if err != nil {
@@ -314,6 +327,10 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		go func() {
 			defer s.wg.Done()
 			<-exitCode
+			state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+			}
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
@@ -363,7 +380,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
 			args.Type = task.CRType_REMOTE
 		} else {
-			args.CheckpointPath = state.GetCheckpointPath()
+			args.CheckpointPath = state.CheckpointPath
 			args.Type = task.CRType_LOCAL
 		}
 	} else {
@@ -400,20 +417,16 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	pid, exitCode, err := s.restore(ctx, args, stream)
 	if err != nil {
-		staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-		return nil, staterr
+		err := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+		return nil, err
 	}
-	state := &task.ProcessState{}
+
 	// Only update state if it was a managed job
+	state := &task.ProcessState{}
 	if args.JID != "" {
-		state, err = s.generateState(ctx, pid)
+		state, err = s.getState(ctx, args.JID)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to generate state after restore, using fallback")
-			state, err = s.getState(ctx, args.JID)
-			if err != nil {
-				err = status.Error(codes.NotFound, err.Error())
-				return nil, err
-			}
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
 		log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored process")
 		state.PID = pid
@@ -432,6 +445,10 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 					ExitCode: int32(code),
 				})
 			}
+			state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+			}
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
@@ -443,6 +460,10 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			go func() {
 				defer s.wg.Done()
 				<-exitCode
+				state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+				if err != nil {
+					log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+				}
 				state.JobState = task.JobState_JOB_DONE
 				err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 				if err != nil {

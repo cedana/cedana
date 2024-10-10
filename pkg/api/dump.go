@@ -251,6 +251,10 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
+	if !(opts.LeaveRunning) {
+		state.JobState = task.JobState_JOB_KILLED
+	}
+
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
 	return s.postDump(ctx, opts.ImagesDirectory, state, nil)

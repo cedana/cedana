@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -111,7 +112,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
-		log.Info().Msgf("cmd = %v", cmd)
+		log.Debug().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
@@ -354,22 +355,19 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, isManagedJob bool) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return fmt.Errorf("could not get restore stats from context")
+		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	isManagedJob := false
-	_, err := s.getState(ctx, containerId) // as container ID is used as JID for runc containers
-	if err == nil {
-		isManagedJob = true
+	// TODO: ensure imgpath dir exists
+
+	state, err := deserializeStateFromDir(imgPath, false)
+	if err != nil {
+		return 0, nil, err
 	}
-
-	dir := imgPath
-
-	state, err := deserializeStateFromDir(dir, false)
 
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
@@ -377,13 +375,16 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
 		var err error
-		gpuCmd, err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 		}
-		return err
+		return 0, nil, err
 	}
 
+	if opts.Bundle == "" {
+		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
+	}
 	bundle := Bundle{Bundle: opts.Bundle}
 
 	isPodman := checkIfPodman(bundle)
@@ -403,40 +404,40 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		newBundle := "/" + strings.Join(parts, "/")
 
 		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
-			return err
+			return 0, nil, err
 		}
 		if err := rsyncDirectories(runPath, newRunPath); err != nil {
-			return err
+			return 0, nil, err
 		}
 		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
 		if err != nil {
-			return err
+			return 0, nil, err
 		}
 		if err := json.Unmarshal(configFile, &spec); err != nil {
-			return err
+			return 0, nil, err
 		}
 		recursivelyReplace(&spec, oldContainerId, containerId)
 		varPath := spec.Root.Path + "/"
 		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
-			return err
+			return 0, nil, err
 		}
 		if err := rsyncDirectories(varPath, newVarPath); err != nil {
-			return err
+			return 0, nil, err
 		}
 		spec.Root.Path = newVarPath
 		updatedConfig, err := json.Marshal(spec)
 		if err != nil {
-			return err
+			return 0, nil, err
 		}
 		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
-			return err
+			return 0, nil, err
 		}
 		opts.Bundle = newBundle + "/userdata"
 	}
 
 	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 
 	if isPodman {
@@ -447,34 +448,33 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		}()
 	}
 
+	// HACK YA: RACE The container might not exit yet
+	time.Sleep(1 * time.Second)
+
+	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
+	}
+
+	exitCode := make(chan int)
 	if isManagedJob {
-		// Wait for server shutdown to gracefully exit, since job is now managed
-		// Wait for process exit, to update state, and clean up GPU controller
+		// Wait to cleanup
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			select {
-			case <-s.serverCtx.Done():
-				<-s.serverCtx.Done()
-				log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
-				err := syscall.Kill(int(state.PID), syscall.SIGKILL)
-				if err != nil {
-					log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process")
-				}
-			case <-utils.WaitForPid(state.PID):
-				log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
-			}
-			state.JobState = task.JobState_JOB_DONE
-			err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to update state after done")
-			}
+			var status syscall.WaitStatus
+			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
+			code := status.ExitStatus()
+			log.Debug().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
 				if err != nil {
-					log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
+					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
 				}
 			}
+
+			exitCode <- code
 		}()
 
 		// Clean up GPU controller and also handle premature exit
@@ -492,15 +492,28 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 					Msg("GPU controller exited")
 
 				// Should kill process if still running since GPU controller might have exited prematurely
-				syscall.Kill(int(state.PID), syscall.SIGKILL)
+				syscall.Kill(int(pid), syscall.SIGKILL)
 			}()
 		}
+
+		// Kill on server/stream shutdown
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			log.Debug().Int32("PID", pid).Str("JID", containerId).Msgf("killing runc container")
+			syscall.Kill(int(pid), syscall.SIGKILL)
+			if err != nil {
+				log.Warn().Err(err).Int32("PID", pid).Str("JID", containerId).Msgf("could not kill runc container")
+				return
+			}
+		}()
 	}
 
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
-	return err
+	return pid, exitCode, nil
 }
 
 // Bundle represents an OCI bundle

@@ -190,11 +190,26 @@ var dumpJobCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
+		external, _ := cmd.Flags().GetString(externalFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		if stream {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
+			}
+		}
+
+		var externalNamespaces []string
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
 			}
 		}
 
@@ -205,6 +220,8 @@ var dumpJobCmd = &cobra.Command{
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
 				TcpEstablished: tcpEstablished,
+				External:       externalNamespaces,
+				FileLocks:      fileLocks,
 			},
 		}
 
@@ -384,12 +401,11 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		criuOpts := &task.CriuOpts{
-			ImagesDirectory: dir,
-			WorkDirectory:   wdPath,
-			LeaveRunning:    leaveRunning,
-			TcpEstablished:  tcpEstablished,
-			External:        externalNamespaces,
-			FileLocks:       fileLocks,
+			WorkDirectory:  wdPath,
+			LeaveRunning:   leaveRunning,
+			TcpEstablished: tcpEstablished,
+			External:       externalNamespaces,
+			FileLocks:      fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -398,6 +414,7 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
+			Dir:         dir,
 			Root:        getRuncRootPath(root),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
@@ -433,6 +450,8 @@ func init() {
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
+	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
+	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
 
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
@@ -448,7 +467,7 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
+	dumpContainerdCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
 
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)

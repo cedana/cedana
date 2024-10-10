@@ -18,13 +18,18 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		return nil, err
 	}
 
+	if state.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+	}
+
 	// Check if normal process or container
 	if state.ContainerID == "" {
 		dumpResp, err := s.Dump(ctx, &task.DumpArgs{
 			JID:      args.JID,
+			PID:      state.PID,
+			Dir:      args.Dir,
 			Type:     args.Type,
 			Stream:   args.Stream,
-			Dir:      args.Dir,
 			CriuOpts: args.CriuOpts,
 		})
 		if err != nil {
@@ -37,6 +42,7 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.Message = dumpResp.Message
 	} else {
 		dumpResp, err := s.RuncDump(ctx, &task.RuncDumpArgs{
+			Dir:         args.Dir,
 			Root:        state.ContainerRoot,
 			ContainerID: state.ContainerID,
 			CriuOpts:    args.CriuOpts,
@@ -64,6 +70,10 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 		return nil, err
 	}
 
+	if state.GPU && s.gpuEnabled == false {
+		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+	}
+
 	// Check if normal process or container
 	if state.ContainerID == "" {
 		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
@@ -78,7 +88,32 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 		res.RestoreStats = restoreResp.RestoreStats
 		res.Message = restoreResp.Message
 	} else {
-		// Runc
+		opts := &task.RuncOpts{}
+		opts.Detach = args.RuncOpts.Detach
+		opts.ConsoleSocket = args.RuncOpts.ConsoleSocket
+		opts.Bundle = args.RuncOpts.Bundle
+		if opts.Bundle == "" {
+			// Use saved bundle if not overridden from args
+			opts.Bundle = state.ContainerBundle
+		}
+		opts.Root = args.RuncOpts.Root
+		if opts.Root == "" {
+			// Use saved root if not overridden from args
+			opts.Root = state.ContainerRoot
+		}
+		restoreResp, err := s.RuncRestore(ctx, &task.RuncRestoreArgs{
+			ContainerID: state.ContainerID,
+			ImagePath:   state.CheckpointPath,
+			Opts:        opts,
+			Type:        args.Type,
+			CriuOpts:    args.CriuOpts,
+		})
+		if err != nil {
+			return nil, err
+		}
+		res.State = restoreResp.State
+		res.RestoreStats = restoreResp.RestoreStats
+		res.Message = restoreResp.Message
 	}
 
 	return res, nil
@@ -95,6 +130,10 @@ func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServe
 	if err != nil {
 		err = status.Error(codes.NotFound, err.Error())
 		return err
+	}
+
+	if state.GPU && s.gpuEnabled == false {
+		return status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 	}
 
 	// Check if normal process or container

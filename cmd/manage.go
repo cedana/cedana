@@ -98,7 +98,7 @@ var manageRuncCmd = &cobra.Command{
 
 		manageArgs := &task.RuncManageArgs{
 			ContainerID: id,
-			Root:        root,
+			Root:        getRuncRootPath(root),
 			GPU:         gpuEnabled,
 		}
 
@@ -112,7 +112,7 @@ var manageRuncCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Msgf("Managing runc container: %v", resp)
+		log.Info().Str("JID", resp.State.JID).Int32("PID", resp.State.PID).Msgf("Managing runc container")
 
 		return nil
 	},

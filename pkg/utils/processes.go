@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
@@ -80,24 +81,24 @@ func GetProcessName(pid int32) (*string, error) {
 
 // Returns a channel that will be closed when a non-child process exits
 // Since, we cannot use the process.Wait() method to wait for a non-child process to exit
-func WaitForPid(pid int32) chan struct{} {
-	exitCh := make(chan struct{})
+func WaitForPid(pid int32) chan int {
+	exitCh := make(chan int)
 
 	go func() {
 		for {
 			// wait for the process to exit
-			_, err := ps.NewProcess(pid)
+			p, err := ps.NewProcess(pid)
 			if err != nil {
-				close(exitCh)
+				exitCh <- -1
 				return
 			}
-			// status, err := p.Status()
-			// if err != nil {
-			// 	close(exitCh)
-			// return
-			// }
-			// fmt.Printf("%v", status)
-			// time.Sleep(1 * time.Second)
+			status, err := p.Status()
+			if err != nil {
+				exitCh <- -1
+				return
+			}
+			fmt.Printf("%v", status)
+			time.Sleep(200 * time.Millisecond)
 		}
 	}()
 
