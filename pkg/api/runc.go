@@ -61,7 +61,7 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 	state.ContainerRoot = args.Root
 	state.ContainerBundle = bundle
 	state.JobState = task.JobState_JOB_RUNNING
-	state.GPU = true
+	state.GPU = args.GPU
 
 	err = s.updateState(ctx, state.JID, state)
 	if err != nil {
