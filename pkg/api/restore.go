@@ -365,6 +365,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		// FIXME: Remove later when GPU controller is started in pre-resume hook
 		if gpuCmd != nil {
 			gpuCmd.Process.Kill()
+			gpuCmd.Wait()
 		}
 
 		return 0, nil, err
@@ -378,6 +379,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		// Kill GPU controller if it was started
 		// FIXME: Remove later when GPU controller is started in pre-resume hook
 		if gpuCmd != nil {
+			gpuCmd.Wait()
 			gpuCmd.Process.Kill()
 		}
 
@@ -393,7 +395,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			var status syscall.WaitStatus
 			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Debug().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -700,7 +702,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
+			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()

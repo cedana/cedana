@@ -1,0 +1,32 @@
+table ip filter {
+	chain CRIU {
+		mark 0xc114 counter packets 0 bytes 0 accept
+		counter packets 0 bytes 0 drop
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 0 bytes 0 jump CRIU
+	}
+
+	chain OUTPUT {
+		type filter hook output priority filter; policy accept;
+		counter packets 0 bytes 0 jump CRIU
+	}
+}
+table ip6 filter {
+	chain CRIU {
+		mark 0xc114 counter packets 0 bytes 0 accept
+		counter packets 0 bytes 0 drop
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 0 bytes 0 jump CRIU
+	}
+
+	chain OUTPUT {
+		type filter hook output priority filter; policy accept;
+		counter packets 0 bytes 0 jump CRIU
+	}
+}
