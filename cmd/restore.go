@@ -364,7 +364,7 @@ func init() {
 	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
-	// TODO Runc
+	// Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
 	runcRestoreCmd.MarkFlagRequired("dir")
@@ -374,7 +374,6 @@ func init() {
 	runcRestoreCmd.Flags().StringP(consoleSocketFlag, "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringP(rootFlag, "r", "default", "runc root directory")
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
-	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
 

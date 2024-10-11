@@ -59,6 +59,12 @@ var dumpProcessCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		if stream {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
@@ -436,16 +442,59 @@ var dumpRuncCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	// Process/jobs
-	dumpCmd.AddCommand(dumpProcessCmd)
-	dumpCmd.AddCommand(dumpJobCmd)
+var dumpCRIORootfs = &cobra.Command{
+	Use:   "crioRootfs",
+	Short: "Manually commit a CRIO container",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
+		id, err := cmd.Flags().GetString(idFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting container id: %v", err)
+		}
+		dest, err := cmd.Flags().GetString(destFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting destination path: %v", err)
+		}
+		containerStorage, err := cmd.Flags().GetString(containerStorageFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting container storage path: %v", err)
+		}
+
+		dumpArgs := task.CRIORootfsDumpArgs{
+			ContainerID:      id,
+			Dest:             dest,
+			ContainerStorage: containerStorage,
+		}
+
+		resp, err := cts.CRIORootfsDump(ctx, &dumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				log.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				log.Error().Msgf("Checkpoint task failed: %v", err)
+			}
+			return err
+		}
+		log.Info().Msgf("Response: %v", resp)
+
+		return nil
+	},
+}
+
+func init() {
+	// Process
+	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
+	// Job
+	dumpCmd.AddCommand(dumpJobCmd)
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
@@ -469,6 +518,8 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpContainerdCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
 
+	// Containerd Rootfs
+	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
 	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
@@ -477,7 +528,7 @@ func init() {
 	dumpContainerdRootfsCmd.MarkFlagRequired(addressFlag)
 	dumpContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
-	// TODO Runc
+	// Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
 	dumpRuncCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
@@ -488,6 +539,7 @@ func init() {
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 
+	// CRIO
 	dumpCmd.AddCommand(dumpCRIORootfs)
 	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
 	dumpCRIORootfs.MarkFlagRequired(idFlag)
@@ -496,15 +548,5 @@ func init() {
 	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
 	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
 
-	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
-
 	rootCmd.AddCommand(dumpCmd)
-
-	rootCmd.AddCommand(pushCRIOImage)
-	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
-	pushCRIOImage.MarkFlagRequired(refFlag)
-	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
-	pushCRIOImage.MarkFlagRequired(newRefFlag)
-	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
-	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
 }

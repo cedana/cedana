@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -19,12 +18,9 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
-	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -214,7 +210,6 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 
 	var crPid int
 
-	bundle := Bundle{ContainerID: containerID}
 	runcContainer, err := container.GetContainerFromRunc(containerID, root)
 	if err != nil {
 		return fmt.Errorf("could not get container from runc: %v", err)
@@ -240,12 +235,6 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	if err != nil {
 		log.Error().Err(err).Send()
 		return err
-	}
-
-	if checkIfPodman(bundle) {
-		if err := patchPodmanDump(containerID, opts.ImagesDirectory); err != nil {
-			return err
-		}
 	}
 
 	elapsed := time.Since(start)
@@ -467,91 +456,5 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
 
-	return nil
-}
-
-func checkIfPodman(b Bundle) bool {
-	var matched bool
-	if b.ContainerID != "" {
-		_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", b.ContainerID, "userdata"))
-		return err == nil
-	} else {
-		pattern := "/var/lib/containers/storage/overlay-containers/.*?/userdata"
-		matched, _ = regexp.MatchString(pattern, b.Bundle)
-	}
-	return matched
-}
-
-func patchPodmanDump(containerID, imgPath string) error {
-	var containerStoreData *types.StoreContainer
-
-	config := make(map[string]interface{})
-	state := make(map[string]interface{})
-
-	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerID + "/userdata"
-
-	byteId := []byte(containerID)
-
-	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
-
-	if err := db.SetNewDbConn(); err != nil {
-		return err
-	}
-
-	defer db.Conn.Close()
-
-	err := db.Conn.View(func(tx *bolt.Tx) error {
-		bkt, err := utils.GetCtrBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		if err := db.GetContainerConfigFromDB(byteId, &config, bkt); err != nil {
-			return err
-		}
-
-		if err := db.GetContainerStateDB(byteId, &state, bkt); err != nil {
-			return err
-		}
-
-		utils.WriteJSONFile(config, imgPath, "config.dump")
-
-		jsonPath := filepath.Join(bundlePath, "config.json")
-		cfg, _, err := utils.NewFromFile(jsonPath)
-		if err != nil {
-			return err
-		}
-
-		utils.WriteJSONFile(cfg, imgPath, "spec.dump")
-
-		return nil
-	})
-
-	ctrConfig := new(types.ContainerConfig)
-	if _, err := utils.ReadJSONFile(ctrConfig, imgPath, "config.dump"); err != nil {
-		return err
-	}
-
-	storeConfig := new([]types.StoreContainer)
-	if _, err := utils.ReadJSONFile(storeConfig, utils.StorePath, "containers.json"); err != nil {
-		return err
-	}
-
-	// Grabbing the state of the container in containers.json for the specific podman container
-	for _, container := range *storeConfig {
-		if container.ID == ctrConfig.ID {
-			containerStoreData = &container
-		}
-	}
-	name := namesgenerator.GetRandomName(0)
-
-	containerStoreData.Names = []string{name}
-
-	// Saving the current state of containers.json for the specific podman container we are checkpointing
-	utils.WriteJSONFile(containerStoreData, imgPath, "containers.json")
-
-	if err != nil {
-		return err
-	}
 	return nil
 }

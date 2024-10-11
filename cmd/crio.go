@@ -9,49 +9,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var dumpCRIORootfs = &cobra.Command{
-	Use:   "crioRootfs",
-	Short: "Manually commit a CRIO container",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
-
-		id, err := cmd.Flags().GetString(idFlag)
-		if err != nil {
-			log.Error().Msgf("Error getting container id: %v", err)
-		}
-		dest, err := cmd.Flags().GetString(destFlag)
-		if err != nil {
-			log.Error().Msgf("Error getting destination path: %v", err)
-		}
-		containerStorage, err := cmd.Flags().GetString(containerStorageFlag)
-		if err != nil {
-			log.Error().Msgf("Error getting container storage path: %v", err)
-		}
-
-		dumpArgs := task.CRIORootfsDumpArgs{
-			ContainerID:      id,
-			Dest:             dest,
-			ContainerStorage: containerStorage,
-		}
-
-		resp, err := cts.CRIORootfsDump(ctx, &dumpArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				log.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
-			} else {
-				log.Error().Msgf("Checkpoint task failed: %v", err)
-			}
-			return err
-		}
-		log.Info().Msgf("Response: %v", resp)
-
-		return nil
-	},
-}
-
 var pushCRIOImage = &cobra.Command{
 	Use:   "crio-push",
 	Short: "Manually push a crio image",
@@ -93,4 +50,14 @@ var pushCRIOImage = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(pushCRIOImage)
+	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
+	pushCRIOImage.MarkFlagRequired(refFlag)
+	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
+	pushCRIOImage.MarkFlagRequired(newRefFlag)
+	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
+	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
 }

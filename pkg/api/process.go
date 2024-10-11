@@ -32,8 +32,6 @@ const (
 	OUTPUT_FILE_FLAGS int         = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 )
 
-var DB_BUCKET_JOBS = []byte("jobs")
-
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
 	return s.startHelper(ctx, args, nil)
 }
@@ -75,12 +73,17 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 	exitCode := utils.WaitForPid(args.PID)
 
 	state, err = s.generateState(ctx, args.PID)
-	if state == nil || state.ProcessInfo.IsRunning == false {
-		err = status.Error(codes.NotFound, "process not running")
-		return nil, err
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "is the process running?")
 	}
 	state.JID = args.JID
 	state.JobState = task.JobState_JOB_RUNNING
+	state.GPU = args.GPU
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
+	}
 
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
@@ -94,14 +97,6 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
 		}
-		state.GPU = true
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to update state after manage")
-		syscall.Kill(int(args.PID), syscall.SIGKILL) // kill cuz inconsistent state
-		return nil, status.Error(codes.Internal, "failed to update state after manage")
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
@@ -115,14 +110,14 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
 			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
 			if err != nil {
-				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process")
+				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process. already dead?")
 			}
 		case <-exitCode:
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
 		}
 		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+			log.Error().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
 		state.JobState = task.JobState_JOB_DONE
 		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
@@ -160,8 +155,6 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 }
 
 func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-	var err error
-
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
 	}
@@ -183,11 +176,11 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	state := &task.ProcessState{}
 	pid := args.PID
 
-	if args.JID != "" { // if job
+	var err error
+	if args.JID != "" { // if managed job
 		state, err = s.getState(ctx, args.JID)
 		if err != nil {
-			err = status.Error(codes.NotFound, err.Error())
-			return nil, err
+			return nil, status.Error(codes.NotFound, "job ID not found: "+err.Error())
 		}
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
@@ -235,8 +228,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	if args.JID != "" {
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
-			return nil, st.Err()
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
 		}
 	}
 

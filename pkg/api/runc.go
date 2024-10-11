@@ -46,23 +46,27 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{pid}})
 	if len(queryResp.Processes) > 0 {
 		if queryResp.Processes[0].JobState == task.JobState_JOB_RUNNING {
-			err = status.Error(codes.AlreadyExists, "PID already exists as a managed job")
-			return nil, err
+			return nil, status.Error(codes.AlreadyExists, "PID already exists as a managed job")
 		}
 	}
 
 	exitCode := utils.WaitForPid(pid)
 
 	state, err = s.generateState(ctx, pid)
-	if state == nil || state.ProcessInfo.IsRunning == false {
-		err = status.Error(codes.NotFound, "process not running")
-		return nil, err
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "is the process running?")
 	}
 	state.JID = args.ContainerID
 	state.ContainerID = args.ContainerID
 	state.ContainerRoot = args.Root
 	state.ContainerBundle = bundle
 	state.JobState = task.JobState_JOB_RUNNING
+	state.GPU = true
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
+	}
 
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
@@ -76,14 +80,6 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
 		}
-		state.GPU = true
-	}
-
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to update state after manage")
-		syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
-		return nil, status.Error(codes.Internal, "failed to update state after manage")
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
@@ -97,7 +93,7 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing runc container")
 			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
 			if err != nil {
-				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill runc container")
+				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill runc container. already dead?")
 			}
 		case <-exitCode:
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("runc container exited")
@@ -233,8 +229,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	if isManagedJob {
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
-			return nil, st.Err()
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
 		}
 	}
 

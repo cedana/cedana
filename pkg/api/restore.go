@@ -301,38 +301,6 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
-	// Podman run -d state
-	if !opts.Detach {
-		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
-		if err != nil {
-			return err
-		}
-
-		var data map[string]interface{}
-
-		if err := json.Unmarshal(jsonData, &data); err != nil {
-			return err
-		}
-
-		data["process"].(map[string]interface{})["terminal"] = false
-		updatedJSON, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
-			return err
-		}
-	}
-
-	// Here lie the podman patch! :brandon-pirate:
-	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	switch v := data.(type) {
 	case map[string]interface{}:
@@ -385,67 +353,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	if opts.Bundle == "" {
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
-	bundle := Bundle{Bundle: opts.Bundle}
-
-	isPodman := checkIfPodman(bundle)
-	// XXX YA: Podman should not be a concern of runc level functions, as it's higher level
-	if isPodman {
-		var spec specs.Spec
-		parts := strings.Split(opts.Bundle, "/")
-		oldContainerId := parts[6]
-
-		runPath := "/run/containers/storage/overlay-containers/" + oldContainerId + "/userdata"
-		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
-		newVarPath := "/var/lib/containers/storage/overlay/" + containerId + "/merged"
-
-		parts[6] = containerId
-		// exclude last part for rsync
-		parts = parts[1 : len(parts)-1]
-		newBundle := "/" + strings.Join(parts, "/")
-
-		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
-			return 0, nil, err
-		}
-		if err := rsyncDirectories(runPath, newRunPath); err != nil {
-			return 0, nil, err
-		}
-		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
-		if err != nil {
-			return 0, nil, err
-		}
-		if err := json.Unmarshal(configFile, &spec); err != nil {
-			return 0, nil, err
-		}
-		recursivelyReplace(&spec, oldContainerId, containerId)
-		varPath := spec.Root.Path + "/"
-		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
-			return 0, nil, err
-		}
-		if err := rsyncDirectories(varPath, newVarPath); err != nil {
-			return 0, nil, err
-		}
-		spec.Root.Path = newVarPath
-		updatedConfig, err := json.Marshal(spec)
-		if err != nil {
-			return 0, nil, err
-		}
-		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
-			return 0, nil, err
-		}
-		opts.Bundle = newBundle + "/userdata"
-	}
 
 	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
 		return 0, nil, err
-	}
-
-	if isPodman {
-		go func() {
-			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
-				log.Error().Err(err).Send()
-			}
-		}()
 	}
 
 	// HACK YA: RACE The container might not exit yet
