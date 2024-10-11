@@ -106,7 +106,6 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 		defer s.wg.Done()
 		select {
 		case <-s.serverCtx.Done():
-			<-s.serverCtx.Done()
 			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
 			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
 			if err != nil {
