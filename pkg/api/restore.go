@@ -330,7 +330,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	// TODO: ensure imgpath dir exists
+	// ensure imgpath dir exists
+	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+		os.MkdirAll(imgPath, RESTORE_TEMPDIR_PERMS)
+	}
 
 	state, err := deserializeStateFromDir(imgPath, false)
 	if err != nil {
@@ -340,14 +343,16 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
 
-	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
+	// FIXME: GPU restore should instead be done in the pre-resume hook, so as to ensure it does not
+	// continue to run as an orphan process if the restore fails early. Once process has started, then
+	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
 		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
+			return 0, nil, err
 		}
-		return 0, nil, err
 	}
 
 	if opts.Bundle == "" {
@@ -356,6 +361,12 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 
 	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
 	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if gpuCmd != nil {
+			gpuCmd.Process.Kill()
+		}
+
 		return 0, nil, err
 	}
 
@@ -364,6 +375,12 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 
 	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
 	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if gpuCmd != nil {
+			gpuCmd.Process.Kill()
+		}
+
 		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
 	}
 
@@ -593,6 +610,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
+		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
+		// process is just about to be resumed. If we do GPU restore too early, then we will have to
+		// ensure it's killed on every failure. Once the process starts, then it's lifecycle is tied to it
+		// (see below goroutines).
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
