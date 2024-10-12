@@ -208,6 +208,13 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, opts *
 		return fmt.Errorf("could not get dump stats from context")
 	}
 
+	if _, err := os.Stat(opts.ImagesDirectory); os.IsNotExist(err) {
+		err := os.MkdirAll(opts.ImagesDirectory, DUMP_FOLDER_PERMS)
+		if err != nil {
+			return fmt.Errorf("could not create dump dir: %v", err)
+		}
+	}
+
 	runcContainer, err := container.GetContainerFromRunc(containerID, root)
 	if err != nil {
 		return fmt.Errorf("could not get container from runc: %v", err)
