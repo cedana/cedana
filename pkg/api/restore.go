@@ -367,7 +367,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	}
 
 	// HACK YA: RACE The container might not exit yet
-	time.Sleep(1 * time.Second)
+	// time.Sleep(1 * time.Second)
 
 	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
 	if err != nil {

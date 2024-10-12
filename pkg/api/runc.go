@@ -284,7 +284,10 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
 			args.Type = task.CRType_REMOTE
 		} else {
-			args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
+			if state.CheckpointPath != "" {
+				// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
+				args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
+			}
 			args.Type = task.CRType_LOCAL
 		}
 	} else {
