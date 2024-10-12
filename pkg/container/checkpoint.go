@@ -207,7 +207,7 @@ type RuncContainer struct {
 	Id                   string
 	StateDir             string
 	Root                 string
-	Pid                  int
+	Pid                  int32
 	Config               *configs.Config // standin for configs.Config from runc
 	CgroupManager        cgroups.Manager
 	InitProcessStartTime uint64
@@ -551,7 +551,7 @@ func GetContainerFromRunc(containerID string, root string) (*RuncContainer, erro
 		// dockerConfig:  &container,
 		Config:          &state.Config,
 		IntelRdtManager: NewManager(&state.Config, containerID, state.IntelRdtPath),
-		Pid:             state.InitProcessPid,
+		Pid:             int32(state.InitProcessPid),
 		// state:           containerState,
 		Created: state.Created,
 	}
@@ -1579,7 +1579,7 @@ func snapshotOpts(id string) error {
 	return nil
 }
 
-func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int, runcRoot string, pauseConfig *configs.Config) error {
+func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int32, runcRoot string, pauseConfig *configs.Config) error {
 	c.M.Lock()
 	defer c.M.Unlock()
 

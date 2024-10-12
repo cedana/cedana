@@ -330,14 +330,9 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	// ensure imgpath dir exists
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		os.MkdirAll(imgPath, RESTORE_TEMPDIR_PERMS)
-	}
-
 	state, err := deserializeStateFromDir(imgPath, false)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
 	var gpuCmd *exec.Cmd

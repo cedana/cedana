@@ -192,7 +192,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
-	err = s.runcDump(ctx, args.Root, args.ContainerID, pid, criuOpts, state)
+	err = s.runcDump(ctx, args.Root, args.ContainerID, criuOpts, state)
 	if err != nil {
 		st := status.New(codes.Internal, "Runc dump failed: "+err.Error())
 		st.WithDetails(&errdetails.ErrorInfo{

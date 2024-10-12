@@ -201,14 +201,12 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	return &opts
 }
 
-func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
+func (s *service) runcDump(ctx context.Context, root, containerID string, opts *container.CriuOpts, state *task.ProcessState) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
-
-	var crPid int
 
 	runcContainer, err := container.GetContainerFromRunc(containerID, root)
 	if err != nil {
@@ -218,12 +216,6 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 	// TODO make into flag and describe how this redirects using container's init process pid and
 	// instead a specific pid.
 
-	if pid != 0 {
-		crPid = int(pid)
-	} else {
-		crPid = runcContainer.Pid
-	}
-
 	if state.GPU {
 		err = s.gpuDump(ctx, opts.ImagesDirectory)
 		if err != nil {
@@ -231,7 +223,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, pid in
 		}
 	}
 
-	err = runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
+	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
 	if err != nil {
 		log.Error().Err(err).Send()
 		return err
