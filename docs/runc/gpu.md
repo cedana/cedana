@@ -1,4 +1,6 @@
-## Checkpoint/Restore GPU runc containers (experimental)
+## Checkpoint/Restore GPU runc containers
+> [!WARNING]
+> This feature is still experimental.
 
 This doc explains the daemon's features that can be used to do a GPU checkpoint/restore of runc containers that are enabled with GPU devices.
 
