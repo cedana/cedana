@@ -418,7 +418,7 @@ jobs:
 
   docker-image-push:
     name: Docker Image push to cedana-helper-test
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-2
     needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
