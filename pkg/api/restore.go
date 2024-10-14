@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -67,7 +68,7 @@ func (s *service) setupStreamerServe(dumpdir string) (*exec.Cmd, error) {
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -111,7 +112,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
-		log.Info().Msgf("cmd = %v", cmd)
+		log.Debug().Msgf("cmd = %v", cmd)
 	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
@@ -270,7 +271,7 @@ func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
 
 func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -300,38 +301,6 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
-	// Podman run -d state
-	if !opts.Detach {
-		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
-		if err != nil {
-			return err
-		}
-
-		var data map[string]interface{}
-
-		if err := json.Unmarshal(jsonData, &data); err != nil {
-			return err
-		}
-
-		data["process"].(map[string]interface{})["terminal"] = false
-		updatedJSON, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
-			return err
-		}
-	}
-
-	// Here lie the podman patch! :brandon-pirate:
-	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	switch v := data.(type) {
 	case map[string]interface{}:
@@ -354,72 +323,114 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, isManagedJob bool) (int32, chan int, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return fmt.Errorf("could not get restore stats from context")
+		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	bundle := Bundle{Bundle: opts.Bundle}
-
-	isPodman := checkIfPodman(bundle)
-
-	if isPodman {
-		var spec specs.Spec
-		parts := strings.Split(opts.Bundle, "/")
-		oldContainerId := parts[6]
-
-		runPath := "/run/containers/storage/overlay-containers/" + oldContainerId + "/userdata"
-		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
-		newVarPath := "/var/lib/containers/storage/overlay/" + containerId + "/merged"
-
-		parts[6] = containerId
-		// exclude last part for rsync
-		parts = parts[1 : len(parts)-1]
-		newBundle := "/" + strings.Join(parts, "/")
-
-		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
-			return err
-		}
-		if err := rsyncDirectories(runPath, newRunPath); err != nil {
-			return err
-		}
-		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(configFile, &spec); err != nil {
-			return err
-		}
-		recursivelyReplace(&spec, oldContainerId, containerId)
-		varPath := spec.Root.Path + "/"
-		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
-			return err
-		}
-		if err := rsyncDirectories(varPath, newVarPath); err != nil {
-			return err
-		}
-		spec.Root.Path = newVarPath
-		updatedConfig, err := json.Marshal(spec)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
-			return err
-		}
-		opts.Bundle = newBundle + "/userdata"
-	}
-
-	err := container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	state, err := deserializeStateFromDir(imgPath, false)
 	if err != nil {
-		return err
+		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
-	if isPodman {
+	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
+
+	// FIXME: GPU restore should instead be done in the pre-resume hook, so as to ensure it does not
+	// continue to run as an orphan process if the restore fails early. Once process has started, then
+	// it's lifecycle is tied to it (see below goroutines).
+	if state.GPU {
+		var err error
+		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+		if err != nil {
+			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
+			return 0, nil, err
+		}
+	}
+
+	if opts.Bundle == "" {
+		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
+	}
+
+	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if gpuCmd != nil {
+			gpuCmd.Process.Kill()
+			gpuCmd.Wait()
+		}
+
+		return 0, nil, err
+	}
+
+	// HACK YA: RACE The container might not exit yet
+	// time.Sleep(1 * time.Second)
+
+	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
+	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if gpuCmd != nil {
+			gpuCmd.Wait()
+			gpuCmd.Process.Kill()
+		}
+
+		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
+	}
+
+	exitCode := make(chan int)
+	if isManagedJob {
+		// Wait to cleanup
+		s.wg.Add(1)
 		go func() {
-			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
-				log.Error().Err(err).Send()
+			defer s.wg.Done()
+			var status syscall.WaitStatus
+			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
+			code := status.ExitStatus()
+			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+
+			if gpuCmd != nil {
+				err = gpuCmd.Process.Kill()
+				if err != nil {
+					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
+				}
+			}
+
+			exitCode <- code
+		}()
+
+		// Clean up GPU controller and also handle premature exit
+		if gpuCmd != nil {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				err := gpuCmd.Wait()
+				if err != nil {
+					log.Debug().Err(err).Msg("GPU controller Wait()")
+				}
+				log.Info().Int("PID", gpuCmd.Process.Pid).
+					Int("status", gpuCmd.ProcessState.ExitCode()).
+					Str("out/err", gpuOutBuf.String()).
+					Msg("GPU controller exited")
+
+				// Should kill process if still running since GPU controller might have exited prematurely
+				syscall.Kill(int(pid), syscall.SIGKILL)
+			}()
+		}
+
+		// Kill on server/stream shutdown
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			log.Debug().Int32("PID", pid).Str("JID", containerId).Msgf("killing runc container")
+			syscall.Kill(int(pid), syscall.SIGKILL)
+			if err != nil {
+				log.Warn().Err(err).Int32("PID", pid).Str("JID", containerId).Msgf("could not kill runc container")
+				return
 			}
 		}()
 	}
@@ -427,7 +438,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
-	return err
+	return pid, exitCode, nil
 }
 
 // Bundle represents an OCI bundle
@@ -594,16 +605,17 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
 
-	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
-	if state.GPUCheckpointed {
-		if !s.gpuEnabled {
-			return 0, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
-		}
+	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
+	if state.GPU {
+		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
+		// process is just about to be resumed. If we do GPU restore too early, then we will have to
+		// ensure it's killed on every failure. Once the process starts, then it's lifecycle is tied to it
+		// (see below goroutines).
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
+				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -651,7 +663,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer s.wg.Done()
 				defer out.Close()
 				for stdoutScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stdout")
 						return
 					}
@@ -667,7 +679,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 				defer s.wg.Done()
 				defer er.Close()
 				for stderrScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stderr")
 						return
 					}
@@ -685,7 +697,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
+			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -806,7 +818,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}

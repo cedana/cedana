@@ -1,7 +1,12 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
@@ -20,7 +25,6 @@ func GetPid(processName string) (int32, error) {
 	}
 
 	return pid, nil
-
 }
 
 func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, error) {
@@ -66,7 +70,6 @@ func GetProcessSimilarity(processName string, processes []*ps.Process) (int32, e
 func GetProcessName(pid int32) (*string, error) {
 	// new process checks if exists as well
 	p, err := ps.NewProcess(pid)
-
 	if err != nil {
 		return nil, err
 	}
@@ -74,4 +77,55 @@ func GetProcessName(pid int32) (*string, error) {
 	name, _ := p.Exe()
 
 	return &name, nil
+}
+
+// Returns a channel that will be closed when a non-child process exits
+// Since, we cannot use the process.Wait() method to wait for a non-child process to exit
+func WaitForPid(pid int32) chan int {
+	exitCh := make(chan int)
+
+	go func() {
+		for {
+			// wait for the process to exit
+			p, err := ps.NewProcess(pid)
+			if err != nil {
+				exitCh <- -1
+				return
+			}
+			_, err = p.Status()
+			if err != nil {
+				exitCh <- -1
+				return
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+
+	return exitCh
+}
+
+// checks if the given process has any active tcp connections
+func CheckTCPConnections(pid int32) (bool, error) {
+	tcpFile := filepath.Join("/proc", fmt.Sprintf("%d", pid), "net/tcp")
+
+	file, err := os.Open(tcpFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to open %s: %v", tcpFile, err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "  sl") {
+			continue
+		}
+		return true, nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return false, fmt.Errorf("error reading %s: %v", tcpFile, err)
+	}
+
+	return false, nil
 }
