@@ -2,7 +2,7 @@ package runc
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +19,8 @@ const (
 	crioContainerName       = "io.kubernetes.container.name"
 	crioSandboxName         = "io.kubernetes.pod.name"
 )
+
+var ErrContainerNotFound = errors.New("container id not found")
 
 type runcContainer struct {
 	ContainerId      string
@@ -59,6 +61,35 @@ func List(root string) error {
 		}
 	}
 	return nil
+}
+
+func GetBundleByContainerId(containerId, root string) (string, error) {
+	dirs, err := os.ReadDir(root)
+	if err != nil {
+		return "", err
+	}
+	for _, dir := range dirs {
+		var runcSpec libcontainer.State
+		if dir.IsDir() {
+			statePath := filepath.Join(root, dir.Name(), "state.json")
+			if _, err := os.Stat(statePath); err == nil {
+				configFile, err := os.ReadFile(statePath)
+				if err != nil {
+					return "", err
+				}
+				if err := json.Unmarshal(configFile, &runcSpec); err != nil {
+					return "", err
+				}
+				for _, label := range runcSpec.Config.Labels {
+					splitLabel := strings.Split(label, "=")
+					if splitLabel[0] == "bundle" {
+						return splitLabel[1], nil
+					}
+				}
+			}
+		}
+	}
+	return "", ErrContainerNotFound
 }
 
 func GetPidByContainerId(containerId, root string) (int32, error) {
@@ -186,7 +217,7 @@ func GetContainerIdByName(containerName, sandboxName, root string) (string, stri
 		}
 
 	}
-	return "", "", fmt.Errorf("Container id not found")
+	return "", "", ErrContainerNotFound
 }
 
 func GetPausePid(bundlePath string) (int, error) {
@@ -219,7 +250,6 @@ func GetPausePid(bundlePath string) (int, error) {
 }
 
 func GetSpecById(root, containerID string) (spec *rspec.Spec, err error) {
-
 	configFile, err := os.ReadFile(filepath.Join(root, containerID))
 	if err != nil {
 		return spec, err

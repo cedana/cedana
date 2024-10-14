@@ -1,4 +1,4 @@
-# Container Runtime Support
+# Container runtime support
 
 Using the process as a primitive, cedana supports multiple container runtimes for checkpoint/restore. As we continue to abstract away the concept of what a container is (cgroups, overlay, namespaces, etc.) we'll continue to add support for more runtimes as well as increase support for currently supported ones. 
 

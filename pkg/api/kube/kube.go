@@ -2,6 +2,7 @@ package kube
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,8 @@ const CONTAINER_TYPE_CONTAINER = "container"
 
 const CONTAINER_TYPE_SANDBOX = "sandbox"
 
+var ErrDirectoryDoesNotExist = errors.New("directory does not exist")
+
 type Container struct {
 	containerName string
 	sandboxId     string
@@ -54,7 +57,7 @@ func StateList(root string) ([]RuncContainer, error) {
 
 	dirs, err := os.ReadDir(root)
 	if err != nil {
-		return nil, err
+		return nil, ErrDirectoryDoesNotExist
 	}
 
 	for _, dir := range dirs {

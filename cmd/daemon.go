@@ -23,7 +23,10 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
-var DEFAULT_PORT uint32 = 8080
+var (
+	DEFAULT_PORT      uint32 = 8080
+	ASR_POLL_INTERVAL        = 60 * time.Second
+)
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
@@ -104,7 +107,7 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 				return
 			}
 			_ = conts
-			time.Sleep(60 * time.Second)
+			time.Sleep(ASR_POLL_INTERVAL)
 		}
 	}()
 }

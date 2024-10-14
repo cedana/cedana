@@ -527,7 +527,7 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 	_, err := os.Stat(filePath)
 	if err == nil {
-		log.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
+		log.Info().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
@@ -548,7 +548,11 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
+		if resp != nil {
+			log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
+		} else {
+			log.Error().Err(err).Msg("could not get gpu binary")
+		}
 		return fmt.Errorf("could not get gpu binary")
 	}
 	defer resp.Body.Close()

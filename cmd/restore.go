@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,20 @@ import (
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Manually restore a process or container from a checkpoint located at input path: [process, runc (container), containerd (container)]",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var restoreProcessCmd = &cobra.Command{
@@ -31,39 +46,12 @@ var restoreProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
-
-		var uid int32
-		var gid int32
-		var groups []int32 = []int32{}
-
-		asRoot, _ := cmd.Flags().GetBool(rootFlag)
-		if !asRoot {
-			uid = int32(os.Getuid())
-			gid = int32(os.Getgid())
-			groups_int, err := os.Getgroups()
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user groups")
-				return err
-			}
-			for _, g := range groups_int {
-				groups = append(groups, int32(g))
-			}
-		}
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		restoreArgs := task.RestoreArgs{
-			UID:            uid,
-			GID:            gid,
-			Groups:         groups,
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 			Stream:         stream,
@@ -82,7 +70,103 @@ var restoreProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
+
+		return nil
+	},
+}
+
+var restoreJobCmd = &cobra.Command{
+	Use:   "job",
+	Short: "Manually restore a previously dumped process or container from an input id",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+
+		jid := args[0]
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		root, _ := cmd.Flags().GetString(rootFlag)
+		stream, _ := cmd.Flags().GetBool(streamFlag)
+		bundle, err := cmd.Flags().GetString(bundleFlag)
+		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
+		detach, err := cmd.Flags().GetBool(detachFlag)
+
+		restoreArgs := &task.JobRestoreArgs{
+			JID:    jid,
+			Stream: stream,
+			CriuOpts: &task.CriuOpts{
+				TcpEstablished: tcpEstablished,
+			},
+			RuncOpts: &task.RuncOpts{
+				Root:          getRuncRootPath(root),
+				Bundle:        bundle,
+				ConsoleSocket: consoleSocket,
+				Detach:        detach,
+			},
+		}
+
+		attach, _ := cmd.Flags().GetBool(attachFlag)
+		if attach {
+			stream, err := cts.JobRestoreAttach(ctx, &task.AttachArgs{Args: &task.AttachArgs_JobRestoreArgs{JobRestoreArgs: restoreArgs}})
+			if err != nil {
+				st, ok := status.FromError(err)
+				if ok {
+					log.Error().Err(st.Err()).Msg("restore failed")
+				} else {
+					log.Error().Err(err).Msg("restore failed")
+				}
+				return err
+			}
+
+			// Handler stdout, stderr
+			exitCode := make(chan int)
+			go func() {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						log.Error().Err(err).Msg("stream ended")
+						exitCode <- 1
+						return
+					}
+					if resp.Stdout != "" {
+						fmt.Print(resp.Stdout)
+					} else if resp.Stderr != "" {
+						fmt.Fprint(os.Stderr, resp.Stderr)
+					} else {
+						exitCode <- int(resp.GetExitCode())
+						return
+					}
+				}
+			}()
+
+			// Handle stdin
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					if err := stream.Send(&task.AttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
+						log.Error().Err(err).Msg("error sending stdin")
+						return
+					}
+				}
+			}()
+
+			os.Exit(<-exitCode)
+
+			// TODO: Add signal handling properly
+		}
+
+		resp, err := cts.JobRestore(ctx, restoreArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
+			} else {
+				log.Error().Err(err).Msgf("Failed")
+			}
+			return err
+		}
+		log.Info().Str("message", resp.Message).Int32("PID", resp.State.PID).Interface("stats", resp.RestoreStats).Msgf("Success")
 
 		return nil
 	},
@@ -171,130 +255,13 @@ var restoreKataCmd = &cobra.Command{
 	},
 }
 
-var restoreJobCmd = &cobra.Command{
-	Use:   "job",
-	Short: "Manually restore a previously dumped process or container from an input id",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Err(err).Msgf("error creating client")
-			return err
-		}
-		defer cts.Close()
-
-		var uid int32
-		var gid int32
-		var groups []int32 = []int32{}
-
-		jid := args[0]
-		asRoot, _ := cmd.Flags().GetBool(rootFlag)
-		if !asRoot {
-			uid = int32(os.Getuid())
-			gid = int32(os.Getgid())
-			groups_int, err := os.Getgroups()
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user groups")
-				return err
-			}
-			for _, g := range groups_int {
-				groups = append(groups, int32(g))
-			}
-		}
-
-		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
-		restoreArgs := task.RestoreArgs{
-			JID:    jid,
-			UID:    uid,
-			GID:    gid,
-			Groups: groups,
-			Stream: stream,
-			CriuOpts: &task.CriuOpts{
-				TcpEstablished: tcpEstablished,
-			},
-		}
-
-		attach, _ := cmd.Flags().GetBool(attachFlag)
-		if attach {
-			stream, err := cts.RestoreAttach(ctx, &task.RestoreAttachArgs{Args: &restoreArgs})
-			if err != nil {
-				st, ok := status.FromError(err)
-				if ok {
-					log.Error().Err(st.Err()).Msg("restore failed")
-				} else {
-					log.Error().Err(err).Msg("restore failed")
-				}
-			}
-
-			// Handler stdout, stderr
-			exitCode := make(chan int)
-			go func() {
-				for {
-					resp, err := stream.Recv()
-					if err != nil {
-						log.Error().Err(err).Msg("stream ended")
-						exitCode <- 1
-						return
-					}
-					if resp.Stdout != "" {
-						fmt.Print(resp.Stdout)
-					} else if resp.Stderr != "" {
-						fmt.Fprint(os.Stderr, resp.Stderr)
-					} else {
-						exitCode <- int(resp.GetExitCode())
-						return
-					}
-				}
-			}()
-
-			// Handle stdin
-			go func() {
-				scanner := bufio.NewScanner(os.Stdin)
-				for scanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachArgs{Stdin: scanner.Text() + "\n"}); err != nil {
-						log.Error().Err(err).Msg("error sending stdin")
-						return
-					}
-				}
-			}()
-
-			os.Exit(<-exitCode)
-
-			// TODO: Add signal handling properly
-		}
-
-		resp, err := cts.Restore(ctx, &restoreArgs)
-		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("Failed")
-			} else {
-				log.Error().Err(err).Msgf("Failed")
-			}
-			return err
-		}
-		log.Info().Str("message", resp.Message).Int32("PID", resp.NewPID).Interface("stats", resp.RestoreStats).Msgf("Success")
-
-		return nil
-	},
-}
-
 var containerdRestoreCmd = &cobra.Command{
 	Use:   "containerd",
 	Short: "Manually checkpoint a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		ref, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
@@ -325,25 +292,15 @@ var runcRestoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		root, err := cmd.Flags().GetString(rootFlag)
-		if runcRootPath[root] == "" {
-			log.Error().Msgf("container root %s not supported", root)
-			return err
-		}
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		opts := &task.RuncOpts{
-			Root:          runcRootPath[root],
+			Root:          getRuncRootPath(root),
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detach:        detach,
@@ -380,16 +337,20 @@ var runcRestoreCmd = &cobra.Command{
 }
 
 func init() {
-	// Process/jobs
+	// Process
 	restoreCmd.AddCommand(restoreProcessCmd)
-	restoreCmd.AddCommand(restoreJobCmd)
-
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
+
+	// Job
+	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
-	restoreJobCmd.Flags().BoolP(rootFlag, "r", false, "restore as root")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
+	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
+	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")
+	restoreJobCmd.Flags().BoolP(detachFlag, "e", false, "(runc) restore detached")
+	restoreJobCmd.Flags().StringP(rootFlag, "r", "default", "(runc) root")
 
 	// Kata
 	restoreCmd.AddCommand(restoreKataCmd)
@@ -403,18 +364,16 @@ func init() {
 	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
-	// TODO Runc
+	// Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
 	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
 	runcRestoreCmd.MarkFlagRequired("dir")
 	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
-	runcRestoreCmd.MarkFlagRequired(bundleFlag)
 	runcRestoreCmd.Flags().StringP(consoleSocketFlag, "c", "", "console socket path")
 	runcRestoreCmd.Flags().StringP(rootFlag, "r", "default", "runc root directory")
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
-	runcRestoreCmd.Flags().Bool(isK3sFlag, false, "pass whether or not we are checkpointing a container in a k3s agent")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
 
