@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -33,8 +32,6 @@ const (
 	OUTPUT_FILE_FLAGS int         = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 )
 
-var DB_BUCKET_JOBS = []byte("jobs")
-
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
 	return s.startHelper(ctx, args, nil)
 }
@@ -44,24 +41,119 @@ func (s *service) StartAttach(stream task.TaskService_StartAttachServer) error {
 	if err != nil {
 		return err
 	}
-	args := in.GetArgs()
+	args := in.GetStartArgs()
 
 	_, err = s.startHelper(stream.Context(), args, stream)
 	return err
 }
 
-func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
+func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.ManageResp, error) {
+	state := &task.ProcessState{}
 	var err error
-
-	if args.GPU {
-		if s.gpuEnabled == false {
-			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-		}
-		if args.JID == "" {
-			return nil, status.Error(codes.InvalidArgument, "GPU dump is only supported for managed jobs")
+	if args.JID == "" {
+		args.JID = xid.New().String()
+	} else {
+		// Check if job ID is already in use
+		state, err = s.getState(ctx, args.JID)
+		if state != nil {
+			err = status.Error(codes.AlreadyExists, "job ID already exists")
+			return nil, err
 		}
 	}
 
+	// Check if process PID already exists as a managed job
+	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{args.PID}})
+	if len(queryResp.Processes) > 0 {
+		if queryResp.Processes[0].JobState == task.JobState_JOB_RUNNING {
+			err = status.Error(codes.AlreadyExists, "PID already exists as a managed job")
+			return nil, err
+		}
+	}
+
+	exitCode := utils.WaitForPid(args.PID)
+
+	state, err = s.generateState(ctx, args.PID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "is the process running?")
+	}
+	state.JID = args.JID
+	state.JobState = task.JobState_JOB_RUNNING
+	state.GPU = args.GPU
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
+	}
+
+	var gpuCmd *exec.Cmd
+	gpuOutBuf := &bytes.Buffer{}
+	if args.GPU {
+		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
+		if args.GPU {
+			gpuOut := io.Writer(gpuOutBuf)
+			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
+			if err != nil {
+				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
+				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
+			}
+		}
+	}
+
+	// Wait for server shutdown to gracefully exit, since job is now managed
+	// Also wait for process exit, to update state
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		select {
+		case <-s.serverCtx.Done():
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing process")
+			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
+			if err != nil {
+				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process. already dead?")
+			}
+		case <-exitCode:
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
+		}
+		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+		}
+		state.JobState = task.JobState_JOB_DONE
+		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update state after done")
+		}
+		if gpuCmd != nil {
+			err = gpuCmd.Process.Kill()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
+			}
+		}
+	}()
+
+	// Clean up GPU controller and also handle premature exit
+	if gpuCmd != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			err := gpuCmd.Wait()
+			if err != nil {
+				log.Debug().Err(err).Msg("GPU controller Wait()")
+			}
+			log.Info().Int("PID", gpuCmd.Process.Pid).
+				Int("status", gpuCmd.ProcessState.ExitCode()).
+				Str("out/err", gpuOutBuf.String()).
+				Msg("GPU controller exited")
+
+			// Should kill process if still running since GPU controller might have exited prematurely
+			syscall.Kill(int(state.PID), syscall.SIGKILL)
+		}()
+	}
+
+	return &task.ManageResp{Message: "success", State: state}, nil
+}
+
+func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	dumpStats := task.DumpStats{
 		DumpType: task.DumpType_PROCESS,
 	}
@@ -83,14 +175,14 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	state := &task.ProcessState{}
 	pid := args.PID
 
-	if args.JID != "" { // if job
+	var err error
+	if args.JID != "" { // if managed job
 		state, err = s.getState(ctx, args.JID)
 		if err != nil {
-			err = status.Error(codes.NotFound, err.Error())
-			return nil, err
+			return nil, status.Error(codes.NotFound, "job ID not found: "+err.Error())
 		}
-		if state == nil {
-			return nil, status.Error(codes.NotFound, "job not found")
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 		}
 		pid = state.PID
 	}
@@ -135,8 +227,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 	if args.JID != "" {
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
-			return nil, st.Err()
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
 		}
 	}
 
@@ -155,49 +246,10 @@ func (s *service) RestoreAttach(stream task.TaskService_RestoreAttachServer) err
 	if err != nil {
 		return err
 	}
-	args := in.GetArgs()
+	args := in.GetRestoreArgs()
 
 	_, err = s.restoreHelper(stream.Context(), args, stream)
 	return err
-}
-
-func (s *service) Query(ctx context.Context, args *task.QueryArgs) (*task.QueryResp, error) {
-	res := &task.QueryResp{}
-
-	if len(args.JIDs) > 0 {
-		for _, jid := range args.JIDs {
-			state, err := s.getState(ctx, jid)
-			if err != nil {
-				return nil, status.Error(codes.NotFound, "job not found")
-			}
-			if state != nil {
-				res.Processes = append(res.Processes, state)
-			}
-		}
-	} else {
-		pidSet := make(map[int32]bool)
-		for _, pid := range args.PIDs {
-			pidSet[pid] = true
-		}
-
-		list, err := s.db.ListJobs(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to retrieve jobs from database")
-		}
-		for _, job := range list {
-			state := task.ProcessState{}
-			err = json.Unmarshal(job.State, &state)
-			if err != nil {
-				return nil, status.Error(codes.Internal, "failed to unmarshal state")
-			}
-			if len(pidSet) > 0 && !pidSet[state.PID] {
-				continue
-			}
-			res.Processes = append(res.Processes, &state)
-		}
-	}
-
-	return res, nil
 }
 
 //////////////////////////
@@ -209,11 +261,14 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		args.Task = viper.GetString("client.task")
 	}
 
-	if args.GPU && s.gpuEnabled == false {
-		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
-	}
-
 	state := &task.ProcessState{}
+
+	if args.GPU {
+		if s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+		state.GPU = true
+	}
 
 	if args.JID == "" {
 		state.JID = xid.New().String()
@@ -244,9 +299,13 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	if stream != nil && exitCode != nil {
 		code := <-exitCode // if streaming, wait for process to finish
 		if stream != nil {
-			stream.Send(&task.StartAttachResp{
+			stream.Send(&task.AttachResp{
 				ExitCode: int32(code),
 			})
+		}
+		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
 		state.JobState = task.JobState_JOB_DONE
 		err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
@@ -259,6 +318,10 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 		go func() {
 			defer s.wg.Done()
 			<-exitCode
+			state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+			}
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 			if err != nil {
@@ -283,12 +346,16 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_PROCESS,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	if args.JID != "" {
 		state, err := s.getState(ctx, args.JID)
 		if err != nil {
-			return nil, status.Error(codes.NotFound, "job not found")
+			err = status.Error(codes.NotFound, err.Error())
+			return nil, err
+		}
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
 		}
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
@@ -304,7 +371,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
 			args.Type = task.CRType_REMOTE
 		} else {
-			args.CheckpointPath = state.GetCheckpointPath()
+			args.CheckpointPath = state.CheckpointPath
 			args.Type = task.CRType_LOCAL
 		}
 	} else {
@@ -341,19 +408,16 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	pid, exitCode, err := s.restore(ctx, args, stream)
 	if err != nil {
-		staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-		return nil, staterr
+		err := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
+		return nil, err
 	}
-	state := &task.ProcessState{}
+
 	// Only update state if it was a managed job
+	state := &task.ProcessState{}
 	if args.JID != "" {
-		state, err = s.generateState(ctx, pid)
+		state, err = s.getState(ctx, args.JID)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to generate state after restore, using fallback")
-			state, err = s.getState(ctx, args.JID)
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to get state existing after restore")
-			}
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
 		log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored process")
 		state.PID = pid
@@ -368,9 +432,13 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if stream != nil && exitCode != nil {
 			code := <-exitCode // if streaming, wait for process to finish
 			if stream != nil {
-				stream.Send(&task.RestoreAttachResp{
+				stream.Send(&task.AttachResp{
 					ExitCode: int32(code),
 				})
+			}
+			state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 			}
 			state.JobState = task.JobState_JOB_DONE
 			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
@@ -383,6 +451,10 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 			go func() {
 				defer s.wg.Done()
 				<-exitCode
+				state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+				if err != nil {
+					log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+				}
 				state.JobState = task.JobState_JOB_DONE
 				err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
 				if err != nil {
@@ -395,7 +467,6 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 
 	resp = task.RestoreResp{
 		Message:      fmt.Sprintf("successfully restored process: %v", pid),
-		NewPID:       pid,
 		State:        state,
 		RestoreStats: &restoreStats,
 	}
@@ -507,7 +578,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stdoutPipe.Close()
 			for stdoutScanner.Scan() {
-				if err := stream.Send(&task.StartAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+				if err := stream.Send(&task.AttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
 					log.Error().Err(err).Msg("failed to send stdout")
 					return
 				}
@@ -528,7 +599,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			defer s.wg.Done()
 			defer stderrPipe.Close()
 			for stderrScanner.Scan() {
-				if err := stream.Send(&task.StartAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+				if err := stream.Send(&task.AttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
 					log.Error().Err(err).Msg("failed to send stderr")
 					return
 				}
