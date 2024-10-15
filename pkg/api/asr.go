@@ -89,7 +89,7 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 }
 
 func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
-	return GetContainerInfo(ctx, s.cadvisorManager)
+	return nil, fmt.Errorf("removed; we now don't use grpc for asr reporting")
 }
 
 func GetContainerInfo(ctx context.Context, cman manager.Manager) (*task.ContainersInfo, error) {
