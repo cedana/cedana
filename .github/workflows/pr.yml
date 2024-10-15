@@ -79,6 +79,11 @@ on:
         description: "Skip shellcheck or not"
         required: false
         default: false
+      skip_helper_image_push:
+        type: boolean
+        description: "Skip helper image push or not"
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -416,10 +421,11 @@ jobs:
           filePath: /src/summary.md
           comment_tag: execution
 
-  docker-image-push:
-    name: Docker Image push to cedana-helper-test
+  helper-image-push:
+    name: Push Helper Test Image
     runs-on: ubicloud-standard-2
     needs: [build, setup-script-tests]
+    if: ${{ !inputs.skip_helper_image_push }}
     steps:
       - uses: actions/checkout@v4
         with:
