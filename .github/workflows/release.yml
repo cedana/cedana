@@ -63,6 +63,7 @@ jobs:
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       skip_bench: true # since benchmark will be run in a separate job below
       skip_shellcheck: true
+      skip_helper_image_push: true
 
   build-publish-amd64:
     name: Build & Publish (amd64)

@@ -3,6 +3,7 @@ package cmd
 // This file contains all the dump-related commands when starting `cedana dump ...`
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -23,6 +25,20 @@ import (
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Manually checkpoint a process or container to a directory: [process, runc (container), containerd (container)]",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var dumpProcessCmd = &cobra.Command{
@@ -31,14 +47,7 @@ var dumpProcessCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -47,17 +56,19 @@ var dumpProcessCmd = &cobra.Command{
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-
-		// always self serve when invoked from CLI
-		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
+		if stream {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
 			Type:   task.CRType_LOCAL,
-			GPU:    gpuEnabled,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
@@ -74,7 +85,7 @@ var dumpProcessCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
 
 		return nil
 	},
@@ -174,27 +185,19 @@ var dumpJobCmd = &cobra.Command{
 	Short: "Manually checkpoint a running job to a directory [-d]",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		id := args[0]
-
 		if id == "" {
 			log.Error().Msgf("no job id specified")
-			return err
+			return fmt.Errorf("no job id specified")
 		}
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
-
-		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
+		external, _ := cmd.Flags().GetString(externalFlag)
 		stream, _ := cmd.Flags().GetBool(streamFlag)
 		if stream {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
@@ -202,18 +205,33 @@ var dumpJobCmd = &cobra.Command{
 				return err
 			}
 		}
-		dumpArgs := task.DumpArgs{
+
+		var externalNamespaces []string
+		namespaces := strings.Split(external, ",")
+		if external != "" {
+			for _, ns := range namespaces {
+				nsParts := strings.Split(ns, ":")
+
+				nsType := nsParts[0]
+				nsDestination := nsParts[1]
+
+				externalNamespaces = append(externalNamespaces, fmt.Sprintf("%s[%s]:extRootPidNS", nsType, nsDestination))
+			}
+		}
+
+		dumpArgs := task.JobDumpArgs{
 			JID:    id,
 			Dir:    dir,
-			GPU:    gpuEnabled,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
 				TcpEstablished: tcpEstablished,
+				External:       externalNamespaces,
+				FileLocks:      fileLocks,
 			},
 		}
 
-		resp, err := cts.Dump(ctx, &dumpArgs)
+		resp, err := cts.JobDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -223,7 +241,7 @@ var dumpJobCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
 
 		return nil
 	},
@@ -235,14 +253,7 @@ var dumpContainerdCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		ref, _ := cmd.Flags().GetString(refFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
@@ -257,11 +268,8 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		root, _ := cmd.Flags().GetString(rootFlag)
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
-		pid, _ := cmd.Flags().GetInt(pidFlag)
-
 		external, _ := cmd.Flags().GetString(externalFlag)
 
 		var externalNamespaces []string
@@ -286,10 +294,7 @@ var dumpContainerdCmd = &cobra.Command{
 		}
 
 		runcArgs := task.RuncDumpArgs{
-			Root: root,
-			// CheckpointPath: checkpointPath,
-			// FIXME YA: Where does this come from?
-			Pid:         int32(pid),
+			Root:        getRuncRootPath(root),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
@@ -302,7 +307,7 @@ var dumpContainerdCmd = &cobra.Command{
 			RuncDumpArgs:             &runcArgs,
 		}
 
-		_, err = cts.ContainerdDump(ctx, &dumpArgs)
+		_, err := cts.ContainerdDump(ctx, &dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -324,14 +329,7 @@ var dumpContainerdRootfsCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		id, err := cmd.Flags().GetString(idFlag)
 		if err != nil {
@@ -384,25 +382,12 @@ var dumpRuncCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		root, _ := cmd.Flags().GetString(rootFlag)
-		if runcRootPath[root] == "" {
-			log.Error().Msgf("container root %s not supported", root)
-			return err
-		}
-
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
-		pid, _ := cmd.Flags().GetInt(pidFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -422,12 +407,11 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		criuOpts := &task.CriuOpts{
-			ImagesDirectory: dir,
-			WorkDirectory:   wdPath,
-			LeaveRunning:    leaveRunning,
-			TcpEstablished:  tcpEstablished,
-			External:        externalNamespaces,
-			FileLocks:       fileLocks,
+			WorkDirectory:  wdPath,
+			LeaveRunning:   leaveRunning,
+			TcpEstablished: tcpEstablished,
+			External:       externalNamespaces,
+			FileLocks:      fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -436,8 +420,8 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		dumpArgs := task.RuncDumpArgs{
-			Root:        runcRootPath[root],
-			Pid:         int32(pid),
+			Dir:         dir,
+			Root:        getRuncRootPath(root),
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 		}
@@ -452,48 +436,77 @@ var dumpRuncCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Msgf("Success")
+		log.Info().Str("message", resp.Message).Interface("stats", resp.DumpStats).Str("Checkpoint", resp.CheckpointID).Msgf("Success")
+
+		return nil
+	},
+}
+
+var dumpCRIORootfs = &cobra.Command{
+	Use:   "crioRootfs",
+	Short: "Manually commit a CRIO container",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+
+		id, err := cmd.Flags().GetString(idFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting container id: %v", err)
+		}
+		dest, err := cmd.Flags().GetString(destFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting destination path: %v", err)
+		}
+		containerStorage, err := cmd.Flags().GetString(containerStorageFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting container storage path: %v", err)
+		}
+
+		dumpArgs := task.CRIORootfsDumpArgs{
+			ContainerID:      id,
+			Dest:             dest,
+			ContainerStorage: containerStorage,
+		}
+
+		resp, err := cts.CRIORootfsDump(ctx, &dumpArgs)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				log.Error().Msgf("Checkpoint task failed: %v, %v", st.Message(), st.Code())
+			} else {
+				log.Error().Msgf("Checkpoint task failed: %v", err)
+			}
+			return err
+		}
+		log.Info().Msgf("Response: %v", resp)
 
 		return nil
 	},
 }
 
 func init() {
-	// Process/jobs
+	// Process
 	dumpCmd.AddCommand(dumpProcessCmd)
-	dumpCmd.AddCommand(dumpJobCmd)
-
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpProcessCmd.MarkFlagRequired(dirFlag)
-	dumpProcessCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
+	// Job
+	dumpCmd.AddCommand(dumpJobCmd)
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpJobCmd.MarkFlagRequired(dirFlag)
-	dumpJobCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "checkpoint gpu")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
+	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
+	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
 
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
 	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpKataCmd.MarkFlagRequired(dirFlag)
 
 	// Containerd
-	// ref, _ := cmd.Flags().GetString(imgFlag)
-	// id, _ := cmd.Flags().GetString(idFlag)
-	// address, _ := cmd.Flags().GetString(addressFlag)
-	// namespace, _ := cmd.Flags().GetString(namespaceFlag)
-
-	// Runc
-	// dir, _ := cmd.Flags().GetString(dirFlag)
-	// wdPath, _ := cmd.Flags().GetString(wdFlag)
-	// pid, _ := cmd.Flags().GetInt(pidFlag)
-	// external, _ := cmd.Flags().GetString(externalFlag)
-
 	dumpCmd.AddCommand(dumpContainerdCmd)
 	dumpContainerdCmd.Flags().String(idFlag, "", "container id")
 	dumpContainerdCmd.Flags().String(refFlag, "", "image ref")
@@ -501,14 +514,12 @@ func init() {
 	dumpContainerdCmd.Flags().StringP(addressFlag, "a", "", "containerd sock address")
 	dumpContainerdCmd.MarkFlagRequired(addressFlag)
 	dumpContainerdCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
-
 	dumpContainerdCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpContainerdCmd.MarkFlagRequired(dirFlag)
 	dumpContainerdCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpContainerdCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpContainerdCmd.Flags().Int(pidFlag, 0, "pid")
-	dumpContainerdCmd.Flags().String(externalFlag, "", "external")
+	dumpContainerdCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
 
+	// Containerd Rootfs
+	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
 	dumpContainerdRootfsCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpContainerdRootfsCmd.MarkFlagRequired(imgFlag)
 	dumpContainerdRootfsCmd.Flags().String(refFlag, "", "image ref")
@@ -517,20 +528,18 @@ func init() {
 	dumpContainerdRootfsCmd.MarkFlagRequired(addressFlag)
 	dumpContainerdRootfsCmd.Flags().StringP(namespaceFlag, "n", "", "containerd namespace")
 
-	// TODO Runc
+	// Runc
 	dumpCmd.AddCommand(dumpRuncCmd)
 	dumpRuncCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
-	dumpRuncCmd.MarkFlagRequired(dirFlag)
 	dumpRuncCmd.Flags().StringP(idFlag, "i", "", "container id")
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
-	dumpRuncCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "gpu enabled")
-	dumpRuncCmd.Flags().Int(pidFlag, 0, "pid")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 
+	// CRIO
 	dumpCmd.AddCommand(dumpCRIORootfs)
 	dumpCRIORootfs.Flags().StringP(idFlag, "i", "", "container id")
 	dumpCRIORootfs.MarkFlagRequired(idFlag)
@@ -539,15 +548,5 @@ func init() {
 	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
 	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
 
-	dumpCmd.AddCommand(dumpContainerdRootfsCmd)
-
 	rootCmd.AddCommand(dumpCmd)
-
-	rootCmd.AddCommand(pushCRIOImage)
-	pushCRIOImage.Flags().StringP(refFlag, "", "", "original ref")
-	pushCRIOImage.MarkFlagRequired(refFlag)
-	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
-	pushCRIOImage.MarkFlagRequired(newRefFlag)
-	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
-	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
 }
