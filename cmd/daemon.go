@@ -142,7 +142,7 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 		}
 		// end
 		log.Info().Msg("start pushing asr metrics")
-		client, err := pubsub.NewClient(ctx, getenv("GOOGLE_CLOUD_PROJECT", "prod-data"))
+		client, err := pubsub.NewClient(ctx, getenv("GOOGLE_CLOUD_PROJECT", "prod-data-438318"))
 		if err != nil {
 			log.Error().Msgf("Failed to create Pub/Sub client: %v", err)
 			return
