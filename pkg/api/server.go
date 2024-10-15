@@ -112,15 +112,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	var manager manager.Manager
-	if opts.MetricsEnabled {
-		manager, err = SetupCadvisor(ctx)
-		if err != nil {
-			log.Error().Err(err).Send()
-			return nil, err
-		}
-	}
-
 	var js *jobservice.JobService
 	if opts.JobServiceEnabled {
 		js, err = jobservice.New()
@@ -139,7 +130,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		serverCtx:       ctx,
 		gpuEnabled:      opts.GPUEnabled,
 		machineID:       machineID,
-		cadvisorManager: manager,
+		cadvisorManager: nil,
 		jobService:      js,
 	}
 

@@ -6,9 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
 	"os"
 	"time"
 
+	"cloud.google.com/go/pubsub"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -61,11 +65,11 @@ var startDaemonCmd = &cobra.Command{
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			if metricsEnabled {
-				pollForAsrMetricsReporting(ctx, port)
-			}
 		} else {
 			utils.InitOtelNoop()
+		}
+		if metricsEnabled {
+			pollForAsrMetricsReporting(ctx, port)
 		}
 
 		err = api.StartServer(ctx, &api.ServeOpts{
@@ -85,25 +89,87 @@ var startDaemonCmd = &cobra.Command{
 	},
 }
 
+func getenv(k, d string) string {
+	if s, f := os.LookupEnv(k); f {
+		return s
+	}
+	return d
+}
+
+func gcloudAdcSetup(ctx context.Context) error {
+	adcPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if adcPath == "" {
+		// set env if not present
+		// default to root /gcloud-credentials.json
+		adcPath = "/gcloud-credentials.json"
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", adcPath)
+	}
+	if _, err := os.Stat(adcPath); err == nil {
+		// already present skip
+		return nil
+	}
+	url := getenv("CEDANA_SERVER_URL", "https://sandbox.cedana.ai") + "/k8s/gcloud/serviceaccount"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(adcPath, bytes, 0600)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 	// polling for ASR
 	go func() {
-		time.Sleep(10 * time.Second)
-		cts, err := services.NewClient(port)
+		// setup GCLOUD_JSON
+		err := gcloudAdcSetup(ctx)
 		if err != nil {
-			log.Error().Msgf("error creating client: %v", err)
+			log.Error().Err(err).Msg("failed to setup gcloud ADC, disabling reporting")
 			return
 		}
-		defer cts.Close()
-
-		log.Info().Msg("started polling...")
+		// end
+		log.Info().Msg("start pushing asr metrics")
+		client, err := pubsub.NewClient(ctx, getenv("GOOGLE_CLOUD_PROJECT", "prod-data"))
+		if err != nil {
+			log.Error().Msgf("Failed to create Pub/Sub client: %v", err)
+			return
+		}
+		defer client.Close()
+		manager, err := api.SetupCadvisor(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup cadvisor")
+			return
+		}
+		topic := client.Topic("asr-metrics")
+		time.Sleep(10 * time.Second)
 		for {
-			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+			conts, err := api.GetContainerInfo(ctx, manager)
 			if err != nil {
 				log.Error().Msgf("error getting info: %v", err)
 				return
 			}
-			_ = conts
+			b, err := json.Marshal(conts)
+			// Publish a message
+			result := topic.Publish(ctx, &pubsub.Message{
+				Data: b,
+			})
+			// Get the server-assigned message ID
+			id, err := result.Get(ctx)
+			if err != nil {
+				log.Error().Msgf("Failed to publish message: %v", err)
+			}
+			log.Info().Msgf("Published message with ID: %v\n", id)
 			time.Sleep(60 * time.Second)
 		}
 	}()
