@@ -18,3 +18,14 @@ data.json
 venv
 
 compose-dev.yaml
+
+test/regression/dump
+test/regression/dump.tar
+test/regression/bundle/rootfs
+
+alpine-minirootfs-*
+otelcol-contrib*
+extracted
+-
+
+

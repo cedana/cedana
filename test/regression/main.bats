@@ -196,7 +196,8 @@ teardown() {
 }
 
 @test "Full containerd checkpoint (jupyter notebook)" {
-    local container_id="jupyter-notebook"
+    local random=`echo $RANDOM | md5sum | head -c 5`
+    local container_id="jupyter-notebook-$random"
     local image_ref="checkpoint/test:latest"
     local containerd_sock="/run/containerd/containerd.sock"
     local namespace="default"
@@ -214,7 +215,8 @@ teardown() {
 }
 
 @test "Full containerd restore (jupyter notebook)" {
-    local container_id="jupyter-notebook-restore"
+    local random=`echo $RANDOM | md5sum | head -c 5`
+    local container_id="jupyter-notebook-restore-$random"
     local dumpdir="/tmp/jupyter-checkpoint"
 
     run start_sleeping_jupyter_notebook "checkpoint/test:latest" "$container_id"
@@ -238,11 +240,11 @@ teardown() {
     local dumpdir=$DIR/dump
 
     # fetch and unpack a rootfs
-    wget $rootfs
-
-    mkdir -p $bundle/rootfs
-
-    sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+    if [ ! -d $bundle/rootfs ]; then
+        wget $rootfs
+        mkdir -p $bundle/rootfs
+        sudo tar -C $bundle/rootfs -xzf alpine-minirootfs-3.10.1-x86_64.tar.gz
+    fi
 
     # create a runc container
     echo bundle is $bundle
