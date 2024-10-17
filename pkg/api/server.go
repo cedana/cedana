@@ -112,15 +112,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	healthcheck := health.NewServer()
 	healthcheckgrpc.RegisterHealthServer(server.grpcServer, healthcheck)
 
-	var manager manager.Manager
-	if opts.MetricsEnabled {
-		manager, err = SetupCadvisor(ctx)
-		if err != nil {
-			log.Error().Err(err).Send()
-			return nil, err
-		}
-	}
-
 	var js *jobservice.JobService
 	if opts.JobServiceEnabled {
 		js, err = jobservice.New()
@@ -139,7 +130,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		serverCtx:       ctx,
 		gpuEnabled:      opts.GPUEnabled,
 		machineID:       machineID,
-		cadvisorManager: manager,
+		cadvisorManager: nil,
 		jobService:      js,
 	}
 
@@ -279,7 +270,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		controllerPath = utils.GpuControllerBinaryPath
 	}
 	if _, err := os.Stat(controllerPath); os.IsNotExist(err) {
-		log.Fatal().Err(err)
+		log.Error().Err(err).Send()
 		return nil, fmt.Errorf("no gpu controller at %s", controllerPath)
 	}
 
@@ -476,9 +467,10 @@ func (s *service) GPUHealthCheck(
 	defer func() {
 		err = cmd.Process.Kill()
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Error().Err(err).Msg("could not kill gpu controller")
+		} else {
+			log.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
 		}
-		log.Info().Int("PID", cmd.Process.Pid).Msgf("GPU controller killed")
 	}()
 
 	var opts []grpc.DialOption
@@ -526,7 +518,7 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 	_, err := os.Stat(filePath)
 	if err == nil {
-		log.Debug().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
+		log.Info().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
@@ -547,7 +539,11 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
+		if resp != nil {
+			log.Error().Err(err).Int("status", resp.StatusCode).Msg("could not get gpu binary")
+		} else {
+			log.Error().Err(err).Msg("could not get gpu binary")
+		}
 		return fmt.Errorf("could not get gpu binary")
 	}
 	defer resp.Body.Close()

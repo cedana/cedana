@@ -50,6 +50,7 @@ func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState,
 }
 
 // TODO NR - customizable errors
+// If state exists in DB, only updates its fields
 func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessState, error) {
 	if pid == 0 {
 		return nil, fmt.Errorf("invalid PID %d", pid)

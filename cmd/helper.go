@@ -14,12 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -176,7 +173,7 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 		for {
 			select {
 			case <-ticker.C:
-				isRunning, err := isProcessRunning(port)
+				isRunning, err := isCedanaDaemonRunning(ctx, port)
 				if err != nil {
 					log.Error().Err(err).Msg("Issue checking if daemon is running")
 				}
@@ -223,8 +220,10 @@ func startHelper(ctx context.Context, startChroot bool, port uint32) {
 				log.Error().Err(err).Msg("Error reading cedana-daemon.log")
 				return
 			}
-			if len(line) > 0 {
-				log.Info().Msg(line)
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 {
+				// we don't use the log function as the logs should have their own timing data
+				fmt.Println(trimmed)
 			}
 		}
 	}()
@@ -294,17 +293,13 @@ func startDaemon(startChroot bool) error {
 	return nil
 }
 
-func isProcessRunning(port uint32) (bool, error) {
-	// TODO: Dial API is deprecated in favour of NewClient since early 2024, will be removed soon
-	// Note: NewClient defaults to idle state for connection rather than automatically trying to
-	// connect in the background
-	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func isCedanaDaemonRunning(ctx context.Context, port uint32) (bool, error) {
+	conn, err := services.NewClient(port)
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	return true, nil
+	return conn.HealthCheck(ctx)
 }
 
 func init() {

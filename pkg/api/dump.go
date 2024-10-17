@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -19,12 +18,9 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
-	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -66,13 +62,15 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	var hasTCP bool
 	var hasExtUnixSocket bool
 
-	for _, Conn := range state.ProcessInfo.OpenConnections {
-		if Conn.Type == syscall.SOCK_STREAM { // TCP
-			hasTCP = true
-		}
+	if state.ProcessInfo != nil {
+		for _, Conn := range state.ProcessInfo.OpenConnections {
+			if Conn.Type == syscall.SOCK_STREAM { // TCP
+				hasTCP = true
+			}
 
-		if Conn.Type == syscall.AF_UNIX { // Interprocess
-			hasExtUnixSocket = true
+			if Conn.Type == syscall.AF_UNIX { // Interprocess
+				hasExtUnixSocket = true
+			}
 		}
 	}
 
@@ -84,10 +82,12 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// check tty state
 	// if pts is in open fds, chances are it's a shell job
 	var isShellJob bool
-	for _, f := range state.ProcessInfo.OpenFds {
-		if strings.Contains(f.Path, "pts") {
-			isShellJob = true
-			break
+	if state.ProcessInfo != nil {
+		for _, f := range state.ProcessInfo.OpenFds {
+			if strings.Contains(f.Path, "pts") {
+				isShellJob = true
+				break
+			}
 		}
 	}
 	opts.ShellJob = proto.Bool(isShellJob)
@@ -139,11 +139,12 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, nil
 }
 
-func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) {
+func (s *service) postDump(ctx context.Context, dumpdir string, state *task.ProcessState, streamCmd *exec.Cmd) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
-		log.Fatal().Msg("could not get dump stats from context")
+		log.Error().Msg("could not get dump stats from context")
+		return fmt.Errorf("could not get dump stats from context")
 	}
 
 	var compressedCheckpointPath string
@@ -159,7 +160,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	// sneak in a serialized state obj
 	err := serializeStateToDir(dumpdir, state, streamCmd != nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err)
+		return err
 	}
 
 	log.Info().Str("Path", compressedCheckpointPath).Msg("compressing checkpoint")
@@ -169,14 +171,16 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	} else {
 		err = utils.TarFolder(dumpdir, compressedCheckpointPath)
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Error().Err(err)
+			return nil
 		}
 	}
 
 	// get size of compressed checkpoint
 	info, err := os.Stat(compressedCheckpointPath)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Error().Err(err)
+		return err
 	}
 
 	elapsed := time.Since(start)
@@ -184,6 +188,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		Size:     info.Size(),
 		Duration: elapsed.Milliseconds(),
 	}
+
+	return nil
 }
 
 func (s *service) prepareDumpOpts() *rpc.CriuOpts {
@@ -195,64 +201,67 @@ func (s *service) prepareDumpOpts() *rpc.CriuOpts {
 	return &opts
 }
 
-func (s *service) runcDump(ctx context.Context, root, containerID string, pid int32, opts *container.CriuOpts, state *task.ProcessState) error {
+func (s *service) runcDump(ctx context.Context, root, containerID string, opts *container.CriuOpts, state *task.ProcessState) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
 
-	var crPid int
+	if _, err := os.Stat(opts.ImagesDirectory); os.IsNotExist(err) {
+		err := os.MkdirAll(opts.ImagesDirectory, DUMP_FOLDER_PERMS)
+		if err != nil {
+			return fmt.Errorf("could not create dump dir: %v", err)
+		}
+	}
 
-	bundle := Bundle{ContainerID: containerID}
-	runcContainer := container.GetContainerFromRunc(containerID, root)
+	runcContainer, err := container.GetContainerFromRunc(containerID, root)
+	if err != nil {
+		return fmt.Errorf("could not get container from runc: %v", err)
+	}
 
 	// TODO make into flag and describe how this redirects using container's init process pid and
 	// instead a specific pid.
 
-	if pid != 0 {
-		crPid = int(pid)
-	} else {
-		crPid = runcContainer.Pid
-	}
-
-	err := runcContainer.RuncCheckpoint(opts, crPid, root, runcContainer.Config)
-	if err != nil {
-		log.Fatal().Err(err)
-		return err
-	}
-
-	if checkIfPodman(bundle) {
-		if err := patchPodmanDump(containerID, opts.ImagesDirectory); err != nil {
+	if state.GPU {
+		err = s.gpuDump(ctx, opts.ImagesDirectory)
+		if err != nil {
 			return err
 		}
+	}
+
+	err = runcContainer.RuncCheckpoint(opts, runcContainer.Pid, root, runcContainer.Config)
+	if err != nil {
+		log.Error().Err(err).Send()
+		return err
 	}
 
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
+	if !(opts.LeaveRunning) {
+		state.JobState = task.JobState_JOB_KILLED
+	}
+
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, opts.ImagesDirectory, state, nil)
-
-	return nil
+	return s.postDump(ctx, opts.ImagesDirectory, state, nil)
 }
 
 func (s *service) containerdDump(ctx context.Context, imagePath, containerID string, state *task.ProcessState) error {
 	// CRIU ntfy hooks get run before this,
 	// so have to ensure that image files aren't tampered with
-	s.postDump(ctx, imagePath, state, nil)
-
-	return nil
+	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
+func (s *service) setupStreamerCapture(dumpdir string) (*exec.Cmd, error) {
 	buf := new(bytes.Buffer)
 	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "capture")
 	cmd.Stderr = buf
 	err := cmd.Start()
 	if err != nil {
-		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
+		log.Error().Msgf("unable to exec image streamer server: %v", err)
+		return nil, err
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
@@ -261,7 +270,7 @@ func (s *service) setupStreamerCapture(dumpdir string) *exec.Cmd {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	return cmd
+	return cmd, nil
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -272,16 +281,17 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	}
 	var cmd *exec.Cmd
 	if args.Stream {
-		cmd = s.setupStreamerCapture(dumpdir)
+		cmd, err = s.setupStreamerCapture(dumpdir)
+		if err != nil {
+			return err
+		}
 	}
 
-	var GPUCheckpointed bool
-	if args.GPU {
+	if state.GPU {
 		err = s.gpuDump(ctx, dumpdir)
 		if err != nil {
 			return err
 		}
-		GPUCheckpointed = true
 	}
 
 	img, err := os.Open(dumpdir)
@@ -319,14 +329,11 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
-	state.GPUCheckpointed = GPUCheckpointed
 	if !(*opts.LeaveRunning) {
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	s.postDump(ctx, dumpdir, state, cmd)
-
-	return nil
+	return s.postDump(ctx, dumpdir, state, cmd)
 }
 
 func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
@@ -448,91 +455,5 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
 
-	return nil
-}
-
-func checkIfPodman(b Bundle) bool {
-	var matched bool
-	if b.ContainerID != "" {
-		_, err := os.Stat(filepath.Join("/var/lib/containers/storage/overlay-containers/", b.ContainerID, "userdata"))
-		return err == nil
-	} else {
-		pattern := "/var/lib/containers/storage/overlay-containers/.*?/userdata"
-		matched, _ = regexp.MatchString(pattern, b.Bundle)
-	}
-	return matched
-}
-
-func patchPodmanDump(containerID, imgPath string) error {
-	var containerStoreData *types.StoreContainer
-
-	config := make(map[string]interface{})
-	state := make(map[string]interface{})
-
-	bundlePath := "/var/lib/containers/storage/overlay-containers/" + containerID + "/userdata"
-
-	byteId := []byte(containerID)
-
-	db := &utils.DB{Conn: nil, DbPath: "/var/lib/containers/storage/libpod/bolt_state.db"}
-
-	if err := db.SetNewDbConn(); err != nil {
-		return err
-	}
-
-	defer db.Conn.Close()
-
-	err := db.Conn.View(func(tx *bolt.Tx) error {
-		bkt, err := utils.GetCtrBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		if err := db.GetContainerConfigFromDB(byteId, &config, bkt); err != nil {
-			return err
-		}
-
-		if err := db.GetContainerStateDB(byteId, &state, bkt); err != nil {
-			return err
-		}
-
-		utils.WriteJSONFile(config, imgPath, "config.dump")
-
-		jsonPath := filepath.Join(bundlePath, "config.json")
-		cfg, _, err := utils.NewFromFile(jsonPath)
-		if err != nil {
-			return err
-		}
-
-		utils.WriteJSONFile(cfg, imgPath, "spec.dump")
-
-		return nil
-	})
-
-	ctrConfig := new(types.ContainerConfig)
-	if _, err := utils.ReadJSONFile(ctrConfig, imgPath, "config.dump"); err != nil {
-		return err
-	}
-
-	storeConfig := new([]types.StoreContainer)
-	if _, err := utils.ReadJSONFile(storeConfig, utils.StorePath, "containers.json"); err != nil {
-		return err
-	}
-
-	// Grabbing the state of the container in containers.json for the specific podman container
-	for _, container := range *storeConfig {
-		if container.ID == ctrConfig.ID {
-			containerStoreData = &container
-		}
-	}
-	name := namesgenerator.GetRandomName(0)
-
-	containerStoreData.Names = []string{name}
-
-	// Saving the current state of containers.json for the specific podman container we are checkpointing
-	utils.WriteJSONFile(containerStoreData, imgPath, "containers.json")
-
-	if err != nil {
-		return err
-	}
 	return nil
 }
