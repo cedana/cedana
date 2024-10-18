@@ -524,7 +524,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 	}
 	log.Debug().Msgf("pulling gpu binary %s", binary)
 
-	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
+	url := viper.GetString("connection.cedana_url") + "/k8s/gpu/" + binary
 	log.Debug().Msgf("pulling %s from %s", binary, url)
 
 	httpClient := &http.Client{}
