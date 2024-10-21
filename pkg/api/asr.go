@@ -89,10 +89,13 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 }
 
 func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
-	if s.cadvisorManager == nil {
-		return nil, fmt.Errorf("cadvisor manager not enabled in daemon")
-	}
+	return nil, fmt.Errorf("removed; we now don't use grpc for asr reporting")
+}
 
+func GetContainerInfo(ctx context.Context, cman manager.Manager) (*task.ContainersInfo, error) {
+	if cman == nil {
+		return nil, fmt.Errorf("cadvisor manager is nil")
+	}
 	containerdService := containerd_plugin.Success
 	crioService := crio_plugin.Success
 
@@ -100,10 +103,10 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 	var err error
 
 	if containerdService && crioService {
-		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllContainerdContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
-		ccontainers, err := s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+		ccontainers, err := cman.AllCrioContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 		if err != nil {
@@ -120,11 +123,11 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 			}
 		}
 	} else if containerdService {
-		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllContainerdContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 	} else if crioService {
-		containers, err = s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllCrioContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 	}
