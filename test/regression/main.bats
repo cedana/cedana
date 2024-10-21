@@ -195,6 +195,30 @@ teardown() {
     [[ "$output" == *"$image_ref"* ]]
 }
 
+@test "Concurrent rootfs snapshot of containerd container" {
+    local cid1="busybox-test-1"
+    local cid2="busybox-test-2"
+    local cid3="busybox-test-3"
+    local cid4="busybox-test-4"
+    local img1="checkpoint/test-1:latest"
+    local img2="checkpoint/test-2:latest"
+    local img3="checkpoint/test-3:latest"
+    local img4="checkpoint/test-4:latest"
+    local namespace="default"
+
+    run start_busybox $cid1
+    run start_busybox $cid2
+    run start_busybox $cid3
+    run start_busybox $cid4
+
+    local jobId1=$(run queue_rootfs_checkpoint $cid1 $img1 $namespace 2&>/dev/null)
+    local jobId2=$(run queue_rootfs_checkpoint $cid2 $img2 $namespace 2&>/dev/null)
+    local jobId3=$(run queue_rootfs_checkpoint $cid3 $img3 $namespace 2&>/dev/null)
+    local jobId4=$(run queue_rootfs_checkpoint $cid4 $img4 $namespace 2&>/dev/null)
+
+    run queue_wait_for_success $jobId1 $jobId2 $jobId3 $jobId4
+}
+
 @test "Full containerd checkpoint (jupyter notebook)" {
     local container_id="jupyter-notebook"
     local image_ref="checkpoint/test:latest"
