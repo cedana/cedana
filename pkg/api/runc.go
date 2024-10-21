@@ -63,11 +63,6 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 	state.JobState = task.JobState_JOB_RUNNING
 	state.GPU = args.GPU
 
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to update state after manage")
-	}
-
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
 	if args.GPU {
@@ -80,6 +75,11 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
 		}
+	}
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
