@@ -112,7 +112,8 @@ func gcloudAdcSetup(ctx context.Context) error {
 		// already present skip
 		return nil
 	}
-	url := getenv("CEDANA_URL", "https://sandbox.cedana.ai") + "/k8s/gcloud/serviceaccount"
+	cedanaURL := viper.GetString("connection.cedana_url")
+	url := cedanaURL + "/k8s/gcloud/serviceaccount"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
