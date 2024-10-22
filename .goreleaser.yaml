@@ -1,48 +1,11 @@
-before:
-  hooks:
-    - go mod tidy
-    - go generate ./...
+version: 2
 builds:
-  - env:
-      - CGO_ENABLED=1
-    goos:
-      - linux
-    goarch:
-      - amd64
-    ldflags:
-      - -X main.Version={{ .Summary }}
-checksum:
-  name_template: 'checksums.txt'
-snapshot:
-  name_template: "{{ .Summary }}"
-changelog:
-  sort: asc
-  use: github
-nfpms:
-  -
-    id: default
-    package_name: cedana
-    file_name_template: "{{ .ConventionalFileName }}"
-    vendor: Cedana Corp
+  builder: prebuilt
 
-    homepage: cedana.ai
-    maintainer: Niranjan Ravichandra <nravic@cedana.ai>
+  goos:
+    - linux
+  goarch:
+    - amd64
 
-    description: |-
-      Fast, adaptive checkpointing for orchestrated cloud brokerage.
-
-    license: GNU APLv3
-
-    formats:
-      - deb
-      - rpm
-      - archlinux  # Since GoReleaser v1.13.
-
-    suggests:
-      - criu
-
-archives:
-  - id: cedana
-    files:
-      - "build-start-daemon.sh"
-      - "cmd/scripts/k8s/*"
+  prebuilt:
+    path: output/cedana_

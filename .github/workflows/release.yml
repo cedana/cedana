@@ -102,6 +102,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
+  build-publish-amd64-20.04:
+    name: Build & Publish (amd64) against 20.04
+    runs-on: ubuntu-20.04
+    needs: test
+    container:
+      image: golang:1.22-bullseye
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          fetch-tags: true
+
+      # issue when using custom container: https://github.com/actions/checkout/issues/1048
+      - run: git config --global --add safe.directory /__w/cedana/cedana
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y sudo
+          sudo -E make -C scripts/ci setup-build
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build_publish_amd64 }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v4
+        with:
+          distribution: goreleaser
+          args: release --clean --auto-snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          VERSION: "20.04" # custom 20.04 build
+
+
+
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-2

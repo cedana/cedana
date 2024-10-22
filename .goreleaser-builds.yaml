@@ -1,0 +1,55 @@
+# This gets run multiple times on different architectures:
+# i.e ubuntu 22.04, 20.04, etc; and those versions are passed through to
+# goreleaser via the VERSION env var to create separate binaries.
+#
+# The binaries are then collected together and sent over to the main .goreleaser.yaml
+# which uses prebuilt to release them together.
+version: 2
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+builds:
+  - env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    ldflags:
+      - -X main.Version={{ .Summary }}
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Summary }}-{{ .Env.VERSION }}"
+changelog:
+  sort: asc
+  use: github
+nfpms:
+  -
+    id: default
+    package_name: cedana
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Cedana Corp
+
+    homepage: cedana.ai
+    maintainer: Niranjan Ravichandra <nravic@cedana.ai>
+
+    description: |-
+      Fast, adaptive checkpointing for orchestrated cloud brokerage.
+
+    license: GNU APLv3
+
+    formats:
+      - deb
+      - rpm
+      - archlinux  # Since GoReleaser v1.13.
+
+    suggests:
+      - criu
+
+archives:
+  - id: cedana
+    files:
+      - "build-start-daemon.sh"
+      - "cmd/scripts/k8s/*"
