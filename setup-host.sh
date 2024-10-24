@@ -14,7 +14,7 @@ YUM_PACKAGES=(
 
 APT_PACKAGES=(
     wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev python3-protobuf build-essential
-    libprotobuf-c1 buildah libnftables1
+    libprotobuf-c1 buildah libnftables1 libelf-dev
 )
 
 # Function to install APT packages
@@ -76,6 +76,13 @@ else
     exit 1
 fi
 
+# if gpu driver present enable it!
+GPU=""
+if command -v nvidia-smi &>/dev/null; then
+    echo "nvidia-smi found! CUDA Version: $(nvidia-smi --version | grep CUDA | cut -d ':' -f 2)"
+    GPU="--gpu"
+fi
+
 # Run the Cedana daemon setup script
 cd /
-./build-start-daemon.sh --systemctl --no-build --k8s
+./build-start-daemon.sh --systemctl --no-build --k8s ${GPU}
