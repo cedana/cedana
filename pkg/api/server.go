@@ -262,7 +262,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	return err
 }
 
-func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups []int32, out io.Writer, jid string) (*exec.Cmd, error) {
 	log.Debug().Int32("UID", uid).Int32("GID", gid).Ints32("Groups", groups).Msgf("starting gpu controller")
 	var gpuCmd *exec.Cmd
 	controllerPath := viper.GetString("gpu_controller_path")
@@ -285,7 +285,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 			" ")
 	}
 
-	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
+	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath, jid)
 	groupsUint32 := make([]uint32, len(groups))
 	for i, v := range groups {
 		groupsUint32[i] = uint32(v)
@@ -457,7 +457,7 @@ func (s *service) GPUHealthCheck(
 
 	gpuOutBuf := &bytes.Buffer{}
 	gpuOut := io.MultiWriter(gpuOutBuf)
-	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, gpuOut)
+	cmd, err := s.StartGPUController(ctx, req.UID, req.GID, req.Groups, gpuOut, "")
 	if err != nil {
 		log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("could not start gpu controller")
 		resp.UnhealthyReasons = append(resp.UnhealthyReasons, fmt.Sprintf("could not start gpu controller: %v", err))

@@ -343,7 +343,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
-		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf), containerId)
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 			return 0, nil, err
@@ -615,7 +615,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf), args.JID)
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -816,14 +816,14 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer, jid string) (*exec.Cmd, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, out)
+	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, out, jid)
 	if err != nil {
 		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
@@ -848,8 +848,8 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
-			return nil, fmt.Errorf("gpu checkpoint failed")
+			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu restore failed")
+			return nil, fmt.Errorf("gpu restore failed")
 		} else {
 			return nil, err
 		}
