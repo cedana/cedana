@@ -243,7 +243,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 					gpuSharedLibPath = s
 				}
 				log.Info().Str("gpu_shared_lib_path", gpuSharedLibPath).Msg("Ensuring LibCedana library exists.")
-				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, gpuSharedLibPath)
+				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, gpuSharedLibPath)
 				if err != nil {
 					log.Error().Err(err).Msg("could not download libcedana")
 					cancel(err)
