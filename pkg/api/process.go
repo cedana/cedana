@@ -86,7 +86,7 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
 		if args.GPU {
 			gpuOut := io.Writer(gpuOutBuf)
-			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
+			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut, args.JID)
 			if err != nil {
 				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
@@ -485,7 +485,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	var err error
 	if args.GPU {
 		gpuOut := io.Writer(gpuOutBuf)
-		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
+		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut, args.JID)
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 			return 0, nil, fmt.Errorf("failed to start GPU controller: %v", err)
@@ -498,7 +498,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		if _, err := os.Stat(sharedLibPath); os.IsNotExist(err) {
 			return 0, nil, fmt.Errorf("no gpu shared lib at %s", sharedLibPath)
 		}
-		args.Task = fmt.Sprintf("LD_PRELOAD=%s %s", sharedLibPath, args.Task)
+		args.Task = fmt.Sprintf("CEDANA_JID=%s LD_PRELOAD=%s %s", args.JID, sharedLibPath, args.Task)
 	}
 
 	groupsUint32 := make([]uint32, len(args.Groups))

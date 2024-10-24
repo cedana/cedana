@@ -69,7 +69,7 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
 		if args.GPU {
 			gpuOut := io.Writer(gpuOutBuf)
-			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut)
+			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut, args.ContainerID)
 			if err != nil {
 				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
