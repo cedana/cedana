@@ -157,7 +157,9 @@ jobs:
         run: ./bench results push --overwrite
 
       - name: Plot
-        run: ./bench plot --runtime cedana --save
+        env:
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+        run: ./bench plot --runtime cedana --save $FLAGS
 
       - name: Upload plots
         id: upload-plots
