@@ -79,13 +79,6 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd 
 	}
 	log.Info().Str("Log", logpath).Msgf("Started cedana-image-streamer")
 
-	cmd = exec.Command("ls", "-l", "/test")
-	cmd.Stdout = out
-	err = cmd.Run()
-	cmd = exec.Command("ls", "-l", "/tmp/cedana_restore")
-	cmd.Stdout = out
-	err = cmd.Run()
-
 	return cmd
 }
 
