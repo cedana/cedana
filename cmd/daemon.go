@@ -161,6 +161,7 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 		hostname, _ := os.Hostname()
 		v, _ := mem.VirtualMemory()
 		pmem := fmt.Sprintf("%d", v.Total/(1024*1024*1024)) // in GB
+		url := viper.GetString("connection.cedana_url")
 
 		topic := client.Topic("asr-metrics")
 		time.Sleep(10 * time.Second)
@@ -178,6 +179,7 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 					"mac":      macAddr,
 					"hostname": hostname,
 					"mem":      pmem,
+					"url":      url,
 				},
 			})
 			// Get the server-assigned message ID
