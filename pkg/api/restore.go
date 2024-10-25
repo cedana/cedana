@@ -40,7 +40,7 @@ const (
 	CRIU_RESTORE_LOG_FILE        = "cedana-restore.log"
 	CRIU_RESTORE_LOG_LEVEL       = 4
 	RESTORE_TEMPDIR              = "/tmp/cedana_restore"
-	RESTORE_TEMPDIR_PERMS        = 0o777
+	RESTORE_TEMPDIR_PERMS        = 0o755
 	RESTORE_OUTPUT_LOG_PATH      = "/var/log/cedana-output-%s.log"
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
@@ -79,6 +79,13 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) *exec.Cmd 
 	}
 	log.Info().Str("Log", logpath).Msgf("Started cedana-image-streamer")
 
+	cmd = exec.Command("ls", "-l", "/test")
+	cmd.Stdout = out
+	err = cmd.Run()
+	cmd = exec.Command("ls", "-l", "/tmp/cedana_restore")
+	cmd.Stdout = out
+	err = cmd.Run()
+
 	return cmd
 }
 
@@ -96,31 +103,30 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	var ioFiles []*os.File
 	isManagedJob := args.JID != ""
 
-	tempDir := RESTORE_TEMPDIR
-
-	// check if tmpdir exists
-	// XXX YA: Tempdir usage is not thread safe
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-	} else {
-		// likely an old checkpoint hanging around, delete
-		err := os.RemoveAll(tempDir)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-	}
-
+	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
 		s.setupStreamerServe(args.CheckpointPath, args.Stream)
 	} else {
+		tempDir = RESTORE_TEMPDIR
+		// check if tmpdir exists
+		// XXX YA: Tempdir usage is not thread safe
+		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+			err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+		} else {
+			// likely an old checkpoint hanging around, delete
+			err := os.RemoveAll(tempDir)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+		}
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
 			log.Error().Err(err).Msg("error decompressing checkpoint")
@@ -228,9 +234,11 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
-	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
-		log.Error().Err(err).Msg("error changing permissions")
-		return nil, nil, nil, nil, err
+	if args.Stream <= 0 {
+		if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
+			log.Error().Err(err).Msg("error changing permissions")
+			return nil, nil, nil, nil, err
+		}
 	}
 
 	elapsed := time.Since(start)
