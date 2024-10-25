@@ -47,23 +47,38 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string) (*exec.Cmd, error) {
+func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	out := new(bytes.Buffer)
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
+	cmd.Stdout = out
+	logpath := "/var/log/cedana-image-streamer-restore.log"
 	err := cmd.Start()
+	go func() {
+		for {
+			file, err := os.Create(logpath)
+			if err != nil {
+				log.Fatal().Msgf("Unable to create %s: %v", logpath, err)
+			}
+			_, err = file.Write(out.Bytes())
+			if err != nil {
+				log.Fatal().Msgf("Unable to write to %s: %v", logpath, err)
+			}
+			file.Close()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
 	if err != nil {
-		log.Error().Msgf("unable to exec image streamer server: %v", err)
-		return nil, err
+		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
-	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
-		time.Sleep(2 * time.Millisecond)
+		log.Info().Msgf("Waiting for cedana-image-streamer to setup...")
+		time.Sleep(10 * time.Millisecond)
 	}
-
-	return cmd, nil
+	log.Info().Str("Log", logpath).Msgf("Started cedana-image-streamer")
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -80,40 +95,30 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	var ioFiles []*os.File
 	isManagedJob := args.JID != ""
 
-	tempDir := RESTORE_TEMPDIR
-
-	// check if tmpdir exists
-	// XXX YA: Tempdir usage is not thread safe
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
+	var tempDir string
+	if args.Stream > 0 {
+		tempDir = args.CheckpointPath
+		s.setupStreamerServe(tempDir, args.Stream)
 	} else {
-		// likely an old checkpoint hanging around, delete
-		err := os.RemoveAll(tempDir)
-		if err != nil {
-			return nil, nil, nil, nil, err
+		tempDir = RESTORE_TEMPDIR
+		// check if tmpdir exists
+		// XXX YA: Tempdir usage is not thread safe
+		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+			err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+		} else {
+			// likely an old checkpoint hanging around, delete
+			err := os.RemoveAll(tempDir)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
 		}
-		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-	}
-
-	var cmd *exec.Cmd
-	if args.Stream {
-		absPath, err := filepath.Abs(args.CheckpointPath)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		tempDir = filepath.Dir(absPath)
-		cmd, err = s.setupStreamerServe(tempDir)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		log.Debug().Msgf("cmd = %v", cmd)
-	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
 			log.Error().Err(err).Msg("error decompressing checkpoint")
@@ -121,7 +126,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 	}
 
-	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream)
+	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
@@ -216,14 +221,16 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	}
 
 	opts.ShellJob = proto.Bool(isShellJob)
-	opts.Stream = proto.Bool(args.Stream)
+	opts.Stream = proto.Bool(args.Stream > 0)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
-	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
-		log.Error().Err(err).Msg("error changing permissions")
-		return nil, nil, nil, nil, err
+	if args.Stream <= 0 {
+		if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
+			log.Error().Err(err).Msg("error changing permissions")
+			return nil, nil, nil, nil, err
+		}
 	}
 
 	elapsed := time.Since(start)
@@ -343,7 +350,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
-		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, io.Writer(gpuOutBuf))
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 			return 0, nil, err
@@ -615,7 +622,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, io.Writer(gpuOutBuf))
+				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, io.Writer(gpuOutBuf))
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -816,7 +823,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer) (*exec.Cmd, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -843,6 +850,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
+		Stream:    stream,
 	}
 	resp, err := gpuServiceConn.Restore(ctx, &args)
 	if err != nil {
