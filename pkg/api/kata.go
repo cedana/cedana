@@ -175,16 +175,16 @@ func findPidFromCgroups() ([]int32, error) {
 		}
 
 		parts := strings.Split(ociSpec.Linux.CgroupsPath, ":")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid input format, expected 'slice:containerID', got: %s", ociSpec.Linux.CgroupsPath)
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid input format, expected 'slice:cri-containerd:containerID', got: %s with %s parts", ociSpec.Linux.CgroupsPath, len(parts))
 		}
 
 		slice := parts[0]
-		containerID := parts[1]
+		containerID := parts[2]
 
-		containerID = strings.ReplaceAll(containerID, ":", "-")
-
-		cgroupPath := fmt.Sprintf("/sys/fs/cgroup/kubepods.slice/kubepods-besteffort.slice/%s.slice/cri-containerd-%s.scope/cgroup.procs", slice, containerID)
+		// TODO BS this could be different for different types of cgroups, need to parse
+		// Linux.CgroupsPath properly
+		cgroupPath := fmt.Sprintf("/sys/fs/cgroup/kubepods.slice/kubepods-besteffort.slice/%s/cri-containerd-%s.scope/cgroup.procs", slice, containerID)
 
 		pidFromFile, err := os.ReadFile(cgroupPath)
 		if err != nil {
