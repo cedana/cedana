@@ -353,6 +353,16 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(state.PID)
 	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	allExternalMounts, err := findAllExternalBindMounts()
+	if err != nil {
+		return err
+	}
+
+	// Here we extend external mounts to include those from the config.json of the container
+	// a 2D array is used as the function does not assume 1 container in kata vm but here
+	// it is assumed we only use the first container found, this is the case for non-side car
+	// containers which we do not yet support.
+	opts.External = append(opts.External, allExternalMounts[0]...)
 	opts.LeaveRunning = proto.Bool(true)
 
 	nfy := Notify{}

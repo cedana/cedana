@@ -149,6 +149,55 @@ func childPidFromPPid(ppid int32) (int32, error) {
 	return int32(firstChildPID), nil
 }
 
+func findAllExternalBindMounts() ([][]string, error) {
+	allExternalMounts := [][]string{}
+
+	pattern := "/run/kata-containers/*/config.json"
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config.json files: %w", err)
+	}
+
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+
+		var ociSpec spec.Spec
+		if err := json.Unmarshal(data, &ociSpec); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON from %s: %w", file, err)
+		}
+
+		// Skip non-container kata containers
+		if ociSpec.Annotations["io.kubernetes.cri.container-type"] != "container" {
+			continue
+		}
+
+		fileMounts := []string{}
+
+		for _, m := range ociSpec.Mounts {
+			if mountIsBind(m) {
+				fileMounts = append(fileMounts, fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination))
+			}
+		}
+
+		allExternalMounts = append(allExternalMounts, fileMounts)
+	}
+
+	return allExternalMounts, nil
+}
+
+func mountIsBind(m spec.Mount) bool {
+	for _, o := range m.Options {
+		if o == "rbind" {
+			return true
+		}
+	}
+
+	return false
+}
+
 func findPidFromCgroups() ([]int32, error) {
 	var pids = []int32{}
 
