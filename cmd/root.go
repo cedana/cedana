@@ -1,12 +1,11 @@
 package cmd
 
-// This file contains the root commands when starting `cedana ...`
-
 import (
 	"context"
 
+	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -29,30 +28,30 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
-	log.Logger = utils.Logger
+	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
 
 	rootCmd.Version = version
 	rootCmd.Long = rootCmd.Long + "\n " + version
+	rootCmd.SilenceUsage = true // only show usage when true usage error
 
-	// only show usage when true usage error
-	rootCmd.SilenceUsage = true
+	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
+	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
+	rootCmd.PersistentFlags().Uint32(portFlag, server.DEFAULT_PORT, "port to listen on/connect to")
+	rootCmd.PersistentFlags().String(hostFlag, server.DEFAULT_HOST, "host to listen on/connect to")
 
+	// initialize config
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		config, _ := cmd.Flags().GetString(configFlag)
-		configDir, _ := cmd.Flags().GetString(configDirFlag)
-		if err := utils.InitConfig(types.InitConfigArgs{
-			Config:    config,
-			ConfigDir: configDir,
+		conf, _ := cmd.Flags().GetString(configFlag)
+		confDir, _ := cmd.Flags().GetString(configDirFlag)
+		if err := config.InitConfig(types.InitConfigArgs{
+			Config:    conf,
+			ConfigDir: confDir,
 		}); err != nil {
 			log.Error().Err(err).Msg("failed to initialize config")
 			return err
 		}
 		return nil
 	}
-
-	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
-	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
-	rootCmd.PersistentFlags().Uint32P(portFlag, "p", DEFAULT_PORT, "port to listen on/connect to")
 
 	return rootCmd.ExecuteContext(ctx)
 }
