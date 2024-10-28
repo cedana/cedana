@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -28,12 +29,17 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
+	log.Logger = logger.Logger
 	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
 
 	rootCmd.Version = version
 	rootCmd.Long = rootCmd.Long + "\n " + version
 	rootCmd.SilenceUsage = true // only show usage when true usage error
 
+	// add subcommands
+	rootCmd.AddCommand(daemonCmd)
+
+	// add root flags
 	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
 	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
 	rootCmd.PersistentFlags().Uint32(portFlag, server.DEFAULT_PORT, "port to listen on/connect to")

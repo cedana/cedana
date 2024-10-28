@@ -9,11 +9,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var daemonCmd = &cobra.Command{
+	Use:   "daemon",
+	Short: "Manage the cedana daemon",
+}
+
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+		log := log.Ctx(ctx)
 		if os.Getuid() != 0 {
 			return fmt.Errorf("daemon must be run as root")
 		}
@@ -22,21 +28,30 @@ var startDaemonCmd = &cobra.Command{
 
 		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
 		port, _ := cmd.Flags().GetUint32(portFlag)
-		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
-		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
+		host, _ := cmd.Flags().GetString(hostFlag)
 
-		log.Ctx(ctx).Info().Str("version", rootCmd.Version).Msg("starting daemon")
-	  ctx = log.With().Str("context", "daemon").Logger().WithContext(ctx)
+		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		err = api.StartServer(ctx, &server.ServeOpts{
-			VSOCKEnabled:      vsockEnabled,
-			Port:              port,
+		server, err := server.NewServer(ctx, &server.ServeOpts{
+			VSOCKEnabled: vsockEnabled,
+			Port:         port,
+			Host:         host,
 		})
 		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msgf("stopping daemon")
+			log.Error().Err(err).Msgf("stopping daemon")
+			return fmt.Errorf("failed to create server: %w", err)
+		}
+
+		err = server.Start()
+		if err != nil {
+			log.Error().Err(err).Msgf("stopping daemon")
 			return err
 		}
 
 		return nil
 	},
+}
+
+func init() {
+	daemonCmd.AddCommand(startDaemonCmd)
 }

@@ -16,6 +16,8 @@ const (
 	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
 
+var Logger = log.Logger
+
 type LineInfoHook struct{}
 
 func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
@@ -38,7 +40,7 @@ func init() {
 	}
 
 	// Set as default logger
-	log.Logger = zerolog.New(output).
+	Logger = zerolog.New(output).
 		Level(logLevel).
 		With().
 		Timestamp().
