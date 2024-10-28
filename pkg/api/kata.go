@@ -5,14 +5,18 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,20 +28,26 @@ import (
 // 	KATA_OUTPUT_FILE_FLAGS int         = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 // )
 
+var ERR_NO_KATA_CONTAINERS_FOUND = fmt.Errorf("No kata containers found!")
+
 func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 
 	state := &task.ProcessState{}
-	kataAgentPid, err := childPidFromPPid(1)
-	if err != nil {
+	pids, err := findPidFromCgroups()
+	if err != nil && err != ERR_NO_KATA_CONTAINERS_FOUND {
 		return nil, err
 	}
-	pid, err := childPidFromPPid(kataAgentPid)
-	if err != nil {
-		return nil, err
+	if err == ERR_NO_KATA_CONTAINERS_FOUND {
+		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
-	state, err = s.generateState(ctx, pid)
+	if len(pids) > 1 {
+		return nil, fmt.Errorf("Too many kata containers, I don't know what to do for this yet!")
+	}
+
+	// more than 1 kata container in same vm is not yet implemented
+	state, err = s.generateState(ctx, pids[0])
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
@@ -61,7 +71,7 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	switch args.Type {
 	case task.CRType_LOCAL:
 		resp = task.DumpResp{
-			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+			Message:      fmt.Sprintf("Dumped process %d to %s", pids[0], args.Dir),
 			CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
 		}
 	}
@@ -137,4 +147,64 @@ func childPidFromPPid(ppid int32) (int32, error) {
 	}
 
 	return int32(firstChildPID), nil
+}
+
+func findPidFromCgroups() ([]int32, error) {
+	var pids = []int32{}
+
+	pattern := "/run/kata-containers/*/config.json"
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config.json files: %w", err)
+	}
+
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+
+		var ociSpec spec.Spec
+		if err := json.Unmarshal(data, &ociSpec); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON from %s: %w", file, err)
+		}
+
+		// skip non-container kata containers
+		if ociSpec.Annotations["io.kubernetes.cri.container-type"] != "container" {
+			continue
+		}
+
+		parts := strings.Split(ociSpec.Linux.CgroupsPath, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid input format, expected 'slice:containerID', got: %s", ociSpec.Linux.CgroupsPath)
+		}
+
+		slice := parts[0]
+		containerID := parts[1]
+
+		containerID = strings.ReplaceAll(containerID, ":", "-")
+
+		cgroupPath := fmt.Sprintf("/sys/fs/cgroup/kubepods.slice/kubepods-besteffort.slice/%s.slice/cri-containerd-%s.scope/cgroup.procs", slice, containerID)
+
+		pidFromFile, err := os.ReadFile(cgroupPath)
+		if err != nil {
+			return nil, err
+		}
+
+		pidFromFileTrimmed := strings.TrimSpace(string(pidFromFile))
+
+		pid, err := strconv.ParseInt(pidFromFileTrimmed, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert content to int32: %w", err)
+		}
+
+		pids = append(pids, int32(pid))
+
+	}
+
+	if len(pids) == 0 {
+		return pids, ERR_NO_KATA_CONTAINERS_FOUND
+	}
+
+	return pids, nil
 }
