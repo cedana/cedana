@@ -76,6 +76,19 @@ else
     exit 1
 fi
 
+# if nvidia-smi is not found by default we will try to find it by forcing some default paths
+if ! command -v nvidia-smi &>/dev/null; then
+    export PATH=$PATH:/usr/local/cuda/bin
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"/usr/local/cuda/lib64"}:/usr/local/cuda/lib64
+fi
+
+# if gpu driver is present enable it!
+GPU=""
+if command -v nvidia-smi &>/dev/null; then
+    echo "nvidia-smi found! CUDA Version: $(nvidia-smi --version | grep CUDA | cut -d ':' -f 2)"
+    GPU="--gpu"
+fi
+
 # Run the Cedana daemon setup script
 cd /
 ./build-start-daemon.sh --systemctl --no-build --k8s
