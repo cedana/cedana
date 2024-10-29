@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Controller_Checkpoint_FullMethodName  = "/cedana.services.gpu.Controller/Checkpoint"
-	Controller_Restore_FullMethodName     = "/cedana.services.gpu.Controller/Restore"
-	Controller_HealthCheck_FullMethodName = "/cedana.services.gpu.Controller/HealthCheck"
+	Controller_Checkpoint_FullMethodName  = "/cedana.plugins.gpu.Controller/Checkpoint"
+	Controller_Restore_FullMethodName     = "/cedana.plugins.gpu.Controller/Restore"
+	Controller_HealthCheck_FullMethodName = "/cedana.plugins.gpu.Controller/HealthCheck"
 )
 
 // ControllerClient is the client API for Controller service.
@@ -176,7 +176,7 @@ func _Controller_HealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Controller_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "cedana.services.gpu.Controller",
+	ServiceName: "cedana.plugins.gpu.Controller",
 	HandlerType: (*ControllerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

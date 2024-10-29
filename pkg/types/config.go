@@ -4,33 +4,31 @@ package types
 type (
 	// Daemon config
 	Config struct {
-		Client        Client        `key:"client" json:"client" mapstructure:"client"`
-		Connection    Connection    `key:"connection" json:"connection" mapstructure:"connection"`
-		SharedStorage SharedStorage `key:"sharedStorage" json:"shared_storage" mapstructure:"shared_storage"`
-		CLI           CLI           `key:"cli" json:"cli" mapstructure:"cli"`
+		Options    Options    `key:"options" json:"options" mapstructure:"options"`
+		Connection Connection `key:"connection" json:"connection" mapstructure:"connection"`
+		Storage    Storage    `key:"storage" json:"storage" mapstructure:"storage"`
+		Profiling  Profiling  `key:"profiling" json:"profiling" mapstructure:"profiling"`
+		CLI        CLI        `key:"cli" json:"cli" mapstructure:"cli"`
 	}
-	Client struct {
-		// job to run
-		Task         string `key:"task" json:"task" mapstructure:"task"`
-		LeaveRunning bool   `key:"leaveRunning" json:"leave_running" mapstructure:"leave_running"`
-		ForwardLogs  bool   `key:"forwardLogs" json:"forward_logs" mapstructure:"forward_logs"`
+	Options struct {
+		LeaveRunning bool `key:"leaveRunning" json:"leave_running" mapstructure:"leave_running"`
 	}
 	Connection struct {
 		// for cedana managed systems
 		CedanaUrl       string `key:"cedanaUrl" json:"cedana_url" mapstructure:"cedana_url"`
 		CedanaAuthToken string `key:"cedanaAuthToken" json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
 	}
-	SharedStorage struct {
-		DumpStorageDir string `key:"dumpStorageDir" json:"dump_storage_dir" mapstructure:"dump_storage_dir"`
+	Storage struct {
+		Remote  bool   `key:"remote" json:"remote" mapstructure:"remote"`
+		DumpDir string `key:"dumpDir" json:"dump_dir" mapstructure:"dump_dir"`
 	}
-
+	Profiling struct {
+		Enabled bool `key:"enabled" json:"enabled" mapstructure:"enabled"`
+		Otel    struct {
+			Port int `key:"port" json:"port" mapstructure:"port"`
+		} `key:"otel" json:"otel" mapstructure:"otel"`
+	}
 	CLI struct {
 		WaitForReady bool `key:"waitForReady" json:"wait_for_ready" mapstructure:"wait_for_ready"`
-	}
-
-	// Misc
-	InitConfigArgs struct {
-		Config    string
-		ConfigDir string
 	}
 )

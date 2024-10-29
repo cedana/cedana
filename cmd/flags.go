@@ -38,7 +38,7 @@ const (
 	fileLocksFlag        = "file-locks"
 	vsockEnabledFlag     = "vsock"
 	portFlag             = "port"
-  hostFlag             = "host"
+	hostFlag             = "host"
 	metricsEnabledFlag   = "metrics-enabled"
 	jobServiceFlag       = "job-service"
 )

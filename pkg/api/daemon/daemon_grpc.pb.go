@@ -19,8 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Daemon_Dump_FullMethodName    = "/cedana.services.daemon.Daemon/Dump"
-	Daemon_Restore_FullMethodName = "/cedana.services.daemon.Daemon/Restore"
+	Daemon_Dump_FullMethodName    = "/cedana.daemon.Daemon/Dump"
+	Daemon_Restore_FullMethodName = "/cedana.daemon.Daemon/Restore"
 )
 
 // DaemonClient is the client API for Daemon service.
@@ -142,7 +142,7 @@ func _Daemon_Restore_Handler(srv interface{}, ctx context.Context, dec func(inte
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Daemon_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "cedana.services.daemon.Daemon",
+	ServiceName: "cedana.daemon.Daemon",
 	HandlerType: (*DaemonServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

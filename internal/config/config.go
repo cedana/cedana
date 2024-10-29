@@ -2,33 +2,31 @@ package config
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/cedana/cedana/internal/utils"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/spf13/viper"
 )
 
 const (
 	configDirName  = ".cedana"
-	configFileName = "client_config"
+	configFileName = "config"
 	configFileType = "json"
 	envVarPrefix   = "CEDANA"
 	configDirPerm  = 0755
 	configFilePerm = 0644
 )
 
-const (
-	GpuControllerBinaryName = "gpucontroller"
-	GpuControllerBinaryPath = "/usr/local/bin/cedana-gpu-controller"
-	GpuSharedLibName        = "libcedana"
-	GpuSharedLibPath        = "/usr/local/lib/libcedana-gpu.so"
-)
+type InitArgs struct {
+	Config    string
+	ConfigDir string
+}
 
-func InitConfig(args types.InitConfigArgs) error {
-	user, err := getUser()
+func Init(args InitArgs) error {
+	user, err := utils.GetUser()
 	if err != nil {
 		return err
 	}
@@ -80,7 +78,7 @@ func InitConfig(args types.InitConfigArgs) error {
 	return err
 }
 
-func GetConfig() (*types.Config, error) {
+func Get() (*types.Config, error) {
 	var config types.Config
 	err := viper.Unmarshal(&config)
 	if err != nil {
@@ -95,54 +93,34 @@ func GetConfig() (*types.Config, error) {
 
 // Set defaults that are used when no value is found in config/env vars
 func setDefaults() {
-	viper.SetDefault("client.task", "")
-	viper.SetDefault("client.leave_running", false)
-	viper.SetDefault("client.forward_logs", false)
+	viper.SetDefault("options.leave_running", false)
 
-	viper.SetDefault("shared_storage.dump_storage_dir", "/tmp")
+	viper.SetDefault("storage.dump_dir", "/tmp")
+	viper.SetDefault("storage.remote", false)
 
-	viper.SetDefault("connection.cedana_user", "random-user")
+	viper.SetDefault("connection.cedana_url", "unset")
+	viper.SetDefault("connection.cedana_auth_token", "unset")
 
 	viper.SetDefault("cli.wait_for_ready", false)
-	viper.SetDefault("otel_port", 7777)
+
+	viper.SetDefault("profiling.enabled", false)
+	viper.SetDefault("profiling.otel.port", 7777)
 }
 
 // Add bindings for env vars so env vars can be used as backup
 // when a value is not found in config when using viper.Get~()
 func bindEnvVars() {
 	// Related to the config file
-	viper.BindEnv("client.task", "CEDANA_CLIENT_TASK")
-	viper.BindEnv("client.leave_running", "CEDANA_CLIENT_LEAVE_RUNNING")
-	viper.BindEnv("client.forward_logs", "CEDANA_CLIENT_FORWARD_LOGS")
-	viper.BindEnv("shared_storage.dump_storage_dir", "CEDANA_DUMP_STORAGE_DIR")
+	viper.BindEnv("options.leave_running", "CEDANA_OPTIONS_LEAVE_RUNNING")
+
+	viper.BindEnv("storage.dump_dir", "CEDANA_STORAGE_DUMP_DIR")
+	viper.BindEnv("storage.remote", "CEDANA_REMOTE")
+
 	viper.BindEnv("connection.cedana_url", "CEDANA_URL")
-	viper.BindEnv("connection.cedana_user", "CEDANA_USER")
 	viper.BindEnv("connection.cedana_auth_token", "CEDANA_AUTH_TOKEN")
 
-	// Others used across the codebase
-	viper.BindEnv("log_level", "CEDANA_LOG_LEVEL")
-	viper.BindEnv("otel_port", "CEDANA_OTEL_PORT")
-	viper.BindEnv("otel_enabled", "CEDANA_OTEL_ENABLED")
-	viper.BindEnv("gpu_controller_path", "CEDANA_GPU_CONTROLLER_PATH")
-	viper.BindEnv("gpu_shared_lib_path", "CEDANA_GPU_SHARED_LIB_PATH")
-	viper.BindEnv("gpu_debugging_enabled", "CEDANA_GPU_DEBUGGING_ENABLED")
-	viper.BindEnv("profiling_enabled", "CEDANA_PROFILING_ENABLED")
-	viper.BindEnv("remote", "CEDANA_REMOTE")
-
-	// CLI-specific
 	viper.BindEnv("cli.wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
-}
 
-func getUser() (*user.User, error) {
-	username := os.Getenv("SUDO_USER")
-	if username == "" {
-		// fetch the current user
-		// it uses getpwuid_r iirc
-		u, err := user.Current()
-		if err == nil {
-			return u, nil
-		}
-		username = os.Getenv("USER")
-	}
-	return user.Lookup(username)
+	viper.BindEnv("profiling.enabled", "CEDANA_PROFILING_ENABLED")
+	viper.BindEnv("profiling.otel.port", "CEDANA_PROFILING_OTEL_PORT")
 }

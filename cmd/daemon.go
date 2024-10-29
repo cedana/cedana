@@ -2,25 +2,29 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	daemonCmd.AddCommand(startDaemonCmd)
+}
+
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Manage the cedana daemon",
+	Short: "Manage the daemon",
 }
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Starts the daemon",
+	Short: "Start the daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		log := log.Ctx(ctx)
-		if os.Getuid() != 0 {
+		if utils.IsRootUser() == false {
 			return fmt.Errorf("daemon must be run as root")
 		}
 
@@ -50,8 +54,4 @@ var startDaemonCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-func init() {
-	daemonCmd.AddCommand(startDaemonCmd)
 }
