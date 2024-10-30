@@ -152,7 +152,7 @@ teardown() {
     # try to dump unmanaged process with GPU flags
     run exec_task $task $job_id
     [ "$status" -eq 0 ]
-    run dump_task $job_id --gpu-enabled
+    run checkpoint_task $job_id --gpu-enabled
     [ "$status" -ne 0 ]
 }
 
