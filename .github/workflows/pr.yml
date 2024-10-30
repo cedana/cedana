@@ -394,7 +394,9 @@ jobs:
             /src/*.log
 
       - name: Plot comparison
-        run: ./bench plot --runtime cedana:2 --save
+        env:
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+        run: ./bench plot --runtime cedana:2 --save $FLAGS
 
       - name: Upload plots
         id: upload-plots
