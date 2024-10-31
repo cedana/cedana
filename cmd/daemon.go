@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/internal/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -30,16 +31,16 @@ var startDaemonCmd = &cobra.Command{
 
 		var err error
 
-		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		host, _ := cmd.Flags().GetString(hostFlag)
+		useVSOCK := viper.GetBool("options.use_vsock")
+		port := viper.GetUint32("options.port")
+		host := viper.GetString("options.host")
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
 		server, err := server.NewServer(ctx, &server.ServeOpts{
-			VSOCKEnabled: vsockEnabled,
-			Port:         port,
-			Host:         host,
+			UseVSOCK: useVSOCK,
+			Port:     port,
+			Host:     host,
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")

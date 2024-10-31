@@ -3,6 +3,9 @@ package plugins
 // Functions here never error out, they just return empty values. If a plugin
 // cannot be accessed, the feature that depends on it is just disabled.
 
+// Here, we simply load installed plugins. It assumes that the plugins were
+// already installed by the user/plugin manager.
+
 import (
 	"os"
 	"path/filepath"
@@ -17,9 +20,13 @@ const (
 	defaultInstallationDir = "/usr/local/lib/"
 
 	// Features (symbols) that plugins can implement
-	FEATURE_VERSION     = "Version"
-	FEATURE_DUMP_CMD    = "DumpCmd"
-	FEATURE_RESTORE_CMD = "RestoreCmd"
+	FEATURE_VERSION = "Version"
+
+	FEATURE_DUMP_CMD        = "DumpCmd"
+	FEATURE_DUMP_MIDDLEWARE = "DumpMiddleware"
+
+	FEATURE_RESTORE_CMD        = "RestoreCmd"
+	FEATURE_RESTORE_MIDDLEWARE = "RestoreMiddleware"
 )
 
 var LoadedPlugins = map[string]*plugin.Plugin{}
@@ -48,7 +55,7 @@ func init() {
 	}
 
 	for name, t := range Plugins {
-		if t != Supported {
+		if t.Type != Supported {
 			continue
 		}
 

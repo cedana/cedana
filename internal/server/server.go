@@ -10,24 +10,20 @@ import (
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/checkpoint-restore/go-criu/v7"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
-const (
-	DEFAULT_HOST     = "0.0.0.0"
-	DEFAULT_PORT     = 8080
-	DEFAULT_PROTOCOL = "tcp"
-)
+const DEFAULT_PROTOCOL = "tcp"
 
 type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
-	// criu *Criu
-	fs *afero.Afero // for dependency-injection of filesystems (useful for testing)
+	criu *criu.Criu // for CRIU operations
 	// db  db.DB
 
 	wg  sync.WaitGroup  // for waiting for all background tasks to finish
@@ -37,9 +33,9 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	VSOCKEnabled bool
-	Port         uint32
-	Host         string
+	UseVSOCK bool
+	Port     uint32
+	Host     string
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -61,15 +57,18 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	criu := criu.MakeCriu()
+
+	// Set custom path if specified in config
+	if custom_path := viper.GetString("criu.binary_path"); custom_path != "" {
+		criu.SetCriuPath(custom_path)
+	}
 	server := &Server{
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(loggingStreamInterceptor()),
 			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID, macAddr, hostname)),
 		),
-		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
-		// instead of leaving one running forever.
-		// CRIU:            &Criu{},
-		fs: &afero.Afero{Fs: afero.NewOsFs()},
+		criu: criu,
 		// db:              db.NewLocalDB(ctx),
 		ctx: ctx,
 	}
@@ -78,7 +77,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	var listener net.Listener
 
-	if opts.VSOCKEnabled {
+	if opts.UseVSOCK {
 		listener, err = vsock.Listen(opts.Port, nil)
 	} else {
 		// NOTE: `localhost` server inside kubernetes may or may not work

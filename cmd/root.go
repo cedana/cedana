@@ -2,12 +2,33 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
+
+func init() {
+	rootCmd.AddCommand(daemonCmd)
+	rootCmd.AddCommand(dumpCmd)
+	rootCmd.AddCommand(restoreCmd)
+	rootCmd.AddCommand(pluginCmd)
+
+	// Add root flags
+	rootCmd.PersistentFlags().String(types.ConfigFlag.Full, "", "one-time config JSON string (will merge with existing config)")
+	rootCmd.PersistentFlags().String(types.ConfigDirFlag.Full, "", "custom config directory")
+	rootCmd.PersistentFlags().Uint32P(types.PortFlag.Full, types.PortFlag.Short, 0, "port to listen on/connect to")
+	rootCmd.PersistentFlags().StringP(types.HostFlag.Full, types.HostFlag.Short, "", "host to listen on/connect to")
+	rootCmd.PersistentFlags().BoolP(types.UseVSOCKFlag.Full, types.UseVSOCKFlag.Short, false, "use vsock for communication")
+
+	// Bind to config
+	viper.BindPFlag("options.port", rootCmd.PersistentFlags().Lookup(types.PortFlag.Full))
+	viper.BindPFlag("options.host", rootCmd.PersistentFlags().Lookup(types.HostFlag.Full))
+	viper.BindPFlag("options.use_vsock", rootCmd.PersistentFlags().Lookup(types.UseVSOCKFlag.Full))
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "cedana",
@@ -26,29 +47,16 @@ var rootCmd = &cobra.Command{
 		"\n Property of Cedana, Corp.\n",
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		conf, _ := cmd.Flags().GetString(configFlag)
-		confDir, _ := cmd.Flags().GetString(configDirFlag)
+		conf, _ := cmd.Flags().GetString(types.ConfigFlag.Full)
+		confDir, _ := cmd.Flags().GetString(types.ConfigDirFlag.Full)
 		if err := config.Init(config.InitArgs{
 			Config:    conf,
 			ConfigDir: confDir,
 		}); err != nil {
-			log.Error().Err(err).Msg("failed to initialize config")
-			return err
+			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
 		return nil
 	},
-}
-
-func init() {
-	rootCmd.AddCommand(daemonCmd)
-	rootCmd.AddCommand(dumpCmd)
-	rootCmd.AddCommand(restoreCmd)
-
-	// add root flags
-	rootCmd.PersistentFlags().String(configFlag, "", "one-time config JSON string (will merge with existing config)")
-	rootCmd.PersistentFlags().String(configDirFlag, "", "custom config directory")
-	rootCmd.PersistentFlags().Uint32(portFlag, server.DEFAULT_PORT, "port to listen on/connect to")
-	rootCmd.PersistentFlags().String(hostFlag, server.DEFAULT_HOST, "host to listen on/connect to")
 }
 
 func Execute(ctx context.Context, version string) error {

@@ -14,8 +14,6 @@ import (
 const (
 	DEFAULT_DUMP_DEADLINE    = 5 * time.Minute
 	DEFAULT_RESTORE_DEADLINE = 5 * time.Minute
-
-	CLIENT_CONTEXT_KEY = "client"
 )
 
 type Client struct {

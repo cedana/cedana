@@ -16,4 +16,5 @@ var (
 
 func init() {
 	DumpCmd = cmd.DumpCmd
+	RestoreCmd = cmd.RestoreCmd
 }
