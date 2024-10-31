@@ -58,8 +58,9 @@ var dumpProcessCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
-		if stream {
+		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		log.Info().Msgf("cmd/dump stream = %d", stream)
+		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
@@ -198,8 +199,8 @@ var dumpJobCmd = &cobra.Command{
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
-		if stream {
+		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
@@ -490,14 +491,14 @@ func init() {
 	dumpCmd.AddCommand(dumpProcessCmd)
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpProcessCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 
 	// Job
 	dumpCmd.AddCommand(dumpJobCmd)
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	dumpJobCmd.Flags().BoolP(streamFlag, "s", false, "dump images using criu-image-streamer")
+	dumpJobCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
