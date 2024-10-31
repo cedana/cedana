@@ -3,6 +3,7 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
+	// "bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -136,9 +137,9 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	}
 
 	// setup cedana-image-streamer
-	var cmd *exec.Cmd
+	var streamCmd *exec.Cmd
 	if args.Stream > 0 {
-		cmd, err = s.setupStreamerCapture(dumpDirPath, args.Stream)
+		streamCmd, err = s.setupStreamerCapture(dumpDirPath, args.Stream)
 		if err != nil {
 			return "", nil, err
 		}
@@ -147,7 +148,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-	return dumpDirPath, cmd, nil
+	return dumpDirPath, streamCmd, nil
 }
 
 func (s *service) getDumpdirSize(path string) (int64, error) {
@@ -315,25 +316,25 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
 	buf := new(bytes.Buffer)
-	//out := new(bytes.Buffer)
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	cmd.Stderr = buf
-	//cmd.Stdout = out
-	err := cmd.Start()
-	/*go func() {
+	var err error
+	/*stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	pipe := bufio.NewReader(stdout)
+	go func() {
 		for {
-			file, err := os.Create("/var/log/cedana-image-streamer-dump.log")
+			line, err := pipe.ReadString('\n')
 			if err != nil {
-				panic(err)
+				break
 			}
-			_, err = file.Write(out.Bytes())
-			if err != nil {
-				panic(err)
-			}
-			file.Close()
-			time.Sleep(10 * time.Millisecond)
+			line = strings.TrimSuffix(line, "\n")
+			log.Info().Msg(line)
 		}
 	}()*/
+	err = cmd.Start()
 	if err != nil {
 		log.Error().Msgf("unable to exec image streamer server: %v", err)
 		return nil, err
@@ -350,7 +351,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.C
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
 	opts := s.prepareDumpOpts()
-	dumpdir, cmd, err := s.prepareDump(ctx, state, args, opts)
+	dumpdir, streamCmd, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
 		return err
 	}
@@ -416,7 +417,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		state.JobState = task.JobState_JOB_KILLED
 	}
 
-	return s.postDump(ctx, dumpdir, state, cmd)
+	return s.postDump(ctx, dumpdir, state, streamCmd)
 }
 
 func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {

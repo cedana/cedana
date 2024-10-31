@@ -49,36 +49,35 @@ const (
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	buf := new(bytes.Buffer)
-	out := new(bytes.Buffer)
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
-	cmd.Stdout = out
-	logpath := "/var/log/cedana-image-streamer-restore.log"
-	err := cmd.Start()
+	var err error
+	/*stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	pipe := bufio.NewReader(stdout)
 	go func() {
 		for {
-			file, err := os.Create(logpath)
+			line, err := pipe.ReadString('\n')
 			if err != nil {
-				log.Fatal().Msgf("Unable to create %s: %v", logpath, err)
+				break
 			}
-			_, err = file.Write(out.Bytes())
-			if err != nil {
-				log.Fatal().Msgf("Unable to write to %s: %v", logpath, err)
-			}
-			file.Close()
-			time.Sleep(10 * time.Millisecond)
+			line = strings.TrimSuffix(line, "\n")
+			log.Info().Msg(line)
 		}
-	}()
+	}()*/
+	err = cmd.Start()
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		log.Info().Msgf("Waiting for cedana-image-streamer to setup...")
+		log.Info().Msg("Waiting for cedana-image-streamer to setup...")
 		time.Sleep(10 * time.Millisecond)
 	}
-	log.Info().Str("Log", logpath).Msgf("Started cedana-image-streamer")
+	log.Info().Msg("Started cedana-image-streamer")
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
