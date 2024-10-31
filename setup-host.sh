@@ -14,7 +14,7 @@ YUM_PACKAGES=(
 
 APT_PACKAGES=(
     wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev python3-protobuf build-essential
-    libprotobuf-c1 buildah libnftables1
+    libprotobuf-c1 buildah libnftables1 libelf-dev
 )
 
 # Function to install APT packages
@@ -32,12 +32,12 @@ install_yum_packages() {
 install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
-            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_3.19-4_amd64.deb"
-            OUTPUT_FILE="criu_3.19-4_amd64.deb"
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_4.0-3_amd64.deb"
+            OUTPUT_FILE="criu_4.0-3_amd64.deb"
             ;;
         aarch64 | arm64)
-            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_3.19-4_arm64.deb"
-            OUTPUT_FILE="criu_3.19-4_arm64.deb"
+            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
+            OUTPUT_FILE="criu_4.0-3_arm64.deb"
             ;;
         *)
             echo "Unknown platform architecture $(uname -m)"
@@ -76,6 +76,13 @@ else
     exit 1
 fi
 
+# if gpu driver present enable it!
+GPU=""
+if command -v nvidia-smi &>/dev/null; then
+    echo "nvidia-smi found! CUDA Version: $(nvidia-smi --version | grep CUDA | cut -d ':' -f 2)"
+    GPU="--gpu"
+fi
+
 # Run the Cedana daemon setup script
 cd /
-./build-start-daemon.sh --systemctl --no-build --k8s
+./build-start-daemon.sh --systemctl --no-build --k8s ${GPU}
