@@ -6,9 +6,6 @@ endif
 
 export CONTAINER_TERMINAL
 
-benchmark:
-	./benchmark-and-push.sh || (echo "Benchmark and push failed" && exit 1)
-
 smoke:
 	./smoke-test.sh || (echo "Smoke test failed" && exit 1)
 
