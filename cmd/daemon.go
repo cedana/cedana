@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -54,6 +55,7 @@ var startDaemonCmd = &cobra.Command{
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
+			log.Warn().Msg("CEDANA_URL or CEDANA_AUTH_TOKEN unset, certain features may not work as expected.")
 			cedanaURL = "unset"
 		}
 
@@ -110,7 +112,8 @@ func gcloudAdcSetup(ctx context.Context) error {
 		// already present skip
 		return nil
 	}
-	url := getenv("CEDANA_SERVER_URL", "https://sandbox.cedana.ai") + "/k8s/gcloud/serviceaccount"
+	cedanaURL := viper.GetString("connection.cedana_url")
+	url := cedanaURL + "/k8s/gcloud/serviceaccount"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -153,6 +156,13 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 			log.Error().Err(err).Msg("failed to setup cadvisor")
 			return
 		}
+
+		macAddr, _ := utils.GetMACAddress()
+		hostname, _ := os.Hostname()
+		v, _ := mem.VirtualMemory()
+		pmem := fmt.Sprintf("%d", v.Total/(1024*1024*1024)) // in GB
+		url := viper.GetString("connection.cedana_url")
+
 		topic := client.Topic("asr-metrics")
 		time.Sleep(10 * time.Second)
 		for {
@@ -165,6 +175,12 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 			// Publish a message
 			result := topic.Publish(ctx, &pubsub.Message{
 				Data: b,
+				Attributes: map[string]string{
+					"mac":      macAddr,
+					"hostname": hostname,
+					"mem":      pmem,
+					"url":      url,
+				},
 			})
 			// Get the server-assigned message ID
 			id, err := result.Get(ctx)

@@ -40,4 +40,7 @@ const (
 	portFlag             = "port"
 	metricsEnabledFlag   = "metrics-enabled"
 	jobServiceFlag       = "job-service"
+	noStdinFlag          = "no-stdin"
+	pidFileFlag          = "pid-file"
+	modeFlag             = "mode"
 )

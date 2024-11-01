@@ -80,11 +80,6 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 	state.JobState = task.JobState_JOB_RUNNING
 	state.GPU = args.GPU
 
-	err = s.updateState(ctx, state.JID, state)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to update state after manage")
-	}
-
 	var gpuCmd *exec.Cmd
 	gpuOutBuf := &bytes.Buffer{}
 	if args.GPU {
@@ -97,6 +92,11 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
 		}
+	}
+
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
 	}
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
@@ -387,11 +387,11 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if os.IsNotExist(err) {
 			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: does not exist")
 		}
-		if !args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
+		if (args.Stream <= 0) && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
 			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
 		}
-		if args.Stream && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".lz4")) {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be lz4 file (--stream enabled)")
+		if (args.Stream > 0) && !stat.IsDir() {
+			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be dir (--stream enabled)")
 		}
 	case task.CRType_REMOTE:
 		if args.CheckpointID == "" {

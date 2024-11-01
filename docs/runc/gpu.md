@@ -10,11 +10,10 @@ Currently, support is available for NVIDIA GPUs only.
 
 To spawn a runc container with NVIDIA GPU support, NVIDIA ships a runc `prestart` hook that can be used to set up the GPU environment for the container. For instance, when spawning a docker container with `--runtime=nvidia` ([more info](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#configuring-docker)), the `nvidia-container-runtime-hook` is added to the runc bundle's `config.json` file. 
 
-To enable cedana C/R support, there are 4 additional requirements:
+To enable cedana C/R support, there are 3 additional requirements:
 1. Add/Mount the cedana GPU shared library `libcedana-gpu.so` to the container. This binary can be obtained when you run the daemon with GPU support enabled, i.e., `sudo cedana daemon start --gpu-enabled`.
 2. Set the `LD_PRELOAD=libcedana-gpu.so` environment variable, or prefix to `process.args` in the container's `config.json`.
-3. Bind the container's port 50051 to the host.
-4. Share the container's shared memory (`/dev/shm`) with the host. 
+3. Share the container's shared memory (`/dev/shm`) with the host. 
 
 All these steps can only be done before spawning the container (by modifying the bundle's `config.json`). In future releases, we plan to add a runc hook that will automate these steps, or add an option to spawn a runc container from the daemon itself.
 

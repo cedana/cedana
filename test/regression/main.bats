@@ -16,13 +16,16 @@ setup() {
     # as those will point to the bats executable's location or the preprocessed file respectively
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
     TTY_SOCK=$DIR/tty.sock
-    recvtty $TTY_SOCK &
+
+    # set up a fake cedana recvtty cmd
+    cp /usr/local/bin/cedana /usr/local/bin/cedanarecvtty
+    cedanarecvtty debug recvtty "$TTY_SOCK" &
 }
 
 teardown() {
     sleep 1 3>-
 
-    pkill recvtty
+    pkill cedanarecvtty
     rm -f $TTY_SOCK
 
     stop_cedana
@@ -149,7 +152,7 @@ teardown() {
     # try to dump unmanaged process with GPU flags
     run exec_task $task $job_id
     [ "$status" -eq 0 ]
-    run dump_task $job_id --gpu-enabled
+    run checkpoint_task $job_id --gpu-enabled
     [ "$status" -ne 0 ]
 }
 

@@ -218,28 +218,40 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 		}
 
+		var wg sync.WaitGroup
 		if opts.GPUEnabled {
-			if viper.GetString("gpu_controller_path") == "" {
-				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, utils.GpuControllerBinaryPath)
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				gpuControllerPath := utils.GpuControllerBinaryPath
+				if s := viper.GetString("gpu_controller_path"); s != "" {
+					gpuControllerPath = s
+				}
+				log.Info().Str("gpu_controller_path", gpuControllerPath).Msg("Ensuring GPU Controller exists.")
+				err = pullGPUBinary(cmdCtx, utils.GpuControllerBinaryName, gpuControllerPath)
 				if err != nil {
 					log.Error().Err(err).Msg("could not pull gpu controller")
 					cancel(err)
 					return
 				}
-			} else {
-				log.Debug().Str("path", viper.GetString("gpu_controller_path")).Msg("using gpu controller")
-			}
+			}()
 
-			if viper.GetString("gpu_shared_lib_path") == "" {
-				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, utils.GpuSharedLibPath)
+			go func() {
+				defer wg.Done()
+				gpuSharedLibPath := utils.GpuSharedLibPath
+				if s := viper.GetString("gpu_shared_lib_path"); s != "" {
+					gpuSharedLibPath = s
+				}
+				log.Info().Str("gpu_shared_lib_path", gpuSharedLibPath).Msg("Ensuring LibCedana library exists.")
+				err = pullGPUBinary(cmdCtx, utils.GpuSharedLibName, gpuSharedLibPath)
 				if err != nil {
-					log.Error().Err(err).Msg("could not pull gpu shared lib")
+					log.Error().Err(err).Msg("could not download libcedana")
 					cancel(err)
 					return
 				}
-			} else {
-				log.Debug().Str("path", viper.GetString("gpu_shared_lib_path")).Msg("using gpu shared lib")
-			}
+			}()
+
+			wg.Wait()
 		}
 
 		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
@@ -518,14 +530,12 @@ func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*t
 func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 	_, err := os.Stat(filePath)
 	if err == nil {
-		log.Info().Str("Path", filePath).Msgf("GPU binary exists. Delete existing binary to download latest version.")
+		log.Info().Str("Path", filePath).Msgf("%s binary found, skipping download.", binary)
 		// TODO NR - check version and checksum of binary?
 		return nil
 	}
-	log.Debug().Msgf("pulling gpu binary %s", binary)
-
-	url := viper.GetString("connection.cedana_url") + "/checkpoint/gpu/" + binary
-	log.Debug().Msgf("pulling %s from %s", binary, url)
+	url := viper.GetString("connection.cedana_url") + "/k8s/gpu/" + binary
+	log.Info().Msgf("Downloading %s from %s", binary, url)
 
 	httpClient := &http.Client{}
 
@@ -563,7 +573,7 @@ func pullGPUBinary(ctx context.Context, binary string, filePath string) error {
 		log.Err(err).Msg("could not read file from response")
 		return err
 	}
-	log.Debug().Msgf("%s downloaded to %s", binary, filePath)
+	log.Info().Msgf("%s downloaded to %s", binary, filePath)
 	return err
 }
 
