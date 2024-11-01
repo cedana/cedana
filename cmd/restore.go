@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/cedana/cedana/pkg/api"
@@ -50,7 +51,13 @@ var restoreProcessCmd = &cobra.Command{
 
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
+		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		if stream > 0 {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		restoreArgs := task.RestoreArgs{
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
@@ -87,11 +94,16 @@ var restoreJobCmd = &cobra.Command{
 		jid := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		root, _ := cmd.Flags().GetString(rootFlag)
-		stream, _ := cmd.Flags().GetBool(streamFlag)
+		stream, _ := cmd.Flags().GetInt32(streamFlag)
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
-
+		if stream > 0 {
+			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
+				return err
+			}
+		}
 		restoreArgs := &task.JobRestoreArgs{
 			JID:    jid,
 			Stream: stream,
@@ -340,12 +352,12 @@ func init() {
 	// Process
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreProcessCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
+	restoreProcessCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 
 	// Job
 	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreJobCmd.Flags().BoolP(streamFlag, "s", false, "restore images using criu-image-streamer")
+	restoreJobCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
 	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")

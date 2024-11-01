@@ -12,6 +12,7 @@ TBD
 ## How-to-guides 
 - [Checkpoint/Restore kata containers](kata/kata.md)
 - [Checkpoint/Restore GPU runc containers](runc/gpu.md)
+- [Checkpoint/Restore with cedana-image-streamer](cedana-image-streamer/cedana-image-streamer.md)
 
 ## Developer Guides 
 - [Container runtime support](support/runtimes.md) 
