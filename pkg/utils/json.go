@@ -28,3 +28,21 @@ func SaveJSONToFile(data any, path string) error {
 
 	return nil
 }
+
+func LoadJSONFromFile(path string, data any) error {
+	// Open the file to read the JSON data
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	// Decode the JSON data into the struct
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(data)
+	if err != nil {
+		return fmt.Errorf("error decoding JSON: %v", err)
+	}
+
+	return nil
+}

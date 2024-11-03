@@ -21,15 +21,20 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	compression := viper.GetString("storage.compression")
 
 	middleware := []types.DumpAdapter{
-		fillMissingDefaults,
+		// Bare minimum adapters
+		adapters.JobDumpAdapter,
+		fillMissingDumpDefaults,
 		validateDumpRequest,
 		adapters.PrepareDumpDir(compression),
-		adapters.FillRequestIfJob,
-		insertTypeSpecificMiddleware,
-		adapters.FillProcessState, // need state right before dump
-		adapters.DetectNetworkOptions,
-		adapters.DetectShellJob,
-		// adapters.CloseCommonFds,
+
+		// Insert type-specific middleware, from plugins or built-in
+		insertTypeSpecificDumpMiddleware,
+
+		// Process state-dependent adapters
+		adapters.FillProcessStateForDump,
+		adapters.DetectNetworkOptionsForDump,
+		adapters.DetectShellJobForDump,
+		adapters.CloseCommonFilesForDump,
 	}
 
 	handler := types.AdaptedDump(handlers.CriuDump(s.criu), middleware...)
@@ -50,7 +55,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 //////////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func fillMissingDefaults(h types.DumpHandler) types.DumpHandler {
+func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			req.Dir = viper.GetString("storage.dump_dir")
@@ -86,23 +91,22 @@ func validateDumpRequest(h types.DumpHandler) types.DumpHandler {
 }
 
 // Adapter that inserts new adapters after itself based on the type of dump.
-func insertTypeSpecificMiddleware(h types.DumpHandler) types.DumpHandler {
+func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		middleware := []types.DumpAdapter{}
 		t := req.GetDetails().GetType()
 		switch t {
 		case "job":
-			// Insert adapters for job dump
-			return status.Errorf(codes.InvalidArgument, "please first use fillRequestIfJob adapter for jobs")
+			return status.Errorf(codes.InvalidArgument, "please first use JobDumpAdapter")
 		case "process":
 			// Insert adapters for process dump
-			middleware = append(middleware, adapters.CheckProcessExists)
+			middleware = append(middleware, adapters.CheckProcessExistsForDump)
 		default:
-			// Insert plugin-specific adapters
+			// Insert plugin-specific middleware
 			if p, exists := plugins.LoadedPlugins[t]; exists {
 				defer plugins.RecoverFromPanic(t)
-				if dumpMiddleware, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
-					middleware = append(middleware, dumpMiddleware.([]types.DumpAdapter)...)
+				if pluginMiddleware, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
+					middleware = append(middleware, pluginMiddleware.([]types.DumpAdapter)...)
 				} else {
 					return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
 				}

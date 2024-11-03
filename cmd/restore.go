@@ -27,6 +27,7 @@ func init() {
 	restoreCmd.PersistentFlags().StringP(types.PathFlag.Full, types.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	restoreCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "restore tcp established connections")
+	restoreCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
 
 	// Add commands from plugins
 	for name, p := range plugins.LoadedPlugins {
@@ -47,6 +48,7 @@ var restoreCmd = &cobra.Command{
 		path, _ := cmd.Flags().GetString(types.PathFlag.Full)
 		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
+		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
@@ -55,6 +57,7 @@ var restoreCmd = &cobra.Command{
 			Details: &daemon.RestoreDetails{
 				Criu: &daemon.CriuOpts{
 					TcpEstablished: tcpEstablished,
+					TcpClose:       tcpClose,
 				},
 			},
 		}

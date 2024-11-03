@@ -18,9 +18,13 @@ import (
 )
 
 const (
-	DUMP_DIR_PERMS     = 0755
-	DUMP_DIR_FORMATTER = ""
+	DUMP_DIR_PERMS    = 0o755
+	RESTORE_DIR_PERMS = 0o755
 )
+
+///////////////////////
+//// Dump Adapters ////
+///////////////////////
 
 // This adapter ensures the specified dump dir exists and is writable.
 // Creates a unique directory within this directory for the dump.
@@ -52,9 +56,7 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 			// Set CRIU opts
 			f, err := os.Open(imagesDirectory)
 			if err != nil {
-				if os.Remove(imagesDirectory) != nil {
-					log.Warn().Err(err).Str("dir", dir).Msg("failed to cleanup dump dir after failure")
-				}
+				os.Remove(imagesDirectory)
 				return status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
 			}
 			defer f.Close()
@@ -75,7 +77,7 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 			resp.Path = imagesDirectory
 
 			if compression == "" || compression == "none" {
-				return err
+				return err // Nothing else to do
 			}
 
 			// Create the compressed tarball
@@ -83,12 +85,8 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 			var tarball string
 
 			defer os.RemoveAll(imagesDirectory)
-			dumpFiles, err := utils.ListFilesInDir(imagesDirectory)
-			if err != nil {
-				return status.Errorf(codes.Internal, "failed to list files in dump dir: %v", err)
-			}
 
-			if tarball, err = utils.CreateTarball(dumpFiles, imagesDirectory, compression); err != nil {
+			if tarball, err = utils.Tar(imagesDirectory, imagesDirectory, compression); err != nil {
 				return status.Errorf(codes.Internal, "failed to create tarball: %v", err)
 			}
 
@@ -98,5 +96,56 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 
 			return nil
 		}
+	}
+}
+
+//////////////////////////
+//// Restore Adapters ////
+//////////////////////////
+
+// This adapter decompresses (if required) the dump to a temporary directory for restore.
+// Automatically detects the compression format from the file extension.
+func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		path := req.GetPath()
+		stat, err := os.Stat(path)
+		if err != nil {
+			return status.Errorf(codes.NotFound, "path error: %s", path)
+		}
+
+		var dir *os.File
+		var imagesDirectory string
+
+		if stat.IsDir() {
+			imagesDirectory = path
+		} else {
+			// Create a temporary directory for the restore
+			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().Unix()))
+			if err := os.Mkdir(imagesDirectory, RESTORE_DIR_PERMS); err != nil {
+				return status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
+			}
+			defer os.RemoveAll(imagesDirectory)
+
+			// Decompress the dump
+			if err := utils.Untar(path, imagesDirectory); err != nil {
+				return status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
+			}
+		}
+
+		dir, err = os.Open(imagesDirectory)
+		if err != nil {
+			os.RemoveAll(imagesDirectory)
+			return status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
+		}
+		defer dir.Close()
+
+		if req.GetDetails().GetCriu() == nil {
+			req.Details.Criu = &daemon.CriuOpts{}
+		}
+
+		req.GetDetails().GetCriu().ImagesDir = imagesDirectory
+		req.GetDetails().GetCriu().ImagesDirFd = int32(dir.Fd())
+
+		return h(ctx, resp, req)
 	}
 }

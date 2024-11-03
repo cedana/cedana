@@ -4,10 +4,12 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -22,11 +24,16 @@ import (
 )
 
 const (
-	STATE_FILE = "process_state.json"
+	STATE_FILE                        = "process_state.json"
+	RESTORE_OUTPUT_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
 )
 
+////////////////////////
+//// Dump Adapters /////
+////////////////////////
+
 // Check if the process exists, and is running
-func CheckProcessExists(h types.DumpHandler) types.DumpHandler {
+func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		pid := req.GetDetails().GetPID()
 		if pid == 0 {
@@ -53,7 +60,7 @@ func CheckProcessExists(h types.DumpHandler) types.DumpHandler {
 // Fills process state in the dump response.
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
-func FillProcessState(h types.DumpHandler) types.DumpHandler {
+func FillProcessStateForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		state := resp.GetState()
 		if state == nil {
@@ -215,7 +222,11 @@ func FillProcessState(h types.DumpHandler) types.DumpHandler {
 }
 
 // Detect and sets network options for CRIU
-func DetectNetworkOptions(h types.DumpHandler) types.DumpHandler {
+// XXX YA: Enforces unsuitable options for CRIU. Some times, we may
+// not want to use TCP established connections. Also, for external unix
+// sockets, the flag is deprecated. The correct way is to use the
+// --external flag in CRIU.
+func DetectNetworkOptionsForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		var hasTCP, hasExtUnixSocket bool
 
@@ -235,7 +246,7 @@ func DetectNetworkOptions(h types.DumpHandler) types.DumpHandler {
 			}
 			hasTCP = hasTCP || activeTCP
 		} else {
-			log.Warn().Msg("No process info found. FillProcessState should be called before this adapter")
+			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
 		// Set the network options
@@ -251,7 +262,7 @@ func DetectNetworkOptions(h types.DumpHandler) types.DumpHandler {
 }
 
 // Detect and sets shell job option for CRIU
-func DetectShellJob(h types.DumpHandler) types.DumpHandler {
+func DetectShellJobForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -262,7 +273,7 @@ func DetectShellJob(h types.DumpHandler) types.DumpHandler {
 				}
 			}
 		} else {
-			log.Warn().Msg("No process info found. FillProcessState should be called before this adapter")
+			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
 		// Set the shell job option
@@ -277,7 +288,7 @@ func DetectShellJob(h types.DumpHandler) types.DumpHandler {
 }
 
 // Close common file descriptors b/w the parent and child process
-func CloseCommonFds(h types.DumpHandler) types.DumpHandler {
+func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
@@ -288,6 +299,133 @@ func CloseCommonFds(h types.DumpHandler) types.DumpHandler {
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
+
+		return h(ctx, resp, req)
+	}
+}
+
+////////////////////////
+/// Restore Adapters ///
+////////////////////////
+
+// Detect and sets network options for CRIU
+// XXX YA: Enforces unsuitable options for CRIU. Some times, we may
+// not want to use TCP established connections. Also, for external unix
+// sockets, the flag is deprecated. The correct way is to use the
+// --external flag in CRIU.
+func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		var hasTCP, hasExtUnixSocket bool
+
+		if state := resp.GetState(); state != nil {
+			for _, Conn := range state.GetInfo().GetOpenConnections() {
+				if Conn.Type == syscall.SOCK_STREAM { // TCP
+					hasTCP = true
+				}
+				if Conn.Type == syscall.AF_UNIX { // Interprocess
+					hasExtUnixSocket = true
+				}
+			}
+		} else {
+			log.Warn().Msg("No process info found. it should have been filled by an adapter")
+		}
+
+		// Set the network options
+		if req.GetDetails().GetCriu() == nil {
+			req.Details.Criu = &daemon.CriuOpts{}
+		}
+
+		req.Details.Criu.TcpEstablished = hasTCP || req.GetDetails().GetCriu().GetTcpEstablished()
+		req.Details.Criu.ExtUnixSk = hasExtUnixSocket || req.GetDetails().GetCriu().GetExtUnixSk()
+
+		return h(ctx, resp, req)
+	}
+}
+
+// Detect and sets shell job option for CRIU
+func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		var isShellJob bool
+		if info := resp.GetState().GetInfo(); info != nil {
+			for _, f := range info.GetOpenFiles() {
+				if strings.Contains(f.Path, "pts") {
+					isShellJob = true
+					break
+				}
+			}
+		} else {
+			log.Warn().Msg("No process info found. it should have been filled by an adapter")
+		}
+
+		// Set the shell job option
+		if req.GetDetails().GetCriu() == nil {
+			req.Details.Criu = &daemon.CriuOpts{}
+		}
+
+		req.Details.Criu.ShellJob = isShellJob || req.GetDetails().GetCriu().GetShellJob()
+
+		return h(ctx, resp, req)
+	}
+}
+
+// Fill process state in the restore response
+func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		// Check if path is a directory
+		path := req.GetDetails().GetCriu().GetImagesDir()
+		if path == "" {
+			return status.Errorf(codes.InvalidArgument, "missing path. should have been set by an adapter")
+		}
+
+		stateFile := filepath.Join(path, STATE_FILE)
+		state := &daemon.ProcessState{}
+
+		if err := utils.LoadJSONFromFile(stateFile, state); err != nil {
+			return status.Errorf(codes.Internal, "failed to load process state from dump: %v", err)
+		}
+
+		resp.State = state
+
+		return h(ctx, resp, req)
+	}
+}
+
+// Open files from the dump state are inherited by the restored process.
+// For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
+// a log file.
+func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		inheritFds := req.GetDetails().GetCriu().GetInheritFd()
+		if info := resp.GetState().GetInfo(); info != nil {
+			restoreLogPath := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH_FORMATTER, time.Now().Unix())
+			restoreLog, err := os.Create(restoreLogPath)
+			defer restoreLog.Close()
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to open restore log: %v", err)
+			}
+			for _, f := range info.GetOpenFiles() {
+				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+					f.Path = strings.TrimPrefix(f.Path, "/")
+					extraFiles = append(extraFiles, restoreLog)
+					inheritFds = append(inheritFds, &daemon.InheritFd{
+						Fd:  2 + int32(len(extraFiles)),
+						Key: f.Path,
+					})
+				} else {
+					log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
+				}
+			}
+		} else {
+			log.Warn().Msg("No process info found. it should have been filled by an adapter")
+		}
+		ctx = context.WithValue(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
+
+		// Set the inherited fds
+		if req.GetDetails().GetCriu() == nil {
+			req.GetDetails().Criu = &daemon.CriuOpts{}
+		}
+		req.GetDetails().GetCriu().InheritFd = inheritFds
 
 		return h(ctx, resp, req)
 	}

@@ -12,7 +12,7 @@ import (
 
 const (
 	DEFAULT_LOG_LEVEL    = zerolog.InfoLevel
-	LOG_TIME_FORMAT_FULL = time.RFC3339
+	LOG_TIME_FORMAT_FULL = time.TimeOnly
 	LOG_CALLER_SKIP      = 3 // stack frame depth
 )
 
@@ -36,7 +36,11 @@ func init() {
 	}
 
 	var output io.Writer = zerolog.ConsoleWriter{
-		Out: os.Stdout,
+		Out:          os.Stdout,
+		TimeFormat:   LOG_TIME_FORMAT_FULL,
+		TimeLocation: time.Local,
+		PartsOrder:   []string{"time", "level", "caller", "message"},
+		FieldsOrder:  []string{"time", "level", "caller", "message"},
 	}
 
 	// Set as default logger

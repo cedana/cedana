@@ -17,6 +17,7 @@ var (
 	// CRIU
 	LeaveRunningFlag   = Flag{"leave-running", ""}
 	TcpEstablishedFlag = Flag{"tcp-established", ""}
+	TcpCloseFlag       = Flag{"tcp-close", ""}
 
 	// Root
 	PortFlag      = Flag{"port", "P"}

@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/checkpoint-restore/go-criu/v7"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -116,16 +116,15 @@ func (s *Server) Start() error {
 
 	// Wait for all background go routines to finish
 	s.wg.Wait()
-
 	s.Stop()
-	log.Debug().Msg("stopped server gracefully")
 
 	return err
 }
 
-func (s *Server) Stop() error {
+func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
-	return s.listener.Close()
+	s.listener.Close()
+	log.Debug().Msg("stopped server gracefully")
 }
 
 func loggingStreamInterceptor() grpc.StreamServerInterceptor {
