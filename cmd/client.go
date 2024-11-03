@@ -8,7 +8,9 @@ import (
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -39,7 +41,9 @@ func NewClient(host string, port uint32) (*Client, error) {
 }
 
 func (c *Client) Close() {
-	c.conn.Close()
+	if c.conn != nil {
+		c.conn.Close()
+	}
 }
 
 ///////////////////
@@ -52,7 +56,7 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, err
+		return nil, handleError(err)
 	}
 	return resp, nil
 }
@@ -63,7 +67,34 @@ func (c *Client) Restore(ctx context.Context, args *daemon.RestoreReq) (*daemon.
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, err
+		return nil, handleError(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) Start(ctx context.Context, args *daemon.StartReq) (*daemon.StartResp, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.Start(ctx, args, opts...)
+	if err != nil {
+		return nil, handleError(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) Manage(ctx context.Context, args *daemon.ManageReq) (*daemon.ManageResp, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.Manage(ctx, args, opts...)
+	if err != nil {
+		return nil, handleError(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListResp, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.List(ctx, args, opts...)
+	if err != nil {
+		return nil, handleError(err)
 	}
 	return resp, nil
 }
@@ -78,4 +109,16 @@ func getDefaultCallOptions() []grpc.CallOption {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts
+}
+
+func handleError(err error) error {
+	st, ok := status.FromError(err)
+	if ok {
+		if st.Code() == codes.Unavailable {
+			return fmt.Errorf("Daemon unavailable. Is it running?")
+		} else {
+			return fmt.Errorf("Failed: %v", st.Message())
+		}
+	}
+	return fmt.Errorf("Unknown error: %v", err)
 }

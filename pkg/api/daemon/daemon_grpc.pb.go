@@ -21,14 +21,22 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Daemon_Dump_FullMethodName    = "/cedana.daemon.Daemon/Dump"
 	Daemon_Restore_FullMethodName = "/cedana.daemon.Daemon/Restore"
+	Daemon_Start_FullMethodName   = "/cedana.daemon.Daemon/Start"
+	Daemon_Manage_FullMethodName  = "/cedana.daemon.Daemon/Manage"
+	Daemon_List_FullMethodName    = "/cedana.daemon.Daemon/List"
 )
 
 // DaemonClient is the client API for Daemon service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DaemonClient interface {
+	// C/R
 	Dump(ctx context.Context, in *DumpReq, opts ...grpc.CallOption) (*DumpResp, error)
 	Restore(ctx context.Context, in *RestoreReq, opts ...grpc.CallOption) (*RestoreResp, error)
+	// Job management
+	Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartResp, error)
+	Manage(ctx context.Context, in *ManageReq, opts ...grpc.CallOption) (*ManageResp, error)
+	List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*ListResp, error)
 }
 
 type daemonClient struct {
@@ -59,12 +67,47 @@ func (c *daemonClient) Restore(ctx context.Context, in *RestoreReq, opts ...grpc
 	return out, nil
 }
 
+func (c *daemonClient) Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartResp)
+	err := c.cc.Invoke(ctx, Daemon_Start_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonClient) Manage(ctx context.Context, in *ManageReq, opts ...grpc.CallOption) (*ManageResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageResp)
+	err := c.cc.Invoke(ctx, Daemon_Manage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonClient) List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*ListResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResp)
+	err := c.cc.Invoke(ctx, Daemon_List_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServer is the server API for Daemon service.
 // All implementations must embed UnimplementedDaemonServer
 // for forward compatibility.
 type DaemonServer interface {
+	// C/R
 	Dump(context.Context, *DumpReq) (*DumpResp, error)
 	Restore(context.Context, *RestoreReq) (*RestoreResp, error)
+	// Job management
+	Start(context.Context, *StartReq) (*StartResp, error)
+	Manage(context.Context, *ManageReq) (*ManageResp, error)
+	List(context.Context, *ListReq) (*ListResp, error)
 	mustEmbedUnimplementedDaemonServer()
 }
 
@@ -80,6 +123,15 @@ func (UnimplementedDaemonServer) Dump(context.Context, *DumpReq) (*DumpResp, err
 }
 func (UnimplementedDaemonServer) Restore(context.Context, *RestoreReq) (*RestoreResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
+}
+func (UnimplementedDaemonServer) Start(context.Context, *StartReq) (*StartResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+}
+func (UnimplementedDaemonServer) Manage(context.Context, *ManageReq) (*ManageResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Manage not implemented")
+}
+func (UnimplementedDaemonServer) List(context.Context, *ListReq) (*ListResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedDaemonServer) mustEmbedUnimplementedDaemonServer() {}
 func (UnimplementedDaemonServer) testEmbeddedByValue()                {}
@@ -138,6 +190,60 @@ func _Daemon_Restore_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Daemon_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).Start(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_Start_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).Start(ctx, req.(*StartReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Daemon_Manage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).Manage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_Manage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).Manage(ctx, req.(*ManageReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Daemon_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).List(ctx, req.(*ListReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Daemon_ServiceDesc is the grpc.ServiceDesc for Daemon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +258,18 @@ var Daemon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restore",
 			Handler:    _Daemon_Restore_Handler,
+		},
+		{
+			MethodName: "Start",
+			Handler:    _Daemon_Start_Handler,
+		},
+		{
+			MethodName: "Manage",
+			Handler:    _Daemon_Manage_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _Daemon_List_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -15,9 +15,8 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -26,6 +25,7 @@ func init() {
 
 	// Add common flags
 	dumpCmd.PersistentFlags().StringP(types.DirFlag.Full, types.DirFlag.Short, "", "directory to dump to")
+	dumpCmd.MarkPersistentFlagDirname(types.DirFlag.Full)
 	dumpCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	dumpCmd.PersistentFlags().BoolP(types.LeaveRunningFlag.Full, types.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "dump tcp established connections")
@@ -34,13 +34,29 @@ func init() {
 	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(types.DirFlag.Full))
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(types.LeaveRunningFlag.Full))
 
-	// Add commands from supported plugins
+	///////////////////////////////////////////
+	// Add modifications from supported plugins
+	///////////////////////////////////////////
+
 	for name, p := range plugins.LoadedPlugins {
 		defer plugins.RecoverFromPanic(name)
-		if pluginCmd, err := p.Lookup(plugins.FEATURE_DUMP_CMD); err == nil {
-			dumpCmd.AddCommand(*pluginCmd.(**cobra.Command))
-		} else {
-			log.Debug().Str("plugin", name).Err(err).Msg("Plugin does not provide a dump command")
+		if pluginCmdUntyped, err := p.Lookup(plugins.FEATURE_DUMP_CMD); err == nil {
+			// Add new subcommand from supported plugins
+			pluginCmd, ok := pluginCmdUntyped.(**cobra.Command)
+			if !ok {
+				log.Debug().Str("plugin", name).Msgf("Provided %s is not a valid command", plugins.FEATURE_DUMP_CMD)
+				continue
+			}
+			dumpCmd.AddCommand(*pluginCmd)
+
+			// Apply all the flags from the plugin command to job subcommand (as optional flags),
+			// since the job subcommand can be used to dump any managed entity (even from plugins, like runc),
+			// thus it could have specific CLI overrides from plugins.
+
+			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+				jobDumpCmd.Flags().AddFlag(f)
+				f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+			})
 		}
 	}
 }
@@ -59,11 +75,9 @@ var dumpCmd = &cobra.Command{
 		req := &daemon.DumpReq{
 			Dir:    dir,
 			Stream: stream,
-			Details: &daemon.DumpDetails{
-				Criu: &daemon.CriuOpts{
-					LeaveRunning:   leaveRunning,
-					TcpEstablished: tcpEstablished,
-				},
+			Criu: &daemon.CriuOpts{
+				LeaveRunning:   leaveRunning,
+				TcpEstablished: tcpEstablished,
 			},
 		}
 
@@ -94,15 +108,7 @@ var dumpCmd = &cobra.Command{
 
 		resp, err := client.Dump(cmd.Context(), req)
 		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				if st.Code() == codes.Unavailable {
-					return fmt.Errorf("Daemon unavailable. Is it running?")
-				} else {
-					return fmt.Errorf("Failed: %v", st.Message())
-				}
-			}
-			return fmt.Errorf("Unknown error: %v", err)
+			return err
 		}
 
 		fmt.Printf(resp.Message)
@@ -125,19 +131,13 @@ var processDumpCmd = &cobra.Command{
 		// And modify the request type.
 		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
-		if len(args) == 0 {
-			return fmt.Errorf("PID is required")
-		}
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
 			return fmt.Errorf("PID must be an number")
 		}
 
-		req.Details = &daemon.DumpDetails{
-			Type: "process",
-			Opts: &daemon.DumpDetails_PID{PID: uint32(pid)},
-			Criu: req.GetDetails().GetCriu(),
-		}
+		req.Type = "process"
+		req.Details = &daemon.DumpReq_PID{PID: uint32(pid)}
 
 		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
@@ -149,7 +149,19 @@ var processDumpCmd = &cobra.Command{
 var jobDumpCmd = &cobra.Command{
 	Use:   "job <JID>",
 	Short: "Dump a managed process/container (job)",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// All we need to do is modify the request to include the job ID, and request type.
+		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+
+		jid := args[0]
+
+		req.Type = "job"
+		req.Details = &daemon.DumpReq_JID{JID: jid}
+
+		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
+		cmd.SetContext(ctx)
+
 		return nil
 	},
 }

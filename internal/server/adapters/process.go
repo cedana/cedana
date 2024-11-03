@@ -35,7 +35,7 @@ const (
 // Check if the process exists, and is running
 func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		pid := req.GetDetails().GetPID()
+		pid := req.GetPID()
 		if pid == 0 {
 			return status.Errorf(codes.InvalidArgument, "missing PID")
 		}
@@ -212,7 +212,7 @@ func FillProcessStateForDump(h types.DumpHandler) types.DumpHandler {
 		}
 
 		// Post dump, save the state to a file in the dump
-		stateFile := filepath.Join(req.GetDetails().GetCriu().GetImagesDir(), STATE_FILE)
+		stateFile := filepath.Join(req.GetCriu().GetImagesDir(), STATE_FILE)
 		if err := utils.SaveJSONToFile(state, stateFile); err != nil {
 			log.Warn().Err(err).Str("file", stateFile).Msg("failed to save process state")
 		}
@@ -250,12 +250,12 @@ func DetectNetworkOptionsForDump(h types.DumpHandler) types.DumpHandler {
 		}
 
 		// Set the network options
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
 
-		req.Details.Criu.TcpEstablished = hasTCP || req.GetDetails().GetCriu().GetTcpEstablished()
-		req.Details.Criu.ExtUnixSk = hasExtUnixSocket || req.GetDetails().GetCriu().GetExtUnixSk()
+		req.Criu.TcpEstablished = hasTCP || req.GetCriu().GetTcpEstablished()
+		req.Criu.ExtUnixSk = hasExtUnixSocket || req.GetCriu().GetExtUnixSk()
 
 		return h(ctx, resp, req)
 	}
@@ -277,11 +277,11 @@ func DetectShellJobForDump(h types.DumpHandler) types.DumpHandler {
 		}
 
 		// Set the shell job option
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
 
-		req.Details.Criu.ShellJob = isShellJob || req.GetDetails().GetCriu().GetShellJob()
+		req.Criu.ShellJob = isShellJob || req.GetCriu().GetShellJob()
 
 		return h(ctx, resp, req)
 	}
@@ -331,12 +331,12 @@ func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler
 		}
 
 		// Set the network options
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
 
-		req.Details.Criu.TcpEstablished = hasTCP || req.GetDetails().GetCriu().GetTcpEstablished()
-		req.Details.Criu.ExtUnixSk = hasExtUnixSocket || req.GetDetails().GetCriu().GetExtUnixSk()
+		req.Criu.TcpEstablished = hasTCP || req.GetCriu().GetTcpEstablished()
+		req.Criu.ExtUnixSk = hasExtUnixSocket || req.GetCriu().GetExtUnixSk()
 
 		return h(ctx, resp, req)
 	}
@@ -358,11 +358,11 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 		}
 
 		// Set the shell job option
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
 
-		req.Details.Criu.ShellJob = isShellJob || req.GetDetails().GetCriu().GetShellJob()
+		req.Criu.ShellJob = isShellJob || req.GetCriu().GetShellJob()
 
 		return h(ctx, resp, req)
 	}
@@ -372,7 +372,7 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		// Check if path is a directory
-		path := req.GetDetails().GetCriu().GetImagesDir()
+		path := req.GetCriu().GetImagesDir()
 		if path == "" {
 			return status.Errorf(codes.InvalidArgument, "missing path. should have been set by an adapter")
 		}
@@ -396,7 +396,7 @@ func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		inheritFds := req.GetDetails().GetCriu().GetInheritFd()
+		inheritFds := req.GetCriu().GetInheritFd()
 		if info := resp.GetState().GetInfo(); info != nil {
 			restoreLogPath := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH_FORMATTER, time.Now().Unix())
 			restoreLog, err := os.Create(restoreLogPath)
@@ -422,10 +422,10 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 		ctx = context.WithValue(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
 
 		// Set the inherited fds
-		if req.GetDetails().GetCriu() == nil {
-			req.GetDetails().Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
-		req.GetDetails().GetCriu().InheritFd = inheritFds
+		req.GetCriu().InheritFd = inheritFds
 
 		return h(ctx, resp, req)
 	}

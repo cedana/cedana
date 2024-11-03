@@ -12,14 +12,23 @@ import (
 )
 
 func init() {
+	// Add main subcommands
 	rootCmd.AddCommand(daemonCmd)
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
+	rootCmd.AddCommand(manageCmd)
 	rootCmd.AddCommand(pluginCmd)
+	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(jobCmd)
+
+	// Add aliases
+	rootCmd.AddCommand(execCmd)
+	rootCmd.AddCommand(psCmd)
 
 	// Add root flags
 	rootCmd.PersistentFlags().String(types.ConfigFlag.Full, "", "one-time config JSON string (will merge with existing config)")
 	rootCmd.PersistentFlags().String(types.ConfigDirFlag.Full, "", "custom config directory")
+	rootCmd.MarkPersistentFlagDirname(types.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().Uint32P(types.PortFlag.Full, types.PortFlag.Short, 0, "port to listen on/connect to")
 	rootCmd.PersistentFlags().StringP(types.HostFlag.Full, types.HostFlag.Short, "", "host to listen on/connect to")
 	rootCmd.PersistentFlags().BoolP(types.UseVSOCKFlag.Full, types.UseVSOCKFlag.Short, false, "use vsock for communication")

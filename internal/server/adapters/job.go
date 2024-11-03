@@ -19,7 +19,7 @@ import (
 // Post-dump, updates the saved job details.
 func JobDumpAdapter(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		if req.GetDetails().GetType() == "job" {
+		if req.GetType() == "job" {
 			// Get job info from the request
 			return fmt.Errorf("not implemented")
 		}
@@ -35,7 +35,7 @@ func JobDumpAdapter(h types.DumpHandler) types.DumpHandler {
 // Post-restore, updates the saved job details.
 func JobRestoreAdapter(h types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-		if req.GetDetails().GetType() == "job" {
+		if req.GetType() == "job" {
 			// Get job info from the request
 			return fmt.Errorf("not implemented")
 		}

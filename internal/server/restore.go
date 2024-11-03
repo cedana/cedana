@@ -17,7 +17,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add basic adapters. The order below is the order followed before executing
 	// the final handler (handlers.CriuRestore). Post-restore, the order is reversed.
 
-	middleware := []types.RestoreAdapter{
+	middleware := []types.Adapter[types.RestoreHandler]{
 		// Bare minimum adapters
 		adapters.JobRestoreAdapter,
 		fillMissingRestoreDefaults,
@@ -34,7 +34,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		adapters.InheritOpenFilesForRestore,
 	}
 
-	handler := types.AdaptedRestore(handlers.CriuRestore(s.criu), middleware...)
+	handler := types.Adapted(handlers.CriuRestore(s.criu), middleware...)
 
 	resp := &daemon.RestoreResp{}
 	err := handler(ctx, resp, req)
@@ -66,10 +66,7 @@ func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
 		if req.GetPath() == "" {
 			return status.Error(codes.InvalidArgument, "no path provided")
 		}
-		if req.GetDetails() == nil {
-			return status.Error(codes.InvalidArgument, "missing details")
-		}
-		if req.GetDetails().GetType() == "" {
+		if req.GetType() == "" {
 			return status.Error(codes.InvalidArgument, "missing type")
 		}
 
@@ -80,8 +77,8 @@ func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
 // Adapter that inserts new adapters based on the type of restore request
 func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-		middleware := []types.RestoreAdapter{}
-		t := req.GetDetails().GetType()
+		middleware := []types.Adapter[types.RestoreHandler]{}
+		t := req.GetType()
 		switch t {
 		case "job":
 			return status.Error(codes.InvalidArgument, "please first use JobRestoreAdapter")
@@ -91,8 +88,12 @@ func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHa
 			// Insert plugin-specific middleware
 			if p, exists := plugins.LoadedPlugins[t]; exists {
 				defer plugins.RecoverFromPanic(t)
-				if pluginMiddleware, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
-					middleware = append(middleware, pluginMiddleware.([]types.RestoreAdapter)...)
+				if pluginMiddlewareUntyped, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
+					pluginMiddleware, ok := pluginMiddlewareUntyped.([]types.Adapter[types.RestoreHandler])
+					if !ok {
+						return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
+					}
+					middleware = append(middleware, pluginMiddleware...)
 				} else {
 					return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
 				}
@@ -102,7 +103,7 @@ func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHa
 
 			return h(ctx, resp, req)
 		}
-		h = types.AdaptedRestore(h, middleware...)
+		h = types.Adapted(h, middleware...)
 		return h(ctx, resp, req)
 	}
 }

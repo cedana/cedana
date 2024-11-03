@@ -23,7 +23,7 @@ type Criu struct {
 // MakeCriu returns the Criu object required for most operations
 func MakeCriu() *Criu {
 	return &Criu{
-		swrkPath: "bash",
+		swrkPath: "criu",
 	}
 }
 
@@ -49,7 +49,7 @@ func (c *Criu) Prepare(extraFiles ...*os.File) error {
 	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
 	defer srv.Close()
 
-	args := []string{"-c", "swrk", strconv.Itoa(fds[1])}
+	args := []string{"swrk", strconv.Itoa(fds[1])}
 	// #nosec G204
 	cmd := exec.Command(c.swrkPath, args...)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, extraFiles...)

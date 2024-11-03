@@ -15,11 +15,8 @@ var RestoreCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
 
-		req.Details = &daemon.RestoreDetails{
-			Type: "runc",
-			Opts: &daemon.RestoreDetails_Runc{},
-			Criu: req.GetDetails().GetCriu(),
-		}
+		req.Type = "runc"
+		req.Details = &daemon.RestoreReq_Runc{}
 
 		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

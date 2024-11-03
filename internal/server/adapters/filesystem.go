@@ -33,7 +33,7 @@ const (
 //   - "none" does not compress the dump directory
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
-func PrepareDumpDir(compression string) types.DumpAdapter {
+func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 	return func(h types.DumpHandler) types.DumpHandler {
 		return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			dir := req.GetDir()
@@ -45,7 +45,7 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 
 			// Create a unique directory within the dump dir, using type, PID, and timestamp
 			imagesDirectory := filepath.Join(dir, fmt.Sprintf("%s-%d",
-				req.GetDetails().GetType(),
+				req.GetType(),
 				time.Now().Unix()))
 
 			// Create the directory
@@ -61,12 +61,12 @@ func PrepareDumpDir(compression string) types.DumpAdapter {
 			}
 			defer f.Close()
 
-			if req.GetDetails().GetCriu() == nil {
-				req.Details.Criu = &daemon.CriuOpts{}
+			if req.GetCriu() == nil {
+				req.Criu = &daemon.CriuOpts{}
 			}
 
-			req.GetDetails().GetCriu().ImagesDir = imagesDirectory
-			req.GetDetails().GetCriu().ImagesDirFd = int32(f.Fd())
+			req.GetCriu().ImagesDir = imagesDirectory
+			req.GetCriu().ImagesDirFd = int32(f.Fd())
 
 			err = h(ctx, resp, req)
 			if err != nil {
@@ -139,12 +139,12 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 		}
 		defer dir.Close()
 
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{}
 		}
 
-		req.GetDetails().GetCriu().ImagesDir = imagesDirectory
-		req.GetDetails().GetCriu().ImagesDirFd = int32(dir.Fd())
+		req.GetCriu().ImagesDir = imagesDirectory
+		req.GetCriu().ImagesDirFd = int32(dir.Fd())
 
 		return h(ctx, resp, req)
 	}

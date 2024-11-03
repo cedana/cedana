@@ -8,10 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cedana/cedana/internal/utils"
+	internal_utils "github.com/cedana/cedana/internal/utils"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/checkpoint-restore/go-criu/v7/rpc"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -28,7 +29,7 @@ const (
 // Returns a CRIU dump handler for the server
 func CriuDump(c *criu.Criu) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		opts := req.GetDetails().GetCriu()
+		opts := req.GetCriu()
 		if opts == nil {
 			return fmt.Errorf("criu options is nil")
 		}
@@ -63,7 +64,7 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 		// Capture internal logs from CRIU
 		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go utils.ReadFileToLog(ctx, logfile)
+		go internal_utils.ReadFileToLog(ctx, logfile)
 
 		err = c.Dump(criuOpts, criu.NoNotify{})
 		if err != nil {
@@ -79,9 +80,9 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 // Returns a CRIU restore handler for the server
 func CriuRestore(c *criu.Criu) types.RestoreHandler {
 	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		extraFiles := utils.GetContextValSafe(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, []*os.File{})
 
-		opts := req.GetDetails().GetCriu()
+		opts := req.GetCriu()
 		if opts == nil {
 			return fmt.Errorf("criu options is nil")
 		}
@@ -123,7 +124,7 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 		// Capture internal logs from CRIU
 		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go utils.ReadFileToLog(ctx, logfile)
+		go internal_utils.ReadFileToLog(ctx, logfile)
 
 		err = c.Restore(criuOpts, criu.NotifyCallback{
 			PreRestoreFunc: func() error {

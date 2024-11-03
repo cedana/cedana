@@ -9,25 +9,13 @@ import (
 type (
 	DumpHandler    func(context.Context, *daemon.DumpResp, *daemon.DumpReq) error
 	RestoreHandler func(context.Context, *daemon.RestoreResp, *daemon.RestoreReq) error
+
+	Adapter[H DumpHandler | RestoreHandler] func(H) H
 )
 
-type (
-	DumpAdapter    func(DumpHandler) DumpHandler
-	RestoreAdapter func(RestoreHandler) RestoreHandler
-)
-
-// AdaptedDump takes a DumpHandler and a list of DumpAdapters, and
-// returns a new DumpHandler that applies the adapters in order.
-func AdaptedDump(h DumpHandler, adapters ...DumpAdapter) DumpHandler {
-	for i := len(adapters) - 1; i >= 0; i-- {
-		h = adapters[i](h)
-	}
-	return h
-}
-
-// AdaptedRestore takes a RestoreHandler and a list of RestoreAdapters, and
-// returns a new RestoreHandler that applies the adapters in order.
-func AdaptedRestore(h RestoreHandler, adapters ...RestoreAdapter) RestoreHandler {
+// Adapted takes a Handler and a list of Adapters, and
+// returns a new Handler that applies the adapters in order.
+func Adapted[H DumpHandler | RestoreHandler](h H, adapters ...Adapter[H]) H {
 	for i := len(adapters) - 1; i >= 0; i-- {
 		h = adapters[i](h)
 	}

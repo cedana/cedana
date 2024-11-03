@@ -14,9 +14,8 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -29,13 +28,29 @@ func init() {
 	restoreCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
 
-	// Add commands from plugins
+	///////////////////////////////////////////
+	// Add modifications from supported plugins
+	///////////////////////////////////////////
+
 	for name, p := range plugins.LoadedPlugins {
 		defer plugins.RecoverFromPanic(name)
-		if pluginCmd, err := p.Lookup(plugins.FEATURE_RESTORE_CMD); err == nil {
-			restoreCmd.AddCommand(*pluginCmd.(**cobra.Command))
-		} else {
-			log.Debug().Str("plugin", name).Err(err).Msg("Plugin does not provide a restore command")
+		if pluginCmdUntyped, err := p.Lookup(plugins.FEATURE_RESTORE_CMD); err == nil {
+			// Add new subcommand from supported plugins
+			pluginCmd, ok := pluginCmdUntyped.(**cobra.Command)
+			if !ok {
+				log.Debug().Str("plugin", name).Msgf("Provided %s is not a valid command", plugins.FEATURE_RESTORE_CMD)
+				continue
+			}
+			restoreCmd.AddCommand(*pluginCmd)
+
+			// Apply all the flags from the plugin command to job subcommand (as optional flags),
+			// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
+			// thus it could have specific CLI overrides from plugins.
+
+			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+				jobRestoreCmd.Flags().AddFlag(f)
+				f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+			})
 		}
 	}
 }
@@ -54,11 +69,9 @@ var restoreCmd = &cobra.Command{
 		req := &daemon.RestoreReq{
 			Path:   path,
 			Stream: stream,
-			Details: &daemon.RestoreDetails{
-				Criu: &daemon.CriuOpts{
-					TcpEstablished: tcpEstablished,
-					TcpClose:       tcpClose,
-				},
+			Criu: &daemon.CriuOpts{
+				TcpEstablished: tcpEstablished,
+				TcpClose:       tcpClose,
 			},
 		}
 
@@ -89,15 +102,7 @@ var restoreCmd = &cobra.Command{
 
 		resp, err := client.Restore(cmd.Context(), req)
 		if err != nil {
-			st, ok := status.FromError(err)
-			if ok {
-				if st.Code() == codes.Unavailable {
-					return fmt.Errorf("Daemon unavailable. Is it running?")
-				} else {
-					return fmt.Errorf("Failed: %v", st.Message())
-				}
-			}
-			return fmt.Errorf("Unknown error: %v", err)
+			return err
 		}
 
 		fmt.Printf(resp.Message)
@@ -115,10 +120,7 @@ var processRestoreCmd = &cobra.Command{
 		// All we need to do is modify the request type
 		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
 
-		req.Details = &daemon.RestoreDetails{
-			Type: "process",
-			Criu: req.GetDetails().GetCriu(),
-		}
+		req.Type = "process"
 
 		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
@@ -130,7 +132,22 @@ var processRestoreCmd = &cobra.Command{
 var jobRestoreCmd = &cobra.Command{
 	Use:   "job <JID>",
 	Short: "Restore a managed process/container (job)",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// All we need to do is modify the request to include the job ID, and request type.
+		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
+
+		if len(args) == 0 {
+			return fmt.Errorf("Job ID is required")
+		}
+		jid := args[0]
+
+		req.Type = "job"
+		req.Details = &daemon.RestoreReq_JID{JID: jid}
+
+		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
+		cmd.SetContext(ctx)
+
 		return nil
 	},
 }

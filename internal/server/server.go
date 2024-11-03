@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
@@ -24,7 +25,7 @@ type Server struct {
 	listener   net.Listener
 
 	criu *criu.Criu // for CRIU operations
-	// db  db.DB
+	db   db.DB
 
 	wg  sync.WaitGroup  // for waiting for all background tasks to finish
 	ctx context.Context // context alive for the duration of the server
@@ -59,6 +60,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	criu := criu.MakeCriu()
 
+	db, err := db.NewLocalDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Set custom path if specified in config
 	if custom_path := viper.GetString("criu.binary_path"); custom_path != "" {
 		criu.SetCriuPath(custom_path)
@@ -69,8 +75,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID, macAddr, hostname)),
 		),
 		criu: criu,
-		// db:              db.NewLocalDB(ctx),
-		ctx: ctx,
+		db:   db,
+		ctx:  ctx,
 	}
 
 	daemon.RegisterDaemonServer(server.grpcServer, server)
@@ -96,7 +102,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func (s *Server) Start() error {
+func (s *Server) Launch() error {
 	// Create a child context for the server
 	ctx, cancel := context.WithCancelCause(s.ctx)
 	log := log.Ctx(ctx)

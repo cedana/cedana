@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS jobs (
+  jid   TINYTEXT PRIMARY KEY,
+  data  BLOB
+);

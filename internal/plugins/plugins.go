@@ -27,6 +27,8 @@ const (
 
 	FEATURE_RESTORE_CMD        = "RestoreCmd"
 	FEATURE_RESTORE_MIDDLEWARE = "RestoreMiddleware"
+
+	FEATURE_START_CMD = "StartCmd"
 )
 
 var LoadedPlugins = map[string]*plugin.Plugin{}

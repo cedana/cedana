@@ -10,16 +10,24 @@ type Flag struct {
 }
 
 var (
-	DirFlag    = Flag{"dir", "d"}
-	PathFlag   = Flag{"path", "p"}
-	StreamFlag = Flag{"stream", "s"}
+	DirFlag        = Flag{"dir", "d"}
+	PathFlag       = Flag{"path", "p"}
+	StreamFlag     = Flag{"stream", "s"}
+	WorkingDirFlag = Flag{"working-dir", "w"}
+	JidFlag        = Flag{"jid", "j"}
+	GpuEnabledFlag = Flag{"gpu-enabled", "g"}
+	AttachFlag     = Flag{"attach", "a"}
 
 	// CRIU
 	LeaveRunningFlag   = Flag{"leave-running", ""}
 	TcpEstablishedFlag = Flag{"tcp-established", ""}
 	TcpCloseFlag       = Flag{"tcp-close", ""}
 
-	// Root
+	// Runc
+	RootFlag   = Flag{"root", "r"}
+	BundleFlag = Flag{"bundle", "b"}
+
+	// Parent flags
 	PortFlag      = Flag{"port", "P"}
 	HostFlag      = Flag{"host", "H"}
 	ConfigFlag    = Flag{"config", ""}

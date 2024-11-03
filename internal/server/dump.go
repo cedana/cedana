@@ -20,7 +20,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	compression := viper.GetString("storage.compression")
 
-	middleware := []types.DumpAdapter{
+	middleware := []types.Adapter[types.DumpHandler]{
 		// Bare minimum adapters
 		adapters.JobDumpAdapter,
 		fillMissingDumpDefaults,
@@ -37,7 +37,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		adapters.CloseCommonFilesForDump,
 	}
 
-	handler := types.AdaptedDump(handlers.CriuDump(s.criu), middleware...)
+	handler := types.Adapted(handlers.CriuDump(s.criu), middleware...)
 
 	resp := &daemon.DumpResp{}
 	err := handler(ctx, resp, req)
@@ -61,12 +61,12 @@ func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 			req.Dir = viper.GetString("storage.dump_dir")
 		}
 
-		if req.GetDetails().GetCriu() == nil {
-			req.Details.Criu = &daemon.CriuOpts{
+		if req.GetCriu() == nil {
+			req.Criu = &daemon.CriuOpts{
 				LeaveRunning: viper.GetBool("criu.leave_running"),
 			}
 		} else {
-			req.Details.Criu.LeaveRunning = viper.GetBool("criu.leave_running")
+			req.Criu.LeaveRunning = viper.GetBool("criu.leave_running")
 		}
 
 		return h(ctx, resp, req)
@@ -82,7 +82,7 @@ func validateDumpRequest(h types.DumpHandler) types.DumpHandler {
 		if req.GetDetails() == nil {
 			return status.Errorf(codes.InvalidArgument, "missing details")
 		}
-		if req.GetDetails().GetType() == "" {
+		if req.GetType() == "" {
 			return status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
@@ -93,8 +93,8 @@ func validateDumpRequest(h types.DumpHandler) types.DumpHandler {
 // Adapter that inserts new adapters after itself based on the type of dump.
 func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		middleware := []types.DumpAdapter{}
-		t := req.GetDetails().GetType()
+		middleware := []types.Adapter[types.DumpHandler]{}
+		t := req.GetType()
 		switch t {
 		case "job":
 			return status.Errorf(codes.InvalidArgument, "please first use JobDumpAdapter")
@@ -105,8 +105,12 @@ func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
 			// Insert plugin-specific middleware
 			if p, exists := plugins.LoadedPlugins[t]; exists {
 				defer plugins.RecoverFromPanic(t)
-				if pluginMiddleware, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
-					middleware = append(middleware, pluginMiddleware.([]types.DumpAdapter)...)
+				if pluginMiddlewareUntyped, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
+					pluginMiddleware, ok := pluginMiddlewareUntyped.([]types.Adapter[types.DumpHandler])
+					if !ok {
+						return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
+					}
+					middleware = append(middleware, pluginMiddleware...)
 				} else {
 					return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
 				}
@@ -114,7 +118,7 @@ func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
 				return status.Errorf(codes.InvalidArgument, "unknown dump type: %s. maybe a missing plugin?", t)
 			}
 		}
-		h = types.AdaptedDump(h, middleware...)
+		h = types.Adapted(h, middleware...)
 		return h(ctx, resp, req)
 	}
 }
