@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
@@ -35,7 +36,7 @@ const (
 //   - "gzip" creates a gzipped tarball of the dump directory
 func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 	return func(h types.DumpHandler) types.DumpHandler {
-		return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			dir := req.GetDir()
 
 			// Check if the provided dir exists
@@ -68,7 +69,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 			req.GetCriu().ImagesDir = imagesDirectory
 			req.GetCriu().ImagesDirFd = int32(f.Fd())
 
-			err = h(ctx, resp, req)
+			err = h(ctx, wg, resp, req)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
 				return err
@@ -106,7 +107,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
 func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
@@ -146,6 +147,6 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 		req.GetCriu().ImagesDir = imagesDirectory
 		req.GetCriu().ImagesDirFd = int32(dir.Fd())
 
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }

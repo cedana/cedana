@@ -6,9 +6,16 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"sync"
 
+	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 ////////////////////////
@@ -17,13 +24,15 @@ import (
 
 // Adapter that fills in dump request details based on saved job info.
 // Post-dump, updates the saved job details.
-func JobDumpAdapter(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		if req.GetType() == "job" {
-			// Get job info from the request
-			return fmt.Errorf("not implemented")
+func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
+	return func(h types.DumpHandler) types.DumpHandler {
+		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+			if req.GetType() == "job" {
+				// Get job info from the request
+				return fmt.Errorf("not implemented")
+			}
+			return h(ctx, wg, resp, req)
 		}
-		return h(ctx, resp, req)
 	}
 }
 
@@ -33,12 +42,90 @@ func JobDumpAdapter(h types.DumpHandler) types.DumpHandler {
 
 // Adapter that fills in restore request details based on saved job info
 // Post-restore, updates the saved job details.
-func JobRestoreAdapter(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-		if req.GetType() == "job" {
-			// Get job info from the request
-			return fmt.Errorf("not implemented")
+func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
+	return func(h types.RestoreHandler) types.RestoreHandler {
+		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+			if req.GetType() == "job" {
+				// Get job info from the request
+				return fmt.Errorf("not implemented")
+			}
+			return h(ctx, wg, resp, req)
 		}
-		return h(ctx, resp, req)
+	}
+}
+
+////////////////////////
+//// Start Adapters ////
+////////////////////////
+
+// Adapter that manages the job state.
+// Also attaches GPU support to the job, if requested.
+func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
+	return func(h types.StartHandler) types.StartHandler {
+		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+			jid := req.GetJID()
+			if jid == "" {
+				jid = xid.New().String()
+			} else {
+				// Check if the job already exists
+				_, err := db.GetJob(ctx, jid)
+				if err == nil {
+					return nil, status.Errorf(codes.AlreadyExists, "job already exists")
+				}
+			}
+
+			if req.GetGPUEnabled() { // Attach GPU support if requested
+				h = types.Adapted(h, GPUAdapter)
+			}
+
+			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
+			exitCode, err := h(ctx, lifetimeCtx, wg, resp, req)
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+
+			job := &daemon.Job{
+				JID:        jid,
+				Type:       req.GetType(),
+				Process:    &daemon.ProcessState{},
+				GPUEnabled: req.GetGPUEnabled(),
+				Details:    &daemon.JobDetails{Details: &daemon.JobDetails_PID{PID: resp.PID}},
+			}
+
+			// Get process state if no errors. Cuz it's possible that the process
+			// has already exited by the time we get here.
+			state := &daemon.ProcessState{}
+			err = utils.FillProcessState(ctx, resp.PID, state)
+			if err == nil {
+				job.Process = state
+
+				// Save job details
+				err = db.PutJob(ctx, jid, job)
+				if err != nil {
+					cancel()
+					return nil, status.Errorf(codes.Internal, "failed to save job details: %v", err)
+				}
+
+			}
+
+			// Wait for process exit to update job
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				code := <-exitCode
+				close(exitCode) // so all other waiters can exit
+				log.Info().Str("JID", jid).Uint32("PID", resp.PID).Int("exitCode", code).Msg("job exited")
+				job.Process.ExitCode = int32(code)
+				job.Process.Info.IsRunning = false
+				ctx := context.WithoutCancel(ctx)
+				err := db.PutJob(ctx, jid, job)
+				if err != nil {
+					log.Warn().Err(err).Str("JID", jid).Msg("failed to update job after exit")
+				}
+			}()
+
+			return exitCode, nil
+		}
 	}
 }

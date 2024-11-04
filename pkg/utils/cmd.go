@@ -3,12 +3,14 @@ package utils
 // Utility functions for the cobra CLI
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 )
 
 // Use this for RunE to make a command an alias to another command's RunE.
 // Invokes all PersistentPreRunE and PersistentPostRunE hooks for immediate parents as well.
-func AliasRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) error {
+func AliasCommandRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) error {
 	if aliasOf == nil {
 		return nil
 	}
@@ -39,4 +41,13 @@ func AliasRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) e
 
 		return nil
 	}
+}
+
+func AliasCommandUse(aliasOf *cobra.Command, name string) string {
+	if aliasOf == nil {
+		return name
+	}
+
+	// Append the rest of the aliasOf.Use to the name
+	return name + " " + strings.Join(strings.Split(aliasOf.Use, " ")[1:], " ")
 }

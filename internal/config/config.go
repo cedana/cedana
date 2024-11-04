@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/internal/utils"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/spf13/viper"
 )

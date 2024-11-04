@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/internal/server"
-	"github.com/cedana/cedana/internal/utils"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -47,7 +47,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		err = server.Launch()
+		err = server.Launch(ctx)
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err

@@ -27,7 +27,7 @@ type Server struct {
 	criu *criu.Criu // for CRIU operations
 	db   db.DB
 
-	wg  sync.WaitGroup  // for waiting for all background tasks to finish
+	wg  *sync.WaitGroup // for waiting for all background tasks to finish
 	ctx context.Context // context alive for the duration of the server
 
 	daemon.UnimplementedDaemonServer
@@ -76,7 +76,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		),
 		criu: criu,
 		db:   db,
-		ctx:  ctx,
+		wg:   &sync.WaitGroup{},
 	}
 
 	daemon.RegisterDaemonServer(server.grpcServer, server)
@@ -102,11 +102,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func (s *Server) Launch() error {
+func (s *Server) Launch(ctx context.Context) error {
 	// Create a child context for the server
-	ctx, cancel := context.WithCancelCause(s.ctx)
-	log := log.Ctx(ctx)
-	defer cancel(nil)
+	ctx, cancel := context.WithCancelCause(ctx)
+	s.ctx = ctx
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)

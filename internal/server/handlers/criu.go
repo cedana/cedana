@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
-	internal_utils "github.com/cedana/cedana/internal/utils"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
@@ -28,7 +28,7 @@ const (
 
 // Returns a CRIU dump handler for the server
 func CriuDump(c *criu.Criu) types.DumpHandler {
-	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		opts := req.GetCriu()
 		if opts == nil {
 			return fmt.Errorf("criu options is nil")
@@ -64,7 +64,7 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 		// Capture internal logs from CRIU
 		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go internal_utils.ReadFileToLog(ctx, logfile)
+		go utils.ReadFileToLog(ctx, logfile)
 
 		err = c.Dump(criuOpts, criu.NoNotify{})
 		if err != nil {
@@ -79,7 +79,7 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 
 // Returns a CRIU restore handler for the server
 func CriuRestore(c *criu.Criu) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		extraFiles := utils.GetContextValSafe(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, []*os.File{})
 
 		opts := req.GetCriu()
@@ -124,7 +124,7 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 		// Capture internal logs from CRIU
 		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go internal_utils.ReadFileToLog(ctx, logfile)
+		go utils.ReadFileToLog(ctx, logfile)
 
 		err = c.Restore(criuOpts, criu.NotifyCallback{
 			PreRestoreFunc: func() error {

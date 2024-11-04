@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"sync"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
@@ -19,7 +20,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	middleware := []types.Adapter[types.RestoreHandler]{
 		// Bare minimum adapters
-		adapters.JobRestoreAdapter,
+		adapters.JobRestoreAdapter(s.db),
 		fillMissingRestoreDefaults,
 		validateRestoreRequest,
 		adapters.PrepareRestoreDir, // auto-detects compression
@@ -37,7 +38,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	handler := types.Adapted(handlers.CriuRestore(s.criu), middleware...)
 
 	resp := &daemon.RestoreResp{}
-	err := handler(ctx, resp, req)
+	err := handler(ctx, s.wg, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -53,16 +54,16 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that fills missing info from the request using config defaults
 func fillMissingRestoreDefaults(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		// Nothing to do, yet
 
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }
 
 // Adapter that validates the restore request
 func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		if req.GetPath() == "" {
 			return status.Error(codes.InvalidArgument, "no path provided")
 		}
@@ -70,13 +71,13 @@ func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
 			return status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }
 
 // Adapter that inserts new adapters based on the type of restore request
 func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
 		middleware := []types.Adapter[types.RestoreHandler]{}
 		t := req.GetType()
 		switch t {
@@ -100,10 +101,8 @@ func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHa
 			} else {
 				return status.Errorf(codes.InvalidArgument, "unknown dump type: %s. maybe a missing plugin?", t)
 			}
-
-			return h(ctx, resp, req)
 		}
 		h = types.Adapted(h, middleware...)
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }

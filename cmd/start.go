@@ -22,6 +22,9 @@ func init() {
 	startCmd.PersistentFlags().BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
 	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/stdout/stderr")
 
+	// Sync flags with aliases
+	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
+
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
@@ -102,13 +105,17 @@ var processStartCmd = &cobra.Command{
 		path := args[0]
 		args = args[1:]
 		env := os.Environ()
+		wd, _ := os.Getwd()
 
 		req.Type = "process"
-		req.Details = &daemon.StartReq_Process{
-			Process: &daemon.ProcessStartOpts{
-				Path: path,
-				Args: args,
-				Env:  env,
+		req.Details = &daemon.JobDetails{
+			Details: &daemon.JobDetails_ProcessStartOpts{
+				ProcessStartOpts: &daemon.ProcessStartOpts{
+					Path:       path,
+					Args:       args,
+					Env:        env,
+					WorkingDir: wd,
+				},
 			},
 		}
 
@@ -124,10 +131,10 @@ var processStartCmd = &cobra.Command{
 ////////////////////
 
 var execCmd = &cobra.Command{
-	Use:        "exec <path> [args...]",
-	Short:      "Start a managed process (job)",
-	Long:       "Alias for `start process`",
+	Use:        utils.AliasCommandUse(processStartCmd, "exec"),
+	Short:      processStartCmd.Short,
+	Long:       processStartCmd.Long,
+	Args:       processStartCmd.Args,
 	Deprecated: "Use `start process` instead",
-	Args:       cobra.MinimumNArgs(1),
-	RunE:       utils.AliasRunE(processStartCmd),
+	RunE:       utils.AliasCommandRunE(processStartCmd),
 }

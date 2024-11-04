@@ -14,6 +14,9 @@ import (
 
 func init() {
 	jobCmd.AddCommand(listJobCmd)
+
+	// Sync flags with aliases
+	psCmd.Flags().AddFlagSet(listJobCmd.PersistentFlags())
 }
 
 var jobCmd = &cobra.Command{
@@ -74,9 +77,9 @@ var listJobCmd = &cobra.Command{
 ////////////////////
 
 var psCmd = &cobra.Command{
-	Use:        "ps",
-	Short:      "List all managed processes/containers (jobs)",
+	Use:        utils.AliasCommandUse(listJobCmd, "ps"),
+	Short:      listJobCmd.Short,
+	Long:       listJobCmd.Long,
 	Deprecated: "Use `job list` instead",
-	Long:       "Alias for `job list`",
-	RunE:       utils.AliasRunE(listJobCmd),
+	RunE:       utils.AliasCommandRunE(listJobCmd),
 }

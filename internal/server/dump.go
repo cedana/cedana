@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"sync"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
@@ -18,14 +19,12 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// Add basic adapters. The order below is the order followed before executing
 	// the final handler (handlers.CriuDump). Post-dump, the order is reversed.
 
-	compression := viper.GetString("storage.compression")
-
 	middleware := []types.Adapter[types.DumpHandler]{
 		// Bare minimum adapters
-		adapters.JobDumpAdapter,
+		adapters.JobDumpAdapter(s.db),
 		fillMissingDumpDefaults,
 		validateDumpRequest,
-		adapters.PrepareDumpDir(compression),
+		adapters.PrepareDumpDir(viper.GetString("storage.compression")),
 
 		// Insert type-specific middleware, from plugins or built-in
 		insertTypeSpecificDumpMiddleware,
@@ -40,7 +39,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	handler := types.Adapted(handlers.CriuDump(s.criu), middleware...)
 
 	resp := &daemon.DumpResp{}
-	err := handler(ctx, resp, req)
+	err := handler(ctx, s.wg, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +55,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that fills missing info from the request using config defaults
 func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			req.Dir = viper.GetString("storage.dump_dir")
 		}
@@ -69,13 +68,13 @@ func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 			req.Criu.LeaveRunning = viper.GetBool("criu.leave_running")
 		}
 
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }
 
 // Adapter that just checks all required fields are present in the request
 func validateDumpRequest(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			return status.Errorf(codes.InvalidArgument, "no dump dir specified")
 		}
@@ -86,13 +85,13 @@ func validateDumpRequest(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		middleware := []types.Adapter[types.DumpHandler]{}
 		t := req.GetType()
 		switch t {
@@ -119,6 +118,6 @@ func insertTypeSpecificDumpMiddleware(h types.DumpHandler) types.DumpHandler {
 			}
 		}
 		h = types.Adapted(h, middleware...)
-		return h(ctx, resp, req)
+		return h(ctx, wg, resp, req)
 	}
 }
