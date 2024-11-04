@@ -238,7 +238,7 @@ require (
 require (
 	github.com/adrg/strutil v0.3.1
 	github.com/felixge/fgprof v0.9.5
-	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/rs/zerolog v1.33.0
