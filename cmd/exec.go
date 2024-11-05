@@ -96,6 +96,7 @@ var execTaskCmd = &cobra.Command{
 				} else {
 					log.Error().Err(err).Msg("start task failed")
 				}
+				return err
 			}
 
 			// Handler stdout, stderr

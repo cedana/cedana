@@ -23,8 +23,6 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -284,7 +282,7 @@ func (s *service) runcDump(ctx context.Context, root, containerID string, opts *
 	// instead a specific pid.
 
 	if state.GPU {
-		err = s.gpuDump(ctx, opts.ImagesDirectory, false)
+		err = s.gpuDump(ctx, opts.ImagesDirectory, false, state.JID)
 		if err != nil {
 			return err
 		}
@@ -359,10 +357,11 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	log.Info().Int32("stream", args.Stream).Msg("")
 
 	if state.GPU {
-		err = s.gpuDump(ctx, dumpdir, args.Stream > 0)
+		err = s.gpuDump(ctx, dumpdir, args.Stream > 0, state.JID)
 		if err != nil {
 			return err
 		}
+		log.Info().Msg("gpu dumped")
 	} else if args.Stream > 0 {
 		conn, err := imgStreamerInit(dumpdir, O_GPU_DUMP)
 		if err != nil {
@@ -491,32 +490,24 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	return nil
 }
 
-func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool) error {
+func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool, jid string) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return fmt.Errorf("could not get dump stats from context")
 	}
-	// TODO NR - these should move out of here and be part of the Client lifecycle
-	// setting up a connection could be a source of slowdown for checkpointing
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	gpuConn, err := grpc.Dial("127.0.0.1:50051", opts...)
-	if err != nil {
-		log.Warn().Msgf("could not connect to gpu controller service: %v", err)
-		return err
+	gpuController := s.GetGPUController(jid)
+	if gpuController == nil {
+		return fmt.Errorf("did not find gpu controller for job %s", jid)
 	}
-	defer gpuConn.Close()
-
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
 
 	args := gpu.CheckpointRequest{
 		Directory: dumpdir,
 		Stream:    stream,
 	}
 
-	resp, err := gpuServiceConn.Checkpoint(ctx, &args)
+	resp, err := gpuController.Client.Checkpoint(ctx, &args)
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
