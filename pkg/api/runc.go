@@ -186,7 +186,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		WorkDirectory:   args.GetCriuOpts().GetWorkDirectory(),
 		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"),
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
-		TcpClose:        isUsingTCP,
+		TcpClose:        args.GetCriuOpts().GetTcpClose(),
 		MntnsCompatMode: false,
 		External:        args.GetCriuOpts().GetExternal(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
@@ -255,8 +255,8 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
-		TcpClose:        true,  // XXX: Should instead take value from args
 		TcpEstablished:  args.GetCriuOpts().GetTcpEstablished(),
+		TcpClose:        args.GetCriuOpts().GetTcpClose(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 

@@ -51,6 +51,7 @@ var restoreProcessCmd = &cobra.Command{
 
 		path := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
@@ -64,6 +65,7 @@ var restoreProcessCmd = &cobra.Command{
 			Stream:         stream,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
+				TcpClose:       tcpClose,
 			},
 		}
 
@@ -93,6 +95,7 @@ var restoreJobCmd = &cobra.Command{
 
 		jid := args[0]
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpCloseFlag, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		root, _ := cmd.Flags().GetString(rootFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
 		bundle, err := cmd.Flags().GetString(bundleFlag)
@@ -109,6 +112,7 @@ var restoreJobCmd = &cobra.Command{
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
+				TcpClose:       tcpCloseFlag,
 			},
 			RuncOpts: &task.RuncOpts{
 				Root:          getRuncRootPath(root),
@@ -311,6 +315,8 @@ var runcRestoreCmd = &cobra.Command{
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
+		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
+		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		opts := &task.RuncOpts{
 			Root:          getRuncRootPath(root),
 			Bundle:        bundle,
@@ -328,7 +334,9 @@ var runcRestoreCmd = &cobra.Command{
 			Opts:        opts,
 			Type:        task.CRType_LOCAL,
 			CriuOpts: &task.CriuOpts{
-				FileLocks: fileLocks,
+				FileLocks:      fileLocks,
+				TcpEstablished: tcpEstablished,
+				TcpClose:       tcpClose,
 			},
 		}
 
@@ -352,11 +360,13 @@ func init() {
 	// Process
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreProcessCmd.Flags().BoolP(tcpCloseFlag, "t", false, "restore with TCP connections closed")
 	restoreProcessCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 
 	// Job
 	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
+	restoreJobCmd.Flags().BoolP(tcpCloseFlag, "t", false, "restore with TCP connections closed")
 	restoreJobCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
@@ -388,6 +398,8 @@ func init() {
 	runcRestoreCmd.Flags().BoolP(detachFlag, "e", false, "run runc container in detached mode")
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
+	runcRestoreCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
+	runcRestoreCmd.Flags().BoolP(tcpCloseFlag, "t", false, "tcp close")
 
 	rootCmd.AddCommand(restoreCmd)
 }
