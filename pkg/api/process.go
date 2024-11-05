@@ -4,10 +4,8 @@ package api
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,15 +78,11 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 	state.JobState = task.JobState_JOB_RUNNING
 	state.GPU = args.GPU
 
-	var gpuCmd *exec.Cmd
-	gpuOutBuf := &bytes.Buffer{}
 	if args.GPU {
 		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
 		if args.GPU {
-			gpuOut := io.Writer(gpuOutBuf)
-			gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut, args.JID)
+			err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, args.JID)
 			if err != nil {
-				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
 		}
@@ -123,27 +117,20 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 		if err != nil {
 			log.Error().Err(err).Msg("failed to update state after done")
 		}
-		if gpuCmd != nil {
-			err = gpuCmd.Process.Kill()
+		if s.GetGPUController(state.JID) != nil {
+			err = s.StopGPUController(state.JID)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
+				log.Error().Err(err).Msg("failed to stop GPU controller")
 			}
 		}
 	}()
 
 	// Clean up GPU controller and also handle premature exit
-	if gpuCmd != nil {
+	if s.GetGPUController(state.JID) != nil {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			err := gpuCmd.Wait()
-			if err != nil {
-				log.Debug().Err(err).Msg("GPU controller Wait()")
-			}
-			log.Info().Int("PID", gpuCmd.Process.Pid).
-				Int("status", gpuCmd.ProcessState.ExitCode()).
-				Str("out/err", gpuOutBuf.String()).
-				Msg("GPU controller exited")
+			s.WaitGPUController(state.JID)
 
 			// Should kill process if still running since GPU controller might have exited prematurely
 			syscall.Kill(int(state.PID), syscall.SIGKILL)
@@ -480,14 +467,10 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		return 0, nil, fmt.Errorf("could not find task")
 	}
 
-	var gpuCmd *exec.Cmd
-	gpuOutBuf := &bytes.Buffer{}
 	var err error
 	if args.GPU {
-		gpuOut := io.Writer(gpuOutBuf)
-		gpuCmd, err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, gpuOut, args.JID)
+		err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, args.JID)
 		if err != nil {
-			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 			return 0, nil, fmt.Errorf("failed to start GPU controller: %v", err)
 		}
 
@@ -628,11 +611,8 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 		if err != nil {
 			log.Debug().Err(err).Msg("process Wait()")
 		}
-		if gpuCmd != nil {
-			err = gpuCmd.Process.Kill()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
-			}
+		if s.GetGPUController(args.JID) != nil {
+			s.StopGPUController(args.JID)
 		}
 		log.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
 		code := cmd.ProcessState.ExitCode()
@@ -640,18 +620,11 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 	}()
 
 	// Clean up GPU controller and also handle premature exit
-	if gpuCmd != nil {
+	if s.GetGPUController(args.JID) != nil {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			err := gpuCmd.Wait()
-			if err != nil {
-				log.Debug().Err(err).Msg("GPU controller Wait()")
-			}
-			log.Info().Int("PID", gpuCmd.Process.Pid).
-				Int("status", gpuCmd.ProcessState.ExitCode()).
-				Str("out/err", gpuOutBuf.String()).
-				Msg("GPU controller exited")
+			s.WaitGPUController(args.JID)
 
 			// Should kill process if still running since GPU controller might have exited prematurely
 			cmd.Process.Kill()
