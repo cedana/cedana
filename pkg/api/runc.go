@@ -158,10 +158,11 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
-	isManagedJob := false // if a JID = ContainerID exists in DB
+	var jid string
+
 	state, err := s.getState(ctx, args.ContainerID)
 	if err == nil {
-		isManagedJob = true
+		jid = args.ContainerID // For runc, we use the container ID as JID
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 		}
@@ -225,7 +226,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 	}
 
 	// Only update state if it was a managed job
-	if isManagedJob {
+	if jid != "" {
 		err = s.updateState(ctx, state.JID, state)
 		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
@@ -260,16 +261,16 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
-	isManagedJob := false // if a JID = ContainerID exists in DB
+	var jid string
 	state, err := s.getState(ctx, args.ContainerID)
 	if err == nil {
-		isManagedJob = true
+		jid = args.ContainerID // For runc, we use the container ID as JID
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
 		}
 	}
 
-	if isManagedJob {
+	if jid != "" {
 		if viper.GetBool("remote") {
 			remoteState := state.GetRemoteState()
 			if remoteState == nil {
@@ -313,14 +314,14 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		args.ImagePath = *zipFile
 	}
 
-	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts, isManagedJob)
+	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts, jid)
 	if err != nil {
 		err = status.Error(codes.Internal, fmt.Sprintf("failed to restore runc container: %v", err))
 		return nil, err
 	}
 
 	// Only update state if it was a managed job
-	if isManagedJob {
+	if jid != "" {
 		state, err = s.getState(ctx, args.ContainerID)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")

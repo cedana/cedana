@@ -329,7 +329,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, isManagedJob bool) (int32, chan int, error) {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -349,7 +349,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
-		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, io.Writer(gpuOutBuf))
+		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, io.Writer(gpuOutBuf), jid)
 		if err != nil {
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 			return 0, nil, err
@@ -388,7 +388,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	}
 
 	exitCode := make(chan int)
-	if isManagedJob {
+	if jid != "" {
 		// Wait to cleanup
 		s.wg.Add(1)
 		go func() {
@@ -621,7 +621,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, io.Writer(gpuOutBuf))
+				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, io.Writer(gpuOutBuf), args.JID)
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -822,7 +822,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer, jid string) (*exec.Cmd, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
