@@ -16,6 +16,9 @@ type DB interface {
 	// Setters (create or update)
 	PutJob(ctx context.Context, jid string, job *daemon.Job) error
 
-	// Listers
-	ListJobs(context.Context) ([]*daemon.Job, error)
+	// Listers (list jobs if no jids are provided, otherwise list the jobs with the provided jids)
+	ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error)
+
+	// Deleters
+	DeleteJob(ctx context.Context, jid string) error
 }

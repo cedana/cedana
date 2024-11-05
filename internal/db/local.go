@@ -83,11 +83,22 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 // Listers //
 /////////////
 
-func (db *LocalDB) ListJobs(ctx context.Context) ([]*daemon.Job, error) {
+func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
 	dbJobs, err := db.queries.ListJobs(ctx)
+
+	jidSet := make(map[string]struct{})
+	for _, jid := range jids {
+		jidSet[jid] = struct{}{}
+	}
 
 	jobs := make([]*daemon.Job, len(dbJobs))
 	for i, dbJob := range dbJobs {
+		if len(jids) > 0 {
+			if _, ok := jidSet[dbJob.Jid]; !ok {
+				continue
+			}
+		}
+
 		bytes := dbJob.Data
 
 		// unmarsal the bytes into a Job struct
@@ -101,4 +112,12 @@ func (db *LocalDB) ListJobs(ctx context.Context) ([]*daemon.Job, error) {
 	}
 
 	return jobs, nil
+}
+
+//////////////
+// Deleters //
+//////////////
+
+func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
+	return db.queries.DeleteJob(ctx, jid)
 }

@@ -12,6 +12,10 @@ var pluginCmd = &cobra.Command{
 	Short: "Manage plugins",
 }
 
+////////////////////
+/// Subcommands  ///
+////////////////////
+
 var pluginListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all plugins",

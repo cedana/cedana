@@ -24,6 +24,8 @@ const (
 	Daemon_Start_FullMethodName   = "/cedana.daemon.Daemon/Start"
 	Daemon_Manage_FullMethodName  = "/cedana.daemon.Daemon/Manage"
 	Daemon_List_FullMethodName    = "/cedana.daemon.Daemon/List"
+	Daemon_Kill_FullMethodName    = "/cedana.daemon.Daemon/Kill"
+	Daemon_Delete_FullMethodName  = "/cedana.daemon.Daemon/Delete"
 )
 
 // DaemonClient is the client API for Daemon service.
@@ -37,6 +39,8 @@ type DaemonClient interface {
 	Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartResp, error)
 	Manage(ctx context.Context, in *ManageReq, opts ...grpc.CallOption) (*ManageResp, error)
 	List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*ListResp, error)
+	Kill(ctx context.Context, in *KillReq, opts ...grpc.CallOption) (*KillResp, error)
+	Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error)
 }
 
 type daemonClient struct {
@@ -97,6 +101,26 @@ func (c *daemonClient) List(ctx context.Context, in *ListReq, opts ...grpc.CallO
 	return out, nil
 }
 
+func (c *daemonClient) Kill(ctx context.Context, in *KillReq, opts ...grpc.CallOption) (*KillResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KillResp)
+	err := c.cc.Invoke(ctx, Daemon_Kill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonClient) Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteResp)
+	err := c.cc.Invoke(ctx, Daemon_Delete_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServer is the server API for Daemon service.
 // All implementations must embed UnimplementedDaemonServer
 // for forward compatibility.
@@ -108,6 +132,8 @@ type DaemonServer interface {
 	Start(context.Context, *StartReq) (*StartResp, error)
 	Manage(context.Context, *ManageReq) (*ManageResp, error)
 	List(context.Context, *ListReq) (*ListResp, error)
+	Kill(context.Context, *KillReq) (*KillResp, error)
+	Delete(context.Context, *DeleteReq) (*DeleteResp, error)
 	mustEmbedUnimplementedDaemonServer()
 }
 
@@ -132,6 +158,12 @@ func (UnimplementedDaemonServer) Manage(context.Context, *ManageReq) (*ManageRes
 }
 func (UnimplementedDaemonServer) List(context.Context, *ListReq) (*ListResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedDaemonServer) Kill(context.Context, *KillReq) (*KillResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Kill not implemented")
+}
+func (UnimplementedDaemonServer) Delete(context.Context, *DeleteReq) (*DeleteResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
 func (UnimplementedDaemonServer) mustEmbedUnimplementedDaemonServer() {}
 func (UnimplementedDaemonServer) testEmbeddedByValue()                {}
@@ -244,6 +276,42 @@ func _Daemon_List_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Daemon_Kill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KillReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).Kill(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_Kill_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).Kill(ctx, req.(*KillReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Daemon_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).Delete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_Delete_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).Delete(ctx, req.(*DeleteReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Daemon_ServiceDesc is the grpc.ServiceDesc for Daemon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +338,14 @@ var Daemon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "List",
 			Handler:    _Daemon_List_Handler,
+		},
+		{
+			MethodName: "Kill",
+			Handler:    _Daemon_Kill_Handler,
+		},
+		{
+			MethodName: "Delete",
+			Handler:    _Daemon_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

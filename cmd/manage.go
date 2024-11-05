@@ -11,3 +11,7 @@ var manageCmd = &cobra.Command{
 		return nil
 	},
 }
+
+////////////////////
+/// Subcommands  ///
+////////////////////

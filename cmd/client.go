@@ -99,6 +99,24 @@ func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListRe
 	return resp, nil
 }
 
+func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillResp, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.Kill(ctx, args, opts...)
+	if err != nil {
+		return nil, handleError(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.DeleteResp, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.Delete(ctx, args, opts...)
+	if err != nil {
+		return nil, handleError(err)
+	}
+	return resp, nil
+}
+
 ///////////////////
 //    Helpers    //
 ///////////////////

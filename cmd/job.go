@@ -15,6 +15,11 @@ import (
 
 func init() {
 	jobCmd.AddCommand(listJobCmd)
+	jobCmd.AddCommand(killJobCmd)
+	jobCmd.AddCommand(deleteJobCmd)
+
+	// Add subcommand flags
+	deleteJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "delete all jobs")
 
 	// Sync flags with aliases
 	psCmd.Flags().AddFlagSet(listJobCmd.PersistentFlags())
@@ -43,6 +48,10 @@ var jobCmd = &cobra.Command{
 		return nil
 	},
 }
+
+////////////////////
+/// Subcommands  ///
+////////////////////
 
 var listJobCmd = &cobra.Command{
 	Use:   "list",
@@ -92,6 +101,64 @@ var listJobCmd = &cobra.Command{
 		}
 
 		writer.Render()
+
+		return nil
+	},
+}
+
+var killJobCmd = &cobra.Command{
+	Use:   "kill <JID>",
+	Short: "Kill a managed process/container (job)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		jid := args[0]
+
+		req := &daemon.KillReq{
+			JIDs: []string{jid},
+		}
+
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		_, err := client.Kill(cmd.Context(), req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Killed job %s\n", jid)
+
+		return nil
+	},
+}
+
+var deleteJobCmd = &cobra.Command{
+	Use:   "delete <JID>",
+	Short: "Delete a managed process/container (job)",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var jid string
+		req := &daemon.DeleteReq{}
+
+		if len(args) == 1 {
+			jid = args[0]
+			req.JIDs = []string{jid}
+		} else {
+			// Check if the all flag is set
+			all, _ := cmd.Flags().GetBool(types.AllFlag.Full)
+			if !all {
+				return fmt.Errorf("Please provide a job ID or use the --all flag")
+			}
+		}
+
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		_, err := client.Delete(cmd.Context(), req)
+		if err != nil {
+			return err
+		}
+
+		if jid != "" {
+			fmt.Printf("Deleted job %s\n", jid)
+		} else {
+			fmt.Println("Deleted jobs")
+		}
 
 		return nil
 	},

@@ -95,6 +95,10 @@ var startCmd = &cobra.Command{
 	},
 }
 
+////////////////////
+/// Subcommands  ///
+////////////////////
+
 var processStartCmd = &cobra.Command{
 	Use:   "process <path> [args...]",
 	Short: "Start a managed process (job)",

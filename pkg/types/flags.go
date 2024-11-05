@@ -17,6 +17,7 @@ var (
 	JidFlag        = Flag{"jid", "j"}
 	GpuEnabledFlag = Flag{"gpu-enabled", "g"}
 	AttachFlag     = Flag{"attach", "a"}
+	AllFlag        = Flag{"all", ""}
 
 	// CRIU
 	LeaveRunningFlag   = Flag{"leave-running", ""}

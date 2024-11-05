@@ -113,6 +113,10 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
+////////////////////
+/// Subcommands  ///
+////////////////////
+
 var processRestoreCmd = &cobra.Command{
 	Use:   "process",
 	Short: "Restore a process",
