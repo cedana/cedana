@@ -20,6 +20,7 @@ const (
 	isK3sFlag            = "is-k3s"
 	netPidFlag           = "net-pid"
 	tcpEstablishedFlag   = "tcp-established"
+	tcpCloseFlag         = "tcp-close"
 	gpuEnabledFlag       = "gpu-enabled"
 	logRedirectFlag      = "log-redirect"
 	startChrootFlag      = "start-chroot"

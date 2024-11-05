@@ -221,6 +221,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	opts.Stream = proto.Bool(args.Stream > 0)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
+	opts.TcpClose = proto.Bool(args.GetCriuOpts().GetTcpClose())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
 	if args.Stream <= 0 {
