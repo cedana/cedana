@@ -23,7 +23,9 @@ import (
 
 const (
 	STATE_FILE                         = "process_state.json"
-	RESTORE_OUTPUT_FILE_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
+	DEFAULT_RESTORE_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
+	RESTORE_LOG_FLAGS                  = os.O_CREATE | os.O_WRONLY | os.O_APPEND // no truncate
+	RESTORE_LOG_PERMS                  = 0644
 )
 
 ////////////////////////
@@ -266,8 +268,11 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
 		if info := resp.GetState().GetInfo(); info != nil {
-			restoreLogPath := fmt.Sprintf(RESTORE_OUTPUT_FILE_PATH_FORMATTER, time.Now().Unix())
-			restoreLog, err := os.Create(restoreLogPath)
+			restoreLogPath := req.Log
+			if restoreLogPath == "" {
+				restoreLogPath = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
+			}
+			restoreLog, err := os.OpenFile(restoreLogPath, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
 			defer restoreLog.Close()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)

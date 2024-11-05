@@ -21,6 +21,7 @@ func init() {
 	startCmd.PersistentFlags().StringP(types.JidFlag.Full, types.JidFlag.Short, "", "job id")
 	startCmd.PersistentFlags().BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
 	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/stdout/stderr")
+	startCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/stderr")
 
 	// Sync flags with aliases
 	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
@@ -50,11 +51,13 @@ var startCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(types.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(types.GpuEnabledFlag.Full)
+		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
 		// attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.StartReq{
 			JID:        jid,
+			Log:        log,
 			GPUEnabled: gpuEnabled,
 		}
 

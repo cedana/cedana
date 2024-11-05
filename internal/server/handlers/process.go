@@ -4,12 +4,10 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/rs/zerolog/log"
@@ -18,9 +16,8 @@ import (
 )
 
 const (
-	OUTPUT_FILE_PATH_FORMATTER string      = "/var/log/cedana-output-%d.log"
-	OUTPUT_FILE_PERMS          os.FileMode = 0644
-	OUTPUT_FILE_FLAGS          int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
+	LOG_FILE_PERMS os.FileMode = 0644
+	LOG_FILE_FLAGS int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
 )
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
@@ -49,15 +46,14 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 	cmd.Env = opts.Env
 	cmd.Dir = opts.WorkingDir
 
-	outFilePath := fmt.Sprintf(OUTPUT_FILE_PATH_FORMATTER, time.Now().Unix())
-	outFile, err := os.OpenFile(outFilePath, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
+	logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to open output file: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 	}
-	defer outFile.Close()
-	cmd.Stdin = outFile
-	cmd.Stdout = outFile
-	cmd.Stderr = outFile
+	defer logFile.Close()
+	cmd.Stdin = logFile
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
 
 	err = cmd.Start()
 	if err != nil {

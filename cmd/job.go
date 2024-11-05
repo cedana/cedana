@@ -75,7 +75,7 @@ var listJobCmd = &cobra.Command{
 		writer.SetStyle(table.StyleLight)
 		writer.Style().Options.SeparateRows = false
 
-		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Last Checkpoint", "GPU"})
+		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Last Checkpoint", "Log", "GPU"})
 
 		boolStr := func(b bool) string {
 			if b {
@@ -95,6 +95,7 @@ var listJobCmd = &cobra.Command{
 				job.GetProcess().GetPID(),
 				state,
 				job.GetCheckpointPath(),
+				job.GetLog(),
 				boolStr(job.GetGPUEnabled()),
 			}
 			writer.AppendRow(row)

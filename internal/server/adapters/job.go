@@ -5,6 +5,7 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/cedana/cedana/internal/db"
@@ -17,6 +18,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 
 ////////////////////////
 //// Dump Adapters /////
@@ -105,6 +108,9 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 			}
 
 			// TODO YA: Allow overriding job details, otherwise use saved job details
+			if req.Log == "" {
+				req.Log = job.Log // Use the same log file as it was before dump
+			}
 			req.Details = job.Details
 			if req.Path == "" {
 				req.Path = job.CheckpointPath
@@ -121,6 +127,8 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 				cancel()
 				return nil, err
 			}
+
+			job.Log = req.Log
 
 			// Get process state if only if possible, as the process
 			// may have already exited by the time we get here.
@@ -182,6 +190,10 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				h = types.Adapted(h, GPUAdapter)
 			}
 
+			if req.Log == "" {
+				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, jid)
+			}
+
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
 			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
 			if err != nil {
@@ -194,6 +206,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				Type:       req.GetType(),
 				Process:    &daemon.ProcessState{},
 				GPUEnabled: req.GetGPUEnabled(),
+				Log:        req.GetLog(),
 				Details:    &daemon.Details{PID: proto.Uint32(resp.PID)},
 			}
 

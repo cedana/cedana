@@ -28,6 +28,7 @@ func init() {
 	restoreCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	restoreCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
+	restoreCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/stderr")
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
@@ -65,11 +66,13 @@ var restoreCmd = &cobra.Command{
 		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
+		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:   path,
 			Stream: stream,
+			Log:    log,
 			Criu: &daemon.CriuOpts{
 				TcpEstablished: tcpEstablished,
 				TcpClose:       tcpClose,
