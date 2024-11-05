@@ -20,6 +20,7 @@ func init() {
 
 	// Add subcommand flags
 	deleteJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "delete all jobs")
+	killJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "kill all jobs")
 
 	// Sync flags with aliases
 	psCmd.Flags().AddFlagSet(listJobCmd.PersistentFlags())
@@ -110,12 +111,20 @@ var listJobCmd = &cobra.Command{
 var killJobCmd = &cobra.Command{
 	Use:   "kill <JID>",
 	Short: "Kill a managed process/container (job)",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		jid := args[0]
+		var jid string
+		req := &daemon.KillReq{}
 
-		req := &daemon.KillReq{
-			JIDs: []string{jid},
+		if len(args) == 1 {
+			jid = args[0]
+			req.JIDs = []string{jid}
+		} else {
+			// Check if the all flag is set
+			all, _ := cmd.Flags().GetBool(types.AllFlag.Full)
+			if !all {
+				return fmt.Errorf("Please provide a job ID or use the --all flag")
+			}
 		}
 
 		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
@@ -124,7 +133,11 @@ var killJobCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Killed job %s\n", jid)
+		if jid != "" {
+			fmt.Printf("Killed job %s\n", jid)
+		} else {
+			fmt.Println("Killed jobs")
+		}
 
 		return nil
 	},
