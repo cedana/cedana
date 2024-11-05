@@ -354,8 +354,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 		return err
 	}
 
-	log.Debug().Interface("state", state).Msg("beginning dump")
-
 	log.Info().Int32("stream", args.Stream).Msg("")
 
 	if state.GPU {
