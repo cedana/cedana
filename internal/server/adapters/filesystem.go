@@ -107,11 +107,11 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
 func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
-			return status.Errorf(codes.NotFound, "path error: %s", path)
+			return nil, status.Errorf(codes.NotFound, "path error: %s", path)
 		}
 
 		var dir *os.File
@@ -123,20 +123,20 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().Unix()))
 			if err := os.Mkdir(imagesDirectory, RESTORE_DIR_PERMS); err != nil {
-				return status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 			}
 			defer os.RemoveAll(imagesDirectory)
 
 			// Decompress the dump
 			if err := utils.Untar(path, imagesDirectory); err != nil {
-				return status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
 			}
 		}
 
 		dir, err = os.Open(imagesDirectory)
 		if err != nil {
 			os.RemoveAll(imagesDirectory)
-			return status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
 		}
 		defer dir.Close()
 
@@ -147,6 +147,6 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 		req.GetCriu().ImagesDir = imagesDirectory
 		req.GetCriu().ImagesDirFd = int32(dir.Fd())
 
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

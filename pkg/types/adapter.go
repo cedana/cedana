@@ -9,7 +9,7 @@ import (
 
 type (
 	DumpHandler    func(context.Context, *sync.WaitGroup, *daemon.DumpResp, *daemon.DumpReq) error
-	RestoreHandler func(context.Context, *sync.WaitGroup, *daemon.RestoreResp, *daemon.RestoreReq) error
+	RestoreHandler func(context.Context, context.Context, *sync.WaitGroup, *daemon.RestoreResp, *daemon.RestoreReq) (chan int, error)
 	StartHandler   func(context.Context, context.Context, *sync.WaitGroup, *daemon.StartResp, *daemon.StartReq) (chan int, error)
 	ManageHandler  func(context.Context, *sync.WaitGroup, *daemon.ManageResp, *daemon.ManageReq) error
 

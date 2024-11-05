@@ -38,7 +38,12 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	handler := types.Adapted(handlers.CriuRestore(s.criu), middleware...)
 
 	resp := &daemon.RestoreResp{}
-	err := handler(ctx, s.wg, resp, req)
+
+	// s.ctx is the lifetime context of the server, pass it so that
+	// managed processes maximum lifetime is the same as the server.
+	// It gives adapters the power to control the lifetime of the process. For e.g.,
+	// the GPU adapter can use this context to kill the process when GPU support fails.
+	_, err := handler(ctx, s.ctx, s.wg, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -54,35 +59,35 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that fills missing info from the request using config defaults
 func fillMissingRestoreDefaults(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Nothing to do, yet
 
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
 // Adapter that validates the restore request
 func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		if req.GetPath() == "" {
-			return status.Error(codes.InvalidArgument, "no path provided")
+			return nil, status.Error(codes.InvalidArgument, "no path provided")
 		}
 		if req.GetType() == "" {
-			return status.Error(codes.InvalidArgument, "missing type")
+			return nil, status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
 // Adapter that inserts new adapters based on the type of restore request
 func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		middleware := []types.Adapter[types.RestoreHandler]{}
 		t := req.GetType()
 		switch t {
 		case "job":
-			return status.Error(codes.InvalidArgument, "please first use JobRestoreAdapter")
+			return nil, status.Error(codes.InvalidArgument, "please first use JobRestoreAdapter")
 		case "process":
 			// Nothing to do, yet
 		default:
@@ -92,17 +97,17 @@ func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHa
 				if pluginMiddlewareUntyped, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
 					pluginMiddleware, ok := pluginMiddlewareUntyped.([]types.Adapter[types.RestoreHandler])
 					if !ok {
-						return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
+						return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
 					}
 					middleware = append(middleware, pluginMiddleware...)
 				} else {
-					return status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
+					return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
 				}
 			} else {
-				return status.Errorf(codes.InvalidArgument, "unknown dump type: %s. maybe a missing plugin?", t)
+				return nil, status.Errorf(codes.InvalidArgument, "unknown dump type: %s. maybe a missing plugin?", t)
 			}
 		}
 		h = types.Adapted(h, middleware...)
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

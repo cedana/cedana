@@ -106,17 +106,17 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 	return
 }
 
-func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) error {
+func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) (*rpc.CriuResp, error) {
 	resp, err := c.doSwrkWithResp(reqType, opts, nfy, nil, extraFiles...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	respType := resp.GetType()
 	if respType != reqType {
-		return errors.New("unexpected CRIU RPC response")
+		return nil, errors.New("unexpected CRIU RPC response")
 	}
 
-	return nil
+	return resp, nil
 }
 
 func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, features *rpc.CriuFeatures, extraFiles ...*os.File) (resp *rpc.CriuResp, retErr error) {
@@ -229,23 +229,35 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 }
 
 // Dump dumps a process
-func (c *Criu) Dump(opts *rpc.CriuOpts, nfy Notify) error {
-	return c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy)
+func (c *Criu) Dump(opts *rpc.CriuOpts, nfy Notify) (*rpc.CriuDumpResp, error) {
+	resp, err := c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetDump(), nil
 }
 
 // Restore restores a process
-func (c *Criu) Restore(opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) error {
-	return c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy, extraFiles...)
+func (c *Criu) Restore(opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) (*rpc.CriuRestoreResp, error) {
+	resp, err := c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy, extraFiles...)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetRestore(), nil
 }
 
 // PreDump does a pre-dump
 func (c *Criu) PreDump(opts *rpc.CriuOpts, nfy Notify) error {
-	return c.doSwrk(rpc.CriuReqType_PRE_DUMP, opts, nfy)
+	_, err := c.doSwrk(rpc.CriuReqType_PRE_DUMP, opts, nfy)
+	return err
 }
 
 // StartPageServer starts the page server
 func (c *Criu) StartPageServer(opts *rpc.CriuOpts) error {
-	return c.doSwrk(rpc.CriuReqType_PAGE_SERVER, opts, nil)
+	_, err := c.doSwrk(rpc.CriuReqType_PAGE_SERVER, opts, nil)
+	return err
 }
 
 // StartPageServerChld starts the page server and returns PID and port

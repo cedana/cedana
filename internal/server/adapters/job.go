@@ -5,7 +5,6 @@ package adapters
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/cedana/cedana/internal/db"
@@ -88,11 +87,68 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 // Post-restore, updates the saved job details.
 func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 	return func(h types.RestoreHandler) types.RestoreHandler {
-		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.GetType() != "job" {
-				return h(ctx, wg, resp, req)
+				return h(ctx, lifetimeCtx, wg, resp, req)
 			}
-			return fmt.Errorf("not implemented")
+
+			// Fill in restore request details based on saved job info
+			jid := req.GetDetails().GetJID()
+			if jid == "" {
+				return nil, status.Errorf(codes.InvalidArgument, "JID is required")
+			}
+
+			job, err := db.GetJob(ctx, jid)
+			if err != nil {
+				return nil, status.Errorf(codes.NotFound, "job not found: %v", err)
+			}
+
+			req.Details = job.Details
+			req.Type = job.Type
+			req.Path = job.CheckpointPath
+			if req.GetCriu() == nil {
+				req.Criu = &daemon.CriuOpts{}
+			}
+			req.Criu.RstSibling = true
+
+			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
+			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+
+			// Get process state if only if possible, as the process
+			// may have already exited by the time we get here.
+			state := &daemon.ProcessState{}
+			err = utils.FillProcessState(ctx, resp.PID, state)
+			if err == nil {
+				job.Process = state
+
+				// Save job details
+				err = db.PutJob(ctx, jid, job)
+				if err != nil {
+					cancel()
+					return nil, status.Errorf(codes.Internal, "failed to save job details: %v", err)
+				}
+
+			}
+
+			// Wait for process exit to update job
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-exited
+				log.Info().Str("JID", jid).Uint32("PID", resp.PID).Msg("job exited")
+				job.Process.Info = &daemon.ProcessInfo{IsRunning: false}
+				ctx := context.WithoutCancel(ctx)
+				err := db.PutJob(ctx, jid, job)
+				if err != nil {
+					log.Warn().Err(err).Str("JID", jid).Msg("failed to update job after exit")
+				}
+			}()
+
+			return exited, nil
 		}
 	}
 }
@@ -137,8 +193,8 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				Details:    &daemon.Details{PID: proto.Uint32(resp.PID)},
 			}
 
-			// Get process state if no errors. Cuz it's possible that the process
-			// has already exited by the time we get here.
+			// Get process state if only if possible, as the process
+			// may have already exited by the time we get here.
 			state := &daemon.ProcessState{}
 			err = utils.FillProcessState(ctx, resp.PID, state)
 			if err == nil {

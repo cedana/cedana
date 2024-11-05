@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
@@ -66,7 +67,7 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
 		go utils.ReadFileToLog(ctx, logfile)
 
-		err = c.Dump(criuOpts, criu.NoNotify{})
+		_, err = c.Dump(criuOpts, criu.NoNotify{})
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 		}
@@ -79,17 +80,17 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 
 // Returns a CRIU restore handler for the server
 func CriuRestore(c *criu.Criu) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		extraFiles := utils.GetContextValSafe(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, []*os.File{})
 
 		opts := req.GetCriu()
 		if opts == nil {
-			return fmt.Errorf("criu options is nil")
+			return nil, fmt.Errorf("criu options is nil")
 		}
 
 		version, err := c.GetCriuVersion()
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
 		criuOpts := &rpc.CriuOpts{
@@ -101,6 +102,7 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 			OrphanPtsMaster: proto.Bool(false),
 
 			// Variable opts
+			RstSibling:     proto.Bool(opts.GetRstSibling()),
 			ImagesDirFd:    proto.Int32(opts.GetImagesDirFd()),
 			TcpEstablished: proto.Bool(opts.GetTcpEstablished()),
 			TcpClose:       proto.Bool(opts.GetTcpClose()),
@@ -126,22 +128,41 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
 		go utils.ReadFileToLog(ctx, logfile)
 
-		err = c.Restore(criuOpts, criu.NotifyCallback{
-			PreRestoreFunc: func() error {
-				log.Info().Msg("PreRestoreFunc")
-				return nil
-			},
-			OrphanPtsMasterFunc: func(fd int32) error {
-				log.Info().Int32("fd", fd).Msg("OrphanPtsMasterFunc")
-				return nil
-			},
-		}, extraFiles...)
+		criuResp, err := c.Restore(criuOpts, criu.NoNotify{}, extraFiles...)
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
+		}
+		resp.PID = uint32(*criuResp.Pid)
+
+		// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
+		// as their could be goroutines waiting on it.
+		exited := make(chan int)
+		if opts.GetRstSibling() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var status syscall.WaitStatus
+				_, err := syscall.Wait4(int(resp.PID), &status, 0, nil)
+				if err != nil {
+					log.Debug().Err(err).Msg("process Wait4()")
+				}
+				log.Debug().Int("code", status.ExitStatus()).Msg("process exited")
+				close(exited)
+			}()
+
+			// Also kill the process if it's lifetime expires
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-lifetimeCtx.Done()
+				syscall.Kill(int(resp.PID), syscall.SIGKILL)
+			}()
+		} else {
+			close(exited)
 		}
 
 		log.Debug().Int("CRIU", version).Msg("CRIU restore complete")
 
-		return err
+		return exited, err
 	}
 }

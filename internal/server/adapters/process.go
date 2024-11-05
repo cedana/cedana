@@ -176,13 +176,35 @@ func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 /// Restore Adapters ///
 ////////////////////////
 
+// Fill process state in the restore response
+func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		// Check if path is a directory
+		path := req.GetCriu().GetImagesDir()
+		if path == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing path. should have been set by an adapter")
+		}
+
+		stateFile := filepath.Join(path, STATE_FILE)
+		state := &daemon.ProcessState{}
+
+		if err := utils.LoadJSONFromFile(stateFile, state); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load process state from dump: %v", err)
+		}
+
+		resp.State = state
+
+		return h(ctx, lifetimeCtx, wg, resp, req)
+	}
+}
+
 // Detect and sets network options for CRIU
 // XXX YA: Enforces unsuitable options for CRIU. Some times, we may
 // not want to use TCP established connections. Also, for external unix
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
@@ -206,13 +228,13 @@ func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler
 		req.Criu.TcpEstablished = hasTCP || req.GetCriu().GetTcpEstablished()
 		req.Criu.ExtUnixSk = hasExtUnixSocket || req.GetCriu().GetExtUnixSk()
 
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
 			for _, f := range info.GetOpenFiles() {
@@ -232,29 +254,7 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 
 		req.Criu.ShellJob = isShellJob || req.GetCriu().GetShellJob()
 
-		return h(ctx, wg, resp, req)
-	}
-}
-
-// Fill process state in the restore response
-func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-		// Check if path is a directory
-		path := req.GetCriu().GetImagesDir()
-		if path == "" {
-			return status.Errorf(codes.InvalidArgument, "missing path. should have been set by an adapter")
-		}
-
-		stateFile := filepath.Join(path, STATE_FILE)
-		state := &daemon.ProcessState{}
-
-		if err := utils.LoadJSONFromFile(stateFile, state); err != nil {
-			return status.Errorf(codes.Internal, "failed to load process state from dump: %v", err)
-		}
-
-		resp.State = state
-
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
@@ -262,7 +262,7 @@ func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 // For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
 // a log file.
 func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -270,7 +270,7 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 			restoreLog, err := os.Create(restoreLogPath)
 			defer restoreLog.Close()
 			if err != nil {
-				return status.Errorf(codes.Internal, "failed to open restore log: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)
 			}
 			for _, f := range info.GetOpenFiles() {
 				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
@@ -295,6 +295,6 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 		}
 		req.GetCriu().InheritFd = inheritFds
 
-		return h(ctx, wg, resp, req)
+		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

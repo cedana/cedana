@@ -107,7 +107,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		fmt.Printf(resp.Message)
-		fmt.Printf("Restored successfully")
+		fmt.Printf("Restored successfully, PID: %d\n", resp.PID)
 
 		return nil
 	},
