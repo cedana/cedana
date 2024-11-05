@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 FROM golang:1.22-bullseye as builder
 
 WORKDIR /app
