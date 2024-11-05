@@ -8,14 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Checks if the given process has any active tcp connections
@@ -84,24 +83,25 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	if state == nil {
 		return fmt.Errorf("state is nil")
 	}
+	state.PID = pid
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
-		return status.Errorf(codes.NotFound, "process not found: %v", err)
+		return fmt.Errorf("could not get process: %v", err)
 	}
 
 	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not get uids: %v", err)
+		return fmt.Errorf("could not get uids: %v", err)
 	}
 	gids, err := p.GidsWithContext(ctx)
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not get gids: %v", err)
+		return fmt.Errorf("could not get gids: %v", err)
 	}
 	groups, err := p.GroupsWithContext(ctx)
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not get groups: %v", err)
+		return fmt.Errorf("could not get groups: %v", err)
 	}
 	state.UIDs = uids
 	state.GIDs = gids
@@ -110,7 +110,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	var openFiles []*daemon.OpenFilesStat
 	of, err := p.OpenFiles()
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not get open files: %v", err)
+		return fmt.Errorf("could not get open files: %v", err)
 	}
 	for _, f := range of {
 		file, err := os.Stat(f.Path)
@@ -130,7 +130,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	var openConnections []*daemon.ConnectionStat
 	conns, err := p.Connections()
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not get connections: %v", err)
+		return fmt.Errorf("could not get connections: %v", err)
 	}
 	for _, conn := range conns {
 		Laddr := &daemon.Addr{
@@ -156,7 +156,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	memoryUsed, _ := p.MemoryPercent()
 	isRunning, err := p.IsRunning()
 	if err != nil {
-		return status.Errorf(codes.Internal, "could not check if process is running: %v", err)
+		return fmt.Errorf("could not get process status: %v", err)
 	}
 
 	// if the process is actually running, we don't care that
@@ -218,4 +218,28 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	}
 
 	return nil
+}
+
+// Returns a channel that will be closed when a non-child process exits
+// Since, we cannot use the process.Wait() method to wait for a non-child process to exit
+func WaitForPid(pid uint32) chan int {
+	exitCh := make(chan int)
+
+	go func() {
+		for {
+			// wait for the process to exit
+			p, err := process.NewProcess(int32(pid))
+			if err != nil {
+				break
+			}
+			_, err = p.Status()
+			if err != nil {
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		close(exitCh)
+	}()
+
+	return exitCh
 }

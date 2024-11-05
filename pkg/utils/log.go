@@ -15,7 +15,7 @@ func ReadFileToLog(ctx context.Context, logfile string) {
 	log := log.Ctx(ctx)
 	file, err := os.OpenFile(logfile, os.O_RDONLY, 0644)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to open log file")
+		log.Debug().Str("file", logfile).Msg("failed to open log file")
 		return
 	}
 	defer file.Close()

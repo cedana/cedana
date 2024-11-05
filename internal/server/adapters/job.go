@@ -28,11 +28,54 @@ import (
 func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 	return func(h types.DumpHandler) types.DumpHandler {
 		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-			if req.GetType() == "job" {
-				// Get job info from the request
-				return fmt.Errorf("not implemented")
+			if req.GetType() != "job" {
+				return h(ctx, wg, resp, req)
 			}
-			return h(ctx, wg, resp, req)
+
+			// Fill in dump request details based on saved job info
+			jid := req.GetDetails().GetJID()
+			if jid == "" {
+				return status.Errorf(codes.InvalidArgument, "JID is required")
+			}
+
+			job, err := db.GetJob(ctx, jid)
+			if err != nil {
+				return status.Errorf(codes.NotFound, "job not found: %v", err)
+			}
+
+			req.Details = job.Details
+			req.Type = job.Type
+
+			err = h(ctx, wg, resp, req)
+			if err != nil {
+				return err
+			}
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ctx := context.WithoutCancel(ctx)
+
+				job.CheckpointPath = resp.GetPath()
+				job.Process = resp.GetState()
+
+				// Wait for process exit, if not using --leave-running
+				// to avoid race with state update
+				if !req.GetCriu().GetLeaveRunning() {
+					utils.WaitForPid(job.Process.GetPID())
+					if job.Process.Info == nil {
+						job.Process.Info = &daemon.ProcessInfo{}
+					}
+					job.Process.Info.IsRunning = false
+				}
+
+				err = db.PutJob(ctx, jid, job)
+				if err != nil {
+					log.Warn().Err(err).Str("JID", jid).Msg("failed to update job after dump")
+				}
+			}()
+
+			return nil
 		}
 	}
 }
@@ -46,11 +89,10 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 	return func(h types.RestoreHandler) types.RestoreHandler {
 		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) error {
-			if req.GetType() == "job" {
-				// Get job info from the request
-				return fmt.Errorf("not implemented")
+			if req.GetType() != "job" {
+				return h(ctx, wg, resp, req)
 			}
-			return h(ctx, wg, resp, req)
+			return fmt.Errorf("not implemented")
 		}
 	}
 }
@@ -92,7 +134,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				Type:       req.GetType(),
 				Process:    &daemon.ProcessState{},
 				GPUEnabled: req.GetGPUEnabled(),
-				Details:    &daemon.JobDetails{PID: proto.Uint32(resp.PID)},
+				Details:    &daemon.Details{PID: proto.Uint32(resp.PID)},
 			}
 
 			// Get process state if no errors. Cuz it's possible that the process

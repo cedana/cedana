@@ -33,7 +33,7 @@ const (
 // Check if the process exists, and is running
 func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		pid := req.GetPID()
+		pid := req.GetDetails().GetPID()
 		if pid == 0 {
 			return status.Errorf(codes.InvalidArgument, "missing PID")
 		}
@@ -42,7 +42,7 @@ func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.Internal, "failed to check process: %v", err)
 		}
 		if !exists {
-			return status.Errorf(codes.NotFound, "process not found: %d", pid)
+			return status.Errorf(codes.NotFound, "process PID %d does not exist", pid)
 		}
 
 		if resp.GetState() == nil {

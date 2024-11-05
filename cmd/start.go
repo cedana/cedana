@@ -108,8 +108,8 @@ var processStartCmd = &cobra.Command{
 		wd, _ := os.Getwd()
 
 		req.Type = "process"
-		req.Details = &daemon.JobDetails{
-			ProcessStartOpts: &daemon.ProcessStartOpts{
+		req.Details = &daemon.Details{
+			ProcessStart: &daemon.ProcessStartDetails{
 				Path:       path,
 				Args:       args,
 				Env:        env,

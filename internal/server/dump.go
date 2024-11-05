@@ -65,7 +65,8 @@ func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 				LeaveRunning: viper.GetBool("criu.leave_running"),
 			}
 		} else {
-			req.Criu.LeaveRunning = viper.GetBool("criu.leave_running")
+			// Only override if set as true
+			req.Criu.LeaveRunning = viper.GetBool("criu.leave_running") || req.Criu.LeaveRunning
 		}
 
 		return h(ctx, wg, resp, req)

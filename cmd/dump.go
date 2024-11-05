@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -137,7 +138,7 @@ var processDumpCmd = &cobra.Command{
 		}
 
 		req.Type = "process"
-		req.Details = &daemon.DumpReq_PID{PID: uint32(pid)}
+		req.Details = &daemon.Details{PID: proto.Uint32(uint32(pid))}
 
 		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
@@ -157,7 +158,7 @@ var jobDumpCmd = &cobra.Command{
 		jid := args[0]
 
 		req.Type = "job"
-		req.Details = &daemon.DumpReq_JID{JID: jid}
+		req.Details = &daemon.Details{JID: proto.String(jid)}
 
 		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

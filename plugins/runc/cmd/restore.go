@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/api/plugins/runc"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
@@ -16,7 +17,7 @@ var RestoreCmd = &cobra.Command{
 		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
 
 		req.Type = "runc"
-		req.Details = &daemon.RestoreReq_Runc{}
+		req.Details = &daemon.Details{Runc: &runc.Details{}}
 
 		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

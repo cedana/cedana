@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/api/plugins/runc"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
@@ -20,7 +21,7 @@ var DumpCmd = &cobra.Command{
 		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
 		req.Type = "runc"
-		req.Details = &daemon.DumpReq_Runc{}
+		req.Details = &daemon.Details{Runc: &runc.Details{}}
 
 		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

@@ -25,7 +25,7 @@ const (
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
 func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-	opts := req.GetDetails().GetProcessStartOpts()
+	opts := req.GetDetails().GetProcessStart()
 	if opts == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing process start options")
 	}

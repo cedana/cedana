@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -143,7 +144,7 @@ var jobRestoreCmd = &cobra.Command{
 		jid := args[0]
 
 		req.Type = "job"
-		req.Details = &daemon.RestoreReq_JID{JID: jid}
+		req.Details = &daemon.Details{JID: proto.String(jid)}
 
 		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
