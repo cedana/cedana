@@ -89,9 +89,10 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 		res.Message = restoreResp.Message
 	} else {
 		opts := &task.RuncOpts{}
-		opts.Detach = args.RuncOpts.Detach
-		opts.ConsoleSocket = args.RuncOpts.ConsoleSocket
-		opts.Bundle = args.RuncOpts.Bundle
+		argOpts := args.GetRuncOpts()
+		opts.Detach = argOpts.GetDetach()
+		opts.ConsoleSocket = argOpts.GetConsoleSocket()
+		opts.Bundle = argOpts.GetBundle()
 		if opts.Bundle == "" {
 			// Use saved bundle if not overridden from args
 			opts.Bundle = state.ContainerBundle
