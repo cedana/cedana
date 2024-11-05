@@ -42,7 +42,10 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 				return status.Errorf(codes.NotFound, "job not found: %v", err)
 			}
 
-			req.Details = job.Details
+			// Allow overriding job details, otherwise use saved job details
+			if req.Details == nil {
+				req.Details = job.Details
+			}
 			req.Type = job.Type
 
 			err = h(ctx, wg, resp, req)
@@ -103,13 +106,18 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 				return nil, status.Errorf(codes.NotFound, "job not found: %v", err)
 			}
 
-			req.Details = job.Details
-			req.Type = job.Type
-			req.Path = job.CheckpointPath
-			if req.GetCriu() == nil {
+			// Allow overriding job details, otherwise use saved job details
+			if req.Details == nil {
+				req.Details = job.Details
+			}
+			if req.Path == "" {
+				req.Path = job.CheckpointPath
+			}
+			if req.Criu == nil {
 				req.Criu = &daemon.CriuOpts{}
 			}
 			req.Criu.RstSibling = true
+			req.Type = job.Type
 
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
 			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
