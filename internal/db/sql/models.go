@@ -7,7 +7,7 @@ package sql
 import ()
 
 type Job struct {
-	Jid  interface{}
+	Jid  string
 	Data []byte
 }
 

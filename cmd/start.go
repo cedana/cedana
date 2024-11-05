@@ -89,7 +89,7 @@ var startCmd = &cobra.Command{
 		}
 
 		fmt.Printf(resp.Message)
-		fmt.Printf("Started managed PID %d\n", resp.PID)
+		fmt.Printf("Started managing job %s, PID %d\n", resp.JID, resp.PID)
 
 		return nil
 	},
@@ -109,13 +109,11 @@ var processStartCmd = &cobra.Command{
 
 		req.Type = "process"
 		req.Details = &daemon.JobDetails{
-			Details: &daemon.JobDetails_ProcessStartOpts{
-				ProcessStartOpts: &daemon.ProcessStartOpts{
-					Path:       path,
-					Args:       args,
-					Env:        env,
-					WorkingDir: wd,
-				},
+			ProcessStartOpts: &daemon.ProcessStartOpts{
+				Path:       path,
+				Args:       args,
+				Env:        env,
+				WorkingDir: wd,
 			},
 		}
 

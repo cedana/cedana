@@ -12,10 +12,11 @@ import (
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/xid"
+	"github.com/rb-go/namegen"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 ////////////////////////
@@ -65,13 +66,14 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 			jid := req.GetJID()
 			if jid == "" {
-				jid = xid.New().String()
-			} else {
-				// Check if the job already exists
-				_, err := db.GetJob(ctx, jid)
-				if err == nil {
-					return nil, status.Errorf(codes.AlreadyExists, "job already exists")
-				}
+				jid = namegen.GetName(1)
+			}
+			resp.JID = jid
+
+			// Check if the job already exists
+			_, err := db.GetJob(ctx, jid)
+			if err == nil {
+				return nil, status.Errorf(codes.AlreadyExists, "job already exists")
 			}
 
 			if req.GetGPUEnabled() { // Attach GPU support if requested
@@ -79,7 +81,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			}
 
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
-			exitCode, err := h(ctx, lifetimeCtx, wg, resp, req)
+			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err
@@ -90,7 +92,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				Type:       req.GetType(),
 				Process:    &daemon.ProcessState{},
 				GPUEnabled: req.GetGPUEnabled(),
-				Details:    &daemon.JobDetails{Details: &daemon.JobDetails_PID{PID: resp.PID}},
+				Details:    &daemon.JobDetails{PID: proto.Uint32(resp.PID)},
 			}
 
 			// Get process state if no errors. Cuz it's possible that the process
@@ -113,11 +115,9 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				code := <-exitCode
-				close(exitCode) // so all other waiters can exit
-				log.Info().Str("JID", jid).Uint32("PID", resp.PID).Int("exitCode", code).Msg("job exited")
-				job.Process.ExitCode = int32(code)
-				job.Process.Info.IsRunning = false
+				<-exited
+				log.Info().Str("JID", jid).Uint32("PID", resp.PID).Msg("job exited")
+				job.Process.Info = &daemon.ProcessInfo{IsRunning: false}
 				ctx := context.WithoutCancel(ctx)
 				err := db.PutJob(ctx, jid, job)
 				if err != nil {
@@ -125,7 +125,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				}
 			}()
 
-			return exitCode, nil
+			return exited, nil
 		}
 	}
 }

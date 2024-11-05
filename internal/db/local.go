@@ -39,7 +39,7 @@ func NewLocalDB(ctx context.Context) (DB, error) {
 /////////////
 
 func (db *LocalDB) GetJob(ctx context.Context, jid string) (*daemon.Job, error) {
-	dbJob, err := db.queries.GetJob(ctx, []byte(jid))
+	dbJob, err := db.queries.GetJob(ctx, jid)
 	if err != nil {
 		return nil, err
 	}
@@ -67,16 +67,14 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 		return err
 	}
 
+	if _, err := db.queries.GetJob(ctx, jid); err == nil {
+		db.queries.DeleteJob(ctx, jid)
+	}
+
 	_, err = db.queries.CreateJob(ctx, sql.CreateJobParams{
 		Jid:  jid,
 		Data: bytes,
 	})
-	if err != nil {
-		err = db.queries.UpdateJob(ctx, sql.UpdateJobParams{
-			Jid:  jid,
-			Data: bytes,
-		})
-	}
 
 	return err
 }

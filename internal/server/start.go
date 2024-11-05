@@ -39,7 +39,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 		return nil, err
 	}
 
-	log.Info().Str("JID", req.JID).Uint32("PID", resp.PID).Msg("job started")
+	log.Info().Str("JID", resp.JID).Uint32("PID", resp.PID).Msg("job started")
 
 	return resp, nil
 }
@@ -59,10 +59,6 @@ func fillMissingStartDefaults(h types.StartHandler) types.StartHandler {
 // Adapter that validates the start request
 func validateStartRequest(h types.StartHandler) types.StartHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		jid := req.GetJID()
-		if jid == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "JID is required")
-		}
 		if req.GetType() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
 		}

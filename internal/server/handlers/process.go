@@ -67,7 +67,7 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 	resp.PID = uint32(cmd.Process.Pid)
 
 	// Wait for the process to exit, send exit code
-	exitCode := make(chan int)
+	exited := make(chan int)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -75,15 +75,9 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 		if err != nil {
 			log.Debug().Err(err).Msg("process Wait()")
 		}
-
-		select {
-		case <-lifetimeCtx.Done():
-			// So that we don't end up forever waiting for
-			// someone to read the exit code from the channel
-			close(exitCode)
-		case exitCode <- cmd.ProcessState.ExitCode():
-		}
+		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("process exited")
+		close(exited)
 	}()
 
-	return exitCode, err
+	return exited, err
 }

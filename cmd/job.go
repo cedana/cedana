@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -57,13 +58,36 @@ var listJobCmd = &cobra.Command{
 
 		if len(jobs) == 0 {
 			fmt.Println("No jobs found")
+			return nil
 		}
 
 		writer := table.NewWriter()
-		writer.AppendHeader(table.Row{"JID", "Type", "State", "Checkpoint", "GPU Enabled"})
+		writer.SetOutputMirror(cmd.OutOrStdout())
+		writer.SetStyle(table.StyleLight)
+		writer.Style().Options.SeparateRows = false
+
+		writer.AppendHeader(table.Row{"Job", "Type", "State", "Last Checkpoint", "GPU"})
+
+		boolStr := func(b bool) string {
+			if b {
+				return text.Colors{text.FgGreen}.Sprint("yes")
+			}
+			return text.Colors{text.FgRed}.Sprint("no")
+		}
 
 		for _, job := range jobs {
-			writer.AppendRow([]interface{}{job.JID, job.Type, job.Process.Info.GetStatus, job.CheckpointPath, job.GPUEnabled})
+			state := text.Colors{text.FgGreen}.Sprint("running")
+			if !job.GetProcess().GetInfo().GetIsRunning() {
+				state = text.Colors{text.FgRed}.Sprint("exited")
+			}
+			row := table.Row{
+				job.GetJID(),
+				job.GetType(),
+				state,
+				job.GetCheckpointPath(),
+				boolStr(job.GetGPUEnabled()),
+			}
+			writer.AppendRow(row)
 		}
 
 		writer.Render()

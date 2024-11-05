@@ -14,16 +14,12 @@ import (
 var Ddl string
 
 const createJob = `-- name: CreateJob :one
-INSERT INTO jobs (
-  jid, data
-) VALUES (
-  $1, $2
-)
+INSERT INTO jobs (jid, data) VALUES ($1, $2)
 RETURNING jid, data
 `
 
 type CreateJobParams struct {
-	Jid  interface{}
+	Jid  string
 	Data []byte
 }
 
@@ -35,21 +31,19 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 }
 
 const deleteJob = `-- name: DeleteJob :exec
-DELETE FROM jobs
-WHERE jid = $1
+DELETE FROM jobs WHERE jid = $1
 `
 
-func (q *Queries) DeleteJob(ctx context.Context, jid interface{}) error {
+func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
 	_, err := q.db.ExecContext(ctx, deleteJob, jid)
 	return err
 }
 
 const getJob = `-- name: GetJob :one
-SELECT jid, data FROM jobs
-WHERE jid = $1 LIMIT 1
+SELECT jid, data FROM jobs WHERE jid = $1
 `
 
-func (q *Queries) GetJob(ctx context.Context, jid interface{}) (Job, error) {
+func (q *Queries) GetJob(ctx context.Context, jid string) (Job, error) {
 	row := q.db.QueryRowContext(ctx, getJob, jid)
 	var i Job
 	err := row.Scan(&i.Jid, &i.Data)
@@ -58,7 +52,6 @@ func (q *Queries) GetJob(ctx context.Context, jid interface{}) (Job, error) {
 
 const listJobs = `-- name: ListJobs :many
 SELECT jid, data FROM jobs
-ORDER BY jid
 `
 
 func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
@@ -85,13 +78,11 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 }
 
 const updateJob = `-- name: UpdateJob :exec
-UPDATE jobs
-SET data = $2
-WHERE jid = $1
+UPDATE jobs SET data = $2 WHERE jid = $1
 `
 
 type UpdateJobParams struct {
-	Jid  interface{}
+	Jid  string
 	Data []byte
 }
 
@@ -99,3 +90,4 @@ func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
 	_, err := q.db.ExecContext(ctx, updateJob, arg.Jid, arg.Data)
 	return err
 }
+
