@@ -42,10 +42,8 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 				return status.Errorf(codes.NotFound, "job not found: %v", err)
 			}
 
-			// Allow overriding job details, otherwise use saved job details
-			if req.Details == nil {
-				req.Details = job.Details
-			}
+			// TODO YA: Allow overriding job details, otherwise use saved job details
+			req.Details = job.Details
 			req.Type = job.Type
 
 			err = h(ctx, wg, resp, req)
@@ -106,10 +104,8 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 				return nil, status.Errorf(codes.NotFound, "job not found: %v", err)
 			}
 
-			// Allow overriding job details, otherwise use saved job details
-			if req.Details == nil {
-				req.Details = job.Details
-			}
+			// TODO YA: Allow overriding job details, otherwise use saved job details
+			req.Details = job.Details
 			if req.Path == "" {
 				req.Path = job.CheckpointPath
 			}
