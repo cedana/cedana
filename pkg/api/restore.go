@@ -25,8 +25,6 @@ import (
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -330,7 +328,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, isManagedJob bool) (int32, chan int, error) {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -342,17 +340,13 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
-	var gpuCmd *exec.Cmd
-	gpuOutBuf := &bytes.Buffer{}
-
 	// FIXME: GPU restore should instead be done in the pre-resume hook, so as to ensure it does not
 	// continue to run as an orphan process if the restore fails early. Once process has started, then
 	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
-		gpuCmd, err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, io.Writer(gpuOutBuf))
+		err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
 		if err != nil {
-			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 			return 0, nil, err
 		}
 	}
@@ -365,9 +359,9 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	if err != nil {
 		// Kill GPU controller if it was started
 		// FIXME: Remove later when GPU controller is started in pre-resume hook
-		if gpuCmd != nil {
-			gpuCmd.Process.Kill()
-			gpuCmd.Wait()
+		if s.GetGPUController(jid) != nil {
+			s.StopGPUController(jid)
+			s.WaitGPUController(jid)
 		}
 
 		return 0, nil, err
@@ -380,16 +374,16 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	if err != nil {
 		// Kill GPU controller if it was started
 		// FIXME: Remove later when GPU controller is started in pre-resume hook
-		if gpuCmd != nil {
-			gpuCmd.Wait()
-			gpuCmd.Process.Kill()
+		if s.GetGPUController(jid) != nil {
+			s.StopGPUController(jid)
+			s.WaitGPUController(jid)
 		}
 
 		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
 	}
 
 	exitCode := make(chan int)
-	if isManagedJob {
+	if jid != "" {
 		// Wait to cleanup
 		s.wg.Add(1)
 		go func() {
@@ -399,8 +393,8 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			code := status.ExitStatus()
 			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
 
-			if gpuCmd != nil {
-				err = gpuCmd.Process.Kill()
+			if s.GetGPUController(jid) != nil {
+				err = s.StopGPUController(jid)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
 				}
@@ -410,18 +404,11 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if gpuCmd != nil {
+		if s.GetGPUController(jid) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				err := gpuCmd.Wait()
-				if err != nil {
-					log.Debug().Err(err).Msg("GPU controller Wait()")
-				}
-				log.Info().Int("PID", gpuCmd.Process.Pid).
-					Int("status", gpuCmd.ProcessState.ExitCode()).
-					Str("out/err", gpuOutBuf.String()).
-					Msg("GPU controller exited")
+				s.WaitGPUController(jid)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(pid), syscall.SIGKILL)
@@ -609,9 +596,6 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		return 0, nil, err
 	}
 
-	var gpuCmd *exec.Cmd
-	gpuOutBuf := &bytes.Buffer{}
-
 	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
 		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
@@ -622,10 +606,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, io.Writer(gpuOutBuf))
-				if err != nil {
-					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
-				}
+				err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
 				return err
 			},
 		}
@@ -706,8 +687,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			code := status.ExitStatus()
 			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
-			if gpuCmd != nil {
-				err = gpuCmd.Process.Kill()
+			if s.GetGPUController(args.JID) != nil {
+				err = s.StopGPUController(args.JID)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
 				}
@@ -717,18 +698,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if gpuCmd != nil {
+		if s.GetGPUController(args.JID) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				err := gpuCmd.Wait()
-				if err != nil {
-					log.Debug().Err(err).Msg("GPU controller Wait()")
-				}
-				log.Info().Int("PID", gpuCmd.Process.Pid).
-					Int("status", gpuCmd.ProcessState.ExitCode()).
-					Str("out/err", gpuOutBuf.String()).
-					Msg("GPU controller exited")
+				s.WaitGPUController(args.JID)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(*pid), syscall.SIGKILL)
@@ -823,43 +797,33 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, jid string) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return nil, fmt.Errorf("could not get restore stats from context")
+		return fmt.Errorf("could not get restore stats from context")
 	}
 
-	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, out)
+	err := s.StartGPUController(ctx, uid, gid, groups, jid)
 	if err != nil {
 		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
-		return nil, err
+		return err
 	}
 
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
-	if err != nil {
-		log.Error().Msgf("fail to dial GPU controller: %v", err)
-		return nil, fmt.Errorf("fail to dial GPU controller: %v", err)
-	}
-	defer gpuConn.Close()
-
-	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+	gpuController := s.GetGPUController(jid)
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
 		Stream:    stream,
 	}
-	resp, err := gpuServiceConn.Restore(ctx, &args)
+	resp, err := gpuController.Client.Restore(ctx, &args)
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
-			return nil, fmt.Errorf("gpu checkpoint failed")
+			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu restore failed")
+			return fmt.Errorf("gpu restore failed")
 		} else {
-			return nil, err
+			return err
 		}
 	}
 
@@ -872,11 +836,11 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	log.Info().Msgf("gpu controller returned %v", resp)
 
 	if !resp.Success {
-		return nil, fmt.Errorf("could not restore gpu")
+		return fmt.Errorf("could not restore gpu")
 	}
 
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
 
-	return gpuCmd, nil
+	return nil
 }
