@@ -46,7 +46,7 @@ func init() {
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a managed process/container",
+	Short: "Start a managed process/container (create a job)",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(types.JidFlag.Full)
