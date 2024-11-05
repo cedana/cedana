@@ -360,13 +360,13 @@ func init() {
 	// Process
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreProcessCmd.Flags().BoolP(tcpCloseFlag, "t", false, "restore with TCP connections closed")
+	restoreProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "restore with TCP connections closed")
 	restoreProcessCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 
 	// Job
 	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
-	restoreJobCmd.Flags().BoolP(tcpCloseFlag, "t", false, "restore with TCP connections closed")
+	restoreJobCmd.Flags().BoolP(tcpCloseFlag, "", false, "restore with TCP connections closed")
 	restoreJobCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
@@ -399,7 +399,7 @@ func init() {
 	runcRestoreCmd.Flags().Int32P(netPidFlag, "n", 0, "provide the network pid to restore to in k3s")
 	runcRestoreCmd.Flags().Bool(fileLocksFlag, false, "restore file locks")
 	runcRestoreCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
-	runcRestoreCmd.Flags().BoolP(tcpCloseFlag, "t", false, "tcp close")
+	runcRestoreCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
 
 	rootCmd.AddCommand(restoreCmd)
 }
