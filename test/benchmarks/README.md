@@ -6,7 +6,7 @@ The [`entrypoint.sh`](entrypoint.sh) script is the top-level to the `cedana` per
 ```
 ./test/benchmarks/entrypoint.sh [flags]
 ```
-Default (no flags) runs all benchmarking tests, collects data with [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector) in `data.json` and `benchmark_output.csv`, processes results and pushes them to BigQuery -- used in Github Action **Benchmark and Publish**.
+Default (no flags) runs all benchmarking tests, collects data with [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector) in `data.json` and `benchmark_output.csv`, processes results and pushes them to BigQuery -- used in Github Action **Benchmark and Publish**. Has been DEPRECATED in favor of using a separate benchmarking approach. However, the flags below are still in use. 
 
 Flags
 - `--correctness`: run correctness tests
