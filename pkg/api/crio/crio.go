@@ -436,11 +436,13 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 		}
 	}
 
+	log.Debug().Msgf("Buildah from command started")
 	cmd := exec.Command("buildah", "from", originalImageRef)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("issue making working container: %s, %s", err.Error(), string(out))
 	}
+	log.Debug().Msgf("Buildah from command finished")
 
 	// Split the output into lines
 	lines := strings.Split(string(out), "\n")
