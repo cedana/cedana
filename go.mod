@@ -3,7 +3,6 @@ module github.com/cedana/cedana
 go 1.22.5
 
 require (
-	github.com/checkpoint-restore/go-criu/v7 v7.2.0
 	github.com/jedib0t/go-pretty/v6 v6.6.1
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mdlayher/vsock v1.2.1
@@ -18,6 +17,7 @@ require (
 )
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

@@ -26,6 +26,7 @@ const (
 	Daemon_List_FullMethodName    = "/cedana.daemon.Daemon/List"
 	Daemon_Kill_FullMethodName    = "/cedana.daemon.Daemon/Kill"
 	Daemon_Delete_FullMethodName  = "/cedana.daemon.Daemon/Delete"
+	Daemon_Attach_FullMethodName  = "/cedana.daemon.Daemon/Attach"
 )
 
 // DaemonClient is the client API for Daemon service.
@@ -41,6 +42,7 @@ type DaemonClient interface {
 	List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*ListResp, error)
 	Kill(ctx context.Context, in *KillReq, opts ...grpc.CallOption) (*KillResp, error)
 	Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error)
+	Attach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachReq, AttachResp], error)
 }
 
 type daemonClient struct {
@@ -121,6 +123,19 @@ func (c *daemonClient) Delete(ctx context.Context, in *DeleteReq, opts ...grpc.C
 	return out, nil
 }
 
+func (c *daemonClient) Attach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachReq, AttachResp], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Daemon_ServiceDesc.Streams[0], Daemon_Attach_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[AttachReq, AttachResp]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Daemon_AttachClient = grpc.BidiStreamingClient[AttachReq, AttachResp]
+
 // DaemonServer is the server API for Daemon service.
 // All implementations must embed UnimplementedDaemonServer
 // for forward compatibility.
@@ -134,6 +149,7 @@ type DaemonServer interface {
 	List(context.Context, *ListReq) (*ListResp, error)
 	Kill(context.Context, *KillReq) (*KillResp, error)
 	Delete(context.Context, *DeleteReq) (*DeleteResp, error)
+	Attach(grpc.BidiStreamingServer[AttachReq, AttachResp]) error
 	mustEmbedUnimplementedDaemonServer()
 }
 
@@ -164,6 +180,9 @@ func (UnimplementedDaemonServer) Kill(context.Context, *KillReq) (*KillResp, err
 }
 func (UnimplementedDaemonServer) Delete(context.Context, *DeleteReq) (*DeleteResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedDaemonServer) Attach(grpc.BidiStreamingServer[AttachReq, AttachResp]) error {
+	return status.Errorf(codes.Unimplemented, "method Attach not implemented")
 }
 func (UnimplementedDaemonServer) mustEmbedUnimplementedDaemonServer() {}
 func (UnimplementedDaemonServer) testEmbeddedByValue()                {}
@@ -312,6 +331,13 @@ func _Daemon_Delete_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Daemon_Attach_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DaemonServer).Attach(&grpc.GenericServerStream[AttachReq, AttachResp]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Daemon_AttachServer = grpc.BidiStreamingServer[AttachReq, AttachResp]
+
 // Daemon_ServiceDesc is the grpc.ServiceDesc for Daemon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -348,6 +374,13 @@ var Daemon_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Daemon_Delete_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Attach",
+			Handler:       _Daemon_Attach_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "daemon.proto",
 }

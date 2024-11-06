@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/creack/pty"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,9 +53,21 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 		return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 	}
 	defer logFile.Close()
-	cmd.Stdin = logFile
+	p, t, err := pty.Open()
+	cmd.Stdin = t
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+
+	// check location of p
+	log.Debug().Str("location", p.Name()).Msg("pty location")
+	log.Debug().Str("location", t.Name()).Msg("tty location")
+
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			p.Write([]byte("hello\n"))
+		}
+	}()
 
 	err = cmd.Start()
 	if err != nil {
