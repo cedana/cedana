@@ -16,8 +16,12 @@ import (
 const (
 	IMG_STREAMER_CAPTURE_SOCKET_NAME = "ced-capture.sock"
 	IMG_STREAMER_SERVE_SOCKET_NAME   = "ced-serve.sock"
+	GPU_CAPTURE_SOCKET_NAME          = "gpu-capture.sock"
+	GPU_SERVE_SOCKET_NAME            = "gpu-serve.sock"
 	O_DUMP                           = 577
 	O_RSTR                           = 578
+	O_GPU_DUMP                       = 579
+	O_GPU_RSTR                       = 580
 )
 
 var (
@@ -31,6 +35,10 @@ func socketNameForMode(mode int) string {
 		return IMG_STREAMER_CAPTURE_SOCKET_NAME
 	case O_RSTR:
 		return IMG_STREAMER_SERVE_SOCKET_NAME
+	case O_GPU_DUMP:
+		return GPU_CAPTURE_SOCKET_NAME
+	case O_GPU_RSTR:
+		return GPU_SERVE_SOCKET_NAME
 	default:
 		panic("BUG")
 	}
@@ -88,9 +96,9 @@ func _imgStreamerOpen(filename string, conn *net.UnixConn) (int, int, int, error
 	r_fd, w_fd, err := establishStreamerFilePipe()
 
 	var open_fd int
-	if imgStreamerMode == O_DUMP {
+	if imgStreamerMode == O_DUMP || imgStreamerMode == O_GPU_DUMP {
 		open_fd = r_fd
-	} else if imgStreamerMode == O_RSTR {
+	} else if imgStreamerMode == O_RSTR || imgStreamerMode == O_GPU_RSTR {
 		open_fd = w_fd
 	} else {
 		return -1, -1, -1, fmt.Errorf("Unknown imgStreamerMode %v", imgStreamerMode)

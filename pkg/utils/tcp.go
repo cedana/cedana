@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,7 +28,6 @@ const (
 )
 
 func IsUsingIoUring(fdDir string) (bool, error) {
-
 	// Read the contents of the fd directory
 	fds, err := os.ReadDir(fdDir)
 	if err != nil {
@@ -127,4 +127,23 @@ func IsReadyLoop(getTCPStates func(io.Reader) ([]uint64, error), getTCPReader fu
 	}
 
 	return isReady, nil
+}
+
+// GetFreePort returns a free random port on the host
+func GetFreePort() (int, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	addr := listener.Addr().String()
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, err
+	}
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return 0, err
+	}
+	return portInt, nil
 }
