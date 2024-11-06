@@ -30,6 +30,7 @@ import (
 
 var ERR_NO_KATA_CONTAINERS_FOUND = fmt.Errorf("No kata containers found!")
 
+// Cedana KataDump function that lives in Kata VM
 func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	var err error
 

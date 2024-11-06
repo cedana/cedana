@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,9 +20,11 @@ import (
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -46,6 +49,14 @@ const (
 type Bundle struct {
 	ContainerID string
 	Bundle      string
+}
+
+type KataService interface {
+	KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error)
+}
+
+func useKataDump(s KataService) {
+
 }
 
 // prepareDump =/= preDump.
@@ -364,6 +375,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	// containers which we do not yet support.
 	opts.External = append(opts.External, allExternalMounts[0]...)
 	opts.LeaveRunning = proto.Bool(true)
+	opts.OrphanPtsMaster = proto.Bool(true)
 
 	nfy := Notify{}
 
@@ -466,4 +478,127 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string) error {
 	stats.GPUDuration = elapsed.Milliseconds()
 
 	return nil
+}
+
+const requestTimeout = 30 * time.Second
+
+type ServiceClient struct {
+	taskService task.TaskServiceClient
+	taskConn    *grpc.ClientConn
+}
+
+func NewVSockClient(vm string, port uint32) (*ServiceClient, error) {
+	// extract cid from the process tree on host
+	cid, err := utils.ExtractCID(vm)
+	if err != nil {
+		return nil, err
+	}
+
+	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, port), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return vsock.Dial(cid, port, nil)
+	}))
+	if err != nil {
+		return nil, err
+	}
+
+	taskClient := task.NewTaskServiceClient(taskConn)
+
+	client := &ServiceClient{
+		taskService: taskClient,
+		taskConn:    taskConn,
+	}
+	return client, err
+}
+
+func (c *ServiceClient) Close() {
+	c.taskConn.Close()
+}
+
+// Does rpc over vsock to kata vm for the cedana KataDump function
+func (s *service) HostDumpKata(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	vm := args.VmName
+	port := args.Port
+	dir := args.Dir
+
+	cts, err := NewVSockClient(vm, port)
+	if err != nil {
+		log.Error().Msgf("Error creating client: %v", err)
+		return nil, status.Errorf(codes.Internal, "Error creating client: %v", err)
+	}
+	defer cts.Close()
+
+	id := xid.New().String()
+	log.Info().Msgf("no job id specified, using %s", id)
+
+	cpuDumpArgs := task.DumpArgs{
+		Dir:  "/tmp",
+		JID:  id,
+		Type: task.CRType_LOCAL,
+	}
+
+	go func() {
+		listener, err := vsock.Listen(9999, nil)
+		if err != nil {
+			log.Error().Msgf("Failed to start vsock listener: %v", err)
+			return
+		}
+		defer listener.Close()
+
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Error().Msgf("Failed to accept connection: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		file, err := os.Create(dir + "/dmp.tar")
+		if err != nil {
+			log.Error().Msgf("Failed to create file: %v", err)
+			return
+		}
+		defer file.Close()
+
+		buffer := make([]byte, 1024)
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Error().Msg("File write operation canceled due to context timeout")
+				return
+			default:
+				bytesReceived, err := conn.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					log.Error().Msgf("Error reading data: %v", err)
+					return
+				}
+
+				_, err = file.Write(buffer[:bytesReceived])
+				if err != nil {
+					log.Error().Msgf("Error writing to file: %v", err)
+					return
+				}
+			}
+		}
+	}()
+
+	resp, err := cts.KataDump(ctx, &cpuDumpArgs)
+	if err != nil {
+		st, ok := status.FromError(err)
+		if ok {
+			log.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			return nil, st.Err()
+		}
+		log.Error().Msgf("Checkpoint task failed: %v", err)
+		return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+	}
+
+	log.Info().Msgf("Response: %v", resp.Message)
+	// TODO implement the host tar dump dir location
+	return &task.HostDumpKataResp{TarDumpDir: "NOT IMPLEMENTED"}, nil
 }
