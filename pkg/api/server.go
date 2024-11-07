@@ -284,6 +284,7 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		},
 			" ")
 	}
+	// controllerPath = strings.Join([]string{"gdb", controllerPath}, " ")
 
 	gpuCmd = exec.CommandContext(s.serverCtx, controllerPath)
 	groupsUint32 := make([]uint32, len(groups))

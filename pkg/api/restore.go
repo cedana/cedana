@@ -47,34 +47,50 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
-	buf := new(bytes.Buffer)
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
-	cmd.Stderr = buf
-	var err error
-	/*stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal().Err(err)
+func (s *service) setupStreamerServe(dumpdir string, bucket string, num_pipes int32) {
+	var cmd *exec.Cmd
+	bucket = "direct-remoting"
+	if bucket != "" {
+		cmd = exec.Command("sudo", "-E", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "--bucket", bucket, "serve")
+	} else {
+		cmd = exec.Command("sudo", "-E", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	}
-	pipe := bufio.NewReader(stdout)
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	outpipe := bufio.NewReader(stdout)
+	errpipe := bufio.NewReader(stderr)
 	go func() {
 		for {
-			line, err := pipe.ReadString('\n')
+			line, err := outpipe.ReadString('\n')
 			if err != nil {
 				break
 			}
 			line = strings.TrimSuffix(line, "\n")
 			log.Info().Msg(line)
 		}
-	}()*/
+	}()
+	i := 0
+	go func() {
+		for {
+			line, err := errpipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			if i > 0 { // first stderr line is ready signal
+				log.Error().Msgf(line)
+			}
+			i += 1
+		}
+	}()
 	err = cmd.Start()
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
-	for buf.Len() == 0 {
-		log.Info().Msg("Waiting for cedana-image-streamer to setup...")
+	for i == 0 {
+		// log.Info().Msg("Waiting for cedana-image-streamer to setup...")
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
@@ -97,7 +113,8 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(tempDir, args.Stream)
+		s.setupStreamerServe(tempDir, args.Bucket, args.Stream)
+		log.Info().Msgf("returned from setupStreamerServe")
 	} else {
 		tempDir = RESTORE_TEMPDIR
 		// check if tmpdir exists
@@ -109,7 +126,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			}
 		} else {
 			// likely an old checkpoint hanging around, delete
-			err := os.RemoveAll(tempDir)
+			// err := os.RemoveAll(tempDir)
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
@@ -126,6 +143,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	}
 
 	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
+	log.Info().Msgf("returned from deserializeStateFromDir and %v",checkpointState)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
@@ -235,6 +253,8 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
+	log.Info().Msgf("elapsed = %v",elapsed)
+
 	return &tempDir, checkpointState, extraFiles, ioFiles, nil
 }
 
@@ -294,7 +314,7 @@ func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notif
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		// os.RemoveAll(dir)
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
@@ -613,6 +633,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
+		log.Info().Msgf("state.GPU = true")
 		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
 		// process is just about to be resumed. If we do GPU restore too early, then we will have to
 		// ensure it's killed on every failure. Once the process starts, then it's lifecycle is tied to it
@@ -622,6 +643,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			Callback: func() error {
 				var err error
 				gpuCmd, err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, io.Writer(gpuOutBuf))
+				log.Info().Msgf("gpuCmd = %v",gpuCmd)
 				if err != nil {
 					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
 				}
@@ -703,7 +725,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
+			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited1")
 
 			if gpuCmd != nil {
 				err = gpuCmd.Process.Kill()
@@ -730,6 +752,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 					Msg("GPU controller exited")
 
 				// Should kill process if still running since GPU controller might have exited prematurely
+				log.Info().Msgf("killing process bc GPU controller exited prematurely")
 				syscall.Kill(int(*pid), syscall.SIGKILL)
 			}()
 		}
@@ -823,6 +846,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 }
 
 func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, out io.Writer) (*exec.Cmd, error) {
+	log.Info().Msgf("entered gpuRestore")
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -834,6 +858,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
 		return nil, err
 	}
+	log.Info().Msgf("gpuCmd = %v",gpuCmd)
 
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -846,6 +871,9 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	defer gpuConn.Close()
 
 	gpuServiceConn := gpu.NewCedanaGPUClient(gpuConn)
+
+	// log.Info().Msgf("sleeping for 15s to allow gdb attach")
+	// time.Sleep(15 * time.Second)
 
 	args := gpu.RestoreRequest{
 		Directory: dir,

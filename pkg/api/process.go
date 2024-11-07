@@ -91,6 +91,7 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
 			}
+			log.Info().Msgf("did not fail to start GPU controller (manage)")
 		}
 	}
 
@@ -112,7 +113,7 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill process. already dead?")
 			}
 		case <-exitCode:
-			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited")
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("process exited2")
 		}
 		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
 		if err != nil {
@@ -490,6 +491,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 			log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to start GPU controller")
 			return 0, nil, fmt.Errorf("failed to start GPU controller: %v", err)
 		}
+		log.Info().Msgf("did not fail to start GPU controller (run) PID = %v",gpuCmd.Process.Pid)
 
 		sharedLibPath := viper.GetString("gpu_shared_lib_path")
 		if sharedLibPath == "" {
@@ -634,7 +636,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream task.Tas
 				log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
 			}
 		}
-		log.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited")
+		log.Info().Int("status", cmd.ProcessState.ExitCode()).Int32("PID", pid).Msg("process exited3")
 		code := cmd.ProcessState.ExitCode()
 		exitCode <- code
 	}()

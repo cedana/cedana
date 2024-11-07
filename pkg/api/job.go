@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
+	log.Info().Msg("entered JobDump")
 	res := &task.JobDumpResp{}
 
 	state, err := s.getState(ctx, args.JID)
@@ -18,12 +20,14 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		return nil, err
 	}
 
+	log.Info().Msgf("state.GPU = %v",state.GPU)
 	if state.GPU && s.gpuEnabled == false {
 		return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
 	}
 
 	// Check if normal process or container
 	if state.ContainerID == "" {
+		log.Info().Msgf("calling Dump")
 		dumpResp, err := s.Dump(ctx, &task.DumpArgs{
 			JID:      args.JID,
 			PID:      state.PID,

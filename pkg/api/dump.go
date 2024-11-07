@@ -3,7 +3,7 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
-	// "bufio"
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -139,7 +140,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// setup cedana-image-streamer
 	var streamCmd *exec.Cmd
 	if args.Stream > 0 {
-		streamCmd, err = s.setupStreamerCapture(dumpDirPath, args.Stream)
+		streamCmd, err = s.setupStreamerCapture(dumpDirPath, args.Bucket, args.Stream)
 		if err != nil {
 			return "", nil, err
 		}
@@ -149,6 +150,39 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	stats.PrepareDuration = elapsed.Milliseconds()
 
 	return dumpDirPath, streamCmd, nil
+}
+
+func extractTotalSize(output string) (int64, error) {
+    // Regular expression to find the "Total Size" line
+    re := regexp.MustCompile(`Total Size:\s+(\d+)`)
+    matches := re.FindStringSubmatch(output)
+    if len(matches) < 2 {
+        return 0, fmt.Errorf("total size not found in output")
+    }
+
+    // Convert the matched string to int64
+    var totalSize int64
+    _, err := fmt.Sscanf(matches[1], "%d", &totalSize)
+    if err != nil {
+        return 0, err
+    }
+
+    return totalSize, nil
+}
+
+func (s *service) getBucketSize(bucket string) (int64, error) {
+	cmd := exec.Command("aws", "s3", "ls", "--summarize", "s3://"+bucket)
+	var out bytes.Buffer
+    cmd.Stdout = &out
+
+    err := cmd.Run()
+    if err != nil {
+        log.Error().Msgf("failed to run command: %v", err)
+    }
+
+    // Extract the total size from the output
+    output := out.String()
+	return extractTotalSize(output)
 }
 
 func (s *service) getDumpdirSize(path string) (int64, error) {
@@ -224,7 +258,7 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	if streamCmd != nil {
 		streamCmd.Wait()
 		log.Info().Str("Path", compressedCheckpointPath).Msg("getting checkpoint size")
-		size, err = s.getDumpdirSize(compressedCheckpointPath)
+		size, err = s.getBucketSize("direct-remoting")
 		if err != nil {
 			log.Fatal().Err(err)
 		}
@@ -314,26 +348,48 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
-	buf := new(bytes.Buffer)
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
-	cmd.Stderr = buf
-	var err error
-	/*stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
+func (s *service) setupStreamerCapture(dumpdir string, bucket string, num_pipes int32) (*exec.Cmd, error) {
+	var cmd *exec.Cmd
+	bucket = "direct-remoting"
+	if bucket != "" {
+		log.Info().Msg("bucket != nil")
+		cmd = exec.Command("sudo", "-E", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "--bucket", bucket, "capture")
+	} else {
+		log.Info().Msg("bucket = nil")
+		cmd = exec.Command("sudo", "-E", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	}
-	pipe := bufio.NewReader(stdout)
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	outpipe := bufio.NewReader(stdout)
+	errpipe := bufio.NewReader(stderr)
 	go func() {
 		for {
-			line, err := pipe.ReadString('\n')
+			line, err := outpipe.ReadString('\n')
 			if err != nil {
 				break
 			}
 			line = strings.TrimSuffix(line, "\n")
 			log.Info().Msg(line)
 		}
-	}()*/
+	}()
+	i := 0
+	go func() {
+		for {
+			line, err := errpipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			if i > 0 { // first stderr line is ready signal
+				log.Error().Msgf(line)
+			}
+			i += 1
+		}
+	}()
+	log.Info().Msgf("Executing command: %s", cmd.String())
+	// for _, env := range os.Environ() {
+	// 	log.Info().Msgf("Env: %s", env)
+	// }
 	err = cmd.Start()
 	if err != nil {
 		log.Error().Msgf("unable to exec image streamer server: %v", err)
@@ -341,7 +397,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.C
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
-	for buf.Len() == 0 {
+	for i == 0 {
 		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -350,6 +406,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.C
 }
 
 func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs) error {
+	log.Info().Msgf("entered dump")
 	opts := s.prepareDumpOpts()
 	dumpdir, streamCmd, err := s.prepareDump(ctx, state, args, opts)
 	if err != nil {
@@ -359,6 +416,7 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	log.Info().Int32("stream", args.Stream).Msg("")
 
 	if state.GPU {
+		log.Info().Msgf("state.GPU = true")
 		err = s.gpuDump(ctx, dumpdir, args.Stream > 0)
 		if err != nil {
 			return err
@@ -492,6 +550,7 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 }
 
 func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool) error {
+	log.Info().Msgf("entered gpuDump")
 	start := time.Now()
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
