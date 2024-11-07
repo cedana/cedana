@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/cedana/cedana/internal/plugins"
@@ -22,6 +23,7 @@ func init() {
 	startCmd.PersistentFlags().BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
 	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/stdout/stderr")
 	startCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/stderr")
+	startCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full)
 
 	// Sync flags with aliases
 	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
@@ -52,13 +54,14 @@ var startCmd = &cobra.Command{
 		jid, _ := cmd.Flags().GetString(types.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(types.GpuEnabledFlag.Full)
 		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
-		// attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
+		attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.StartReq{
 			JID:        jid,
 			Log:        log,
 			GPUEnabled: gpuEnabled,
+			Attach:     attach,
 		}
 
 		ctx := context.WithValue(cmd.Context(), types.START_REQ_CONTEXT_KEY, req)
@@ -89,6 +92,20 @@ var startCmd = &cobra.Command{
 		resp, err := client.Start(cmd.Context(), req)
 		if err != nil {
 			return err
+		}
+
+		if req.Attach {
+			stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{JID: resp.JID})
+			if err != nil {
+				return err
+			}
+			stdIn, stdOut, stdErr, exitCode := utils.NewStreamIOMaster(stream)
+
+			go io.Copy(stdIn, os.Stdin)           // since stdin never closes
+			<-utils.CopyNotify(os.Stdout, stdOut) // wait to capture all out
+			<-utils.CopyNotify(os.Stderr, stdErr) // wait to capture all err
+
+			os.Exit(<-exitCode)
 		}
 
 		fmt.Printf(resp.Message)
@@ -136,10 +153,9 @@ var processStartCmd = &cobra.Command{
 ////////////////////
 
 var execCmd = &cobra.Command{
-	Use:        utils.AliasCommandUse(processStartCmd, "exec"),
-	Short:      processStartCmd.Short,
-	Long:       processStartCmd.Long,
-	Args:       processStartCmd.Args,
-	Deprecated: "Use `start process` instead",
-	RunE:       utils.AliasCommandRunE(processStartCmd),
+	Use:   utils.AliasCommandUse(processStartCmd, "exec"),
+	Short: processStartCmd.Short,
+	Long:  processStartCmd.Long,
+	Args:  processStartCmd.Args,
+	RunE:  utils.AliasCommandRunE(processStartCmd),
 }

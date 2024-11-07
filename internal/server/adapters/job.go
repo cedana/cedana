@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -19,7 +20,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
+const (
+	DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
+	LOG_ATTACHABLE             string = "[Attachable]"
+)
 
 ////////////////////////
 //// Dump Adapters /////
@@ -116,9 +120,9 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 				req.Path = job.CheckpointPath
 			}
 			if req.Criu == nil {
-				req.Criu = &daemon.CriuOpts{}
+				req.Criu = &criu.CriuOpts{}
 			}
-			req.Criu.RstSibling = true
+			req.Criu.RstSibling = proto.Bool(true)
 			req.Type = job.Type
 
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
@@ -178,6 +182,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			if jid == "" {
 				jid = namegen.GetName(1)
 			}
+			req.JID = jid
 			resp.JID = jid
 
 			// Check if the job already exists
@@ -190,6 +195,9 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				h = types.Adapted(h, GPUAdapter)
 			}
 
+			if req.Attach {
+				req.Log = LOG_ATTACHABLE
+			}
 			if req.Log == "" {
 				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, jid)
 			}

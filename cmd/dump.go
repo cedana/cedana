@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/cedana/cedana/internal/plugins"
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -30,6 +31,7 @@ func init() {
 	dumpCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	dumpCmd.PersistentFlags().BoolP(types.LeaveRunningFlag.Full, types.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "dump tcp established connections")
+	dumpCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "close tcp connections")
 
 	// Bind to config
 	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(types.DirFlag.Full))
@@ -69,16 +71,18 @@ var dumpCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := viper.GetString("storage.dump_dir")
 		leaveRunning := viper.GetBool("criu.leave_running")
-		stream, _ := cmd.Flags().GetBool("stream")
-		tcpEstablished, _ := cmd.Flags().GetBool("tcp-established")
+		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
+		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
+		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
 			Dir:    dir,
 			Stream: stream,
-			Criu: &daemon.CriuOpts{
-				LeaveRunning:   leaveRunning,
-				TcpEstablished: tcpEstablished,
+			Criu: &criu.CriuOpts{
+				LeaveRunning:   proto.Bool(leaveRunning),
+				TcpEstablished: proto.Bool(tcpEstablished),
+				TcpClose:       proto.Bool(tcpClose),
 			},
 		}
 

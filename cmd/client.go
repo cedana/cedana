@@ -117,6 +117,19 @@ func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.De
 	return resp, nil
 }
 
+func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) (daemon.Daemon_AttachClient, error) {
+	opts := getDefaultCallOptions()
+	stream, err := c.daemonClient.Attach(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Send the first start request
+	if err := stream.Send(args); err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 ///////////////////
 //    Helpers    //
 ///////////////////

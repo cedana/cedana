@@ -243,3 +243,15 @@ func WaitForPid(pid uint32) chan int {
 
 	return exitCh
 }
+
+func PidExists(pid uint32) bool {
+	p, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return false
+	}
+	_, err = p.Status()
+	if err != nil {
+		return false
+	}
+	return true
+}

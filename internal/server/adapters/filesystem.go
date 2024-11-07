@@ -10,12 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -63,11 +65,11 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 			defer f.Close()
 
 			if req.GetCriu() == nil {
-				req.Criu = &daemon.CriuOpts{}
+				req.Criu = &criu.CriuOpts{}
 			}
 
-			req.GetCriu().ImagesDir = imagesDirectory
-			req.GetCriu().ImagesDirFd = int32(f.Fd())
+			req.GetCriu().ImagesDir = proto.String(imagesDirectory)
+			req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
 			err = h(ctx, wg, resp, req)
 			if err != nil {
@@ -141,11 +143,11 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 		defer dir.Close()
 
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		req.GetCriu().ImagesDir = imagesDirectory
-		req.GetCriu().ImagesDirFd = int32(dir.Fd())
+		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
+		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
 		return h(ctx, lifetimeCtx, wg, resp, req)
 	}

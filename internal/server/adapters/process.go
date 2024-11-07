@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -19,6 +20,7 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -119,13 +121,17 @@ func DetectNetworkOptionsForDump(h types.DumpHandler) types.DumpHandler {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
-		// Set the network options
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		req.Criu.TcpEstablished = hasTCP || req.GetCriu().GetTcpEstablished()
-		req.Criu.ExtUnixSk = hasExtUnixSocket || req.GetCriu().GetExtUnixSk()
+		// Only set unless already set
+		if req.GetCriu().TcpEstablished == nil {
+			req.Criu.TcpEstablished = proto.Bool(hasTCP)
+		}
+		if req.GetCriu().ExtUnixSk == nil {
+			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
+		}
 
 		return h(ctx, wg, resp, req)
 	}
@@ -146,12 +152,14 @@ func DetectShellJobForDump(h types.DumpHandler) types.DumpHandler {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
-		// Set the shell job option
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		req.Criu.ShellJob = isShellJob || req.GetCriu().GetShellJob()
+		// Only set unless already set
+		if req.GetCriu().ShellJob == nil {
+			req.Criu.ShellJob = proto.Bool(isShellJob)
+		}
 
 		return h(ctx, wg, resp, req)
 	}
@@ -222,13 +230,17 @@ func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
-		// Set the network options
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		req.Criu.TcpEstablished = hasTCP || req.GetCriu().GetTcpEstablished()
-		req.Criu.ExtUnixSk = hasExtUnixSocket || req.GetCriu().GetExtUnixSk()
+		// Only set unless already set
+		if req.GetCriu().TcpEstablished == nil {
+			req.Criu.TcpEstablished = proto.Bool(hasTCP)
+		}
+		if req.GetCriu().ExtUnixSk == nil {
+			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
+		}
 
 		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
@@ -249,12 +261,14 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
-		// Set the shell job option
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		req.Criu.ShellJob = isShellJob || req.GetCriu().GetShellJob()
+		// Only set unless already set
+		if req.GetCriu().ShellJob == nil {
+			req.Criu.ShellJob = proto.Bool(isShellJob)
+		}
 
 		return h(ctx, lifetimeCtx, wg, resp, req)
 	}
@@ -279,11 +293,11 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 			}
 			for _, f := range info.GetOpenFiles() {
 				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
-					f.Path = strings.TrimPrefix(f.Path, "/")
+					// f.Path = strings.TrimPrefix(f.Path, "/")
 					extraFiles = append(extraFiles, restoreLog)
-					inheritFds = append(inheritFds, &daemon.InheritFd{
-						Fd:  2 + int32(len(extraFiles)),
-						Key: f.Path,
+					inheritFds = append(inheritFds, &criu.InheritFd{
+						Fd:  proto.Int32(2 + int32(len(extraFiles))),
+						Key: proto.String(f.Path),
 					})
 				} else {
 					log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
@@ -296,7 +310,7 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 
 		// Set the inherited fds
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{}
+			req.Criu = &criu.CriuOpts{}
 		}
 		req.GetCriu().InheritFd = inheritFds
 

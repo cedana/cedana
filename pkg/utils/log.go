@@ -15,7 +15,7 @@ func ReadFileToLog(ctx context.Context, logfile string) {
 	log := log.Ctx(ctx)
 	file, err := os.OpenFile(logfile, os.O_RDONLY, 0644)
 	if err != nil {
-		log.Debug().Str("file", logfile).Msg("failed to open log file")
+		log.Trace().Str("file", logfile).Msg("failed to open log file")
 		return
 	}
 	defer file.Close()
@@ -26,16 +26,16 @@ func ReadFileToLog(ctx context.Context, logfile string) {
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			log.Debug().Msg("context done")
+			log.Trace().Msg("context done")
 			return
 		default:
-			log.Debug().Msg(scanner.Text())
+			log.Trace().Msg(scanner.Text())
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Debug().Err(err).Msg("finished reading log file")
+		log.Trace().Err(err).Msg("finished reading log file")
 	} else {
-		log.Debug().Msg("finished reading log file")
+		log.Trace().Msg("finished reading log file")
 	}
 }

@@ -7,12 +7,14 @@ import (
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
@@ -61,12 +63,12 @@ func fillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 		}
 
 		if req.GetCriu() == nil {
-			req.Criu = &daemon.CriuOpts{
-				LeaveRunning: viper.GetBool("criu.leave_running"),
-			}
-		} else {
-			// Only override if set as true
-			req.Criu.LeaveRunning = viper.GetBool("criu.leave_running") || req.Criu.LeaveRunning
+			req.Criu = &criu.CriuOpts{}
+		}
+
+		// Only override if unset
+		if req.GetCriu().LeaveRunning == nil {
+			req.Criu.LeaveRunning = proto.Bool(viper.GetBool("criu.leave_running"))
 		}
 
 		return h(ctx, wg, resp, req)

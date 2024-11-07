@@ -201,7 +201,6 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 		case "post-resume":
 			err = nfy.PostResume(notify.GetPid())
 		case "orphan-pts-master":
-			fmt.Println("ORPHAN PTS MASTER")
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
 				return nil, err

@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/internal/plugins"
+	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -73,9 +74,9 @@ var restoreCmd = &cobra.Command{
 			Path:   path,
 			Stream: stream,
 			Log:    log,
-			Criu: &daemon.CriuOpts{
-				TcpEstablished: tcpEstablished,
-				TcpClose:       tcpClose,
+			Criu: &criu.CriuOpts{
+				TcpEstablished: proto.Bool(tcpEstablished),
+				TcpClose:       proto.Bool(tcpClose),
 			},
 		}
 

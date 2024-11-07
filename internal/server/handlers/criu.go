@@ -10,7 +10,6 @@ import (
 	"sync"
 	"syscall"
 
-	rpc "github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
@@ -22,7 +21,7 @@ import (
 )
 
 const (
-	CRIU_LOG_VERBOSITY_LEVEL = 1
+	CRIU_LOG_VERBOSITY_LEVEL = 4
 	CRIU_LOG_FILE            = "criu.log"
 	GHOST_LIMIT              = 10000000
 )
@@ -40,25 +39,13 @@ func CriuDump(c *criu.Criu) types.DumpHandler {
 			return status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
-		criuOpts := &rpc.CriuOpts{
-			// Fixed opts
-			LogFile:       proto.String(CRIU_LOG_FILE),
-			LogLevel:      proto.Int32(CRIU_LOG_VERBOSITY_LEVEL),
-			NotifyScripts: proto.Bool(true),
+		criuOpts := req.GetCriu()
 
-			// Variable opts
-			Pid:            proto.Int32(int32(resp.GetState().GetPID())),
-			ImagesDirFd:    proto.Int32(opts.GetImagesDirFd()),
-			LeaveRunning:   proto.Bool(opts.GetLeaveRunning()),
-			ExtUnixSk:      proto.Bool(opts.GetExtUnixSk()),
-			TcpEstablished: proto.Bool(opts.GetTcpEstablished()),
-			ShellJob:       proto.Bool(opts.GetShellJob()),
-			FileLocks:      proto.Bool(opts.GetFileLocks()),
-			EmptyNs:        proto.Uint32(opts.GetEmptyNs()),
-			AutoDedup:      proto.Bool(opts.GetAutoDedup()),
-			LazyPages:      proto.Bool(opts.GetLazyPages()),
-			External:       opts.GetExternal(),
-		}
+		// Set CRIU opts
+		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
+		criuOpts.NotifyScripts = proto.Bool(true)
+		criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 
 		log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
 
@@ -93,33 +80,14 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
-		criuOpts := &rpc.CriuOpts{
-			// Fixed opts
-			LogFile:         proto.String(CRIU_LOG_FILE),
-			LogLevel:        proto.Int32(CRIU_LOG_VERBOSITY_LEVEL),
-			LogToStderr:     proto.Bool(true),
-			NotifyScripts:   proto.Bool(true),
-			OrphanPtsMaster: proto.Bool(false),
+		criuOpts := req.GetCriu()
 
-			// Variable opts
-			RstSibling:     proto.Bool(opts.GetRstSibling()),
-			ImagesDirFd:    proto.Int32(opts.GetImagesDirFd()),
-			TcpEstablished: proto.Bool(opts.GetTcpEstablished()),
-			TcpClose:       proto.Bool(opts.GetTcpClose()),
-			ShellJob:       proto.Bool(opts.GetShellJob()),
-			FileLocks:      proto.Bool(opts.GetFileLocks()),
-			EmptyNs:        proto.Uint32(opts.GetEmptyNs()),
-			AutoDedup:      proto.Bool(opts.GetAutoDedup()),
-			LazyPages:      proto.Bool(opts.GetLazyPages()),
-			External:       opts.GetExternal(),
-		}
-
-		for _, f := range opts.GetInheritFd() {
-			criuOpts.InheritFd = append(criuOpts.InheritFd, &rpc.InheritFd{
-				Key: proto.String(f.GetKey()),
-				Fd:  proto.Int32(f.GetFd()),
-			})
-		}
+		// Set CRIU opts
+		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
+		criuOpts.LogToStderr = proto.Bool(true)
+		criuOpts.NotifyScripts = proto.Bool(true)
+		criuOpts.OrphanPtsMaster = proto.Bool(false)
 
 		log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 

@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -17,6 +19,7 @@ func init() {
 	jobCmd.AddCommand(listJobCmd)
 	jobCmd.AddCommand(killJobCmd)
 	jobCmd.AddCommand(deleteJobCmd)
+	jobCmd.AddCommand(attachJobCmd)
 
 	// Add subcommand flags
 	deleteJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "delete all jobs")
@@ -76,7 +79,7 @@ var listJobCmd = &cobra.Command{
 		writer.SetStyle(table.StyleLight)
 		writer.Style().Options.SeparateRows = false
 
-		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Last Checkpoint", "Log", "GPU"})
+		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Last Checkpoint", "Std I/O", "GPU"})
 
 		boolStr := func(b bool) string {
 			if b {
@@ -178,14 +181,47 @@ var deleteJobCmd = &cobra.Command{
 	},
 }
 
+var attachJobCmd = &cobra.Command{
+	Use:   "attach <JID>",
+	Short: "Attach stdin/out/err to a managed process/container (job)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+
+		jid := args[0]
+
+		stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{JID: jid})
+		if err != nil {
+			return err
+		}
+		stdIn, stdOut, stdErr, _ := utils.NewStreamIOMaster(stream)
+
+		go io.Copy(stdIn, os.Stdin)           // since stdin never closes
+		<-utils.CopyNotify(os.Stdout, stdOut) // wait to capture all out
+		<-utils.CopyNotify(os.Stderr, stdErr) // wait to capture all err
+
+		// os.Exit(<-exitCode)
+
+		return nil
+	},
+}
+
 ////////////////////
 ///// Aliases //////
 ////////////////////
 
 var psCmd = &cobra.Command{
-	Use:        utils.AliasCommandUse(listJobCmd, "ps"),
-	Short:      listJobCmd.Short,
-	Long:       listJobCmd.Long,
-	Deprecated: "Use `job list` instead",
-	RunE:       utils.AliasCommandRunE(listJobCmd),
+	Use:   utils.AliasCommandUse(listJobCmd, "ps"),
+	Short: listJobCmd.Short,
+	Long:  listJobCmd.Long,
+	Args:  listJobCmd.Args,
+	RunE:  utils.AliasCommandRunE(listJobCmd),
+}
+
+var attachCmd = &cobra.Command{
+	Use:   utils.AliasCommandUse(attachJobCmd, "attach"),
+	Short: attachJobCmd.Short,
+	Long:  attachJobCmd.Long,
+	Args:  attachJobCmd.Args,
+	RunE:  utils.AliasCommandRunE(attachJobCmd),
 }

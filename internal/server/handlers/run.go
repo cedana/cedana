@@ -1,6 +1,6 @@
 package handlers
 
-// Defines process handlers that ship with the server
+// Defines run (process) handlers that ship with the server
 
 import (
 	"context"
@@ -8,10 +8,9 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/creack/pty"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,7 +22,7 @@ const (
 )
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
-func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 	opts := req.GetDetails().GetProcessStart()
 	if opts == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing process start options")
@@ -48,26 +47,23 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 	cmd.Env = opts.Env
 	cmd.Dir = opts.WorkingDir
 
-	logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
-	}
-	defer logFile.Close()
-	p, t, err := pty.Open()
-	cmd.Stdin = t
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-
-	// check location of p
-	log.Debug().Str("location", p.Name()).Msg("pty location")
-	log.Debug().Str("location", t.Name()).Msg("tty location")
-
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			p.Write([]byte("hello\n"))
+	// Attach IO if requested, otherwise log to file
+	exitCode := make(chan int, 1)
+	if req.Attach {
+		stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetimeCtx, req.JID, exitCode)
+		cmd.Stdin = stdIn
+		cmd.Stdout = stdOut
+		cmd.Stderr = stdErr
+	} else {
+		logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 		}
-	}()
+		defer logFile.Close()
+		cmd.Stdin = logFile
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
 
 	err = cmd.Start()
 	if err != nil {
@@ -77,7 +73,7 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 	resp.PID = uint32(cmd.Process.Pid)
 
 	// Wait for the process to exit, send exit code
-	exited := make(chan int)
+	exited = make(chan int)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -85,7 +81,10 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 		if err != nil {
 			log.Debug().Err(err).Msg("process Wait()")
 		}
-		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("process exited")
+		code := cmd.ProcessState.ExitCode()
+		log.Debug().Int("code", code).Msg("process exited")
+		exitCode <- code
+		close(exitCode)
 		close(exited)
 	}()
 
