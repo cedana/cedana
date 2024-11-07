@@ -15,5 +15,4 @@ if [ -z "$SIGNOZ_ACCESS_TOKEN" ]; then
     exit 1
 fi
 
-/usr/local/bin/otelcol-contrib --config /usr/local/bin/otelcol-config.yaml > /dev/null 2>&1 &
 '
