@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -115,6 +117,77 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 	resp.State = state
 
 	return &resp, nil
+}
+
+type VMSnapshot interface {
+	Snapshot(destinationURL string) error
+	Restore(snapshotPath string) error
+	Pause() error
+	Resume() error
+}
+
+type SnapshotRequest struct {
+	DestinationURL string `json:"destination_url"`
+}
+
+type CloudHypervisorVM struct {
+	socketPath string
+}
+
+func (u *CloudHypervisorVM) Snapshot(destinationURL string) error {
+	data := SnapshotRequest{DestinationURL: destinationURL}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", u.socketPath)
+			},
+		},
+	}
+
+	req, err := http.NewRequest("PUT", "http://localhost/snapshot", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (u *CloudHypervisorVM) Restore(snapshotPath string) error {
+	fmt.Println("Restore function called with snapshot path:", snapshotPath)
+	return nil
+}
+
+func (u *CloudHypervisorVM) Pause() error {
+	fmt.Println("Pause function called")
+	return nil
+}
+
+// Resume implements the Resume method of the VMSnapshot interface
+func (u *CloudHypervisorVM) Resume() error {
+	// This function should handle the logic to resume the VM
+	fmt.Println("Resume function called")
+	return nil
+}
+
+// NewUnixSocketVMSnapshot creates a new UnixSocketVMSnapshot with the given socket path
+func NewUnixSocketVMSnapshot(socketPath string) *CloudHypervisorVM {
+	return &CloudHypervisorVM{socketPath: socketPath}
 }
 
 //////////////////////////

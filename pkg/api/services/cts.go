@@ -10,7 +10,6 @@ import (
 
 	"github.com/mdlayher/vsock"
 
-	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
@@ -25,6 +24,7 @@ const (
 	DEFAULT_PROCESS_DEADLINE    = 20 * time.Minute
 	DEFAULT_CONTAINERD_DEADLINE = 10 * time.Minute
 	DEFAULT_RUNC_DEADLINE       = 10 * time.Minute
+	DEFAULT_HOST                = "0.0.0.0"
 )
 
 type ServiceClient struct {
@@ -35,7 +35,7 @@ type ServiceClient struct {
 func NewClient(port uint32) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
+	address := fmt.Sprintf("%s:%d", DEFAULT_HOST, port)
 	taskConn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err

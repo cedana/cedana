@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services"
+	"github.com/cedana/cedana/pkg/api/kata"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -25,7 +25,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -560,13 +559,8 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool, jid 
 
 const requestTimeout = 30 * time.Second
 
-type ServiceClient struct {
-	taskService task.TaskServiceClient
-	taskConn    *grpc.ClientConn
-}
-
 // Does rpc over vsock to kata vm for the cedana KataDump function
-func (s *service) HostDumpKata(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
+func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -574,7 +568,7 @@ func (s *service) HostDumpKata(ctx context.Context, args *task.HostDumpKataArgs)
 	port := args.Port
 	dir := args.Dir
 
-	cts, err := services.NewVSockClient(vm, port)
+	cts, err := kata.NewVSockClient(vm, port)
 	if err != nil {
 		log.Error().Msgf("Error creating client: %v", err)
 		return nil, status.Errorf(codes.Internal, "Error creating client: %v", err)

@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cedana/cedana/pkg/api/runc"
+	"github.com/cedana/cedana/pkg/api/services"
 	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
@@ -34,7 +35,6 @@ import (
 )
 
 const (
-	DEFAULT_HOST          = "0.0.0.0"
 	PROTOCOL              = "tcp"
 	CEDANA_CONTAINER_NAME = "binary-container"
 	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
@@ -133,7 +133,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		// NOTE: `localhost` server inside kubernetes may or may not work
 		// based on firewall and network configuration, it would only work
 		// on local system, hence for serving use 0.0.0.0
-		address := fmt.Sprintf("%s:%d", DEFAULT_HOST, opts.Port)
+		address := fmt.Sprintf("%s:%d", services.DEFAULT_HOST, opts.Port)
 		listener, err = net.Listen(PROTOCOL, address)
 	}
 
@@ -214,7 +214,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 		}
 
-		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
+		log.Info().Str("host", services.DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
 
 		err := server.start(srvCtx)
 		if err != nil {
