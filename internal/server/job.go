@@ -13,30 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) Attach(stream daemon.Daemon_AttachServer) error {
-	in, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-	jid := in.GetJID()
-
-	// Check if the given job has an available IO slave
-	slave := utils.GetIOSlave(jid)
-	if slave == nil {
-		return status.Errorf(codes.NotFound, "job %s has no IO slave", jid)
-	}
-
-	err = slave.Attach(s.ctx, stream)
-	if err != nil {
-		return err
-	}
-	log.Info().Str("JID", jid).Msgf("master detached from job")
-
-	return nil
-}
+const LOG_ATTACHABLE string = "[Attachable]"
 
 func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListResp, error) {
-	jobs, err := s.db.ListJobs(ctx)
+	jobs, err := s.db.ListJobs(ctx, req.GetJIDs()...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
@@ -110,12 +90,18 @@ func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.Del
 
 // syncJobState checks if the job is still running and updates the state
 func (s *Server) syncJobState(ctx context.Context, job *daemon.Job) {
-	if job.GetProcess().GetInfo().GetIsRunning() {
-		pid := job.GetProcess().GetPID()
-		exists := utils.PidExists(pid)
-		if !exists {
+	isRunning := job.GetProcess().GetInfo().GetIsRunning()
+	pid := job.GetProcess().GetPID()
+
+	if isRunning {
+		if !utils.PidExists(pid) {
 			job.GetProcess().GetInfo().IsRunning = false
-			s.db.PutJob(ctx, job.JID, job)
 		}
+	}
+	s.db.PutJob(ctx, job.JID, job)
+
+	// Ephemeral changes, that we don't want to save to DB
+	if isRunning && utils.GetIOSlave(pid) != nil {
+		job.Log = LOG_ATTACHABLE
 	}
 }

@@ -7,6 +7,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/pkg/api/criu"
@@ -29,7 +31,9 @@ func init() {
 	restoreCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	restoreCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
-	restoreCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/stderr")
+	restoreCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
+	restoreCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
+	restoreCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full) // only one of these can be set
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
@@ -68,12 +72,14 @@ var restoreCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
 		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
+		attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:   path,
 			Stream: stream,
 			Log:    log,
+			Attach: attach,
 			Criu: &criu.CriuOpts{
 				TcpEstablished: proto.Bool(tcpEstablished),
 				TcpClose:       proto.Bool(tcpClose),
@@ -108,6 +114,26 @@ var restoreCmd = &cobra.Command{
 		resp, err := client.Restore(cmd.Context(), req)
 		if err != nil {
 			return err
+		}
+
+		if req.Attach {
+			stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+			if err != nil {
+				return err
+			}
+			stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
+
+			go io.Copy(stdIn, os.Stdin) // since stdin never closes
+			outDone := utils.CopyNotify(os.Stdout, stdOut)
+			errDone := utils.CopyNotify(os.Stderr, stdErr)
+			<-outDone // wait to capture all out
+			<-errDone // wait to capture all err
+
+			if err := <-errors; err != nil {
+				return GRPCError(err)
+			}
+
+			os.Exit(<-exitCode)
 		}
 
 		fmt.Printf(resp.Message)

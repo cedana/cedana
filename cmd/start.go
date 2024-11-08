@@ -21,9 +21,9 @@ func init() {
 	// Add common flags
 	startCmd.PersistentFlags().StringP(types.JidFlag.Full, types.JidFlag.Short, "", "job id")
 	startCmd.PersistentFlags().BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
-	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/stdout/stderr")
-	startCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/stderr")
-	startCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full)
+	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
+	startCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
+	startCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full) // only one of these can be set
 
 	// Sync flags with aliases
 	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
@@ -95,15 +95,21 @@ var startCmd = &cobra.Command{
 		}
 
 		if req.Attach {
-			stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{JID: resp.JID})
+			stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 			if err != nil {
 				return err
 			}
-			stdIn, stdOut, stdErr, exitCode := utils.NewStreamIOMaster(stream)
+			stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
 
-			go io.Copy(stdIn, os.Stdin)           // since stdin never closes
-			<-utils.CopyNotify(os.Stdout, stdOut) // wait to capture all out
-			<-utils.CopyNotify(os.Stderr, stdErr) // wait to capture all err
+			go io.Copy(stdIn, os.Stdin) // since stdin never closes
+			outDone := utils.CopyNotify(os.Stdout, stdOut)
+			errDone := utils.CopyNotify(os.Stderr, stdErr)
+			<-outDone // wait to capture all out
+			<-errDone // wait to capture all err
+
+			if err := <-errors; err != nil {
+				return GRPCError(err)
+			}
 
 			os.Exit(<-exitCode)
 		}

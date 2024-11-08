@@ -11,7 +11,7 @@ import (
 )
 
 // Log messages from a file, until the file exists
-func ReadFileToLog(ctx context.Context, logfile string) {
+func TraceFile(ctx context.Context, logfile string) {
 	log := log.Ctx(ctx)
 	file, err := os.OpenFile(logfile, os.O_RDONLY, 0644)
 	if err != nil {

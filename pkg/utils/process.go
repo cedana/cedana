@@ -113,11 +113,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		return fmt.Errorf("could not get open files: %v", err)
 	}
 	for _, f := range of {
+		var mode string
 		file, err := os.Stat(f.Path)
-		if err != nil {
-			continue
+		if err == nil {
+			mode = file.Mode().Perm().String()
 		}
-		mode := file.Mode().Perm().String()
 
 		openFiles = append(openFiles, &daemon.OpenFilesStat{
 			Fd:   f.Fd,

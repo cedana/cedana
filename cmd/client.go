@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	DEFAULT_DUMP_DEADLINE    = 5 * time.Minute
-	DEFAULT_RESTORE_DEADLINE = 5 * time.Minute
+	DEFAULT_DUMP_TIMEOUT    = 5 * time.Minute
+	DEFAULT_RESTORE_TIMEOUT = 5 * time.Minute
 )
 
 type Client struct {
@@ -51,23 +51,23 @@ func (c *Client) Close() {
 ///////////////////
 
 func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpResp, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_DEADLINE)
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
 
 func (c *Client) Restore(ctx context.Context, args *daemon.RestoreReq) (*daemon.RestoreResp, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RESTORE_DEADLINE)
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RESTORE_TIMEOUT)
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -76,7 +76,7 @@ func (c *Client) Start(ctx context.Context, args *daemon.StartReq) (*daemon.Star
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Start(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -85,7 +85,7 @@ func (c *Client) Manage(ctx context.Context, args *daemon.ManageReq) (*daemon.Ma
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -94,7 +94,7 @@ func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.List(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -103,7 +103,7 @@ func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -112,7 +112,7 @@ func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.De
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, GRPCError(err)
 	}
 	return resp, nil
 }
@@ -121,11 +121,11 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) (daemon.Dae
 	opts := getDefaultCallOptions()
 	stream, err := c.daemonClient.Attach(ctx, opts...)
 	if err != nil {
-		return nil, err
+		return nil, GRPCError(err)
 	}
 	// Send the first start request
 	if err := stream.Send(args); err != nil {
-		return nil, err
+		return nil, GRPCError(err)
 	}
 	return stream, nil
 }
@@ -142,7 +142,7 @@ func getDefaultCallOptions() []grpc.CallOption {
 	return opts
 }
 
-func handleError(err error) error {
+func GRPCError(err error) error {
 	st, ok := status.FromError(err)
 	if ok {
 		if st.Code() == codes.Unavailable {
@@ -151,5 +151,5 @@ func handleError(err error) error {
 			return fmt.Errorf("Failed: %v", st.Message())
 		}
 	}
-	return fmt.Errorf("Unknown error: %v", err)
+	return err
 }

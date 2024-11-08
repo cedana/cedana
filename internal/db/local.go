@@ -91,24 +91,22 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 		jidSet[jid] = struct{}{}
 	}
 
-	jobs := make([]*daemon.Job, len(dbJobs))
-	for i, dbJob := range dbJobs {
+	jobs := []*daemon.Job{}
+	for _, dbJob := range dbJobs {
 		if len(jids) > 0 {
 			if _, ok := jidSet[dbJob.Jid]; !ok {
 				continue
 			}
 		}
 
-		bytes := dbJob.Data
-
 		// unmarsal the bytes into a Job struct
 		job := daemon.Job{}
-		err = json.Unmarshal(bytes, &job)
+		err = json.Unmarshal(dbJob.Data, &job)
 		if err != nil {
 			return nil, err
 		}
 
-		jobs[i] = &job
+		jobs = append(jobs, &job)
 	}
 
 	return jobs, nil

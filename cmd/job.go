@@ -79,7 +79,7 @@ var listJobCmd = &cobra.Command{
 		writer.SetStyle(table.StyleLight)
 		writer.Style().Options.SeparateRows = false
 
-		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Last Checkpoint", "Std I/O", "GPU"})
+		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Std I/O", "Last Checkpoint", "GPU"})
 
 		boolStr := func(b bool) string {
 			if b {
@@ -98,8 +98,8 @@ var listJobCmd = &cobra.Command{
 				job.GetType(),
 				job.GetProcess().GetPID(),
 				state,
-				job.GetCheckpointPath(),
 				job.GetLog(),
+				job.GetCheckpointPath(),
 				boolStr(job.GetGPUEnabled()),
 			}
 			writer.AppendRow(row)
@@ -116,6 +116,8 @@ var killJobCmd = &cobra.Command{
 	Short: "Kill a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+
 		var jid string
 		req := &daemon.KillReq{}
 
@@ -130,7 +132,6 @@ var killJobCmd = &cobra.Command{
 			}
 		}
 
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
 		_, err := client.Kill(cmd.Context(), req)
 		if err != nil {
 			return err
@@ -151,6 +152,8 @@ var deleteJobCmd = &cobra.Command{
 	Short: "Delete a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+
 		var jid string
 		req := &daemon.DeleteReq{}
 
@@ -165,7 +168,6 @@ var deleteJobCmd = &cobra.Command{
 			}
 		}
 
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
 		_, err := client.Delete(cmd.Context(), req)
 		if err != nil {
 			return err
@@ -190,17 +192,31 @@ var attachJobCmd = &cobra.Command{
 
 		jid := args[0]
 
-		stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{JID: jid})
+		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
 		if err != nil {
 			return err
 		}
-		stdIn, stdOut, stdErr, _ := utils.NewStreamIOMaster(stream)
+		if len(list.Jobs) == 0 {
+			return fmt.Errorf("Job %s not found", jid)
+		}
 
-		go io.Copy(stdIn, os.Stdin)           // since stdin never closes
-		<-utils.CopyNotify(os.Stdout, stdOut) // wait to capture all out
-		<-utils.CopyNotify(os.Stderr, stdErr) // wait to capture all err
+		stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{PID: list.Jobs[0].GetDetails().GetPID()})
+		if err != nil {
+			return err
+		}
+		stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
 
-		// os.Exit(<-exitCode)
+		go io.Copy(stdIn, os.Stdin) // since stdin never closes
+		outDone := utils.CopyNotify(os.Stdout, stdOut)
+		errDone := utils.CopyNotify(os.Stderr, stdErr)
+		<-outDone // wait to capture all out
+		<-errDone // wait to capture all err
+
+		if err := <-errors; err != nil {
+			return GRPCError(err)
+		}
+
+		os.Exit(<-exitCode)
 
 		return nil
 	},
@@ -216,12 +232,4 @@ var psCmd = &cobra.Command{
 	Long:  listJobCmd.Long,
 	Args:  listJobCmd.Args,
 	RunE:  utils.AliasCommandRunE(listJobCmd),
-}
-
-var attachCmd = &cobra.Command{
-	Use:   utils.AliasCommandUse(attachJobCmd, "attach"),
-	Short: attachJobCmd.Short,
-	Long:  attachJobCmd.Long,
-	Args:  attachJobCmd.Args,
-	RunE:  utils.AliasCommandRunE(attachJobCmd),
 }

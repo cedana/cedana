@@ -27,7 +27,7 @@ const (
 	STATE_FILE                         = "process_state.json"
 	DEFAULT_RESTORE_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
 	RESTORE_LOG_FLAGS                  = os.O_CREATE | os.O_WRONLY | os.O_APPEND // no truncate
-	RESTORE_LOG_PERMS                  = 0644
+	RESTORE_LOG_PERMS                  = 0o644
 )
 
 ////////////////////////
@@ -278,35 +278,76 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 // For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
 // a log file.
 func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		ioFiles, _ := ctx.Value(types.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
+
 		if info := resp.GetState().GetInfo(); info != nil {
-			restoreLogPath := req.Log
-			if restoreLogPath == "" {
-				restoreLogPath = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
-			}
-			restoreLog, err := os.OpenFile(restoreLogPath, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
-			defer restoreLog.Close()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)
-			}
-			for _, f := range info.GetOpenFiles() {
-				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
-					// f.Path = strings.TrimPrefix(f.Path, "/")
-					extraFiles = append(extraFiles, restoreLog)
-					inheritFds = append(inheritFds, &criu.InheritFd{
-						Fd:  proto.Int32(2 + int32(len(extraFiles))),
-						Key: proto.String(f.Path),
-					})
-				} else {
-					log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
+			// In case of attach, we need to create pipes for stdin, stdout, stderr
+			if req.Attach {
+				inReader, inWriter, err := os.Pipe()
+				outReader, outWriter, err := os.Pipe()
+				errReader, errWriter, err := os.Pipe()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to create pipes for attach: %v", err)
+				}
+				ioFiles = append(ioFiles, inWriter, outReader, errReader)
+				for _, f := range info.GetOpenFiles() {
+					f.Path = strings.TrimPrefix(f.Path, "/")
+					if f.Fd == 0 {
+						extraFiles = append(extraFiles, inReader)
+						inheritFds = append(inheritFds, &criu.InheritFd{
+							Fd:  proto.Int32(2 + int32(len(extraFiles))),
+							Key: proto.String(f.Path),
+						})
+						defer inReader.Close()
+					} else if f.Fd == 1 {
+						extraFiles = append(extraFiles, outWriter)
+						inheritFds = append(inheritFds, &criu.InheritFd{
+							Fd:  proto.Int32(2 + int32(len(extraFiles))),
+							Key: proto.String(f.Path),
+						})
+						defer outWriter.Close()
+					} else if f.Fd == 2 {
+						extraFiles = append(extraFiles, errWriter)
+						inheritFds = append(inheritFds, &criu.InheritFd{
+							Fd:  proto.Int32(2 + int32(len(extraFiles))),
+							Key: proto.String(f.Path),
+						})
+						defer errWriter.Close()
+					}
+				}
+
+				// In case of log, we need to open a log file
+			} else {
+				if req.Log == "" {
+					req.Log = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
+				}
+				restoreLog, err := os.OpenFile(req.Log, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
+				defer restoreLog.Close()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)
+				}
+				for _, f := range info.GetOpenFiles() {
+					if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+						f.Path = strings.TrimPrefix(f.Path, "/")
+						extraFiles = append(extraFiles, restoreLog)
+						inheritFds = append(inheritFds, &criu.InheritFd{
+							Fd:  proto.Int32(2 + int32(len(extraFiles))),
+							Key: proto.String(f.Path),
+						})
+					} else {
+						log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
+					}
 				}
 			}
 		} else {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
+
 		ctx = context.WithValue(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
+		ctx = context.WithValue(ctx, types.RESTORE_IO_FILES_CONTEXT_KEY, ioFiles)
 
 		// Set the inherited fds
 		if req.GetCriu() == nil {

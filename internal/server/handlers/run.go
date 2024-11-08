@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"os/exec"
 	"sync"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	LOG_FILE_PERMS os.FileMode = 0644
+	LOG_FILE_PERMS os.FileMode = 0o644
 	LOG_FILE_FLAGS int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
 )
 
@@ -50,7 +51,10 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
 	if req.Attach {
-		stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetimeCtx, req.JID, exitCode)
+		// Use a random number, since we don't have PID yet
+		id := rand.Uint32()
+		stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetimeCtx, id, exitCode)
+		defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		cmd.Stdin = stdIn
 		cmd.Stdout = stdOut
 		cmd.Stderr = stdErr

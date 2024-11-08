@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
@@ -30,6 +30,8 @@ type Server struct {
 	wg  *sync.WaitGroup // for waiting for all background tasks to finish
 	ctx context.Context // context alive for the duration of the server
 
+	machine Machine
+
 	daemon.UnimplementedDaemonServer
 }
 
@@ -37,6 +39,12 @@ type ServeOpts struct {
 	UseVSOCK bool
 	Port     uint32
 	Host     string
+}
+
+type Machine struct {
+	ID       string
+	MACAddr  string
+	Hostname string
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -58,25 +66,30 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
-	criu := criu.MakeCriu()
-
 	db, err := db.NewLocalDB(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	criu := criu.MakeCriu()
 	// Set custom path if specified in config
 	if custom_path := viper.GetString("criu.binary_path"); custom_path != "" {
 		criu.SetCriuPath(custom_path)
 	}
+
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(loggingStreamInterceptor()),
-			grpc.UnaryInterceptor(loggingUnaryInterceptor(*opts, machineID, macAddr, hostname)),
+			grpc.StreamInterceptor(logger.StreamLogger()),
+			grpc.UnaryInterceptor(logger.UnaryLogger()),
 		),
 		criu: criu,
 		db:   db,
 		wg:   &sync.WaitGroup{},
+		machine: Machine{
+			ID:       machineID,
+			MACAddr:  macAddr,
+			Hostname: hostname,
+		},
 	}
 
 	daemon.RegisterDaemonServer(server.grpcServer, server)
@@ -130,47 +143,4 @@ func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
 	log.Debug().Msg("stopped server gracefully")
-}
-
-func loggingStreamInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx := log.With().Str("context", "daemon").Logger().WithContext(ss.Context())
-		log := log.Ctx(ctx)
-		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
-
-		err := handler(srv, ss)
-
-		if err != nil {
-			log.Error().Str("method", info.FullMethod).Err(err).Msg("gRPC stream failed")
-		} else {
-			log.Debug().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
-		}
-
-		return err
-	}
-}
-
-// TODO NR - this needs a deep copy to properly redact
-func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr string, hostname string) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx = log.With().Str("context", "daemon").Logger().WithContext(ctx)
-		log := log.Ctx(ctx)
-
-		// log the GetContainerInfo method to trace
-		if strings.Contains(info.FullMethod, "GetContainerInfo") {
-			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
-		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
-		}
-
-		resp, err := handler(ctx, req)
-
-		if err != nil {
-			log.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
-		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
-		}
-
-		return resp, err
-	}
 }

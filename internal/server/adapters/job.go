@@ -20,10 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
-	LOG_ATTACHABLE             string = "[Attachable]"
-)
+const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 
 ////////////////////////
 //// Dump Adapters /////
@@ -195,9 +192,6 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				h = types.Adapted(h, GPUAdapter)
 			}
 
-			if req.Attach {
-				req.Log = LOG_ATTACHABLE
-			}
 			if req.Log == "" {
 				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, jid)
 			}
