@@ -130,11 +130,6 @@ func CriuRestore(c *criu.Criu) types.RestoreHandler {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if req.Attach {
-					defer inWriter.Close()
-					defer outReader.Close()
-					defer errReader.Close()
-				}
 				var status syscall.WaitStatus
 				_, err := syscall.Wait4(int(resp.PID), &status, 0, nil)
 				if err != nil {

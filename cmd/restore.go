@@ -7,8 +7,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/pkg/api/criu"
@@ -117,23 +115,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		if req.Attach {
-			stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-			if err != nil {
-				return err
-			}
-			stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
-
-			go io.Copy(stdIn, os.Stdin) // since stdin never closes
-			outDone := utils.CopyNotify(os.Stdout, stdOut)
-			errDone := utils.CopyNotify(os.Stderr, stdErr)
-			<-outDone // wait to capture all out
-			<-errDone // wait to capture all err
-
-			if err := <-errors; err != nil {
-				return GRPCError(err)
-			}
-
-			os.Exit(<-exitCode)
+			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
 		fmt.Printf(resp.Message)

@@ -3,14 +3,15 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -56,7 +57,7 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -67,7 +68,7 @@ func (c *Client) Restore(ctx context.Context, args *daemon.RestoreReq) (*daemon.
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -76,7 +77,7 @@ func (c *Client) Start(ctx context.Context, args *daemon.StartReq) (*daemon.Star
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Start(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -85,7 +86,7 @@ func (c *Client) Manage(ctx context.Context, args *daemon.ManageReq) (*daemon.Ma
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -94,7 +95,7 @@ func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.List(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -103,7 +104,7 @@ func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
@@ -112,22 +113,39 @@ func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.De
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return resp, nil
 }
 
-func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) (daemon.Daemon_AttachClient, error) {
+// Attach attaches to a managed process/container. Exits the program
+// with the exit code of the process.
+func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	opts := getDefaultCallOptions()
 	stream, err := c.daemonClient.Attach(ctx, opts...)
 	if err != nil {
-		return nil, GRPCError(err)
+		return utils.GRPCError(err)
 	}
 	// Send the first start request
 	if err := stream.Send(args); err != nil {
-		return nil, GRPCError(err)
+		return utils.GRPCError(err)
 	}
-	return stream, nil
+
+	stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
+
+	go io.Copy(stdIn, os.Stdin) // since stdin never closes
+	outDone := utils.CopyNotify(os.Stdout, stdOut)
+	errDone := utils.CopyNotify(os.Stderr, stdErr)
+	<-outDone // wait to capture all out
+	<-errDone // wait to capture all err
+
+	if err := <-errors; err != nil {
+		return utils.GRPCError(err)
+	}
+
+	os.Exit(<-exitCode)
+
+	return nil
 }
 
 ///////////////////
@@ -140,16 +158,4 @@ func getDefaultCallOptions() []grpc.CallOption {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts
-}
-
-func GRPCError(err error) error {
-	st, ok := status.FromError(err)
-	if ok {
-		if st.Code() == codes.Unavailable {
-			return fmt.Errorf("Daemon unavailable. Is it running?")
-		} else {
-			return fmt.Errorf("Failed: %v", st.Message())
-		}
-	}
-	return err
 }

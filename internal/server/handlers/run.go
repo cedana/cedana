@@ -64,7 +64,7 @@ func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, r
 			return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 		}
 		defer logFile.Close()
-		cmd.Stdin = logFile
+		cmd.Stdin = nil // /dev/null
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
 	}

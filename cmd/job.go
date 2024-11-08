@@ -3,8 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -200,25 +198,9 @@ var attachJobCmd = &cobra.Command{
 			return fmt.Errorf("Job %s not found", jid)
 		}
 
-		stream, err := client.Attach(cmd.Context(), &daemon.AttachReq{PID: list.Jobs[0].GetDetails().GetPID()})
-		if err != nil {
-			return err
-		}
-		stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
+		pid := list.Jobs[0].GetDetails().GetPID()
 
-		go io.Copy(stdIn, os.Stdin) // since stdin never closes
-		outDone := utils.CopyNotify(os.Stdout, stdOut)
-		errDone := utils.CopyNotify(os.Stderr, stdErr)
-		<-outDone // wait to capture all out
-		<-errDone // wait to capture all err
-
-		if err := <-errors; err != nil {
-			return GRPCError(err)
-		}
-
-		os.Exit(<-exitCode)
-
-		return nil
+		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},
 }
 

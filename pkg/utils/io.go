@@ -20,7 +20,7 @@ const (
 	channelBufLen      = 32
 	readFromBufLen     = 1024
 	streamDoneExitCode = 254
-	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
+	maxPendingMasters  = 1 // UNTESTED: DO NOT CHANGE
 )
 
 // Map of PID to Slave
@@ -143,41 +143,45 @@ func NewStreamIOSlave(ctx context.Context, pid uint32, exitCode chan int) (stdIn
 	// Send out/err to master
 	go func() {
 		defer DeleteIOSlave(&slave.PID)
-		var master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]
+
+		master := <-slave.master // wait for first master before doing anything
+	exit:
 		for {
-			select {
-			case <-ctx.Done():
-				close(in) // BUG: causes race with in's senders in attach
-				return
-			case master = <-slave.master: // wait for a master to attach
-				{
-				stream:
-					for {
-						select {
-						case <-master.Context().Done():
-							break stream // and wait for new master
-						case b, ok := <-out:
-							if !ok {
-								out = nil
-								break
-							}
-							master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stdout{Stdout: b}})
-						case b, ok := <-err:
-							if !ok {
-								err = nil
-								break
-							}
-							master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stderr{Stderr: b}})
-						}
-						if out == nil && err == nil { // exit once we've sent all out/err
-							close(in) // BUG: causes race with in's senders in attach
-							master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}})
-							return
-						}
+		stream:
+			for {
+				select {
+				case <-master.Context().Done():
+					break stream // and wait for new master
+				case b, ok := <-out:
+					if !ok {
+						out = nil
+						break
 					}
+					master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stdout{Stdout: b}})
+				case b, ok := <-err:
+					if !ok {
+						err = nil
+						break
+					}
+					master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stderr{Stderr: b}})
+				}
+				if out == nil && err == nil { // exit once we've sent all out/err
+					break exit
 				}
 			}
+			// wait for a new master while discarding out/err
+			select {
+			case <-ctx.Done():
+				break exit
+			case master = <-slave.master: // wait for a master to attach
+        break
+			case <-out: // discard out
+			case <-err: // discard err
+			}
 		}
+
+		close(in) // BUG: causes race with in's senders in attach
+		master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}})
 	}()
 
 	stdIn = &StreamIOReader{bytes: in}

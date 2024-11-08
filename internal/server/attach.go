@@ -34,6 +34,9 @@ func (s *Server) Attach(stream daemon.Daemon_AttachServer) error {
 
 	err = slave.Attach(lifetime, stream)
 	if err != nil {
+		if err == context.DeadlineExceeded {
+			return status.Errorf(codes.DeadlineExceeded, "likely another master attached")
+		}
 		return err
 	}
 	log.Info().Uint32("PID", pid).Msgf("master detached from process")

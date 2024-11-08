@@ -41,7 +41,7 @@ func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 		if pid == 0 {
 			return status.Errorf(codes.InvalidArgument, "missing PID")
 		}
-		exists, err := process.PidExists(int32(pid))
+		exists, err := process.PidExistsWithContext(ctx, int32(pid))
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed to check process: %v", err)
 		}
@@ -173,7 +173,7 @@ func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.NotFound, "missing PID. Ensure an adapter sets this PID in response before.")
 		}
 
-		err := utils.CloseCommonFds(int32(os.Getpid()), int32(pid))
+		err := utils.CloseCommonFds(ctx, int32(os.Getpid()), int32(pid))
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
@@ -188,7 +188,7 @@ func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 
 // Fill process state in the restore response
 func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
@@ -204,7 +204,16 @@ func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 
 		resp.State = state
 
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		exited, err = h(ctx, lifetimeCtx, wg, resp, req)
+		if err != nil {
+			return exited, err
+		}
+
+		// Try to update the process state with the latest information,
+		// Only possible if process is still running, otherwise ignore.
+		_ = utils.FillProcessState(ctx, state.PID, state)
+
+		return exited, err
 	}
 }
 
@@ -330,7 +339,7 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 					return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)
 				}
 				for _, f := range info.GetOpenFiles() {
-					if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+					if f.Fd == 1 || f.Fd == 2 {
 						f.Path = strings.TrimPrefix(f.Path, "/")
 						extraFiles = append(extraFiles, restoreLog)
 						inheritFds = append(inheritFds, &criu.InheritFd{

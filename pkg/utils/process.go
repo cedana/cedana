@@ -44,23 +44,23 @@ func HasActiveTCPConnections(pid int32) (bool, error) {
 }
 
 // CloseCommonFdscloses any common FDs between the parent and child process
-func CloseCommonFds(parentPID, childPID int32) error {
-	parent, err := process.NewProcess(parentPID)
+func CloseCommonFds(ctx context.Context, parentPID, childPID int32) error {
+	parent, err := process.NewProcessWithContext(ctx, parentPID)
 	if err != nil {
 		return err
 	}
 
-	child, err := process.NewProcess(childPID)
+	child, err := process.NewProcessWithContext(ctx, childPID)
 	if err != nil {
 		return err
 	}
 
-	parentFds, err := parent.OpenFiles()
+	parentFds, err := parent.OpenFilesWithContext(ctx)
 	if err != nil {
 		return err
 	}
 
-	childFds, err := child.OpenFiles()
+	childFds, err := child.OpenFilesWithContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	state.Groups = groups
 
 	var openFiles []*daemon.OpenFilesStat
-	of, err := p.OpenFiles()
+	of, err := p.OpenFilesWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get open files: %v", err)
 	}
@@ -128,7 +128,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	// used for network barriers (TODO: NR)
 	var openConnections []*daemon.ConnectionStat
-	conns, err := p.Connections()
+	conns, err := p.ConnectionsWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get connections: %v", err)
 	}
@@ -153,8 +153,8 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		})
 	}
 
-	memoryUsed, _ := p.MemoryPercent()
-	isRunning, err := p.IsRunning()
+	memoryUsed, _ := p.MemoryPercentWithContext(ctx)
+	isRunning, err := p.IsRunningWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get process status: %v", err)
 	}
@@ -165,15 +165,15 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	// this is the status as returned by gopsutil.
 	// ideally we want more than this, or some parsing to happen from this end
-	proccessStatus, _ := p.Status()
+	proccessStatus, _ := p.StatusWithContext(ctx)
 
 	// we need the cwd to ensure that it exists on the other side of the restore.
 	// if it doesn't - we inheritFd it?
-	cwd, _ := p.Cwd()
+	cwd, _ := p.CwdWithContext(ctx)
 
 	// system information
-	cpuinfo, err := cpu.Info()
-	vcpus, err := cpu.Counts(true)
+	cpuinfo, err := cpu.InfoWithContext(ctx)
+	vcpus, err := cpu.CountsWithContext(ctx, true)
 	if err == nil {
 		state.CPUInfo = &daemon.CPUInfo{
 			Count:      int32(vcpus),
@@ -184,7 +184,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		}
 	}
 
-	mem, err := mem.VirtualMemory()
+	mem, err := mem.VirtualMemoryWithContext(ctx)
 	if err == nil {
 		state.MemoryInfo = &daemon.MemoryInfo{
 			Total:     mem.Total,
@@ -193,7 +193,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		}
 	}
 
-	host, err := host.Info()
+	host, err := host.InfoWithContext(ctx)
 	if err == nil {
 		state.HostInfo = &daemon.HostInfo{
 			HostID:               host.HostID,

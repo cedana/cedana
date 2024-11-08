@@ -130,21 +130,12 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 			}
 
 			job.Log = req.Log
+			job.Process = resp.State
 
-			// Get process state if only if possible, as the process
-			// may have already exited by the time we get here.
-			state := &daemon.ProcessState{}
-			err = utils.FillProcessState(ctx, resp.PID, state)
-			if err == nil {
-				job.Process = state
-
-				// Save job details
-				err = db.PutJob(ctx, jid, job)
-				if err != nil {
-					cancel()
-					return nil, status.Errorf(codes.Internal, "failed to save job details: %v", err)
-				}
-
+			err = db.PutJob(ctx, jid, job)
+			if err != nil {
+				cancel()
+				return nil, status.Errorf(codes.Internal, "failed to save job details: %v", err)
 			}
 
 			// Wait for process exit to update job
