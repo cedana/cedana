@@ -162,7 +162,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return fmt.Errorf("error snapshotting vm: %d", resp.StatusCode)
 	}
 
 	return nil

@@ -52,7 +52,8 @@ type service struct {
 	machineID       string
 	cadvisorManager manager.Manager
 
-	jobService *jobservice.JobService
+	jobService    *jobservice.JobService
+	vmSnapshotter VMSnapshot
 
 	task.UnimplementedTaskServiceServer
 }
@@ -70,9 +71,10 @@ type ServeOpts struct {
 	Port              uint32
 	MetricsEnabled    bool
 	JobServiceEnabled bool
+	VMSocketPath      string
 }
 
-func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
+func NewServer(ctx context.Context, opts *ServeOpts, vmSnapshotter VMSnapshot) (*Server, error) {
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -120,6 +122,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		machineID:       machineID,
 		cadvisorManager: nil,
 		jobService:      js,
+		vmSnapshotter:   vmSnapshotter,
 	}
 
 	task.RegisterTaskServiceServer(server.grpcServer, service)
@@ -171,7 +174,10 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(srvCtx, opts)
+	// For now we only support CloudHypervisor but we should add to the snappshotter more VMs
+	// and choose them at the snapshot function level
+	vmSnapshotter := CloudHypervisorVM{opts.VMSocketPath}
+	server, err := NewServer(srvCtx, opts, &vmSnapshotter)
 	if err != nil {
 		return err
 	}
