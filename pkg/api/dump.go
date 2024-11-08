@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/api/services/gpu"
 	"github.com/cedana/cedana/pkg/api/services/rpc"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -565,33 +565,6 @@ type ServiceClient struct {
 	taskConn    *grpc.ClientConn
 }
 
-func NewVSockClient(vm string, port uint32) (*ServiceClient, error) {
-	// extract cid from the process tree on host
-	cid, err := utils.ExtractCID(vm)
-	if err != nil {
-		return nil, err
-	}
-
-	taskConn, err := grpc.Dial(fmt.Sprintf("vsock://%d:%d", cid, port), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return vsock.Dial(cid, port, nil)
-	}))
-	if err != nil {
-		return nil, err
-	}
-
-	taskClient := task.NewTaskServiceClient(taskConn)
-
-	client := &ServiceClient{
-		taskService: taskClient,
-		taskConn:    taskConn,
-	}
-	return client, err
-}
-
-func (c *ServiceClient) Close() {
-	c.taskConn.Close()
-}
-
 // Does rpc over vsock to kata vm for the cedana KataDump function
 func (s *service) HostDumpKata(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -601,7 +574,7 @@ func (s *service) HostDumpKata(ctx context.Context, args *task.HostDumpKataArgs)
 	port := args.Port
 	dir := args.Dir
 
-	cts, err := NewVSockClient(vm, port)
+	cts, err := services.NewVSockClient(vm, port)
 	if err != nil {
 		log.Error().Msgf("Error creating client: %v", err)
 		return nil, status.Errorf(codes.Internal, "Error creating client: %v", err)
