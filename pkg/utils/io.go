@@ -20,7 +20,7 @@ const (
 	channelBufLen      = 32
 	readFromBufLen     = 1024
 	streamDoneExitCode = 254
-	maxPendingMasters  = 1 // UNTESTED: DO NOT CHANGE
+	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
 )
 
 // Map of PID to Slave
