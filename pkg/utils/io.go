@@ -170,13 +170,22 @@ func NewStreamIOSlave(ctx context.Context, pid uint32, exitCode chan int) (stdIn
 				}
 			}
 			// wait for a new master while discarding out/err
-			select {
-			case <-ctx.Done():
-				break exit
-			case master = <-slave.master: // wait for a master to attach
-        break
-			case <-out: // discard out
-			case <-err: // discard err
+		wait:
+			for {
+				select {
+				case <-ctx.Done():
+					break exit
+				case master = <-slave.master: // wait for a master to attach
+					break wait
+				case _, ok := <-out: // discard out
+					if !ok {
+						break exit
+					}
+				case _, ok := <-err: // discard err
+					if !ok {
+						break exit
+					}
+				}
 			}
 		}
 
