@@ -3,11 +3,11 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -31,9 +31,9 @@ var startDaemonCmd = &cobra.Command{
 
 		var err error
 
-		useVSOCK := viper.GetBool("options.use_vsock")
-		port := viper.GetUint32("options.port")
-		host := viper.GetString("options.host")
+		useVSOCK := config.Get(config.USE_VSOCK)
+		port := config.Get(config.PORT)
+		host := config.Get(config.HOST)
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 

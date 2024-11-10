@@ -36,9 +36,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolP(types.UseVSOCKFlag.Full, types.UseVSOCKFlag.Short, false, "use vsock for communication")
 
 	// Bind to config
-	viper.BindPFlag("options.port", rootCmd.PersistentFlags().Lookup(types.PortFlag.Full))
-	viper.BindPFlag("options.host", rootCmd.PersistentFlags().Lookup(types.HostFlag.Full))
-	viper.BindPFlag("options.use_vsock", rootCmd.PersistentFlags().Lookup(types.UseVSOCKFlag.Full))
+	viper.BindPFlag(config.PORT.Key, rootCmd.PersistentFlags().Lookup(types.PortFlag.Full))
+	viper.BindPFlag(config.PORT.Key, rootCmd.PersistentFlags().Lookup(types.HostFlag.Full))
+	viper.BindPFlag(config.USE_VSOCK.Key, rootCmd.PersistentFlags().Lookup(types.UseVSOCKFlag.Full))
 }
 
 var rootCmd = &cobra.Command{

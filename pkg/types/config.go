@@ -12,9 +12,10 @@ type (
 		CLI        CLI        `key:"cli" json:"cli" mapstructure:"cli"`
 	}
 	Options struct {
-		Port     uint32 `key:"port" json:"port" mapstructure:"port"`
-		Host     string `key:"host" json:"host" mapstructure:"host"`
-		UseVSOCK bool   `key:"useVSOCK" json:"use_vsock" mapstructure:"use_vsock"`
+		Port      uint32 `key:"port" json:"port" mapstructure:"port"`
+		Host      string `key:"host" json:"host" mapstructure:"host"`
+		UseVSOCK  bool   `key:"useVSOCK" json:"use_vsock" mapstructure:"use_vsock"`
+		PluginDir string `key:"pluginDir" json:"plugin_dir" mapstructure:"plugin_dir"`
 	}
 	Connection struct {
 		// for cedana managed systems

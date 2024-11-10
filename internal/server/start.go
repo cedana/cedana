@@ -26,7 +26,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 		validateStartRequest,
 	}
 
-	handler := types.Adapted(typeSpecificHandler(), middleware...)
+	handler := types.Adapted(pluginHandler(), middleware...)
 
 	resp := &daemon.StartResp{}
 
@@ -75,30 +75,24 @@ func validateStartRequest(h types.StartHandler) types.StartHandler {
 //////////////////////////
 
 // Handler that returns the type-specific handler for the job
-func typeSpecificHandler() types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func pluginHandler() types.StartHandler {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 		t := req.GetType()
 		var handler types.StartHandler
 		switch t {
-		case "job":
-			return nil, status.Errorf(codes.InvalidArgument, "please first use JobStartAdapter")
 		case "process":
 			handler = handlers.Run
 		default:
-			// Get plugin-specific handler
-			if p, exists := plugins.LoadedPlugins[t]; exists {
-				defer plugins.RecoverFromPanic(t)
-				if pluginHandlerUntyped, err := p.Lookup(plugins.FEATURE_START_HANDLER); err == nil {
-					pluginHandler, ok := pluginHandlerUntyped.(types.StartHandler)
-					if !ok {
-						return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid start handler: %v", t, err)
-					}
-					handler = pluginHandler
-				} else {
-					return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid start handler: %v", t, err)
-				}
-			} else {
-				return nil, status.Errorf(codes.InvalidArgument, "unknown type: %s. maybe a missing plugin?", t)
+			// Use plugin-specific handler
+			err = plugins.IfFeatureAvailable(plugins.FEATURE_START_HANDLER, func(
+				name string,
+				pluginHandler types.StartHandler,
+			) error {
+				handler = pluginHandler
+				return nil
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
 		return handler(ctx, lifetimeCtx, wg, resp, req)

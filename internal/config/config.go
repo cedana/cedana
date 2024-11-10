@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 )
 
@@ -25,49 +25,9 @@ func init() {
 	bindEnvVars()
 }
 
-// Set defaults that are used when no value is found in config/env vars
-func setDefaults() {
-	viper.SetDefault("options.port", 8080)
-	viper.SetDefault("options.host", "0.0.0.0")
-	viper.SetDefault("options.use_vsock", false)
-
-	viper.SetDefault("storage.remote", false)
-	viper.SetDefault("storage.dump_dir", "/tmp")
-	viper.SetDefault("storage.compression", "none")
-
-	viper.SetDefault("connection.cedana_url", "unset")
-	viper.SetDefault("connection.cedana_auth_token", "unset")
-
-	viper.SetDefault("cli.wait_for_ready", false)
-
-	viper.SetDefault("profiling.enabled", false)
-	viper.SetDefault("profiling.otel.port", 7777)
-
-	viper.SetDefault("criu.leave_running", false)
-}
-
-// Add bindings for env vars so env vars can be used as backup
-// when a value is not found in config when using viper.Get~()
-func bindEnvVars() {
-	// Related to the config file
-	viper.BindEnv("options.port", "CEDANA_OPTIONS_PORT")
-	viper.BindEnv("options.host", "CEDANA_OPTIONS_HOST")
-	viper.BindEnv("options.use_vsock", "CEDANA_OPTIONS_USE_VSOCK")
-
-	viper.BindEnv("storage.remote", "CEDANA_REMOTE")
-	viper.BindEnv("storage.dump_dir", "CEDANA_STORAGE_DUMP_DIR")
-	viper.BindEnv("storage.compression", "CEDANA_STORAGE_COMPRESSION")
-
-	viper.BindEnv("connection.cedana_url", "CEDANA_URL")
-	viper.BindEnv("connection.cedana_auth_token", "CEDANA_AUTH_TOKEN")
-
-	viper.BindEnv("cli.wait_for_ready", "CEDANA_CLI_WAIT_FOR_READY")
-
-	viper.BindEnv("profiling.enabled", "CEDANA_PROFILING_ENABLED")
-	viper.BindEnv("profiling.otel.port", "CEDANA_PROFILING_OTEL_PORT")
-
-	viper.BindEnv("criu.leave_running", "CEDANA_CRIU_LEAVE_RUNNING")
-	viper.BindEnv("criu.binary_path", "CEDANA_CRIU_BINARY_PATH")
+// Get a typed config value
+func Get[T any](item ConfigItem[T]) T {
+	return item.Get(item.Key)
 }
 
 type InitArgs struct {
@@ -125,7 +85,7 @@ func Init(args InitArgs) error {
 	return err
 }
 
-func Get() (*types.Config, error) {
+func GetConfig() (*types.Config, error) {
 	var config types.Config
 	err := viper.Unmarshal(&config)
 	if err != nil {

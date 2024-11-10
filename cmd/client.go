@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -154,7 +154,7 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 
 func getDefaultCallOptions() []grpc.CallOption {
 	opts := []grpc.CallOption{}
-	if viper.GetBool("cli.wait_for_ready") {
+	if config.Get(config.CLI_WAIT_FOR_READY) {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts

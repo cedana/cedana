@@ -19,14 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Daemon_Dump_FullMethodName    = "/cedana.daemon.Daemon/Dump"
-	Daemon_Restore_FullMethodName = "/cedana.daemon.Daemon/Restore"
-	Daemon_Start_FullMethodName   = "/cedana.daemon.Daemon/Start"
-	Daemon_Manage_FullMethodName  = "/cedana.daemon.Daemon/Manage"
-	Daemon_List_FullMethodName    = "/cedana.daemon.Daemon/List"
-	Daemon_Kill_FullMethodName    = "/cedana.daemon.Daemon/Kill"
-	Daemon_Delete_FullMethodName  = "/cedana.daemon.Daemon/Delete"
-	Daemon_Attach_FullMethodName  = "/cedana.daemon.Daemon/Attach"
+	Daemon_Dump_FullMethodName          = "/cedana.daemon.Daemon/Dump"
+	Daemon_Restore_FullMethodName       = "/cedana.daemon.Daemon/Restore"
+	Daemon_Start_FullMethodName         = "/cedana.daemon.Daemon/Start"
+	Daemon_Manage_FullMethodName        = "/cedana.daemon.Daemon/Manage"
+	Daemon_List_FullMethodName          = "/cedana.daemon.Daemon/List"
+	Daemon_Kill_FullMethodName          = "/cedana.daemon.Daemon/Kill"
+	Daemon_Delete_FullMethodName        = "/cedana.daemon.Daemon/Delete"
+	Daemon_Attach_FullMethodName        = "/cedana.daemon.Daemon/Attach"
+	Daemon_ReloadPlugins_FullMethodName = "/cedana.daemon.Daemon/ReloadPlugins"
 )
 
 // DaemonClient is the client API for Daemon service.
@@ -43,6 +44,8 @@ type DaemonClient interface {
 	Kill(ctx context.Context, in *KillReq, opts ...grpc.CallOption) (*KillResp, error)
 	Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error)
 	Attach(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AttachReq, AttachResp], error)
+	// Plugins
+	ReloadPlugins(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type daemonClient struct {
@@ -136,6 +139,16 @@ func (c *daemonClient) Attach(ctx context.Context, opts ...grpc.CallOption) (grp
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Daemon_AttachClient = grpc.BidiStreamingClient[AttachReq, AttachResp]
 
+func (c *daemonClient) ReloadPlugins(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Daemon_ReloadPlugins_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServer is the server API for Daemon service.
 // All implementations must embed UnimplementedDaemonServer
 // for forward compatibility.
@@ -150,6 +163,8 @@ type DaemonServer interface {
 	Kill(context.Context, *KillReq) (*KillResp, error)
 	Delete(context.Context, *DeleteReq) (*DeleteResp, error)
 	Attach(grpc.BidiStreamingServer[AttachReq, AttachResp]) error
+	// Plugins
+	ReloadPlugins(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedDaemonServer()
 }
 
@@ -183,6 +198,9 @@ func (UnimplementedDaemonServer) Delete(context.Context, *DeleteReq) (*DeleteRes
 }
 func (UnimplementedDaemonServer) Attach(grpc.BidiStreamingServer[AttachReq, AttachResp]) error {
 	return status.Errorf(codes.Unimplemented, "method Attach not implemented")
+}
+func (UnimplementedDaemonServer) ReloadPlugins(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadPlugins not implemented")
 }
 func (UnimplementedDaemonServer) mustEmbedUnimplementedDaemonServer() {}
 func (UnimplementedDaemonServer) testEmbeddedByValue()                {}
@@ -338,6 +356,24 @@ func _Daemon_Attach_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Daemon_AttachServer = grpc.BidiStreamingServer[AttachReq, AttachResp]
 
+func _Daemon_ReloadPlugins_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServer).ReloadPlugins(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Daemon_ReloadPlugins_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServer).ReloadPlugins(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Daemon_ServiceDesc is the grpc.ServiceDesc for Daemon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -372,6 +408,10 @@ var Daemon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _Daemon_Delete_Handler,
+		},
+		{
+			MethodName: "ReloadPlugins",
+			Handler:    _Daemon_ReloadPlugins_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -184,3 +184,15 @@ func ListFilesInDir(dir string) ([]string, error) {
 
 	return files, err
 }
+
+func Kibibytes(bytes int64) int64 {
+	return bytes / 1024
+}
+
+func Mebibytes(bytes int64) int64 {
+	return bytes / 1024 / 1024
+}
+
+func Gibibytes(bytes int64) int64 {
+	return bytes / 1024 / 1024 / 1024
+}

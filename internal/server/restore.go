@@ -25,8 +25,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validateRestoreRequest,
 		adapters.PrepareRestoreDir, // auto-detects compression
 
-		// Insert type-specific middleware, from plugins or built-in
-		insertTypeSpecificRestoreMiddleware,
+		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
 		adapters.FillProcessStateForRestore,
@@ -81,30 +80,24 @@ func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
 }
 
 // Adapter that inserts new adapters based on the type of restore request
-func insertTypeSpecificRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func pluginRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
+	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := []types.Adapter[types.RestoreHandler]{}
 		t := req.GetType()
 		switch t {
-		case "job":
-			return nil, status.Error(codes.InvalidArgument, "please first use JobRestoreAdapter")
 		case "process":
 			// Nothing to do, yet
 		default:
 			// Insert plugin-specific middleware
-			if p, exists := plugins.LoadedPlugins[t]; exists {
-				defer plugins.RecoverFromPanic(t)
-				if pluginMiddlewareUntyped, err := p.Lookup(plugins.FEATURE_DUMP_MIDDLEWARE); err == nil {
-					pluginMiddleware, ok := pluginMiddlewareUntyped.([]types.Adapter[types.RestoreHandler])
-					if !ok {
-						return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
-					}
-					middleware = append(middleware, pluginMiddleware...)
-				} else {
-					return nil, status.Errorf(codes.InvalidArgument, "plugin '%s' has no valid dump middleware: %v", t, err)
-				}
-			} else {
-				return nil, status.Errorf(codes.InvalidArgument, "unknown dump type: %s. maybe a missing plugin?", t)
+			err = plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_MIDDLEWARE, func(
+				name string,
+				pluginMiddleware []types.Adapter[types.RestoreHandler],
+			) error {
+				middleware = append(middleware, pluginMiddleware...)
+				return nil
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
 		h = types.Adapted(h, middleware...)

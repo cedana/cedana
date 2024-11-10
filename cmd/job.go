@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/api/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -31,8 +31,8 @@ var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		port := viper.GetUint32("options.port")
-		host := viper.GetString("options.host")
+		port := config.Get(config.PORT)
+		host := config.Get(config.HOST)
 
 		client, err := NewClient(host, port)
 		if err != nil {
@@ -74,31 +74,28 @@ var listJobCmd = &cobra.Command{
 
 		writer := table.NewWriter()
 		writer.SetOutputMirror(cmd.OutOrStdout())
-		writer.SetStyle(table.StyleLight)
+		writer.SetStyle(style.TableStyle)
 		writer.Style().Options.SeparateRows = false
 
-		writer.AppendHeader(table.Row{"Job", "Type", "PID", "State", "Std I/O", "Last Checkpoint", "GPU"})
-
-		boolStr := func(b bool) string {
-			if b {
-				return text.Colors{text.FgGreen}.Sprint("yes")
-			}
-			return text.Colors{text.FgRed}.Sprint("no")
-		}
+		writer.AppendHeader(table.Row{
+			"Job",
+			"Type",
+			"PID",
+			"State",
+			"Std I/O",
+			"Last Checkpoint",
+			"GPU",
+		})
 
 		for _, job := range jobs {
-			state := text.Colors{text.FgGreen}.Sprint("running")
-			if !job.GetProcess().GetInfo().GetIsRunning() {
-				state = text.Colors{text.FgRed}.Sprint("exited")
-			}
 			row := table.Row{
 				job.GetJID(),
 				job.GetType(),
 				job.GetProcess().GetPID(),
-				state,
+				style.BoolStr(job.GetProcess().GetInfo().GetIsRunning(), "running", "stopped"),
 				job.GetLog(),
 				job.GetCheckpointPath(),
-				boolStr(job.GetGPUEnabled()),
+				style.BoolStr(job.GetGPUEnabled()),
 			}
 			writer.AppendRow(row)
 		}

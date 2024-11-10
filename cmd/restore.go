@@ -8,15 +8,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -37,27 +36,19 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	for name, p := range plugins.LoadedPlugins {
-		defer plugins.RecoverFromPanic(name)
-		if pluginCmdUntyped, err := p.Lookup(plugins.FEATURE_RESTORE_CMD); err == nil {
-			// Add new subcommand from supported plugins
-			pluginCmd, ok := pluginCmdUntyped.(**cobra.Command)
-			if !ok {
-				log.Debug().Str("plugin", name).Msgf("Provided %s is not a valid command", plugins.FEATURE_RESTORE_CMD)
-				continue
-			}
-			restoreCmd.AddCommand(*pluginCmd)
+	plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_CMD, func(name string, pluginCmd **cobra.Command) error {
+		restoreCmd.AddCommand(*pluginCmd)
 
-			// Apply all the flags from the plugin command to job subcommand (as optional flags),
-			// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
-			// thus it could have specific CLI overrides from plugins.
+		// Apply all the flags from the plugin command to job subcommand (as optional flags),
+		// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
+		// thus it could have specific CLI overrides from plugins.
 
-			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-				jobRestoreCmd.Flags().AddFlag(f)
-				f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
-			})
-		}
-	}
+		(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+			jobRestoreCmd.Flags().AddFlag(f)
+			f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+		})
+    return nil
+	})
 }
 
 var restoreCmd = &cobra.Command{
@@ -97,8 +88,8 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		port := viper.GetUint32("options.port")
-		host := viper.GetString("options.host")
+		port := config.Get(config.PORT)
+		host := config.Get(config.HOST)
 
 		client, err := NewClient(host, port)
 		if err != nil {

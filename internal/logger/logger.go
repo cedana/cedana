@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
@@ -29,7 +30,7 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 func init() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
+	logLevelStr := config.Get(config.LOG_LEVEL)
 	logLevel, err := zerolog.ParseLevel(logLevelStr)
 	if err != nil || logLevelStr == "" { // allow turning off logging
 		logLevel = DEFAULT_LOG_LEVEL

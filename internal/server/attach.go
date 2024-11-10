@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const ATTACH_TIMEOUT = 10 * time.Second
+const ATTACH_TIMEOUT = 1 * time.Minute
 
 func (s *Server) Attach(stream daemon.Daemon_AttachServer) error {
 	in, err := stream.Recv()

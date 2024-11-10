@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/pkg/api/criu"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -34,34 +34,26 @@ func init() {
 	dumpCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "close tcp connections")
 
 	// Bind to config
-	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(types.DirFlag.Full))
-	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(types.LeaveRunningFlag.Full))
+	viper.BindPFlag(config.STORAGE_DUMP_DIR.Key, dumpCmd.PersistentFlags().Lookup(types.DirFlag.Full))
+	viper.BindPFlag(config.CRIU_LEAVE_RUNNING.Key, dumpCmd.PersistentFlags().Lookup(types.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	for name, p := range plugins.LoadedPlugins {
-		defer plugins.RecoverFromPanic(name)
-		if pluginCmdUntyped, err := p.Lookup(plugins.FEATURE_DUMP_CMD); err == nil {
-			// Add new subcommand from supported plugins
-			pluginCmd, ok := pluginCmdUntyped.(**cobra.Command)
-			if !ok {
-				log.Debug().Str("plugin", name).Msgf("Provided %s is not a valid command", plugins.FEATURE_DUMP_CMD)
-				continue
-			}
-			dumpCmd.AddCommand(*pluginCmd)
+	plugins.IfFeatureAvailable(plugins.FEATURE_DUMP_CMD, func(name string, pluginCmd **cobra.Command) error {
+		dumpCmd.AddCommand(*pluginCmd)
 
-			// Apply all the flags from the plugin command to job subcommand (as optional flags),
-			// since the job subcommand can be used to dump any managed entity (even from plugins, like runc),
-			// thus it could have specific CLI overrides from plugins.
+		// Apply all the flags from the plugin command to job subcommand (as optional flags),
+		// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
+		// thus it could have specific CLI overrides from plugins.
 
-			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-				jobDumpCmd.Flags().AddFlag(f)
-				f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
-			})
-		}
-	}
+		(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+			jobDumpCmd.Flags().AddFlag(f)
+			f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+		})
+		return nil
+	})
 }
 
 var dumpCmd = &cobra.Command{
@@ -69,8 +61,8 @@ var dumpCmd = &cobra.Command{
 	Short: "Dump a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := viper.GetString("storage.dump_dir")
-		leaveRunning := viper.GetBool("criu.leave_running")
+		dir := config.Get(config.STORAGE_DUMP_DIR)
+		leaveRunning := config.Get(config.CRIU_LEAVE_RUNNING)
 		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
@@ -99,8 +91,8 @@ var dumpCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		port := viper.GetUint32("options.port")
-		host := viper.GetString("options.host")
+		port := config.Get(config.PORT)
+		host := config.Get(config.HOST)
 
 		client, err := NewClient(host, port)
 		if err != nil {

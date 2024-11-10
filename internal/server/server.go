@@ -9,6 +9,7 @@ import (
 
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
+	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
@@ -143,4 +144,9 @@ func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
 	log.Debug().Msg("stopped server gracefully")
+}
+
+func (s *Server) ReloadPlugins(ctx context.Context, req *daemon.Empty) (*daemon.Empty, error) {
+	plugins.LoadPlugins()
+	return &daemon.Empty{}, nil
 }
