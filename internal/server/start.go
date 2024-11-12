@@ -19,14 +19,14 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 	// the final handler, which depends on the type of job being started, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
 
-	middleware := []types.Adapter[types.StartHandler]{
+	middleware := types.Middleware[types.StartHandler]{
 		// Bare minimum adapters
 		adapters.JobStartAdapter(s.db),
-		fillMissingStartDefaults,
-		validateStartRequest,
+		adapters.FillMissingStartDefaults,
+		adapters.ValidateStartRequest,
 	}
 
-	handler := types.Adapted(pluginHandler(), middleware...)
+	handler := pluginStartHandler().With(middleware...)
 
 	resp := &daemon.StartResp{}
 
@@ -45,37 +45,11 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 }
 
 //////////////////////////
-//// Helper Adapters /////
-//////////////////////////
-
-// Adapter that fills missing info from the request using config defaults
-func fillMissingStartDefaults(h types.StartHandler) types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		// Nothing to fill in for now
-		return h(ctx, lifetimeCtx, wg, resp, req)
-	}
-}
-
-// Adapter that validates the start request
-func validateStartRequest(h types.StartHandler) types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		if req.GetType() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
-		}
-		if req.GetDetails() == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
-		}
-		// Check if JID already exists
-		return h(ctx, lifetimeCtx, wg, resp, req)
-	}
-}
-
-//////////////////////////
 //// Helper Handlers /////
 //////////////////////////
 
 // Handler that returns the type-specific handler for the job
-func pluginHandler() types.StartHandler {
+func pluginStartHandler() types.StartHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 		t := req.GetType()
 		var handler types.StartHandler

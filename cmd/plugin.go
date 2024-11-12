@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/plugins"
+	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/api/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -30,9 +32,21 @@ var pluginCmd = &cobra.Command{
 		}
 
 		manager := plugins.NewLocalManager()
+
+		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+
 		ctx := context.WithValue(cmd.Context(), types.PLUGIN_MANAGER_CONTEXT_KEY, manager)
+		ctx = context.WithValue(ctx, types.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
 
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client.Close()
 		return nil
 	},
 }
@@ -137,6 +151,7 @@ var pluginInstallCmd = &cobra.Command{
 	Short: "Install a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, names []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
 		manager, ok := cmd.Context().Value(types.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -171,6 +186,9 @@ var pluginInstallCmd = &cobra.Command{
 			}
 		}
 
+		// Tell daemon to reload plugins
+		client.ReloadPlugins(cmd.Context(), &daemon.Empty{})
+
 		if installed < len(names) {
 			return fmt.Errorf("Installed %d plugins, %d failed", installed, len(names)-installed)
 		} else {
@@ -185,6 +203,7 @@ var pluginRemoveCmd = &cobra.Command{
 	Short: "Remove a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
 		manager, ok := cmd.Context().Value(types.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -218,6 +237,9 @@ var pluginRemoveCmd = &cobra.Command{
 				break
 			}
 		}
+
+		// Tell daemon to reload plugins
+		client.ReloadPlugins(cmd.Context(), &daemon.Empty{})
 
 		if removed < len(args) {
 			return fmt.Errorf("Removed %d plugins, %d failed", removed, len(args)-removed)

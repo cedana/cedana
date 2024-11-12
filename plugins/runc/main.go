@@ -1,7 +1,9 @@
 package main
 
 import (
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/cmd"
+	"github.com/cedana/cedana/plugins/runc/internal/adapters"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +16,23 @@ var (
 	RestoreCmd *cobra.Command
 )
 
+// Middleware
+var (
+	DumpMiddleware    types.Middleware[types.DumpHandler]
+	RestoreMiddleware types.Middleware[types.RestoreHandler]
+)
+
 func init() {
 	DumpCmd = cmd.DumpCmd
 	RestoreCmd = cmd.RestoreCmd
+
+	// NOTE: Assumes other basic request details will be validated by the daemon
+
+	DumpMiddleware = types.Middleware[types.DumpHandler]{
+		adapters.FillMissingDumpDefaults,
+		adapters.ValidateDumpRequest,
+		adapters.GetContainerForDump,
+	}
+
+	RestoreMiddleware = types.Middleware[types.RestoreHandler]{}
 }

@@ -26,10 +26,11 @@ var Plugins = []Plugin{
 		Dependencies: []string{"runc"},
 	},
 	{
-		Name:      "crio",
-		Type:      Unimplemented,
-		Status:    Unknown,
-		Libraries: []string{"libcedana-crio.so"},
+		Name:         "crio",
+		Type:         Unimplemented,
+		Status:       Unknown,
+		Libraries:    []string{"libcedana-crio.so"},
+		Dependencies: []string{"runc"},
 	},
 	{
 		Name:      "kata",

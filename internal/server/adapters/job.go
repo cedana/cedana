@@ -29,10 +29,10 @@ const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 // Adapter that fills in dump request details based on saved job info.
 // Post-dump, updates the saved job details.
 func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
-	return func(h types.DumpHandler) types.DumpHandler {
+	return func(next types.DumpHandler) types.DumpHandler {
 		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			if req.GetType() != "job" {
-				return h(ctx, wg, resp, req)
+				return next(ctx, wg, resp, req)
 			}
 
 			// Fill in dump request details based on saved job info
@@ -50,7 +50,7 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 			req.Details = job.Details
 			req.Type = job.Type
 
-			err = h(ctx, wg, resp, req)
+			err = next(ctx, wg, resp, req)
 			if err != nil {
 				return err
 			}
@@ -91,10 +91,10 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 // Adapter that fills in restore request details based on saved job info
 // Post-restore, updates the saved job details.
 func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
-	return func(h types.RestoreHandler) types.RestoreHandler {
+	return func(next types.RestoreHandler) types.RestoreHandler {
 		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.GetType() != "job" {
-				return h(ctx, lifetimeCtx, wg, resp, req)
+				return next(ctx, lifetimeCtx, wg, resp, req)
 			}
 
 			// Fill in restore request details based on saved job info
@@ -123,7 +123,7 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 			req.Type = job.Type
 
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
-			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
+			exited, err := next(ctx, lifetimeCtx, wg, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err
@@ -164,7 +164,7 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
 func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
-	return func(h types.StartHandler) types.StartHandler {
+	return func(next types.StartHandler) types.StartHandler {
 		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 			jid := req.GetJID()
 			if jid == "" {
@@ -180,7 +180,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			}
 
 			if req.GetGPUEnabled() { // Attach GPU support if requested
-				h = types.Adapted(h, GPUAdapter)
+				next = next.With(GPUAdapter)
 			}
 
 			if req.Log == "" {
@@ -188,7 +188,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			}
 
 			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
-			exited, err := h(ctx, lifetimeCtx, wg, resp, req)
+			exited, err := next(ctx, lifetimeCtx, wg, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err

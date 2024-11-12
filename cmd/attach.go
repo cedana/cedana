@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var attachCmd = &cobra.Command{
@@ -14,10 +14,7 @@ var attachCmd = &cobra.Command{
 	Short: "Attach stdin/out/err to a process/container",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		port := viper.GetUint32("options.port")
-		host := viper.GetString("options.host")
-
-		client, err := NewClient(host, port)
+		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}

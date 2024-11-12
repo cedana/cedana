@@ -7,7 +7,7 @@ type (
 		Options    Options    `key:"options" json:"options" mapstructure:"options"`
 		Connection Connection `key:"connection" json:"connection" mapstructure:"connection"`
 		Storage    Storage    `key:"storage" json:"storage" mapstructure:"storage"`
-		Profiling  Profiling  `key:"profiling" json:"profiling" mapstructure:"profiling"`
+		Metrics    Metrics    `key:"metrics" json:"metrics" mapstructure:"metrics"`
 		CRIU       CRIU       `key:"criu" json:"criu" mapstructure:"criu"`
 		CLI        CLI        `key:"cli" json:"cli" mapstructure:"cli"`
 	}
@@ -27,10 +27,11 @@ type (
 		DumpDir     string `key:"dumpDir" json:"dump_dir" mapstructure:"dump_dir"`
 		Compression string `key:"compression" json:"compression" mapstructure:"compression"`
 	}
-	Profiling struct {
-		Enabled bool `key:"enabled" json:"enabled" mapstructure:"enabled"`
-		Otel    struct {
-			Port int `key:"port" json:"port" mapstructure:"port"`
+	Metrics struct {
+		ASR  bool `key:"asr" json:"asr" mapstructure:"asr"`
+		Otel struct {
+			Enabled bool `key:"enabled" json:"enabled" mapstructure:"enabled"`
+			Port    int  `key:"port" json:"port" mapstructure:"port"`
 		} `key:"otel" json:"otel" mapstructure:"otel"`
 	}
 	CLI struct {

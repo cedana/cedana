@@ -5,13 +5,21 @@ import (
 
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
+
+	// Add flags
+	startDaemonCmd.PersistentFlags().BoolP(types.MetricsASRFlag.Full, types.MetricsASRFlag.Short, false, "enable metrics for ASR")
+
+	// Bind to config
+	viper.BindPFlag(config.METRICS_ASR.Key, startDaemonCmd.PersistentFlags().Lookup(types.MetricsASRFlag.Full))
 }
 
 var daemonCmd = &cobra.Command{
@@ -31,16 +39,16 @@ var startDaemonCmd = &cobra.Command{
 
 		var err error
 
-		useVSOCK := config.Get(config.USE_VSOCK)
-		port := config.Get(config.PORT)
-		host := config.Get(config.HOST)
-
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
 		server, err := server.NewServer(ctx, &server.ServeOpts{
-			UseVSOCK: useVSOCK,
-			Port:     port,
-			Host:     host,
+			UseVSOCK: config.Get(config.USE_VSOCK),
+			Port:     config.Get(config.PORT),
+			Host:     config.Get(config.HOST),
+			Metrics: server.MetricOpts{
+				ASR:  config.Get(config.METRICS_ASR),
+				OTel: config.Get(config.METRICS_OTEL_ENABLED),
+			},
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")

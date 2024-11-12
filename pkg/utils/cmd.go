@@ -43,11 +43,14 @@ func AliasCommandRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []st
 	}
 }
 
-func AliasCommandUse(aliasOf *cobra.Command, name string) string {
-	if aliasOf == nil {
-		return name
-	}
+func AliasCommandUse(aliasOf *cobra.Command, name ...string) string {
+	if len(name) > 0 {
+		if aliasOf == nil {
+			return name[0]
+		}
 
-	// Append the rest of the aliasOf.Use to the name
-	return name + " " + strings.Join(strings.Split(aliasOf.Use, " ")[1:], " ")
+		// Append the rest of the aliasOf.Use to the name
+		return name[0] + " " + strings.Join(strings.Split(aliasOf.Use, " ")[1:], " ")
+	}
+	return aliasOf.Use
 }

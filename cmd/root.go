@@ -23,8 +23,10 @@ func init() {
 
 	// Add aliases
 	rootCmd.AddCommand(execCmd)
-	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(psCmd)
+	rootCmd.AddCommand(killCmd)
+	rootCmd.AddCommand(deleteCmd)
 
 	// Add root flags
 	rootCmd.PersistentFlags().String(types.ConfigFlag.Full, "", "one-time config JSON string (will merge with existing config)")

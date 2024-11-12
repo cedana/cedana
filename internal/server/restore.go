@@ -16,13 +16,13 @@ import (
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add basic adapters. The order below is the order followed before executing
-	// the final handler (handlers.CriuRestore). Post-restore, the order is reversed.
+	// the final handler (handlers.Restore). Post-restore, the order is reversed.
 
-	middleware := []types.Adapter[types.RestoreHandler]{
+	middleware := types.Middleware[types.RestoreHandler]{
 		// Bare minimum adapters
 		adapters.JobRestoreAdapter(s.db),
-		fillMissingRestoreDefaults,
-		validateRestoreRequest,
+		adapters.FillMissingRestoreDefaults,
+		adapters.ValidateRestoreRequest,
 		adapters.PrepareRestoreDir, // auto-detects compression
 
 		pluginRestoreMiddleware, // middleware from plugins
@@ -34,7 +34,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		adapters.InheritOpenFilesForRestore,
 	}
 
-	handler := types.Adapted(handlers.CriuRestore(s.criu), middleware...)
+	handler := handlers.Restore(s.criu).With(middleware...)
 
 	resp := &daemon.RestoreResp{}
 
@@ -56,33 +56,10 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 //// Helper Adapters /////
 //////////////////////////
 
-// Adapter that fills missing info from the request using config defaults
-func fillMissingRestoreDefaults(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		// Nothing to do, yet
-
-		return h(ctx, lifetimeCtx, wg, resp, req)
-	}
-}
-
-// Adapter that validates the restore request
-func validateRestoreRequest(h types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		if req.GetPath() == "" {
-			return nil, status.Error(codes.InvalidArgument, "no path provided")
-		}
-		if req.GetType() == "" {
-			return nil, status.Error(codes.InvalidArgument, "missing type")
-		}
-
-		return h(ctx, lifetimeCtx, wg, resp, req)
-	}
-}
-
 // Adapter that inserts new adapters based on the type of restore request
-func pluginRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
+func pluginRestoreMiddleware(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
-		middleware := []types.Adapter[types.RestoreHandler]{}
+		middleware := types.Middleware[types.RestoreHandler]{}
 		t := req.GetType()
 		switch t {
 		case "process":
@@ -91,7 +68,7 @@ func pluginRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
 			// Insert plugin-specific middleware
 			err = plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_MIDDLEWARE, func(
 				name string,
-				pluginMiddleware []types.Adapter[types.RestoreHandler],
+				pluginMiddleware types.Middleware[types.RestoreHandler],
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
@@ -100,7 +77,6 @@ func pluginRestoreMiddleware(h types.RestoreHandler) types.RestoreHandler {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		h = types.Adapted(h, middleware...)
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		return next.With(middleware...)(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

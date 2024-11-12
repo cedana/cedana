@@ -67,10 +67,7 @@ var startCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		port := config.Get(config.PORT)
-		host := config.Get(config.HOST)
-
-		client, err := NewClient(host, port)
+		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}

@@ -35,7 +35,7 @@ const (
 ////////////////////////
 
 // Check if the process exists, and is running
-func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
+func CheckProcessExistsForDump(next types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		pid := req.GetDetails().GetPID()
 		if pid == 0 {
@@ -55,14 +55,14 @@ func CheckProcessExistsForDump(h types.DumpHandler) types.DumpHandler {
 
 		resp.State.PID = uint32(pid)
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, wg, resp, req)
 	}
 }
 
 // Fills process state in the dump response.
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
-func FillProcessStateForDump(h types.DumpHandler) types.DumpHandler {
+func FillProcessStateForDump(next types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		state := resp.GetState()
 		if state == nil {
@@ -78,7 +78,7 @@ func FillProcessStateForDump(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
-		err = h(ctx, wg, resp, req)
+		err = next(ctx, wg, resp, req)
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func FillProcessStateForDump(h types.DumpHandler) types.DumpHandler {
 // not want to use TCP established connections. Also, for external unix
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
-func DetectNetworkOptionsForDump(h types.DumpHandler) types.DumpHandler {
+func DetectNetworkOptionsForDump(next types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		var hasTCP, hasExtUnixSocket bool
 
@@ -133,12 +133,12 @@ func DetectNetworkOptionsForDump(h types.DumpHandler) types.DumpHandler {
 			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 		}
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, wg, resp, req)
 	}
 }
 
 // Detect and sets shell job option for CRIU
-func DetectShellJobForDump(h types.DumpHandler) types.DumpHandler {
+func DetectShellJobForDump(next types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -161,12 +161,12 @@ func DetectShellJobForDump(h types.DumpHandler) types.DumpHandler {
 			req.Criu.ShellJob = proto.Bool(isShellJob)
 		}
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, wg, resp, req)
 	}
 }
 
 // Close common file descriptors b/w the parent and child process
-func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
+func CloseCommonFilesForDump(next types.DumpHandler) types.DumpHandler {
 	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
@@ -178,7 +178,7 @@ func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, wg, resp, req)
 	}
 }
 
@@ -187,7 +187,7 @@ func CloseCommonFilesForDump(h types.DumpHandler) types.DumpHandler {
 ////////////////////////
 
 // Fill process state in the restore response
-func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
+func FillProcessStateForRestore(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
@@ -204,7 +204,7 @@ func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 
 		resp.State = state
 
-		exited, err = h(ctx, lifetimeCtx, wg, resp, req)
+		exited, err = next(ctx, lifetimeCtx, wg, resp, req)
 		if err != nil {
 			return exited, err
 		}
@@ -222,7 +222,7 @@ func FillProcessStateForRestore(h types.RestoreHandler) types.RestoreHandler {
 // not want to use TCP established connections. Also, for external unix
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
-func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler {
+func DetectNetworkOptionsForRestore(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
@@ -251,12 +251,12 @@ func DetectNetworkOptionsForRestore(h types.RestoreHandler) types.RestoreHandler
 			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 		}
 
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		return next(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
 // Detect and sets shell job option for CRIU
-func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
+func DetectShellJobForRestore(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -279,14 +279,14 @@ func DetectShellJobForRestore(h types.RestoreHandler) types.RestoreHandler {
 			req.Criu.ShellJob = proto.Bool(isShellJob)
 		}
 
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		return next(ctx, lifetimeCtx, wg, resp, req)
 	}
 }
 
 // Open files from the dump state are inherited by the restored process.
 // For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
 // a log file.
-func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
+func InheritOpenFilesForRestore(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 		ioFiles, _ := ctx.Value(types.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
@@ -364,6 +364,6 @@ func InheritOpenFilesForRestore(h types.RestoreHandler) types.RestoreHandler {
 		}
 		req.GetCriu().InheritFd = inheritFds
 
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		return next(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

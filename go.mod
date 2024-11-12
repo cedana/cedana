@@ -17,7 +17,6 @@ require (
 )
 
 require (
-	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

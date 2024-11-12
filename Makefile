@@ -1,4 +1,5 @@
 OUT_DIR=$(PWD)
+SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOCLEAN=$(GOCMD) clean
@@ -26,17 +27,12 @@ clean:
 test:
 	$(GOTEST) -v ./...
 
-systemd:
+start-daemon: build
+	@sudo ./$(BINARY) daemon start
+
+start-systemd: build
 	@echo "Installing systemd service..."
-
-###########
-## Proto ##
-###########
-
-PROTO_SOURCES=$(wildcard pkg/api/proto/**/*.proto)
-
-proto: $(PROTO_SOURCES)
-	@cd pkg/api && ./generate.sh
+	$(SCRIPTS_DIR)/start-systemd.sh --plugins=runc
 
 #############
 ## Plugins ##
@@ -49,3 +45,13 @@ plugins: $(PLUGIN_SOURCES)
 		name=$$(basename $$path); \
 		$(GOBUILD) -C $$path -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 	done
+
+###########
+## Proto ##
+###########
+
+PROTO_SOURCES=$(wildcard pkg/api/proto/**/*.proto)
+
+proto: $(PROTO_SOURCES)
+	@cd pkg/api && ./generate.sh
+

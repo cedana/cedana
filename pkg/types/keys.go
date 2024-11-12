@@ -1,6 +1,10 @@
 package types
 
-// Defines common keys used across the codebase, including plugins.
+// Defines common keys used in context. Should
+// be consulted when adding new keys in a plugin to avoid conflicts.
+
+// NOTE: Do not add plugin keys here. Plugin keys should be
+// defined in the plugin's own types package.
 
 const (
 	DUMP_REQ_CONTEXT_KEY = iota

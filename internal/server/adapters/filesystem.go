@@ -37,7 +37,7 @@ const (
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
-	return func(h types.DumpHandler) types.DumpHandler {
+	return func(next types.DumpHandler) types.DumpHandler {
 		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			dir := req.GetDir()
 
@@ -71,7 +71,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 			req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 			req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
-			err = h(ctx, wg, resp, req)
+			err = next(ctx, wg, resp, req)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
 				return err
@@ -108,7 +108,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.DumpHandler] {
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
-func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
+func PrepareRestoreDir(next types.RestoreHandler) types.RestoreHandler {
 	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
@@ -149,6 +149,6 @@ func PrepareRestoreDir(h types.RestoreHandler) types.RestoreHandler {
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		return h(ctx, lifetimeCtx, wg, resp, req)
+		return next(ctx, lifetimeCtx, wg, resp, req)
 	}
 }

@@ -31,10 +31,7 @@ var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		port := config.Get(config.PORT)
-		host := config.Get(config.HOST)
-
-		client, err := NewClient(host, port)
+		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
@@ -211,4 +208,20 @@ var psCmd = &cobra.Command{
 	Long:  listJobCmd.Long,
 	Args:  listJobCmd.Args,
 	RunE:  utils.AliasCommandRunE(listJobCmd),
+}
+
+var deleteCmd = &cobra.Command{
+	Use:   utils.AliasCommandUse(deleteJobCmd),
+	Short: deleteJobCmd.Short,
+	Long:  deleteJobCmd.Long,
+	Args:  deleteJobCmd.Args,
+	RunE:  utils.AliasCommandRunE(deleteJobCmd),
+}
+
+var killCmd = &cobra.Command{
+	Use:   utils.AliasCommandUse(killJobCmd),
+	Short: killJobCmd.Short,
+	Long:  killJobCmd.Long,
+	Args:  killJobCmd.Args,
+	RunE:  utils.AliasCommandRunE(killJobCmd),
 }

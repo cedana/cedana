@@ -148,6 +148,15 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	return nil
 }
 
+func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty) (*daemon.Empty, error) {
+	opts := getDefaultCallOptions()
+	resp, err := c.daemonClient.ReloadPlugins(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCError(err)
+	}
+	return resp, nil
+}
+
 ///////////////////
 //    Helpers    //
 ///////////////////

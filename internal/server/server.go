@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/internal/plugins"
@@ -15,7 +16,6 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -40,6 +40,12 @@ type ServeOpts struct {
 	UseVSOCK bool
 	Port     uint32
 	Host     string
+	Metrics  MetricOpts
+}
+
+type MetricOpts struct {
+	ASR  bool
+	OTel bool
 }
 
 type Machine struct {
@@ -74,7 +80,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	criu := criu.MakeCriu()
 	// Set custom path if specified in config
-	if custom_path := viper.GetString("criu.binary_path"); custom_path != "" {
+	if custom_path := config.Get(config.CRIU_BINARY_PATH); custom_path != "" {
 		criu.SetCriuPath(custom_path)
 	}
 

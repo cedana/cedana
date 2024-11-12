@@ -28,8 +28,9 @@ var (
 
 	CLI_WAIT_FOR_READY = ConfigItem[bool]{"cli.wait_for_ready", false, "CEDANA_CLI_WAIT_FOR_READY", viper.GetBool}
 
-	PROFILING_ENABLED   = ConfigItem[bool]{"profiling.enabled", false, "CEDANA_PROFILING_ENABLED", viper.GetBool}
-	PROFILING_OTEL_PORT = ConfigItem[int]{"profiling.otel.port", 7777, "CEDANA_PROFILING_OTEL_PORT", viper.GetInt}
+	METRICS_ASR          = ConfigItem[bool]{"metrics.asr", false, "CEDANA_METRICS_ASR", viper.GetBool}
+	METRICS_OTEL_ENABLED = ConfigItem[bool]{"metrics.otel.enabled", false, "CEDANA_METRICS_OTEL_ENABLED", viper.GetBool}
+	METRICS_OTEL_PORT    = ConfigItem[int]{"metrics.otel.port", 7777, "CEDANA_METRICS_OTEL_PORT", viper.GetInt}
 
 	CRIU_LEAVE_RUNNING = ConfigItem[bool]{"criu.leave_running", false, "CEDANA_CRIU_LEAVE_RUNNING", viper.GetBool}
 	CRIU_BINARY_PATH   = ConfigItem[string]{"criu.binary_path", "criu", "CEDANA_CRIU_BINARY_PATH", viper.GetString}
@@ -57,8 +58,9 @@ func setDefaults() {
 
 	viper.SetDefault(CLI_WAIT_FOR_READY.Key, CLI_WAIT_FOR_READY.Default)
 
-	viper.SetDefault(PROFILING_ENABLED.Key, PROFILING_ENABLED.Default)
-	viper.SetDefault(PROFILING_OTEL_PORT.Key, PROFILING_OTEL_PORT.Default)
+	viper.SetDefault(METRICS_ASR.Key, METRICS_ASR.Default)
+	viper.SetDefault(METRICS_OTEL_ENABLED.Key, METRICS_OTEL_ENABLED.Default)
+	viper.SetDefault(METRICS_OTEL_PORT.Key, METRICS_OTEL_PORT.Default)
 
 	viper.SetDefault(CRIU_LEAVE_RUNNING.Key, CRIU_LEAVE_RUNNING.Default)
 }
@@ -82,8 +84,9 @@ func bindEnvVars() {
 
 	viper.BindEnv(CLI_WAIT_FOR_READY.Key, CLI_WAIT_FOR_READY.Env)
 
-	viper.BindEnv(PROFILING_ENABLED.Key, PROFILING_ENABLED.Env)
-	viper.BindEnv(PROFILING_OTEL_PORT.Key, PROFILING_OTEL_PORT.Env)
+	viper.BindEnv(METRICS_ASR.Key, METRICS_ASR.Env)
+	viper.BindEnv(METRICS_OTEL_ENABLED.Key, METRICS_OTEL_ENABLED.Env)
+	viper.BindEnv(METRICS_OTEL_PORT.Key, METRICS_OTEL_PORT.Env)
 
 	viper.BindEnv(CRIU_LEAVE_RUNNING.Key, CRIU_LEAVE_RUNNING.Env)
 	viper.BindEnv(CRIU_BINARY_PATH.Key, CRIU_BINARY_PATH.Env)

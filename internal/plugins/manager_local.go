@@ -61,8 +61,8 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.Status = Available
-			p.Version = "Local"
-			p.LatestVersion = "Local"
+			p.Version = "dev"
+			p.LatestVersion = "dev"
 			p.Size = size
 
 			SyncInstalled(&p)
@@ -111,6 +111,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				errs <- fmt.Errorf("Plugin %s is not available", name)
 				continue
 			}
+
 			msgs <- fmt.Sprintf("Installing %s...", name)
 
 			// Copy the plugin files from the source directory to the installation directory
@@ -119,6 +120,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Libraries {
 				src := filepath.Join(srcDir, file)
 				dest := filepath.Join(config.Get(config.PLUGINS_LIB_DIR), file)
+				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
 					break
@@ -127,6 +129,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Binaries {
 				src := filepath.Join(srcDir, file)
 				dest := filepath.Join(config.Get(config.PLUGINS_BIN_DIR), file)
+				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
 					break
@@ -196,7 +199,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 				}
 			}
 
-			msgs <- style.PositiveColor.Sprintf("Removed %s", name)
+			msgs <- style.NegativeColor.Sprintf("Removed %s", name)
 			removed <- 1
 		}
 	}()
