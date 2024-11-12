@@ -25,11 +25,13 @@ import (
 	"github.com/containers/image/v5/pkg/shortnames"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	"github.com/containers/storage"
 	archive "github.com/containers/storage/pkg/archive"
 	libconfig "github.com/cri-o/cri-o/pkg/config"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 )
 
 func getDefaultConfig() (*libconfig.Config, error) {
@@ -413,6 +415,29 @@ func removeBuildahContainer(containerID string) error {
 	}
 
 	return nil
+}
+func getStoreBuildah(c *cobra.Command) (storage.Store, error) {
+	if err := setXDGRuntimeDir(); err != nil {
+		return nil, err
+	}
+	options, err := storage.DefaultStoreOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	// Do not allow to mount a graphdriver that is not vfs if we are creating the userns as part
+	// of the mount command.
+	// Differently, allow the mount if we are already in a userns, as the mount point will still
+	// be accessible once "buildah mount" exits.
+	if os.Geteuid() != 0 && options.GraphDriverName != "vfs" {
+		return nil, fmt.Errorf("cannot mount using driver %s in rootless mode. You need to run it in a `buildah unshare` session", options.GraphDriverName)
+	}
+
+	store, err := storage.GetStore(options)
+	if store != nil {
+		is.Transport.SetStore(store)
+	}
+	return store, err
 }
 
 type commitInputOptions struct {
