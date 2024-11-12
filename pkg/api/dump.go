@@ -558,6 +558,7 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool, jid 
 }
 
 const requestTimeout = 30 * time.Second
+const dumpTarDir = "/tmp/test"
 
 // Does rpc over vsock to kata vm for the cedana KataDump function
 func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
@@ -567,6 +568,14 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 	vm := args.VmName
 	port := args.Port
 	dir := args.Dir
+
+	if args.VMSnapshot {
+		err := s.vmSnapshotter.Snapshot(dumpTarDir)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+		}
+		return &task.HostDumpKataResp{TarDumpDir: "NOT IMPLEMENTED"}, nil
+	}
 
 	cts, err := kata.NewVSockClient(vm, port)
 	if err != nil {

@@ -379,6 +379,16 @@ func (c *ServiceClient) RuncManage(ctx context.Context, args *task.RuncManageArg
 // Kata Service Calls //
 ///////////////////////////
 
+func (c *ServiceClient) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.HostKataDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *ServiceClient) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()

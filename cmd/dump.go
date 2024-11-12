@@ -5,8 +5,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -18,8 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
-
-	"github.com/mdlayher/vsock"
 )
 
 var dumpCmd = &cobra.Command{
@@ -104,7 +100,7 @@ var dumpKataCmd = &cobra.Command{
 		vm := args[0]
 
 		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewVSockClient(vm, port)
+		cts, err := services.NewClient(port)
 		if err != nil {
 			log.Error().Msgf("Error creating client: %v", err)
 			return err
@@ -115,53 +111,16 @@ var dumpKataCmd = &cobra.Command{
 		log.Info().Msgf("no job id specified, using %s", id)
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
+		vmSnapshot, _ := cmd.Flags().GetBool(vmSnapshotFlag)
 
-		cpuDumpArgs := task.DumpArgs{
-			Dir:  "/tmp",
-			JID:  id,
-			Type: task.CRType_LOCAL,
+		dumpArgs := &task.HostDumpKataArgs{
+			VmName:     vm,
+			Dir:        dir,
+			Port:       1024,
+			VMSnapshot: vmSnapshot,
 		}
 
-		go func() {
-			listener, err := vsock.Listen(9999, nil)
-			if err != nil {
-				return
-			}
-			defer listener.Close()
-
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			defer conn.Close()
-
-			// Open the file for writing
-			file, err := os.Create(dir + "/dmp.tar")
-			if err != nil {
-				return
-			}
-			defer file.Close()
-
-			buffer := make([]byte, 1024)
-
-			// Receive data and write to file
-			for {
-				bytesReceived, err := conn.Read(buffer)
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					return
-				}
-
-				_, err = file.Write(buffer[:bytesReceived])
-				if err != nil {
-					return
-				}
-			}
-		}()
-
-		resp, err := cts.KataDump(ctx, &cpuDumpArgs)
+		resp, err := cts.HostKataDump(ctx, dumpArgs)
 		if err != nil {
 			st, ok := status.FromError(err)
 			if ok {
@@ -171,7 +130,7 @@ var dumpKataCmd = &cobra.Command{
 			}
 			return err
 		}
-		log.Info().Msgf("Response: %v", resp.Message)
+		log.Info().Msgf("Dump dir: %v", resp.TarDumpDir)
 
 		return nil
 	},
