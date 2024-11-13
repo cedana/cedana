@@ -1,6 +1,6 @@
 package db
 
-// Remote implementation of the DB, that talks to the propogator.
+// Local implementation of the DB, using sqlite.
 
 import (
 	"context"
