@@ -19,14 +19,14 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 	// the final handler, which depends on the type of job being started, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
 
-	middleware := types.Middleware[types.StartHandler]{
+	middleware := types.Middleware[types.Start]{
 		// Bare minimum adapters
 		adapters.JobStartAdapter(s.db),
 		adapters.FillMissingStartDefaults,
 		adapters.ValidateStartRequest,
 	}
 
-	handler := pluginStartHandler().With(middleware...)
+	start := pluginStartHandler(s.ctx, s.wg).With(middleware...)
 
 	resp := &daemon.StartResp{}
 
@@ -34,7 +34,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := handler(ctx, s.ctx, s.wg, resp, req)
+	_, err := start.Handle(ctx, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -49,18 +49,20 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 //////////////////////////
 
 // Handler that returns the type-specific handler for the job
-func pluginStartHandler() types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
+func pluginStartHandler(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start] {
+	handler := types.NewHandler[types.Start](wg, nil)
+	handler.Lifetime = lifetime
+	handler.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 		t := req.GetType()
-		var handler types.StartHandler
+		var handler types.Handler[types.Start]
 		switch t {
 		case "process":
-			handler = handlers.Run
+			handler = handlers.Run(lifetime, wg)
 		default:
 			// Use plugin-specific handler
 			err = plugins.IfFeatureAvailable(plugins.FEATURE_START_HANDLER, func(
 				name string,
-				pluginHandler types.StartHandler,
+				pluginHandler types.Handler[types.Start],
 			) error {
 				handler = pluginHandler
 				return nil
@@ -69,6 +71,7 @@ func pluginStartHandler() types.StartHandler {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return handler(ctx, lifetimeCtx, wg, resp, req)
+		return handler.Handle(ctx, resp, req)
 	}
+	return handler
 }

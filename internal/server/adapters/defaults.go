@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/api/criu"
@@ -19,8 +18,8 @@ import (
 ///////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingDumpDefaults(next types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func FillMissingDumpDefaults(next types.Handler[types.Dump]) types.Handler[types.Dump] {
+	next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			req.Dir = config.Get(config.STORAGE_DUMP_DIR)
 		}
@@ -34,8 +33,9 @@ func FillMissingDumpDefaults(next types.DumpHandler) types.DumpHandler {
 			req.Criu.LeaveRunning = proto.Bool(config.Get(config.CRIU_LEAVE_RUNNING))
 		}
 
-		return next(ctx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }
 
 //////////////////////////
@@ -43,12 +43,13 @@ func FillMissingDumpDefaults(next types.DumpHandler) types.DumpHandler {
 //////////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingRestoreDefaults(next types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func FillMissingRestoreDefaults(next types.Handler[types.Restore]) types.Handler[types.Restore] {
+	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Nothing to do, yet
 
-		return next(ctx, lifetimeCtx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }
 
 ////////////////////////
@@ -56,9 +57,10 @@ func FillMissingRestoreDefaults(next types.RestoreHandler) types.RestoreHandler 
 ////////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingStartDefaults(next types.StartHandler) types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func FillMissingStartDefaults(next types.Handler[types.Start]) types.Handler[types.Start] {
+	next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 		// Nothing to fill in for now
-		return next(ctx, lifetimeCtx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }

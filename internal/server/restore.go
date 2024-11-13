@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
@@ -18,7 +17,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add basic adapters. The order below is the order followed before executing
 	// the final handler (handlers.Restore). Post-restore, the order is reversed.
 
-	middleware := types.Middleware[types.RestoreHandler]{
+	middleware := types.Middleware[types.Restore]{
 		// Bare minimum adapters
 		adapters.JobRestoreAdapter(s.db),
 		adapters.FillMissingRestoreDefaults,
@@ -34,7 +33,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		adapters.InheritOpenFilesForRestore,
 	}
 
-	handler := handlers.Restore(s.criu).With(middleware...)
+	restore := handlers.Restore(ctx, s.wg, s.criu).With(middleware...)
 
 	resp := &daemon.RestoreResp{}
 
@@ -42,7 +41,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := handler(ctx, s.ctx, s.wg, resp, req)
+	_, err := restore.Handle(ctx, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +56,9 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 //////////////////////////
 
 // Adapter that inserts new adapters based on the type of restore request
-func pluginRestoreMiddleware(next types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
-		middleware := types.Middleware[types.RestoreHandler]{}
+func pluginRestoreMiddleware(next types.Handler[types.Restore]) types.Handler[types.Restore] {
+	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+		middleware := types.Middleware[types.Restore]{}
 		t := req.GetType()
 		switch t {
 		case "process":
@@ -68,7 +67,7 @@ func pluginRestoreMiddleware(next types.RestoreHandler) types.RestoreHandler {
 			// Insert plugin-specific middleware
 			err = plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_MIDDLEWARE, func(
 				name string,
-				pluginMiddleware types.Middleware[types.RestoreHandler],
+				pluginMiddleware types.Middleware[types.Restore],
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
@@ -77,6 +76,7 @@ func pluginRestoreMiddleware(next types.RestoreHandler) types.RestoreHandler {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...)(ctx, lifetimeCtx, wg, resp, req)
+		return next.With(middleware...).Handle(ctx, resp, req)
 	}
+	return next
 }

@@ -36,7 +36,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		adapters.CloseCommonFilesForDump,
 	}
 
-	dump := handlers.Dump(s.ctx, s.wg, s.criu).With(middleware...)
+	dump := handlers.Dump(ctx, s.wg, s.criu).With(middleware...)
 
 	resp := &daemon.DumpResp{}
 	err := dump.Handle(ctx, resp, req)

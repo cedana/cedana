@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -17,8 +16,8 @@ import (
 ///////////////////////
 
 // Adapter that just checks all required fields are present in the request
-func ValidateDumpRequest(next types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func ValidateDumpRequest(next types.Handler[types.Dump]) types.Handler[types.Dump] {
+	next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			return status.Errorf(codes.InvalidArgument, "no dump dir specified")
 		}
@@ -29,8 +28,9 @@ func ValidateDumpRequest(next types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
-		return next(ctx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }
 
 //////////////////////////
@@ -38,8 +38,8 @@ func ValidateDumpRequest(next types.DumpHandler) types.DumpHandler {
 //////////////////////////
 
 // Adapter that validates the restore request
-func ValidateRestoreRequest(next types.RestoreHandler) types.RestoreHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func ValidateRestoreRequest(next types.Handler[types.Restore]) types.Handler[types.Restore] {
+	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		if req.GetPath() == "" {
 			return nil, status.Error(codes.InvalidArgument, "no path provided")
 		}
@@ -47,8 +47,9 @@ func ValidateRestoreRequest(next types.RestoreHandler) types.RestoreHandler {
 			return nil, status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return next(ctx, lifetimeCtx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }
 
 ////////////////////////
@@ -56,8 +57,8 @@ func ValidateRestoreRequest(next types.RestoreHandler) types.RestoreHandler {
 ////////////////////////
 
 // Adapter that validates the start request
-func ValidateStartRequest(next types.StartHandler) types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func ValidateStartRequest(next types.Handler[types.Start]) types.Handler[types.Start] {
+	next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 		if req.GetType() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
 		}
@@ -65,6 +66,7 @@ func ValidateStartRequest(next types.StartHandler) types.StartHandler {
 			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
 		}
 		// Check if JID already exists
-		return next(ctx, lifetimeCtx, wg, resp, req)
+		return next.Handle(ctx, resp, req)
 	}
+	return next
 }

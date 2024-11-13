@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -11,9 +10,10 @@ import (
 
 // Defines adapters for GPU support
 
-func GPUAdapter(next types.StartHandler) types.StartHandler {
-	return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func GPUAdapter(next types.Handler[types.Start]) types.Handler[types.Start] {
+	next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 		// Attach GPU support to the job
 		return nil, fmt.Errorf("GPU support not implemented")
 	}
+	return next
 }

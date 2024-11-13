@@ -10,11 +10,14 @@ import (
 
 type (
 	Handler[H Dump | Restore | Start | Manage] struct {
-		WG       *sync.WaitGroup
-		CRIU     *criu.Criu
-		Lifetime context.Context
+		// Private methods. Use getters to access them.
+		// This is to ensure these never get overridden.
+		wg   *sync.WaitGroup
+		criu *criu.Criu
 
-		Handle H
+		// Available methods. Can be overridden by an adapter.
+		Lifetime context.Context
+		Handle   H
 	}
 
 	Dump    func(context.Context, *daemon.DumpResp, *daemon.DumpReq) error
@@ -29,12 +32,23 @@ type (
 	Middleware[H Dump | Restore | Start | Manage] []Adapter[H]
 )
 
-func (h Handler[H]) With(
-	lifetime context.Context,
-	wg *sync.WaitGroup,
-	criu *criu.Criu,
-	middleware ...Adapter[H],
-) Handler[H] {
+// NewHandler returns a new Handler with the given lifetime, waitgroup, and criu
+func NewHandler[H Dump | Restore | Start | Manage](wg *sync.WaitGroup, criu *criu.Criu) Handler[H] {
+	return Handler[H]{
+		wg:   wg,
+		criu: criu,
+	}
+}
+
+func (h Handler[H]) GetWG() *sync.WaitGroup {
+	return h.wg
+}
+
+func (h Handler[H]) GetCRIU() *criu.Criu {
+	return h.criu
+}
+
+func (h Handler[H]) With(middleware ...Adapter[H]) Handler[H] {
 	return adapted(h, middleware...)
 }
 

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -23,74 +24,79 @@ const (
 )
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
-func Run(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
-	opts := req.GetDetails().GetProcessStart()
-	if opts == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing process start options")
-	}
-	if opts.Path == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing path")
-	}
-
-	groupsUint32 := make([]uint32, len(opts.Groups))
-	for i, v := range opts.Groups {
-		groupsUint32[i] = uint32(v)
-	}
-	cmd := exec.CommandContext(lifetimeCtx, opts.Path, opts.Args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-		Credential: &syscall.Credential{
-			Uid:    uint32(opts.UID),
-			Gid:    uint32(opts.GID),
-			Groups: groupsUint32,
-		},
-	}
-	cmd.Env = opts.Env
-	cmd.Dir = opts.WorkingDir
-
-	// Attach IO if requested, otherwise log to file
-	exitCode := make(chan int, 1)
-	if req.Attach {
-		// Use a random number, since we don't have PID yet
-		id := rand.Uint32()
-		stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetimeCtx, id, exitCode)
-		defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
-		cmd.Stdin = stdIn
-		cmd.Stdout = stdOut
-		cmd.Stderr = stdErr
-	} else {
-		logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
+func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start] {
+	handler := types.NewHandler[types.Start](wg, nil)
+	handler.Lifetime = lifetime
+	handler.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
+		opts := req.GetDetails().GetProcessStart()
+		if opts == nil {
+			return nil, status.Error(codes.InvalidArgument, "missing process start options")
 		}
-		defer logFile.Close()
-		cmd.Stdin = nil // /dev/null
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	resp.PID = uint32(cmd.Process.Pid)
-
-	// Wait for the process to exit, send exit code
-	exited = make(chan int)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := cmd.Wait()
-		if err != nil {
-			log.Debug().Err(err).Msg("process Wait()")
+		if opts.Path == "" {
+			return nil, status.Error(codes.InvalidArgument, "missing path")
 		}
-		code := cmd.ProcessState.ExitCode()
-		log.Debug().Int("code", code).Msg("process exited")
-		exitCode <- code
-		close(exitCode)
-		close(exited)
-	}()
 
-	return exited, err
+		groupsUint32 := make([]uint32, len(opts.Groups))
+		for i, v := range opts.Groups {
+			groupsUint32[i] = uint32(v)
+		}
+		cmd := exec.CommandContext(lifetime, opts.Path, opts.Args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setsid: true,
+			Credential: &syscall.Credential{
+				Uid:    uint32(opts.UID),
+				Gid:    uint32(opts.GID),
+				Groups: groupsUint32,
+			},
+		}
+		cmd.Env = opts.Env
+		cmd.Dir = opts.WorkingDir
+
+		// Attach IO if requested, otherwise log to file
+		exitCode := make(chan int, 1)
+		if req.Attach {
+			// Use a random number, since we don't have PID yet
+			id := rand.Uint32()
+			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetime, id, exitCode)
+			defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
+			cmd.Stdin = stdIn
+			cmd.Stdout = stdOut
+			cmd.Stderr = stdErr
+		} else {
+			logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
+			}
+			defer logFile.Close()
+			cmd.Stdin = nil // /dev/null
+			cmd.Stdout = logFile
+			cmd.Stderr = logFile
+		}
+
+		err = cmd.Start()
+		if err != nil {
+			return nil, err
+		}
+
+		resp.PID = uint32(cmd.Process.Pid)
+
+		// Wait for the process to exit, send exit code
+		exited = make(chan int)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := cmd.Wait()
+			if err != nil {
+				log.Debug().Err(err).Msg("process Wait()")
+			}
+			code := cmd.ProcessState.ExitCode()
+			log.Debug().Int("code", code).Msg("process exited")
+			exitCode <- code
+			close(exitCode)
+			close(exited)
+		}()
+
+		return exited, err
+	}
+	return handler
 }

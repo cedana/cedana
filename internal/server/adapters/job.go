@@ -6,7 +6,6 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/api/criu"
@@ -28,11 +27,11 @@ const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 
 // Adapter that fills in dump request details based on saved job info.
 // Post-dump, updates the saved job details.
-func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
-	return func(next types.DumpHandler) types.DumpHandler {
-		return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func JobDumpAdapter(db db.DB) types.Adapter[types.Dump] {
+	return func(next types.Handler[types.Dump]) types.Handler[types.Dump] {
+		next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			if req.GetType() != "job" {
-				return next(ctx, wg, resp, req)
+				return next.Handle(ctx, resp, req)
 			}
 
 			// Fill in dump request details based on saved job info
@@ -50,11 +49,12 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 			req.Details = job.Details
 			req.Type = job.Type
 
-			err = next(ctx, wg, resp, req)
+			err = next.Handle(ctx, resp, req)
 			if err != nil {
 				return err
 			}
 
+			wg := next.GetWG()
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -81,6 +81,7 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 
 			return nil
 		}
+		return next
 	}
 }
 
@@ -90,11 +91,16 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.DumpHandler] {
 
 // Adapter that fills in restore request details based on saved job info
 // Post-restore, updates the saved job details.
-func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
-	return func(next types.RestoreHandler) types.RestoreHandler {
-		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func JobRestoreAdapter(db db.DB) types.Adapter[types.Restore] {
+	return func(next types.Handler[types.Restore]) types.Handler[types.Restore] {
+		// Create child context, so we have cancellation ability over restored process created
+		// by the next handler(s).
+		lifetime, cancel := context.WithCancel(next.Lifetime)
+		next.Lifetime = lifetime
+
+		next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.GetType() != "job" {
-				return next(ctx, lifetimeCtx, wg, resp, req)
+				return next.Handle(ctx, resp, req)
 			}
 
 			// Fill in restore request details based on saved job info
@@ -122,8 +128,7 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 			req.Criu.RstSibling = proto.Bool(true)
 			req.Type = job.Type
 
-			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
-			exited, err := next(ctx, lifetimeCtx, wg, resp, req)
+			exited, err := next.Handle(ctx, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err
@@ -139,6 +144,7 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 			}
 
 			// Wait for process exit to update job
+			wg := next.GetWG()
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -154,6 +160,7 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 
 			return exited, nil
 		}
+		return next
 	}
 }
 
@@ -163,9 +170,14 @@ func JobRestoreAdapter(db db.DB) types.Adapter[types.RestoreHandler] {
 
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
-func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
-	return func(next types.StartHandler) types.StartHandler {
-		return func(ctx context.Context, lifetimeCtx context.Context, wg *sync.WaitGroup, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func JobStartAdapter(db db.DB) types.Adapter[types.Start] {
+	return func(next types.Handler[types.Start]) types.Handler[types.Start] {
+		// Create child context, so we have cancellation ability over restored process created
+		// by the next handler(s).
+		lifetime, cancel := context.WithCancel(next.Lifetime)
+		next.Lifetime = lifetime
+
+		next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 			jid := req.GetJID()
 			if jid == "" {
 				jid = namegen.GetName(1)
@@ -187,8 +199,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, jid)
 			}
 
-			lifetimeCtx, cancel := context.WithCancel(lifetimeCtx)
-			exited, err := next(ctx, lifetimeCtx, wg, resp, req)
+			exited, err := next.Handle(ctx, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err
@@ -220,6 +231,7 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 			}
 
 			// Wait for process exit to update job
+			wg := next.GetWG()
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -235,5 +247,6 @@ func JobStartAdapter(db db.DB) types.Adapter[types.StartHandler] {
 
 			return exited, nil
 		}
+		return next
 	}
 }
