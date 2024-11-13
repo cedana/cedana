@@ -332,7 +332,6 @@ var runcRestoreCmd = &cobra.Command{
 			ImagePath:   dir,
 			ContainerID: id,
 			Opts:        opts,
-			Type:        task.CRType_LOCAL,
 			CriuOpts: &task.CriuOpts{
 				FileLocks:      fileLocks,
 				TcpEstablished: tcpEstablished,

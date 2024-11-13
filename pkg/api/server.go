@@ -45,7 +45,6 @@ type service struct {
 	CRIU            *Criu
 	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db              db.DB
-	store           *utils.CedanaStore
 	serverCtx       context.Context // context alive for the duration of the server
 	wg              sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled      bool
@@ -114,7 +113,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		CRIU:            &Criu{},
 		fs:              &afero.Afero{Fs: afero.NewOsFs()},
 		db:              db.NewLocalDB(ctx),
-		store:           utils.NewCedanaStore(),
 		serverCtx:       ctx,
 		gpuEnabled:      opts.GPUEnabled,
 		machineID:       machineID,
