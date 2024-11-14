@@ -578,6 +578,12 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 		}
+
+		err = s.vmSnapshotter.Resume(args.VMSocketPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+		}
+
 		return &task.HostDumpKataResp{TarDumpDir: args.Dir}, nil
 	}
 
