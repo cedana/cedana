@@ -162,7 +162,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error snapshotting vm: %d", resp.StatusCode)
+		return fmt.Errorf("error snapshotting vm: %d, %v", resp.StatusCode, resp.Body)
 	}
 
 	return nil
@@ -199,7 +199,7 @@ func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error pausing VM: %d", resp.StatusCode)
+		return fmt.Errorf("error pausing VM: %d, %v", resp.StatusCode, resp.Body)
 	}
 
 	fmt.Println("VM paused successfully")
