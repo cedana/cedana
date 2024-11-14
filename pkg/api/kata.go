@@ -123,7 +123,7 @@ type VMSnapshot interface {
 	Snapshot(destinationURL, vmSocketPath string) error
 	Restore(snapshotPath string) error
 	Pause(vmSocketPath string) error
-	Resume() error
+	Resume(vmSocketPath string) error
 }
 
 type SnapshotRequest struct {
@@ -200,14 +200,37 @@ func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
 		return fmt.Errorf("error pausing VM: %d, %v", resp.StatusCode, resp.Body)
 	}
 
-	log.Logger.Debug().Msgf("VM paused successfully")
 	return nil
 }
 
 // Resume implements the Resume method of the VMSnapshot interface
-func (u *CloudHypervisorVM) Resume() error {
-	// This function should handle the logic to resume the VM
-	log.Logger.Debug().Msg("Resume function called")
+func (u *CloudHypervisorVM) Resume(vmSocketPath string) error {
+
+	var jsonData []byte
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", vmSocketPath)
+			},
+		},
+	}
+
+	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.resume", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create resume request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute resume request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("error resuming VM: %d, %v", resp.StatusCode, resp.Body)
+	}
 	return nil
 }
 

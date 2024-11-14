@@ -578,7 +578,7 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 		}
-		return &task.HostDumpKataResp{TarDumpDir: "NOT IMPLEMENTED"}, nil
+		return &task.HostDumpKataResp{TarDumpDir: args.Dir}, nil
 	}
 
 	cts, err := kata.NewVSockClient(vm, port)
