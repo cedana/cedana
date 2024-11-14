@@ -161,7 +161,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("error snapshotting vm: %d, %v", resp.StatusCode, resp.Body)
 	}
 
@@ -169,13 +169,11 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 }
 
 func (u *CloudHypervisorVM) Restore(snapshotPath string) error {
-	fmt.Println("Restore function called with snapshot path:", snapshotPath)
+	log.Logger.Debug().Msgf("Restore function called with snapshot path:", snapshotPath)
 	return nil
 }
 
 func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
-	fmt.Println("Pause function called")
-
 	var jsonData []byte
 
 	client := &http.Client{
@@ -202,14 +200,14 @@ func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
 		return fmt.Errorf("error pausing VM: %d, %v", resp.StatusCode, resp.Body)
 	}
 
-	fmt.Println("VM paused successfully")
+	log.Logger.Debug().Msgf("VM paused successfully")
 	return nil
 }
 
 // Resume implements the Resume method of the VMSnapshot interface
 func (u *CloudHypervisorVM) Resume() error {
 	// This function should handle the logic to resume the VM
-	fmt.Println("Resume function called")
+	log.Logger.Debug().Msg("Resume function called")
 	return nil
 }
 
