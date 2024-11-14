@@ -122,7 +122,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 type VMSnapshot interface {
 	Snapshot(destinationURL, vmSocketPath string) error
 	Restore(snapshotPath string) error
-	Pause() error
+	Pause(vmSocketPath string) error
 	Resume() error
 }
 
@@ -173,8 +173,36 @@ func (u *CloudHypervisorVM) Restore(snapshotPath string) error {
 	return nil
 }
 
-func (u *CloudHypervisorVM) Pause() error {
+func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
 	fmt.Println("Pause function called")
+
+	var jsonData []byte
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", vmSocketPath)
+			},
+		},
+	}
+
+	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.pause", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create pause request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute pause request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error pausing VM: %d", resp.StatusCode)
+	}
+
+	fmt.Println("VM paused successfully")
 	return nil
 }
 
