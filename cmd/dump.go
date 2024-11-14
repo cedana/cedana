@@ -473,6 +473,8 @@ func init() {
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
 	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpKataCmd.Flags().Bool(vmSnapshotFlag, false, "is vmsnapshot")
+	dumpKataCmd.Flags().Uint32P(portFlag, "p", DEFAULT_PORT, "port for cts client")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)
