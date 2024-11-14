@@ -558,7 +558,6 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool, jid 
 }
 
 const requestTimeout = 30 * time.Second
-const dumpTarDir = "/tmp/test"
 
 // Does rpc over vsock to kata vm for the cedana KataDump function
 func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
@@ -575,7 +574,7 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 		}
 
-		err = s.vmSnapshotter.Snapshot(dumpTarDir, args.VMSocketPath)
+		err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 		}
