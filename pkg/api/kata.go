@@ -148,7 +148,8 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 		},
 	}
 
-	req, err := http.NewRequest("PUT", "http://localhost/snapshot", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.snapshot", bytes.NewBuffer(jsonData))
+
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
