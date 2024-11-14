@@ -196,7 +196,7 @@ func (u *CloudHypervisorVM) Pause(vmSocketPath string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("error pausing VM: %d, %v", resp.StatusCode, resp.Body)
 	}
 
