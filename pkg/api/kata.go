@@ -167,7 +167,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 	log.Logger.Debug().Msgf("Request Headers: %v\n", req.Header)
 
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("error snapshotting vm: %d, %v, req data: ", resp.StatusCode, resp.Body)
+		return fmt.Errorf("error snapshotting vm: %d, %v, req data: %v", resp.StatusCode, resp.Body, data)
 	}
 
 	return nil
