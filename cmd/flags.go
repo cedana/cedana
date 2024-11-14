@@ -45,4 +45,5 @@ const (
 	pidFileFlag          = "pid-file"
 	modeFlag             = "mode"
 	vmSnapshotFlag       = "vm-snapshot"
+	vmSocketPathFlag     = "vm-socket-path"
 )

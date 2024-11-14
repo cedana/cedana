@@ -176,7 +176,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 
 	// For now we only support CloudHypervisor but we should add to the snappshotter more VMs
 	// and choose them at the snapshot function level
-	vmSnapshotter := CloudHypervisorVM{opts.VMSocketPath}
+	vmSnapshotter := CloudHypervisorVM{}
 	server, err := NewServer(srvCtx, opts, &vmSnapshotter)
 	if err != nil {
 		return err

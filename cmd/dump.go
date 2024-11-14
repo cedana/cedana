@@ -112,12 +112,14 @@ var dumpKataCmd = &cobra.Command{
 
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		vmSnapshot, _ := cmd.Flags().GetBool(vmSnapshotFlag)
+		vmSocketPath, _ := cmd.Flags().GetString(vmSocketPathFlag)
 
 		dumpArgs := &task.HostDumpKataArgs{
-			VmName:     vm,
-			Dir:        dir,
-			Port:       1024,
-			VMSnapshot: vmSnapshot,
+			VmName:       vm,
+			Dir:          dir,
+			Port:         1024,
+			VMSnapshot:   vmSnapshot,
+			VMSocketPath: vmSocketPath,
 		}
 
 		resp, err := cts.HostKataDump(ctx, dumpArgs)
@@ -473,8 +475,10 @@ func init() {
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
 	dumpKataCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
+	dumpKataCmd.MarkFlagRequired(dirFlag)
 	dumpKataCmd.Flags().Bool(vmSnapshotFlag, false, "is vmsnapshot")
 	dumpKataCmd.Flags().Uint32P(portFlag, "p", DEFAULT_PORT, "port for cts client")
+	dumpKataCmd.Flags().String(vmSocketPathFlag, "", "socket path for full vm snapshot")
 
 	// Containerd
 	dumpCmd.AddCommand(dumpContainerdCmd)

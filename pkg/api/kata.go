@@ -120,7 +120,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 }
 
 type VMSnapshot interface {
-	Snapshot(destinationURL string) error
+	Snapshot(destinationURL, vmSocketPath string) error
 	Restore(snapshotPath string) error
 	Pause() error
 	Resume() error
@@ -131,10 +131,9 @@ type SnapshotRequest struct {
 }
 
 type CloudHypervisorVM struct {
-	socketPath string
 }
 
-func (u *CloudHypervisorVM) Snapshot(destinationURL string) error {
+func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error {
 	data := SnapshotRequest{DestinationURL: destinationURL}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -144,7 +143,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL string) error {
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", u.socketPath)
+				return (&net.Dialer{}).DialContext(ctx, "unix", vmSocketPath)
 			},
 		},
 	}
@@ -187,7 +186,7 @@ func (u *CloudHypervisorVM) Resume() error {
 
 // NewUnixSocketVMSnapshot creates a new UnixSocketVMSnapshot with the given socket path
 func NewUnixSocketVMSnapshot(socketPath string) *CloudHypervisorVM {
-	return &CloudHypervisorVM{socketPath: socketPath}
+	return &CloudHypervisorVM{}
 }
 
 //////////////////////////

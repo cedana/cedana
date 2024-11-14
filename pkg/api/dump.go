@@ -570,7 +570,7 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 	dir := args.Dir
 
 	if args.VMSnapshot {
-		err := s.vmSnapshotter.Snapshot(dumpTarDir)
+		err := s.vmSnapshotter.Snapshot(dumpTarDir, args.VMSocketPath)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 		}
