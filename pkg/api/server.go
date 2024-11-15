@@ -107,7 +107,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	var database db.DB
 	if viper.GetBool("remote") {
-		database = db.NewRemoteDB(ctx, viper.GetString("connection.cedana_url")+"/k8s/jobs")
+		database = db.NewRemoteDB(ctx, viper.GetString("connection.cedana_url")+"/jobs")
 	} else {
 		database = db.NewLocalDB(ctx)
 	}

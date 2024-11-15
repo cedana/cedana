@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/cedana/cedana/pkg/db/models"
+	"github.com/spf13/viper"
 )
 
 type RemoteDB struct {
@@ -29,11 +30,13 @@ func NewRemoteDB(ctx context.Context, baseUrl string) DB {
 /////////////
 
 func (db *RemoteDB) GetJob(ctx context.Context, jid []byte) (models.Job, error) {
-	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, jid)
+	url := fmt.Sprintf("%s/%s", db.baseUrl, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return models.Job{}, err
 	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -58,7 +61,7 @@ func (db *RemoteDB) GetJob(ctx context.Context, jid []byte) (models.Job, error) 
 /////////////
 
 func (db *RemoteDB) PutJob(ctx context.Context, jid []byte, state []byte) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, jid)
+	url := fmt.Sprintf("%s/%s", db.baseUrl, jid)
 
 	jobData := map[string][]byte{
 		"jid":   jid,
@@ -74,6 +77,7 @@ func (db *RemoteDB) PutJob(ctx context.Context, jid []byte, state []byte) error 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -93,11 +97,13 @@ func (db *RemoteDB) PutJob(ctx context.Context, jid []byte, state []byte) error 
 /////////////
 
 func (db *RemoteDB) ListJobs(ctx context.Context) ([]models.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.baseUrl)
+	url := fmt.Sprintf("%s", db.baseUrl)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
