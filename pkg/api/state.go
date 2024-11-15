@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
-	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
