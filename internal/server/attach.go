@@ -29,7 +29,7 @@ func (s *Server) Attach(stream daemon.Daemon_AttachServer) error {
 		return status.Errorf(codes.NotFound, "process %d has no IO slave", pid)
 	}
 
-	lifetime, cancel := context.WithTimeout(s.ctx, ATTACH_TIMEOUT)
+	lifetime, cancel := context.WithTimeout(s.lifetime, ATTACH_TIMEOUT)
 	defer cancel()
 
 	err = slave.Attach(lifetime, stream)

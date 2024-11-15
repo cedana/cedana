@@ -29,7 +29,7 @@ type Server struct {
 	db   db.DB
 
 	wg  *sync.WaitGroup // for waiting for all background tasks to finish
-	ctx context.Context // context alive for the duration of the server
+	lifetime context.Context // context alive for the duration of the server
 
 	machine Machine
 
@@ -125,7 +125,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 func (s *Server) Launch(ctx context.Context) error {
 	// Create a child context for the server
 	ctx, cancel := context.WithCancelCause(ctx)
-	s.ctx = ctx
+	s.lifetime = ctx
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)

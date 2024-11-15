@@ -103,13 +103,13 @@ type Manager interface {
 func (t Type) String() string {
 	switch t {
 	case Supported:
-		return "Supported"
+		return "supported"
 	case Experimental:
-		return "Experimental"
+		return "experimental"
 	case Deprecated:
-		return "Deprecated"
+		return "deprecated"
 	case Unimplemented:
-		return "Unimplemented"
+		return "unimplemented"
 	default:
 		return "-"
 	}
@@ -118,9 +118,9 @@ func (t Type) String() string {
 func (s Status) String() string {
 	switch s {
 	case Available:
-		return "Available"
+		return "available"
 	case Installed:
-		return "Installed"
+		return "installed"
 	default:
 		return "-"
 	}

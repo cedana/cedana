@@ -16,8 +16,8 @@ import (
 ///////////////////////
 
 // Adapter that just checks all required fields are present in the request
-func ValidateDumpRequest(next types.Handler[types.Dump]) types.Handler[types.Dump] {
-	next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func ValidateDumpRequest(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			return status.Errorf(codes.InvalidArgument, "no dump dir specified")
 		}
@@ -28,9 +28,8 @@ func ValidateDumpRequest(next types.Handler[types.Dump]) types.Handler[types.Dum
 			return status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }
 
 //////////////////////////
@@ -38,8 +37,8 @@ func ValidateDumpRequest(next types.Handler[types.Dump]) types.Handler[types.Dum
 //////////////////////////
 
 // Adapter that validates the restore request
-func ValidateRestoreRequest(next types.Handler[types.Restore]) types.Handler[types.Restore] {
-	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func ValidateRestoreRequest(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		if req.GetPath() == "" {
 			return nil, status.Error(codes.InvalidArgument, "no path provided")
 		}
@@ -47,9 +46,8 @@ func ValidateRestoreRequest(next types.Handler[types.Restore]) types.Handler[typ
 			return nil, status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }
 
 ////////////////////////
@@ -57,8 +55,8 @@ func ValidateRestoreRequest(next types.Handler[types.Restore]) types.Handler[typ
 ////////////////////////
 
 // Adapter that validates the start request
-func ValidateStartRequest(next types.Handler[types.Start]) types.Handler[types.Start] {
-	next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func ValidateStartRequest(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 		if req.GetType() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
 		}
@@ -66,7 +64,6 @@ func ValidateStartRequest(next types.Handler[types.Start]) types.Handler[types.S
 			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
 		}
 		// Check if JID already exists
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }

@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -16,8 +15,8 @@ import (
 //// Dump Adapters ////
 ///////////////////////
 
-func ValidateDumpRequest(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func ValidateDumpRequest(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDetails().GetRunc().GetRoot() == "" {
 			return status.Errorf(codes.InvalidArgument, "missing root")
 		}
@@ -25,7 +24,7 @@ func ValidateDumpRequest(h types.DumpHandler) types.DumpHandler {
 			return status.Errorf(codes.InvalidArgument, "missing id")
 		}
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 

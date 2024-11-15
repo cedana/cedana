@@ -4,7 +4,6 @@ package adapters
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -20,8 +19,8 @@ import (
 //// Dump Adapters ////
 ///////////////////////
 
-func GetContainerForDump(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func GetContainerForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
@@ -32,6 +31,6 @@ func GetContainerForDump(h types.DumpHandler) types.DumpHandler {
 
 		ctx = context.WithValue(ctx, runc_types.DUMP_CONTAINER_CONTEXT_KEY, container)
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

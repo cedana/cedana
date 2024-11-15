@@ -36,10 +36,16 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		adapters.CloseCommonFilesForDump,
 	}
 
-	dump := handlers.Dump(ctx, s.wg, s.criu).With(middleware...)
+	dump := handlers.Dump().With(middleware...)
 
+	opts := types.ServerOpts{
+		Lifetime: s.lifetime,
+		CRIU:     s.criu,
+		WG:       s.wg,
+	}
 	resp := &daemon.DumpResp{}
-	err := dump.Handle(ctx, resp, req)
+
+	err := dump(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +60,8 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 //////////////////////////
 
 // Adapter that inserts new adapters after itself based on the type of dump.
-func pluginDumpMiddleware(next types.Handler[types.Dump]) types.Handler[types.Dump] {
-	next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) (err error) {
+func pluginDumpMiddleware(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
@@ -75,7 +81,6 @@ func pluginDumpMiddleware(next types.Handler[types.Dump]) types.Handler[types.Du
 				return status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...).Handle(ctx, resp, req)
+		return next.With(middleware...)(ctx, server, resp, req)
 	}
-	return next
 }

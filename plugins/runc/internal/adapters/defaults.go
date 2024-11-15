@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/api/plugins/runc"
@@ -18,8 +17,8 @@ const defaultRoot = "/run/runc"
 //// Dump Adapters ////
 ///////////////////////
 
-func FillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
-	return func(ctx context.Context, wg *sync.WaitGroup, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func FillMissingDumpDefaults(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -32,7 +31,7 @@ func FillMissingDumpDefaults(h types.DumpHandler) types.DumpHandler {
 			req.Details.Runc.Root = defaultRoot
 		}
 
-		return h(ctx, wg, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"sync"
 
 	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
@@ -26,15 +25,19 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 		adapters.ValidateStartRequest,
 	}
 
-	start := pluginStartHandler(s.ctx, s.wg).With(middleware...)
-
-	resp := &daemon.StartResp{}
+	start := pluginStartHandler().With(middleware...)
 
 	// s.ctx is the lifetime context of the server, pass it so that
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := start.Handle(ctx, resp, req)
+	opts := types.ServerOpts{
+		Lifetime: s.lifetime,
+		WG:       s.wg,
+	}
+	resp := &daemon.StartResp{}
+
+	_, err := start(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -49,20 +52,18 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 //////////////////////////
 
 // Handler that returns the type-specific handler for the job
-func pluginStartHandler(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start] {
-	handler := types.NewHandler[types.Start](wg, nil)
-	handler.Lifetime = lifetime
-	handler.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
+func pluginStartHandler() types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 		t := req.GetType()
-		var handler types.Handler[types.Start]
+		var handler types.Start
 		switch t {
 		case "process":
-			handler = handlers.Run(lifetime, wg)
+			handler = handlers.Run()
 		default:
 			// Use plugin-specific handler
 			err = plugins.IfFeatureAvailable(plugins.FEATURE_START_HANDLER, func(
 				name string,
-				pluginHandler types.Handler[types.Start],
+				pluginHandler types.Start,
 			) error {
 				handler = pluginHandler
 				return nil
@@ -71,7 +72,6 @@ func pluginStartHandler(lifetime context.Context, wg *sync.WaitGroup) types.Hand
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return handler.Handle(ctx, resp, req)
+		return handler(ctx, server, resp, req)
 	}
-	return handler
 }

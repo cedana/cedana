@@ -18,10 +18,16 @@ func init() {
 
 	// Add common flags
 	startCmd.PersistentFlags().StringP(types.JidFlag.Full, types.JidFlag.Short, "", "job id")
-	startCmd.PersistentFlags().BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
-	startCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
-	startCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
-	startCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full) // only one of these can be set
+	startCmd.PersistentFlags().
+		BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
+	startCmd.PersistentFlags().
+		BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
+	startCmd.PersistentFlags().
+		StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
+	startCmd.MarkFlagsMutuallyExclusive(
+		types.AttachFlag.Full,
+		types.LogFlag.Full,
+	) // only one of these can be set
 
 	// Sync flags with aliases
 	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
@@ -30,10 +36,13 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_CMD, func(name string, pluginCmd **cobra.Command) error {
-		startCmd.AddCommand(*pluginCmd)
-		return nil
-	})
+	plugins.IfFeatureAvailable(
+		plugins.FEATURE_START_CMD,
+		func(name string, pluginCmd **cobra.Command) error {
+			startCmd.AddCommand(*pluginCmd)
+			return nil
+		},
+	)
 }
 
 var startCmd = &cobra.Command{
@@ -74,7 +83,11 @@ var startCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(cmd.Context(), types.START_REQ_CONTEXT_KEY, &daemon.StartReq{})
+		req := utils.GetContextValSafe(
+			cmd.Context(),
+			types.START_REQ_CONTEXT_KEY,
+			&daemon.StartReq{},
+		)
 
 		resp, err := client.Start(cmd.Context(), req)
 		if err != nil {
@@ -101,7 +114,11 @@ var processStartCmd = &cobra.Command{
 	Short: "Start a managed process (job)",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := utils.GetContextValSafe(cmd.Context(), types.START_REQ_CONTEXT_KEY, &daemon.StartReq{})
+		req := utils.GetContextValSafe(
+			cmd.Context(),
+			types.START_REQ_CONTEXT_KEY,
+			&daemon.StartReq{},
+		)
 
 		path := args[0]
 		args = args[1:]

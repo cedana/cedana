@@ -18,8 +18,8 @@ import (
 ///////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingDumpDefaults(next types.Handler[types.Dump]) types.Handler[types.Dump] {
-	next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func FillMissingDumpDefaults(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 		if req.GetDir() == "" {
 			req.Dir = config.Get(config.STORAGE_DUMP_DIR)
 		}
@@ -33,9 +33,8 @@ func FillMissingDumpDefaults(next types.Handler[types.Dump]) types.Handler[types
 			req.Criu.LeaveRunning = proto.Bool(config.Get(config.CRIU_LEAVE_RUNNING))
 		}
 
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }
 
 //////////////////////////
@@ -43,13 +42,12 @@ func FillMissingDumpDefaults(next types.Handler[types.Dump]) types.Handler[types
 //////////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingRestoreDefaults(next types.Handler[types.Restore]) types.Handler[types.Restore] {
-	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func FillMissingRestoreDefaults(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Nothing to do, yet
 
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }
 
 ////////////////////////
@@ -57,10 +55,10 @@ func FillMissingRestoreDefaults(next types.Handler[types.Restore]) types.Handler
 ////////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingStartDefaults(next types.Handler[types.Start]) types.Handler[types.Start] {
-	next.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func FillMissingStartDefaults(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 		// Nothing to fill in for now
-		return next.Handle(ctx, resp, req)
+
+		return next(ctx, server, resp, req)
 	}
-	return next
 }

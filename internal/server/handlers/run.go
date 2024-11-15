@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"sync"
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
@@ -24,10 +23,8 @@ const (
 )
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
-func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start] {
-	handler := types.NewHandler[types.Start](wg, nil)
-	handler.Lifetime = lifetime
-	handler.Handle = func(ctx context.Context, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
+func Run() types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
 		opts := req.GetDetails().GetProcessStart()
 		if opts == nil {
 			return nil, status.Error(codes.InvalidArgument, "missing process start options")
@@ -40,7 +37,7 @@ func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start
 		for i, v := range opts.Groups {
 			groupsUint32[i] = uint32(v)
 		}
-		cmd := exec.CommandContext(lifetime, opts.Path, opts.Args...)
+		cmd := exec.CommandContext(server.Lifetime, opts.Path, opts.Args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
 			Credential: &syscall.Credential{
@@ -57,7 +54,7 @@ func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start
 		if req.Attach {
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetime, id, exitCode)
+			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(server.Lifetime, id, exitCode)
 			defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
 			cmd.Stdin = stdIn
 			cmd.Stdout = stdOut
@@ -82,9 +79,9 @@ func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start
 
 		// Wait for the process to exit, send exit code
 		exited = make(chan int)
-		wg.Add(1)
+		server.WG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer server.WG.Done()
 			err := cmd.Wait()
 			if err != nil {
 				log.Debug().Err(err).Msg("process Wait()")
@@ -98,5 +95,4 @@ func Run(lifetime context.Context, wg *sync.WaitGroup) types.Handler[types.Start
 
 		return exited, err
 	}
-	return handler
 }

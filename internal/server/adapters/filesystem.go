@@ -30,14 +30,14 @@ const (
 
 // This adapter ensures the specified dump dir exists and is writable.
 // Creates a unique directory within this directory for the dump.
-// Updates the CRIU opts to use this newly created directory.
+// Updates the CRIU server to use this newly created directory.
 // Compresses the dump directory post-dump, based on the compression format provided:
 //   - "none" does not compress the dump directory
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
-	return func(next types.Handler[types.Dump]) types.Handler[types.Dump] {
-		next.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(next types.Dump) types.Dump {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
 			dir := req.GetDir()
 
 			// Check if the provided dir exists
@@ -55,7 +55,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 				return status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 			}
 
-			// Set CRIU opts
+			// Set CRIU server
 			f, err := os.Open(imagesDirectory)
 			if err != nil {
 				os.Remove(imagesDirectory)
@@ -70,7 +70,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 			req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 			req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
-			err = next.Handle(ctx, resp, req)
+			err = next(ctx, server, resp, req)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
 				return err
@@ -98,7 +98,6 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 			return nil
 		}
-		return next
 	}
 }
 
@@ -108,8 +107,8 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
-func PrepareRestoreDir(next types.Handler[types.Restore]) types.Handler[types.Restore] {
-	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func PrepareRestoreDir(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
@@ -149,7 +148,6 @@ func PrepareRestoreDir(next types.Handler[types.Restore]) types.Handler[types.Re
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		return next.Handle(ctx, resp, req)
+		return next(ctx, server, resp, req)
 	}
-	return next
 }

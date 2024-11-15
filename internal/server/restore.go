@@ -33,15 +33,20 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		adapters.InheritOpenFilesForRestore,
 	}
 
-	restore := handlers.Restore(ctx, s.wg, s.criu).With(middleware...)
+	restore := handlers.Restore().With(middleware...)
 
+	opts := types.ServerOpts{
+		Lifetime: s.lifetime,
+		CRIU:     s.criu,
+		WG:       s.wg,
+	}
 	resp := &daemon.RestoreResp{}
 
 	// s.ctx is the lifetime context of the server, pass it so that
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := restore.Handle(ctx, resp, req)
+	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +61,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 //////////////////////////
 
 // Adapter that inserts new adapters based on the type of restore request
-func pluginRestoreMiddleware(next types.Handler[types.Restore]) types.Handler[types.Restore] {
-	next.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+func pluginRestoreMiddleware(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.GetType()
 		switch t {
@@ -76,7 +81,6 @@ func pluginRestoreMiddleware(next types.Handler[types.Restore]) types.Handler[ty
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...).Handle(ctx, resp, req)
+		return next.With(middleware...)(ctx, server, resp, req)
 	}
-	return next
 }

@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/api/daemon"
@@ -28,37 +27,34 @@ const (
 )
 
 // Returns a CRIU dump handler for the server
-func Dump(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.Handler[types.Dump] {
-	handler := types.NewHandler[types.Dump](wg, c)
-	handler.Lifetime = lifetime
-	handler.Handle = func(ctx context.Context, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		opts := req.GetCriu()
-		if opts == nil {
+func Dump() types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+		if req.GetCriu() == nil {
 			return status.Error(codes.InvalidArgument, "criu options is nil")
 		}
 
-		version, err := c.GetCriuVersion()
+		version, err := server.CRIU.GetCriuVersion()
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
 		criuOpts := req.GetCriu()
 
-		// Set CRIU opts
+		// Set CRIU server
 		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
 		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 		criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 		criuOpts.NotifyScripts = proto.Bool(true)
 
-		log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
+		log.Debug().Int("CRIU", version).Interface("server", criuOpts).Msg("CRIU dump starting")
 
 		// Capture internal logs from CRIU
-		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
+		logfile := filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
 		go utils.TraceFile(ctx, logfile)
 
-		_, err = c.Dump(criuOpts, criu.NoNotify{})
+		_, err = server.CRIU.Dump(criuOpts, criu.NoNotify{})
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 		}
@@ -67,30 +63,26 @@ func Dump(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.Hand
 
 		return err
 	}
-	return handler
 }
 
 // Returns a CRIU restore handler for the server
-func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.Handler[types.Restore] {
-	handler := types.NewHandler[types.Restore](wg, c)
-	handler.Lifetime = lifetime
-	handler.Handle = func(ctx context.Context, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func Restore() types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		extraFiles := utils.GetContextValSafe(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, []*os.File{})
 		ioFiles := utils.GetContextValSafe(ctx, types.RESTORE_IO_FILES_CONTEXT_KEY, []*os.File{})
 
-		opts := req.GetCriu()
-		if opts == nil {
+		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
 
-		version, err := c.GetCriuVersion()
+		version, err := server.CRIU.GetCriuVersion()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
 		criuOpts := req.GetCriu()
 
-		// Set CRIU opts
+		// Set CRIU server
 		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
 		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
@@ -98,10 +90,10 @@ func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.H
 		criuOpts.NotifyScripts = proto.Bool(true)
 		criuOpts.OrphanPtsMaster = proto.Bool(false)
 
-		log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
+		log.Debug().Int("CRIU", version).Interface("server", criuOpts).Msg("CRIU restore starting")
 
 		// Capture internal logs from CRIU
-		logfile := filepath.Join(opts.GetImagesDir(), CRIU_LOG_FILE)
+		logfile := filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE)
 		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
 		go utils.TraceFile(ctx, logfile)
 
@@ -115,14 +107,14 @@ func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.H
 			inWriter, outReader, errReader = ioFiles[0], ioFiles[1], ioFiles[2]
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(lifetime, id, exitCode)
+			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(server.Lifetime, id, exitCode)
 			defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
 			go io.Copy(inWriter, stdIn)
 			go io.Copy(stdOut, outReader)
 			go io.Copy(stdErr, errReader)
 		}
 
-		criuResp, err := c.Restore(criuOpts, criu.NoNotify{}, extraFiles...)
+		criuResp, err := server.CRIU.Restore(criuOpts, criu.NoNotify{}, extraFiles...)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
 		}
@@ -131,10 +123,10 @@ func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.H
 		// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
 		// as their could be goroutines waiting on it.
 		exited := make(chan int)
-		if opts.GetRstSibling() {
-			wg.Add(1)
+		if criuOpts.GetRstSibling() {
+			server.WG.Add(1)
 			go func() {
-				defer wg.Done()
+				defer server.WG.Done()
 				var status syscall.WaitStatus
 				_, err := syscall.Wait4(int(resp.PID), &status, 0, nil)
 				if err != nil {
@@ -148,10 +140,10 @@ func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.H
 			}()
 
 			// Also kill the process if it's lifetime expires
-			wg.Add(1)
+			server.WG.Add(1)
 			go func() {
-				defer wg.Done()
-				<-lifetime.Done()
+				defer server.WG.Done()
+				<-server.Lifetime.Done()
 				syscall.Kill(int(resp.PID), syscall.SIGKILL)
 			}()
 		} else {
@@ -163,5 +155,4 @@ func Restore(lifetime context.Context, wg *sync.WaitGroup, c *criu.Criu) types.H
 
 		return exited, err
 	}
-	return handler
 }
