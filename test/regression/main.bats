@@ -321,6 +321,9 @@ teardown() {
     local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
     [ $nlines_after -gt $nlines_before ]
 
+    # start managing the container
+    runc_manage $job_id
+
     # checkpoint the container
     checkpoint_task $job_id $dumpdir --leave-running
     [ -d $dumpdir ]
@@ -333,7 +336,7 @@ teardown() {
 # NOTE: Assumes that "Managed runc checkpoint" test has been run
 @test "Managed runc (job) restore" {
     local bundle=$DIR/bundle
-    local job_id="managed-runc-test-restored"
+    local job_id="managed-runc-test"
     local out_file=$bundle/rootfs/out
     local dumpdir=$DIR/dump
 

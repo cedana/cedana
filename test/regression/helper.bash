@@ -118,6 +118,12 @@ function runc_restore_tty() {
     cedana restore runc -e -b "$bundle" --image "$img" --id "$id" --console-socket "$tty"
 }
 
+function runc_manage() {
+    local id="$1"
+    shift 1
+    cedana manage runc --id "$id" $@
+}
+
 function fail() {
     echo "$@" >&2
     exit 1
