@@ -19,14 +19,26 @@ function exec_task() {
 
 function checkpoint_task() {
     local job_id="$1"
-    shift 1
-    cedana dump job "$job_id" -d /tmp $@
+    if [ $# -gt 1 ]; then
+        local dir="$2"
+        shift 2
+        cedana dump job "$job_id" -d "$dir" $@
+    else
+        shift 1
+        cedana dump job "$job_id" -d /tmp $@
+    fi
 }
 
 function restore_task() {
     local job_id="$1"
-    shift 1
-    cedana restore job "$job_id" $@
+    if [ $# -gt 1 ]; then
+        local img="$2"
+        shift 2
+        cedana restore job "$job_id" -i "$img" $@
+    else
+        shift 1
+        cedana restore job "$job_id" $@
+    fi
 }
 
 function start_busybox(){
@@ -96,10 +108,10 @@ function runc_checkpoint() {
 # /run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore
 function runc_restore() {
     local bundle="$1"
-    local dir="$2"
+    local img="$2"
     local id="$3"
     local tty="$4"
-    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
+    cedana restore runc -e -b "$bundle" --path "$img" --id "$id" --console-socket "$tty"
 }
 
 function runc_restore_jupyter() {

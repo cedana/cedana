@@ -270,6 +270,7 @@ teardown() {
     sudo runc delete $job_id
 }
 
+# NOTE: Assumes that "Simple runc checkpoint" test has been run
 @test "Simple runc restore" {
     local bundle=$DIR/bundle
     local job_id="runc-test-restored"
@@ -281,7 +282,7 @@ teardown() {
     [ -d $dumpdir ]
     echo $dumpdir contents:
     ls $dumpdir
-    runc_restore $bundle $dumpdir $job_id $TTY_SOCK
+    runc_restore $bundle $dumpdir.tar $job_id $TTY_SOCK
 
     sleep 1 3>-
 
@@ -295,4 +296,65 @@ teardown() {
     # clean up
     sudo runc kill $job_id SIGKILL
     sudo runc delete $job_id
+    sudo rm -rf $dumpdir*
+}
+
+# NOTE: Assumes that "Simple runc checkpoint" has been run as it uses the same bundle
+@test "Managed runc (job) checkpoint" {
+    local bundle=$DIR/bundle
+    echo bundle is $bundle
+    local job_id="managed-runc-test"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$DIR/dump
+
+    # create a runc container
+    echo bundle is $bundle
+    echo jobid is $job_id
+
+    sudo runc run $job_id -b $bundle -d --console-socket $TTY_SOCK
+    sleep 2 3>-
+    sudo runc list
+
+    # check if container running correctly, count lines in output file
+    local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
+
+    # checkpoint the container
+    checkpoint_task $job_id $dumpdir --leave-running
+    [ -d $dumpdir ]
+
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
+}
+
+# NOTE: Assumes that "Managed runc checkpoint" test has been run
+@test "Managed runc (job) restore" {
+    local bundle=$DIR/bundle
+    local job_id="managed-runc-test-restored"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$DIR/dump
+
+    # restore the container
+    [ -d $bundle ]
+    [ -d $dumpdir ]
+    echo $dumpdir contents:
+    ls $dumpdir
+    restore_task $job_id $dumpdir.tar -e -b $bundle -c $TTY_SOCK
+
+    sleep 1 3>-
+
+    # check if container running correctly, count lines in output file
+    [ -f $out_file ]
+    local nlines_before=$(wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
+
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
+    sudo rm -rf $dumpdir
 }

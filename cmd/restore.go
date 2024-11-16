@@ -101,6 +101,7 @@ var restoreJobCmd = &cobra.Command{
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
+		img, err := cmd.Flags().GetString(imgFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
@@ -108,8 +109,9 @@ var restoreJobCmd = &cobra.Command{
 			}
 		}
 		restoreArgs := &task.JobRestoreArgs{
-			JID:    jid,
-			Stream: stream,
+			JID:            jid,
+			Stream:         stream,
+			CheckpointPath: img,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
 				TcpClose:       tcpCloseFlag,
@@ -372,6 +374,7 @@ func init() {
 	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")
 	restoreJobCmd.Flags().BoolP(detachFlag, "e", false, "(runc) restore detached")
 	restoreJobCmd.Flags().StringP(rootFlag, "r", "default", "(runc) root")
+	restoreJobCmd.Flags().StringP(imgFlag, "i", "", "checkpoint image")
 
 	// Kata
 	restoreCmd.AddCommand(restoreKataCmd)
@@ -380,7 +383,7 @@ func init() {
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
-	containerdRestoreCmd.Flags().String(imgFlag, "", "image ref")
+	containerdRestoreCmd.Flags().String(imgFlag, "", "checkpoint image")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
