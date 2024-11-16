@@ -229,7 +229,7 @@ func (s *service) Restore(ctx context.Context, args *task.RestoreArgs) (*task.Re
 	return s.restoreHelper(ctx, args, nil)
 }
 
-func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) error {
+func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.RestoreAtta
 ///// Process Utils //////
 //////////////////////////
 
-func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (*task.StartResp, error) {
+func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (*task.StartResp, error) {
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
 	}
@@ -326,7 +326,7 @@ func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream 
 	}, err
 }
 
-func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) (*task.RestoreResp, error) {
+func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (*task.RestoreResp, error) {
 	var resp task.RestoreResp
 	var pid int32
 	var err error
@@ -462,7 +462,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 	return &resp, nil
 }
 
-func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.StartAttachArgs, task.StartAttachResp]) (int32, chan int, error) {
+func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (int32, chan int, error) {
 	var pid int32
 	if args.Task == "" {
 		return 0, nil, fmt.Errorf("could not find task")
