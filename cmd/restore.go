@@ -327,11 +327,11 @@ var runcRestoreCmd = &cobra.Command{
 			NetPid:        netPid,
 		}
 
-		dir, _ := cmd.Flags().GetString(dirFlag)
+		img, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   dir,
+			ImagePath:   img,
 			ContainerID: id,
 			Opts:        opts,
 			CriuOpts: &task.CriuOpts{
@@ -390,8 +390,8 @@ func init() {
 
 	// Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
-	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
-	runcRestoreCmd.MarkFlagRequired("dir")
+	runcRestoreCmd.Flags().StringP(imgFlag, "", "", "checkpoint image to restore from")
+	runcRestoreCmd.MarkFlagRequired(imgFlag)
 	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")

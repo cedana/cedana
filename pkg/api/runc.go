@@ -233,7 +233,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		}
 	}
 
-	if jid != "" {
+	if jid != "" { // if managed job
 		if args.ImagePath == "" {
 			args.ImagePath = state.CheckpointPath
 		}

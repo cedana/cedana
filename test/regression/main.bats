@@ -73,7 +73,7 @@ teardown() {
     # execute, checkpoint and restore a job
     exec_task $task $job_id
     sleep 2 3>-
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 2 3>-
     restore_task $job_id
 
@@ -114,7 +114,7 @@ teardown() {
     sleep 2 3>-
 
     # checkpoint and restore the job
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 2 3>-
     restore_task $job_id
 
@@ -152,7 +152,7 @@ teardown() {
     # try to dump unmanaged process with GPU flags
     run exec_task $task $job_id
     [ "$status" -eq 0 ]
-    run checkpoint_task $job_id --gpu-enabled
+    run checkpoint_task $job_id /tmp --gpu-enabled
     [ "$status" -ne 0 ]
 }
 
@@ -176,7 +176,7 @@ teardown() {
     # execute, checkpoint and restore a job
     exec_task $task $job_id
     sleep 1 3>-
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 1 3>-
     run restore_task $job_id --attach
 
@@ -226,7 +226,7 @@ teardown() {
     pid=$(cat "$bundle"/init.pid)
 
     # restore the container
-    run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
+    run runc_restore $bundle $dumpdir.tar $container_id
     echo "$output"
 
     [[ "$output" == *"Success"* ]]
@@ -282,7 +282,7 @@ teardown() {
     [ -d $dumpdir ]
     echo $dumpdir contents:
     ls $dumpdir
-    runc_restore $bundle $dumpdir.tar $job_id $TTY_SOCK
+    runc_restore_tty $bundle $dumpdir.tar $job_id $TTY_SOCK
 
     sleep 1 3>-
 
