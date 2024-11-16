@@ -235,7 +235,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	if jid != "" {
 		if args.ImagePath == "" {
-			// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
 			args.ImagePath = state.CheckpointPath
 		}
 	}
