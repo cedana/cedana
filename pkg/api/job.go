@@ -28,7 +28,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			JID:      args.JID,
 			PID:      state.PID,
 			Dir:      args.Dir,
-			Type:     args.Type,
 			Stream:   args.Stream,
 			CriuOpts: args.CriuOpts,
 		})
@@ -38,7 +37,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.State = dumpResp.State
 		res.DumpStats = dumpResp.DumpStats
 		res.CheckpointID = dumpResp.CheckpointID
-		res.UploadID = dumpResp.UploadID
 		res.Message = dumpResp.Message
 	} else {
 		dumpResp, err := s.RuncDump(ctx, &task.RuncDumpArgs{
@@ -46,7 +44,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			Root:        state.ContainerRoot,
 			ContainerID: state.ContainerID,
 			CriuOpts:    args.CriuOpts,
-			Type:        args.Type,
 		})
 		if err != nil {
 			return nil, err
@@ -54,7 +51,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.State = dumpResp.State
 		res.DumpStats = dumpResp.DumpStats
 		res.CheckpointID = dumpResp.CheckpointID
-		res.UploadID = dumpResp.UploadID
 		res.Message = dumpResp.Message
 	}
 
@@ -106,7 +102,6 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 			ContainerID: state.ContainerID,
 			ImagePath:   state.CheckpointPath,
 			Opts:        opts,
-			Type:        args.Type,
 			CriuOpts:    args.CriuOpts,
 		})
 		if err != nil {
@@ -143,7 +138,6 @@ func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServe
 			JID:      args.JID,
 			Stream:   args.Stream,
 			CriuOpts: args.CriuOpts,
-			Type:     args.Type,
 		}, stream)
 	} else {
 		err = status.Error(codes.Unimplemented, "restore attach for runc is not supported")

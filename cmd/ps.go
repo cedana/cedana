@@ -42,15 +42,7 @@ var psCmd = &cobra.Command{
 		}
 
 		for _, v := range resp.Processes {
-			var checkpoint, status string
-			if v.RemoteState != nil {
-				// For now just grab latest checkpoint
-				checkpoint = fmt.Sprintf("%s (remote)", v.RemoteState[len(v.RemoteState)-1].CheckpointID)
-			} else {
-				checkpoint = v.CheckpointPath
-			}
-
-			status = v.JobState.String()
+			status := v.JobState.String()
 			pid := strconv.Itoa(int(v.PID))
 			gpu := strconv.FormatBool(v.GPU)
 			var typ string
@@ -60,7 +52,7 @@ var psCmd = &cobra.Command{
 				typ = "runc"
 			}
 
-			table.Append([]string{v.JID, typ, pid, status, checkpoint, gpu})
+			table.Append([]string{v.JID, typ, pid, status, v.CheckpointPath, gpu})
 		}
 
 		table.Render()

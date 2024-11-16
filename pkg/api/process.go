@@ -10,14 +10,12 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/spf13/viper"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -153,12 +151,6 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		}
 	}
 
-	if viper.GetBool("remote") {
-		args.Type = task.CRType_REMOTE
-	} else {
-		args.Type = task.CRType_LOCAL
-	}
-
 	state := &task.ProcessState{}
 	pid := args.PID
 
@@ -186,28 +178,9 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, st.Err()
 	}
 
-	var resp task.DumpResp
-
-	switch args.Type {
-	case task.CRType_LOCAL:
-		resp = task.DumpResp{
-			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
-			CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
-		}
-
-	case task.CRType_REMOTE:
-		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
-		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			return nil, st.Err()
-		}
-		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
-		state.RemoteState = append(state.RemoteState, remoteState)
-		resp = task.DumpResp{
-			Message:      fmt.Sprintf("Dumped process %d to %s, multipart checkpoint id: %s", pid, args.Dir, uploadID),
-			CheckpointID: checkpointID,
-			UploadID:     uploadID,
-		}
+	resp := task.DumpResp{
+		Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+		CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
 	}
 
 	// Only update state if it was a managed job
@@ -344,53 +317,21 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
 		}
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				log.Debug().Str("JID", args.JID).Msgf("No remote state found")
-				return nil, status.Error(codes.InvalidArgument, "no remote state found")
-			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				log.Debug().Str("JID", args.JID).Msgf("No remote checkpoint found")
-				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
-			}
-			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			args.Type = task.CRType_REMOTE
-		} else {
-			args.CheckpointPath = state.CheckpointPath
-			args.Type = task.CRType_LOCAL
-		}
-	} else {
-		args.Type = task.CRType_LOCAL
+		args.CheckpointPath = state.CheckpointPath
 	}
 
-	switch args.Type {
-	case task.CRType_LOCAL:
-		if args.CheckpointPath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
-		stat, err := os.Stat(args.CheckpointPath)
-		if os.IsNotExist(err) {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: does not exist")
-		}
-		if (args.Stream <= 0) && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
-		}
-		if (args.Stream > 0) && !stat.IsDir() {
-			return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be dir (--stream enabled)")
-		}
-	case task.CRType_REMOTE:
-		if args.CheckpointID == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
-		}
-
-		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
-		if err != nil {
-			return nil, err
-		}
-
-		args.CheckpointPath = *zipFile
+	if args.CheckpointPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
+	}
+	stat, err := os.Stat(args.CheckpointPath)
+	if os.IsNotExist(err) {
+		return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: does not exist")
+	}
+	if (args.Stream <= 0) && (stat.IsDir() || !strings.HasSuffix(args.CheckpointPath, ".tar")) {
+		return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be tar file")
+	}
+	if (args.Stream > 0) && !stat.IsDir() {
+		return nil, status.Error(codes.InvalidArgument, "invalid checkpoint path: must be dir (--stream enabled)")
 	}
 
 	pid, exitCode, err := s.restore(ctx, args, stream)
@@ -667,58 +608,4 @@ func closeCommonFds(parentPID, childPID int32) error {
 		}
 	}
 	return nil
-}
-
-func (s *service) uploadCheckpoint(ctx context.Context, path string) (string, string, error) {
-	start := time.Now()
-	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
-	if !ok {
-		return "", "", status.Error(codes.Internal, "failed to get dump stats")
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		st := status.New(codes.NotFound, "checkpoint zip not found")
-		st.WithDetails(&errdetails.ErrorInfo{
-			Reason: err.Error(),
-		})
-		return "", "", st.Err()
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		st := status.New(codes.Internal, "checkpoint zip stat failed")
-		st.WithDetails(&errdetails.ErrorInfo{
-			Reason: err.Error(),
-		})
-		return "", "", st.Err()
-	}
-
-	// Get the size
-	size := fileInfo.Size()
-
-	// zipFileSize += 4096
-	checkpointFullSize := int64(size)
-
-	multipartCheckpointResp, cid, err := s.store.CreateMultiPartUpload(ctx, checkpointFullSize)
-	if err != nil {
-		st := status.New(codes.Internal, fmt.Sprintf("CreateMultiPartUpload failed with error: %s", err.Error()))
-		return "", "", st.Err()
-	}
-
-	err = s.store.StartMultiPartUpload(ctx, cid, multipartCheckpointResp, path)
-	if err != nil {
-		st := status.New(codes.Internal, fmt.Sprintf("StartMultiPartUpload failed with error: %s", err.Error()))
-		return "", "", st.Err()
-	}
-
-	err = s.store.CompleteMultiPartUpload(ctx, *multipartCheckpointResp, cid)
-	if err != nil {
-		st := status.New(codes.Internal, fmt.Sprintf("CompleteMultiPartUpload failed with error: %s", err.Error()))
-		return "", "", st.Err()
-	}
-
-	stats.UploadDuration = time.Since(start).Milliseconds()
-	return cid, multipartCheckpointResp.UploadID, err
 }
