@@ -1,8 +1,10 @@
 # Documentation 
+> [!NOTE]
+> This documentation is a work in progress.
 
 The cedana documentation repo hosts documentation related to running the `cedana` daemon on your machine, system architecture and the various features/components the daemon itself provides. 
 
-For detailed documentation on our managed Kubernetes or GPU checkpointing features, please see [here](https://docs.cedana.ai). 
+For detailed documentation on our managed Kubernetes or the larger cedana system, please see [here](https://docs.cedana.ai). 
 
 ## Getting Started 
 The simplest demonstration of checkpoint/restore can be performed on your machine. 
@@ -30,6 +32,10 @@ cedana restore job cs3gkv7oruu6pi3qul4g
 For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see the how-to-guides below. For information on architecture or anything else that can get you started building out code in cedana, see the developer guides section. 
 
 ## How-to-guides 
-- [Checkpoint/Restore Kata Containers (experimental)](kata/kata.md)
+- [Checkpoint/Restore kata containers](kata/kata.md)
+- [Checkpoint/Restore GPU runc containers](runc/gpu.md)
+- [Checkpoint/Restore with cedana-image-streamer](cedana-image-streamer/cedana-image-streamer.md)
+
 ## Developer Guides 
-- [Container support matrix](support/runtimes.md) 
+- [Container runtime support](support/runtimes.md) 
+- [CLI commands](cli/commands.md)

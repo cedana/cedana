@@ -222,7 +222,7 @@ func CRImportCheckpoint(ctx context.Context, dir, containerId string) error {
 
 	ctrID := ctrConfig.ID
 
-	ctrStorage.ID = containerId //Set this to the wanted containerId
+	ctrStorage.ID = containerId // Set this to the wanted containerId
 
 	if err := json.Unmarshal([]byte(ctrStorage.Metadata), &metadata); err != nil {
 		return err
@@ -447,7 +447,6 @@ func CreateContainer(ctrState *map[string]interface{}, ctrConfig *types.Containe
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -518,10 +517,6 @@ func (s *DB) GetContainerStateDB(id []byte, state *map[string]interface{}, ctrsB
 	}
 
 	return nil
-}
-
-func podmanPatch() {
-
 }
 
 func initContainerVariables(rSpec *rspec.Spec, config *types.ContainerConfig) (*types.ContainerConfig, *types.ContainerState, error) {

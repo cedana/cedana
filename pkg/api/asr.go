@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +33,6 @@ var ignoreMetrics = container.MetricSet{
 	container.NetworkUdpUsageMetrics:         struct{}{},
 	container.NetworkAdvancedTcpUsageMetrics: struct{}{},
 	container.ProcessSchedulerMetrics:        struct{}{},
-	container.ProcessMetrics:                 struct{}{},
 	container.HugetlbUsageMetrics:            struct{}{},
 	container.ReferencedMemoryMetrics:        struct{}{},
 	container.CPUTopologyMetrics:             struct{}{},
@@ -89,10 +89,13 @@ func SetupCadvisor(ctx context.Context) (manager.Manager, error) {
 }
 
 func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoRequest) (*task.ContainersInfo, error) {
-	if s.cadvisorManager == nil {
-		return nil, fmt.Errorf("cadvisor manager not enabled in daemon")
-	}
+	return nil, fmt.Errorf("removed; we now don't use grpc for asr reporting")
+}
 
+func GetContainerInfo(ctx context.Context, cman manager.Manager) (*task.ContainersInfo, error) {
+	if cman == nil {
+		return nil, fmt.Errorf("cadvisor manager is nil")
+	}
 	containerdService := containerd_plugin.Success
 	crioService := crio_plugin.Success
 
@@ -100,10 +103,10 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 	var err error
 
 	if containerdService && crioService {
-		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllContainerdContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
-		ccontainers, err := s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+		ccontainers, err := cman.AllCrioContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 		if err != nil {
@@ -120,11 +123,11 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 			}
 		}
 	} else if containerdService {
-		containers, err = s.cadvisorManager.AllContainerdContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllContainerdContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 	} else if crioService {
-		containers, err = s.cadvisorManager.AllCrioContainers(&v1.ContainerInfoRequest{
+		containers, err = cman.AllCrioContainers(&v1.ContainerInfoRequest{
 			NumStats: 1,
 		})
 	}
@@ -144,24 +147,38 @@ func (s *service) GetContainerInfo(ctx context.Context, _ *task.ContainerInfoReq
 
 		for _, c := range container.Stats {
 			info := task.ContainerInfo{
-				ContainerName: name,
-				DaemonId:      SystemIdentifier,
-				// from nanoseconds in uint64 to cputime in float64
-				CpuTime:    float64(c.Cpu.Usage.User) / 1000000000.,
-				CpuLoadAvg: float64(c.Cpu.LoadAverage) / 1.,
-				// from bytes in uin64 to megabytes in float64
-				MaxMemory: float64(c.Memory.MaxUsage) / (1024. * 1024.),
-				// from bytes in uin64 to megabytes in float64
-				CurrentMemory: float64(c.Memory.Usage) / (1024. * 1024.),
-				NetworkIO:     float64(c.Network.RxBytes+c.Network.TxBytes) / 1.,
-				DiskIO:        0,
-				Image:         container.Spec.Image,
-				Labels:        labels,
+				CpuTime:           float64(c.Cpu.Usage.Total) / 1000000000.,
+				FilesystemIoTime:  cumulativeFsTime(c.Filesystem),
+				AcceleratorMemory: cumulativeAcceleratorsMem(c.Accelerators),
+				CurrentMemory:     float64(c.Memory.Usage) / (1024. * 1024.),
+				NetworkIO:         float64(c.Network.RxBytes + c.Network.TxBytes),
+				ContainerName:     name,
+				Processes:         strconv.FormatUint(c.Processes.ProcessCount, 10),
+				Labels:            labels,
+				Image:             container.Spec.Image,
 			}
 			ci.Containers = append(ci.Containers, &info)
 		}
 	}
 	return &ci, nil
+}
+
+func cumulativeAcceleratorsMem(stats []v1.AcceleratorStats) float64 {
+	sum := 0.0
+	for _, s := range stats {
+		// memory in megabytes
+		sum += float64(s.MemoryUsed) / (1024. * 1024.)
+	}
+	return sum
+}
+
+func cumulativeFsTime(stats []v1.FsStats) float64 {
+	sum := 0.0
+	for _, s := range stats {
+		// time in seconds
+		sum += float64(s.IoTime) / 1000
+	}
+	return sum
 }
 
 var (

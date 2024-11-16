@@ -336,8 +336,7 @@ func (ms *MockStore) ListCheckpoints(ctx context.Context) (*[]CheckpointMeta, er
 }
 
 func UploadCheckpoint(ctx context.Context, path string, store *CedanaStore) (string, string, error) {
-	start := time.Now()
-	stats, ok := ctx.Value(DumpStatsKey).(*task.DumpStats)
+	_, ok := ctx.Value(DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return "", "", status.Error(codes.Internal, "failed to get dump stats")
 	}
@@ -384,6 +383,5 @@ func UploadCheckpoint(ctx context.Context, path string, store *CedanaStore) (str
 		return "", "", st.Err()
 	}
 
-	stats.UploadDuration = time.Since(start).Milliseconds()
 	return cid, multipartCheckpointResp.UploadID, err
 }

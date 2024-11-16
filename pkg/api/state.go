@@ -50,6 +50,7 @@ func (s *service) getState(ctx context.Context, jid string) (*task.ProcessState,
 }
 
 // TODO NR - customizable errors
+// If state exists in DB, only updates its fields
 func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessState, error) {
 	if pid == 0 {
 		return nil, fmt.Errorf("invalid PID %d", pid)
@@ -266,7 +267,7 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 		if err != nil {
 			return nil, fmt.Errorf("imgStreamerInit failed with %v", err)
 		}
-		socket_fd, r_fd, w_fd, err := imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
+		_, r_fd, w_fd, err := imgStreamerOpen(CHECKPOINT_STATE_FILE, conn)
 		if err != nil {
 			return nil, fmt.Errorf("imgStreamerOpen failed with %v", err)
 		}
@@ -285,9 +286,19 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 		if err != nil {
 			return nil, fmt.Errorf("UnixConn Close failed with %v", err)
 		}
-		imgStreamerFinish(socket_fd, r_fd, w_fd)
+		err = syscall.Close(r_fd)
+		if err != nil {
+			return nil, fmt.Errorf("Closing r_fd failed with %v", err)
+		}
+		err = syscall.Close(w_fd)
+		if err != nil {
+			return nil, fmt.Errorf("Closing w_fd failed with %v", err)
+		}
 
 		err = json.Unmarshal(byte_arr[:n_bytes], &checkpointState)
+		if err != nil {
+			return nil, fmt.Errorf("Unmarshaling json failed with %v")
+		}
 	} else {
 		_, err := os.Stat(filepath.Join(dir, CHECKPOINT_STATE_FILE))
 		if err != nil {

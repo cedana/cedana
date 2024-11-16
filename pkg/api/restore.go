@@ -17,16 +17,13 @@ import (
 	"time"
 
 	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
-	gpugrpc "buf.build/gen/go/cedana/gpu/grpc/go/_gogrpc"
-	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -47,28 +44,42 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string) (*exec.Cmd, error) {
+func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "serve")
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
-	err := cmd.Start()
+	var err error
+	/*stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Error().Msgf("unable to exec image streamer server: %v", err)
-		return nil, err
+		log.Fatal().Err(err)
 	}
-	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
+	pipe := bufio.NewReader(stdout)
+	go func() {
+		for {
+			line, err := pipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			log.Info().Msg(line)
+		}
+	}()*/
+	err = cmd.Start()
+	if err != nil {
+		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
+	}
+	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
 	for buf.Len() == 0 {
-		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
-		time.Sleep(2 * time.Millisecond)
+		log.Info().Msg("Waiting for cedana-image-streamer to setup...")
+		time.Sleep(10 * time.Millisecond)
 	}
-
-	return cmd, nil
+	log.Info().Msg("Started cedana-image-streamer")
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp], isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -80,40 +91,30 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var ioFiles []*os.File
 	isManagedJob := args.JID != ""
 
-	tempDir := RESTORE_TEMPDIR
-
-	// check if tmpdir exists
-	// XXX YA: Tempdir usage is not thread safe
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
+	var tempDir string
+	if args.Stream > 0 {
+		tempDir = args.CheckpointPath
+		s.setupStreamerServe(tempDir, args.Stream)
 	} else {
-		// likely an old checkpoint hanging around, delete
-		err := os.RemoveAll(tempDir)
-		if err != nil {
-			return nil, nil, nil, nil, err
+		tempDir = RESTORE_TEMPDIR
+		// check if tmpdir exists
+		// XXX YA: Tempdir usage is not thread safe
+		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+			err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+		} else {
+			// likely an old checkpoint hanging around, delete
+			err := os.RemoveAll(tempDir)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
 		}
-		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-	}
-
-	var cmd *exec.Cmd
-	if args.Stream {
-		absPath, err := filepath.Abs(args.CheckpointPath)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		tempDir = filepath.Dir(absPath)
-		cmd, err = s.setupStreamerServe(tempDir)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		log.Info().Msgf("cmd = %v", cmd)
-	} else {
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
 			log.Error().Err(err).Msg("error decompressing checkpoint")
@@ -121,7 +122,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 		}
 	}
 
-	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream)
+	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
 		return nil, nil, nil, nil, err
@@ -216,14 +217,17 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	}
 
 	opts.ShellJob = proto.Bool(isShellJob)
-	opts.Stream = proto.Bool(args.Stream)
+	opts.Stream = proto.Bool(args.Stream > 0)
 	opts.InheritFd = inheritFds
 	opts.TcpEstablished = proto.Bool(tcpEstablished || args.GetCriuOpts().GetTcpEstablished())
+	opts.TcpClose = proto.Bool(args.GetCriuOpts().GetTcpClose())
 	opts.RstSibling = proto.Bool(isManagedJob) // restore as pure child of daemon
 
-	if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
-		log.Error().Err(err).Msg("error changing permissions")
-		return nil, nil, nil, nil, err
+	if args.Stream <= 0 {
+		if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
+			log.Error().Err(err).Msg("error changing permissions")
+			return nil, nil, nil, nil, err
+		}
 	}
 
 	elapsed := time.Since(start)
@@ -271,7 +275,7 @@ func (s *service) prepareRestoreOpts() *criu.CriuOpts {
 
 func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return nil, fmt.Errorf("could not get restore stats from context")
 	}
@@ -301,38 +305,6 @@ func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Noti
 	return resp.Restore.Pid, nil
 }
 
-func patchPodmanRestore(ctx context.Context, opts *container.RuncOpts, containerId, imgPath string) error {
-	// Podman run -d state
-	if !opts.Detach {
-		jsonData, err := os.ReadFile(opts.Bundle + "config.json")
-		if err != nil {
-			return err
-		}
-
-		var data map[string]interface{}
-
-		if err := json.Unmarshal(jsonData, &data); err != nil {
-			return err
-		}
-
-		data["process"].(map[string]interface{})["terminal"] = false
-		updatedJSON, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(opts.Bundle+"config.json", updatedJSON, 0644); err != nil {
-			return err
-		}
-	}
-
-	// Here lie the podman patch! :brandon-pirate:
-	if err := utils.CRImportCheckpoint(ctx, imgPath, containerId); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func recursivelyReplace(data interface{}, oldValue, newValue string) {
 	switch v := data.(type) {
 	case map[string]interface{}:
@@ -355,72 +327,103 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts) error {
+func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return fmt.Errorf("could not get restore stats from context")
+		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	bundle := Bundle{Bundle: opts.Bundle}
-
-	isPodman := checkIfPodman(bundle)
-
-	if isPodman {
-		var spec specs.Spec
-		parts := strings.Split(opts.Bundle, "/")
-		oldContainerId := parts[6]
-
-		runPath := "/run/containers/storage/overlay-containers/" + oldContainerId + "/userdata"
-		newRunPath := "/run/containers/storage/overlay-containers/" + containerId
-		newVarPath := "/var/lib/containers/storage/overlay/" + containerId + "/merged"
-
-		parts[6] = containerId
-		// exclude last part for rsync
-		parts = parts[1 : len(parts)-1]
-		newBundle := "/" + strings.Join(parts, "/")
-
-		if err := rsyncDirectories(opts.Bundle, newBundle); err != nil {
-			return err
-		}
-		if err := rsyncDirectories(runPath, newRunPath); err != nil {
-			return err
-		}
-		configFile, err := os.ReadFile(filepath.Join(newBundle+"/userdata", "config.json"))
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(configFile, &spec); err != nil {
-			return err
-		}
-		recursivelyReplace(&spec, oldContainerId, containerId)
-		varPath := spec.Root.Path + "/"
-		if err := os.Mkdir("/var/lib/containers/storage/overlay/"+containerId, 0644); err != nil {
-			return err
-		}
-		if err := rsyncDirectories(varPath, newVarPath); err != nil {
-			return err
-		}
-		spec.Root.Path = newVarPath
-		updatedConfig, err := json.Marshal(spec)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(newBundle+"/userdata", "config.json"), updatedConfig, 0644); err != nil {
-			return err
-		}
-		opts.Bundle = newBundle + "/userdata"
-	}
-
-	err := container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	state, err := deserializeStateFromDir(imgPath, false)
 	if err != nil {
-		return err
+		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
-	if isPodman {
+	// FIXME: GPU restore should instead be done in the pre-resume hook, so as to ensure it does not
+	// continue to run as an orphan process if the restore fails early. Once process has started, then
+	// it's lifecycle is tied to it (see below goroutines).
+	if state.GPU {
+		var err error
+		err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+
+	if opts.Bundle == "" {
+		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
+	}
+
+	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if s.GetGPUController(jid) != nil {
+			s.StopGPUController(jid)
+			s.WaitGPUController(jid)
+		}
+
+		return 0, nil, err
+	}
+
+	// HACK YA: RACE The container might not exit yet
+	// time.Sleep(1 * time.Second)
+
+	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
+	if err != nil {
+		// Kill GPU controller if it was started
+		// FIXME: Remove later when GPU controller is started in pre-resume hook
+		if s.GetGPUController(jid) != nil {
+			s.StopGPUController(jid)
+			s.WaitGPUController(jid)
+		}
+
+		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
+	}
+
+	exitCode := make(chan int)
+	if jid != "" {
+		// Wait to cleanup
+		s.wg.Add(1)
 		go func() {
-			if err := patchPodmanRestore(ctx, opts, containerId, imgPath); err != nil {
-				log.Error().Err(err).Send()
+			defer s.wg.Done()
+			var status syscall.WaitStatus
+			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
+			code := status.ExitStatus()
+			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+
+			if s.GetGPUController(jid) != nil {
+				err = s.StopGPUController(jid)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
+				}
+			}
+
+			exitCode <- code
+		}()
+
+		// Clean up GPU controller and also handle premature exit
+		if s.GetGPUController(jid) != nil {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				s.WaitGPUController(jid)
+
+				// Should kill process if still running since GPU controller might have exited prematurely
+				syscall.Kill(int(pid), syscall.SIGKILL)
+			}()
+		}
+
+		// Kill on server/stream shutdown
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-s.serverCtx.Done()
+			log.Debug().Int32("PID", pid).Str("JID", containerId).Msgf("killing runc container")
+			syscall.Kill(int(pid), syscall.SIGKILL)
+			if err != nil {
+				log.Warn().Err(err).Int32("PID", pid).Str("JID", containerId).Msgf("could not kill runc container")
+				return
 			}
 		}()
 	}
@@ -428,7 +431,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	elapsed := time.Since(start)
 	stats.CRIUDuration = elapsed.Milliseconds()
 
-	return err
+	return pid, exitCode, nil
 }
 
 // Bundle represents an OCI bundle
@@ -592,22 +595,17 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		return 0, nil, err
 	}
 
-	var gpuCmd *exec.Cmd
-	gpuOutBuf := &bytes.Buffer{}
-
-	// No GPU flag passed in args - if state.GPUCheckpointed = true, always restore using gpu-controller
-	if state.GPUCheckpointed {
-		if !s.gpuEnabled {
-			return 0, nil, fmt.Errorf("dump has GPU state but GPU support is not enabled in daemon")
-		}
+	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
+	if state.GPU {
+		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
+		// process is just about to be resumed. If we do GPU restore too early, then we will have to
+		// ensure it's killed on every failure. Once the process starts, then it's lifecycle is tied to it
+		// (see below goroutines).
 		nfy.PreResumeFunc = NotifyFunc{
 			Avail: true,
 			Callback: func() error {
 				var err error
-				gpuCmd, err = s.gpuRestore(ctx, *dir, args.UID, args.GID, args.Groups, io.Writer(gpuOutBuf))
-				if err != nil {
-					log.Error().Err(err).Str("stdout/stderr", gpuOutBuf.String()).Msg("failed to restore GPU")
-				}
+				err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
 				return err
 			},
 		}
@@ -652,7 +650,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 				defer s.wg.Done()
 				defer out.Close()
 				for stdoutScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stdout: stdoutScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stdout")
 						return
 					}
@@ -668,7 +666,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 				defer s.wg.Done()
 				defer er.Close()
 				for stderrScanner.Scan() {
-					if err := stream.Send(&task.RestoreAttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
+					if err := stream.Send(&task.AttachResp{Stderr: stderrScanner.Text() + "\n"}); err != nil {
 						log.Error().Err(err).Msg("failed to send stderr")
 						return
 					}
@@ -686,10 +684,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 			var status syscall.WaitStatus
 			syscall.Wait4(int(*pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Debug().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
+			log.Info().Int32("PID", *pid).Str("JID", args.JID).Int("status", code).Msgf("process exited")
 
-			if gpuCmd != nil {
-				err = gpuCmd.Process.Kill()
+			if s.GetGPUController(args.JID) != nil {
+				err = s.StopGPUController(args.JID)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after process exit")
 				}
@@ -699,18 +697,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if gpuCmd != nil {
+		if s.GetGPUController(args.JID) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				err := gpuCmd.Wait()
-				if err != nil {
-					log.Debug().Err(err).Msg("GPU controller Wait()")
-				}
-				log.Info().Int("PID", gpuCmd.Process.Pid).
-					Int("status", gpuCmd.ProcessState.ExitCode()).
-					Str("out/err", gpuOutBuf.String()).
-					Msg("GPU controller exited")
+				s.WaitGPUController(args.JID)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(*pid), syscall.SIGKILL)
@@ -805,42 +796,33 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, out io.Writer) (*exec.Cmd, error) {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, jid string) error {
 	start := time.Now()
-	stats, ok := ctx.Value("restoreStats").(*task.RestoreStats)
+	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return nil, fmt.Errorf("could not get restore stats from context")
+		return fmt.Errorf("could not get restore stats from context")
 	}
 
-	gpuCmd, err := s.StartGPUController(ctx, uid, gid, groups, out)
+	err := s.StartGPUController(ctx, uid, gid, groups, jid)
 	if err != nil {
 		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
-		return nil, err
+		return err
 	}
 
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	gpuConn, err := grpc.NewClient("127.0.0.1:50051", opts...)
-	if err != nil {
-		log.Error().Msgf("fail to dial GPU controller: %v", err)
-		return nil, fmt.Errorf("fail to dial GPU controller: %v", err)
-	}
-	defer gpuConn.Close()
-
-	gpuServiceConn := gpugrpc.NewCedanaGPUClient(gpuConn)
+	gpuController := s.GetGPUController(jid)
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
+		Stream:    stream,
 	}
-	resp, err := gpuServiceConn.Restore(ctx, &args)
+	resp, err := gpuController.Client.Restore(ctx, &args)
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu checkpoint failed")
-			return nil, fmt.Errorf("gpu checkpoint failed")
+			log.Error().Str("message", st.Message()).Str("code", st.Code().String()).Msgf("gpu restore failed")
+			return fmt.Errorf("gpu restore failed")
 		} else {
-			return nil, err
+			return err
 		}
 	}
 
@@ -853,11 +835,11 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	log.Info().Msgf("gpu controller returned %v", resp)
 
 	if !resp.Success {
-		return nil, fmt.Errorf("could not restore gpu")
+		return fmt.Errorf("could not restore gpu")
 	}
 
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
 
-	return gpuCmd, nil
+	return nil
 }

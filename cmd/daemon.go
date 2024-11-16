@@ -6,14 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
+	"cloud.google.com/go/pubsub"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -23,7 +27,10 @@ var daemonCmd = &cobra.Command{
 	Short: "Start daemon for cedana client. Must be run as root, needed for all other cedana functionality.",
 }
 
-var DEFAULT_PORT uint32 = 8080
+var (
+	DEFAULT_PORT      uint32 = 8080
+	ASR_POLL_INTERVAL        = 60 * time.Second
+)
 
 var startDaemonCmd = &cobra.Command{
 	Use:   "start",
@@ -48,6 +55,7 @@ var startDaemonCmd = &cobra.Command{
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
+			log.Warn().Msg("CEDANA_URL or CEDANA_AUTH_TOKEN unset, certain features may not work as expected.")
 			cedanaURL = "unset"
 		}
 
@@ -61,11 +69,11 @@ var startDaemonCmd = &cobra.Command{
 				log.Warn().Err(err).Msg("Failed to initialize otel")
 				return err
 			}
-			if metricsEnabled {
-				pollForAsrMetricsReporting(ctx, port)
-			}
 		} else {
 			utils.InitOtelNoop()
+		}
+		if metricsEnabled {
+			pollForAsrMetricsReporting(ctx, port)
 		}
 
 		err = api.StartServer(ctx, &api.ServeOpts{
@@ -85,26 +93,102 @@ var startDaemonCmd = &cobra.Command{
 	},
 }
 
+func getenv(k, d string) string {
+	if s, f := os.LookupEnv(k); f {
+		return s
+	}
+	return d
+}
+
+func gcloudAdcSetup(ctx context.Context) error {
+	adcPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if adcPath == "" {
+		// set env if not present
+		// default to root /gcloud-credentials.json
+		adcPath = "/gcloud-credentials.json"
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", adcPath)
+	}
+	if _, err := os.Stat(adcPath); err == nil {
+		// already present skip
+		return nil
+	}
+	cedanaURL := viper.GetString("connection.cedana_url")
+	url := cedanaURL + "/k8s/gcloud/serviceaccount"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(adcPath, bytes, 0600)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 	// polling for ASR
 	go func() {
-		time.Sleep(10 * time.Second)
-		cts, err := services.NewClient(port)
+		// setup GCLOUD_JSON
+		err := gcloudAdcSetup(ctx)
 		if err != nil {
-			log.Error().Msgf("error creating client: %v", err)
+			log.Error().Err(err).Msg("failed to setup gcloud ADC, disabling reporting")
 			return
 		}
-		defer cts.Close()
+		// end
+		log.Info().Msg("start pushing asr metrics")
+		client, err := pubsub.NewClient(ctx, getenv("GOOGLE_CLOUD_PROJECT", "prod-data-438318"))
+		if err != nil {
+			log.Error().Msgf("Failed to create Pub/Sub client: %v", err)
+			return
+		}
+		defer client.Close()
+		manager, err := api.SetupCadvisor(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup cadvisor")
+			return
+		}
 
-		log.Info().Msg("started polling...")
+		macAddr, _ := utils.GetMACAddress()
+		hostname, _ := os.Hostname()
+		v, _ := mem.VirtualMemory()
+		pmem := fmt.Sprintf("%d", v.Total/(1024*1024*1024)) // in GB
+		url := viper.GetString("connection.cedana_url")
+
+		topic := client.Topic("asr-metrics")
+		time.Sleep(10 * time.Second)
 		for {
-			conts, err := cts.GetContainerInfo(ctx, &task.ContainerInfoRequest{})
+			conts, err := api.GetContainerInfo(ctx, manager)
 			if err != nil {
 				log.Error().Msgf("error getting info: %v", err)
 				return
 			}
-			_ = conts
-			time.Sleep(60 * time.Second)
+			b, err := json.Marshal(conts)
+			// Publish a message
+			result := topic.Publish(ctx, &pubsub.Message{
+				Data: b,
+				Attributes: map[string]string{
+					"mac":      macAddr,
+					"hostname": hostname,
+					"mem":      pmem,
+					"url":      url,
+				},
+			})
+			// Get the server-assigned message ID
+			id, err := result.Get(ctx)
+			if err != nil {
+				log.Error().Msgf("Failed to publish message: %v", err)
+			}
+			log.Info().Msgf("Published message with ID: %v\n", id)
+			time.Sleep(ASR_POLL_INTERVAL)
 		}
 	}()
 }

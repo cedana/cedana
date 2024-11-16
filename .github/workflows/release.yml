@@ -63,6 +63,7 @@ jobs:
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       skip_bench: true # since benchmark will be run in a separate job below
       skip_shellcheck: true
+      skip_helper_image_push: true
 
   build-publish-amd64:
     name: Build & Publish (amd64)
@@ -404,11 +405,12 @@ jobs:
       - name: Plot comparison w/ last patch
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
         run: |
           rm -rf results/*.png
           jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
-          ./bench plot --runtime cedana:2 --save
+          ./bench plot --runtime cedana:2 --save $FLAGS
 
       - name: Upload plots (comparison w/ last patch)
         id: upload-plots-patch

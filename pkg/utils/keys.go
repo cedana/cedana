@@ -2,4 +2,8 @@ package utils
 
 type Key int
 
-const DumpStatsKey Key = 100
+const (
+	CtsKey          Key = 100
+	DumpStatsKey    Key = 101
+	RestoreStatsKey Key = 102
+)

@@ -3,12 +3,14 @@ package cmd
 // This file contains all the config-related commands when starting `cedana config ...`
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/cedana/cedana/pkg/api/services"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -16,6 +18,20 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var showCmd = &cobra.Command{
@@ -23,15 +39,7 @@ var showCmd = &cobra.Command{
 	Short: "show config that the daemon is running with",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
-
-		port, _ := cmd.Flags().GetUint32(portFlag)
-
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		resp, err := cts.GetConfig(ctx, &task.GetConfigRequest{})
 		if err != nil {

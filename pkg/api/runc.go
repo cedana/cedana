@@ -3,13 +3,10 @@ package api
 // Implements the task service functions for runc
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cedana/cedana/pkg/api/runc"
@@ -23,30 +20,103 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// checks if the given process has any active tcp connections
-func CheckTCPConnections(pid int32) (bool, error) {
-	tcpFile := filepath.Join("/proc", fmt.Sprintf("%d", pid), "net/tcp")
+func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*task.RuncManageResp, error) {
+	// For runc we reuse the runc container ID as JID
 
-	file, err := os.Open(tcpFile)
+	// Check if job ID is already in use
+	state, err := s.getState(ctx, args.ContainerID)
+	if state != nil {
+		err = status.Error(codes.AlreadyExists, "job ID already exists")
+		return nil, err
+	}
+
+	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {
-		return false, fmt.Errorf("failed to open %s: %v", tcpFile, err)
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
 	}
-	defer file.Close()
+	bundle, err := runc.GetBundleByContainerId(args.ContainerID, args.Root)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get bundle by container id: %v", err))
+	}
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "  sl") {
-			continue
+	// Check if process PID already exists as a managed job
+	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{pid}})
+	if len(queryResp.Processes) > 0 {
+		if queryResp.Processes[0].JobState == task.JobState_JOB_RUNNING {
+			return nil, status.Error(codes.AlreadyExists, "PID already exists as a managed job")
 		}
-		return true, nil
 	}
 
-	if err := scanner.Err(); err != nil {
-		return false, fmt.Errorf("error reading %s: %v", tcpFile, err)
+	exitCode := utils.WaitForPid(pid)
+
+	state, err = s.generateState(ctx, pid)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "is the process running?")
+	}
+	state.JID = args.ContainerID
+	state.ContainerID = args.ContainerID
+	state.ContainerRoot = args.Root
+	state.ContainerBundle = bundle
+	state.JobState = task.JobState_JOB_RUNNING
+	state.GPU = args.GPU
+
+	if args.GPU {
+		log.Info().Msg("GPU support requested, assuming process was already started with LD_PRELOAD")
+		if args.GPU {
+			err = s.StartGPUController(ctx, args.UID, args.GID, args.Groups, args.ContainerID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to start GPU controller: %v", err)
+			}
+		}
 	}
 
-	return false, nil
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update state after manage")
+	}
+
+	// Wait for server shutdown to gracefully exit, since job is now managed
+	// Also wait for process exit, to update state
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		select {
+		case <-s.serverCtx.Done():
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing runc container")
+			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
+			if err != nil {
+				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill runc container. already dead?")
+			}
+		case <-exitCode:
+			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("runc container exited")
+		}
+		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+		}
+		state.JobState = task.JobState_JOB_DONE
+		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update state after done")
+		}
+		if s.GetGPUController(state.JID) != nil {
+			s.StopGPUController(state.JID)
+		}
+	}()
+
+	// Clean up GPU controller and also handle premature exit
+	if s.GetGPUController(state.JID) != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.WaitGPUController(state.JID)
+
+			// Should kill process if still running since GPU controller might have exited prematurely
+			syscall.Kill(int(state.PID), syscall.SIGKILL)
+		}()
+	}
+
+	return &task.RuncManageResp{Message: "success", State: state}, nil
 }
 
 func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.RuncDumpResp, error) {
@@ -57,36 +127,58 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 
 	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
 	if err != nil {
-		err = status.Error(codes.Internal, fmt.Sprintf("failed to get pid by container id: %v", err))
-		return nil, err
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
+	}
+	bundle, err := runc.GetBundleByContainerId(args.ContainerID, args.Root)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get bundle by container id: %v", err))
 	}
 
-	state, err := s.generateState(ctx, pid)
+	if args.Dir == "" {
+		args.Dir = viper.GetString("shared_storage.dump_storage_dir")
+		if args.Dir == "" {
+			return nil, status.Error(codes.InvalidArgument, "dump storage dir not provided/found in config")
+		}
+	}
+
+	var jid string
+
+	state, err := s.getState(ctx, args.ContainerID)
+	if err == nil {
+		jid = args.ContainerID // For runc, we use the container ID as JID
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "GPU support is not enabled in daemon")
+		}
+	}
+
+	state, err = s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
-	state.JobState = task.JobState_JOB_RUNNING
+	state.ContainerID = args.ContainerID
+	state.ContainerRoot = args.Root
+	state.ContainerBundle = bundle
 
-	isUsingTCP, err := CheckTCPConnections(pid)
+	isUsingTCP, err := utils.CheckTCPConnections(pid)
 	if err != nil {
 		return nil, err
 	}
 
 	criuOpts := &container.CriuOpts{
-		ImagesDirectory: args.GetCriuOpts().GetImagesDirectory(),
+		ImagesDirectory: args.Dir,
 		WorkDirectory:   args.GetCriuOpts().GetWorkDirectory(),
 		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"),
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
-		TcpClose:        isUsingTCP,
+		TcpClose:        args.GetCriuOpts().GetTcpClose(),
 		MntnsCompatMode: false,
 		External:        args.GetCriuOpts().GetExternal(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
-	err = s.runcDump(ctx, args.Root, args.ContainerID, args.Pid, criuOpts, state)
+	err = s.runcDump(ctx, args.Root, args.ContainerID, criuOpts, state)
 	if err != nil {
-		st := status.New(codes.Internal, "Runc dump failed")
+		st := status.New(codes.Internal, "Runc dump failed: "+err.Error())
 		st.WithDetails(&errdetails.ErrorInfo{
 			Reason: err.Error(),
 		})
@@ -116,6 +208,14 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
+	// Only update state if it was a managed job
+	if jid != "" {
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update state with error: %s", err.Error()))
+		}
+	}
+
 	resp.State = state
 	resp.DumpStats = &dumpStats
 
@@ -126,7 +226,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_RUNC,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	opts := &container.RuncOpts{
 		Root:          args.GetOpts().GetRoot(),
@@ -139,51 +239,103 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
-		TcpClose:        true,  // XXX: Should instead take value from args
 		TcpEstablished:  args.GetCriuOpts().GetTcpEstablished(),
+		TcpClose:        args.GetCriuOpts().GetTcpClose(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
-	if viper.GetBool("remote") {
-		args.Type = task.CRType_REMOTE
+	var jid string
+	state, err := s.getState(ctx, args.ContainerID)
+	if err == nil {
+		jid = args.ContainerID // For runc, we use the container ID as JID
+		if state.GPU && s.gpuEnabled == false {
+			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
+		}
+	}
+
+	if jid != "" {
+		if viper.GetBool("remote") {
+			remoteState := state.GetRemoteState()
+			if remoteState == nil {
+				log.Debug().Str("JID", args.ContainerID).Msgf("No remote state found")
+				return nil, status.Error(codes.InvalidArgument, "no remote state found")
+			}
+			// For now just grab latest checkpoint
+			if remoteState[len(remoteState)-1].CheckpointID == "" {
+				log.Debug().Str("JID", args.ContainerID).Msgf("No remote checkpoint found")
+				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
+			}
+			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
+			args.Type = task.CRType_REMOTE
+		} else {
+			if state.CheckpointPath != "" {
+				// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
+				args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
+			}
+			args.Type = task.CRType_LOCAL
+		}
 	} else {
 		args.Type = task.CRType_LOCAL
 	}
 
 	switch args.Type {
 	case task.CRType_LOCAL:
-		err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts)
-		if err != nil {
-			err = status.Error(codes.Internal, err.Error())
-			return nil, err
+		if args.ImagePath == "" {
+			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 		}
 
 	case task.CRType_REMOTE:
 		if args.CheckpointID == "" {
 			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
 		}
+
 		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
 		if err != nil {
 			return nil, err
 		}
-		err = s.runcRestore(ctx, *zipFile, args.ContainerID, criuOpts, opts)
+
+		args.ImagePath = *zipFile
+	}
+
+	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts, jid)
+	if err != nil {
+		err = status.Error(codes.Internal, fmt.Sprintf("failed to restore runc container: %v", err))
+		return nil, err
+	}
+
+	// Only update state if it was a managed job
+	if jid != "" {
+		state, err = s.getState(ctx, args.ContainerID)
 		if err != nil {
-			staterr := status.Error(codes.Internal, fmt.Sprintf("failed to restore process: %v", err))
-			return nil, staterr
+			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
+		log.Info().Int32("PID", pid).Str("JID", state.JID).Msgf("managing restored runc container")
+		state.PID = pid
+		state.JobState = task.JobState_JOB_RUNNING
+		err = s.updateState(ctx, state.JID, state)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update state after restore")
+			syscall.Kill(int(pid), syscall.SIGKILL) // kill cuz inconsistent state
+			return nil, status.Error(codes.Internal, "failed to update state after restore")
+		}
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			<-exitCode
+			state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+			}
+			state.JobState = task.JobState_JOB_DONE
+			err = s.updateState(context.WithoutCancel(ctx), state.JID, state)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to update state after done")
+				return
+			}
+		}()
 	}
 
-	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Opts.Root)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
-	}
-
-	state, err := s.generateState(ctx, pid)
-	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to generate state: %v", err))
-	}
-
-	// TODO: Update state to add or use a job that exists for this container
 	return &task.RuncRestoreResp{
 		Message:      fmt.Sprintf("Restored %v, successfully", args.ContainerID),
 		State:        state,
@@ -194,7 +346,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	var containers []*task.RuncContainer
 	if len(args.ContainerNames) == 0 {
-
 		runcContainers, err := runc.RuncGetAll(args.Root, args.Namespace)
 		if err != nil {
 			return nil, status.Error(codes.NotFound, err.Error())
@@ -213,10 +364,12 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 			containers = append(containers, ctr)
 		}
 	}
+
 	for i, name := range args.ContainerNames {
 		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
 		if errors.Is(err, runc.ErrContainerNotFound) {
 			log.Info().Msgf("container %s not found", name)
+			continue
 		}
 
 		if !errors.Is(err, runc.ErrContainerNotFound) && err != nil {
@@ -227,6 +380,10 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 			ID:         runcId,
 			BundlePath: bundle,
 		})
+	}
+
+	if len(containers) == 0 {
+		return nil, status.Error(codes.NotFound, "no containers found")
 	}
 
 	return &task.RuncQueryResp{Containers: containers}, nil

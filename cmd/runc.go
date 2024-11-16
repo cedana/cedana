@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
+
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -14,9 +18,30 @@ var runcRootPath = map[string]string{
 	"default": api.DEFAULT_RUNC_ROOT,
 }
 
+func getRuncRootPath(runcRoot string) string {
+	if path, ok := runcRootPath[runcRoot]; ok {
+		return path
+	}
+	return runcRoot
+}
+
 var runcCmd = &cobra.Command{
 	Use:   "runc",
 	Short: "Runc container related commands",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetUint32(portFlag)
+		cts, err := services.NewClient(port)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		cmd.SetContext(ctx)
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
+		cts.Close()
+	},
 }
 
 var runcGetRuncIdByName = &cobra.Command{
@@ -25,13 +50,7 @@ var runcGetRuncIdByName = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		port, _ := cmd.Flags().GetUint32(portFlag)
-		cts, err := services.NewClient(port)
-		if err != nil {
-			log.Error().Msgf("Error creating client: %v", err)
-			return err
-		}
-		defer cts.Close()
+		cts := cmd.Context().Value(utils.CtsKey).(*services.ServiceClient)
 
 		root, _ := cmd.Flags().GetString(rootFlag)
 		name := args[0]

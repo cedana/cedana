@@ -73,7 +73,6 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 }
 
 func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
-
 	var resp task.RestoreResp
 	var pid *int32
 	var err error
@@ -85,7 +84,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 	restoreStats := task.RestoreStats{
 		DumpType: task.DumpType_KATA,
 	}
-	ctx = context.WithValue(ctx, "restoreStats", &restoreStats)
+	ctx = context.WithValue(ctx, utils.RestoreStatsKey, &restoreStats)
 
 	pid, err = s.kataRestore(ctx, args)
 	if err != nil {
@@ -93,14 +92,14 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 		return nil, staterr
 	}
 
-	resp = task.RestoreResp{
-		Message: fmt.Sprintf("successfully restored process: %v", *pid),
-		NewPID:  *pid,
-	}
-
 	state, err := s.generateState(ctx, *pid)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to generate state after restore")
+	}
+
+	resp = task.RestoreResp{
+		Message: fmt.Sprintf("successfully restored process: %v", *pid),
+		State:   state,
 	}
 
 	resp.State = state

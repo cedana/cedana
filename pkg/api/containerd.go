@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/containerd"
 	"github.com/cedana/cedana/pkg/api/kube"
 	"github.com/cedana/cedana/pkg/api/runc"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/namespaces"
@@ -95,21 +95,14 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 	}
 	ctx = context.WithValue(ctx, utils.DumpStatsKey, &dumpStats)
 
-	// RUNC DUMP ARGS START
-	pid, err := runc.GetPidByContainerId(dumpOpts.ContainerID, dumpOpts.Root)
-	if err != nil {
-		err = status.Error(codes.Internal, fmt.Sprintf("failed to get pid by container id: %v", err))
-		return nil, err
-	}
-
-	state, err := s.generateState(ctx, pid)
+	state, err := s.generateState(ctx, runcContainer.Pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
 	state.JobState = task.JobState_JOB_RUNNING
 
-	isUsingTCP, err := CheckTCPConnections(pid)
+	isUsingTCP, err := utils.CheckTCPConnections(runcContainer.Pid)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +118,7 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 		TCPInFlight:     !isReady,
 	}
 
-	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, dumpOpts.Pid, criuOpts, state)
+	err = s.runcDump(ctx, dumpOpts.Root, dumpOpts.ContainerID, criuOpts, state)
 	if err != nil {
 		log.Error().Err(err).Msg("Runc dump failed")
 		dumpLogContent, logErr := readDumpLog(dumpOpts.GetCriuOpts().GetImagesDirectory())
