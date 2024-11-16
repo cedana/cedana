@@ -17,6 +17,7 @@ import (
 	"time"
 
 	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
@@ -245,6 +246,13 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	stats.CheckpointFileStats = &task.CheckpointFileStats{
 		Size:     size,
 		Duration: elapsed.Milliseconds(),
+	}
+
+	// final update to db
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		log.Error().Err(err)
+		return err
 	}
 
 	return nil

@@ -131,7 +131,7 @@ func (c *ServiceClient) Start(ctx context.Context, args *task.StartArgs) (*task.
 	return resp, nil
 }
 
-func (c *ServiceClient) StartAttach(ctx context.Context, args *task.StartAttachArgs) (taskgrpc.TaskService_StartAttachClient, error) {
+func (c *ServiceClient) StartAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_StartAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.StartAttach(ctx, opts...)
 	if err != nil {
@@ -167,7 +167,7 @@ func (c *ServiceClient) Restore(ctx context.Context, args *task.RestoreArgs) (*t
 	return resp, nil
 }
 
-func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.RestoreAttachArgs) (taskgrpc.TaskService_RestoreAttachClient, error) {
+func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_RestoreAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.RestoreAttach(ctx, opts...)
 	if err != nil {
@@ -217,7 +217,7 @@ func (c *ServiceClient) JobRestore(ctx context.Context, args *task.JobRestoreArg
 	return resp, nil
 }
 
-func (c *ServiceClient) JobRestoreAttach(ctx context.Context, args *task.AttachArgs) (task.TaskService_RestoreAttachClient, error) {
+func (c *ServiceClient) JobRestoreAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_RestoreAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.JobRestoreAttach(ctx, opts...)
 	if err != nil {

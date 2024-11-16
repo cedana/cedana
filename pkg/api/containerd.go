@@ -8,12 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/containerd"
 	"github.com/cedana/cedana/pkg/api/kube"
-	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/namespaces"
@@ -131,18 +129,6 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 			Reason: err.Error() + "\nDump.log content:\n" + dumpLogContent,
 		})
 		return nil, st.Err()
-	}
-
-	switch dumpOpts.Type {
-	case task.CRType_LOCAL:
-	case task.CRType_REMOTE:
-		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
-		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			return nil, st.Err()
-		}
-		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
-		state.RemoteState = append(state.RemoteState, remoteState)
 	}
 
 	return &task.ContainerdDumpResp{

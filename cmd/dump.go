@@ -70,7 +70,6 @@ var dumpProcessCmd = &cobra.Command{
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
-			Type:   task.CRType_LOCAL,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:   leaveRunning,
@@ -117,9 +116,8 @@ var dumpKataCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 
 		cpuDumpArgs := task.DumpArgs{
-			Dir:  "/tmp",
-			JID:  id,
-			Type: task.CRType_LOCAL,
+			Dir: "/tmp",
+			JID: id,
 		}
 
 		go func() {
@@ -303,7 +301,6 @@ var dumpContainerdCmd = &cobra.Command{
 			ContainerID: id,
 			CriuOpts:    criuOpts,
 			// TODO BS: hard coded for now
-			Type: task.CRType_LOCAL,
 		}
 
 		// TODO BS missing runc dump args

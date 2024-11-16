@@ -19,11 +19,13 @@ import (
 	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
 	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -77,7 +79,7 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	log.Info().Msg("Started cedana-image-streamer")
 }
 
-func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp], isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -583,7 +585,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.RestoreAttachArgs, task.RestoreAttachResp]) (int32, chan int, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (int32, chan int, error) {
 	var dir *string
 	var pid *int32
 

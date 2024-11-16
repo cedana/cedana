@@ -103,7 +103,6 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 			ContainerID: state.ContainerID,
 			ImagePath:   state.CheckpointPath,
 			Opts:        opts,
-			Type:        args.Type,
 			CriuOpts:    args.CriuOpts,
 		})
 		if err != nil {
