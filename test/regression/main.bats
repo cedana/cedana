@@ -17,7 +17,7 @@ setup() {
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
     TTY_SOCK=$DIR/tty.sock
 
-    cedana debug recvtty "$TTY_SOCK" &
+    /usr/local/bin/cedana debug recvtty "$TTY_SOCK" &
 }
 
 teardown() {
