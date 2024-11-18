@@ -141,8 +141,8 @@ jobs:
       - name: Run script
         run: |
           chmod +x ./cedana
-          cp ./cedana /usr/local/bin/
-          cp ./build-start-daemon.sh /build-start-daemon.sh
+          sudo -E cp ./cedana /usr/local/bin/
+          sudo -E cp ./build-start-daemon.sh /build-start-daemon.sh
           ./setup-host.sh
 
   regression-test:
