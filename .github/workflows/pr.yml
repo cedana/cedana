@@ -98,6 +98,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: 1.22
+          check-latest: true
 
       - name: Build
         run: |
@@ -210,6 +211,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: 1.22
+          check-latest: true
 
       - name: Run unit tests
         run: |
