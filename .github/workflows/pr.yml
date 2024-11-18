@@ -101,7 +101,9 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: ./build.sh
+        run: |
+          go clean -modcache
+          ./build.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
