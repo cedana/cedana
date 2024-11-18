@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 # install packages
 RUN <<EOT
 set -eux
-APT_PACKAGES="sudo wget git make curl libnl-3-dev libnet-dev \
+APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev \
     libbsd-dev runc libcap-dev libgpgme-dev iptables iproute2 \
     btrfs-progs libbtrfs-dev libseccomp-dev libapparmor-dev \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
