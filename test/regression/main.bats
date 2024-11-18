@@ -10,7 +10,6 @@ setup_file() {
 setup() {
     # assuming WD is the root of the project
     start_cedana
-    sleep 1 3>-
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
@@ -18,13 +17,14 @@ setup() {
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
     TTY_SOCK=$DIR/tty.sock
 
-    /usr/local/bin/cedana debug recvtty "$TTY_SOCK" &
+    cedana debug recvtty "$TTY_SOCK" &
+    sleep 1 3>-
 }
 
 teardown() {
     sleep 1 3>-
-    stop_cedana
     rm -f $TTY_SOCK
+    stop_cedana
     sleep 1 3>-
 }
 
@@ -221,6 +221,8 @@ teardown() {
     bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
     pid=$(cat "$bundle"/init.pid)
 
+    [ -d $dumpdir ]
+
     # restore the container
     run runc_restore $bundle $dumpdir.tar $container_id
     echo "$output"
@@ -258,11 +260,10 @@ teardown() {
     [ $nlines_after -gt $nlines_before ]
 
     # checkpoint the container
-    runc_checkpoint $dumpdir $job_id --leave-running
+    runc_checkpoint $dumpdir $job_id
     [ -d $dumpdir ]
 
     # clean up
-    sudo runc kill $job_id SIGKILL
     sudo runc delete $job_id
 }
 
@@ -321,11 +322,10 @@ teardown() {
     runc_manage $job_id
 
     # checkpoint the container
-    checkpoint_task $job_id $dumpdir --leave-running
+    checkpoint_task $job_id $dumpdir
     [ -d $dumpdir ]
 
     # clean up
-    sudo runc kill $job_id SIGKILL
     sudo runc delete $job_id
 }
 
@@ -341,7 +341,7 @@ teardown() {
     [ -d $dumpdir ]
     echo $dumpdir contents:
     ls $dumpdir
-    restore_task $job_id $dumpdir.tar -e -b $bundle -c $TTY_SOCK
+    restore_task_img $job_id $dumpdir.tar -e -b $bundle -c $TTY_SOCK
 
     sleep 1 3>-
 

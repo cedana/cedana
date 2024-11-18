@@ -12,7 +12,9 @@ function start_cedana() {
 }
 
 function stop_cedana() {
-    sudo pkill -SIGTERM cedana
+    sudo pkill cedana
+    sleep 2 3>-
+    sudo pkill -SIGKILL cedana # killsiwtch in case it's not stopped
 }
 
 
