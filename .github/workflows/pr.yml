@@ -97,11 +97,11 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.22
+          go-version: 1.23
 
       - name: Build
         run: |
-          ./build.sh
+          ./build.sh -buildvcs=false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -209,7 +209,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.22
+          go-version: 1.23
 
       - name: Run unit tests
         run: |
