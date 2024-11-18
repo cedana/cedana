@@ -77,8 +77,12 @@ rm -f crictl-$VERSION-linux-amd64.tar.gz
 EOT
 
 # install go
-RUN wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-RUN tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+RUN <<EOT
+set -eux
+wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
+tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+cp /usr/local/go/bin/go /usr/local/bin/
+EOT
 
 # install CRIU
 RUN <<EOT
