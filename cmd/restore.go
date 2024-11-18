@@ -273,7 +273,7 @@ var restoreKataCmd = &cobra.Command{
 
 var containerdRestoreCmd = &cobra.Command{
 	Use:   "containerd",
-	Short: "Manually checkpoint a running container to a directory",
+	Short: "Manually restore a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -332,7 +332,6 @@ var runcRestoreCmd = &cobra.Command{
 			ImagePath:   dir,
 			ContainerID: id,
 			Opts:        opts,
-			Type:        task.CRType_LOCAL,
 			CriuOpts: &task.CriuOpts{
 				FileLocks:      fileLocks,
 				TcpEstablished: tcpEstablished,
