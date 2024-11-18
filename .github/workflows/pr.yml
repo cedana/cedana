@@ -75,6 +75,7 @@ jobs:
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-ci:latest
+      options: --privileged
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -150,6 +151,7 @@ jobs:
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-ci:latest
+      options: --privileged
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -185,6 +187,7 @@ jobs:
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-ci:latest
+      options: --privileged
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
