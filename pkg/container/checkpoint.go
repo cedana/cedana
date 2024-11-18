@@ -1777,22 +1777,11 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int32, runcRoot s
 			c.addCriuDumpMount(req, m)
 		}
 
-		// TODO(swarnimarun): was unused, fix in a separate PR after discussion
 		// Write the FD info to a file in the image directory
-		// fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
-		// if err != nil {
-		// 	return err
-		// }
-		// err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
-		// if err != nil {
-		// 	return err
-		// }
-
-		fdsJSON, err := json.Marshal([]string{"/dev/null", "/dev/null", "/dev/null"})
+		fdsJSON, err := json.Marshal(c.InitProcess.externalDescriptors())
 		if err != nil {
 			return err
 		}
-
 		err = os.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptorsFilename), fdsJSON, 0o777)
 		if err != nil {
 			return err
