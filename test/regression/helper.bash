@@ -2,13 +2,19 @@
 
 # Helper functions that hit the local Cedana API
 
+function install_cedana() {
+    # assuming it's already built
+    sudo cp ./cedana /usr/local/bin/cedana
+}
+
 function start_cedana() {
-    ./build-start-daemon.sh --no-build --args="$@"
+    sudo cedana daemon start $@ &
 }
 
 function stop_cedana() {
-    ./reset.sh
+    sudo pkill -SIGTERM cedana
 }
+
 
 function exec_task() {
     local task="$1"

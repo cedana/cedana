@@ -4,6 +4,7 @@ load helper.bash
 
 setup_file() {
     BATS_NO_PARALLELIZE_WITHIN_FILE=true
+    install_cedana
 }
 
 setup() {
@@ -22,7 +23,6 @@ setup() {
 
 teardown() {
     sleep 1 3>-
-
     stop_cedana
     rm -f $TTY_SOCK
     sleep 1 3>-
