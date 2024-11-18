@@ -24,8 +24,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.5
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
-	github.com/golang/protobuf v1.5.4
-	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mdlayher/vsock v1.2.1
@@ -122,6 +120,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.19.1 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
@@ -129,6 +128,7 @@ require (
 	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
 	github.com/google/renameio v1.0.1 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect

@@ -73,6 +73,12 @@ jobs:
   build:
     name: Build
     runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-ci:latest
+      options: --privileged
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -83,22 +89,21 @@ jobs:
           fetch-tags: true
           submodules: "recursive"
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.22"
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
         with:
           limit-access-to-actor: true
 
-      - name: Setup CI
-        run: sudo -E make -C scripts/ci setup-build
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+          check-latest: true
 
       - name: Build
-        run: sudo -E ./build.sh
+        run: |
+          ./build.sh -buildvcs=false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -137,14 +142,20 @@ jobs:
           name: build
       - name: Run script
         run: |
-          sudo chmod +x ./cedana
-          sudo cp ./cedana /usr/local/bin/
-          sudo cp ./build-start-daemon.sh /build-start-daemon.sh
+          chmod +x ./cedana
+          sudo -E cp ./cedana /usr/local/bin/
+          sudo -E cp ./build-start-daemon.sh /build-start-daemon.sh
           ./setup-host.sh
 
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-ci:latest
+      options: --privileged
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
     needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
@@ -164,22 +175,23 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Setup CI
-        run: |
-          chmod +x cedana
-          sudo -E make -C scripts/ci setup-full
-        env:
-          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-
       - name: Run regression tests
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-        run: sudo -E make -C scripts/ci regression
+        run: |
+          chmod +x cedana
+          make -C scripts/ci regression
 
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-ci:latest
+      options: --privileged
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
     needs: [build, setup-script-tests]
     steps:
       - uses: actions/checkout@v4
@@ -199,16 +211,11 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Install Go 1.23
+      - name: Install Go
         uses: actions/setup-go@v4
         with:
           go-version: 1.23
           check-latest: true
-
-      - name: Setup CI
-        run: |
-          chmod +x cedana
-          sudo -E make -C scripts/ci setup-build
 
       - name: Run unit tests
         run: |
@@ -241,7 +248,7 @@ jobs:
       - name: Workaround for dind
         run: |
           umount /var/run/docker.sock
-          sudo service supervisor start
+          service supervisor start
           sleep 1
           supervisorctl restart dockerd
 

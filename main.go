@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/cedana/cedana/cmd"
 	"github.com/containers/storage/pkg/reexec"
@@ -14,7 +15,7 @@ var Version = "dev"
 
 func main() {
 	// Grandparent context to deal with OS interrupts
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	// Calls the reexec init function so that storage-mountfrom is able to be called in crio rootfs
