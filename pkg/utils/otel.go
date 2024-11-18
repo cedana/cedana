@@ -155,6 +155,7 @@ func newTraceProvider(ctx context.Context, version, endpoint, headers string) (*
 	return traceProvider, nil
 }
 func logProvider(serviceName, version, endpoint, headers string) error {
+	_ = os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 	_ = os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", headers)
 	signalProcessor := providerconfighttp.New(
 		providerconfighttp.WithLogOptions(otlploghttp.WithEndpoint(endpoint)),
