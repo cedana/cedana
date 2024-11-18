@@ -77,12 +77,11 @@ rm -f crictl-$VERSION-linux-amd64.tar.gz
 EOT
 
 # install go
-RUN <<EOT
-set -eux
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
-cp /usr/local/go/bin/go /usr/local/bin/
-EOT
+# RUN <<EOT
+# set -eux
+# wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
+# tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
+# EOT
 
 # install CRIU
 RUN <<EOT
@@ -100,7 +99,6 @@ echo '{"client":{"leave_running":false, "task":""}, "connection":{"cedana_url": 
 EOT
 
 # update paths
-ENV GOPATH=${HOME}/go
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
 ENV CEDANA_URL=https://ci.cedana.ai
 
