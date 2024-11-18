@@ -101,7 +101,7 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: sudo -E ./build.sh
+        run: ./build.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -139,9 +139,9 @@ jobs:
           name: build
       - name: Run script
         run: |
-          sudo chmod +x ./cedana
-          sudo cp ./cedana /usr/local/bin/
-          sudo cp ./build-start-daemon.sh /build-start-daemon.sh
+          chmod +x ./cedana
+          cp ./cedana /usr/local/bin/
+          cp ./build-start-daemon.sh /build-start-daemon.sh
           ./setup-host.sh
 
   regression-test:
@@ -177,7 +177,7 @@ jobs:
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: |
           chmod +x cedana
-          sudo -E make -C scripts/ci regression
+          make -C scripts/ci regression
 
   unit-test:
     name: Unit Tests
@@ -243,7 +243,7 @@ jobs:
       - name: Workaround for dind
         run: |
           umount /var/run/docker.sock
-          sudo service supervisor start
+          service supervisor start
           sleep 1
           supervisorctl restart dockerd
 
