@@ -170,6 +170,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"),
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
 		TcpClose:        args.GetCriuOpts().GetTcpClose(),
+    TCPInFlight:     args.GetCriuOpts().GetTcpSkipInFlight(),
 		MntnsCompatMode: false,
 		External:        args.GetCriuOpts().GetExternal(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
