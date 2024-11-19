@@ -164,9 +164,8 @@ jobs:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}
           TAG: v0.0.1
         run: |
-          mkdir current
-          cd current
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/versions/$TAG/criu
+          sudo cp criu /usr/local/sbin/
 
       - name: Download cedana-image-streamer binary
         id: download-streamer
@@ -174,8 +173,8 @@ jobs:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
           TAG: v0.0.2
         run: |
-          cd current
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
+          sudo cp cedana-image-streamer /usr/bin/
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
