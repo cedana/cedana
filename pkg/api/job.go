@@ -97,7 +97,7 @@ func (s *service) JobRestore(
 			// Use saved bundle if not overridden from args
 			opts.Bundle = state.ContainerBundle
 		}
-    opts.Root = args.GetRuncOpts().GetRoot()
+		opts.Root = args.GetRuncOpts().GetRoot()
 		if opts.Root == "" {
 			// Use saved root if not overridden from args
 			opts.Root = state.ContainerRoot
