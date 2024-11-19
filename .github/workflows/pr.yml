@@ -212,6 +212,25 @@ jobs:
         with:
           name: build
 
+      - name: Download forked criu binary
+        id: download
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir current
+          cd current
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/versions/$TAG/criu
+
+      - name: Download cedana-image-streamer binary
+        id: download
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          cd current
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
