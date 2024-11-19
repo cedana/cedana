@@ -159,7 +159,7 @@ jobs:
           name: build
 
       - name: Download forked criu binary
-        id: download
+        id: download-criu
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -169,7 +169,7 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/versions/$TAG/criu
 
       - name: Download cedana-image-streamer binary
-        id: download
+        id: download-streamer
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
           TAG: ${{ steps.tag.outputs.tag }}
