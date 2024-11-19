@@ -350,7 +350,32 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-	state, err := deserializeStateFromDir(imgPath, false)
+  // Untar the image to a temporary directory
+  tempDir := RESTORE_TEMPDIR
+  // check if tmpdir exists
+  // XXX YA: Tempdir usage is not thread safe
+  if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+    err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+    if err != nil {
+      return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
+    }
+  } else {
+    // likely an old checkpoint hanging around, delete
+    err := os.RemoveAll(tempDir)
+    if err != nil {
+      return 0, nil, fmt.Errorf("error removing existing tempdir: %w", err)
+    }
+    err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+    if err != nil {
+      return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
+    }
+  }
+  err := utils.UntarFolder(imgPath, tempDir)
+  if err != nil {
+    return 0, nil, fmt.Errorf("error decompressing checkpoint: %w", err)
+  }
+
+	state, err := deserializeStateFromDir(tempDir, false)
 	if err != nil {
 		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
@@ -360,7 +385,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, imgPath, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
+		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -370,7 +395,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
 
-	err = container.RuncRestore(imgPath, containerId, criuOpts, opts)
+	err = container.RuncRestore(tempDir, containerId, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
 		// FIXME: Remove later when GPU controller is started in pre-resume hook

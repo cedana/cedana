@@ -247,6 +247,13 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		Duration: elapsed.Milliseconds(),
 	}
 
+	// final update to db
+	err = s.updateState(ctx, state.JID, state)
+	if err != nil {
+		log.Error().Err(err)
+		return err
+	}
+
 	return nil
 }
 

@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/containerd"
 	"github.com/cedana/cedana/pkg/api/kube"
@@ -130,18 +129,6 @@ func (s *service) ContainerdDump(ctx context.Context, args *task.ContainerdDumpA
 			Reason: err.Error() + "\nDump.log content:\n" + dumpLogContent,
 		})
 		return nil, st.Err()
-	}
-
-	switch dumpOpts.Type {
-	case task.CRType_LOCAL:
-	case task.CRType_REMOTE:
-		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
-		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			return nil, st.Err()
-		}
-		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
-		state.RemoteState = append(state.RemoteState, remoteState)
 	}
 
 	return &task.ContainerdDumpResp{
