@@ -133,8 +133,16 @@ setup_ci() {
     echo "export CEDANA_URL=https://ci.cedana.ai" >> /etc/environment
 
     # Install CRIU
-    sudo add-apt-repository -y ppa:criu/ppa
-    sudo apt-get update && sudo apt-get install -y criu
+    CRIU_TAG=v0.0.1
+    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$CRIU_TAG/criu
+    chmod +x criu
+    sudo cp criu /usr/local/sbin/
+
+    # Install cedana-image-streamer
+    STREAMER_TAG=v0.0.2
+    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER/cedana/cedana-image-streamer/raw/versions/$STREAMER_TAG/cedana-image-streamer
+    chmod +x cedana-image-streamer
+    sudo cp cedana-image-streamer /usr/bin/
 
     # Install smoke & bench deps
     sudo pip3 install -r test/benchmarks/requirements
