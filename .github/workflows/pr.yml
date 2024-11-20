@@ -137,7 +137,7 @@ jobs:
           name: build
       - name: Run script
         env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU="${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}"
+          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}"
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
