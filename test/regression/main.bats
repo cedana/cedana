@@ -359,6 +359,8 @@ teardown() {
 }
 
 @test "Dump workload with --stream" {
+    echo "main.bats: ls /usr/bin/cedana-image-streamer"
+    ls /usr/bin/cedana-image-streamer
     local task="./workload.sh"
     local job_id="workload-stream-1"
 
