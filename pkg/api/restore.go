@@ -38,7 +38,7 @@ import (
 const (
 	CRIU_RESTORE_LOG_FILE        = "cedana-restore.log"
 	CRIU_RESTORE_LOG_LEVEL       = 4
-	RESTORE_TEMPDIR              = "/tmp/cedana_restore"
+	RESTORE_TEMPDIR              = "/tmp/cedana-restore"
 	RESTORE_TEMPDIR_PERMS        = 0o755
 	RESTORE_OUTPUT_LOG_PATH      = "/var/log/cedana-output-%s.log"
 	KATA_RESTORE_OUTPUT_LOG_PATH = "/tmp/cedana-output-%s.log"
@@ -47,7 +47,7 @@ const (
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	cmd.Stderr = buf
 	var err error
 	/*stdout, err := cmd.StdoutPipe()
@@ -97,7 +97,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		tempDir = args.CheckpointPath
 		s.setupStreamerServe(tempDir, args.Stream)
 	} else {
-		tempDir = RESTORE_TEMPDIR
+		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
 		// XXX YA: Tempdir usage is not thread safe
 		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
@@ -855,7 +855,10 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	stats.GPUDuration = elapsed.Milliseconds()
 
   // HACK: Create empty log file for intercepted process to avoid CRIU errors
-  os.Create(filepath.Join(os.TempDir(), fmt.Sprintf("cedana-so-%s.log", jid)))
+  soLogFileName := fmt.Sprintf("cedana-so-%s.log", jid)
+  if _, err := os.Stat(filepath.Join(os.TempDir(), soLogFileName)); os.IsNotExist(err) {
+    os.Create(filepath.Join(os.TempDir(), soLogFileName))
+  }
 
 	return nil
 }
