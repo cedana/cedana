@@ -323,7 +323,7 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
 	buf := new(bytes.Buffer)
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	cmd.Stderr = buf
 	var err error
 	/*stdout, err := cmd.StdoutPipe()
@@ -362,8 +362,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	if err != nil {
 		return err
 	}
-
-	log.Info().Int32("stream", args.Stream).Msg("")
 
 	if state.GPU {
 		err = s.gpuDump(ctx, dumpdir, args.Stream > 0, state.JID)

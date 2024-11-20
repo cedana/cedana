@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	GPU_CONTROLLER_WAIT_TIMEOUT       = 10 * time.Second
+	GPU_CONTROLLER_WAIT_TIMEOUT       = 20 * time.Second
 	GPU_CONTROLLER_DEFAULT_HOST       = "localhost" // and port is dynamic
 	GPU_CONTROLLER_LOG_PATH_FORMATTER = "/tmp/cedana-gpu-controller-%s.log"
 )
