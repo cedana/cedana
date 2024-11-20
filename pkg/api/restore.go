@@ -4,7 +4,6 @@ package api
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,32 +45,46 @@ const (
 )
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
-	buf := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
-	cmd.Stderr = buf
-	var err error
-	/*stdout, err := cmd.StdoutPipe()
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	pipe := bufio.NewReader(stdout)
+	outpipe := bufio.NewReader(stdout)
 	go func() {
 		for {
-			line, err := pipe.ReadString('\n')
+			line, err := outpipe.ReadString('\n')
 			if err != nil {
 				break
 			}
 			line = strings.TrimSuffix(line, "\n")
 			log.Info().Msg(line)
 		}
-	}()*/
+	}()
+	i := 0
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	errpipe := bufio.NewReader(stderr)
+	go func() {
+		for {
+			line, err := errpipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			log.Info().Msg(line)
+			i += 1
+		}
+	}()
 	err = cmd.Start()
 	if err != nil {
 		log.Fatal().Msgf("unable to exec image streamer server: %v", err)
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("Starting cedana-image-streamer")
 
-	for buf.Len() == 0 {
+	for i == 0 {
 		log.Info().Msg("Waiting for cedana-image-streamer to setup...")
 		time.Sleep(10 * time.Millisecond)
 	}
