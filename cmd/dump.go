@@ -63,9 +63,8 @@ var dumpProcessCmd = &cobra.Command{
 		log.Info().Msgf("cmd/dump stream = %d", stream)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
-				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				path := os.Getenv("PATH")
-				log.Error().Msgf("PATH = %v", path)
+				log.Error().Msgf("Cannot find cedana-image-streamer in PATH = %v", path)
 				return err
 			}
 		}
