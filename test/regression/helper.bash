@@ -5,6 +5,7 @@
 function install_cedana() {
     # assuming it's already built
     sudo cp ./cedana /usr/local/bin/cedana
+    sudo cp cedana-image-streamer /usr/bin/cedana-image-streamer
 }
 
 function start_cedana() {
