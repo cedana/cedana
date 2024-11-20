@@ -615,7 +615,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, false, args.JID)
+		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
 		if err != nil {
 			return 0, nil, err
 		}
