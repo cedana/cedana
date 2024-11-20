@@ -78,11 +78,11 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	log.Info().Msg("Started cedana-image-streamer")
 }
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (*string, *task.ProcessState, []*os.File, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
+		return "", nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
 	var isShellJob bool
@@ -103,30 +103,30 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 			err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 			if err != nil {
-				return nil, nil, nil, nil, err
+				return "", nil, nil, nil, err
 			}
 		} else {
 			// likely an old checkpoint hanging around, delete
 			err := os.RemoveAll(tempDir)
 			if err != nil {
-				return nil, nil, nil, nil, err
+				return "", nil, nil, nil, err
 			}
 			err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 			if err != nil {
-				return nil, nil, nil, nil, err
+				return "", nil, nil, nil, err
 			}
 		}
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
 			log.Error().Err(err).Msg("error decompressing checkpoint")
-			return nil, nil, nil, nil, err
+			return "", nil, nil, nil, err
 		}
 	}
 
 	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
-		return nil, nil, nil, nil, err
+		return "", nil, nil, nil, err
 	}
 
 	if !isKata {
@@ -143,7 +143,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		}
 		if err != nil {
 			log.Error().Err(err).Msg("error creating output file")
-			return nil, nil, nil, nil, err
+			return "", nil, nil, nil, err
 		}
 		ioFiles = append(ioFiles, in_w)
 		ioFiles = append(ioFiles, out_r)
@@ -193,7 +193,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 		file, err := os.Create(filename)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating logfile")
-			return nil, nil, nil, nil, err
+			return "", nil, nil, nil, err
 		}
 
 		for _, f := range open_fds {
@@ -227,14 +227,14 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	if args.Stream <= 0 {
 		if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 			log.Error().Err(err).Msg("error changing permissions")
-			return nil, nil, nil, nil, err
+			return "", nil, nil, nil, err
 		}
 	}
 
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-	return &tempDir, checkpointState, extraFiles, ioFiles, nil
+	return tempDir, checkpointState, extraFiles, ioFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -365,9 +365,6 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
-	// FIXME: GPU restore should instead be done in the pre-resume hook, so as to ensure it does not
-	// continue to run as an orphan process if the restore fails early. Once process has started, then
-	// it's lifecycle is tied to it (see below goroutines).
 	if state.GPU {
 		var err error
 		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
@@ -383,7 +380,6 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	err = container.RuncRestore(tempDir, containerId, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
-		// FIXME: Remove later when GPU controller is started in pre-resume hook
 		if s.GetGPUController(jid) != nil {
 			s.StopGPUController(jid)
 			s.WaitGPUController(jid)
@@ -398,7 +394,6 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
-		// FIXME: Remove later when GPU controller is started in pre-resume hook
 		if s.GetGPUController(jid) != nil {
 			s.StopGPUController(jid)
 			s.WaitGPUController(jid)
@@ -610,9 +605,6 @@ func rsyncDirectories(source, destination string) error {
 }
 
 func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (int32, chan int, error) {
-	var dir *string
-	var pid *int32
-
 	opts := s.prepareRestoreOpts()
 	nfy := Notify{}
 
@@ -621,24 +613,22 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		return 0, nil, err
 	}
 
-	// No GPU flag passed in args - if state.GPU = true, always restore using gpu-controller
 	if state.GPU {
-		// NOTE: Running on pre-resume hook also ensures that there's little room for failure as the
-		// process is just about to be resumed. If we do GPU restore too early, then we will have to
-		// ensure it's killed on every failure. Once the process starts, then it's lifecycle is tied to it
-		// (see below goroutines).
-		nfy.PreResumeFunc = NotifyFunc{
-			Avail: true,
-			Callback: func() error {
-				var err error
-				err = s.gpuRestore(ctx, *dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
-				return err
-			},
+		var err error
+		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, false, args.JID)
+		if err != nil {
+			return 0, nil, err
 		}
 	}
 
-	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
+  pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
 	if err != nil {
+		// Kill GPU controller if it was started
+		if s.GetGPUController(args.JID) != nil {
+			s.StopGPUController(args.JID)
+			s.WaitGPUController(args.JID)
+		}
+
 		return 0, nil, err
 	}
 
@@ -763,9 +753,6 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 }
 
 func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int32, error) {
-	var dir *string
-	var pid *int32
-
 	opts := s.prepareRestoreOpts()
 	nfy := Notify{}
 
@@ -814,7 +801,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	opts.External = append(opts.External, "mnt[]:m")
 	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
 
-	pid, err = s.criuRestore(ctx, opts, nfy, *dir, extraFiles)
+  pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -866,6 +853,9 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
+
+  // HACK: Create empty log file for intercepted process to avoid CRIU errors
+  os.Create(filepath.Join(os.TempDir(), fmt.Sprintf("cedana-so-%s.log", jid)))
 
 	return nil
 }
