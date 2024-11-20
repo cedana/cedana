@@ -58,7 +58,7 @@ var dumpProcessCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
-    tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
 
@@ -74,10 +74,10 @@ var dumpProcessCmd = &cobra.Command{
 			Dir:    dir,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
-				LeaveRunning:   leaveRunning,
-				TcpEstablished: tcpEstablished,
-				TcpClose:       tcpClose,
-        TcpSkipInFlight: tcpSkipInFlight,
+				LeaveRunning:    leaveRunning,
+				TcpEstablished:  tcpEstablished,
+				TcpClose:        tcpClose,
+				TcpSkipInFlight: tcpSkipInFlight,
 			},
 		}
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -200,7 +200,7 @@ var dumpJobCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
-    tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -230,12 +230,12 @@ var dumpJobCmd = &cobra.Command{
 			Dir:    dir,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
-				LeaveRunning:   leaveRunning,
-				TcpEstablished: tcpEstablished,
-				External:       externalNamespaces,
-				FileLocks:      fileLocks,
-				TcpClose:       tcpClose,
-        TcpSkipInFlight: tcpSkipInFlight,
+				LeaveRunning:    leaveRunning,
+				TcpEstablished:  tcpEstablished,
+				External:        externalNamespaces,
+				FileLocks:       fileLocks,
+				TcpClose:        tcpClose,
+				TcpSkipInFlight: tcpSkipInFlight,
 			},
 		}
 
@@ -396,7 +396,7 @@ var dumpRuncCmd = &cobra.Command{
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
-    tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -416,13 +416,13 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		criuOpts := &task.CriuOpts{
-			WorkDirectory:  wdPath,
-			LeaveRunning:   leaveRunning,
-			TcpEstablished: tcpEstablished,
-			TcpClose:       tcpClose,
-      TcpSkipInFlight: tcpSkipInFlight,
-			External:       externalNamespaces,
-			FileLocks:      fileLocks,
+			WorkDirectory:   wdPath,
+			LeaveRunning:    leaveRunning,
+			TcpEstablished:  tcpEstablished,
+			TcpClose:        tcpClose,
+			TcpSkipInFlight: tcpSkipInFlight,
+			External:        externalNamespaces,
+			FileLocks:       fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
