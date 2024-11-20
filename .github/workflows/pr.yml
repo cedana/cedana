@@ -167,7 +167,10 @@ jobs:
           TAG: v0.0.2
         run: |
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
+          ls
           sudo cp cedana-image-streamer /usr/bin/
+          echo "ls /usr/bin/cedana-image-streamer"
+          ls /usr/bin/cedana-image-streamer
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
