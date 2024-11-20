@@ -157,11 +157,13 @@ jobs:
         run: ./bench results push --overwrite
 
       - name: Plot
+        if: always()
         env:
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
         run: ./bench plot --runtime cedana --save $FLAGS
 
       - name: Upload plots
+        if: always()
         id: upload-plots
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -172,6 +174,7 @@ jobs:
           glob: '**/*.png'
 
       - name: Generate summary
+        if: always()
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/cedana/bench-${{ github.ref }}/results
           RESULTS_DESCRIPTION: "> Manual run (cedana)"

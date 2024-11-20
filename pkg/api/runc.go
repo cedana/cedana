@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/api/services/task"
@@ -185,27 +184,8 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		return nil, st.Err()
 	}
 
-	var resp task.RuncDumpResp
-
-	switch args.Type {
-	case task.CRType_LOCAL:
-		resp = task.RuncDumpResp{
-			Message: fmt.Sprintf("Dumped runc process %d", pid),
-		}
-
-	case task.CRType_REMOTE:
-		checkpointID, uploadID, err := s.uploadCheckpoint(ctx, state.CheckpointPath)
-		if err != nil {
-			st := status.New(codes.Internal, fmt.Sprintf("failed to upload checkpoint with error: %s", err.Error()))
-			return nil, st.Err()
-		}
-		remoteState := &task.RemoteState{CheckpointID: checkpointID, UploadID: uploadID, Timestamp: time.Now().Unix()}
-		state.RemoteState = append(state.RemoteState, remoteState)
-		resp = task.RuncDumpResp{
-			Message:      fmt.Sprintf("Dumped runc process %d, multipart checkpoint id: %s", pid, uploadID),
-			CheckpointID: checkpointID,
-			UploadID:     uploadID,
-		}
+	resp := task.RuncDumpResp{
+		Message: fmt.Sprintf("Dumped runc process %d", pid),
 	}
 
 	// Only update state if it was a managed job
@@ -254,47 +234,14 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 
 	if jid != "" {
-		if viper.GetBool("remote") {
-			remoteState := state.GetRemoteState()
-			if remoteState == nil {
-				log.Debug().Str("JID", args.ContainerID).Msgf("No remote state found")
-				return nil, status.Error(codes.InvalidArgument, "no remote state found")
-			}
-			// For now just grab latest checkpoint
-			if remoteState[len(remoteState)-1].CheckpointID == "" {
-				log.Debug().Str("JID", args.ContainerID).Msgf("No remote checkpoint found")
-				return nil, status.Error(codes.InvalidArgument, "no remote checkpoint found")
-			}
-			args.CheckpointID = remoteState[len(remoteState)-1].CheckpointID
-			args.Type = task.CRType_REMOTE
-		} else {
-			if state.CheckpointPath != "" {
-				// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
-				args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
-			}
-			args.Type = task.CRType_LOCAL
+		if state.CheckpointPath != "" {
+			// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
+			args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
 		}
-	} else {
-		args.Type = task.CRType_LOCAL
 	}
 
-	switch args.Type {
-	case task.CRType_LOCAL:
-		if args.ImagePath == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
-		}
-
-	case task.CRType_REMOTE:
-		if args.CheckpointID == "" {
-			return nil, status.Error(codes.InvalidArgument, "checkpoint id cannot be empty")
-		}
-
-		zipFile, err := s.store.GetCheckpoint(ctx, args.CheckpointID)
-		if err != nil {
-			return nil, err
-		}
-
-		args.ImagePath = *zipFile
+	if args.ImagePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 	}
 
 	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts, jid)
@@ -346,7 +293,6 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*task.RuncQueryResp, error) {
 	var containers []*task.RuncContainer
 	if len(args.ContainerNames) == 0 {
-
 		runcContainers, err := runc.RuncGetAll(args.Root, args.Namespace)
 		if err != nil {
 			return nil, status.Error(codes.NotFound, err.Error())
@@ -365,10 +311,12 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 			containers = append(containers, ctr)
 		}
 	}
+
 	for i, name := range args.ContainerNames {
 		runcId, bundle, err := runc.GetContainerIdByName(name, args.SandboxNames[i], args.Root)
 		if errors.Is(err, runc.ErrContainerNotFound) {
 			log.Info().Msgf("container %s not found", name)
+			continue
 		}
 
 		if !errors.Is(err, runc.ErrContainerNotFound) && err != nil {
@@ -379,6 +327,10 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 			ID:         runcId,
 			BundlePath: bundle,
 		})
+	}
+
+	if len(containers) == 0 {
+		return nil, status.Error(codes.NotFound, "no containers found")
 	}
 
 	return &task.RuncQueryResp{Containers: containers}, nil

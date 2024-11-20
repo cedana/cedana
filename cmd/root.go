@@ -4,11 +4,15 @@ package cmd
 
 import (
 	"context"
+	"flag"
 
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	// import klog to disable it
+	"k8s.io/klog/v2"
 )
 
 var rootCmd = &cobra.Command{
@@ -29,6 +33,13 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
+	// disable klog
+	flags := &flag.FlagSet{}
+	klog.InitFlags(flags)
+	flags.Set("logtostderr", "false")
+	flags.Set("alsologtostderr", "false")
+	flags.Set("stderrthreshold", "4")
+
 	log.Logger = utils.Logger
 
 	rootCmd.Version = version
