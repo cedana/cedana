@@ -8,7 +8,7 @@ function install_cedana() {
 }
 
 function start_cedana() {
-    sudo -E cedana daemon start $@ &
+    sudo cedana daemon start $@ &
 }
 
 function stop_cedana() {
