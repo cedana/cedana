@@ -318,7 +318,9 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
 		}
-		args.CheckpointPath = state.CheckpointPath
+		if args.CheckpointPath == "" {
+			args.CheckpointPath = state.CheckpointPath
+		}
 	}
 
 	if args.CheckpointPath == "" {

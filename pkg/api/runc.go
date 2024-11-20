@@ -170,6 +170,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		LeaveRunning:    args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"),
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
 		TcpClose:        args.GetCriuOpts().GetTcpClose(),
+		TCPInFlight:     args.GetCriuOpts().GetTcpSkipInFlight(),
 		MntnsCompatMode: false,
 		External:        args.GetCriuOpts().GetExternal(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
@@ -233,10 +234,9 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		}
 	}
 
-	if jid != "" {
-		if state.CheckpointPath != "" {
-			// HACK YA: Use dir by removing .tar, until we add decompression to runc restore
-			args.ImagePath = state.CheckpointPath[:len(state.CheckpointPath)-4]
+	if jid != "" { // if managed job
+		if args.ImagePath == "" {
+			args.ImagePath = state.CheckpointPath
 		}
 	}
 

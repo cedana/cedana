@@ -60,7 +60,7 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	resp := task.DumpResp{
 		Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
 		CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
-    State:        state,
+		State:        state,
 	}
 
 	return &resp, err

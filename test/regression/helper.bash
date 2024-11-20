@@ -2,13 +2,21 @@
 
 # Helper functions that hit the local Cedana API
 
+function install_cedana() {
+    # assuming it's already built
+    sudo cp ./cedana /usr/local/bin/cedana
+}
+
 function start_cedana() {
-    ./build-start-daemon.sh --no-build --args="$@"
+    sudo cedana daemon start $@ &
 }
 
 function stop_cedana() {
-    ./reset.sh
+    sudo pkill cedana
+    sleep 2 3>-
+    sudo pkill -SIGKILL cedana # killsiwtch in case it's not stopped
 }
+
 
 function exec_task() {
     local task="$1"
@@ -19,14 +27,22 @@ function exec_task() {
 
 function checkpoint_task() {
     local job_id="$1"
-    shift 1
-    cedana dump job "$job_id" -d /tmp $@
+    local dir="$2"
+    shift 2
+    cedana dump job "$job_id" -d "$dir" $@
 }
 
 function restore_task() {
     local job_id="$1"
     shift 1
     cedana restore job "$job_id" $@
+}
+
+function restore_task_img() { # override the image
+    local job_id="$1"
+    local img="$2"
+    shift 2
+    cedana restore job "$job_id" --image "$img" $@
 }
 
 function start_busybox(){
@@ -92,22 +108,28 @@ function runc_checkpoint() {
     shift 2
     cedana dump runc --dir "$dir" --id "$job_id" $@
 }
-# Bundle for jupyter notebook restore
-# /run/containerd/io.containerd.runtime.v2.task/default/jupyter-notebook-restore
+
 function runc_restore() {
     local bundle="$1"
-    local dir="$2"
+    local img="$2"
     local id="$3"
-    local tty="$4"
-    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id" --console-socket "$tty"
+    shift 3
+    cedana restore runc -e -b "$bundle" --image "$img" --id "$id"
 }
 
-function runc_restore_jupyter() {
+function runc_restore_tty() {
     local bundle="$1"
-    local dir="$2"
+    local img="$2"
     local id="$3"
-    local pid="$4"
-    cedana restore runc -e -b "$bundle" --dir "$dir" --id "$id"
+    local tty="$4"
+    shift 4
+    cedana restore runc -e -b "$bundle" --image "$img" --id "$id" --console-socket "$tty"
+}
+
+function runc_manage() {
+    local id="$1"
+    shift 1
+    cedana manage runc --id "$id" $@
 }
 
 function fail() {

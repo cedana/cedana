@@ -115,15 +115,13 @@ jobs:
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1
         with:
-          github_token: ${{ secrets.github_token }}
-          reporter: github-pr-review # Change reporter.
-          path: "." # Optional.
+          reporter: github-pr-review
           pattern: |
             *.bash
             *.sh
             *.bats
-          exclude: "./.git/*" # Optional.
-          check_all_files_with_shebangs: "true" # Optional
+          check_all_files_with_shebangs: true
+          shellcheck_flags: "--external-sources --severity=warning"
 
   setup-script-tests:
     name: Test Setup Scripts
