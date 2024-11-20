@@ -335,30 +335,30 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		return 0, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
-  // Untar the image to a temporary directory
-  tempDir := RESTORE_TEMPDIR
-  // check if tmpdir exists
-  // XXX YA: Tempdir usage is not thread safe
-  if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-    err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-    if err != nil {
-      return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
-    }
-  } else {
-    // likely an old checkpoint hanging around, delete
-    err := os.RemoveAll(tempDir)
-    if err != nil {
-      return 0, nil, fmt.Errorf("error removing existing tempdir: %w", err)
-    }
-    err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
-    if err != nil {
-      return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
-    }
-  }
-  err := utils.UntarFolder(imgPath, tempDir)
-  if err != nil {
-    return 0, nil, fmt.Errorf("error decompressing checkpoint: %w", err)
-  }
+	// Untar the image to a temporary directory
+	tempDir := RESTORE_TEMPDIR
+	// check if tmpdir exists
+	// XXX YA: Tempdir usage is not thread safe
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+		if err != nil {
+			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
+		}
+	} else {
+		// likely an old checkpoint hanging around, delete
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			return 0, nil, fmt.Errorf("error removing existing tempdir: %w", err)
+		}
+		err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
+		if err != nil {
+			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
+		}
+	}
+	err := utils.UntarFolder(imgPath, tempDir)
+	if err != nil {
+		return 0, nil, fmt.Errorf("error decompressing checkpoint: %w", err)
+	}
 
 	state, err := deserializeStateFromDir(tempDir, false)
 	if err != nil {
@@ -621,7 +621,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream ta
 		}
 	}
 
-  pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
+	pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
 	if err != nil {
 		// Kill GPU controller if it was started
 		if s.GetGPUController(args.JID) != nil {
@@ -801,7 +801,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	opts.External = append(opts.External, "mnt[]:m")
 	opts.Root = proto.String("/run/kata-containers/shared/containers/" + args.CheckpointID + "/rootfs")
 
-  pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
+	pid, err := s.criuRestore(ctx, opts, nfy, dir, extraFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -854,11 +854,11 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	elapsed := time.Since(start)
 	stats.GPUDuration = elapsed.Milliseconds()
 
-  // HACK: Create empty log file for intercepted process to avoid CRIU errors
-  soLogFileName := fmt.Sprintf("cedana-so-%s.log", jid)
-  if _, err := os.Stat(filepath.Join(os.TempDir(), soLogFileName)); os.IsNotExist(err) {
-    os.Create(filepath.Join(os.TempDir(), soLogFileName))
-  }
+	// HACK: Create empty log file for intercepted process to avoid CRIU errors
+	soLogFileName := fmt.Sprintf("cedana-so-%s.log", jid)
+	if _, err := os.Stat(filepath.Join(os.TempDir(), soLogFileName)); os.IsNotExist(err) {
+		os.Create(filepath.Join(os.TempDir(), soLogFileName))
+	}
 
 	return nil
 }

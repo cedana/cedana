@@ -76,7 +76,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 
 	opts.TcpEstablished = proto.Bool(hasTCP || args.GetCriuOpts().GetTcpEstablished())
 	opts.TcpClose = proto.Bool(args.GetCriuOpts().GetTcpClose())
-  opts.TcpSkipInFlight = proto.Bool(args.GetCriuOpts().GetTcpSkipInFlight())
+	opts.TcpSkipInFlight = proto.Bool(args.GetCriuOpts().GetTcpSkipInFlight())
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
 	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"))
