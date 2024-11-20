@@ -165,7 +165,7 @@ jobs:
         run: |
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
           ls
-          chmod +x
+          sudo chmod +x cedana-image-streamer
           sudo cp cedana-image-streamer /usr/bin/
           echo "ls -l /usr/bin/cedana-image-streamer"
           ls -l /usr/bin/cedana-image-streamer
