@@ -157,19 +157,6 @@ jobs:
         with:
           name: build
 
-      - name: Download cedana-image-streamer binary
-        id: download-streamer
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
-          TAG: v0.0.2
-        run: |
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
-          ls
-          sudo chmod +x cedana-image-streamer
-          sudo cp cedana-image-streamer /usr/bin/
-          echo "ls -l /usr/bin/cedana-image-streamer"
-          ls -l /usr/bin/cedana-image-streamer
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}

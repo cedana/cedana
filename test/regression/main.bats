@@ -359,8 +359,8 @@ teardown() {
 }
 
 @test "Dump workload with --stream" {
-    echo "main.bats: ls /usr/bin/cedana-image-streamer"
-    ls /usr/bin/cedana-image-streamer
+    echo "main.bats: ls -l /usr/bin/cedana-image-streamer"
+    ls -l /usr/bin/cedana-image-streamer
     echo "PATH = $PATH"
     local task="./workload.sh"
     local job_id="workload-stream-1"
@@ -373,6 +373,9 @@ teardown() {
 }
 
 @test "Restore workload with --stream" {
+    echo "main.bats: ls -l /usr/bin/cedana-image-streamer"
+    ls -l /usr/bin/cedana-image-streamer
+    echo "PATH = $PATH"
     local task="./workload-2.sh"
     local job_id="workload-stream-2"
 
