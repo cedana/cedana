@@ -10,8 +10,9 @@ import (
 
 	"github.com/mdlayher/vsock"
 
+	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -28,7 +29,7 @@ const (
 )
 
 type ServiceClient struct {
-	taskService task.TaskServiceClient
+	taskService taskgrpc.TaskServiceClient
 	taskConn    *grpc.ClientConn
 }
 
@@ -41,7 +42,7 @@ func NewClient(port uint32) (*ServiceClient, error) {
 		return nil, err
 	}
 
-	taskClient := task.NewTaskServiceClient(taskConn)
+	taskClient := taskgrpc.NewTaskServiceClient(taskConn)
 
 	client := &ServiceClient{
 		taskService: taskClient,
@@ -64,7 +65,7 @@ func NewVSockClient(vm string, port uint32) (*ServiceClient, error) {
 		return nil, err
 	}
 
-	taskClient := task.NewTaskServiceClient(taskConn)
+	taskClient := taskgrpc.NewTaskServiceClient(taskConn)
 
 	client := &ServiceClient{
 		taskService: taskClient,
@@ -130,7 +131,7 @@ func (c *ServiceClient) Start(ctx context.Context, args *task.StartArgs) (*task.
 	return resp, nil
 }
 
-func (c *ServiceClient) StartAttach(ctx context.Context, args *task.AttachArgs) (task.TaskService_StartAttachClient, error) {
+func (c *ServiceClient) StartAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_StartAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.StartAttach(ctx, opts...)
 	if err != nil {
@@ -166,7 +167,7 @@ func (c *ServiceClient) Restore(ctx context.Context, args *task.RestoreArgs) (*t
 	return resp, nil
 }
 
-func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.AttachArgs) (task.TaskService_RestoreAttachClient, error) {
+func (c *ServiceClient) RestoreAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_RestoreAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.RestoreAttach(ctx, opts...)
 	if err != nil {
@@ -216,7 +217,7 @@ func (c *ServiceClient) JobRestore(ctx context.Context, args *task.JobRestoreArg
 	return resp, nil
 }
 
-func (c *ServiceClient) JobRestoreAttach(ctx context.Context, args *task.AttachArgs) (task.TaskService_RestoreAttachClient, error) {
+func (c *ServiceClient) JobRestoreAttach(ctx context.Context, args *task.AttachArgs) (taskgrpc.TaskService_RestoreAttachClient, error) {
 	opts := getDefaultCallOptions()
 	stream, err := c.taskService.JobRestoreAttach(ctx, opts...)
 	if err != nil {

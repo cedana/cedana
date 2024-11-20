@@ -5,6 +5,12 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-20241120213244-d99a43b0c85e.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241120213244-06763032c670.1
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241120213244-06763032c670.1
+	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241120213244-f9aa09c7b23a.1
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-20241120213244-f9aa09c7b23a.1
 	cloud.google.com/go/pubsub v1.44.0
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
@@ -24,7 +30,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.3.1
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -51,7 +56,7 @@ require (
 	golang.org/x/time v0.6.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
 	google.golang.org/grpc v1.66.2
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.35.2
 	k8s.io/client-go v0.30.2
 	k8s.io/cri-api v0.30.2
 	k8s.io/klog/v2 v2.130.0
@@ -60,6 +65,7 @@ require (
 replace github.com/cri-o/cri-o => github.com/cri-o/cri-o v1.30.1-0.20240625065658-9d6a596aecea
 
 require (
+	buf.build/gen/go/cedana/criu/grpc/go v1.5.1-20241120213244-d99a43b0c85e.1 // indirect
 	cloud.google.com/go v0.115.1 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
@@ -121,6 +127,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.20.0 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect

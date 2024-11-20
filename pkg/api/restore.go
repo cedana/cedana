@@ -16,15 +16,16 @@ import (
 	"syscall"
 	"time"
 
+	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	"github.com/cedana/cedana/pkg/api/services/rpc"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -78,7 +79,7 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 	log.Info().Msg("Started cedana-image-streamer")
 }
 
-func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer, isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -86,7 +87,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 	}
 
 	var isShellJob bool
-	var inheritFds []*rpc.InheritFd
+	var inheritFds []*criu.InheritFd
 	var tcpEstablished bool
 	var extraFiles []*os.File
 	var ioFiles []*os.File
@@ -158,7 +159,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			if stream == nil {
 				if f.Fd == 1 || f.Fd == 2 {
 					extraFiles = append(extraFiles, out_w)
-					inheritFds = append(inheritFds, &rpc.InheritFd{
+					inheritFds = append(inheritFds, &criu.InheritFd{
 						Fd:  proto.Int32(2 + int32(len(extraFiles))),
 						Key: proto.String(f.Path),
 					})
@@ -166,19 +167,19 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 			} else {
 				if f.Fd == 0 {
 					extraFiles = append(extraFiles, in_r)
-					inheritFds = append(inheritFds, &rpc.InheritFd{
+					inheritFds = append(inheritFds, &criu.InheritFd{
 						Fd:  proto.Int32(2 + int32(len(extraFiles))),
 						Key: proto.String(f.Path),
 					})
 				} else if f.Fd == 1 {
 					extraFiles = append(extraFiles, out_w)
-					inheritFds = append(inheritFds, &rpc.InheritFd{
+					inheritFds = append(inheritFds, &criu.InheritFd{
 						Fd:  proto.Int32(2 + int32(len(extraFiles))),
 						Key: proto.String(f.Path),
 					})
 				} else if f.Fd == 2 {
 					extraFiles = append(extraFiles, er_w)
-					inheritFds = append(inheritFds, &rpc.InheritFd{
+					inheritFds = append(inheritFds, &criu.InheritFd{
 						Fd:  proto.Int32(2 + int32(len(extraFiles))),
 						Key: proto.String(f.Path),
 					})
@@ -202,7 +203,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *rpc.CriuOpts, args *
 				f.Path = strings.TrimPrefix(f.Path, "/")
 
 				extraFiles = append(extraFiles, file)
-				inheritFds = append(inheritFds, &rpc.InheritFd{
+				inheritFds = append(inheritFds, &criu.InheritFd{
 					Fd:  proto.Int32(2 + int32(len(extraFiles))),
 					Key: proto.String(f.Path),
 				})
@@ -265,8 +266,8 @@ func (s *service) containerdRestore(ctx context.Context, imgPath string, contain
 	return nil
 }
 
-func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
-	opts := rpc.CriuOpts{
+func (s *service) prepareRestoreOpts() *criu.CriuOpts {
+	opts := criu.CriuOpts{
 		LogLevel: proto.Int32(CRIU_RESTORE_LOG_LEVEL),
 		LogFile:  proto.String(CRIU_RESTORE_LOG_FILE),
 	}
@@ -274,7 +275,7 @@ func (s *service) prepareRestoreOpts() *rpc.CriuOpts {
 	return &opts
 }
 
-func (s *service) criuRestore(ctx context.Context, opts *rpc.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
+func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Notify, dir string, extraFiles []*os.File) (*int32, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -604,7 +605,7 @@ func rsyncDirectories(source, destination string) error {
 	return nil
 }
 
-func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream task.TaskService_RestoreAttachServer) (int32, chan int, error) {
+func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (int32, chan int, error) {
 	opts := s.prepareRestoreOpts()
 	nfy := Notify{}
 

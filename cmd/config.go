@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"

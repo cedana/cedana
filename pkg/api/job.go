@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	taskrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -122,7 +123,7 @@ func (s *service) JobRestore(
 	return res, nil
 }
 
-func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServer) error {
+func (s *service) JobRestoreAttach(stream taskrpc.TaskService_JobRestoreAttachServer) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
