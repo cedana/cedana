@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	GPU_CONTROLLER_WAIT_TIMEOUT       = 20 * time.Second
+	GPU_CONTROLLER_WAIT_TIMEOUT       = 30 * time.Second
 	GPU_CONTROLLER_DEFAULT_HOST       = "localhost" // and port is dynamic
 	GPU_CONTROLLER_LOG_PATH_FORMATTER = "/tmp/cedana-gpu-controller-%s.log"
 )
@@ -185,6 +185,8 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	waitCtx, _ := context.WithTimeout(ctx, GPU_CONTROLLER_WAIT_TIMEOUT)
 	resp, err := gpuServiceConn.StartupPoll(waitCtx, &args, grpc.WaitForReady(true))
 	if err != nil || !resp.Success {
+    gpuCmd.Process.Signal(syscall.SIGTERM)
+    gpuConn.Close()
 		log.Error().Err(err).Str("stdout/stderr", outBuf.String()).Msg("failed to start GPU controller")
 		return fmt.Errorf("gpu controller did not start: %v", err)
 	}
