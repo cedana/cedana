@@ -161,6 +161,12 @@ func logProvider(serviceName, version, endpoint, headers string) error {
 		providerconfighttp.WithLogOptions(otlploghttp.WithEndpoint(endpoint)),
 	)
 	provider := providerconfig.New(
+		providerconfig.WithDisabledSignals(
+			false, // traces
+			false,  // metrics
+			true,  // logs
+		),
+		providerconfig.WithExecutionType(providerconfig.Async),
 		providerconfig.WithApplicationName(serviceName),
 		providerconfig.WithApplicationVersion(version),
 		providerconfig.WithSignalProcessor(signalProcessor),
