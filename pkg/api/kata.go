@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -56,17 +57,11 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 		return nil, st.Err()
 	}
 
-	var resp task.DumpResp
-
-	switch args.Type {
-	case task.CRType_LOCAL:
-		resp = task.DumpResp{
-			Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
-			CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
-		}
+	resp := task.DumpResp{
+		Message:      fmt.Sprintf("Dumped process %d to %s", pid, args.Dir),
+		CheckpointID: state.CheckpointPath, // XXX: Just return path for ID for now
+		State:        state,
 	}
-
-	resp.State = state
 
 	return &resp, err
 }

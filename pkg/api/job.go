@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	taskrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -28,7 +29,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			JID:      args.JID,
 			PID:      state.PID,
 			Dir:      args.Dir,
-			Type:     args.Type,
 			Stream:   args.Stream,
 			CriuOpts: args.CriuOpts,
 		})
@@ -38,7 +38,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.State = dumpResp.State
 		res.DumpStats = dumpResp.DumpStats
 		res.CheckpointID = dumpResp.CheckpointID
-		res.UploadID = dumpResp.UploadID
 		res.Message = dumpResp.Message
 	} else {
 		dumpResp, err := s.RuncDump(ctx, &task.RuncDumpArgs{
@@ -46,7 +45,6 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			Root:        state.ContainerRoot,
 			ContainerID: state.ContainerID,
 			CriuOpts:    args.CriuOpts,
-			Type:        args.Type,
 		})
 		if err != nil {
 			return nil, err
@@ -54,14 +52,16 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 		res.State = dumpResp.State
 		res.DumpStats = dumpResp.DumpStats
 		res.CheckpointID = dumpResp.CheckpointID
-		res.UploadID = dumpResp.UploadID
 		res.Message = dumpResp.Message
 	}
 
 	return res, nil
 }
 
-func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*task.JobRestoreResp, error) {
+func (s *service) JobRestore(
+	ctx context.Context,
+	args *task.JobRestoreArgs,
+) (*task.JobRestoreResp, error) {
 	res := &task.JobRestoreResp{}
 
 	state, err := s.getState(ctx, args.JID)
@@ -77,9 +77,10 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 	// Check if normal process or container
 	if state.ContainerID == "" {
 		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
-			JID:      args.JID,
-			Stream:   args.Stream,
-			CriuOpts: args.CriuOpts,
+			JID:            args.JID,
+			Stream:         args.Stream,
+			CriuOpts:       args.CriuOpts,
+			CheckpointPath: args.CheckpointPath,
 		})
 		if err != nil {
 			return nil, err
@@ -97,16 +98,18 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 			// Use saved bundle if not overridden from args
 			opts.Bundle = state.ContainerBundle
 		}
-		opts.Root = args.RuncOpts.Root
+		opts.Root = args.GetRuncOpts().GetRoot()
 		if opts.Root == "" {
 			// Use saved root if not overridden from args
 			opts.Root = state.ContainerRoot
 		}
+		if args.CheckpointPath == "" {
+			args.CheckpointPath = state.CheckpointPath
+		}
 		restoreResp, err := s.RuncRestore(ctx, &task.RuncRestoreArgs{
 			ContainerID: state.ContainerID,
-			ImagePath:   state.CheckpointPath,
+			ImagePath:   args.CheckpointPath,
 			Opts:        opts,
-			Type:        args.Type,
 			CriuOpts:    args.CriuOpts,
 		})
 		if err != nil {
@@ -120,7 +123,7 @@ func (s *service) JobRestore(ctx context.Context, args *task.JobRestoreArgs) (*t
 	return res, nil
 }
 
-func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServer) error {
+func (s *service) JobRestoreAttach(stream taskrpc.TaskService_JobRestoreAttachServer) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err
@@ -143,7 +146,6 @@ func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServe
 			JID:      args.JID,
 			Stream:   args.Stream,
 			CriuOpts: args.CriuOpts,
-			Type:     args.Type,
 		}, stream)
 	} else {
 		err = status.Error(codes.Unimplemented, "restore attach for runc is not supported")
@@ -152,7 +154,10 @@ func (s *service) JobRestoreAttach(stream task.TaskService_JobRestoreAttachServe
 	return err
 }
 
-func (s *service) JobQuery(ctx context.Context, args *task.JobQueryArgs) (*task.JobQueryResp, error) {
+func (s *service) JobQuery(
+	ctx context.Context,
+	args *task.JobQueryArgs,
+) (*task.JobQueryResp, error) {
 	res := &task.JobQueryResp{}
 
 	if len(args.JIDs) > 0 {
