@@ -300,6 +300,7 @@ func isCedanaDaemonRunning(ctx context.Context, port uint32) (bool, error) {
 func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
+  helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
 	helperCmd.Flags().Bool("start-otelcol", false, "Start otelcol on the host")
 	rootCmd.AddCommand(helperCmd)
 
