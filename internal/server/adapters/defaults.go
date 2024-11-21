@@ -3,9 +3,9 @@ package adapters
 import (
 	"context"
 
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,7 +19,7 @@ import (
 
 // Adapter that fills missing info from the request using config defaults
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDir() == "" {
 			req.Dir = config.Get(config.STORAGE_DUMP_DIR)
 		}

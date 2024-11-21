@@ -7,15 +7,16 @@ import (
 	"context"
 	"os"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 // Log messages from a file, until the file exists
-func TraceFile(ctx context.Context, logfile string) {
+func LogFromFile(ctx context.Context, logfile string, level zerolog.Level) {
 	log := log.Ctx(ctx)
 	file, err := os.OpenFile(logfile, os.O_RDONLY, 0644)
 	if err != nil {
-		log.Trace().Str("file", logfile).Msg("failed to open log file")
+		log.WithLevel(level).Str("file", logfile).Msg("failed to open log file")
 		return
 	}
 	defer file.Close()
@@ -26,16 +27,16 @@ func TraceFile(ctx context.Context, logfile string) {
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			log.Trace().Msg("context done")
+			log.WithLevel(level).Msg("context done")
 			return
 		default:
-			log.Trace().Msg(scanner.Text())
+			log.WithLevel(level).Msg(scanner.Text())
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Trace().Err(err).Msg("finished reading log file")
+		log.WithLevel(level).Err(err).Msg("finished reading log file")
 	} else {
-		log.Trace().Msg("finished reading log file")
+		log.WithLevel(level).Msg("finished reading log file")
 	}
 }

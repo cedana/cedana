@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -13,7 +13,7 @@ import (
 
 const ATTACH_TIMEOUT = 1 * time.Minute
 
-func (s *Server) Attach(stream daemon.Daemon_AttachServer) error {
+func (s *Server) Attach(stream daemongrpc.Daemon_AttachServer) error {
 	in, err := stream.Recv()
 	if err != nil {
 		return err

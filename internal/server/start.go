@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 
-	"github.com/cedana/cedana/internal/plugins"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// Pluggable features
+const featureStartHandler plugins.Feature[types.Start] = "StartHandler"
 
 func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.StartResp, error) {
 	// Add basic adapters. The order below is the order followed before executing
@@ -61,7 +64,7 @@ func pluginStartHandler() types.Start {
 			handler = handlers.Run()
 		default:
 			// Use plugin-specific handler
-			err = plugins.IfFeatureAvailable(plugins.FEATURE_START_HANDLER, func(
+			err = featureStartHandler.IfAvailable(func(
 				name string,
 				pluginHandler types.Start,
 			) error {

@@ -7,12 +7,13 @@ import (
 	"os"
 	"sync"
 
+	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
-	"github.com/cedana/cedana/internal/plugins"
-	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
@@ -25,15 +26,16 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
-	criu *criu.Criu // for CRIU operations
-	db   db.DB
+	criu    *criu.Criu // for CRIU operations
+	db      db.DB
+	plugins plugins.Manager
 
-	wg  *sync.WaitGroup // for waiting for all background tasks to finish
+	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	lifetime context.Context // context alive for the duration of the server
 
 	machine Machine
 
-	daemon.UnimplementedDaemonServer
+	daemongrpc.UnimplementedDaemonServer
 }
 
 type ServeOpts struct {
@@ -82,6 +84,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	// Set custom path if specified in config
 	if custom_path := config.Get(config.CRIU_BINARY_PATH); custom_path != "" {
 		criu.SetCriuPath(custom_path)
+	} else {
+		// Check if CRIU plugin is installed
 	}
 
 	server := &Server{
@@ -99,7 +103,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		},
 	}
 
-	daemon.RegisterDaemonServer(server.grpcServer, server)
+	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
 
 	var listener net.Listener
 
@@ -153,6 +157,7 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) ReloadPlugins(ctx context.Context, req *daemon.Empty) (*daemon.Empty, error) {
-	plugins.LoadPlugins()
+	plugins.Load()
+
 	return &daemon.Empty{}, nil
 }

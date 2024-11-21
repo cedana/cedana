@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
+	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,7 +21,7 @@ const (
 )
 
 type Client struct {
-	daemonClient daemon.DaemonClient
+	daemonClient daemongrpc.DaemonClient
 	conn         *grpc.ClientConn
 }
 
@@ -33,7 +34,7 @@ func NewClient(host string, port uint32) (*Client, error) {
 		return nil, err
 	}
 
-	daemonClient := daemon.NewDaemonClient(conn)
+	daemonClient := daemongrpc.NewDaemonClient(conn)
 
 	return &Client{
 		daemonClient: daemonClient,
@@ -62,7 +63,10 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpRe
 	return resp, nil
 }
 
-func (c *Client) Restore(ctx context.Context, args *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+func (c *Client) Restore(
+	ctx context.Context,
+	args *daemon.RestoreReq,
+) (*daemon.RestoreResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RESTORE_TIMEOUT)
 	defer cancel()
 	opts := getDefaultCallOptions()

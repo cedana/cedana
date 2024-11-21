@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/plugins"
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/api/style"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -20,9 +21,11 @@ func init() {
 	pluginCmd.AddCommand(pluginRemoveCmd)
 
 	// Subcommand flags
-	pluginListCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "List all available plugins")
+	pluginListCmd.Flags().
+		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "List all available plugins")
 }
 
+// Parent plugin command
 var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Manage plugins",
@@ -38,14 +41,14 @@ var pluginCmd = &cobra.Command{
 			return fmt.Errorf("Error creating client: %v", err)
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.PLUGIN_MANAGER_CONTEXT_KEY, manager)
-		ctx = context.WithValue(ctx, types.CLIENT_CONTEXT_KEY, client)
+		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)
+		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
 
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 		client.Close()
 		return nil
 	},
@@ -60,16 +63,16 @@ var pluginListCmd = &cobra.Command{
 	Short: "List plugins",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		manager, ok := cmd.Context().Value(types.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
+		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
 		}
 
-		all, _ := cmd.Flags().GetBool(types.AllFlag.Full)
+		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 
 		var status []plugins.Status
 		if !all {
-			status = []plugins.Status{plugins.Installed}
+			status = []plugins.Status{plugins.Installed, plugins.Available}
 		}
 
 		list, err := manager.List(status...)
@@ -95,8 +98,8 @@ var pluginListCmd = &cobra.Command{
 			"Plugin",
 			"Size",
 			"Status",
-			"Version",
-			"Latest Version",
+			"Installed version",
+			"Latest version",
 		})
 
 		sizeMibStr := func(bytes int64) string {
@@ -151,8 +154,8 @@ var pluginInstallCmd = &cobra.Command{
 	Short: "Install a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, names []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
-		manager, ok := cmd.Context().Value(types.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
 		}
@@ -203,8 +206,8 @@ var pluginRemoveCmd = &cobra.Command{
 	Short: "Remove a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
-		manager, ok := cmd.Context().Value(types.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
 		}

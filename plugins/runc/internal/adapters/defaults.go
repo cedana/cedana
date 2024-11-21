@@ -3,8 +3,8 @@ package adapters
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/api/plugins/runc"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon/plugins/runc"
 	"github.com/cedana/cedana/pkg/types"
 )
 
@@ -18,7 +18,7 @@ const defaultRoot = "/run/runc"
 ///////////////////////
 
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}

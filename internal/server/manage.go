@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

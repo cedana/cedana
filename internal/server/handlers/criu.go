@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,15 +29,15 @@ const (
 )
 
 // Returns a CRIU dump handler for the server
-func Dump() types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+func DumpCRIU() types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetCriu() == nil {
-			return status.Error(codes.InvalidArgument, "criu options is nil")
+			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
 
 		version, err := server.CRIU.GetCriuVersion()
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
 
 		criuOpts := req.GetCriu()
@@ -47,29 +49,39 @@ func Dump() types.Dump {
 		criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 		criuOpts.NotifyScripts = proto.Bool(true)
 
-		log.Debug().Int("CRIU", version).Interface("server", criuOpts).Msg("CRIU dump starting")
+		// TODO: Add support for pre-dump
+		// TODO: Add support for lazy migration
+
+		log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
+		utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 		// Capture internal logs from CRIU
-		logfile := filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE)
-		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go utils.TraceFile(ctx, logfile)
+		go utils.LogFromFile(
+			log.With().Int("CRIU", version).Logger().WithContext(ctx),
+			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+			zerolog.TraceLevel,
+		)
 
 		_, err = server.CRIU.Dump(criuOpts, criu.NoNotify{})
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 		}
 
 		log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
 
-		return err
+		return utils.WaitForPid(resp.State.PID), nil
 	}
 }
 
 // Returns a CRIU restore handler for the server
-func Restore() types.Restore {
+func RestoreCRIU() types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		extraFiles := utils.GetContextValSafe(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, []*os.File{})
-		ioFiles := utils.GetContextValSafe(ctx, types.RESTORE_IO_FILES_CONTEXT_KEY, []*os.File{})
+		extraFiles := utils.GetContextValSafe(
+			ctx,
+			keys.RESTORE_EXTRA_FILES_CONTEXT_KEY,
+			[]*os.File{},
+		)
+		ioFiles := utils.GetContextValSafe(ctx, keys.RESTORE_IO_FILES_CONTEXT_KEY, []*os.File{})
 
 		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
@@ -90,12 +102,15 @@ func Restore() types.Restore {
 		criuOpts.NotifyScripts = proto.Bool(true)
 		criuOpts.OrphanPtsMaster = proto.Bool(false)
 
-		log.Debug().Int("CRIU", version).Interface("server", criuOpts).Msg("CRIU restore starting")
+		log.Debug().Int("CRIU", version).Msg("CRIU restore starting")
+		utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 		// Capture internal logs from CRIU
-		logfile := filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE)
-		ctx = log.With().Int("CRIU", version).Str("log", logfile).Logger().WithContext(ctx)
-		go utils.TraceFile(ctx, logfile)
+		go utils.LogFromFile(
+			log.With().Int("CRIU", version).Logger().WithContext(ctx),
+			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+			zerolog.TraceLevel,
+		)
 
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)

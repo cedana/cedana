@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 )
@@ -83,13 +82,4 @@ func Init(args InitArgs) error {
 	}
 
 	return err
-}
-
-func GetConfig() (*types.Config, error) {
-	var config types.Config
-	err := viper.Unmarshal(&config)
-	if err != nil {
-		return nil, err
-	}
-	return &config, err
 }

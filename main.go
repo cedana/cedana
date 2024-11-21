@@ -15,12 +15,12 @@ import (
 var Version = "dev"
 
 func main() {
-	log.Logger = logger.DefaultLogger
-
 	// Grandparent context to deal with OS interrupts
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
 	defer stop()
+
+	log.Logger = logger.DefaultLogger
 
 	if err := cmd.Execute(ctx, Version); err != nil {
 		os.Exit(1)

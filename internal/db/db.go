@@ -6,7 +6,7 @@ package db
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 )
 
 type DB interface {

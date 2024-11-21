@@ -1,4 +1,4 @@
-package types
+package flags
 
 // This file contains all the flags used in the cmd package.
 // Should be consulted when adding new flags in a plugin
@@ -23,11 +23,14 @@ var (
 	AttachFlag     = Flag{"attach", "a"}
 	AllFlag        = Flag{"all", "a"}
 	LogFlag        = Flag{"log", ""}
+	ExternalFlag   = Flag{"external", ""}
+	FileLocksFlag  = Flag{"file-locks", ""}
 
 	// CRIU
-	LeaveRunningFlag   = Flag{"leave-running", ""}
-	TcpEstablishedFlag = Flag{"tcp-established", ""}
-	TcpCloseFlag       = Flag{"tcp-close", ""}
+	LeaveRunningFlag    = Flag{"leave-running", ""}
+	TcpEstablishedFlag  = Flag{"tcp-established", ""}
+	TcpCloseFlag        = Flag{"tcp-close", ""}
+	TcpSkipInFlightFlag = Flag{"skip-in-flight", ""}
 
 	// Parent flags
 	PortFlag       = Flag{"port", "P"}

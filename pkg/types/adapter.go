@@ -4,8 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/plugins"
 )
 
 type (
@@ -14,17 +15,17 @@ type (
 	ServerOpts struct {
 		WG       *sync.WaitGroup
 		CRIU     *criu.Criu
+		Plugins  plugins.Manager
 		Lifetime context.Context
 	}
 
-	// Generic Dump Handler
-	Dump func(context.Context, ServerOpts, *daemon.DumpResp, *daemon.DumpReq) error
-	// Generic Restore Handler
-	Restore func(context.Context, ServerOpts, *daemon.RestoreResp, *daemon.RestoreReq) (chan int, error)
-	// Generic Start Handler
-	Start func(context.Context, ServerOpts, *daemon.StartResp, *daemon.StartReq) (chan int, error)
-	// Generic Manage Handler
-	Manage func(context.Context, ServerOpts, *daemon.ManageResp, *daemon.ManageReq) (chan int, error)
+	// Generic handler type
+	Handler[RSP, REQ any] func(context.Context, ServerOpts, RSP, REQ) (exited chan int, err error)
+
+	Dump    Handler[*daemon.DumpResp, *daemon.DumpReq]
+	Restore Handler[*daemon.RestoreResp, *daemon.RestoreReq]
+	Start   Handler[*daemon.StartResp, *daemon.StartReq]
+	Manage  Handler[*daemon.ManageResp, *daemon.ManageReq]
 
 	// An adapter is a function that takes a Handler and returns a new Handler
 	Adapter[H Dump | Restore | Start | Manage] func(H) H

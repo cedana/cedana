@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 
-	"github.com/cedana/cedana/internal/plugins"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// Pluggable features
+const featureRestoreMiddleware plugins.Feature[types.Middleware[types.Restore]] = "RestoreMiddleware"
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add basic adapters. The order below is the order followed before executing
@@ -33,7 +36,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		adapters.InheritOpenFilesForRestore,
 	}
 
-	restore := handlers.Restore().With(middleware...)
+	restore := handlers.RestoreCRIU().With(middleware...)
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -70,7 +73,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 			// Nothing to do, yet
 		default:
 			// Insert plugin-specific middleware
-			err = plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_MIDDLEWARE, func(
+			err = featureRestoreMiddleware.IfAvailable(func(
 				name string,
 				pluginMiddleware types.Middleware[types.Restore],
 			) error {

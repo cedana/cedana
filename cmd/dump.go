@@ -8,12 +8,14 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/plugins"
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -21,41 +23,64 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Pluggable features
+const featureDumpCmd plugins.Feature[*cobra.Command] = "DumpCmd"
+
 func init() {
 	dumpCmd.AddCommand(processDumpCmd)
 	dumpCmd.AddCommand(jobDumpCmd)
 
 	// Add common flags
-	dumpCmd.PersistentFlags().StringP(types.DirFlag.Full, types.DirFlag.Short, "", "directory to dump to")
-	dumpCmd.MarkPersistentFlagDirname(types.DirFlag.Full)
-	dumpCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
-	dumpCmd.PersistentFlags().BoolP(types.LeaveRunningFlag.Full, types.LeaveRunningFlag.Short, false, "leave the process running after dump")
-	dumpCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "dump tcp established connections")
-	dumpCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "close tcp connections")
+	dumpCmd.PersistentFlags().
+		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump to")
+	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
+	dumpCmd.PersistentFlags().
+		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.LeaveRunningFlag.Full, flags.LeaveRunningFlag.Short, false, "leave the process running after dump")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "dump tcp established connections")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "close tcp connections")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.TcpSkipInFlightFlag.Full, flags.TcpSkipInFlightFlag.Short, false, "skip in-flight tcp connections")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "dump file locks")
+	dumpCmd.PersistentFlags().
+		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "external mountpoints to dump (comma-separated)")
 
 	// Bind to config
-	viper.BindPFlag(config.STORAGE_DUMP_DIR.Key, dumpCmd.PersistentFlags().Lookup(types.DirFlag.Full))
-	viper.BindPFlag(config.CRIU_LEAVE_RUNNING.Key, dumpCmd.PersistentFlags().Lookup(types.LeaveRunningFlag.Full))
+	viper.BindPFlag(
+		config.STORAGE_DUMP_DIR.Key,
+		dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full),
+	)
+	viper.BindPFlag(
+		config.CRIU_LEAVE_RUNNING.Key,
+		dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full),
+	)
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	plugins.IfFeatureAvailable(plugins.FEATURE_DUMP_CMD, func(name string, pluginCmd **cobra.Command) error {
-		dumpCmd.AddCommand(*pluginCmd)
+	featureDumpCmd.IfAvailable(
+		func(name string, pluginCmd *cobra.Command) error {
+			dumpCmd.AddCommand(pluginCmd)
 
-		// Apply all the flags from the plugin command to job subcommand (as optional flags),
-		// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
-		// thus it could have specific CLI overrides from plugins.
+			// Apply all the flags from the plugin command to job subcommand (as optional flags),
+			// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
+			// thus it could have specific CLI overrides from plugins.
 
-		(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-			jobDumpCmd.Flags().AddFlag(f)
-			f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
-		})
-		return nil
-	})
+			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+				jobDumpCmd.Flags().AddFlag(f)
+				f.Usage = fmt.Sprintf("(%s plugin) %s", name, f.Usage) // Add plugin name to usage
+			})
+			return nil
+		},
+	)
 }
 
+// Parent dump command
 var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Dump a container/process",
@@ -63,22 +88,28 @@ var dumpCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := config.Get(config.STORAGE_DUMP_DIR)
 		leaveRunning := config.Get(config.CRIU_LEAVE_RUNNING)
-		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
-		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
-		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
+		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
+		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
+		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
+		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
+		external, _ := cmd.Flags().GetString(flags.ExternalFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
 			Dir:    dir,
 			Stream: stream,
 			Criu: &criu.CriuOpts{
-				LeaveRunning:   proto.Bool(leaveRunning),
-				TcpEstablished: proto.Bool(tcpEstablished),
-				TcpClose:       proto.Bool(tcpClose),
+				LeaveRunning:    proto.Bool(leaveRunning),
+				TcpEstablished:  proto.Bool(tcpEstablished),
+				TcpClose:        proto.Bool(tcpClose),
+				TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
+				FileLocks:       proto.Bool(fileLocks),
+				External:        strings.Split(external, ","),
 			},
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -98,7 +129,7 @@ var dumpCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
 		resp, err := client.Dump(cmd.Context(), req)
 		if err != nil {
@@ -123,7 +154,7 @@ var processDumpCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the PID of the process to dump.
 		// And modify the request type.
-		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -133,7 +164,7 @@ var processDumpCmd = &cobra.Command{
 		req.Type = "process"
 		req.Details = &daemon.Details{PID: proto.Uint32(uint32(pid))}
 
-		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -146,14 +177,14 @@ var jobDumpCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the job ID, and request type.
-		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
 		jid := args[0]
 
 		req.Type = "job"
 		req.Details = &daemon.Details{JID: proto.String(jid)}
 
-		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil

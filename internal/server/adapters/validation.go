@@ -3,7 +3,7 @@ package adapters
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,15 +17,15 @@ import (
 
 // Adapter that just checks all required fields are present in the request
 func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDir() == "" {
-			return status.Errorf(codes.InvalidArgument, "no dump dir specified")
+			return nil, status.Errorf(codes.InvalidArgument, "no dump dir specified")
 		}
 		if req.GetDetails() == nil {
-			return status.Errorf(codes.InvalidArgument, "missing details")
+			return nil, status.Errorf(codes.InvalidArgument, "missing details")
 		}
 		if req.GetType() == "" {
-			return status.Errorf(codes.InvalidArgument, "missing type")
+			return nil, status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
 		return next(ctx, server, resp, req)

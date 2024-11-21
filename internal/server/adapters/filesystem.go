@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -37,12 +37,12 @@ const (
 //   - "gzip" creates a gzipped tarball of the dump directory
 func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 			dir := req.GetDir()
 
 			// Check if the provided dir exists
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
-				return status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
+				return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
 			}
 
 			// Create a unique directory within the dump dir, using type, PID, and timestamp
@@ -52,14 +52,14 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 			// Create the directory
 			if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
-				return status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 			}
 
 			// Set CRIU server
 			f, err := os.Open(imagesDirectory)
 			if err != nil {
 				os.Remove(imagesDirectory)
-				return status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
 			}
 			defer f.Close()
 
@@ -70,16 +70,16 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 			req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 			req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
-			err = next(ctx, server, resp, req)
+			exited, err = next(ctx, server, resp, req)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
-				return err
+				return nil, err
 			}
 
 			resp.Path = imagesDirectory
 
 			if compression == "" || compression == "none" {
-				return err // Nothing else to do
+				return exited, err // Nothing else to do
 			}
 
 			// Create the compressed tarball
@@ -89,14 +89,14 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 			defer os.RemoveAll(imagesDirectory)
 
 			if tarball, err = utils.Tar(imagesDirectory, imagesDirectory, compression); err != nil {
-				return status.Errorf(codes.Internal, "failed to create tarball: %v", err)
+				return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
 			}
 
 			resp.Path = tarball
 
 			log.Debug().Str("path", tarball).Str("compression", compression).Msg("created tarball")
 
-			return nil
+			return exited, nil
 		}
 	}
 }

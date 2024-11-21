@@ -3,16 +3,19 @@ package server
 import (
 	"context"
 
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/plugins"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// Pluggable features
+const featureDumpMiddleware plugins.Feature[types.Middleware[types.Dump]] = "DumpMiddleware"
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	// Add basic adapters. The order below is the order followed before executing
@@ -36,7 +39,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		adapters.CloseCommonFilesForDump,
 	}
 
-	dump := handlers.Dump().With(middleware...)
+	dump := handlers.DumpCRIU().With(middleware...)
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -45,7 +48,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{}
 
-	err := dump(ctx, opts, resp, req)
+	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +64,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
@@ -70,7 +73,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 			middleware = append(middleware, adapters.CheckProcessExistsForDump)
 		default:
 			// Insert plugin-specific middleware
-			err = plugins.IfFeatureAvailable(plugins.FEATURE_DUMP_MIDDLEWARE, func(
+			err = featureDumpMiddleware.IfAvailable(func(
 				name string,
 				pluginMiddleware types.Middleware[types.Dump],
 			) error {
@@ -78,7 +81,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil
 			})
 			if err != nil {
-				return status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, server, resp, req)

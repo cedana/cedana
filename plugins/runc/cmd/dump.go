@@ -3,16 +3,16 @@ package cmd
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/api/plugins/runc"
-	"github.com/cedana/cedana/pkg/types"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon/plugins/runc"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
-	runc_types "github.com/cedana/cedana/plugins/runc/pkg/types"
+	runc_flags "github.com/cedana/cedana/plugins/runc/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	DumpCmd.Flags().StringP(runc_types.RootFlag.Full, runc_types.RootFlag.Short, "", "runc root")
+	DumpCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "runc root")
 }
 
 var DumpCmd = &cobra.Command{
@@ -20,11 +20,11 @@ var DumpCmd = &cobra.Command{
 	Short: "Dump a runc container",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := utils.GetContextValSafe(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
 
 		id := args[0]
 
-		root, _ := cmd.Flags().GetString(runc_types.RootFlag.Full)
+		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 
 		req.Type = "runc"
 		req.Details = &daemon.Details{Runc: &runc.Details{
@@ -32,7 +32,7 @@ var DumpCmd = &cobra.Command{
 			ID:   id,
 		}}
 
-		ctx := context.WithValue(cmd.Context(), types.DUMP_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil

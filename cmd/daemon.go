@@ -5,7 +5,7 @@ import (
 
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -16,10 +16,14 @@ func init() {
 	daemonCmd.AddCommand(startDaemonCmd)
 
 	// Add flags
-	startDaemonCmd.PersistentFlags().BoolP(types.MetricsASRFlag.Full, types.MetricsASRFlag.Short, false, "enable metrics for ASR")
+	startDaemonCmd.PersistentFlags().
+		BoolP(flags.MetricsASRFlag.Full, flags.MetricsASRFlag.Short, false, "enable metrics for ASR")
 
 	// Bind to config
-	viper.BindPFlag(config.METRICS_ASR.Key, startDaemonCmd.PersistentFlags().Lookup(types.MetricsASRFlag.Full))
+	viper.BindPFlag(
+		config.METRICS_ASR.Key,
+		startDaemonCmd.PersistentFlags().Lookup(flags.MetricsASRFlag.Full),
+	)
 }
 
 var daemonCmd = &cobra.Command{

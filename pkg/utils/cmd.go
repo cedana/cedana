@@ -8,6 +8,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// AliasOf creates an alias of the provided command, That includes the same flags and hooks.
+// Even the parent command's PersistentPreRunE and PersistentPostRunE hooks are invoked.
+// Provide a name only if it's different from provided command's name
+func AliasOf(cmd *cobra.Command, name ...string) *cobra.Command {
+	if cmd == nil {
+		return nil
+	}
+	return &cobra.Command{
+		Use:   AliasCommandUse(cmd, name...),
+		Short: "(alias) " + cmd.Short,
+		Long:  "(alias) " + cmd.Long,
+		Args:  cmd.Args,
+		RunE:  AliasCommandRunE(cmd),
+	}
+}
+
 // Use this for RunE to make a command an alias to another command's RunE.
 // Invokes all PersistentPreRunE and PersistentPostRunE hooks for immediate parents as well.
 func AliasCommandRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) error {

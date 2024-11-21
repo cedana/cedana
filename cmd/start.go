@@ -5,28 +5,32 @@ import (
 	"fmt"
 	"os"
 
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/plugins"
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 )
+
+// Pluggable features
+const featureStartCmd plugins.Feature[*cobra.Command] = "StartCmd"
 
 func init() {
 	startCmd.AddCommand(processStartCmd)
 
 	// Add common flags
-	startCmd.PersistentFlags().StringP(types.JidFlag.Full, types.JidFlag.Short, "", "job id")
+	startCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	startCmd.PersistentFlags().
-		BoolP(types.GpuEnabledFlag.Full, types.GpuEnabledFlag.Short, false, "enable GPU support")
+		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
 	startCmd.PersistentFlags().
-		BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
+		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	startCmd.PersistentFlags().
-		StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
+		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
 	startCmd.MarkFlagsMutuallyExclusive(
-		types.AttachFlag.Full,
-		types.LogFlag.Full,
+		flags.AttachFlag.Full,
+		flags.LogFlag.Full,
 	) // only one of these can be set
 
 	// Sync flags with aliases
@@ -36,24 +40,24 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	plugins.IfFeatureAvailable(
-		plugins.FEATURE_START_CMD,
-		func(name string, pluginCmd **cobra.Command) error {
-			startCmd.AddCommand(*pluginCmd)
+	featureStartCmd.IfAvailable(
+		func(name string, pluginCmd *cobra.Command) error {
+			startCmd.AddCommand(pluginCmd)
 			return nil
 		},
 	)
 }
 
+// Parent start command
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start a managed process/container (create a job)",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		jid, _ := cmd.Flags().GetString(types.JidFlag.Full)
-		gpuEnabled, _ := cmd.Flags().GetBool(types.GpuEnabledFlag.Full)
-		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
-		attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
+		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
+		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
+		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.StartReq{
@@ -63,7 +67,7 @@ var startCmd = &cobra.Command{
 			Attach:     attach,
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.START_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.START_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -85,7 +89,7 @@ var startCmd = &cobra.Command{
 		// Assuming request is now ready to be sent to the server
 		req := utils.GetContextValSafe(
 			cmd.Context(),
-			types.START_REQ_CONTEXT_KEY,
+			keys.START_REQ_CONTEXT_KEY,
 			&daemon.StartReq{},
 		)
 
@@ -106,6 +110,12 @@ var startCmd = &cobra.Command{
 }
 
 ////////////////////
+///// Aliases //////
+////////////////////
+
+var execCmd = utils.AliasOf(processStartCmd, "exec")
+
+////////////////////
 /// Subcommands  ///
 ////////////////////
 
@@ -116,7 +126,7 @@ var processStartCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req := utils.GetContextValSafe(
 			cmd.Context(),
-			types.START_REQ_CONTEXT_KEY,
+			keys.START_REQ_CONTEXT_KEY,
 			&daemon.StartReq{},
 		)
 
@@ -135,21 +145,9 @@ var processStartCmd = &cobra.Command{
 			},
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.START_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.START_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
 	},
-}
-
-////////////////////
-///// Aliases //////
-////////////////////
-
-var execCmd = &cobra.Command{
-	Use:   utils.AliasCommandUse(processStartCmd, "exec"),
-	Short: processStartCmd.Short,
-	Long:  processStartCmd.Long,
-	Args:  processStartCmd.Args,
-	RunE:  utils.AliasCommandRunE(processStartCmd),
 }

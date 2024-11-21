@@ -1,4 +1,4 @@
-package types
+package keys
 
 // Defines common keys used in context. Should
 // be consulted when adding new keys in a plugin to avoid conflicts.

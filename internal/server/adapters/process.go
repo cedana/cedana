@@ -8,11 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -35,17 +35,17 @@ const (
 
 // Check if the process exists, and is running
 func CheckProcessExistsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		pid := req.GetDetails().GetPID()
 		if pid == 0 {
-			return status.Errorf(codes.InvalidArgument, "missing PID")
+			return nil, status.Errorf(codes.InvalidArgument, "missing PID")
 		}
 		exists, err := process.PidExistsWithContext(ctx, int32(pid))
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to check process: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to check process: %v", err)
 		}
 		if !exists {
-			return status.Errorf(codes.NotFound, "process PID %d does not exist", pid)
+			return nil, status.Errorf(codes.NotFound, "process PID %d does not exist", pid)
 		}
 
 		if resp.GetState() == nil {
@@ -62,24 +62,30 @@ func CheckProcessExistsForDump(next types.Dump) types.Dump {
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
 func FillProcessStateForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
-			return status.Errorf(codes.InvalidArgument, "missing state. at least PID is required in resp.state")
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
 		}
 
 		if state.PID == 0 {
-			return status.Errorf(codes.NotFound, "missing PID. Ensure an adapter sets this PID in response.")
+			return nil, status.Errorf(
+				codes.NotFound,
+				"missing PID. Ensure an adapter sets this PID in response.",
+			)
 		}
 
-		err := utils.FillProcessState(ctx, state.PID, state)
+		err = utils.FillProcessState(ctx, state.PID, state)
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to fill process state: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
-		err = next(ctx, server, resp, req)
+		exited, err = next(ctx, server, resp, req)
 		if err != nil {
-			return err
+			return exited, err
 		}
 
 		// Post dump, save the state to a file in the dump
@@ -88,57 +94,13 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			log.Warn().Err(err).Str("file", stateFile).Msg("failed to save process state")
 		}
 
-		return nil
-	}
-}
-
-// Detect and sets network options for CRIU
-// XXX YA: Enforces unsuitable options for CRIU. Some times, we may
-// not want to use TCP established connections. Also, for external unix
-// sockets, the flag is deprecated. The correct way is to use the
-// --external flag in CRIU.
-func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
-		var hasTCP, hasExtUnixSocket bool
-
-		if state := resp.GetState(); state != nil {
-			for _, Conn := range state.GetInfo().GetOpenConnections() {
-				if Conn.Type == syscall.SOCK_STREAM { // TCP
-					hasTCP = true
-				}
-				if Conn.Type == syscall.AF_UNIX { // Interprocess
-					hasExtUnixSocket = true
-				}
-			}
-
-			activeTCP, err := utils.HasActiveTCPConnections(int32(state.GetPID()))
-			if err != nil {
-				return status.Errorf(codes.Internal, "failed to check active TCP connections: %v", err)
-			}
-			hasTCP = hasTCP || activeTCP
-		} else {
-			log.Warn().Msg("No process info found. it should have been filled by an adapter")
-		}
-
-		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
-		}
-
-		// Only set unless already set
-		if req.GetCriu().TcpEstablished == nil {
-			req.Criu.TcpEstablished = proto.Bool(hasTCP)
-		}
-		if req.GetCriu().ExtUnixSk == nil {
-			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
-		}
-
-		return next(ctx, server, resp, req)
+		return exited, nil
 	}
 }
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
 			for _, f := range info.GetOpenFiles() {
@@ -166,15 +128,18 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 
 // Close common file descriptors b/w the parent and child process
 func CloseCommonFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
-			return status.Errorf(codes.NotFound, "missing PID. Ensure an adapter sets this PID in response before.")
+			return nil, status.Errorf(
+				codes.NotFound,
+				"missing PID. Ensure an adapter sets this PID in response before.",
+			)
 		}
 
-		err := utils.CloseCommonFds(ctx, int32(os.Getpid()), int32(pid))
+		err = utils.CloseCommonFds(ctx, int32(os.Getpid()), int32(pid))
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to close common fds: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
 
 		return next(ctx, server, resp, req)
@@ -191,14 +156,21 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing path. should have been set by an adapter")
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing path. should have been set by an adapter",
+			)
 		}
 
 		stateFile := filepath.Join(path, STATE_FILE)
 		state := &daemon.ProcessState{}
 
 		if err := utils.LoadJSONFromFile(stateFile, state); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load process state from dump: %v", err)
+			return nil, status.Errorf(
+				codes.Internal,
+				"failed to load process state from dump: %v",
+				err,
+			)
 		}
 
 		resp.State = state
@@ -213,44 +185,6 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 		_ = utils.FillProcessState(ctx, state.PID, state)
 
 		return exited, err
-	}
-}
-
-// Detect and sets network options for CRIU
-// XXX YA: Enforces unsuitable options for CRIU. Some times, we may
-// not want to use TCP established connections. Also, for external unix
-// sockets, the flag is deprecated. The correct way is to use the
-// --external flag in CRIU.
-func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		var hasTCP, hasExtUnixSocket bool
-
-		if state := resp.GetState(); state != nil {
-			for _, Conn := range state.GetInfo().GetOpenConnections() {
-				if Conn.Type == syscall.SOCK_STREAM { // TCP
-					hasTCP = true
-				}
-				if Conn.Type == syscall.AF_UNIX { // Interprocess
-					hasExtUnixSocket = true
-				}
-			}
-		} else {
-			log.Warn().Msg("No process info found. it should have been filled by an adapter")
-		}
-
-		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
-		}
-
-		// Only set unless already set
-		if req.GetCriu().TcpEstablished == nil {
-			req.Criu.TcpEstablished = proto.Bool(hasTCP)
-		}
-		if req.GetCriu().ExtUnixSk == nil {
-			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
-		}
-
-		return next(ctx, server, resp, req)
 	}
 }
 
@@ -287,8 +221,8 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 // a log file.
 func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
-		extraFiles, _ := ctx.Value(types.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		ioFiles, _ := ctx.Value(types.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
+		extraFiles, _ := ctx.Value(keys.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		ioFiles, _ := ctx.Value(keys.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
 
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -298,7 +232,11 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 				outReader, outWriter, err := os.Pipe()
 				errReader, errWriter, err := os.Pipe()
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to create pipes for attach: %v", err)
+					return nil, status.Errorf(
+						codes.Internal,
+						"failed to create pipes for attach: %v",
+						err,
+					)
 				}
 				ioFiles = append(ioFiles, inWriter, outReader, errReader)
 				for _, f := range info.GetOpenFiles() {
@@ -354,8 +292,8 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
 
-		ctx = context.WithValue(ctx, types.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
-		ctx = context.WithValue(ctx, types.RESTORE_IO_FILES_CONTEXT_KEY, ioFiles)
+		ctx = context.WithValue(ctx, keys.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
+		ctx = context.WithValue(ctx, keys.RESTORE_IO_FILES_CONTEXT_KEY, ioFiles)
 
 		// Set the inherited fds
 		if req.GetCriu() == nil {

@@ -6,8 +6,8 @@ GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 
-all: proto build plugins
-.PHONY: proto build plugins
+all: build plugins
+.PHONY: build plugins
 
 ############
 ## Cedana ##
@@ -42,16 +42,9 @@ PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
 
 plugins: $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
-		name=$$(basename $$path); \
-		$(GOBUILD) -C $$path -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			$(GOBUILD) -C $$path -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			sudo $(BINARY) plugin install $$name ;\
+		fi ;\
 	done
-
-###########
-## Proto ##
-###########
-
-PROTO_SOURCES=$(wildcard pkg/api/proto/**/*.proto)
-
-proto: $(PROTO_SOURCES)
-	@cd pkg/api && ./generate.sh
-

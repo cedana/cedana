@@ -8,60 +8,79 @@ import (
 	"context"
 	"fmt"
 
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/plugins"
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 )
 
+// Pluggable features
+const featureRestoreCmd plugins.Feature[*cobra.Command] = "RestoreCmd"
+
 func init() {
 	restoreCmd.AddCommand(processRestoreCmd)
 	restoreCmd.AddCommand(jobRestoreCmd)
 
 	// Add common flags
-	restoreCmd.PersistentFlags().StringP(types.PathFlag.Full, types.PathFlag.Short, "", "path of dump")
-	restoreCmd.PersistentFlags().BoolP(types.StreamFlag.Full, types.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
-	restoreCmd.PersistentFlags().BoolP(types.TcpEstablishedFlag.Full, types.TcpEstablishedFlag.Short, false, "restore tcp established connections")
-	restoreCmd.PersistentFlags().BoolP(types.TcpCloseFlag.Full, types.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
-	restoreCmd.PersistentFlags().StringP(types.LogFlag.Full, types.LogFlag.Short, "", "log path to forward stdout/err")
-	restoreCmd.PersistentFlags().BoolP(types.AttachFlag.Full, types.AttachFlag.Short, false, "attach stdin/out/err")
-	restoreCmd.MarkFlagsMutuallyExclusive(types.AttachFlag.Full, types.LogFlag.Full) // only one of these can be set
+	restoreCmd.PersistentFlags().
+		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "restore file locks")
+	restoreCmd.PersistentFlags().
+		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
+	restoreCmd.MarkFlagsMutuallyExclusive(
+		flags.AttachFlag.Full,
+		flags.LogFlag.Full,
+	) // only one of these can be set
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	plugins.IfFeatureAvailable(plugins.FEATURE_RESTORE_CMD, func(name string, pluginCmd **cobra.Command) error {
-		restoreCmd.AddCommand(*pluginCmd)
+	featureRestoreCmd.IfAvailable(
+		func(name string, pluginCmd *cobra.Command) error {
+			restoreCmd.AddCommand(pluginCmd)
 
-		// Apply all the flags from the plugin command to job subcommand (as optional flags),
-		// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
-		// thus it could have specific CLI overrides from plugins.
+			// Apply all the flags from the plugin command to job subcommand (as optional flags),
+			// since the job subcommand can be used to restore any managed entity (even from plugins, like runc),
+			// thus it could have specific CLI overrides from plugins.
 
-		(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-			jobRestoreCmd.Flags().AddFlag(f)
-			f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
-		})
-    return nil
-	})
+			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+				jobRestoreCmd.Flags().AddFlag(f)
+				f.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+			})
+			return nil
+		},
+	)
 }
 
+// Parent restore command
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Restore a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		path, _ := cmd.Flags().GetString(types.PathFlag.Full)
-		stream, _ := cmd.Flags().GetBool(types.StreamFlag.Full)
-		tcpEstablished, _ := cmd.Flags().GetBool(types.TcpEstablishedFlag.Full)
-		tcpClose, _ := cmd.Flags().GetBool(types.TcpCloseFlag.Full)
-		log, _ := cmd.Flags().GetString(types.LogFlag.Full)
-		attach, _ := cmd.Flags().GetBool(types.AttachFlag.Full)
+		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
+		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
+		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
+		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
+		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
+		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
@@ -72,10 +91,11 @@ var restoreCmd = &cobra.Command{
 			Criu: &criu.CriuOpts{
 				TcpEstablished: proto.Bool(tcpEstablished),
 				TcpClose:       proto.Bool(tcpClose),
+				FileLocks:      proto.Bool(fileLocks),
 			},
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -95,7 +115,11 @@ var restoreCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
+		req := utils.GetContextValSafe(
+			cmd.Context(),
+			keys.RESTORE_REQ_CONTEXT_KEY,
+			&daemon.RestoreReq{},
+		)
 
 		resp, err := client.Restore(cmd.Context(), req)
 		if err != nil {
@@ -123,11 +147,15 @@ var processRestoreCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request type
-		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
+		req := utils.GetContextValSafe(
+			cmd.Context(),
+			keys.RESTORE_REQ_CONTEXT_KEY,
+			&daemon.RestoreReq{},
+		)
 
 		req.Type = "process"
 
-		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -140,7 +168,11 @@ var jobRestoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the job ID, and request type.
-		req := utils.GetContextValSafe(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, &daemon.RestoreReq{})
+		req := utils.GetContextValSafe(
+			cmd.Context(),
+			keys.RESTORE_REQ_CONTEXT_KEY,
+			&daemon.RestoreReq{},
+		)
 
 		if len(args) == 0 {
 			return fmt.Errorf("Job ID is required")
@@ -150,7 +182,7 @@ var jobRestoreCmd = &cobra.Command{
 		req.Type = "job"
 		req.Details = &daemon.Details{JID: proto.String(jid)}
 
-		ctx := context.WithValue(cmd.Context(), types.RESTORE_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil

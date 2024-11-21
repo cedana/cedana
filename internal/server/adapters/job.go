@@ -7,9 +7,9 @@ import (
 	"context"
 	"fmt"
 
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/pkg/api/criu"
-	"github.com/cedana/cedana/pkg/api/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rb-go/namegen"
@@ -29,7 +29,7 @@ const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 // Post-dump, updates the saved job details.
 func JobDumpAdapter(db db.DB) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) error {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 			if req.GetType() != "job" {
 				return next(ctx, server, resp, req)
 			}
@@ -37,21 +37,21 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.Dump] {
 			// Fill in dump request details based on saved job info
 			jid := req.GetDetails().GetJID()
 			if jid == "" {
-				return status.Errorf(codes.InvalidArgument, "JID is required")
+				return nil, status.Errorf(codes.InvalidArgument, "JID is required")
 			}
 
 			job, err := db.GetJob(ctx, jid)
 			if err != nil {
-				return status.Errorf(codes.NotFound, "job not found: %v", err)
+				return nil, status.Errorf(codes.NotFound, "job not found: %v", err)
 			}
 
 			// TODO YA: Allow overriding job details, otherwise use saved job details
 			req.Details = job.Details
 			req.Type = job.Type
 
-			err = next(ctx, server, resp, req)
+			exited, err = next(ctx, server, resp, req)
 			if err != nil {
-				return err
+				return exited, err
 			}
 
 			server.WG.Add(1)
@@ -65,7 +65,7 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.Dump] {
 				// Wait for process exit, if not using --leave-running
 				// to avoid race with state update
 				if !req.GetCriu().GetLeaveRunning() {
-					utils.WaitForPid(job.Process.GetPID())
+					<-exited
 					if job.Process.Info == nil {
 						job.Process.Info = &daemon.ProcessInfo{}
 					}
@@ -78,7 +78,7 @@ func JobDumpAdapter(db db.DB) types.Adapter[types.Dump] {
 				}
 			}()
 
-			return nil
+			return exited, nil
 		}
 	}
 }

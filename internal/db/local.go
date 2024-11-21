@@ -7,8 +7,8 @@ import (
 	dbsql "database/sql"
 	"encoding/json"
 
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
-	"github.com/cedana/cedana/pkg/api/daemon"
 	_ "github.com/mattn/go-sqlite3"
 )
 

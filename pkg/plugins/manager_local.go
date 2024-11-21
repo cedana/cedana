@@ -10,8 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/pkg/api/style"
+	"github.com/cedana/cedana/pkg/style"
 )
 
 const artificialDelay = 500 * time.Millisecond
@@ -24,7 +23,7 @@ type LocalManager struct {
 
 func NewLocalManager() *LocalManager {
 	return &LocalManager{
-		srcDir: make(map[string]string),
+		make(map[string]string),
 	}
 }
 
@@ -40,7 +39,7 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 
 	time.Sleep(artificialDelay)
 
-	for _, p := range Plugins {
+	for _, p := range Registry {
 		// search if plugin files available in search path
 		found := 0
 		dir := ""
@@ -61,11 +60,10 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.Status = Available
-			p.Version = "dev"
-			p.LatestVersion = "dev"
+			p.LatestVersion = "local"
 			p.Size = size
 
-			SyncInstalled(&p)
+			p.SyncInstalled()
 		}
 
 		if _, ok := set[p.Status]; len(set) > 0 && !ok {
@@ -74,7 +72,10 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 
 		// sort list by status
 		sort.Slice(list, func(i, j int) bool {
-			return list[i].Status < list[j].Status
+			if list[i].Status == list[j].Status {
+				return list[i].Type < list[j].Type
+			}
+			return list[i].Status > list[j].Status
 		})
 
 		list = append(list, p)
@@ -119,7 +120,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			var err error
 			for _, file := range plugin.Libraries {
 				src := filepath.Join(srcDir, file)
-				dest := filepath.Join(config.Get(config.PLUGINS_LIB_DIR), file)
+				dest := filepath.Join(LibDir, file)
 				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
@@ -128,7 +129,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 			for _, file := range plugin.Binaries {
 				src := filepath.Join(srcDir, file)
-				dest := filepath.Join(config.Get(config.PLUGINS_BIN_DIR), file)
+				dest := filepath.Join(BinDir, file)
 				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
@@ -185,14 +186,14 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 
 			// Remove the plugin files from the installation directory
 			for _, file := range plugin.Libraries {
-				dest := filepath.Join(config.Get(config.PLUGINS_LIB_DIR), file)
+				dest := filepath.Join(LibDir, file)
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
 				}
 			}
 			for _, file := range plugin.Binaries {
-				dest := filepath.Join(config.Get(config.PLUGINS_BIN_DIR), file)
+				dest := filepath.Join(BinDir, file)
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break

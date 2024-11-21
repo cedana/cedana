@@ -4,6 +4,7 @@ import "github.com/spf13/cobra"
 
 func init() {}
 
+// Parent manage command
 var manageCmd = &cobra.Command{
 	Use:   "manage",
 	Short: "Manage a process/container (create a job)",

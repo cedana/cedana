@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"syscall"
 
-	rpc "github.com/cedana/cedana/pkg/api/criu"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -106,7 +106,12 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 	return
 }
 
-func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) (*rpc.CriuResp, error) {
+func (c *Criu) doSwrk(
+	reqType criu.CriuReqType,
+	opts *criu.CriuOpts,
+	nfy Notify,
+	extraFiles ...*os.File,
+) (*criu.CriuResp, error) {
 	resp, err := c.doSwrkWithResp(reqType, opts, nfy, nil, extraFiles...)
 	if err != nil {
 		return nil, err
@@ -119,8 +124,14 @@ func (c *Criu) doSwrk(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, e
 	return resp, nil
 }
 
-func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy Notify, features *rpc.CriuFeatures, extraFiles ...*os.File) (resp *rpc.CriuResp, retErr error) {
-	req := rpc.CriuReq{
+func (c *Criu) doSwrkWithResp(
+	reqType criu.CriuReqType,
+	opts *criu.CriuOpts,
+	nfy Notify,
+	features *criu.CriuFeatures,
+	extraFiles ...*os.File,
+) (resp *criu.CriuResp, retErr error) {
+	req := criu.CriuReq{
 		Type: &reqType,
 		Opts: opts,
 	}
@@ -159,7 +170,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 			return nil, err
 		}
 
-		resp = &rpc.CriuResp{}
+		resp = &criu.CriuResp{}
 		err = proto.Unmarshal(respB[:respS], resp)
 		if err != nil {
 			return nil, err
@@ -171,7 +182,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 		}
 
 		respType := resp.GetType()
-		if respType != rpc.CriuReqType_NOTIFY {
+		if respType != criu.CriuReqType_NOTIFY {
 			break
 		}
 		if nfy == nil {
@@ -218,7 +229,7 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 			return resp, err
 		}
 
-		req = rpc.CriuReq{
+		req = criu.CriuReq{
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
 		}
@@ -228,8 +239,8 @@ func (c *Criu) doSwrkWithResp(reqType rpc.CriuReqType, opts *rpc.CriuOpts, nfy N
 }
 
 // Dump dumps a process
-func (c *Criu) Dump(opts *rpc.CriuOpts, nfy Notify) (*rpc.CriuDumpResp, error) {
-	resp, err := c.doSwrk(rpc.CriuReqType_DUMP, opts, nfy)
+func (c *Criu) Dump(opts *criu.CriuOpts, nfy Notify) (*criu.CriuDumpResp, error) {
+	resp, err := c.doSwrk(criu.CriuReqType_DUMP, opts, nfy)
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +249,12 @@ func (c *Criu) Dump(opts *rpc.CriuOpts, nfy Notify) (*rpc.CriuDumpResp, error) {
 }
 
 // Restore restores a process
-func (c *Criu) Restore(opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) (*rpc.CriuRestoreResp, error) {
-	resp, err := c.doSwrk(rpc.CriuReqType_RESTORE, opts, nfy, extraFiles...)
+func (c *Criu) Restore(
+	opts *criu.CriuOpts,
+	nfy Notify,
+	extraFiles ...*os.File,
+) (*criu.CriuRestoreResp, error) {
+	resp, err := c.doSwrk(criu.CriuReqType_RESTORE, opts, nfy, extraFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,20 +263,20 @@ func (c *Criu) Restore(opts *rpc.CriuOpts, nfy Notify, extraFiles ...*os.File) (
 }
 
 // PreDump does a pre-dump
-func (c *Criu) PreDump(opts *rpc.CriuOpts, nfy Notify) error {
-	_, err := c.doSwrk(rpc.CriuReqType_PRE_DUMP, opts, nfy)
+func (c *Criu) PreDump(opts *criu.CriuOpts, nfy Notify) error {
+	_, err := c.doSwrk(criu.CriuReqType_PRE_DUMP, opts, nfy)
 	return err
 }
 
 // StartPageServer starts the page server
-func (c *Criu) StartPageServer(opts *rpc.CriuOpts) error {
-	_, err := c.doSwrk(rpc.CriuReqType_PAGE_SERVER, opts, nil)
+func (c *Criu) StartPageServer(opts *criu.CriuOpts) error {
+	_, err := c.doSwrk(criu.CriuReqType_PAGE_SERVER, opts, nil)
 	return err
 }
 
 // StartPageServerChld starts the page server and returns PID and port
-func (c *Criu) StartPageServerChld(opts *rpc.CriuOpts) (int, int, error) {
-	resp, err := c.doSwrkWithResp(rpc.CriuReqType_PAGE_SERVER_CHLD, opts, nil, nil)
+func (c *Criu) StartPageServerChld(opts *criu.CriuOpts) (int, int, error) {
+	resp, err := c.doSwrkWithResp(criu.CriuReqType_PAGE_SERVER_CHLD, opts, nil, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -272,12 +287,12 @@ func (c *Criu) StartPageServerChld(opts *rpc.CriuOpts) (int, int, error) {
 // GetCriuVersion executes the VERSION RPC call and returns the version
 // as an integer. Major * 10000 + Minor * 100 + SubLevel
 func (c *Criu) GetCriuVersion() (int, error) {
-	resp, err := c.doSwrkWithResp(rpc.CriuReqType_VERSION, nil, nil, nil)
+	resp, err := c.doSwrkWithResp(criu.CriuReqType_VERSION, nil, nil, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	if resp.GetType() != rpc.CriuReqType_VERSION {
+	if resp.GetType() != criu.CriuReqType_VERSION {
 		return 0, errors.New("unexpected CRIU RPC response")
 	}
 

@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/pkg/api/daemon"
-	"github.com/cedana/cedana/pkg/api/style"
-	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -20,13 +21,14 @@ func init() {
 	jobCmd.AddCommand(attachJobCmd)
 
 	// Add subcommand flags
-	deleteJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "delete all jobs")
-	killJobCmd.Flags().BoolP(types.AllFlag.Full, types.AllFlag.Short, false, "kill all jobs")
+	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
+	killJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "kill all jobs")
 
 	// Sync flags with aliases
 	psCmd.Flags().AddFlagSet(listJobCmd.PersistentFlags())
 }
 
+// Parent job command
 var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
@@ -36,17 +38,27 @@ var jobCmd = &cobra.Command{
 			return fmt.Errorf("Error creating client: %v", err)
 		}
 
-		ctx := context.WithValue(cmd.Context(), types.CLIENT_CONTEXT_KEY, client)
+		ctx := context.WithValue(cmd.Context(), keys.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
 
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 		client.Close()
 		return nil
 	},
 }
+
+////////////////////
+///// Aliases //////
+////////////////////
+
+var (
+	psCmd     = utils.AliasOf(listJobCmd, "ps")
+	deleteCmd = utils.AliasOf(deleteJobCmd)
+	killCmd   = utils.AliasOf(killJobCmd)
+)
 
 ////////////////////
 /// Subcommands  ///
@@ -56,7 +68,7 @@ var listJobCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all managed processes/containers (jobs)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 
 		resp, err := client.List(cmd.Context(), &daemon.ListReq{})
 		if err != nil {
@@ -108,7 +120,7 @@ var killJobCmd = &cobra.Command{
 	Short: "Kill a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 
 		var jid string
 		req := &daemon.KillReq{}
@@ -118,7 +130,7 @@ var killJobCmd = &cobra.Command{
 			req.JIDs = []string{jid}
 		} else {
 			// Check if the all flag is set
-			all, _ := cmd.Flags().GetBool(types.AllFlag.Full)
+			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
 			}
@@ -144,7 +156,7 @@ var deleteJobCmd = &cobra.Command{
 	Short: "Delete a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 
 		var jid string
 		req := &daemon.DeleteReq{}
@@ -154,7 +166,7 @@ var deleteJobCmd = &cobra.Command{
 			req.JIDs = []string{jid}
 		} else {
 			// Check if the all flag is set
-			all, _ := cmd.Flags().GetBool(types.AllFlag.Full)
+			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
 			}
@@ -180,7 +192,7 @@ var attachJobCmd = &cobra.Command{
 	Short: "Attach stdin/out/err to a managed process/container (job)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), types.CLIENT_CONTEXT_KEY, &Client{})
+		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
 
 		jid := args[0]
 
@@ -196,32 +208,4 @@ var attachJobCmd = &cobra.Command{
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},
-}
-
-////////////////////
-///// Aliases //////
-////////////////////
-
-var psCmd = &cobra.Command{
-	Use:   utils.AliasCommandUse(listJobCmd, "ps"),
-	Short: listJobCmd.Short,
-	Long:  listJobCmd.Long,
-	Args:  listJobCmd.Args,
-	RunE:  utils.AliasCommandRunE(listJobCmd),
-}
-
-var deleteCmd = &cobra.Command{
-	Use:   utils.AliasCommandUse(deleteJobCmd),
-	Short: deleteJobCmd.Short,
-	Long:  deleteJobCmd.Long,
-	Args:  deleteJobCmd.Args,
-	RunE:  utils.AliasCommandRunE(deleteJobCmd),
-}
-
-var killCmd = &cobra.Command{
-	Use:   utils.AliasCommandUse(killJobCmd),
-	Short: killJobCmd.Short,
-	Long:  killJobCmd.Long,
-	Args:  killJobCmd.Args,
-	RunE:  utils.AliasCommandRunE(killJobCmd),
 }
