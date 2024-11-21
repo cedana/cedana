@@ -27,9 +27,6 @@ const (
 //go:embed scripts/k8s/setup-host.sh
 var setupHostScript string
 
-//go:embed scripts/k8s/chroot-start.sh
-var chrootStartScript string
-
 //go:embed scripts/k8s/cleanup-host.sh
 var cleanupHostScript string
 
@@ -49,13 +46,6 @@ var helperCmd = &cobra.Command{
 		if restart {
 			if err := runScript("bash", restartScript, true); err != nil {
 				log.Error().Err(err).Msg("Error restarting")
-			}
-		}
-
-		startChroot, _ := cmd.Flags().GetBool("start-chroot")
-		if startChroot {
-			if err := runScript("bash", chrootStartScript, true); err != nil {
-				log.Error().Err(err).Msg("Error with chroot and starting daemon")
 			}
 		}
 
@@ -82,6 +72,7 @@ var helperCmd = &cobra.Command{
 		}
 
 		port, _ := cmd.Flags().GetUint32(portFlag)
+		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		startHelper(ctx, startChroot, port)
 
 		return nil
@@ -276,13 +267,17 @@ func runScript(command, script string, logOutput bool) error {
 	return cmd.Run()
 }
 
+var startChrootScript = `
+#!/bin/bash
+chroot /host bash /run-cedana.sh
+`
+
 func startDaemon(startChroot bool) error {
 	if startChroot {
-		err := runScript("bash", chrootStartScript, true)
+		err := runScript("bash", startChrootScript, true)
 		if err != nil {
 			return err
 		}
-
 	} else {
 		err := runCommand("bash", "-c", "cedana daemon start")
 		if err != nil {
@@ -305,7 +300,6 @@ func isCedanaDaemonRunning(ctx context.Context, port uint32) (bool, error) {
 func init() {
 	helperCmd.Flags().Bool("setup-host", false, "Setup host for Cedana")
 	helperCmd.Flags().Bool("restart", false, "Restart the cedana service on the host")
-	helperCmd.Flags().Bool("start-chroot", false, "Start chroot and Cedana daemon")
 	helperCmd.Flags().Bool("start-otelcol", false, "Start otelcol on the host")
 	rootCmd.AddCommand(helperCmd)
 
