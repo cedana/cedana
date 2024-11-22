@@ -8,16 +8,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"github.com/vincentfree/opentelemetry/otelzerolog"
-	"github.com/vincentfree/opentelemetry/providerconfig"
-	"github.com/vincentfree/opentelemetry/providerconfig/providerconfighttp"
-	otelzerologbridge "go.opentelemetry.io/contrib/bridges/otelzerolog"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -64,10 +57,6 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 	otel.SetTracerProvider(tracerProvider)
 
-	if logProvider("cedana-daemon", "unknown-dev", endpoint, headers) != nil {
-		handleErr(err)
-		return
-	}
 	return
 }
 
@@ -153,40 +142,4 @@ func newTraceProvider(ctx context.Context, version, endpoint, headers string) (*
 		trace.WithResource(resources),
 	)
 	return traceProvider, nil
-}
-func logProvider(serviceName, version, endpoint, headers string) error {
-	_ = os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
-	_ = os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", headers)
-	signalProcessor := providerconfighttp.New(
-		providerconfighttp.WithLogOptions(otlploghttp.WithEndpoint(endpoint)),
-	)
-	provider := providerconfig.New(
-		providerconfig.WithDisabledSignals(
-			false, // traces
-			false,  // metrics
-			true,  // logs
-		),
-		providerconfig.WithExecutionType(providerconfig.Async),
-		providerconfig.WithApplicationName(serviceName),
-		providerconfig.WithApplicationVersion(version),
-		providerconfig.WithSignalProcessor(signalProcessor),
-	)
-
-	otelzerolog.SetGlobalLogger(
-		otelzerolog.WithOtelBridge(
-			serviceName,
-			otelzerologbridge.WithLoggerProvider(provider.LogProvider()),
-			otelzerologbridge.WithVersion("0.1.0"),
-		),
-		otelzerolog.WithAttributes(
-			attribute.Bool("production", os.Getenv("CEDANA_DEBUG") == ""),
-		),
-		otelzerolog.WithServiceName(serviceName),
-		otelzerolog.WithZeroLogFeatures(
-			zerolog.Context.Stack,
-			zerolog.Context.Caller,
-			zerolog.Context.Timestamp,
-		),
-	)
-	return nil
 }
