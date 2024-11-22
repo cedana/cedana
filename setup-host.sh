@@ -3,7 +3,7 @@
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf libnl3-devel
-    libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah criu libnftables1
+    libcap-devel libseccomp-devel gpgme-devel btrfs-progs-devel buildah libnftables1
 )
 
 APT_PACKAGES=(
@@ -26,22 +26,22 @@ install_yum_packages() {
 install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
-            PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_4.0-3_amd64.deb"
-            OUTPUT_FILE="criu_4.0-3_amd64.deb"
+            TAG=latest
+            curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+            sudo cp criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
             OUTPUT_FILE="criu_4.0-3_arm64.deb"
+            wget $PACKAGE_URL -O $OUTPUT_FILE
+            dpkg -i $OUTPUT_FILE
+            rm $OUTPUT_FILE
             ;;
         *)
             echo "Unknown platform architecture $(uname -m)"
             exit 1
             ;;
     esac
-
-    wget $PACKAGE_URL -O $OUTPUT_FILE
-    dpkg -i $OUTPUT_FILE
-    rm $OUTPUT_FILE
 }
 
 # Detect OS and install appropriate packages
