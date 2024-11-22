@@ -137,7 +137,7 @@ jobs:
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
           sudo cp ./build-start-daemon.sh /build-start-daemon.sh
-          ./setup-host.sh
+          sudo ./setup-host.sh
         env:
           CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}"
 
