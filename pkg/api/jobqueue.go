@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
