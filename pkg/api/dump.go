@@ -321,7 +321,7 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 }
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	var err error
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

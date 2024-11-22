@@ -46,7 +46,7 @@ const (
 )
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
