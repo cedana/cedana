@@ -3,8 +3,7 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
-	// "bufio"
-	"bytes"
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -322,25 +321,42 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 }
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
-	buf := new(bytes.Buffer)
-	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
-	cmd.Stderr = buf
+	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	var err error
-	/*stdout, err := cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	pipe := bufio.NewReader(stdout)
+	outpipe := bufio.NewReader(stdout)
 	go func() {
 		for {
-			line, err := pipe.ReadString('\n')
+			line, err := outpipe.ReadString('\n')
 			if err != nil {
 				break
 			}
 			line = strings.TrimSuffix(line, "\n")
 			log.Info().Msg(line)
 		}
-	}()*/
+	}()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	i := 0
+	errpipe := bufio.NewReader(stderr)
+	go func() {
+		for {
+			line, err := errpipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			if i != 0 {
+				log.Error().Msg(line)
+			}
+			i += 1
+		}
+	}()
 	err = cmd.Start()
 	if err != nil {
 		log.Error().Msgf("unable to exec image streamer server: %v", err)
@@ -348,7 +364,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.C
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
-	for buf.Len() == 0 {
+	for i == 0 {
 		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
