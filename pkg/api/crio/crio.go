@@ -21,8 +21,8 @@ import (
 	"github.com/containers/buildah/pkg/parse"
 	"github.com/containers/buildah/util"
 	"github.com/containers/common/pkg/auth"
-	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/pkg/shortnames"
+	is "github.com/containers/image/v5/storage"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
@@ -31,7 +31,6 @@ import (
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 func getDefaultConfig() (*libconfig.Config, error) {
@@ -416,10 +415,7 @@ func removeBuildahContainer(containerID string) error {
 
 	return nil
 }
-func getStoreBuildah(c *cobra.Command) (storage.Store, error) {
-	if err := setXDGRuntimeDir(); err != nil {
-		return nil, err
-	}
+func getStoreBuildah() (storage.Store, error) {
 	options, err := storage.DefaultStoreOptions()
 	if err != nil {
 		return nil, err
@@ -519,12 +515,12 @@ func commit(args []string, iopts commitInputOptions) error {
 	if err != nil {
 		return err
 	}
-	store, err := getStore(c)
+	store, err := getStoreBuildah()
 	if err != nil {
 		return err
 	}
 
-	ctx := getContext()
+	ctx := context.Background() // was context.to-do earlier
 
 	builder, err := buildah.openBuilder(ctx, store, name)
 	if err != nil {
@@ -563,18 +559,6 @@ func commit(args []string, iopts commitInputOptions) error {
 	encConfig, encLayers, err := cli.EncryptConfig(iopts.encryptionKeys, iopts.encryptLayers)
 	if err != nil {
 		return fmt.Errorf("unable to obtain encryption config: %w", err)
-	}
-
-	var overrideConfig *manifest.Schema2Config
-	if c.Flag("config").Changed {
-		configBytes, err := os.ReadFile(iopts.configFile)
-		if err != nil {
-			return fmt.Errorf("reading configuration blob from file: %w", err)
-		}
-		overrideConfig = &manifest.Schema2Config{}
-		if err := json.Unmarshal(configBytes, &overrideConfig); err != nil {
-			return fmt.Errorf("parsing configuration blob from %q: %w", iopts.configFile, err)
-		}
 	}
 
 	var addFiles map[string]string
@@ -618,21 +602,6 @@ func commit(args []string, iopts commitInputOptions) error {
 		ExtraImageContent:     addFiles,
 	}
 	exclusiveFlags := 0
-	if c.Flag("reference-time").Changed {
-		exclusiveFlags++
-		referenceFile := iopts.referenceTime
-		finfo, err := os.Stat(referenceFile)
-		if err != nil {
-			return fmt.Errorf("reading timestamp of file %q: %w", referenceFile, err)
-		}
-		timestamp := finfo.ModTime().UTC()
-		options.HistoryTimestamp = &timestamp
-	}
-	if c.Flag("timestamp").Changed {
-		exclusiveFlags++
-		timestamp := time.Unix(iopts.timestamp, 0).UTC()
-		options.HistoryTimestamp = &timestamp
-	}
 	if iopts.omitTimestamp {
 		exclusiveFlags++
 		timestamp := time.Unix(0, 0).UTC()
@@ -645,26 +614,6 @@ func commit(args []string, iopts commitInputOptions) error {
 			return fmt.Errorf("parsing --cw arguments: %w", err)
 		}
 		options.ConfidentialWorkloadOptions = confidentialWorkloadOptions
-	}
-
-	pullPolicy, err := parse.PullPolicyFromOptions(c)
-	if err != nil {
-		return err
-	}
-
-	if c.Flag("sbom").Changed || c.Flag("sbom-scanner-command").Changed || c.Flag("sbom-scanner-image").Changed || c.Flag("sbom-image-output").Changed || c.Flag("sbom-merge-strategy").Changed || c.Flag("sbom-output").Changed || c.Flag("sbom-image-output").Changed || c.Flag("sbom-purl-output").Changed || c.Flag("sbom-image-purl-output").Changed {
-		var sbomOptions []define.SBOMScanOptions
-		sbomOption, err := parse.SBOMScanOptions(c)
-		if err != nil {
-			return err
-		}
-		sbomOption.PullPolicy = pullPolicy
-		sbomOptions = append(sbomOptions, *sbomOption)
-		options.SBOMScanOptions = sbomOptions
-	}
-
-	if exclusiveFlags > 1 {
-		return errors.New("can not use more then one timestamp option at at time")
 	}
 
 	if !iopts.quiet {
