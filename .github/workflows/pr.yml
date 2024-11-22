@@ -158,8 +158,10 @@ jobs:
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
-          sudo cp ./build-start-daemon.sh /build-start-daemon.sh
-          ./setup-host.sh
+          mkdir -p /cedana/scripts
+          sudo cp ./setup-host.sh /cedana/scripts/setup-host.sh
+          sudo cp ./build-start-daemon.sh /cedana/scripts/build-start-daemon.sh
+          /cedana/scripts/setup-host.sh
 
   smoke-test:
     name: Smoke Tests
