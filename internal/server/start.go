@@ -36,6 +36,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 	// the GPU adapter can use this context to kill the process when GPU support fails.
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
 	resp := &daemon.StartResp{}

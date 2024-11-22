@@ -41,6 +41,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
 		CRIU:     s.criu,
+		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
 	resp := &daemon.RestoreResp{}

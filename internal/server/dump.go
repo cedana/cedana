@@ -44,6 +44,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
 		CRIU:     s.criu,
+		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
 	resp := &daemon.DumpResp{}
