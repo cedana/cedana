@@ -626,6 +626,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	if err != nil {
 		return 0, nil, err
 	}
+  defer os.RemoveAll(dir) // since it's a temporary directory
 
 	if state.GPU {
 		var err error
