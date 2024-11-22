@@ -369,6 +369,8 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
 		}
 	}
+  defer os.RemoveAll(tempDir) // since it's a temporary directory
+
 	err := utils.UntarFolder(imgPath, tempDir)
 	if err != nil {
 		return 0, nil, fmt.Errorf("error decompressing checkpoint: %w", err)
