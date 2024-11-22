@@ -1,10 +1,11 @@
 package db
 
-// Local implementation of sqlite DB
+// Local implementation of the DB, using sqlite.
 
 import (
 	"context"
 	"database/sql"
+
 	"github.com/cedana/cedana/pkg/db/models"
 	"github.com/cedana/cedana/pkg/db/sqlite"
 )
@@ -18,7 +19,6 @@ type LocalDB struct {
 }
 
 func NewLocalDB(ctx context.Context) DB {
-
 	db, err := sql.Open("sqlite3", SQLITE_DB_PATH)
 	if err != nil {
 		return nil

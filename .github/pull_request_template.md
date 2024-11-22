@@ -1,7 +1,5 @@
 ## Describe your changes
 
-## Issue ticket number
-
 ## Checklist before requesting a review
 - [ ] Have I performed a self-review?
 - [ ] Have I added regression or unit tests (where it makes sense) for my changes?

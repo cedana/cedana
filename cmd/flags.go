@@ -44,4 +44,5 @@ const (
 	noStdinFlag          = "no-stdin"
 	pidFileFlag          = "pid-file"
 	modeFlag             = "mode"
+	skipInFlightFlag     = "skip-in-flight"
 )

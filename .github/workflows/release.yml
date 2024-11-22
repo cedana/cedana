@@ -56,9 +56,7 @@ jobs:
       pull-requests: 'write'
     with:
       debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      debug_smoke_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      debug_correctness_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       skip_bench: true # since benchmark will be run in a separate job below

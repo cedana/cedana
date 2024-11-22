@@ -4,12 +4,12 @@ load helper.bash
 
 setup_file() {
     BATS_NO_PARALLELIZE_WITHIN_FILE=true
+    install_cedana
 }
 
 setup() {
     # assuming WD is the root of the project
     start_cedana
-    sleep 1 3>-
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
@@ -17,17 +17,13 @@ setup() {
     DIR="$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
     TTY_SOCK=$DIR/tty.sock
 
-    # set up a fake cedana recvtty cmd
-    cp /usr/local/bin/cedana /usr/local/bin/cedanarecvtty
-    cedanarecvtty debug recvtty "$TTY_SOCK" &
+    cedana debug recvtty "$TTY_SOCK" &
+    sleep 1 3>-
 }
 
 teardown() {
     sleep 1 3>-
-
-    pkill cedanarecvtty
     rm -f $TTY_SOCK
-
     stop_cedana
     sleep 1 3>-
 }
@@ -73,7 +69,7 @@ teardown() {
     # execute, checkpoint and restore a job
     exec_task $task $job_id
     sleep 2 3>-
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 2 3>-
     restore_task $job_id
 
@@ -114,7 +110,7 @@ teardown() {
     sleep 2 3>-
 
     # checkpoint and restore the job
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 2 3>-
     restore_task $job_id
 
@@ -152,7 +148,7 @@ teardown() {
     # try to dump unmanaged process with GPU flags
     run exec_task $task $job_id
     [ "$status" -eq 0 ]
-    run checkpoint_task $job_id --gpu-enabled
+    run checkpoint_task $job_id /tmp --gpu-enabled
     [ "$status" -ne 0 ]
 }
 
@@ -176,7 +172,7 @@ teardown() {
     # execute, checkpoint and restore a job
     exec_task $task $job_id
     sleep 1 3>-
-    checkpoint_task $job_id
+    checkpoint_task $job_id /tmp
     sleep 1 3>-
     run restore_task $job_id --attach
 
@@ -225,8 +221,10 @@ teardown() {
     bundle=/run/containerd/io.containerd.runtime.v2.task/default/$container_id
     pid=$(cat "$bundle"/init.pid)
 
+    [ -d $dumpdir ]
+
     # restore the container
-    run runc_restore_jupyter "$bundle" "$dumpdir" "$container_id" "$pid"
+    run runc_restore $bundle $dumpdir.tar $container_id
     echo "$output"
 
     [[ "$output" == *"Success"* ]]
@@ -262,14 +260,14 @@ teardown() {
     [ $nlines_after -gt $nlines_before ]
 
     # checkpoint the container
-    runc_checkpoint $dumpdir $job_id --leave-running
+    runc_checkpoint $dumpdir $job_id
     [ -d $dumpdir ]
 
     # clean up
-    sudo runc kill $job_id SIGKILL
     sudo runc delete $job_id
 }
 
+# NOTE: Assumes that "Simple runc checkpoint" test has been run
 @test "Simple runc restore" {
     local bundle=$DIR/bundle
     local job_id="runc-test-restored"
@@ -281,7 +279,7 @@ teardown() {
     [ -d $dumpdir ]
     echo $dumpdir contents:
     ls $dumpdir
-    runc_restore $bundle $dumpdir $job_id $TTY_SOCK
+    runc_restore_tty $bundle $dumpdir.tar $job_id $TTY_SOCK
 
     sleep 1 3>-
 
@@ -295,4 +293,67 @@ teardown() {
     # clean up
     sudo runc kill $job_id SIGKILL
     sudo runc delete $job_id
+    sudo rm -rf $dumpdir*
+}
+
+# NOTE: Assumes that "Simple runc checkpoint" has been run as it uses the same bundle
+@test "Managed runc (job) checkpoint" {
+    local bundle=$DIR/bundle
+    echo bundle is $bundle
+    local job_id="managed-runc-test"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$DIR/dump
+
+    # create a runc container
+    echo bundle is $bundle
+    echo jobid is $job_id
+
+    sudo runc run $job_id -b $bundle -d --console-socket $TTY_SOCK
+    sleep 2 3>-
+    sudo runc list
+
+    # check if container running correctly, count lines in output file
+    local nlines_before=$(sudo wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(sudo wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
+
+    # start managing the container
+    runc_manage $job_id
+
+    # checkpoint the container
+    checkpoint_task $job_id $dumpdir
+    [ -d $dumpdir ]
+
+    # clean up
+    sudo runc delete $job_id
+}
+
+# NOTE: Assumes that "Managed runc checkpoint" test has been run
+@test "Managed runc (job) restore" {
+    local bundle=$DIR/bundle
+    local job_id="managed-runc-test"
+    local out_file=$bundle/rootfs/out
+    local dumpdir=$DIR/dump
+
+    # restore the container
+    [ -d $bundle ]
+    [ -d $dumpdir ]
+    echo $dumpdir contents:
+    ls $dumpdir
+    restore_task_img $job_id $dumpdir.tar -e -b $bundle -c $TTY_SOCK
+
+    sleep 1 3>-
+
+    # check if container running correctly, count lines in output file
+    [ -f $out_file ]
+    local nlines_before=$(wc -l $out_file | awk '{print $1}')
+    sleep 2 3>-
+    local nlines_after=$(wc -l $out_file | awk '{print $1}')
+    [ $nlines_after -gt $nlines_before ]
+
+    # clean up
+    sudo runc kill $job_id SIGKILL
+    sudo runc delete $job_id
+    sudo rm -rf $dumpdir
 }
