@@ -101,6 +101,8 @@ var listJobCmd = &cobra.Command{
 			writer.AppendRow(row)
 		}
 
+		writer.SortBy([]table.SortBy{{Name: "State", Mode: table.Dsc}})
+
 		writer.Render()
 
 		return nil
