@@ -84,6 +84,22 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	return &resp, err
 }
 
+func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKataArgs) (*task.HostRestoreKataResp, error) {
+	isVMSnapshot := args.VMSnapshot
+	snapshot := args.VMSnapshotPath
+	socketPath := args.VMSocketPath
+
+	if isVMSnapshot {
+		err := s.vmSnapshotter.Restore(snapshot, socketPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Restore task failed during vmSnapshotter Restore: %v", err)
+		}
+
+		return &task.HostRestoreKataResp{State: "restored"}, nil
+	}
+	return &task.HostRestoreKataResp{State: "invalid args"}, nil
+}
+
 func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*task.RestoreResp, error) {
 	var resp task.RestoreResp
 	var pid *int32
@@ -121,7 +137,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 
 type VMSnapshot interface {
 	Snapshot(destinationURL, vmSocketPath string) error
-	Restore(snapshotPath string) error
+	Restore(snapshotPath, vmSocketPath string) error
 	Pause(vmSocketPath string) error
 	Resume(vmSocketPath string) error
 }
@@ -168,8 +184,48 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 	return nil
 }
 
-func (u *CloudHypervisorVM) Restore(snapshotPath string) error {
-	log.Logger.Debug().Msgf("Restore function called with snapshot path:", snapshotPath)
+type RestoreConfig struct {
+	SourceURL string               `json:"source_url"`
+	Prefault  bool                 `json:"prefault"`
+	NetFds    *[]RestoredNetConfig `json:"net_fds,omitempty"`
+}
+
+type RestoredNetConfig struct {
+	Fds []int `json:"fds"`
+}
+
+func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string) error {
+	data := RestoreConfig{SourceURL: snapshotPath, Prefault: true}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", vmSocketPath)
+			},
+		},
+	}
+
+	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.restore", bytes.NewBuffer(jsonData))
+
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("error snapshotting vm: %d, %v, req data: %v", resp.StatusCode, resp.Body, data)
+	}
+
 	return nil
 }
 
