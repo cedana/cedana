@@ -76,7 +76,7 @@ func (s Status) String() string {
 	case Installed:
 		return "installed"
 	default:
-		return "-"
+		return "unknown"
 	}
 }
 
