@@ -19,14 +19,10 @@ func init() {
 	rootCmd.AddCommand(manageCmd)
 	rootCmd.AddCommand(pluginCmd)
 	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
 
 	// Add aliases
-	rootCmd.AddCommand(execCmd)
-	rootCmd.AddCommand(attachCmd)
-	rootCmd.AddCommand(psCmd)
-	rootCmd.AddCommand(killCmd)
-	rootCmd.AddCommand(deleteCmd)
 
 	// Add root flags
 	rootCmd.PersistentFlags().

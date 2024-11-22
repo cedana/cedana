@@ -33,8 +33,8 @@ func init() {
 		flags.LogFlag.Full,
 	) // only one of these can be set
 
-	// Sync flags with aliases
-	execCmd.Flags().AddFlagSet(startCmd.PersistentFlags())
+	// Add aliases
+	rootCmd.AddCommand(utils.AliasOf(processStartCmd, "exec"))
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
@@ -108,12 +108,6 @@ var startCmd = &cobra.Command{
 		return nil
 	},
 }
-
-////////////////////
-///// Aliases //////
-////////////////////
-
-var execCmd = utils.AliasOf(processStartCmd, "exec")
 
 ////////////////////
 /// Subcommands  ///

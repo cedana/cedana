@@ -11,17 +11,32 @@ import (
 // AliasOf creates an alias of the provided command, That includes the same flags and hooks.
 // Even the parent command's PersistentPreRunE and PersistentPostRunE hooks are invoked.
 // Provide a name only if it's different from provided command's name
-func AliasOf(cmd *cobra.Command, name ...string) *cobra.Command {
-	if cmd == nil {
+func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
+	if src == nil {
 		return nil
 	}
-	return &cobra.Command{
-		Use:   AliasCommandUse(cmd, name...),
-		Short: "(alias) " + cmd.Short,
-		Long:  "(alias) " + cmd.Long,
-		Args:  cmd.Args,
-		RunE:  AliasCommandRunE(cmd),
+	cmd := &cobra.Command{
+		Use:                AliasCommandUse(src, name...),
+		Short:              src.Short,
+		Long:               src.Long,
+		Args:               src.Args,
+		Hidden:             src.Hidden,
+		PreRun:             src.PreRun,
+		PreRunE:            src.PreRunE,
+		PersistentPreRun:   src.PersistentPreRun,
+		PersistentPreRunE:  src.PersistentPreRunE,
+		Run:                src.Run,
+		RunE:               AliasCommandRunE(src),
+		PersistentPostRun:  src.PersistentPostRun,
+		PersistentPostRunE: src.PersistentPostRunE,
+		PostRun:            src.PostRun,
+		PostRunE:           src.PostRunE,
 	}
+
+	cmd.Flags().AddFlagSet(src.LocalFlags())
+	cmd.Flags().AddFlagSet(src.InheritedFlags())
+
+	return cmd
 }
 
 // Use this for RunE to make a command an alias to another command's RunE.

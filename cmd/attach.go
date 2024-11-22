@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Parent attach command
 var attachCmd = &cobra.Command{
 	Use:   "attach <PID>",
 	Short: "Attach stdin/out/err to a process/container",

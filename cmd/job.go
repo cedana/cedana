@@ -24,8 +24,10 @@ func init() {
 	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
 	killJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "kill all jobs")
 
-	// Sync flags with aliases
-	psCmd.Flags().AddFlagSet(listJobCmd.PersistentFlags())
+	// Add aliases
+	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "ps"))
+	rootCmd.AddCommand(utils.AliasOf(deleteJobCmd))
+	rootCmd.AddCommand(utils.AliasOf(killJobCmd))
 }
 
 // Parent job command
@@ -49,16 +51,6 @@ var jobCmd = &cobra.Command{
 		return nil
 	},
 }
-
-////////////////////
-///// Aliases //////
-////////////////////
-
-var (
-	psCmd     = utils.AliasOf(listJobCmd, "ps")
-	deleteCmd = utils.AliasOf(deleteJobCmd)
-	killCmd   = utils.AliasOf(killJobCmd)
-)
 
 ////////////////////
 /// Subcommands  ///
