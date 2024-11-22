@@ -32,7 +32,7 @@ install_yum_packages() {
 install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
-            TAG=v0.0.1
+            TAG=latest
             curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
             sudo cp criu /usr/local/sbin/
             ;;
