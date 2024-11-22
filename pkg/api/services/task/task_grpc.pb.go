@@ -59,6 +59,7 @@ type TaskServiceClient interface {
 	KataDump(ctx context.Context, in *DumpArgs, opts ...grpc.CallOption) (*DumpResp, error)
 	KataRestore(ctx context.Context, in *RestoreArgs, opts ...grpc.CallOption) (*RestoreResp, error)
 	HostKataDump(ctx context.Context, in *HostDumpKataArgs, opts ...grpc.CallOption) (*HostDumpKataResp, error)
+	HostKataRestore(ctx context.Context, in *HostRestoreKataArgs, opts ...grpc.CallOption) (*HostRestoreKataResp, error)
 	// Config
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	// JobQueue
@@ -440,6 +441,15 @@ func (c *taskServiceClient) HostKataDump(ctx context.Context, in *HostDumpKataAr
 	return out, nil
 }
 
+func (c *taskServiceClient) HostKataRestore(ctx context.Context, in *HostRestoreKataArgs, opts ...grpc.CallOption) (*HostRestoreKataResp, error) {
+	out := new(HostRestoreKataResp)
+	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/HostKataRestore", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *taskServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
 	out := new(GetConfigResponse)
 	err := c.cc.Invoke(ctx, "/cedana.services.task.TaskService/GetConfig", in, out, opts...)
@@ -525,6 +535,7 @@ type TaskServiceServer interface {
 	KataDump(context.Context, *DumpArgs) (*DumpResp, error)
 	KataRestore(context.Context, *RestoreArgs) (*RestoreResp, error)
 	HostKataDump(context.Context, *HostDumpKataArgs) (*HostDumpKataResp, error)
+	HostKataRestore(context.Context, *HostRestoreKataArgs) (*HostRestoreKataResp, error)
 	// Config
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	// JobQueue
@@ -623,6 +634,9 @@ func (UnimplementedTaskServiceServer) KataRestore(context.Context, *RestoreArgs)
 }
 func (UnimplementedTaskServiceServer) HostKataDump(context.Context, *HostDumpKataArgs) (*HostDumpKataResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HostKataDump not implemented")
+}
+func (UnimplementedTaskServiceServer) HostKataRestore(context.Context, *HostRestoreKataArgs) (*HostRestoreKataResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HostKataRestore not implemented")
 }
 func (UnimplementedTaskServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
@@ -1191,6 +1205,24 @@ func _TaskService_HostKataDump_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_HostKataRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostRestoreKataArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).HostKataRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cedana.services.task.TaskService/HostKataRestore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).HostKataRestore(ctx, req.(*HostRestoreKataArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TaskService_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetConfigRequest)
 	if err := dec(in); err != nil {
@@ -1379,6 +1411,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HostKataDump",
 			Handler:    _TaskService_HostKataDump_Handler,
+		},
+		{
+			MethodName: "HostKataRestore",
+			Handler:    _TaskService_HostKataRestore_Handler,
 		},
 		{
 			MethodName: "GetConfig",
