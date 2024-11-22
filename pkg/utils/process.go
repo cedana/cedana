@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/mem"

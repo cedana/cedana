@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
 	"github.com/spf13/cobra"
 )

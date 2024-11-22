@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	securejoin "github.com/cyphar/filepath-securejoin"

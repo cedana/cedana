@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -58,7 +58,9 @@ type StreamIOWriter struct {
 	bytes chan<- []byte
 }
 
-func NewStreamIOMaster(slave grpc.BidiStreamingClient[daemon.AttachReq, daemon.AttachResp]) (stdIn *StreamIOWriter, stdOut *StreamIOReader, stdErr *StreamIOReader, exitCode chan int, errors chan error) {
+func NewStreamIOMaster(
+	slave grpc.BidiStreamingClient[daemon.AttachReq, daemon.AttachResp],
+) (stdIn *StreamIOWriter, stdOut *StreamIOReader, stdErr *StreamIOReader, exitCode chan int, errors chan error) {
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
 	err := make(chan []byte, channelBufLen)
@@ -124,7 +126,11 @@ func NewStreamIOMaster(slave grpc.BidiStreamingClient[daemon.AttachReq, daemon.A
 	return
 }
 
-func NewStreamIOSlave(ctx context.Context, pid uint32, exitCode chan int) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
+func NewStreamIOSlave(
+	ctx context.Context,
+	pid uint32,
+	exitCode chan int,
+) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
 	err := make(chan []byte, channelBufLen)
@@ -190,7 +196,9 @@ func NewStreamIOSlave(ctx context.Context, pid uint32, exitCode chan int) (stdIn
 		}
 
 		close(in) // BUG: causes race with in's senders in attach
-		master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}})
+		master.Send(
+			&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
+		)
 	}()
 
 	stdIn = &StreamIOReader{bytes: in}
@@ -201,7 +209,10 @@ func NewStreamIOSlave(ctx context.Context, pid uint32, exitCode chan int) (stdIn
 }
 
 // Attach attaches a master stream to the slave.
-func (s *StreamIOSlave) Attach(lifetime context.Context, master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]) error {
+func (s *StreamIOSlave) Attach(
+	lifetime context.Context,
+	master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp],
+) error {
 	for {
 		select {
 		case <-lifetime.Done():

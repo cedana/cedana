@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon/plugins/runc"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"

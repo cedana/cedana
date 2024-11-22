@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"

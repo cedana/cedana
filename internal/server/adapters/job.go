@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"

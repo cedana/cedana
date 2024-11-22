@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"

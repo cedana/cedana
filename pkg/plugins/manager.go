@@ -44,6 +44,7 @@ type Plugin struct {
 }
 
 type Manager interface {
+	Get(name string) *Plugin
 	List(...Status) ([]Plugin, error)
 	Install(names []string) (chan int, chan string, chan error)
 	Remove(names []string) (chan int, chan string, chan error)
@@ -107,12 +108,16 @@ func (p *Plugin) SyncVersion() {
 // Also fetches the local installed version.
 func (p *Plugin) SyncInstalled() {
 	// Check if all plugin files are installed
+	var err error
+	var s os.FileInfo
 	found := 0
+	size := int64(0)
 	for _, file := range p.Libraries {
-		if _, err := os.Stat(filepath.Join(LibDir, file)); err != nil {
+		if s, err = os.Stat(filepath.Join(LibDir, file)); err != nil {
 			continue
 		}
 		found += 1
+		size += s.Size()
 	}
 	if found < len(p.Libraries) {
 		return
@@ -120,14 +125,16 @@ func (p *Plugin) SyncInstalled() {
 
 	found = 0
 	for _, file := range p.Binaries {
-		if _, err := os.Stat(filepath.Join(BinDir, file)); err != nil {
+		if s, err = os.Stat(filepath.Join(BinDir, file)); err != nil {
 			continue
 		}
 		found += 1
+		size += s.Size()
 	}
 	if found < len(p.Binaries) {
 		return
 	}
 	p.Status = Installed
+	p.Size = size
 	p.SyncVersion()
 }

@@ -1,6 +1,6 @@
 package plugins
 
-// Implements a local plugin manager that searches for plugins from local paths.
+// Implements a local plugin manager that searches for installable plugins from local paths.
 
 import (
 	"fmt"
@@ -27,6 +27,19 @@ func NewLocalManager() *LocalManager {
 	}
 }
 
+func (m *LocalManager) Get(name string) *Plugin {
+	time.Sleep(artificialDelay)
+
+	for _, p := range Registry {
+		if p.Name == name {
+			p.SyncInstalled()
+			return &p
+		}
+	}
+
+	return nil
+}
+
 // List returns a list of plugins that are available.
 // If statuses are provided, only plugins with those statuses are returned.
 func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
@@ -40,6 +53,8 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 	time.Sleep(artificialDelay)
 
 	for _, p := range Registry {
+		p.SyncInstalled()
+
 		// search if plugin files available in search path
 		found := 0
 		dir := ""
@@ -59,11 +74,13 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		}
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
-			p.Status = Available
 			p.LatestVersion = "local"
-			p.Size = size
-
-			p.SyncInstalled()
+			if p.Status != Installed {
+				p.Status = Available
+			}
+			if p.Size == 0 {
+				p.Size = size
+			}
 		}
 
 		if _, ok := set[p.Status]; len(set) > 0 && !ok {

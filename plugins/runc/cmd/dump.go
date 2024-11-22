@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon/plugins/runc"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
 	runc_flags "github.com/cedana/cedana/plugins/runc/pkg/flags"

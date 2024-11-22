@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"

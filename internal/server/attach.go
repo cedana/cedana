@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
+	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"

@@ -5,8 +5,8 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-8cad54290adc.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1
-	buf.build/gen/go/cedana/daemon/protocolbuffers/go v1.35.2-00000000000000-07098332be7b.1
 	github.com/cedana/cedana v0.9.231
 	github.com/cyphar/filepath-securejoin v0.3.4
 	github.com/opencontainers/runc v1.2.1

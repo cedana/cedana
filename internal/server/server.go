@@ -7,8 +7,8 @@ import (
 	"os"
 	"sync"
 
-	"buf.build/gen/go/cedana/daemon/grpc/go/daemon/daemongrpc"
-	"buf.build/gen/go/cedana/daemon/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
@@ -80,12 +80,25 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	pluginManager := plugins.NewLocalManager()
+
 	criu := criu.MakeCriu()
-	// Set custom path if specified in config
-	if custom_path := config.Get(config.CRIU_BINARY_PATH); custom_path != "" {
-		criu.SetCriuPath(custom_path)
+
+	// Check if CRIU plugin is installed, then use that binary
+	var p *plugins.Plugin
+	if p = pluginManager.Get("criu"); p.Status != plugins.Installed {
+		// Set custom path if specified in config, as a fallback
+		if custom_path := config.Get(config.CRIU_BINARY_PATH); custom_path != "" {
+			criu.SetCriuPath(custom_path)
+		} else {
+			return nil, fmt.Errorf(
+				"Please install CRIU plugin, or specify %s in config or env var %s",
+				config.CRIU_BINARY_PATH.Key,
+				config.CRIU_BINARY_PATH.Env,
+			)
+		}
 	} else {
-		// Check if CRIU plugin is installed
+		criu.SetCriuPath(p.Binaries[0])
 	}
 
 	server := &Server{
@@ -93,9 +106,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 			grpc.StreamInterceptor(logger.StreamLogger()),
 			grpc.UnaryInterceptor(logger.UnaryLogger()),
 		),
-		criu: criu,
-		db:   db,
-		wg:   &sync.WaitGroup{},
+		plugins: pluginManager,
+		criu:    criu,
+		db:      db,
+		wg:      &sync.WaitGroup{},
 		machine: Machine{
 			ID:       machineID,
 			MACAddr:  macAddr,
