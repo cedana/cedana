@@ -84,10 +84,10 @@ func Run() types.Start {
 			defer server.WG.Done()
 			err := cmd.Wait()
 			if err != nil {
-				log.Debug().Err(err).Msg("process Wait()")
+				log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
 			}
 			code := cmd.ProcessState.ExitCode()
-			log.Debug().Int("code", code).Msg("process exited")
+			log.Debug().Int("code", code).Uint32("PID", resp.PID).Msg("process exited")
 			exitCode <- code
 			close(exitCode)
 			close(exited)

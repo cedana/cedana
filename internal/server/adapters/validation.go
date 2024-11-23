@@ -1,5 +1,7 @@
 package adapters
 
+// This file contains all the adapters that validate the request
+
 import (
 	"context"
 
@@ -9,7 +11,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// This file contains all the adapters that validate the request
+////////////////////////
+//// Start Adapters ////
+////////////////////////
+
+// Adapter that validates the start request
+func ValidateStartRequest(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+		if req.GetType() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
+		}
+		if req.GetDetails() == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
+		}
+		// Check if JID already exists
+		return next(ctx, server, resp, req)
+	}
+}
 
 ///////////////////////
 //// Dump Adapters ////
@@ -46,24 +64,6 @@ func ValidateRestoreRequest(next types.Restore) types.Restore {
 			return nil, status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return next(ctx, server, resp, req)
-	}
-}
-
-////////////////////////
-//// Start Adapters ////
-////////////////////////
-
-// Adapter that validates the start request
-func ValidateStartRequest(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		if req.GetType() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
-		}
-		if req.GetDetails() == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
-		}
-		// Check if JID already exists
 		return next(ctx, server, resp, req)
 	}
 }

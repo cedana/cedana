@@ -156,6 +156,8 @@ func NewStreamIOSlave(
 		stream:
 			for {
 				select {
+				case <-ctx.Done():
+					break exit
 				case <-master.Context().Done():
 					break stream // and wait for new master
 				case b, ok := <-out:

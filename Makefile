@@ -44,7 +44,6 @@ plugins: $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
-			sudo $(BINARY) plugin remove $$name ;\
 			$(GOBUILD) -C $$path -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 			sudo $(BINARY) plugin install $$name ;\
 		fi ;\

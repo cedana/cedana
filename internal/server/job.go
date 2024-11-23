@@ -16,23 +16,23 @@ import (
 const LOG_ATTACHABLE string = "[Attachable]"
 
 func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListResp, error) {
-	jobs, err := s.db.ListJobs(ctx, req.GetJIDs()...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
-	}
+	jobs := s.jobs.List(req.GetJIDs()...)
 
+	jobProtos := []*daemon.Job{}
 	for _, job := range jobs {
-		s.syncJobState(ctx, job)
+		proto := *job.GetProto()
+		if job.IsRunning() && utils.GetIOSlave(job.GetPID()) != nil {
+			proto.Log = LOG_ATTACHABLE
+		}
+
+		jobProtos = append(jobProtos, &proto)
 	}
 
-	return &daemon.ListResp{Jobs: jobs}, nil
+	return &daemon.ListResp{Jobs: jobProtos}, nil
 }
 
 func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillResp, error) {
-	jobs, err := s.db.ListJobs(ctx, req.GetJIDs()...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
-	}
+	jobs := s.jobs.List(req.GetJIDs()...)
 
 	if len(jobs) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no jobs found")
@@ -41,12 +41,10 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 	errs := []error{}
 
 	for _, job := range jobs {
-		s.syncJobState(ctx, job)
-		if job.GetProcess().GetInfo().GetIsRunning() {
-			pid := job.GetProcess().GetPID()
-			err = syscall.Kill(int(pid), syscall.SIGKILL)
+		if job.IsRunning() {
+			err := s.jobs.Kill(job.JID, syscall.SIGKILL)
 			if err != nil {
-				log.Error().Err(err).Msgf("failed to kill job %s", job.GetJID())
+				log.Error().Err(err).Msgf("failed to kill job %s", job.JID)
 			}
 			errs = append(errs, err)
 		}
@@ -56,10 +54,7 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 }
 
 func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.DeleteResp, error) {
-	jobs, err := s.db.ListJobs(ctx, req.GetJIDs()...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
-	}
+	jobs := s.jobs.List(req.GetJIDs()...)
 
 	if len(jobs) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no jobs found")
@@ -68,40 +63,13 @@ func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.Del
 	errs := []error{}
 
 	for _, job := range jobs {
-		s.syncJobState(ctx, job)
 		// Don't delete running jobs
-		if job.GetProcess().GetInfo().GetIsRunning() {
-			errs = append(errs, fmt.Errorf("job %s is running", job.GetJID()))
+		if job.IsRunning() {
+			errs = append(errs, fmt.Errorf("job %s is running", job.JID))
 			continue
 		}
-		err = s.db.DeleteJob(ctx, job.GetJID())
-		if err != nil {
-			log.Error().Err(err).Msgf("failed to delete job %s", job.GetJID())
-		}
-		errs = append(errs, err)
+		s.jobs.Delete(job.JID)
 	}
 
 	return &daemon.DeleteResp{}, errors.Join(errs...)
-}
-
-///////////////////
-///// Helpers /////
-///////////////////
-
-// syncJobState checks if the job is still running and updates the state
-func (s *Server) syncJobState(ctx context.Context, job *daemon.Job) {
-	isRunning := job.GetProcess().GetInfo().GetIsRunning()
-	pid := job.GetProcess().GetPID()
-
-	if isRunning {
-		if !utils.PidExists(pid) {
-			job.GetProcess().GetInfo().IsRunning = false
-		}
-	}
-	s.db.PutJob(ctx, job.JID, job)
-
-	// Ephemeral changes, that we don't want to save to DB
-	if isRunning && utils.GetIOSlave(pid) != nil {
-		job.Log = LOG_ATTACHABLE
-	}
 }

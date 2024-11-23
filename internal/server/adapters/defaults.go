@@ -13,6 +13,19 @@ import (
 // This file contains all the adapters that fill in missing request details
 // with defaults
 
+////////////////////////
+//// Start Adapters ////
+////////////////////////
+
+// Adapter that fills missing info from the request using config defaults
+func FillMissingStartDefaults(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+		// Nothing to fill in for now
+
+		return next(ctx, server, resp, req)
+	}
+}
+
 ///////////////////////
 //// Dump Adapters ////
 ///////////////////////
@@ -45,19 +58,6 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Nothing to do, yet
-
-		return next(ctx, server, resp, req)
-	}
-}
-
-////////////////////////
-//// Start Adapters ////
-////////////////////////
-
-// Adapter that fills missing info from the request using config defaults
-func FillMissingStartDefaults(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		// Nothing to fill in for now
 
 		return next(ctx, server, resp, req)
 	}

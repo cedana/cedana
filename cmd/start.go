@@ -103,7 +103,7 @@ var startCmd = &cobra.Command{
 		}
 
 		fmt.Printf(resp.Message)
-		fmt.Printf("Started managing job %s, PID %d\n", resp.JID, resp.PID)
+		fmt.Printf("Started managing PID %d\n", resp.PID)
 
 		return nil
 	},
@@ -127,7 +127,14 @@ var processStartCmd = &cobra.Command{
 		path := args[0]
 		args = args[1:]
 		env := os.Environ()
-		wd, _ := os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("Error getting working directory: %v", err)
+		}
+		groups, err := os.Getgroups()
+		if err != nil {
+			return fmt.Errorf("Error getting groups: %v", err)
+		}
 
 		req.Type = "process"
 		req.Details = &daemon.Details{
@@ -136,6 +143,9 @@ var processStartCmd = &cobra.Command{
 				Args:       args,
 				Env:        env,
 				WorkingDir: wd,
+				UID:        int32(os.Getuid()),
+				GID:        int32(os.Getgid()),
+				Groups:     utils.Int32Slice(groups),
 			},
 		}
 

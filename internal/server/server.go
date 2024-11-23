@@ -10,8 +10,8 @@ import (
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
+	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
@@ -26,8 +26,8 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
-	criu    *criu.Criu // for CRIU operations
-	db      db.DB
+	criu    *criu.Criu
+	jobs    job.Manager
 	plugins plugins.Manager
 
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
@@ -75,12 +75,14 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
-	db, err := db.NewLocalDB(ctx)
+	wg := &sync.WaitGroup{}
+
+	jobManager, err := job.NewManagerDBLazy(ctx, wg)
 	if err != nil {
 		return nil, err
 	}
 
-	pluginManager := plugins.NewLocalManager()
+	pluginManager := plugins.NewManagerLocal()
 
 	criu := criu.MakeCriu()
 
@@ -106,10 +108,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 			grpc.StreamInterceptor(logger.StreamLogger()),
 			grpc.UnaryInterceptor(logger.UnaryLogger()),
 		),
-		plugins: pluginManager,
 		criu:    criu,
-		db:      db,
-		wg:      &sync.WaitGroup{},
+		plugins: pluginManager,
+		jobs:    jobManager,
+		wg:      wg,
 		machine: Machine{
 			ID:       machineID,
 			MACAddr:  macAddr,
@@ -167,7 +169,7 @@ func (s *Server) Launch(ctx context.Context) error {
 func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
-	log.Debug().Msg("stopped server gracefully")
+	log.Info().Msg("stopped server gracefully")
 }
 
 func (s *Server) ReloadPlugins(ctx context.Context, req *daemon.Empty) (*daemon.Empty, error) {

@@ -5,7 +5,7 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-8cad54290adc.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-f7151e45691d.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1
 	github.com/cedana/cedana v0.9.231
 	github.com/cyphar/filepath-securejoin v0.3.4
@@ -21,6 +21,7 @@ require (
 replace github.com/cedana/cedana => ../..
 
 require (
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-f7151e45691d.1 // indirect
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/containerd/console v1.0.4 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect

@@ -5,8 +5,8 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-8cad54290adc.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-8cad54290adc.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-f7151e45691d.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-f7151e45691d.1
 	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mdlayher/vsock v1.2.1

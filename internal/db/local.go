@@ -18,7 +18,7 @@ type LocalDB struct {
 	queries *sql.Queries
 }
 
-func NewLocalDB(ctx context.Context) (DB, error) {
+func NewLocalDB(ctx context.Context) (*LocalDB, error) {
 	db, err := dbsql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err

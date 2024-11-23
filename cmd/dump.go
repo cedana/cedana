@@ -181,7 +181,6 @@ var jobDumpCmd = &cobra.Command{
 
 		jid := args[0]
 
-		req.Type = "job"
 		req.Details = &daemon.Details{JID: proto.String(jid)}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)

@@ -21,7 +21,7 @@ type LocalManager struct {
 	srcDir map[string]string // map of plugin name to source directory
 }
 
-func NewLocalManager() *LocalManager {
+func NewManagerLocal() *LocalManager {
 	return &LocalManager{
 		make(map[string]string),
 	}
@@ -132,7 +132,11 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				continue
 			}
 
-			msgs <- fmt.Sprintf("Installing %s...", name)
+			if plugin.Status == Installed {
+				msgs <- fmt.Sprintf("Updating %s...", name)
+			} else {
+				msgs <- fmt.Sprintf("Installing %s...", name)
+			}
 
 			// Copy the plugin files from the source directory to the installation directory
 			srcDir := m.srcDir[name]
@@ -160,7 +164,11 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				continue
 			}
 
-			msgs <- style.PositiveColor.Sprintf("Installed %s", name)
+			if plugin.Status == Installed {
+				msgs <- style.WarningColor.Sprintf("Updated %s", name)
+			} else {
+				msgs <- style.PositiveColor.Sprintf("Installed %s", name)
+			}
 			installed <- 1
 		}
 	}()

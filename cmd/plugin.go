@@ -34,7 +34,7 @@ var pluginCmd = &cobra.Command{
 			return fmt.Errorf("plugin commands must be run as root")
 		}
 
-		manager := plugins.NewLocalManager()
+		manager := plugins.NewManagerLocal()
 
 		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
 		if err != nil {

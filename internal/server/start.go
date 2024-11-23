@@ -23,7 +23,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 
 	middleware := types.Middleware[types.Start]{
 		// Bare minimum adapters
-		adapters.JobStartAdapter(s.db),
+		adapters.JobStartAdapter(s.jobs),
 		adapters.FillMissingStartDefaults,
 		adapters.ValidateStartRequest,
 	}
@@ -46,7 +46,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 		return nil, err
 	}
 
-	log.Info().Str("JID", resp.JID).Uint32("PID", resp.PID).Msg("job started")
+	log.Info().Uint32("PID", resp.PID).Msg("job started")
 
 	return resp, nil
 }

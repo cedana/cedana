@@ -1,0 +1,44 @@
+package job
+
+// Manager is the interface that defines the methods that a job manager should implement.
+// Most methods here cannot fail or return error, forcing implmentations to manage state
+// this in-memory.
+
+import (
+	"context"
+	"sync"
+	"syscall"
+)
+
+type Manager interface {
+	// New creates a new job with the given details, and an optional log path.
+	New(jid string, jobType string, log ...string) (*Job, error)
+
+	// Get returns a job with the given JID.
+	Get(jid string) *Job
+
+	// Delete deletes a job with the given JID.
+	// If job is running, it will wait for it to exit.
+	Delete(jid string)
+
+	// Get returns a job with the given JID.
+	List(jids ...string) []*Job
+
+	// Exists checks if a job with the given JID exists.
+	Exists(jid string) bool
+
+	// Starts managing a running job, updating state once it exits.
+	// Since this runs in background, it should be called with a waitgroup,
+	// to ensure the caller can wait for the job to finish. If no exited channel is given,
+	// uses the PID to wait for the job to exit.
+	Manage(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		jid string,
+		pid uint32,
+		exited ...<-chan int,
+	) error
+
+	// Kill sends a signal to a job with the given JID.
+	Kill(jid string, signal ...syscall.Signal) error
+}

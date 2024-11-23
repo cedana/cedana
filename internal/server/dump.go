@@ -25,7 +25,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	middleware := types.Middleware[types.Dump]{
 		// Bare minimum adapters
-		adapters.JobDumpAdapter(s.db),
+		adapters.JobDumpAdapter(s.jobs),
 		adapters.FillMissingDumpDefaults,
 		adapters.ValidateDumpRequest,
 		adapters.PrepareDumpDir(compression),
