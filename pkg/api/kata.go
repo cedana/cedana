@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -222,8 +223,13 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string) error {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("error snapshotting vm: %d, %v, req data: %v", resp.StatusCode, resp.Body, data)
+		return fmt.Errorf("error restoring vm: %d, %v, req data: %v", resp.StatusCode, string(body), data)
 	}
 
 	return nil
