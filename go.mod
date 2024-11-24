@@ -18,7 +18,11 @@ require (
 	github.com/spf13/viper v1.19.0
 )
 
-require google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
+require (
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-70901deb7307.1 // indirect
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-70901deb7307.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
+)
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1

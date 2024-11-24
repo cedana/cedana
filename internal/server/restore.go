@@ -22,7 +22,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	middleware := types.Middleware[types.Restore]{
 		// Bare minimum adapters
-		adapters.JobRestoreAdapter(s.jobs),
+		adapters.ManageRestore(s.jobs),
 		adapters.FillMissingRestoreDefaults,
 		adapters.ValidateRestoreRequest,
 		adapters.PrepareRestoreDir, // auto-detects compression

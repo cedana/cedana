@@ -194,23 +194,62 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 // Returns a channel that will be closed when a non-child process exits
 // Since, we cannot use the process.Wait() method to wait for a non-child process to exit
+// It waits until the process is a zombie process
 func WaitForPid(pid uint32) chan int {
 	exitCh := make(chan int)
 
 	go func() {
+		defer close(exitCh)
 		for {
 			// wait for the process to exit
 			p, err := process.NewProcess(int32(pid))
 			if err != nil {
-				break
+				return
 			}
-			_, err = p.Status()
+			s, err := p.Status()
 			if err != nil {
-				break
+				return
+			}
+			for _, status := range s {
+				if status == "zombie" {
+					return
+				}
 			}
 			time.Sleep(300 * time.Millisecond)
 		}
-		close(exitCh)
+	}()
+
+	return exitCh
+}
+
+// Returns a channel that will be closed when a non-child process exits
+// Since, we cannot use the process.Wait() method to wait for a non-child process to exit
+// It waits until the process is a zombie process, or the process is not found
+func WaitForPidCtx(ctx context.Context, pid uint32) chan int {
+	exitCh := make(chan int)
+
+	go func() {
+		defer close(exitCh)
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			// wait for the process to exit
+			p, err := process.NewProcessWithContext(ctx, int32(pid))
+			if err != nil {
+				return
+			}
+			s, err := p.Status()
+			if err != nil {
+				return
+			}
+			for _, status := range s {
+				if status == "zombie" {
+					return
+				}
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
 	}()
 
 	return exitCh

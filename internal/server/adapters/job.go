@@ -5,15 +5,19 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rb-go/namegen"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 
 ////////////////////////
 //// Start Adapters ////
@@ -21,16 +25,25 @@ import (
 
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
-func JobStartAdapter(jobs job.Manager) types.Adapter[types.Start] {
+func Manage(jobs job.Manager) types.Adapter[types.Start] {
 	return func(next types.Start) types.Start {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-			job, err := jobs.New(req.JID, req.Type, req.Log)
+			if req.JID == "" {
+				req.JID = namegen.GetName(1)
+			}
+
+			job, err := jobs.New(req.JID, req.Type)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create new job: %v", err)
 			}
 
-			if req.GPUEnabled { // Attach GPU support if requested
-				next = next.With(GPUAdapter)
+			if req.Log == "" {
+				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
+			}
+			job.SetLog(req.Log)
+
+			if req.GPUEnabled {
+				next = next.With(GPUSupport(jobs))
 			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
@@ -39,18 +52,11 @@ func JobStartAdapter(jobs job.Manager) types.Adapter[types.Start] {
 
 			exited, err := next(ctx, server, resp, req)
 			if err != nil {
-				cancel()
 				jobs.Delete(job.JID)
 				return nil, err
 			}
 
-			err = jobs.Manage(
-				ctx,
-				server.WG,
-				job.JID,
-				resp.PID,
-				exited,
-			)
+			err = jobs.Manage(ctx, server.WG, job.JID, resp.PID, exited)
 			if err != nil {
 				cancel()
 				jobs.Delete(job.JID)
@@ -68,7 +74,7 @@ func JobStartAdapter(jobs job.Manager) types.Adapter[types.Start] {
 
 // Adapter that fills in dump request details based on saved job info.
 // Post-dump, updates the saved job details.
-func JobDumpAdapter(jobs job.Manager) types.Adapter[types.Dump] {
+func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 			jid := req.GetDetails().GetJID()
@@ -106,7 +112,7 @@ func JobDumpAdapter(jobs job.Manager) types.Adapter[types.Dump] {
 
 // Adapter that fills in restore request details based on saved job info
 // Post-restore, updates the saved job details.
-func JobRestoreAdapter(jobs job.Manager) types.Adapter[types.Restore] {
+func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
@@ -149,13 +155,7 @@ func JobRestoreAdapter(jobs job.Manager) types.Adapter[types.Restore] {
 			job.SetLog(req.Log)
 			job.SetProcess(resp.GetState())
 
-			err = jobs.Manage(
-				ctx,
-				server.WG,
-				jid,
-				resp.PID,
-				exited,
-			)
+			err = jobs.Manage(ctx, server.WG, jid, resp.PID, exited)
 			if err != nil {
 				cancel()
 				return nil, status.Errorf(codes.Internal, "failed to manage restored job: %v", err)

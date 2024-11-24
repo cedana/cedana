@@ -11,9 +11,8 @@ import (
 )
 
 type Job struct {
-	JID    string
-	exited <-chan int
-	proto  daemon.Job
+	JID   string
+	proto daemon.Job
 
 	m sync.RWMutex
 }
@@ -23,15 +22,14 @@ func newJob(
 	jobType string,
 ) *Job {
 	return &Job{
-		jid,
-		nil,
-		daemon.Job{
+		JID: jid,
+		proto: daemon.Job{
 			JID:     jid,
 			Type:    jobType,
-			Process: &daemon.ProcessState{},
 			Details: &daemon.Details{},
 		},
-		sync.RWMutex{},
+
+		m: sync.RWMutex{},
 	}
 }
 
@@ -107,24 +105,17 @@ func (j *Job) GetCheckpointPath() string {
 	return j.proto.CheckpointPath
 }
 
-func (j *Job) SetExited(exited <-chan int) {
-	j.m.Lock()
-	defer j.m.Unlock()
-	j.exited = exited
-}
-
-func (j *Job) Wait() {
-	j.m.RLock()
-	<-j.exited
-	j.m.RUnlock()
-
+func (j *Job) SetRunning(isRunning bool) {
 	j.m.Lock()
 	defer j.m.Unlock()
 
+	if j.proto.GetProcess() == nil {
+		j.proto.Process = &daemon.ProcessState{}
+	}
 	if j.proto.GetProcess().GetInfo() == nil {
 		j.proto.Process.Info = &daemon.ProcessInfo{}
 	}
-	j.proto.Process.Info.IsRunning = false
+	j.proto.Process.Info.IsRunning = isRunning
 }
 
 func (j *Job) IsRunning() bool {

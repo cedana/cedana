@@ -8,12 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/cedana/cedana/pkg/style"
 )
-
-const artificialDelay = 500 * time.Millisecond
 
 var searchPath = os.Getenv("CEDANA_PLUGINS_LOCAL_SEARCH_PATH")
 
@@ -28,8 +25,6 @@ func NewManagerLocal() *LocalManager {
 }
 
 func (m *LocalManager) Get(name string) *Plugin {
-	time.Sleep(artificialDelay)
-
 	for _, p := range Registry {
 		if p.Name == name {
 			p.SyncInstalled()
@@ -38,6 +33,17 @@ func (m *LocalManager) Get(name string) *Plugin {
 	}
 
 	return nil
+}
+
+func (m *LocalManager) IsInstalled(name string) bool {
+	for _, p := range Registry {
+		if p.Name == name {
+			p.SyncInstalled()
+			return p.Status == Installed
+		}
+	}
+
+	return false
 }
 
 // List returns a list of plugins that are available.
@@ -49,8 +55,6 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 	for _, s := range status {
 		set[s] = nil
 	}
-
-	time.Sleep(artificialDelay)
 
 	for _, p := range Registry {
 		p.SyncInstalled()

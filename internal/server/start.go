@@ -23,7 +23,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 
 	middleware := types.Middleware[types.Start]{
 		// Bare minimum adapters
-		adapters.JobStartAdapter(s.jobs),
+		adapters.Manage(s.jobs),
 		adapters.FillMissingStartDefaults,
 		adapters.ValidateStartRequest,
 	}

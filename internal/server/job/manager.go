@@ -11,14 +11,13 @@ import (
 )
 
 type Manager interface {
-	// New creates a new job with the given details, and an optional log path.
-	New(jid string, jobType string, log ...string) (*Job, error)
+	// New creates a new job with the given details.
+	New(jid string, jobType string) (*Job, error)
 
 	// Get returns a job with the given JID.
 	Get(jid string) *Job
 
 	// Delete deletes a job with the given JID.
-	// If job is running, it will wait for it to exit.
 	Delete(jid string)
 
 	// Get returns a job with the given JID.
@@ -41,4 +40,40 @@ type Manager interface {
 
 	// Kill sends a signal to a job with the given JID.
 	Kill(jid string, signal ...syscall.Signal) error
+
+	///////////////////////
+	//// GPU Management ///
+	///////////////////////
+
+	// AttachGPU attaches a GPU controller to a job with the given JID.
+	// Returns error if healthcheck fails.
+	AttachGPU(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		jid string,
+		controller string,
+	) error
+
+	// AttachGPUAsync attaches a GPU controller to a job with the given JID.
+	// Returns a channel that will receive an error if the attach fails.
+	AttachGPUAsync(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		jid string,
+		controller string,
+	) <-chan error
+
+	// DumpGPU dumps the GPU state of a job with the given JID.
+	DumpGPU(ctx context.Context, jid string) error
+
+	// DumpGPUAsync dumps the GPU state of a job with the given JID.
+	// Returns a channel that will receive an error if the dump fails.
+	DumpGPUAsync(ctx context.Context, jid string) <-chan error
+
+	// RestoreGPU restores the GPU state of a job with the given JID.
+	RestoreGPU(ctx context.Context, jid string) error
+
+	// RestoreGPUAsync restores the GPU state of a job with the given JID.
+	// Returns a channel that will receive an error if the restore fails.
+	RestoreGPUAsync(ctx context.Context, jid string) <-chan error
 }

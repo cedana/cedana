@@ -150,7 +150,18 @@ func NewStreamIOSlave(
 	go func() {
 		defer DeleteIOSlave(&slave.PID)
 
-		master := <-slave.master // wait for first master before doing anything
+		var master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]
+		// Wait for first master before doing anything
+	wait_first_master:
+		for {
+			select {
+			case <-ctx.Done():
+				close(in)
+				return
+			case master = <-slave.master:
+				break wait_first_master
+			}
+		}
 	exit:
 		for {
 		stream:
@@ -178,13 +189,13 @@ func NewStreamIOSlave(
 				}
 			}
 			// wait for a new master while discarding out/err
-		wait:
+		wait_new_master:
 			for {
 				select {
 				case <-ctx.Done():
 					break exit
-				case master = <-slave.master: // wait for a master to attach
-					break wait
+				case master = <-slave.master: // wait for a new master to attach
+					break wait_new_master
 				case _, ok := <-out: // discard out
 					if !ok {
 						break exit

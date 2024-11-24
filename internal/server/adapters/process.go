@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
