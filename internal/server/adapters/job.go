@@ -57,7 +57,7 @@ func Manage(jobs job.Manager) types.Adapter[types.Start] {
 				return nil, err
 			}
 
-			err = jobs.Manage(ctx, server.WG, job.JID, resp.PID, exited)
+			err = jobs.Manage(ctx, job.JID, resp.PID, exited)
 			if err != nil {
 				cancel()
 				jobs.Delete(job.JID)
@@ -170,7 +170,7 @@ func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 			job.SetLog(req.Log)
 			job.SetProcess(resp.GetState())
 
-			err = jobs.Manage(ctx, server.WG, jid, resp.PID, exited)
+			err = jobs.Manage(ctx, jid, resp.PID, exited)
 			if err != nil {
 				cancel()
 				return nil, status.Errorf(codes.Internal, "failed to manage restored job: %v", err)

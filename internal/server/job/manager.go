@@ -26,13 +26,15 @@ type Manager interface {
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
 
+  // GetWG returns the waitgroup for the manager.
+  GetWG() *sync.WaitGroup
+
 	// Starts managing a running job, updating state once it exits.
 	// Since this runs in background, it should be called with a waitgroup,
 	// to ensure the caller can wait for the job to finish. If no exited channel is given,
 	// uses the PID to wait for the job to exit.
 	Manage(
 		ctx context.Context,
-		wg *sync.WaitGroup,
 		jid string,
 		pid uint32,
 		exited ...<-chan int,
@@ -50,7 +52,6 @@ type Manager interface {
 	AttachGPU(
 		ctx context.Context,
 		lifetime context.Context,
-		wg *sync.WaitGroup,
 		jid string,
 		controllerPath string,
 	) error
@@ -60,7 +61,6 @@ type Manager interface {
 	AttachGPUAsync(
 		ctx context.Context,
 		lifetime context.Context,
-		wg *sync.WaitGroup,
 		jid string,
 		controllerPath string,
 	) <-chan error

@@ -6,9 +6,11 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
@@ -17,23 +19,116 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type ManagerDBLazy struct {
-	db   db.DB
-	jobs map[string]*Job
+const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
 
+type ManagerLazy struct {
+	jobs           map[string]*Job
 	gpuControllers map[string]*gpuController
+
+	db      db.DB
+	pending chan action
+  wg      *sync.WaitGroup // for all manger background routines
 }
 
-func NewManagerDBLazy(ctx context.Context, wg *sync.WaitGroup) (*ManagerDBLazy, error) {
+type actionType int
+
+const (
+	update actionType = iota
+	remove
+	shutdown
+)
+
+type action struct {
+	typ actionType
+	job *Job
+}
+
+func (i actionType) String() string {
+	return [...]string{"update", "remove", "shutdown"}[i]
+}
+
+func (a *action) do(ctx context.Context, db db.DB) error {
+	job := a.job
+	typ := a.typ
+	var err error
+	switch typ {
+	case update:
+		err = db.PutJob(ctx, job.JID, job.GetProto())
+	case remove:
+		err = db.DeleteJob(ctx, job.JID)
+	}
+	return err
+}
+
+func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
 	db, err := db.NewLocalDB(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new local db: %w", err)
 	}
 
-	return &ManagerDBLazy{
-		db:             db,
-		jobs:           make(map[string]*Job),
+  wg := &sync.WaitGroup{}
+	jobs := make(map[string]*Job)
+	pending := make(chan action, 16)
+
+	// First load all jobs from the DB
+	protos, err := db.ListJobs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load jobs from db: %w", err)
+	}
+	for _, proto := range protos {
+		job := fromProto(proto)
+		jobs[job.JID] = job
+	}
+
+	// Spawn a background routine that will keep the DB in sync
+	// with retry logic. Can extend to use a backoff strategy.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info().Msg("syncing DB before shutdown")
+				var errs []error
+				var failedActions []action
+        wg.Wait() // wait for all background routines
+				pending <- action{shutdown, nil}
+				for action := range pending {
+					if action.typ == shutdown {
+						break
+					}
+					err := action.do(ctx, db)
+					if err != nil {
+						errs = append(errs, err)
+						failedActions = append(failedActions, action)
+					}
+				}
+				close(pending)
+				err = errors.Join(errs...)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to sync DB before shutdown")
+					for _, action := range failedActions {
+						log.Debug().Str("JID", action.job.JID).
+							Interface("job", *action.job.GetProto()).
+							Msgf("failed %s", action.typ)
+					}
+				}
+        return
+			case action := <-pending:
+				err := action.do(ctx, db)
+				if err != nil {
+					log.Debug().Err(err).Msg("DB sync failed, retrying in background")
+					time.Sleep(DB_SYNC_RETRY_INTERVAL)
+					pending <- action
+				}
+			}
+		}
+	}()
+
+	return &ManagerLazy{
+		jobs:           jobs,
 		gpuControllers: make(map[string]*gpuController),
+		db:             db,
+		pending:        pending,
+    wg:             wg,
 	}, nil
 }
 
@@ -41,7 +136,11 @@ func NewManagerDBLazy(ctx context.Context, wg *sync.WaitGroup) (*ManagerDBLazy, 
 //// Methods ////
 /////////////////
 
-func (m *ManagerDBLazy) New(jid string, jobType string) (*Job, error) {
+func (m *ManagerLazy) GetWG() *sync.WaitGroup {
+  return m.wg
+}
+
+func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	if jid == "" {
 		return nil, fmt.Errorf("missing JID")
 	}
@@ -49,22 +148,31 @@ func (m *ManagerDBLazy) New(jid string, jobType string) (*Job, error) {
 	job := newJob(jid, jobType)
 	m.jobs[jid] = job
 
+	m.pending <- action{update, job}
+
 	return job, nil
 }
 
-func (m *ManagerDBLazy) Get(jid string) *Job {
+func (m *ManagerLazy) Get(jid string) *Job {
 	job, ok := m.jobs[jid]
 	if !ok {
 		return nil
 	}
+
 	return job
 }
 
-func (m *ManagerDBLazy) Delete(jid string) {
+func (m *ManagerLazy) Delete(jid string) {
+	job, ok := m.jobs[jid]
+	if !ok {
+		return
+	}
 	delete(m.jobs, jid)
+
+	m.pending <- action{remove, job}
 }
 
-func (m *ManagerDBLazy) List(jids ...string) []*Job {
+func (m *ManagerLazy) List(jids ...string) []*Job {
 	var jobs []*Job
 
 	jidSet := make(map[string]any)
@@ -81,14 +189,13 @@ func (m *ManagerDBLazy) List(jids ...string) []*Job {
 	return jobs
 }
 
-func (m *ManagerDBLazy) Exists(jid string) bool {
+func (m *ManagerLazy) Exists(jid string) bool {
 	_, ok := m.jobs[jid]
 	return ok
 }
 
-func (m *ManagerDBLazy) Manage(
+func (m *ManagerLazy) Manage(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	jid string,
 	pid uint32,
 	exited ...<-chan int,
@@ -113,12 +220,13 @@ func (m *ManagerDBLazy) Manage(
 		err := utils.FillProcessState(ctx, pid, process)
 		if err == nil {
 			job.SetProcess(process)
+			m.pending <- action{update, job}
 		}
 	}
 
-	wg.Add(1)
+	m.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer m.wg.Done()
 		<-exitedChan
 		log.Info().Str("JID", jid).Uint32("PID", pid).Msg("job exited")
 		job.SetRunning(false)
@@ -127,12 +235,13 @@ func (m *ManagerDBLazy) Manage(
 		if ok {
 			gpuController.cmd.Process.Signal(syscall.SIGTERM)
 		}
+		m.pending <- action{update, job}
 	}()
 
 	return nil
 }
 
-func (m *ManagerDBLazy) Kill(jid string, signal ...syscall.Signal) error {
+func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	job, ok := m.jobs[jid]
 	if !ok {
 		return fmt.Errorf("job %s does not exist", jid)

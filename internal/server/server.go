@@ -77,7 +77,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	wg := &sync.WaitGroup{}
 
-	jobManager, err := job.NewManagerDBLazy(ctx, wg)
+	jobManager, err := job.NewManagerDBLazy(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +104,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	server := &Server{
+		lifetime: ctx,
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(logger.StreamLogger()),
 			grpc.UnaryInterceptor(logger.UnaryLogger()),
@@ -142,10 +143,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func (s *Server) Launch(ctx context.Context) error {
-	// Create a child context for the server
-	ctx, cancel := context.WithCancelCause(ctx)
-	s.lifetime = ctx
+func (s *Server) Launch() error {
+	ctx, cancel := context.WithCancelCause(s.lifetime)
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
@@ -161,6 +160,7 @@ func (s *Server) Launch(ctx context.Context) error {
 
 	// Wait for all background go routines to finish
 	s.wg.Wait()
+  s.jobs.GetWG().Wait()
 	s.Stop()
 
 	return err

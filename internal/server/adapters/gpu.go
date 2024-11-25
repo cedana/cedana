@@ -48,7 +48,7 @@ func AddGPUSupport(jobs job.Manager) types.Adapter[types.Start] {
 			controller := gpu.BinaryPaths()[0]
 			interceptor := gpu.LibraryPaths()[0]
 
-			gpuErr := jobs.AttachGPUAsync(ctx, server.Lifetime, server.WG, job.JID, controller)
+			gpuErr := jobs.AttachGPUAsync(ctx, server.Lifetime, job.JID, controller)
 
 			exited, err := next(ctx, server, resp, withGPUInterception(req, interceptor))
 			if err != nil {

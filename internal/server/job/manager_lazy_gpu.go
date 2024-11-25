@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
@@ -48,10 +47,9 @@ type gpuController struct {
 	stderr *bytes.Buffer
 }
 
-func (m *ManagerDBLazy) AttachGPU(
+func (m *ManagerLazy) AttachGPU(
 	ctx context.Context,
 	lifetime context.Context,
-	wg *sync.WaitGroup,
 	jid string,
 	controllerPath string,
 ) error {
@@ -61,6 +59,7 @@ func (m *ManagerDBLazy) AttachGPU(
 
 	job := m.jobs[jid]
 	job.SetGPUEnabled(true)
+	m.pending <- action{update, job}
 
 	port, err := utils.GetFreePort()
 	if err != nil {
@@ -115,9 +114,9 @@ func (m *ManagerDBLazy) AttachGPU(
 
 	// Cleanup controller on exit, and signal job of its exit
 
-	wg.Add(1)
+	m.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer m.wg.Done()
 
 		err := cmd.Wait()
 		if err != nil {
@@ -135,7 +134,7 @@ func (m *ManagerDBLazy) AttachGPU(
 
 	log.Debug().Str("JID", jid).Int("port", port).Msg("waiting for GPU controller...")
 
-	err = m.checkGPUHealth(ctx, wg, gpuController)
+	err = m.checkGPUHealth(ctx, gpuController)
 	if err != nil {
 		cmd.Process.Signal(syscall.SIGTERM)
 		conn.Close()
@@ -169,7 +168,7 @@ func (m *ManagerDBLazy) AttachGPU(
 	// to CRIU restore. We instead block at pre-resume, to maximize concurrency.
 	restoreErr := make(chan error)
 	job.CRIUCallback.PreRestoreFunc = func(ctx context.Context, dir string) error {
-		err := m.AttachGPU(ctx, lifetime, wg, jid, controllerPath) // Re-attach a GPU to the job
+		err := m.AttachGPU(ctx, lifetime, jid, controllerPath) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -200,24 +199,23 @@ func (m *ManagerDBLazy) AttachGPU(
 	return nil
 }
 
-func (m *ManagerDBLazy) AttachGPUAsync(
+func (m *ManagerLazy) AttachGPUAsync(
 	ctx context.Context,
 	lifetime context.Context,
-	wg *sync.WaitGroup,
 	jid string,
 	controller string,
 ) <-chan error {
 	err := make(chan error)
 
-	wg.Add(1)
+	m.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer m.wg.Done()
 		defer close(err)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case err <- m.AttachGPU(ctx, lifetime, wg, jid, controller):
+			case err <- m.AttachGPU(ctx, lifetime, jid, controller):
 				return
 			}
 		}
@@ -232,14 +230,14 @@ func (m *ManagerDBLazy) AttachGPUAsync(
 
 // Health checks the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
-func (m *ManagerDBLazy) checkGPUHealth(ctx context.Context, wg *sync.WaitGroup, controller *gpuController) error {
+func (m *ManagerLazy) checkGPUHealth(ctx context.Context, controller *gpuController) error {
 	waitCtx, cancel := context.WithTimeout(ctx, GPU_HEALTH_TIMEOUT)
 	defer cancel()
 
 	// Wait for early controller exit, and cancel the blocking health check
-	wg.Add(1)
+	m.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer m.wg.Done()
 		<-utils.WaitForPidCtx(waitCtx, uint32(controller.cmd.Process.Pid))
 		cancel()
 	}()

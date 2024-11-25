@@ -59,7 +59,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		err = server.Launch(ctx)
+		err = server.Launch()
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err

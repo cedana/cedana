@@ -39,6 +39,23 @@ func newJob(
 	}
 }
 
+func fromProto(j *daemon.Job) *Job {
+	return &Job{
+		JID: j.GetJID(),
+		proto: daemon.Job{
+			JID:            j.GetJID(),
+			Type:           j.GetType(),
+			Process:        j.GetProcess(),
+			Details:        j.GetDetails(),
+			Log:            j.GetLog(),
+			CheckpointPath: j.GetCheckpointPath(),
+			GPUEnabled:     j.GetGPUEnabled(),
+		},
+		CRIUCallback: &criu.NotifyCallback{},
+		m:            sync.RWMutex{},
+	}
+}
+
 func (j *Job) GetPID() uint32 {
 	j.m.RLock()
 	defer j.m.RUnlock()
