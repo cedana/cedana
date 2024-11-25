@@ -369,7 +369,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
 		}
 	}
-  defer os.RemoveAll(tempDir) // since it's a temporary directory
+	defer os.RemoveAll(tempDir) // since it's a temporary directory
 
 	err := utils.UntarFolder(imgPath, tempDir)
 	if err != nil {
@@ -628,11 +628,11 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	if err != nil {
 		return 0, nil, err
 	}
-  defer os.RemoveAll(dir) // since it's a temporary directory
+	defer os.RemoveAll(dir) // since it's a temporary directory
 
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
+		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, state.JID)
 		if err != nil {
 			return 0, nil, err
 		}

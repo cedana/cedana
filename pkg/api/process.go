@@ -447,6 +447,7 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.Bid
 			Groups: groupsUint32,
 		},
 	}
+	cmd.Env = args.Env
 
 	// working dir needs to be consistent on the checkpoint and restore side
 	if args.WorkingDir != "" {
@@ -457,18 +458,13 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.Bid
 		if args.LogOutputFile == "" {
 			args.LogOutputFile = OUTPUT_FILE_PATH
 		}
-		nullFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-		defer nullFile.Close()
-		if err != nil {
-			return 0, nil, err
-		}
-		cmd.Stdin = nullFile
 		outFile, err := os.OpenFile(args.LogOutputFile, OUTPUT_FILE_FLAGS, OUTPUT_FILE_PERMS)
 		defer outFile.Close()
 		os.Chmod(args.LogOutputFile, OUTPUT_FILE_PERMS)
 		if err != nil {
 			return 0, nil, err
 		}
+		cmd.Stdin = nil // equivalent to /dev/null
 		cmd.Stdout = outFile
 		cmd.Stderr = outFile
 	} else {
@@ -537,7 +533,6 @@ func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.Bid
 		}()
 	}
 
-	cmd.Env = args.Env
 	err = cmd.Start()
 	if err != nil {
 		return 0, nil, err

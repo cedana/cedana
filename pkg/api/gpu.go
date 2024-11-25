@@ -155,6 +155,9 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	gpuCmd.Stderr = gpuOut
 	gpuCmd.Stdout = gpuOut
 
+	// to ensure GPU controller is killed gracefully even if server dies
+	gpuCmd.Cancel = func() error { return gpuCmd.Process.Signal(syscall.SIGTERM) }
+
 	gpuCmd.Env = append(
 		os.Environ(),
 		"CEDANA_AUTH_TOKEN="+viper.GetString("connection.cedana_auth_token"),
@@ -185,8 +188,8 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 	waitCtx, _ := context.WithTimeout(ctx, GPU_CONTROLLER_WAIT_TIMEOUT)
 	resp, err := gpuServiceConn.StartupPoll(waitCtx, &args, grpc.WaitForReady(true))
 	if err != nil || !resp.Success {
-    gpuCmd.Process.Signal(syscall.SIGTERM)
-    gpuConn.Close()
+		gpuCmd.Process.Signal(syscall.SIGTERM)
+		gpuConn.Close()
 		log.Error().Err(err).Str("stdout/stderr", outBuf.String()).Msg("failed to start GPU controller")
 		return fmt.Errorf("gpu controller did not start: %v", err)
 	}
