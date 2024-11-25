@@ -138,7 +138,7 @@ setup_ci() {
     TAG=latest
     curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
     chmod +x criu
-    sudo cp criu /usr/local/sbin/
+    sudo cp criu /usr/sbin/
 
     # Install cedana-image-streamer
     curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
