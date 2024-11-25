@@ -46,7 +46,7 @@ const (
 )
 
 func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+	cmd := exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -248,8 +248,6 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-  log.Info().Msg("exiting prepareRestore")
-
 	return tempDir, checkpointState, extraFiles, ioFiles, nil
 }
 
@@ -305,23 +303,14 @@ func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Noti
 	defer img.Close()
 
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
-  //time.Sleep(2000 * time.Millisecond)
 
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		//os.RemoveAll(dir)
+		os.RemoveAll(dir)
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
-
-  log.Info().Msgf("criu restore done")
-  ready_path := filepath.Join(dir, "rstr")
-  file, err := os.Create(ready_path)
-  if err != nil {
-    log.Fatal().Err(err)
-  }
-  defer file.Close()
 
 	log.Info().Int32("PID", *resp.Restore.Pid).Msgf("process restored")
 
