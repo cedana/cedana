@@ -17,9 +17,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/cedana/cedana/pkg/api/runc"
+	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
@@ -27,7 +27,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthcheckgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -45,7 +44,6 @@ type service struct {
 	CRIU            *Criu
 	fs              *afero.Afero // for dependency-injection of filesystems (useful for testing)
 	db              db.DB
-	store           *utils.CedanaStore
 	serverCtx       context.Context // context alive for the duration of the server
 	wg              sync.WaitGroup  // for waiting for all background tasks to finish
 	gpuEnabled      bool
@@ -55,7 +53,7 @@ type service struct {
 	jobService    *jobservice.JobService
 	vmSnapshotter VMSnapshot
 
-	task.UnimplementedTaskServiceServer
+	taskgrpc.UnimplementedTaskServiceServer
 }
 
 type Server struct {
@@ -110,13 +108,19 @@ func NewServer(ctx context.Context, opts *ServeOpts, vmSnapshotter VMSnapshot) (
 		}
 	}
 
+	var database db.DB
+	if viper.GetBool("remote") {
+		database = db.NewRemoteDB(ctx, viper.GetString("connection.cedana_url")+"/jobs")
+	} else {
+		database = db.NewLocalDB(ctx)
+	}
+
 	service := &service{
 		// criu instantiated as empty, because all criu functions run criu swrk (starting the criu rpc server)
 		// instead of leaving one running forever.
 		CRIU:            &Criu{},
 		fs:              &afero.Afero{Fs: afero.NewOsFs()},
-		db:              db.NewLocalDB(ctx),
-		store:           utils.NewCedanaStore(),
+		db:              database,
 		serverCtx:       ctx,
 		gpuEnabled:      opts.GPUEnabled,
 		machineID:       machineID,
@@ -125,7 +129,7 @@ func NewServer(ctx context.Context, opts *ServeOpts, vmSnapshotter VMSnapshot) (
 		vmSnapshotter:   vmSnapshotter,
 	}
 
-	task.RegisterTaskServiceServer(server.grpcServer, service)
+	taskgrpc.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
@@ -183,35 +187,6 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	}
 
 	go func() {
-		// Here join netns
-		// TODO find pause bundle path
-		if viper.GetBool("is_k8s") {
-			_, bundle, err := runc.GetContainerIdByName(CEDANA_CONTAINER_NAME, "", K8S_RUNC_ROOT)
-			if err != nil {
-				cancel(err)
-				return
-			}
-
-			pausePid, err := runc.GetPausePid(bundle)
-			if err != nil {
-				cancel(err)
-				return
-			}
-
-			nsFd, err := unix.Open(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(pausePid)), unix.O_RDONLY, 0)
-			if err != nil {
-				cancel(fmt.Errorf("error opening network namespace: %v", err))
-				return
-			}
-			defer unix.Close(nsFd)
-
-			// Join the network namespace of the target process
-			err = unix.Setns(nsFd, unix.CLONE_NEWNET)
-			if err != nil {
-				cancel(fmt.Errorf("error setting network namespace: %v", err))
-			}
-		}
-
 		if opts.GPUEnabled {
 			err = DownloadGPUBinaries(cmdCtx)
 			if err != nil {
@@ -327,7 +302,6 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 
 	return resp, nil
 }
-
 func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*task.GetConfigResponse, error) {
 	resp := &task.GetConfigResponse{}
 	config, err := utils.GetConfig()

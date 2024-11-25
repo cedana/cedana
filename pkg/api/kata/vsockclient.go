@@ -3,8 +3,8 @@ package kata
 import (
 	"context"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 )
 
 type VSockClientInterface interface {

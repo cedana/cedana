@@ -46,4 +46,5 @@ const (
 	modeFlag             = "mode"
 	vmSnapshotFlag       = "vm-snapshot"
 	vmSocketPathFlag     = "vm-socket-path"
+	skipInFlightFlag     = "skip-in-flight"
 )

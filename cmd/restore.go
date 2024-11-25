@@ -13,7 +13,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -101,6 +101,7 @@ var restoreJobCmd = &cobra.Command{
 		bundle, err := cmd.Flags().GetString(bundleFlag)
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
+		img, err := cmd.Flags().GetString(imgFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
@@ -108,8 +109,9 @@ var restoreJobCmd = &cobra.Command{
 			}
 		}
 		restoreArgs := &task.JobRestoreArgs{
-			JID:    jid,
-			Stream: stream,
+			JID:            jid,
+			Stream:         stream,
+			CheckpointPath: img,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
 				TcpClose:       tcpCloseFlag,
@@ -273,7 +275,7 @@ var restoreKataCmd = &cobra.Command{
 
 var containerdRestoreCmd = &cobra.Command{
 	Use:   "containerd",
-	Short: "Manually checkpoint a running container to a directory",
+	Short: "Manually restore a running container to a directory",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -325,14 +327,13 @@ var runcRestoreCmd = &cobra.Command{
 			NetPid:        netPid,
 		}
 
-		dir, _ := cmd.Flags().GetString(dirFlag)
+		img, _ := cmd.Flags().GetString(imgFlag)
 		id, _ := cmd.Flags().GetString(idFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   dir,
+			ImagePath:   img,
 			ContainerID: id,
 			Opts:        opts,
-			Type:        task.CRType_LOCAL,
 			CriuOpts: &task.CriuOpts{
 				FileLocks:      fileLocks,
 				TcpEstablished: tcpEstablished,
@@ -373,6 +374,7 @@ func init() {
 	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")
 	restoreJobCmd.Flags().BoolP(detachFlag, "e", false, "(runc) restore detached")
 	restoreJobCmd.Flags().StringP(rootFlag, "r", "default", "(runc) root")
+	restoreJobCmd.Flags().StringP(imgFlag, "i", "", "checkpoint image")
 
 	// Kata
 	restoreCmd.AddCommand(restoreKataCmd)
@@ -381,15 +383,15 @@ func init() {
 
 	// Containerd
 	restoreCmd.AddCommand(containerdRestoreCmd)
-	containerdRestoreCmd.Flags().String(imgFlag, "", "image ref")
+	containerdRestoreCmd.Flags().String(imgFlag, "", "checkpoint image")
 	containerdRestoreCmd.MarkFlagRequired(imgFlag)
 	containerdRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	containerdRestoreCmd.MarkFlagRequired(idFlag)
 
 	// Runc
 	restoreCmd.AddCommand(runcRestoreCmd)
-	runcRestoreCmd.Flags().StringP(dirFlag, "d", "", "directory to restore from")
-	runcRestoreCmd.MarkFlagRequired("dir")
+	runcRestoreCmd.Flags().StringP(imgFlag, "", "", "checkpoint image to restore from")
+	runcRestoreCmd.MarkFlagRequired(imgFlag)
 	runcRestoreCmd.Flags().StringP(idFlag, "i", "", "container id")
 	runcRestoreCmd.MarkFlagRequired(idFlag)
 	runcRestoreCmd.Flags().StringP(bundleFlag, "b", "", "bundle path")
