@@ -67,16 +67,18 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 		return err
 	}
 
-	if _, err := db.queries.GetJob(ctx, jid); err == nil {
-		db.queries.DeleteJob(ctx, jid)
-	}
-
 	_, err = db.queries.CreateJob(ctx, sql.CreateJobParams{
 		Jid:  jid,
 		Data: bytes,
 	})
+	if err == nil {
+		return nil
+	}
 
-	return err
+	return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
+		Jid:  jid,
+		Data: bytes,
+	})
 }
 
 /////////////

@@ -27,7 +27,7 @@ type ManagerLazy struct {
 
 	db      db.DB
 	pending chan action
-  wg      *sync.WaitGroup // for all manger background routines
+	wg      *sync.WaitGroup // for all manger background routines
 }
 
 type actionType int
@@ -47,28 +47,30 @@ func (i actionType) String() string {
 	return [...]string{"update", "remove", "shutdown"}[i]
 }
 
-func (a *action) do(ctx context.Context, db db.DB) error {
+func (a *action) sync(ctx context.Context, db db.DB) error {
 	job := a.job
 	typ := a.typ
 	var err error
 	switch typ {
 	case update:
+		log.Error().Msg("UPDAAAAAAAAAAAAAAAAAAAAAAAATE")
 		err = db.PutJob(ctx, job.JID, job.GetProto())
 	case remove:
+		log.Error().Msg("DELEEEEEEEEEEEEEEEEEEEEEEEEEEEETE")
 		err = db.DeleteJob(ctx, job.JID)
 	}
 	return err
 }
 
-func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
+func NewManagerDBLazy(ctx context.Context, serverWg *sync.WaitGroup) (*ManagerLazy, error) {
 	db, err := db.NewLocalDB(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new local db: %w", err)
 	}
 
-  wg := &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	jobs := make(map[string]*Job)
-	pending := make(chan action, 16)
+	pending := make(chan action, 64)
 
 	// First load all jobs from the DB
 	protos, err := db.ListJobs(ctx)
@@ -82,20 +84,22 @@ func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
+	serverWg.Add(1)
 	go func() {
+		defer serverWg.Done()
 		for {
 			select {
 			case <-ctx.Done():
 				log.Info().Msg("syncing DB before shutdown")
 				var errs []error
 				var failedActions []action
-        wg.Wait() // wait for all background routines
+				wg.Wait() // wait for all background routines
 				pending <- action{shutdown, nil}
 				for action := range pending {
 					if action.typ == shutdown {
 						break
 					}
-					err := action.do(ctx, db)
+					err := action.sync(ctx, db)
 					if err != nil {
 						errs = append(errs, err)
 						failedActions = append(failedActions, action)
@@ -111,13 +115,13 @@ func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
 							Msgf("failed %s", action.typ)
 					}
 				}
-        return
+				return
 			case action := <-pending:
-				err := action.do(ctx, db)
+				err := action.sync(ctx, db)
 				if err != nil {
+					pending <- action
 					log.Debug().Err(err).Msg("DB sync failed, retrying in background")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
-					pending <- action
 				}
 			}
 		}
@@ -128,7 +132,7 @@ func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
 		gpuControllers: make(map[string]*gpuController),
 		db:             db,
 		pending:        pending,
-    wg:             wg,
+		wg:             wg,
 	}, nil
 }
 
@@ -137,7 +141,7 @@ func NewManagerDBLazy(ctx context.Context) (*ManagerLazy, error) {
 /////////////////
 
 func (m *ManagerLazy) GetWG() *sync.WaitGroup {
-  return m.wg
+	return m.wg
 }
 
 func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {

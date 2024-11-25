@@ -77,7 +77,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	wg := &sync.WaitGroup{}
 
-	jobManager, err := job.NewManagerDBLazy(ctx)
+	jobManager, err := job.NewManagerDBLazy(ctx, wg)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +159,9 @@ func (s *Server) Launch() error {
 	err := ctx.Err()
 
 	// Wait for all background go routines to finish
+	// WARN: Careful before changing beflow order, as it may cause deadlock
+	s.jobs.GetWG().Wait()
 	s.wg.Wait()
-  s.jobs.GetWG().Wait()
 	s.Stop()
 
 	return err

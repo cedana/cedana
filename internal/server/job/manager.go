@@ -26,8 +26,8 @@ type Manager interface {
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
 
-  // GetWG returns the waitgroup for the manager.
-  GetWG() *sync.WaitGroup
+	// GetWG returns the waitgroup for the manager.
+	GetWG() *sync.WaitGroup
 
 	// Starts managing a running job, updating state once it exits.
 	// Since this runs in background, it should be called with a waitgroup,
@@ -56,7 +56,7 @@ type Manager interface {
 		controllerPath string,
 	) error
 
-	// AttachGPUAsync attaches a GPU controller to a job with the given JID.
+	// AttachGPUAsync calls AttachGPU in background.
 	// Returns a channel that will receive an error if the attach fails.
 	AttachGPUAsync(
 		ctx context.Context,
