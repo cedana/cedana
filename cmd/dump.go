@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/services"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
@@ -58,8 +58,10 @@ var dumpProcessCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+
 		log.Info().Msgf("cmd/dump stream = %d", stream)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
@@ -72,9 +74,10 @@ var dumpProcessCmd = &cobra.Command{
 			Dir:    dir,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
-				LeaveRunning:   leaveRunning,
-				TcpEstablished: tcpEstablished,
-				TcpClose:       tcpClose,
+				LeaveRunning:    leaveRunning,
+				TcpEstablished:  tcpEstablished,
+				TcpClose:        tcpClose,
+				TcpSkipInFlight: tcpSkipInFlight,
 			},
 		}
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -197,6 +200,7 @@ var dumpJobCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(dirFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -226,11 +230,12 @@ var dumpJobCmd = &cobra.Command{
 			Dir:    dir,
 			Stream: stream,
 			CriuOpts: &task.CriuOpts{
-				LeaveRunning:   leaveRunning,
-				TcpEstablished: tcpEstablished,
-				External:       externalNamespaces,
-				FileLocks:      fileLocks,
-				TcpClose:       tcpClose,
+				LeaveRunning:    leaveRunning,
+				TcpEstablished:  tcpEstablished,
+				External:        externalNamespaces,
+				FileLocks:       fileLocks,
+				TcpClose:        tcpClose,
+				TcpSkipInFlight: tcpSkipInFlight,
 			},
 		}
 
@@ -391,6 +396,7 @@ var dumpRuncCmd = &cobra.Command{
 		wdPath, _ := cmd.Flags().GetString(wdFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
+		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -410,12 +416,13 @@ var dumpRuncCmd = &cobra.Command{
 		}
 
 		criuOpts := &task.CriuOpts{
-			WorkDirectory:  wdPath,
-			LeaveRunning:   leaveRunning,
-			TcpEstablished: tcpEstablished,
-			TcpClose:       tcpClose,
-			External:       externalNamespaces,
-			FileLocks:      fileLocks,
+			WorkDirectory:   wdPath,
+			LeaveRunning:    leaveRunning,
+			TcpEstablished:  tcpEstablished,
+			TcpClose:        tcpClose,
+			TcpSkipInFlight: tcpSkipInFlight,
+			External:        externalNamespaces,
+			FileLocks:       fileLocks,
 		}
 
 		id, err := cmd.Flags().GetString(idFlag)
@@ -497,6 +504,7 @@ func init() {
 	dumpProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
 	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
+	dumpProcessCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
 
 	// Job
 	dumpCmd.AddCommand(dumpJobCmd)
@@ -507,6 +515,7 @@ func init() {
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")
+	dumpJobCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
 
 	// Kata
 	dumpCmd.AddCommand(dumpKataCmd)
@@ -546,6 +555,7 @@ func init() {
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")
 	dumpRuncCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpRuncCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
+	dumpRuncCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
 
 	// CRIO
 	dumpCmd.AddCommand(dumpCRIORootfs)

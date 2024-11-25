@@ -2,10 +2,10 @@ package utils
 
 import (
 	"bytes"
-	"os/exec"
-	"strings"
 	"errors"
+	"os/exec"
 	"strconv"
+	"strings"
 )
 
 func ExtractCID(vm string) (uint32, error) {

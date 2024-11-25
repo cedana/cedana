@@ -17,7 +17,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	task "github.com/cedana/cedana/pkg/api/services/task"
+	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
@@ -51,7 +52,7 @@ type service struct {
 
 	jobService *jobservice.JobService
 
-	task.UnimplementedTaskServiceServer
+	taskgrpc.UnimplementedTaskServiceServer
 }
 
 type Server struct {
@@ -125,7 +126,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		jobService:      js,
 	}
 
-	task.RegisterTaskServiceServer(server.grpcServer, service)
+	taskgrpc.RegisterTaskServiceServer(server.grpcServer, service)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
@@ -295,7 +296,6 @@ func (s *service) DetailedHealthCheck(ctx context.Context, req *task.DetailedHea
 
 	return resp, nil
 }
-
 func (s *service) GetConfig(ctx context.Context, req *task.GetConfigRequest) (*task.GetConfigResponse, error) {
 	resp := &task.GetConfigResponse{}
 	config, err := utils.GetConfig()

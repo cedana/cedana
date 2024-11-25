@@ -13,7 +13,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/api/containerd"
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/jobservice/jobdb"
 
 	"github.com/rs/zerolog/log"
