@@ -90,6 +90,7 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
+	return cmd
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -109,7 +110,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -369,6 +370,8 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
 		}
 	}
+	defer os.RemoveAll(tempDir) // since it's a temporary directory
+
 	err := utils.UntarFolder(imgPath, tempDir)
 	if err != nil {
 		return 0, nil, fmt.Errorf("error decompressing checkpoint: %w", err)
@@ -626,10 +629,13 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	if err != nil {
 		return 0, nil, err
 	}
+	if args.Stream <= 0 {
+		defer os.RemoveAll(dir) // since it's a temporary directory
+	}
 
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, args.JID)
+		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, state.JID)
 		if err != nil {
 			return 0, nil, err
 		}
