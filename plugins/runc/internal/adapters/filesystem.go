@@ -10,7 +10,8 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -27,7 +28,7 @@ const extDescriptorsFilename = "descriptors.json"
 
 // AddBindMountsForDump adds bind mounts as external mountpoints
 func AddBindMountsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(
@@ -38,7 +39,7 @@ func AddBindMountsForDump(next types.Dump) types.Dump {
 
 		criuOpts := req.GetCriu()
 		if criuOpts == nil {
-			criuOpts = &criu.CriuOpts{}
+			criuOpts = &criu_proto.CriuOpts{}
 		}
 
 		for _, m := range container.Config().Mounts {
@@ -55,7 +56,7 @@ func AddBindMountsForDump(next types.Dump) types.Dump {
 }
 
 func AddMaskedPathsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(
@@ -66,7 +67,7 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 
 		criuOpts := req.GetCriu()
 		if criuOpts == nil {
-			criuOpts = &criu.CriuOpts{}
+			criuOpts = &criu_proto.CriuOpts{}
 		}
 
 		config := container.Config()
@@ -87,19 +88,19 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				continue
 			}
 
-			extMnt := &criu.ExtMountMap{
+			extMnt := &criu_proto.ExtMountMap{
 				Key: proto.String(path),
 				Val: proto.String("/dev/null"),
 			}
 			criuOpts.ExtMnt = append(criuOpts.ExtMnt, extMnt)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
 func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(
@@ -110,7 +111,7 @@ func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
 
 		criuOpts := req.GetCriu()
 		if criuOpts == nil {
-			criuOpts = &criu.CriuOpts{}
+			criuOpts = &criu_proto.CriuOpts{}
 		}
 
 		state, err := container.State()
@@ -141,7 +142,7 @@ func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
 			)
 		}
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err = next(ctx, server, nfy, resp, req)
 		if err == nil {
 			return exited, nil
 		}

@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	securejoin "github.com/cyphar/filepath-securejoin"
@@ -26,7 +27,7 @@ import (
 ///////////////////////
 
 func AddDeviceMountsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(
@@ -37,7 +38,7 @@ func AddDeviceMountsForDump(next types.Dump) types.Dump {
 
 		criuOpts := req.GetCriu()
 		if criuOpts == nil {
-			criuOpts = &criu.CriuOpts{}
+			criuOpts = &criu_proto.CriuOpts{}
 		}
 
 		// TODO: return early if pre-dump, as we don't do all of this for pre-dump
@@ -75,7 +76,7 @@ func AddDeviceMountsForDump(next types.Dump) types.Dump {
 			criuAddExternalMount(criuOpts, m, rootfs)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -88,12 +89,12 @@ func AddDeviceMountsForDump(next types.Dump) types.Dump {
 //////////////////////////
 
 // lifted from libcontainer
-func criuAddExternalMount(opts *criu.CriuOpts, m *configs.Mount, rootfs string) {
+func criuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs string) {
 	mountDest := strings.TrimPrefix(m.Destination, rootfs)
 	if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
 		mountDest = dest[len(rootfs):]
 	}
-	extMnt := &criu.ExtMountMap{
+	extMnt := &criu_proto.ExtMountMap{
 		Key: proto.String(mountDest),
 		Val: proto.String(mountDest),
 	}

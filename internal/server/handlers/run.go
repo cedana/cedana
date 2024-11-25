@@ -33,18 +33,15 @@ func Run() types.Start {
 			return nil, status.Error(codes.InvalidArgument, "missing path")
 		}
 
-		groupsUint32 := make([]uint32, len(opts.Groups))
-		for i, v := range opts.Groups {
-			groupsUint32[i] = uint32(v)
-		}
 		cmd := exec.CommandContext(server.Lifetime, opts.Path, opts.Args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Setsid: true,
 			Credential: &syscall.Credential{
 				Uid:    uint32(opts.UID),
 				Gid:    uint32(opts.GID),
-				Groups: groupsUint32,
+				Groups: utils.Uint32Slice(opts.Groups),
 			},
+			Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 		}
 		cmd.Env = opts.Env
 		cmd.Dir = opts.WorkingDir

@@ -136,7 +136,6 @@ var dumpCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf(resp.Message)
 		fmt.Printf("Dumped to %s\n", resp.Path)
 
 		return nil

@@ -8,8 +8,9 @@ import (
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
 	"google.golang.org/grpc/codes"
@@ -43,7 +44,7 @@ func Manage(jobs job.Manager) types.Adapter[types.Start] {
 			job.SetLog(req.Log)
 
 			if req.GPUEnabled {
-				next = next.With(GPUSupport(jobs))
+				next = next.With(AddGPUSupport(jobs))
 			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
@@ -76,16 +77,16 @@ func Manage(jobs job.Manager) types.Adapter[types.Start] {
 // Post-dump, updates the saved job details.
 func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
-				return next(ctx, server, resp, req)
+				return next(ctx, server, nfy, resp, req)
 			}
 
 			job := jobs.Get(jid)
 			if job == nil {
-				return nil, status.Errorf(codes.NotFound, "job not found")
+				return nil, status.Errorf(codes.NotFound, "job %s not found", jid)
 			}
 
 			// Fill in dump request details based on saved job info
@@ -93,7 +94,10 @@ func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 			req.Details = job.GetDetails()
 			req.Type = job.GetType()
 
-			exited, err = next(ctx, server, resp, req)
+			// Import saved notify callbacks
+			nfy.ImportCallback(job.CRIUCallback)
+
+			exited, err := next(ctx, server, nfy, resp, req)
 			if err != nil {
 				return exited, err
 			}
@@ -114,31 +118,39 @@ func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 // Post-restore, updates the saved job details.
 func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
-				return next(ctx, server, resp, req)
+				return next(ctx, server, nfy, resp, req)
 			}
 
 			job := jobs.Get(jid)
 			if job == nil {
-				return nil, status.Errorf(codes.NotFound, "job not found")
+				return nil, status.Errorf(codes.NotFound, "job %s not found", jid)
+			}
+
+			if job.IsRunning() {
+				return nil, status.Errorf(codes.FailedPrecondition, "job %s is already running", jid)
 			}
 
 			// Fill in restore request details based on saved job info
 			// TODO YA: Allow overriding job details, otherwise use saved job details
+			req.Type = job.GetType()
 			if req.Log == "" {
 				req.Log = job.GetLog() // Use the same log file as it was before dump
 			}
 			req.Details = job.GetDetails()
+			req.Details.JID = proto.String(jid)
 			if req.Path == "" {
 				req.Path = job.GetCheckpointPath()
 			}
-			if req.Criu == nil {
-				req.Criu = &criu.CriuOpts{}
+			if req.Path == "" {
+				return nil, status.Errorf(codes.FailedPrecondition, "job %s stopped before a checkpoint was made", jid)
 			}
-			req.Type = job.GetType()
+			if req.Criu == nil {
+				req.Criu = &criu_proto.CriuOpts{}
+			}
 			req.Criu.RstSibling = proto.Bool(true) // Since managed, we restore as child
 
 			// Create child lifetime context, so we have cancellation ability over restored
@@ -146,7 +158,10 @@ func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 			lifetime, cancel := context.WithCancel(server.Lifetime)
 			server.Lifetime = lifetime
 
-			exited, err := next(ctx, server, resp, req)
+			// Import saved notify callbacks
+			nfy.ImportCallback(job.CRIUCallback)
+
+			exited, err := next(ctx, server, nfy, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err

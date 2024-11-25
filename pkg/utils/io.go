@@ -223,17 +223,18 @@ func NewStreamIOSlave(
 
 // Attach attaches a master stream to the slave.
 func (s *StreamIOSlave) Attach(
-	lifetime context.Context,
+	ctx context.Context,
 	master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp],
 ) error {
+wait:
 	for {
 		select {
-		case <-lifetime.Done():
-			return lifetime.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-master.Context().Done():
 			return master.Context().Err()
 		case s.master <- master:
-			goto loop
+			break wait
 		}
 	}
 

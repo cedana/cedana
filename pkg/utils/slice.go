@@ -11,3 +11,13 @@ func Int32Slice(slice []int) []int32 {
 
 	return ints
 }
+
+func Uint32Slice(slice []int32) []uint32 {
+	var ints []uint32
+
+	for _, v := range slice {
+		ints = append(ints, uint32(v))
+	}
+
+	return ints
+}

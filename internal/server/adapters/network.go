@@ -6,8 +6,9 @@ import (
 	"context"
 	"syscall"
 
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -26,7 +27,7 @@ import (
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
@@ -53,7 +54,7 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 		}
 
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// Only set unless already set
@@ -64,7 +65,7 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -78,7 +79,7 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
@@ -95,7 +96,7 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 		}
 
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// Only set unless already set
@@ -106,6 +107,6 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }

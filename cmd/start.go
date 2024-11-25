@@ -102,7 +102,6 @@ var startCmd = &cobra.Command{
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
-		fmt.Printf(resp.Message)
 		fmt.Printf("Started managing PID %d\n", resp.PID)
 
 		return nil

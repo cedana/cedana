@@ -19,13 +19,10 @@ type (
 		Lifetime context.Context
 	}
 
-	// Generic handler type
-	Handler[RSP, REQ any] func(context.Context, ServerOpts, RSP, REQ) (exited chan int, err error)
-
-	Dump    Handler[*daemon.DumpResp, *daemon.DumpReq]
-	Restore Handler[*daemon.RestoreResp, *daemon.RestoreReq]
-	Start   Handler[*daemon.StartResp, *daemon.StartReq]
-	Manage  Handler[*daemon.ManageResp, *daemon.ManageReq]
+	Dump    func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.DumpResp, *daemon.DumpReq) (exited chan int, err error)
+	Restore func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.RestoreResp, *daemon.RestoreReq) (exited chan int, err error)
+	Start   func(context.Context, ServerOpts, *daemon.StartResp, *daemon.StartReq) (exited chan int, err error)
+	Manage  func(context.Context, ServerOpts, *daemon.ManageResp, *daemon.ManageReq) (exited chan int, err error)
 
 	// An adapter is a function that takes a Handler and returns a new Handler
 	Adapter[H Dump | Restore | Start | Manage] func(H) H

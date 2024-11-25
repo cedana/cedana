@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -34,7 +35,7 @@ func (c *Criu) SetCriuPath(path string) {
 }
 
 // Prepare sets up everything for the RPC communication to CRIU
-func (c *Criu) Prepare(extraFiles ...*os.File) error {
+func (c *Criu) Prepare(ctx context.Context, extraFiles ...*os.File) error {
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
 	if err != nil {
 		return err
@@ -51,14 +52,11 @@ func (c *Criu) Prepare(extraFiles ...*os.File) error {
 
 	args := []string{"swrk", strconv.Itoa(fds[1])}
 	// #nosec G204
-	cmd := exec.Command(c.swrkPath, args...)
+	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, extraFiles...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-		Credential: &syscall.Credential{
-			Uid: uint32(0),
-			Gid: uint32(0),
-		},
+		Setsid:    true,
+		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 
 	err = cmd.Start()
@@ -107,12 +105,13 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 }
 
 func (c *Criu) doSwrk(
+	ctx context.Context,
 	reqType criu.CriuReqType,
 	opts *criu.CriuOpts,
 	nfy Notify,
 	extraFiles ...*os.File,
 ) (*criu.CriuResp, error) {
-	resp, err := c.doSwrkWithResp(reqType, opts, nfy, nil, extraFiles...)
+	resp, err := c.doSwrkWithResp(ctx, reqType, opts, nfy, nil, extraFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +124,7 @@ func (c *Criu) doSwrk(
 }
 
 func (c *Criu) doSwrkWithResp(
+	ctx context.Context,
 	reqType criu.CriuReqType,
 	opts *criu.CriuOpts,
 	nfy Notify,
@@ -145,7 +145,7 @@ func (c *Criu) doSwrkWithResp(
 	}
 
 	if c.swrkCmd == nil {
-		err := c.Prepare(extraFiles...)
+		err := c.Prepare(ctx, extraFiles...)
 		if err != nil {
 			return nil, err
 		}
@@ -192,25 +192,25 @@ func (c *Criu) doSwrkWithResp(
 		notify := resp.GetNotify()
 		switch notify.GetScript() {
 		case "pre-dump":
-			err = nfy.PreDump()
+			err = nfy.PreDump(ctx, opts.GetImagesDir())
 		case "post-dump":
-			err = nfy.PostDump()
+			err = nfy.PostDump(ctx, opts.GetImagesDir())
 		case "pre-restore":
-			err = nfy.PreRestore()
+			err = nfy.PreRestore(ctx, opts.GetImagesDir())
 		case "post-restore":
-			err = nfy.PostRestore(notify.GetPid())
+			err = nfy.PostRestore(ctx, notify.GetPid())
 		case "network-lock":
-			err = nfy.NetworkLock()
+			err = nfy.NetworkLock(ctx)
 		case "network-unlock":
-			err = nfy.NetworkUnlock()
+			err = nfy.NetworkUnlock(ctx)
 		case "setup-namespaces":
-			err = nfy.SetupNamespaces(notify.GetPid())
+			err = nfy.SetupNamespaces(ctx, notify.GetPid())
 		case "post-setup-namespaces":
-			err = nfy.PostSetupNamespaces(notify.GetPid())
+			err = nfy.PostSetupNamespaces(ctx, notify.GetPid())
 		case "pre-resume":
-			err = nfy.PreResume(notify.GetPid())
+			err = nfy.PreResume(ctx, notify.GetPid())
 		case "post-resume":
-			err = nfy.PostResume(notify.GetPid())
+			err = nfy.PostResume(ctx, notify.GetPid())
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
@@ -220,7 +220,7 @@ func (c *Criu) doSwrkWithResp(
 			if err != nil {
 				return nil, err
 			}
-			err = nfy.OrphanPtsMaster(int32(fds[0]))
+			err = nfy.OrphanPtsMaster(ctx, int32(fds[0]))
 		default:
 			err = nil
 		}
@@ -239,8 +239,12 @@ func (c *Criu) doSwrkWithResp(
 }
 
 // Dump dumps a process
-func (c *Criu) Dump(opts *criu.CriuOpts, nfy Notify) (*criu.CriuDumpResp, error) {
-	resp, err := c.doSwrk(criu.CriuReqType_DUMP, opts, nfy)
+func (c *Criu) Dump(
+	ctx context.Context,
+	opts *criu.CriuOpts,
+	nfy Notify,
+) (*criu.CriuDumpResp, error) {
+	resp, err := c.doSwrk(ctx, criu.CriuReqType_DUMP, opts, nfy)
 	if err != nil {
 		return nil, err
 	}
@@ -250,11 +254,12 @@ func (c *Criu) Dump(opts *criu.CriuOpts, nfy Notify) (*criu.CriuDumpResp, error)
 
 // Restore restores a process
 func (c *Criu) Restore(
+	ctx context.Context,
 	opts *criu.CriuOpts,
 	nfy Notify,
 	extraFiles ...*os.File,
 ) (*criu.CriuRestoreResp, error) {
-	resp, err := c.doSwrk(criu.CriuReqType_RESTORE, opts, nfy, extraFiles...)
+	resp, err := c.doSwrk(ctx, criu.CriuReqType_RESTORE, opts, nfy, extraFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,20 +268,20 @@ func (c *Criu) Restore(
 }
 
 // PreDump does a pre-dump
-func (c *Criu) PreDump(opts *criu.CriuOpts, nfy Notify) error {
-	_, err := c.doSwrk(criu.CriuReqType_PRE_DUMP, opts, nfy)
+func (c *Criu) PreDump(ctx context.Context, opts *criu.CriuOpts, nfy Notify) error {
+	_, err := c.doSwrk(ctx, criu.CriuReqType_PRE_DUMP, opts, nfy)
 	return err
 }
 
 // StartPageServer starts the page server
-func (c *Criu) StartPageServer(opts *criu.CriuOpts) error {
-	_, err := c.doSwrk(criu.CriuReqType_PAGE_SERVER, opts, nil)
+func (c *Criu) StartPageServer(ctx context.Context, opts *criu.CriuOpts) error {
+	_, err := c.doSwrk(ctx, criu.CriuReqType_PAGE_SERVER, opts, nil)
 	return err
 }
 
 // StartPageServerChld starts the page server and returns PID and port
-func (c *Criu) StartPageServerChld(opts *criu.CriuOpts) (int, int, error) {
-	resp, err := c.doSwrkWithResp(criu.CriuReqType_PAGE_SERVER_CHLD, opts, nil, nil)
+func (c *Criu) StartPageServerChld(ctx context.Context, opts *criu.CriuOpts) (int, int, error) {
+	resp, err := c.doSwrkWithResp(ctx, criu.CriuReqType_PAGE_SERVER_CHLD, opts, nil, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -286,8 +291,8 @@ func (c *Criu) StartPageServerChld(opts *criu.CriuOpts) (int, int, error) {
 
 // GetCriuVersion executes the VERSION RPC call and returns the version
 // as an integer. Major * 10000 + Minor * 100 + SubLevel
-func (c *Criu) GetCriuVersion() (int, error) {
-	resp, err := c.doSwrkWithResp(criu.CriuReqType_VERSION, nil, nil, nil)
+func (c *Criu) GetCriuVersion(ctx context.Context) (int, error) {
+	resp, err := c.doSwrkWithResp(ctx, criu.CriuReqType_VERSION, nil, nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -313,8 +318,8 @@ func (c *Criu) GetCriuVersion() (int, error) {
 
 // IsCriuAtLeast checks if the version is at least the same
 // as the parameter version
-func (c *Criu) IsCriuAtLeast(version int) (bool, error) {
-	criuVersion, err := c.GetCriuVersion()
+func (c *Criu) IsCriuAtLeast(ctx context.Context, version int) (bool, error) {
+	criuVersion, err := c.GetCriuVersion(ctx)
 	if err != nil {
 		return false, err
 	}

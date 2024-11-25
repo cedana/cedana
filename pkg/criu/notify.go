@@ -1,73 +1,75 @@
 package criu
 
+import "context"
+
 // Notify interface
 type Notify interface {
-	PreDump() error
-	PostDump() error
-	PreRestore() error
-	PostRestore(pid int32) error
-	NetworkLock() error
-	NetworkUnlock() error
-	SetupNamespaces(pid int32) error
-	PostSetupNamespaces(pid int32) error
-	PreResume(pid int32) error
-	PostResume(pid int32) error
-	OrphanPtsMaster(fd int32) error
+	PreDump(ctx context.Context, dir string) error
+	PostDump(ctx context.Context, dir string) error
+	PreRestore(ctx context.Context, dir string) error
+	PostRestore(ctx context.Context, pid int32) error
+	NetworkLock(ctx context.Context) error
+	NetworkUnlock(ctx context.Context) error
+	SetupNamespaces(ctx context.Context, pid int32) error
+	PostSetupNamespaces(ctx context.Context, pid int32) error
+	PreResume(ctx context.Context, pid int32) error
+	PostResume(ctx context.Context, pid int32) error
+	OrphanPtsMaster(ctx context.Context, fd int32) error
 }
 
 // NoNotify struct
 type NoNotify struct{}
 
 // PreDump NoNotify
-func (c NoNotify) PreDump() error {
+func (c NoNotify) PreDump(ctx context.Context, dir string) error {
 	return nil
 }
 
 // PostDump NoNotify
-func (c NoNotify) PostDump() error {
+func (c NoNotify) PostDump(ctx context.Context, dir string) error {
 	return nil
 }
 
 // PreRestore NoNotify
-func (c NoNotify) PreRestore() error {
+func (c NoNotify) PreRestore(ctx context.Context, dir string) error {
 	return nil
 }
 
 // PostRestore NoNotify
-func (c NoNotify) PostRestore(pid int32) error {
+func (c NoNotify) PostRestore(ctx context.Context, pid int32) error {
 	return nil
 }
 
 // NetworkLock NoNotify
-func (c NoNotify) NetworkLock() error {
+func (c NoNotify) NetworkLock(ctx context.Context) error {
 	return nil
 }
 
 // NetworkUnlock NoNotify
-func (c NoNotify) NetworkUnlock() error {
+func (c NoNotify) NetworkUnlock(ctx context.Context) error {
 	return nil
 }
 
 // SetupNamespaces NoNotify
-func (c NoNotify) SetupNamespaces(pid int32) error {
+func (c NoNotify) SetupNamespaces(ctx context.Context, pid int32) error {
 	return nil
 }
 
 // PostSetupNamespaces NoNotify
-func (c NoNotify) PostSetupNamespaces(pid int32) error {
+func (c NoNotify) PostSetupNamespaces(ctx context.Context, pid int32) error {
 	return nil
 }
 
 // PreResume NoNotify
-func (c NoNotify) PreResume(pid int32) error {
+func (c NoNotify) PreResume(ctx context.Context, pid int32) error {
 	return nil
 }
 
 // PostResume NoNotify
-func (c NoNotify) PostResume(pid int32) error {
+func (c NoNotify) PostResume(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (c NoNotify) OrphanPtsMaster(fd int32) error {
+func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
 }

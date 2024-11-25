@@ -5,6 +5,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 )
 
@@ -18,7 +19,7 @@ const defaultRoot = "/run/runc"
 ///////////////////////
 
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -31,7 +32,7 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Details.Runc.Root = defaultRoot
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 

@@ -17,11 +17,10 @@ require (
 	google.golang.org/protobuf v1.35.2
 )
 
-// TODO: Remove
+// TODO: Dev only
 replace github.com/cedana/cedana => ../..
 
 require (
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-f7151e45691d.1 // indirect
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/containerd/console v1.0.4 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect

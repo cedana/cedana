@@ -30,12 +30,12 @@ const (
 
 // Returns a CRIU dump handler for the server
 func DumpCRIU() types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
 
-		version, err := server.CRIU.GetCriuVersion()
+		version, err := server.CRIU.GetCriuVersion(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
@@ -53,7 +53,7 @@ func DumpCRIU() types.Dump {
 		// TODO: Add support for lazy migration
 
 		log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
-		utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
+		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 		// Capture internal logs from CRIU
 		go utils.LogFromFile(
@@ -62,7 +62,7 @@ func DumpCRIU() types.Dump {
 			zerolog.TraceLevel,
 		)
 
-		_, err = server.CRIU.Dump(criuOpts, criu.NoNotify{})
+		_, err = server.CRIU.Dump(ctx, criuOpts, nfy)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 		}
@@ -75,7 +75,7 @@ func DumpCRIU() types.Dump {
 
 // Returns a CRIU restore handler for the server
 func RestoreCRIU() types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		extraFiles := utils.GetContextValSafe(
 			ctx,
 			keys.RESTORE_EXTRA_FILES_CONTEXT_KEY,
@@ -87,7 +87,7 @@ func RestoreCRIU() types.Restore {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
 
-		version, err := server.CRIU.GetCriuVersion()
+		version, err := server.CRIU.GetCriuVersion(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 		}
@@ -103,7 +103,7 @@ func RestoreCRIU() types.Restore {
 		criuOpts.OrphanPtsMaster = proto.Bool(false)
 
 		log.Debug().Int("CRIU", version).Msg("CRIU restore starting")
-		utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
+		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 		// Capture internal logs from CRIU
 		go utils.LogFromFile(
@@ -129,7 +129,7 @@ func RestoreCRIU() types.Restore {
 			go io.Copy(stdErr, errReader)
 		}
 
-		criuResp, err := server.CRIU.Restore(criuOpts, criu.NoNotify{}, extraFiles...)
+		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, extraFiles...)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
 		}

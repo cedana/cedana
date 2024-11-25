@@ -28,6 +28,7 @@ var (
 
 	// CRIU
 	LeaveRunningFlag    = Flag{"leave-running", ""}
+	LeaveStoppedFlag    = Flag{"leave-stopped", ""}
 	TcpEstablishedFlag  = Flag{"tcp-established", ""}
 	TcpCloseFlag        = Flag{"tcp-close", ""}
 	TcpSkipInFlightFlag = Flag{"skip-in-flight", ""}

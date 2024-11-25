@@ -21,11 +21,15 @@ require (
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-70901deb7307.1 // indirect
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-70901deb7307.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 )
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1
+	github.com/apex/log v1.9.0
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

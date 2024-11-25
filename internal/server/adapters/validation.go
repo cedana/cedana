@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,7 +36,7 @@ func ValidateStartRequest(next types.Start) types.Start {
 
 // Adapter that just checks all required fields are present in the request
 func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetDir() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "no dump dir specified")
 		}
@@ -46,7 +47,7 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "missing type")
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -56,7 +57,7 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 
 // Adapter that validates the restore request
 func ValidateRestoreRequest(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		if req.GetPath() == "" {
 			return nil, status.Error(codes.InvalidArgument, "no path provided")
 		}
@@ -64,6 +65,6 @@ func ValidateRestoreRequest(next types.Restore) types.Restore {
 			return nil, status.Error(codes.InvalidArgument, "missing type")
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }

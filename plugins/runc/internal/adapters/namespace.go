@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -31,7 +32,7 @@ import (
 // and expect to be setup correctly.
 func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
 				return nil, status.Error(
@@ -40,7 +41,7 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 				)
 			}
 
-			version, err := server.CRIU.GetCriuVersion()
+			version, err := server.CRIU.GetCriuVersion(ctx)
 			if err != nil {
 				return nil, status.Error(
 					codes.Internal,
@@ -56,14 +57,14 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 				if version < minVersion {
 					log.Warn().
 						Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
-					return next(ctx, server, resp, req)
+					return next(ctx, server, nfy, resp, req)
 				}
 			case configs.NEWPID:
 				minVersion := 31500
 				if version < minVersion {
 					log.Warn().
 						Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
-					return next(ctx, server, resp, req)
+					return next(ctx, server, nfy, resp, req)
 				}
 			}
 
@@ -72,7 +73,7 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 			nsPath := config.Namespaces.PathOf(t)
 			if nsPath == "" {
 				// Nothing to do
-				return next(ctx, server, resp, req)
+				return next(ctx, server, nfy, resp, req)
 			}
 			// CRIU expects the information about an external namespace
 			// like this: --external <TYPE>[<inode>]:<key>
@@ -85,12 +86,12 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 
 			criuOpts := req.GetCriu()
 			if criuOpts == nil {
-				criuOpts = &criu.CriuOpts{}
+				criuOpts = &criu_proto.CriuOpts{}
 			}
 
 			criuOpts.External = append(criuOpts.External, external)
 
-			return next(ctx, server, resp, req)
+			return next(ctx, server, nfy, resp, req)
 		}
 	}
 }

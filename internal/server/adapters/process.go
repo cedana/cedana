@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -35,7 +36,7 @@ const (
 
 // Check if the process exists, and is running
 func CheckProcessExistsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		pid := req.GetDetails().GetPID()
 		if pid == 0 {
 			return nil, status.Errorf(codes.InvalidArgument, "missing PID")
@@ -54,7 +55,7 @@ func CheckProcessExistsForDump(next types.Dump) types.Dump {
 
 		resp.State.PID = uint32(pid)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -62,7 +63,7 @@ func CheckProcessExistsForDump(next types.Dump) types.Dump {
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
 func FillProcessStateForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(
@@ -83,7 +84,7 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err = next(ctx, server, nfy, resp, req)
 		if err != nil {
 			return exited, err
 		}
@@ -100,7 +101,7 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
 			for _, f := range info.GetOpenFiles() {
@@ -114,7 +115,7 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 		}
 
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// Only set unless already set
@@ -122,13 +123,13 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 			req.Criu.ShellJob = proto.Bool(isShellJob)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
 // Close common file descriptors b/w the parent and child process
 func CloseCommonFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
 			return nil, status.Errorf(
@@ -142,7 +143,7 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -152,7 +153,7 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 
 // Fill process state in the restore response
 func FillProcessStateForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
@@ -175,7 +176,7 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 
 		resp.State = state
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err := next(ctx, server, nfy, resp, req)
 		if err != nil {
 			return exited, err
 		}
@@ -190,7 +191,7 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
 			for _, f := range info.GetOpenFiles() {
@@ -204,7 +205,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 		}
 
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// Only set unless already set
@@ -212,7 +213,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 			req.Criu.ShellJob = proto.Bool(isShellJob)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }
 
@@ -220,7 +221,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 // For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
 // a log file.
 func InheritOpenFilesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		extraFiles, _ := ctx.Value(keys.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 		ioFiles, _ := ctx.Value(keys.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
@@ -243,21 +244,21 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 					f.Path = strings.TrimPrefix(f.Path, "/")
 					if f.Fd == 0 {
 						extraFiles = append(extraFiles, inReader)
-						inheritFds = append(inheritFds, &criu.InheritFd{
+						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(2 + int32(len(extraFiles))),
 							Key: proto.String(f.Path),
 						})
 						defer inReader.Close()
 					} else if f.Fd == 1 {
 						extraFiles = append(extraFiles, outWriter)
-						inheritFds = append(inheritFds, &criu.InheritFd{
+						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(2 + int32(len(extraFiles))),
 							Key: proto.String(f.Path),
 						})
 						defer outWriter.Close()
 					} else if f.Fd == 2 {
 						extraFiles = append(extraFiles, errWriter)
-						inheritFds = append(inheritFds, &criu.InheritFd{
+						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(2 + int32(len(extraFiles))),
 							Key: proto.String(f.Path),
 						})
@@ -279,7 +280,7 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 					if f.Fd == 1 || f.Fd == 2 {
 						f.Path = strings.TrimPrefix(f.Path, "/")
 						extraFiles = append(extraFiles, restoreLog)
-						inheritFds = append(inheritFds, &criu.InheritFd{
+						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(2 + int32(len(extraFiles))),
 							Key: proto.String(f.Path),
 						})
@@ -297,10 +298,10 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 
 		// Set the inherited fds
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 		req.GetCriu().InheritFd = inheritFds
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }

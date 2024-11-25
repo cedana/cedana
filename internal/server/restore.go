@@ -6,6 +6,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -50,7 +51,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := restore(ctx, opts, resp, req)
+	_, err := restore(ctx, opts, &criu.NotifyCallbackMulti{}, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that inserts new adapters based on the type of restore request
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.GetType()
 		switch t {
@@ -85,6 +86,6 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...)(ctx, server, resp, req)
+		return next.With(middleware...)(ctx, server, nfy, resp, req)
 	}
 }

@@ -23,6 +23,52 @@ func GRPCError(err error, extra ...string) error {
 		if extraStr != "" {
 			return fmt.Errorf(
 				"%s: %s: %s",
+				st.Code().String(),
+				st.Message(),
+				strings.TrimSpace(extra[0]),
+			)
+		} else {
+			return fmt.Errorf(
+				"%s: %s",
+				st.Code().String(),
+				st.Message(),
+			)
+		}
+	}
+	return err
+}
+
+func GRPCErrorShort(err error, extra ...string) error {
+	st, ok := status.FromError(err)
+	var extraStr string
+	if len(extra) > 0 {
+		extraStr = strings.TrimSpace(extra[0])
+	}
+	if ok {
+		if extraStr != "" {
+			return fmt.Errorf(
+				"%s: %s",
+				st.Code().String(),
+				strings.TrimSpace(extra[0]),
+			)
+		} else {
+			return fmt.Errorf("%s", st.Code().String())
+		}
+	}
+	return err
+}
+
+func GRPCErrorColored(err error, extra ...string) error {
+	st, ok := status.FromError(err)
+	var extraStr string
+	if len(extra) > 0 {
+		extraStr = strings.TrimSpace(extra[0])
+	}
+
+	if ok {
+		if extraStr != "" {
+			return fmt.Errorf(
+				"%s: %s: %s",
 				style.NegativeColor.Sprint(st.Code().String()),
 				st.Message(),
 				strings.TrimSpace(extra[0]),
@@ -38,7 +84,7 @@ func GRPCError(err error, extra ...string) error {
 	return err
 }
 
-func GRPCErrorShort(err error, extra ...string) error {
+func GRPCErrorColoredShort(err error, extra ...string) error {
 	st, ok := status.FromError(err)
 	var extraStr string
 	if len(extra) > 0 {

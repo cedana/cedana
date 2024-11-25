@@ -49,31 +49,19 @@ type Manager interface {
 	// Returns error if healthcheck fails.
 	AttachGPU(
 		ctx context.Context,
+		lifetime context.Context,
 		wg *sync.WaitGroup,
 		jid string,
-		controller string,
+		controllerPath string,
 	) error
 
 	// AttachGPUAsync attaches a GPU controller to a job with the given JID.
 	// Returns a channel that will receive an error if the attach fails.
 	AttachGPUAsync(
 		ctx context.Context,
+		lifetime context.Context,
 		wg *sync.WaitGroup,
 		jid string,
-		controller string,
+		controllerPath string,
 	) <-chan error
-
-	// DumpGPU dumps the GPU state of a job with the given JID.
-	DumpGPU(ctx context.Context, jid string) error
-
-	// DumpGPUAsync dumps the GPU state of a job with the given JID.
-	// Returns a channel that will receive an error if the dump fails.
-	DumpGPUAsync(ctx context.Context, jid string) <-chan error
-
-	// RestoreGPU restores the GPU state of a job with the given JID.
-	RestoreGPU(ctx context.Context, jid string) error
-
-	// RestoreGPUAsync restores the GPU state of a job with the given JID.
-	// Returns a channel that will receive an error if the restore fails.
-	RestoreGPUAsync(ctx context.Context, jid string) <-chan error
 }

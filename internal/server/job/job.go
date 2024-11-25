@@ -8,11 +8,16 @@ import (
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/criu"
 )
 
 type Job struct {
 	JID   string
 	proto daemon.Job
+
+	// Notify callbacks that can be saved for later use.
+	// Will be called each time the job is C/R'd.
+	CRIUCallback *criu.NotifyCallback
 
 	m sync.RWMutex
 }
@@ -28,6 +33,7 @@ func newJob(
 			Type:    jobType,
 			Details: &daemon.Details{},
 		},
+		CRIUCallback: &criu.NotifyCallback{},
 
 		m: sync.RWMutex{},
 	}
@@ -122,4 +128,16 @@ func (j *Job) IsRunning() bool {
 	j.m.RLock()
 	defer j.m.RUnlock()
 	return j.proto.GetProcess().GetInfo().GetIsRunning()
+}
+
+func (j *Job) GPUEnabled() bool {
+	j.m.RLock()
+	defer j.m.RUnlock()
+	return j.proto.GPUEnabled
+}
+
+func (j *Job) SetGPUEnabled(enabled bool) {
+	j.m.Lock()
+	defer j.m.Unlock()
+	j.proto.GPUEnabled = enabled
 }

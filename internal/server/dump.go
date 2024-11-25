@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server/adapters"
 	"github.com/cedana/cedana/internal/server/handlers"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -49,7 +50,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{}
 
-	_, err := dump(ctx, opts, resp, req)
+	_, err := dump(ctx, opts, &criu.NotifyCallbackMulti{}, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
@@ -85,6 +86,6 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...)(ctx, server, resp, req)
+		return next.With(middleware...)(ctx, server, nfy, resp, req)
 	}
 }

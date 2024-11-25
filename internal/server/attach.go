@@ -29,10 +29,10 @@ func (s *Server) Attach(stream daemongrpc.Daemon_AttachServer) error {
 		return status.Errorf(codes.NotFound, "process %d has no IO slave", pid)
 	}
 
-	lifetime, cancel := context.WithTimeout(s.lifetime, ATTACH_TIMEOUT)
+	ctx, cancel := context.WithTimeout(s.lifetime, ATTACH_TIMEOUT)
 	defer cancel()
 
-	err = slave.Attach(lifetime, stream)
+	err = slave.Attach(ctx, stream)
 	if err != nil {
 		if err == context.DeadlineExceeded {
 			return status.Errorf(codes.DeadlineExceeded, "likely another master attached")

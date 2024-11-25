@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -37,7 +38,7 @@ const (
 //   - "gzip" creates a gzipped tarball of the dump directory
 func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 			dir := req.GetDir()
 
 			// Check if the provided dir exists
@@ -64,13 +65,13 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 			defer f.Close()
 
 			if req.GetCriu() == nil {
-				req.Criu = &criu.CriuOpts{}
+				req.Criu = &criu_proto.CriuOpts{}
 			}
 
 			req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 			req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
-			exited, err = next(ctx, server, resp, req)
+			exited, err = next(ctx, server, nfy, resp, req)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
 				return nil, err
@@ -108,7 +109,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
 func PrepareRestoreDir(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
@@ -142,12 +143,12 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 		defer dir.Close()
 
 		if req.GetCriu() == nil {
-			req.Criu = &criu.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		return next(ctx, server, resp, req)
+		return next(ctx, server, nfy, resp, req)
 	}
 }

@@ -37,6 +37,8 @@ func init() {
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
 	restoreCmd.PersistentFlags().
+		BoolP(flags.LeaveStoppedFlag.Full, flags.LeaveStoppedFlag.Short, false, "leave the process stopped after restore")
+	restoreCmd.PersistentFlags().
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "restore file locks")
 	restoreCmd.PersistentFlags().
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
@@ -78,6 +80,7 @@ var restoreCmd = &cobra.Command{
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
+		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
@@ -91,6 +94,7 @@ var restoreCmd = &cobra.Command{
 			Criu: &criu.CriuOpts{
 				TcpEstablished: proto.Bool(tcpEstablished),
 				TcpClose:       proto.Bool(tcpClose),
+				LeaveStopped:   proto.Bool(leaveStopped),
 				FileLocks:      proto.Bool(fileLocks),
 			},
 		}
@@ -130,7 +134,6 @@ var restoreCmd = &cobra.Command{
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
-		fmt.Printf(resp.Message)
 		fmt.Printf("Restored successfully, PID: %d\n", resp.PID)
 
 		return nil

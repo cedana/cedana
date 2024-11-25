@@ -58,7 +58,7 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -72,7 +72,7 @@ func (c *Client) Restore(
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -81,7 +81,7 @@ func (c *Client) Start(ctx context.Context, args *daemon.StartReq) (*daemon.Star
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Start(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -90,7 +90,7 @@ func (c *Client) Manage(ctx context.Context, args *daemon.ManageReq) (*daemon.Ma
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -99,7 +99,7 @@ func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.List(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -108,7 +108,7 @@ func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillRe
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -117,7 +117,7 @@ func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.De
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
@@ -128,11 +128,11 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	opts := getDefaultCallOptions()
 	stream, err := c.daemonClient.Attach(ctx, opts...)
 	if err != nil {
-		return utils.GRPCError(err)
+		return utils.GRPCErrorColored(err)
 	}
 	// Send the first start request
 	if err := stream.Send(args); err != nil {
-		return utils.GRPCError(err)
+		return utils.GRPCErrorColored(err)
 	}
 
 	stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
@@ -144,7 +144,7 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	<-errDone // wait to capture all err
 
 	if err := <-errors; err != nil {
-		return utils.GRPCError(err)
+		return utils.GRPCErrorColored(err)
 	}
 
 	os.Exit(<-exitCode)
@@ -156,7 +156,7 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty) (*daemon
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.ReloadPlugins(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCError(err)
+		return nil, utils.GRPCErrorColored(err)
 	}
 	return resp, nil
 }
