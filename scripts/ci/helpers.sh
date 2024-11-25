@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set eux
+
 
 ## NOTE: All scripts are being run by the makefile, which runs in the scripts/ci directory.
 ## As a result, where these functions are called rely on managing directory state using pushd/popd,

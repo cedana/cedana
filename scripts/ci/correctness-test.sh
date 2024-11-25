@@ -1,4 +1,7 @@
 #!/bin/bash -e
+
+set eux
+
 # Used to run correctness tests for CI
 
 source ./helpers.sh

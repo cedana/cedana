@@ -1,4 +1,7 @@
 #!/bin/bash -e
+
+set eux
+
 # Used to run regression bats tests (located in tests/regression)
 
 source ./helpers.sh

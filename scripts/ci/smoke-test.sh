@@ -1,4 +1,7 @@
 #!/bin/bash -e
+
+set eux
+
 # Used to run a quick smoke test for CI
 
 source ./helpers.sh

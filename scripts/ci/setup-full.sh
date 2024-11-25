@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set eux
+
 source ./helpers.sh
 
 main() {
