@@ -45,8 +45,8 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -90,6 +90,7 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
+	return cmd
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -109,7 +110,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -628,7 +629,10 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	if err != nil {
 		return 0, nil, err
 	}
-	defer os.RemoveAll(dir) // since it's a temporary directory
+
+	if args.Stream <= 0 {
+		defer os.RemoveAll(dir) // since it's a temporary directory
+	}
 
 	if state.GPU {
 		var err error
