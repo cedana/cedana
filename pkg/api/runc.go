@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/cedana/cedana/pkg/api/runc"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/api/runc"
 	container "github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -40,7 +40,7 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 
 	// Check if process PID already exists as a managed job
 	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{pid}})
-	if len(queryResp.Processes) > 0 {
+	if queryResp != nil && len(queryResp.Processes) > 0 {
 		if queryResp.Processes[0].JobState == task.JobState_JOB_RUNNING {
 			return nil, status.Error(codes.AlreadyExists, "PID already exists as a managed job")
 		}
