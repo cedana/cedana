@@ -93,11 +93,11 @@ func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pi
 	return cmd
 }
 
-func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, *exec.Cmd, error) {
+func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
-		return "", nil, nil, nil, nil, fmt.Errorf("could not get restore stats from context")
+		return "", nil, nil, nil, fmt.Errorf("could not get restore stats from context")
 	}
 
 	var isShellJob bool
@@ -105,13 +105,12 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tcpEstablished bool
 	var extraFiles []*os.File
 	var ioFiles []*os.File
-	var streamCmd *exec.Cmd
 	isManagedJob := args.JID != ""
 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		streamCmd = s.setupStreamerServe(ctx, tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -119,30 +118,30 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 			err := os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 			if err != nil {
-				return "", nil, nil, nil, streamCmd, err
+				return "", nil, nil, nil, err
 			}
 		} else {
 			// likely an old checkpoint hanging around, delete
 			err := os.RemoveAll(tempDir)
 			if err != nil {
-				return "", nil, nil, nil, streamCmd, err
+				return "", nil, nil, nil, err
 			}
 			err = os.Mkdir(tempDir, RESTORE_TEMPDIR_PERMS)
 			if err != nil {
-				return "", nil, nil, nil, streamCmd, err
+				return "", nil, nil, nil, err
 			}
 		}
 		err := utils.UntarFolder(args.CheckpointPath, tempDir)
 		if err != nil {
 			log.Error().Err(err).Msg("error decompressing checkpoint")
-			return "", nil, nil, nil, streamCmd, err
+			return "", nil, nil, nil, err
 		}
 	}
 
 	checkpointState, err := deserializeStateFromDir(tempDir, args.Stream > 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error unmarshaling checkpoint state")
-		return "", nil, nil, nil, streamCmd, err
+		return "", nil, nil, nil, err
 	}
 
 	if !isKata {
@@ -159,7 +158,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 		}
 		if err != nil {
 			log.Error().Err(err).Msg("error creating output file")
-			return "", nil, nil, nil, streamCmd, err
+			return "", nil, nil, nil, err
 		}
 		ioFiles = append(ioFiles, in_w)
 		ioFiles = append(ioFiles, out_r)
@@ -209,7 +208,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 		file, err := os.Create(filename)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating logfile")
-			return "", nil, nil, nil, streamCmd, err
+			return "", nil, nil, nil, err
 		}
 
 		for _, f := range open_fds {
@@ -243,14 +242,14 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	if args.Stream <= 0 {
 		if err := chmodRecursive(tempDir, RESTORE_TEMPDIR_PERMS); err != nil {
 			log.Error().Err(err).Msg("error changing permissions")
-			return "", nil, nil, nil, streamCmd, err
+			return "", nil, nil, nil, err
 		}
 	}
 
 	elapsed := time.Since(start)
 	stats.PrepareDuration = elapsed.Milliseconds()
 
-	return tempDir, checkpointState, extraFiles, ioFiles, streamCmd, nil
+	return tempDir, checkpointState, extraFiles, ioFiles, nil
 }
 
 // chmodRecursive changes the permissions of the given path and all its contents.
@@ -626,11 +625,14 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	opts := s.prepareRestoreOpts()
 	nfy := Notify{}
 
-	dir, state, extraFiles, ioFiles, streamCmd, err := s.prepareRestore(ctx, opts, args, stream, false)
+	dir, state, extraFiles, ioFiles, err := s.prepareRestore(ctx, opts, args, stream, false)
 	if err != nil {
 		return 0, nil, err
 	}
-	defer os.RemoveAll(dir) // since it's a temporary directory
+
+	if args.Stream <= 0 {
+		defer os.RemoveAll(dir) // since it's a temporary directory
+	}
 
 	if state.GPU {
 		var err error
@@ -768,12 +770,6 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		}()
 	}
 
-	// wait for stream to finish
-	if streamCmd != nil {
-		err := streamCmd.Wait()
-		log.Debug().Err(err).Msgf("streamCmd wait")
-	}
-
 	return *pid, exitCode, nil
 }
 
@@ -818,7 +814,7 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 		}
 	}
 
-	dir, _, extraFiles, _, _, err := s.prepareRestore(ctx, opts, args, nil, true)
+	dir, _, extraFiles, _, err := s.prepareRestore(ctx, opts, args, nil, true)
 	if err != nil {
 		return nil, err
 	}
