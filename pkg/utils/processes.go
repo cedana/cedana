@@ -129,3 +129,15 @@ func CheckTCPConnections(pid int32) (bool, error) {
 
 	return false, nil
 }
+
+func PidExists(pid uint32) bool {
+	p, err := ps.NewProcess(int32(pid))
+	if err != nil {
+		return false
+	}
+	_, err = p.Status()
+	if err != nil {
+		return false
+	}
+	return true
+}

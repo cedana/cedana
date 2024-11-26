@@ -146,7 +146,7 @@ jobs:
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -183,7 +183,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -229,7 +229,7 @@ jobs:
       id-token: "write"
       pull-requests: "write"
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
@@ -344,7 +344,7 @@ jobs:
   helper-image-push:
     name: Push Helper Test Image
     runs-on: ubicloud-standard-2
-    needs: [build, setup-script-tests]
+    needs: [build]
     if: ${{ !inputs.skip_helper_image_push }}
     steps:
       - uses: actions/checkout@v4

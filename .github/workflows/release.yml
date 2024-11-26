@@ -62,6 +62,8 @@ jobs:
       skip_bench: true # since benchmark will be run in a separate job below
       skip_shellcheck: true
       skip_helper_image_push: true
+    secrets: inherit
+
 
   build-publish-amd64:
     name: Build & Publish (amd64)
