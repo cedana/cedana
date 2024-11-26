@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/crio"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 )

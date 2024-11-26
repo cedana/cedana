@@ -22,9 +22,6 @@ install_apt_packages() {
     done
 }
 
-install_code_server() {
-    curl -fsSL https://code-server.dev/install.sh | sh
-}
 
 install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
@@ -47,12 +44,6 @@ install_docker() {
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
-install_sysbox() {
-    wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
-    apt-get install -y jq
-    apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
-    rm -f sysbox-ce_0.6.4-0.linux_amd64.deb
-}
 
 install_buildah() {
     sudo apt-get update
@@ -113,7 +104,6 @@ setup_ci_build() {
 
 setup_ci() {
     setup_ci_build
-    install_code_server
     install_bats_core
 
     install_docker
@@ -133,11 +123,15 @@ setup_ci() {
     echo "export CEDANA_URL=https://ci.cedana.ai" >> /etc/environment
 
     # Install CRIU
-    sudo add-apt-repository -y ppa:criu/ppa
-    sudo apt-get update && sudo apt-get install -y criu
+    TAG=latest
+    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+    chmod +x criu
+    sudo cp criu /usr/local/sbin/
 
-    # Install smoke & bench deps
-    sudo pip3 install -r test/benchmarks/requirements
+    # Install cedana-image-streamer
+    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
+    chmod +x cedana-image-streamer
+    sudo cp cedana-image-streamer /usr/bin/
 }
 
 source_env() {

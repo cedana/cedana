@@ -14,6 +14,7 @@ Some problems Cedana can help solve include:
 - Cold-starts for containers & processes
 - Keeping a process or container running independent of hardware/network failure
 - Managing multiprocess/multinode systems (independent of Kubernetes/SLURM or any orchestration)
+- Kubernetes checkpoint/restore 
 - GPU checkpoint/restore 
 - And more! 
 

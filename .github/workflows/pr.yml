@@ -115,15 +115,13 @@ jobs:
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1
         with:
-          github_token: ${{ secrets.github_token }}
-          reporter: github-pr-review # Change reporter.
-          path: "." # Optional.
+          reporter: github-pr-review
           pattern: |
             *.bash
             *.sh
             *.bats
-          exclude: "./.git/*" # Optional.
-          check_all_files_with_shebangs: "true" # Optional
+          check_all_files_with_shebangs: true
+          shellcheck_flags: "--external-sources --severity=warning"
 
   setup-script-tests:
     name: Test Setup Scripts
@@ -139,12 +137,14 @@ jobs:
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
           sudo cp ./build-start-daemon.sh /build-start-daemon.sh
-          ./setup-host.sh
+          sudo ./setup-host.sh
+        env:
+          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}"
 
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -168,6 +168,8 @@ jobs:
           chmod +x cedana
           sudo -E make -C scripts/ci setup-full
         env:
+          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}
+          CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
       - name: Run regression tests
@@ -179,7 +181,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -225,7 +227,7 @@ jobs:
       id-token: "write"
       pull-requests: "write"
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
@@ -340,7 +342,7 @@ jobs:
   helper-image-push:
     name: Push Helper Test Image
     runs-on: ubicloud-standard-2
-    needs: [build, setup-script-tests]
+    needs: [build]
     if: ${{ !inputs.skip_helper_image_push }}
     steps:
       - uses: actions/checkout@v4

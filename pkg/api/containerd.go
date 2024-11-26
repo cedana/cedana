@@ -9,9 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/containerd"
 	"github.com/cedana/cedana/pkg/api/kube"
-	"github.com/cedana/cedana/pkg/api/services/task"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/containerd/containerd/namespaces"

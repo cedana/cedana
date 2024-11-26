@@ -33,3 +33,4 @@ jobs:
       skip_bench: true
       skip_shellcheck: true
       skip_helper_image_push: true
+    secrets: inherit

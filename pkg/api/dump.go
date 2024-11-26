@@ -3,8 +3,7 @@ package api
 // Internal functions used by service for dumping processes and containers
 
 import (
-	// "bufio"
-	"bytes"
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -16,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cedana/cedana/pkg/api/services/gpu"
-	"github.com/cedana/cedana/pkg/api/services/rpc"
-	"github.com/cedana/cedana/pkg/api/services/task"
+	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
+	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -51,7 +50,7 @@ type Bundle struct {
 // prepareDump =/= preDump.
 // prepareDump sets up the folders to dump into, and sets the criu options.
 // preDump on the other hand does any process cleanup right before the checkpoint.
-func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *rpc.CriuOpts) (string, *exec.Cmd, error) {
+func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, args *task.DumpArgs, opts *criu.CriuOpts) (string, *exec.Cmd, error) {
 	stats, ok := ctx.Value(utils.DumpStatsKey).(*task.DumpStats)
 	if !ok {
 		return "", nil, fmt.Errorf("could not get dump stats from context")
@@ -76,6 +75,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 
 	opts.TcpEstablished = proto.Bool(hasTCP || args.GetCriuOpts().GetTcpEstablished())
 	opts.TcpClose = proto.Bool(args.GetCriuOpts().GetTcpClose())
+	opts.TcpSkipInFlight = proto.Bool(args.GetCriuOpts().GetTcpSkipInFlight())
 	opts.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 	opts.FileLocks = proto.Bool(true)
 	opts.LeaveRunning = proto.Bool(args.GetCriuOpts().GetLeaveRunning() || viper.GetBool("client.leave_running"))
@@ -258,8 +258,8 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	return nil
 }
 
-func (s *service) prepareDumpOpts() *rpc.CriuOpts {
-	opts := rpc.CriuOpts{
+func (s *service) prepareDumpOpts() *criu.CriuOpts {
+	opts := criu.CriuOpts{
 		LogLevel:   proto.Int32(CRIU_DUMP_LOG_LEVEL),
 		LogFile:    proto.String(CRIU_DUMP_LOG_FILE),
 		GhostLimit: proto.Uint32(GHOST_LIMIT),
@@ -321,25 +321,42 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 }
 
 func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
-	buf := new(bytes.Buffer)
 	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
-	cmd.Stderr = buf
 	var err error
-	/*stdout, err := cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	pipe := bufio.NewReader(stdout)
+	outpipe := bufio.NewReader(stdout)
 	go func() {
 		for {
-			line, err := pipe.ReadString('\n')
+			line, err := outpipe.ReadString('\n')
 			if err != nil {
 				break
 			}
 			line = strings.TrimSuffix(line, "\n")
 			log.Info().Msg(line)
 		}
-	}()*/
+	}()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	i := 0
+	errpipe := bufio.NewReader(stderr)
+	go func() {
+		for {
+			line, err := errpipe.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSuffix(line, "\n")
+			if i != 0 {
+				log.Error().Msg(line)
+			}
+			i += 1
+		}
+	}()
 	err = cmd.Start()
 	if err != nil {
 		log.Error().Msgf("unable to exec image streamer server: %v", err)
@@ -347,7 +364,7 @@ func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.C
 	}
 	log.Info().Int("PID", cmd.Process.Pid).Msg("started cedana-image-streamer")
 
-	for buf.Len() == 0 {
+	for i == 0 {
 		log.Info().Msgf("waiting for cedana-image-streamer to setup...")
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -361,8 +378,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 	if err != nil {
 		return err
 	}
-
-	log.Info().Int32("stream", args.Stream).Msg("")
 
 	if state.GPU {
 		err = s.gpuDump(ctx, dumpdir, args.Stream > 0, state.JID)
