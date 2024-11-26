@@ -10,10 +10,14 @@ buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-00000000000000-3ee9a9b2e1a6.1 h1:WPu6
 buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-00000000000000-3ee9a9b2e1a6.1/go.mod h1:PS+uTBH3Bk7T2RGFge6Nk39TzmN6uhm77OWXLYVqCf4=
 buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241120213244-06763032c670.1 h1:fW0Pf9Xqa8zwA/f24lG+cNCUsItq27Vk0B9IFy/VwPA=
 buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241120213244-06763032c670.1/go.mod h1:gUkkKjYHTLQFc5Mar8CdEq9TUqa1TiJ4g7Bvmf2IYlE=
+buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241126224120-f71196128a6a.1 h1:+VUSy7zACBmNsdm2rYx+/NkE9bmN23IOoHIGC/ya/ZM=
+buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241126224120-f71196128a6a.1/go.mod h1:PaznPifUSiYmQbRCJOEila/3z3Tt8wAKJXvx2qQAznw=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-00000000000000-3ee9a9b2e1a6.1 h1:l0dyX51oiXAdPyNetvnTznmPlQn19eGLFnngi2yIVLM=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-00000000000000-3ee9a9b2e1a6.1/go.mod h1:14P29lBGPpmKBTOhetR/D806Xraxf+f7Zw9nwaWSOmo=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241120213244-06763032c670.1 h1:8mJImDs0Q83s61/MN4V3aPJnip6YJRU2IneghwohXyw=
 buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241120213244-06763032c670.1/go.mod h1:14P29lBGPpmKBTOhetR/D806Xraxf+f7Zw9nwaWSOmo=
+buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241126224120-f71196128a6a.1 h1:7gpC+AAH6RLTP6Q27Iqrfx33SXBxz5KutSawjJQuIlQ=
+buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241126224120-f71196128a6a.1/go.mod h1:14P29lBGPpmKBTOhetR/D806Xraxf+f7Zw9nwaWSOmo=
 buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2 h1:kwXHtlUqAOBK5y8cE7PJdH3aVCqQ6MvH4bWAL1XCkFs=
 buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2/go.mod h1:oPrkbz2tVi+fhZbClTT2M5jJaNJhRtrAv8Ef/j/kwwc=
 buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-1c06d68a2426.1 h1:s9F3sDkmPcWk77ijmQLg2taxF6Bf0lbkvtwrVczHZGg=
