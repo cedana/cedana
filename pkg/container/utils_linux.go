@@ -256,7 +256,7 @@ func Create(root, id string, config *configs.Config) (*RuncContainer, error) {
 	if cm.Exists() {
 		// pids, err := cm.GetAllPids()
 		// Reading PIDs can race with cgroups removal, so ignore ENOENT and ENODEV.
-		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENODEV) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENODEV) {
 			return nil, fmt.Errorf("unable to get cgroup PIDs: %w", err)
 		}
 		//if len(pids) != 0 {
