@@ -62,7 +62,7 @@ func (s *service) Manage(ctx context.Context, args *task.ManageArgs) (*task.Mana
 	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{args.PID}})
 	if queryResp != nil && len(queryResp.Processes) > 0 {
 		if utils.PidExists(uint32(args.PID)) {
-			err = status.Error(codes.AlreadyExists, "PID already exists as a managed job")
+			err = status.Error(codes.AlreadyExists, "PID already running as a managed job")
 			return nil, err
 		}
 	}
