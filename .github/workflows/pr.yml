@@ -136,7 +136,7 @@ jobs:
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
-          mkdir -p /cedana/scripts
+          sudo mkdir -p /cedana/scripts
           sudo cp ./setup-host.sh /cedana/scripts/setup-host.sh
           sudo cp ./build-start-daemon.sh /cedana/scripts/build-start-daemon.sh
           sudo /cedana/scripts/setup-host.sh
