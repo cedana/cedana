@@ -6,8 +6,8 @@ toolchain go1.22.2
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-20241120213244-d99a43b0c85e.1
-	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241120213244-06763032c670.1
-	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241120213244-06763032c670.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241126224120-f71196128a6a.1
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241126224120-f71196128a6a.1
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
 	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241120213244-f9aa09c7b23a.1
 	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-20241120213244-f9aa09c7b23a.1
