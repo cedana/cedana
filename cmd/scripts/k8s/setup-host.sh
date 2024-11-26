@@ -19,6 +19,7 @@ EOT
 # Create Cedana directories
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts
 
+# We load the binary from docker image for the container
 # Copy Cedana binaries to the host
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/cedana/scripts/build-start-daemon.sh

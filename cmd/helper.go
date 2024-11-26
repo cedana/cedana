@@ -269,7 +269,7 @@ func runScript(command, script string, logOutput bool) error {
 
 var startChrootScript = `
 #!/bin/bash
-chroot /host bash /run-cedana.sh
+chroot /host bash /cedana/scripts/run-cedana.sh
 `
 
 func startDaemon(startChroot bool) error {
