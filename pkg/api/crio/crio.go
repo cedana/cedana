@@ -415,6 +415,7 @@ func removeBuildahContainer(containerID string) error {
 
 	return nil
 }
+
 func getStoreBuildah() (storage.Store, error) {
 	options, err := storage.DefaultStoreOptions()
 	if err != nil {
@@ -485,9 +486,8 @@ func Tail(a []string) []string {
 	}
 	return []string{}
 }
-func buildahCommit(containerID, newImageRef) {
-	commit(args)
-}
+
+
 func commit(args []string, iopts commitInputOptions) error {
 	var dest types.ImageReference
 	if len(args) == 0 {
@@ -642,6 +642,13 @@ func commit(args []string, iopts commitInputOptions) error {
 	return nil
 }
 
+
+ func buildahCommit(args string[] iopts commitInputOptions) {
+	containerID := args[0]
+	newImageRef := args[1]
+	commit(containerID, newImageRef)
+}
+
 // WARN:
 // currently we are using buildah CLI for commits to images, there are various bugs in older
 // versions of buildah, it is imperative we use the latest buildah binary (v1.37.3) which we
@@ -750,8 +757,8 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	}
 
 	log.Debug().Msgf("committing to %s", newImageRef)
-	cmd = exec.Command("buildah", "commit", containerID, newImageRef)
-	out, err = cmd.CombinedOutput()
+	cmd = buildahCommit(containerID, newImageRef)
+	out, err = dcmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("issue committing image: %s, %s", err.Error(), string(out))
 	}
