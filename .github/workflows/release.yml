@@ -54,7 +54,7 @@ jobs:
       packages: 'read'
       id-token: 'write'
       pull-requests: 'write'
-    env:
+    secrets:
       CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}
       CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
       SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
