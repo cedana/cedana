@@ -90,7 +90,6 @@ func (s *service) setupStreamerServe(dumpdir string, num_pipes int32) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
-	return cmd
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -110,7 +109,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(ctx, tempDir, args.Stream)
+		s.setupStreamerServe(tempDir, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -308,7 +307,9 @@ func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Noti
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		if opts.Stream == nil || !*opts.Stream {
+			os.RemoveAll(dir)
+		}
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
