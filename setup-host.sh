@@ -28,7 +28,7 @@ install_criu_ubuntu_2204() {
         x86_64 | amd64)
             TAG=latest
             curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
-            sudo cp criu /usr/local/sbin/
+            cp criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
@@ -79,7 +79,7 @@ fi
 # create and store startup script for cedana
 # this will be used to restart the daemon if it crashes
 echo "#!/bin/bash" > /cedana/scripts/run-cedana.sh
-echo "./build-start-daemon.sh --systemctl --no-build --k8s ${GPU}" >> /cedana/scripts/run-cedana.sh
+echo "/cedana/scripts/build-start-daemon.sh --systemctl --no-build --k8s ${GPU}" >> /cedana/scripts/run-cedana.sh
 chmod +x /cedana/scripts/run-cedana.sh
 
 bash /cedana/scripts/run-cedana.sh
