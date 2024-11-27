@@ -240,7 +240,7 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 	}
 
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("error restoring vm: %d, %v, req data: %v, socket path: %s", resp.StatusCode, string(body), data, vmSocketPath)
+		return fmt.Errorf("error restoring vm: %d, %v, req data: %v, socket path: %s", resp.StatusCode, string(body), string(jsonData), vmSocketPath)
 	}
 
 	return nil
