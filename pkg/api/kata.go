@@ -182,14 +182,32 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 }
 
 type RestoreConfig struct {
-	SourceURL string                    `json:"source_url"`
-	Prefault  bool                      `json:"prefault"`
-	NetFDs    []*task.RestoredNetConfig `json:"net_fds,omitempty"`
+	SourceURL string               `json:"source_url"`
+	Prefault  bool                 `json:"prefault"`
+	NetFDs    []*RestoredNetConfig `json:"net_fds,omitempty"`
+}
+
+type RestoredNetConfig struct {
+	ID     string  `json:"id"`
+	NumFDs int64   `json:"num_fds"`
+	Fds    []int64 `json:"fds,omitempty"`
 }
 
 func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfigs []*task.RestoredNetConfig) error {
 
-	data := RestoreConfig{SourceURL: snapshotPath, Prefault: true, NetFDs: netConfigs}
+	var clhNetConfigs []*RestoredNetConfig
+
+	for _, netCfg := range netConfigs {
+		clhNetConfig := &RestoredNetConfig{
+			ID:     netCfg.GetID(),
+			NumFDs: netCfg.GetNumFDs(),
+			Fds:    netCfg.GetFds(),
+		}
+
+		clhNetConfigs = append(clhNetConfigs, clhNetConfig)
+	}
+
+	data := RestoreConfig{SourceURL: snapshotPath, Prefault: true, NetFDs: clhNetConfigs}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request data: %w", err)
