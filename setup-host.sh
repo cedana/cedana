@@ -28,7 +28,7 @@ install_criu_ubuntu_2204() {
         x86_64 | amd64)
             TAG=latest
             mkdir -p /cedana/bin
-            wget https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu -O /cedana/bin/criu
+            wget --header "Authorization: Bearer $CEDANA_AUTH_TOKEN" "$CEDANA_URL/k8s/criu/$TAG" -O /cedana/bin/criu
             chmod +x /cedana/bin/criu
             cp /cedana/bin/criu /usr/local/sbin/
             ;;
