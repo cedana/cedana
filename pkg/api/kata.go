@@ -182,9 +182,9 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 }
 
 type RestoreConfig struct {
-	SourceURL string               `json:"source_url"`
-	Prefault  bool                 `json:"prefault"`
-	NetFDs    []*RestoredNetConfig `json:"net_fds,omitempty"`
+	SourceURL string              `json:"source_url"`
+	Prefault  bool                `json:"prefault"`
+	NetFDs    []RestoredNetConfig `json:"net_fds,omitempty"`
 }
 
 type RestoredNetConfig struct {
@@ -195,10 +195,10 @@ type RestoredNetConfig struct {
 
 func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfigs []*task.RestoredNetConfig) error {
 
-	var clhNetConfigs []*RestoredNetConfig
+	var clhNetConfigs []RestoredNetConfig
 
 	for _, netCfg := range netConfigs {
-		clhNetConfig := &RestoredNetConfig{
+		clhNetConfig := RestoredNetConfig{
 			ID:     netCfg.GetID(),
 			NumFDs: netCfg.GetNumFDs(),
 			Fds:    netCfg.GetFds(),
