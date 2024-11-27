@@ -59,6 +59,7 @@ EOT
 COPY ./build.sh /usr/local/bin/
 COPY ./build-start-daemon.sh /usr/local/bin/
 COPY ./setup-host.sh /usr/local/bin/
+COPY ./reset.sh /usr/local/bin/
 COPY ./stop-daemon.sh /usr/local/bin/
 COPY ./scripts/otelcol-config.yaml /usr/local/bin/otelcol-config.yaml
 

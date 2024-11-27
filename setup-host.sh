@@ -1,11 +1,5 @@
 #!/bin/bash
 
-if [[ $SKIPSETUP -eq 1 ]]; then
-    cd /
-    ./build-start-daemon.sh --systemctl --no-build --otel --k8s
-    exit 0
-fi
-
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf libnl3-devel
@@ -33,8 +27,10 @@ install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
             TAG=latest
-            curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
-            sudo cp criu /usr/local/sbin/
+            mkdir -p /cedana/bin
+            wget --header "Authorization: Bearer $CEDANA_AUTH_TOKEN" "$CEDANA_URL/k8s/criu/$TAG" -O /cedana/bin/criu
+            chmod +x /cedana/bin/criu
+            cp /cedana/bin/criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
@@ -76,13 +72,16 @@ else
     exit 1
 fi
 
-# if gpu driver present enable it!
 GPU=""
-if command -v nvidia-smi &>/dev/null; then
-    echo "nvidia-smi found! CUDA Version: $(nvidia-smi --version | grep CUDA | cut -d ':' -f 2)"
+if [ -f /proc/driver/nvidia/gpus/ ]; then
+    echo "nvidia-gpu found!"
     GPU="--gpu"
 fi
 
-# Run the Cedana daemon setup script
-cd /
-./build-start-daemon.sh --systemctl --no-build --k8s ${GPU}
+# create and store startup script for cedana
+# this will be used to restart the daemon if it crashes
+echo "#!/bin/bash" > /cedana/scripts/run-cedana.sh
+echo "/cedana/scripts/build-start-daemon.sh --systemctl --no-build --k8s ${GPU}" >> /cedana/scripts/run-cedana.sh
+chmod +x /cedana/scripts/run-cedana.sh
+
+bash /cedana/scripts/run-cedana.sh
