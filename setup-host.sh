@@ -7,8 +7,8 @@ YUM_PACKAGES=(
 )
 
 APT_PACKAGES=(
-    wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev pkg-config libprotobuf-dev python3-protobuf build-essential
-    libprotobuf-c1 buildah libnftables1 libelf-dev
+    wget libgpgme11-dev libseccomp-dev libbtrfs-dev git make libnl-3-dev libnet-dev libbsd-dev libcap-dev libprotobuf-dev python3-protobuf build-essential
+    libprotobuf-c1 buildah libnftables1 libelf-dev sysvinit-utils
 )
 
 # Function to install APT packages
@@ -27,8 +27,8 @@ install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
             TAG=latest
-            curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
-            sudo cp criu /usr/local/sbin/
+            curl -1sLf -O /cedana/bin/criu https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+            sudo cp /cedana/bin/criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
@@ -72,7 +72,52 @@ fi
 
 GPU=""
 if [ -f /proc/driver/nvidia/gpus/ ]; then
-    echo "nvidia-gpu found!"
+    echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
+    if [ /sbin/ldconfig -p | grep -q libcuda.so.1 ]; then
+        echo "CUDA drivers found!"
+    fi
+
+    set -e
+    echo "Downloading cedana's nvidia interception utilities..."
+
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/cedana-gpu-controller &> /dev/null
+    chmod +x /cedana/bin/cedana-gpu-controlller
+    install /cedana/bin/cedana-gpu-controlller /usr/local/bin/cedana-gpu-controlller
+
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/lib/libcedana-gpu.so $CEDANA_URL/k8s/gpu/libcedana-gpu &> /dev/null
+    install /cedana/lib/libcedana-gpu.so /usr/local/lib/libcedana-gpu.so
+
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/bin/containerd-shim-runc-v2 $CEDANA_URL/k8s/cedana-shim/latest &> /dev/null
+    chmod +x /cedana/bin/containerd-shim-runc-v2
+
+    mkdir -p /usr/local/cedana/bin
+    install /cedana/bin/containerd-shim-runc-v2 /usr/local/cedana/bin/containerd-shim-runc-v2
+
+    PATH_CONTAINERD_CONFIG="/etc/containerd/config.toml"
+    if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
+        echo "Containerd config file not found at $PATH_CONTAINERD_CONFIG"
+        echo "Searching for containerd config file..."
+        PATH_CONTAINERD_CONFIG=$(find / -fullname **/containerd/config.toml | head -n 1)
+        if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
+            echo "Containerd config file not found. Exiting..."
+            exit 1
+        fi
+        echo "Found containerd config file at $PATH_CONTAINERD_CONFIG"
+    fi
+
+    echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+    echo <<<EOL
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+      runtime_type = "io.containerd.runc.v2"
+      runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
+    EOF >> $PATH_CONTAINERD_CONFIG
+
+    # SIGHUP is sent to the containerd process to reload the configuration
+    echo "Sending SIGHUP to containerd..."
+    kill -HUP $(pidof containerd)
+
+    set +e
+
     GPU="--gpu"
 fi
 
