@@ -67,7 +67,9 @@ var startDaemonCmd = &cobra.Command{
 			_, err := utils.InitOtel(ctx, rootCmd.Version)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to initialize otel")
-				return err
+				// fallback to noop
+				log.Warn().Msg("Falling back to noop tracer")
+				utils.InitOtelNoop()
 			}
 		} else {
 			utils.InitOtelNoop()
