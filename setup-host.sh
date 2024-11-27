@@ -27,8 +27,10 @@ install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
             TAG=latest
-            curl -1sLf -O /cedana/bin/criu https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
-            sudo cp /cedana/bin/criu /usr/local/sbin/
+            mkdir -p /cedana/bin
+            wget --header "Authorization: Bearer $CEDANA_AUTH_TOKEN" "$CEDANA_URL/k8s/criu/$TAG" -O /cedana/bin/criu
+            chmod +x /cedana/bin/criu
+            cp /cedana/bin/criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
@@ -117,14 +119,13 @@ if [ -f /proc/driver/nvidia/gpus/ ]; then
     kill -HUP $(pidof containerd)
 
     set +e
-
     GPU="--gpu"
 fi
 
 # create and store startup script for cedana
 # this will be used to restart the daemon if it crashes
 echo "#!/bin/bash" > /cedana/scripts/run-cedana.sh
-echo "./build-start-daemon.sh --systemctl --no-build --k8s ${GPU}" >> /cedana/scripts/run-cedana.sh
+echo "/cedana/scripts/build-start-daemon.sh --systemctl --no-build --k8s ${GPU}" >> /cedana/scripts/run-cedana.sh
 chmod +x /cedana/scripts/run-cedana.sh
 
 bash /cedana/scripts/run-cedana.sh
