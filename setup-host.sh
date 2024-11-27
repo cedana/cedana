@@ -27,8 +27,9 @@ install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
             TAG=latest
-            curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
-            cp criu /usr/local/sbin/
+            curl -1sLf -O /cedana/bin/criu https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+            chmod +x /cedana/bin/criu
+            cp /cedana/bin/criu /usr/local/sbin/
             ;;
         aarch64 | arm64)
             PACKAGE_URL="https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/arm64/criu_4.0-3_arm64.deb"
