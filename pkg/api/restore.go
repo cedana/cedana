@@ -630,6 +630,7 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 	if err != nil {
 		return 0, nil, err
 	}
+
 	if args.Stream <= 0 {
 		defer os.RemoveAll(dir) // since it's a temporary directory
 	}
@@ -639,6 +640,13 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, state.JID)
 		if err != nil {
 			return 0, nil, err
+		}
+
+		nfy.PreResumeFunc = NotifyFunc{
+			Avail: true,
+			Callback: func() error {
+				return s.UnblockGPUController(ctx, state.JID)
+			},
 		}
 	}
 
