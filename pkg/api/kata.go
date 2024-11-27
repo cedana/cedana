@@ -81,12 +81,13 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 }
 
 func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKataArgs) (*task.HostRestoreKataResp, error) {
-	isVMSnapshot := args.VMSnapshot
-	snapshot := args.VMSnapshotPath
-	socketPath := args.VMSocketPath
+	isVMSnapshot := args.GetVMSnapshot()
+	snapshot := args.GetVMSnapshotPath()
+	socketPath := args.GetVMSocketPath()
+	restoredNetConfig := args.GetRestoredNetConfig()
 
 	if isVMSnapshot {
-		err := s.vmSnapshotter.Restore(snapshot, socketPath)
+		err := s.vmSnapshotter.Restore(snapshot, socketPath, restoredNetConfig)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Restore task failed during vmSnapshotter Restore: %v", err)
 		}
@@ -133,7 +134,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 
 type VMSnapshot interface {
 	Snapshot(destinationURL, vmSocketPath string) error
-	Restore(snapshotPath, vmSocketPath string) error
+	Restore(snapshotPath, vmSocketPath string, netConfigs []*task.RestoredNetConfig) error
 	Pause(vmSocketPath string) error
 	Resume(vmSocketPath string) error
 }
@@ -181,17 +182,14 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error 
 }
 
 type RestoreConfig struct {
-	SourceURL string               `json:"source_url"`
-	Prefault  bool                 `json:"prefault"`
-	NetFds    *[]RestoredNetConfig `json:"net_fds,omitempty"`
+	SourceURL string                    `json:"source_url"`
+	Prefault  bool                      `json:"prefault"`
+	NetFDs    []*task.RestoredNetConfig `json:"net_fds,omitempty"`
 }
 
-type RestoredNetConfig struct {
-	Fds []int `json:"fds"`
-}
+func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfigs []*task.RestoredNetConfig) error {
 
-func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string) error {
-	data := RestoreConfig{SourceURL: snapshotPath, Prefault: true}
+	data := RestoreConfig{SourceURL: snapshotPath, Prefault: true, NetFDs: netConfigs}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request data: %w", err)
