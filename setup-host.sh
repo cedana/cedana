@@ -27,7 +27,8 @@ install_criu_ubuntu_2204() {
     case $(uname -m) in
         x86_64 | amd64)
             TAG=latest
-            curl -1sLf -O /cedana/bin/criu https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+            mkdir -p /cedana/bin
+            wget https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu -O /cedana/bin/criu
             chmod +x /cedana/bin/criu
             cp /cedana/bin/criu /usr/local/sbin/
             ;;
