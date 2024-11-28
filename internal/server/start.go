@@ -65,16 +65,16 @@ func pluginStartHandler() types.Start {
 			handler = handlers.Run()
 		default:
 			// Use plugin-specific handler
-			err = featureStartHandler.IfAvailable(func(
-				name string,
-				pluginHandler types.Start,
-			) error {
+			err = featureStartHandler.IfAvailable(func(name string, pluginHandler types.Start) error {
 				handler = pluginHandler
 				return nil
 			})
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
+		}
+		if req.GPUEnabled {
+			handler = handler.With(adapters.GPUInterception)
 		}
 		return handler(ctx, server, resp, req)
 	}

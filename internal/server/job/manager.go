@@ -53,7 +53,6 @@ type Manager interface {
 		ctx context.Context,
 		lifetime context.Context,
 		jid string,
-		controllerPath string,
 	) error
 
 	// AttachGPUAsync calls AttachGPU in background.
@@ -62,6 +61,5 @@ type Manager interface {
 		ctx context.Context,
 		lifetime context.Context,
 		jid string,
-		controllerPath string,
 	) <-chan error
 }

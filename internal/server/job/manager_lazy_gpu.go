@@ -14,6 +14,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -51,13 +52,19 @@ func (m *ManagerLazy) AttachGPU(
 	ctx context.Context,
 	lifetime context.Context,
 	jid string,
-	controllerPath string,
 ) error {
-	if _, err := os.Stat(controllerPath); err != nil {
+	// Check if GPU plugin is installed
+	var gpu *plugins.Plugin
+	if gpu = m.plugins.Get("gpu"); gpu.Status != plugins.Installed {
+		return fmt.Errorf("Please install the GPU plugin to use GPU support")
+	}
+	binary := gpu.BinaryPaths()[0]
+
+	if _, err := os.Stat(binary); err != nil {
 		return err
 	}
 
-	job := m.jobs[jid]
+	job := m.Get(jid)
 	job.SetGPUEnabled(true)
 	m.pending <- action{update, job}
 
@@ -66,7 +73,7 @@ func (m *ManagerLazy) AttachGPU(
 		return err
 	}
 
-	cmd := exec.CommandContext(lifetime, controllerPath, jid, "--port", strconv.Itoa(port))
+	cmd := exec.CommandContext(lifetime, binary, jid, "--port", strconv.Itoa(port))
 
 	stdout, err := os.OpenFile(
 		fmt.Sprintf(GPU_CONTROLLER_LOG_PATH_FORMATTER, jid),
@@ -110,7 +117,7 @@ func (m *ManagerLazy) AttachGPU(
 		conn:   conn,
 		stderr: stderr,
 	}
-	m.gpuControllers[jid] = gpuController
+	m.gpuControllers.Store(jid, gpuController)
 
 	// Cleanup controller on exit, and signal job of its exit
 
@@ -129,7 +136,7 @@ func (m *ManagerLazy) AttachGPU(
 
 		m.Kill(jid, GPU_CONTROLLER_PREMATURE_EXIT_SIGNAL)
 		conn.Close()
-		delete(m.gpuControllers, jid)
+		m.gpuControllers.Delete(jid)
 	}()
 
 	log.Debug().Str("JID", jid).Int("port", port).Msg("waiting for GPU controller...")
@@ -141,11 +148,43 @@ func (m *ManagerLazy) AttachGPU(
 		return err
 	}
 
+	m.addCRIUCallbackGPU(lifetime, jid)
+
 	log.Debug().Str("JID", jid).Msg("GPU controller ready")
 
-	////////////////////////////////
-	//// Register C/R Callbacks ////
-	////////////////////////////////
+	return nil
+}
+
+func (m *ManagerLazy) AttachGPUAsync(
+	ctx context.Context,
+	lifetime context.Context,
+	jid string,
+) <-chan error {
+	err := make(chan error)
+
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		defer close(err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err <- m.AttachGPU(ctx, lifetime, jid):
+				return
+			}
+		}
+	}()
+
+	return err
+}
+
+//////////////////////////
+//// Helper Functions ////
+//////////////////////////
+
+func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
+	job := m.Get(jid)
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.
@@ -153,9 +192,9 @@ func (m *ManagerLazy) AttachGPU(
 		waitCtx, cancel := context.WithTimeout(ctx, GPU_DUMP_TIMEOUT)
 		defer cancel()
 
-		controller := m.gpuControllers[jid]
+		controller := m.getGPUController(jid)
 
-		_, err = controller.client.Checkpoint(waitCtx, &gpu.CheckpointRequest{Directory: dir})
+		_, err := controller.client.Checkpoint(waitCtx, &gpu.CheckpointRequest{Directory: dir})
 		if err != nil {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 			return err
@@ -168,7 +207,7 @@ func (m *ManagerLazy) AttachGPU(
 	// to CRIU restore. We instead block at pre-resume, to maximize concurrency.
 	restoreErr := make(chan error)
 	job.CRIUCallback.PreRestoreFunc = func(ctx context.Context, dir string) error {
-		err := m.AttachGPU(ctx, lifetime, jid, controllerPath) // Re-attach a GPU to the job
+		err := m.AttachGPU(ctx, lifetime, jid) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -179,7 +218,7 @@ func (m *ManagerLazy) AttachGPU(
 			waitCtx, cancel := context.WithTimeout(ctx, GPU_RESTORE_TIMEOUT)
 			defer cancel()
 
-			controller := m.gpuControllers[jid]
+			controller := m.getGPUController(jid)
 			_, err = controller.client.Restore(waitCtx, &gpu.RestoreRequest{Directory: dir})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
@@ -195,38 +234,7 @@ func (m *ManagerLazy) AttachGPU(
 	job.CRIUCallback.PreResumeFunc = func(ctx context.Context, pid int32) error {
 		return <-restoreErr
 	}
-
-	return nil
 }
-
-func (m *ManagerLazy) AttachGPUAsync(
-	ctx context.Context,
-	lifetime context.Context,
-	jid string,
-	controller string,
-) <-chan error {
-	err := make(chan error)
-
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		defer close(err)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case err <- m.AttachGPU(ctx, lifetime, jid, controller):
-				return
-			}
-		}
-	}()
-
-	return err
-}
-
-//////////////////////////
-//// Helper Functions ////
-//////////////////////////
 
 // Health checks the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.

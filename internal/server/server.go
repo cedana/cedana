@@ -60,6 +60,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	ctx = log.With().Str("context", "server").Logger().WithContext(ctx)
 	var err error
 
+	wg := &sync.WaitGroup{}
+
 	machineID, err := utils.GetMachineID()
 	if err != nil {
 		return nil, err
@@ -75,14 +77,12 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
-	wg := &sync.WaitGroup{}
+	pluginManager := plugins.NewManagerLocal()
 
-	jobManager, err := job.NewManagerDBLazy(ctx, wg)
+	jobManager, err := job.NewManagerDBLazy(ctx, wg, pluginManager)
 	if err != nil {
 		return nil, err
 	}
-
-	pluginManager := plugins.NewManagerLocal()
 
 	criu := criu.MakeCriu()
 

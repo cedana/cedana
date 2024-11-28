@@ -9,6 +9,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 type Job struct {
@@ -19,7 +20,7 @@ type Job struct {
 	// Will be called each time the job is C/R'd.
 	CRIUCallback *criu.NotifyCallback
 
-	m sync.RWMutex
+	sync.RWMutex
 }
 
 func newJob(
@@ -34,8 +35,6 @@ func newJob(
 			Details: &daemon.Details{},
 		},
 		CRIUCallback: &criu.NotifyCallback{},
-
-		m: sync.RWMutex{},
 	}
 }
 
@@ -52,85 +51,84 @@ func fromProto(j *daemon.Job) *Job {
 			GPUEnabled:     j.GetGPUEnabled(),
 		},
 		CRIUCallback: &criu.NotifyCallback{},
-		m:            sync.RWMutex{},
 	}
 }
 
 func (j *Job) GetPID() uint32 {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.GetDetails().GetPID()
 }
 
 func (j *Job) GetProto() *daemon.Job {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return &j.proto
 }
 
 func (j *Job) GetType() string {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.Type
 }
 
 func (j *Job) SetType(jobType string) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.Type = jobType
 }
 
 func (j *Job) GetProcess() *daemon.ProcessState {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.Process
 }
 
 func (j *Job) SetProcess(process *daemon.ProcessState) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.Process = process
 }
 
 func (j *Job) GetDetails() *daemon.Details {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.Details
 }
 
 func (j *Job) SetDetails(details *daemon.Details) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.Details = details
 }
 
 func (j *Job) GetLog() string {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.Log
 }
 
 func (j *Job) SetLog(log string) {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.Log = log
 }
 
 func (j *Job) SetCheckpointPath(path string) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.CheckpointPath = path
 }
 
 func (j *Job) GetCheckpointPath() string {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.CheckpointPath
 }
 
 func (j *Job) SetRunning(isRunning bool) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 
 	if j.proto.GetProcess() == nil {
 		j.proto.Process = &daemon.ProcessState{}
@@ -142,19 +140,32 @@ func (j *Job) SetRunning(isRunning bool) {
 }
 
 func (j *Job) IsRunning() bool {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.GetProcess().GetInfo().GetIsRunning()
 }
 
+// SetRunningAuto sets the running state of the job to false if the PID does not exist.
+// Returns true if the job was updated.
+func (j *Job) SetRunningAuto() bool {
+	pid := j.GetPID()
+	savedRunning := j.IsRunning()
+
+	if savedRunning && !utils.PidExists(pid) {
+		j.SetRunning(false)
+		return true
+	}
+	return false
+}
+
 func (j *Job) GPUEnabled() bool {
-	j.m.RLock()
-	defer j.m.RUnlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.proto.GPUEnabled
 }
 
 func (j *Job) SetGPUEnabled(enabled bool) {
-	j.m.Lock()
-	defer j.m.Unlock()
+	j.Lock()
+	defer j.Unlock()
 	j.proto.GPUEnabled = enabled
 }
