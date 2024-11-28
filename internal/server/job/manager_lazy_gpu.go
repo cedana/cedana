@@ -205,7 +205,7 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 			return err
 		}
-		log.Info().Str("JID", jid).Msg("GPU dumped")
+		log.Info().Str("JID", jid).Msg("GPU dump complete")
 		return err
 	}
 
@@ -236,7 +236,7 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 				restoreErr <- err
 				return
 			}
-			log.Info().Str("JID", jid).Msg("GPU restored")
+			log.Info().Str("JID", jid).Msg("GPU restore complete")
 		}()
 		return nil
 	}
