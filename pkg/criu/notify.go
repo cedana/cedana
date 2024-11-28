@@ -1,12 +1,16 @@
 package criu
 
-import "context"
+import (
+	"context"
+
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+)
 
 // Notify interface
 type Notify interface {
-	PreDump(ctx context.Context, dir string) error
-	PostDump(ctx context.Context, dir string) error
-	PreRestore(ctx context.Context, dir string) error
+	PreDump(ctx context.Context, opts *criu.CriuOpts) error
+	PostDump(ctx context.Context, opts *criu.CriuOpts) error
+	PreRestore(ctx context.Context, opts *criu.CriuOpts) error
 	PostRestore(ctx context.Context, pid int32) error
 	NetworkLock(ctx context.Context) error
 	NetworkUnlock(ctx context.Context) error

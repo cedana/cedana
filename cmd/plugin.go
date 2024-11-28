@@ -89,12 +89,10 @@ var pluginListCmd = &cobra.Command{
 			return nil
 		}
 
-		writer := table.NewWriter()
-		writer.SetOutputMirror(cmd.OutOrStdout())
-		writer.SetStyle(style.TableStyle)
-		writer.Style().Options.SeparateRows = false
+		style.TableWriter.SetStyle(style.TableStyle)
+		style.TableWriter.Style().Options.SeparateRows = false
 
-		writer.AppendHeader(table.Row{
+		style.TableWriter.AppendHeader(table.Row{
 			"Plugin",
 			"Size",
 			"Status",
@@ -115,6 +113,8 @@ var pluginListCmd = &cobra.Command{
 				return style.WarningColor.Sprint(s.String())
 			case plugins.Installed:
 				return style.PositiveColor.Sprint(s.String())
+			case plugins.Unknown:
+				return style.DisbledColor.Sprint(s.String())
 			default:
 				return s.String()
 			}
@@ -128,10 +128,10 @@ var pluginListCmd = &cobra.Command{
 				p.Version,
 				p.LatestVersion,
 			}
-			writer.AppendRow(row)
+			style.TableWriter.AppendRow(row)
 		}
 
-		writer.Render()
+		style.TableWriter.Render()
 
 		installedCount := 0
 		availableCount := 0
@@ -143,7 +143,7 @@ var pluginListCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("%d installed, %d available\n", installedCount, availableCount)
+		fmt.Printf("\n%d installed, %d available\n", installedCount, availableCount)
 
 		return nil
 	},

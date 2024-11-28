@@ -14,6 +14,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -188,13 +189,18 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.
-	job.CRIUCallback.PreDumpFunc = func(ctx context.Context, dir string) error {
+	job.CRIUCallback.PreDumpFunc = func(ctx context.Context, opts *criu.CriuOpts) error {
+		err := checkCRIUOptsCompatibilityGPU(opts)
+		if err != nil {
+			return err
+		}
+
 		waitCtx, cancel := context.WithTimeout(ctx, GPU_DUMP_TIMEOUT)
 		defer cancel()
 
 		controller := m.getGPUController(jid)
 
-		_, err := controller.client.Checkpoint(waitCtx, &gpu.CheckpointRequest{Directory: dir})
+		_, err = controller.client.Checkpoint(waitCtx, &gpu.CheckpointRequest{Directory: opts.GetImagesDir()})
 		if err != nil {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 			return err
@@ -206,8 +212,13 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
 	// to CRIU restore. We instead block at pre-resume, to maximize concurrency.
 	restoreErr := make(chan error)
-	job.CRIUCallback.PreRestoreFunc = func(ctx context.Context, dir string) error {
-		err := m.AttachGPU(ctx, lifetime, jid) // Re-attach a GPU to the job
+	job.CRIUCallback.PreRestoreFunc = func(ctx context.Context, opts *criu.CriuOpts) error {
+		err := checkCRIUOptsCompatibilityGPU(opts)
+		if err != nil {
+			return err
+		}
+
+		err = m.AttachGPU(ctx, lifetime, jid) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -219,7 +230,7 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 			defer cancel()
 
 			controller := m.getGPUController(jid)
-			_, err = controller.client.Restore(waitCtx, &gpu.RestoreRequest{Directory: dir})
+			_, err = controller.client.Restore(waitCtx, &gpu.RestoreRequest{Directory: opts.GetImagesDir()})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
 				restoreErr <- err
@@ -267,6 +278,14 @@ func (m *ManagerLazy) checkGPUHealth(ctx context.Context, controller *gpuControl
 			controller.stderr.WriteString("GPU health check failed")
 		}
 		return utils.GRPCErrorShort(err, controller.stderr.String())
+	}
+	return nil
+}
+
+// Certain CRIU options are not compatible with GPU support.
+func checkCRIUOptsCompatibilityGPU(opts *criu.CriuOpts) error {
+	if opts.GetLeaveRunning() {
+		return fmt.Errorf("leave_running is not compatible with GPU support")
 	}
 	return nil
 }

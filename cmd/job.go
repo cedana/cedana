@@ -73,12 +73,7 @@ var listJobCmd = &cobra.Command{
 			return nil
 		}
 
-		writer := table.NewWriter()
-		writer.SetOutputMirror(cmd.OutOrStdout())
-		writer.SetStyle(style.TableStyle)
-		writer.Style().Options.SeparateRows = false
-
-		writer.AppendHeader(table.Row{
+		style.TableWriter.AppendHeader(table.Row{
 			"Job",
 			"Type",
 			"PID",
@@ -98,12 +93,15 @@ var listJobCmd = &cobra.Command{
 				job.GetCheckpointPath(),
 				style.BoolStr(job.GetGPUEnabled()),
 			}
-			writer.AppendRow(row)
+			style.TableWriter.AppendRow(row)
 		}
 
-		writer.SortBy([]table.SortBy{{Name: "State", Mode: table.Dsc}})
+		style.TableWriter.SortBy([]table.SortBy{
+			{Name: "State"},
+			{Name: "Last Checkpoint"},
+		})
 
-		writer.Render()
+		style.TableWriter.Render()
 
 		return nil
 	},

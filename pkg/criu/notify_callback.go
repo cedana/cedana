@@ -2,12 +2,16 @@ package criu
 
 // Implements the Notify interface to support callbacks
 
-import "context"
+import (
+	"context"
+
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+)
 
 type NotifyCallback struct {
-	PreDumpFunc             NotifyFuncDir
-	PostDumpFunc            NotifyFuncDir
-	PreRestoreFunc          NotifyFuncDir
+	PreDumpFunc             NotifyFuncOpts
+	PostDumpFunc            NotifyFuncOpts
+	PreRestoreFunc          NotifyFuncOpts
 	PostRestoreFunc         NotifyFuncPid
 	NetworkLockFunc         NotifyFunc
 	NetworkUnlockFunc       NotifyFunc
@@ -19,15 +23,15 @@ type NotifyCallback struct {
 }
 
 type (
-	NotifyFunc    func(ctx context.Context) error
-	NotifyFuncDir func(ctx context.Context, dir string) error
-	NotifyFuncPid func(ctx context.Context, pid int32) error
-	NotifyFuncFd  func(ctx context.Context, fd int32) error
+	NotifyFunc     func(ctx context.Context) error
+	NotifyFuncOpts func(ctx context.Context, opts *criu.CriuOpts) error
+	NotifyFuncPid  func(ctx context.Context, pid int32) error
+	NotifyFuncFd   func(ctx context.Context, fd int32) error
 )
 
-func (n *NotifyCallback) PreDump(ctx context.Context, dir string) error {
+func (n *NotifyCallback) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
 	if n.PreDumpFunc != nil {
-		err := n.PreDumpFunc(ctx, dir)
+		err := n.PreDumpFunc(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -35,9 +39,9 @@ func (n *NotifyCallback) PreDump(ctx context.Context, dir string) error {
 	return nil
 }
 
-func (n *NotifyCallback) PostDump(ctx context.Context, dir string) error {
+func (n *NotifyCallback) PostDump(ctx context.Context, opts *criu.CriuOpts) error {
 	if n.PostDumpFunc != nil {
-		err := n.PostDumpFunc(ctx, dir)
+		err := n.PostDumpFunc(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -45,9 +49,9 @@ func (n *NotifyCallback) PostDump(ctx context.Context, dir string) error {
 	return nil
 }
 
-func (n *NotifyCallback) PreRestore(ctx context.Context, dir string) error {
+func (n *NotifyCallback) PreRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	if n.PreRestoreFunc != nil {
-		err := n.PreRestoreFunc(ctx, dir)
+		err := n.PreRestoreFunc(ctx, opts)
 		if err != nil {
 			return err
 		}

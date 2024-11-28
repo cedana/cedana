@@ -4,12 +4,16 @@ package criu
 // Callbacks are called in the reverse order they were registered
 // For registration, new callbacks must be appended to the end of the exiting list
 
-import "context"
+import (
+	"context"
+
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+)
 
 type NotifyCallbackMulti struct {
-	PreDumpFunc             []NotifyFuncDir
-	PostDumpFunc            []NotifyFuncDir
-	PreRestoreFunc          []NotifyFuncDir
+	PreDumpFunc             []NotifyFuncOpts
+	PostDumpFunc            []NotifyFuncOpts
+	PreRestoreFunc          []NotifyFuncOpts
 	PostRestoreFunc         []NotifyFuncPid
 	NetworkLockFunc         []NotifyFunc
 	NetworkUnlockFunc       []NotifyFunc
@@ -59,9 +63,9 @@ func (n *NotifyCallbackMulti) ImportCallback(nfy *NotifyCallback) {
 	}
 }
 
-func (n *NotifyCallbackMulti) PreDump(ctx context.Context, dir string) error {
+func (n *NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PreDumpFunc) - 1; i >= 0; i-- {
-		err := n.PreDumpFunc[i](ctx, dir)
+		err := n.PreDumpFunc[i](ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -69,9 +73,9 @@ func (n *NotifyCallbackMulti) PreDump(ctx context.Context, dir string) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PostDump(ctx context.Context, dir string) error {
+func (n *NotifyCallbackMulti) PostDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PostDumpFunc) - 1; i >= 0; i-- {
-		err := n.PostDumpFunc[i](ctx, dir)
+		err := n.PostDumpFunc[i](ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -79,9 +83,9 @@ func (n *NotifyCallbackMulti) PostDump(ctx context.Context, dir string) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PreRestore(ctx context.Context, dir string) error {
+func (n *NotifyCallbackMulti) PreRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PreRestoreFunc) - 1; i >= 0; i-- {
-		err := n.PreRestoreFunc[i](ctx, dir)
+		err := n.PreRestoreFunc[i](ctx, opts)
 		if err != nil {
 			return err
 		}

@@ -85,8 +85,6 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 			if p.Size == 0 {
 				p.Size = size
 			}
-		} else {
-			p.LatestVersion = "unknown"
 		}
 
 		if _, ok := set[p.Status]; len(set) > 0 && !ok {

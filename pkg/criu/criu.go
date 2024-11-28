@@ -192,11 +192,11 @@ func (c *Criu) doSwrkWithResp(
 		notify := resp.GetNotify()
 		switch notify.GetScript() {
 		case "pre-dump":
-			err = nfy.PreDump(ctx, opts.GetImagesDir())
+			err = nfy.PreDump(ctx, opts)
 		case "post-dump":
-			err = nfy.PostDump(ctx, opts.GetImagesDir())
+			err = nfy.PostDump(ctx, opts)
 		case "pre-restore":
-			err = nfy.PreRestore(ctx, opts.GetImagesDir())
+			err = nfy.PreRestore(ctx, opts)
 		case "post-restore":
 			err = nfy.PostRestore(ctx, notify.GetPid())
 		case "network-lock":
