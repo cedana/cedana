@@ -5,21 +5,23 @@ package db
 import (
 	"context"
 	dbsql "database/sql"
-	"encoding/json"
+	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
 	_ "github.com/mattn/go-sqlite3"
+	json "google.golang.org/protobuf/encoding/protojson"
 )
 
-const path = "/tmp/cedana.db"
+const name = "cedana.db"
 
 type LocalDB struct {
 	queries *sql.Queries
 }
 
 func NewLocalDB(ctx context.Context) (*LocalDB, error) {
-	db, err := dbsql.Open("sqlite3", path)
+	db, err := dbsql.Open("sqlite3", filepath.Join(os.TempDir(), name))
 	if err != nil {
 		return nil, err
 	}
@@ -66,19 +68,18 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 	if err != nil {
 		return err
 	}
-
-	_, err = db.queries.CreateJob(ctx, sql.CreateJobParams{
-		Jid:  jid,
-		Data: bytes,
-	})
-	if err == nil {
-		return nil
+	if _, err := db.queries.GetJob(ctx, jid); err == nil {
+		return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
+			Jid:  jid,
+			Data: bytes,
+		})
+	} else {
+		_, err := db.queries.CreateJob(ctx, sql.CreateJobParams{
+			Jid:  jid,
+			Data: bytes,
+		})
+		return err
 	}
-
-	return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
-		Jid:  jid,
-		Data: bytes,
-	})
 }
 
 /////////////

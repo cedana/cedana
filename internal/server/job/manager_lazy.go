@@ -27,7 +27,6 @@ type ManagerLazy struct {
 	gpuControllers sync.Map
 
 	plugins plugins.Manager
-
 	db      db.DB
 	pending chan action
 
@@ -79,6 +78,7 @@ func NewManagerDBLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plu
 					if action.typ == shutdown {
 						break
 					}
+					ctx := context.WithoutCancel(ctx)
 					err := action.sync(ctx, db)
 					if err != nil {
 						errs = append(errs, err)
@@ -282,6 +282,7 @@ func (m *ManagerLazy) initDB(ctx context.Context) (db.DB, error) {
 	}
 	for _, proto := range protos {
 		job := fromProto(proto)
+		m.jobs.Store(job.JID, job)
 
 		if job.SetRunningAuto() {
 			m.pending <- action{update, job}
@@ -290,8 +291,6 @@ func (m *ManagerLazy) initDB(ctx context.Context) (db.DB, error) {
 		if job.GPUEnabled() {
 			m.addCRIUCallbackGPU(ctx, job.JID)
 		}
-
-		m.jobs.Store(job.JID, job)
 	}
 
 	return db, nil

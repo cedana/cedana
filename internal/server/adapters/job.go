@@ -146,7 +146,7 @@ func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 				req.Path = job.GetCheckpointPath()
 			}
 			if req.Path == "" {
-				return nil, status.Errorf(codes.FailedPrecondition, "job %s stopped before a checkpoint was made", jid)
+				return nil, status.Errorf(codes.FailedPrecondition, "job % has no saved checkpoint. pass in path to override", jid)
 			}
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}

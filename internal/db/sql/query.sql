@@ -1,15 +1,15 @@
 -- name: CreateJob :one
-INSERT INTO jobs (jid, data) VALUES ($1, $2)
+INSERT INTO jobs (jid, data) VALUES (?, ?)
 RETURNING jid, data;
 
 -- name: GetJob :one
-SELECT jid, data FROM jobs WHERE jid = $1;
+SELECT jid, data FROM jobs WHERE jid = ?;
 
 -- name: UpdateJob :exec
-UPDATE jobs SET data = $2 WHERE jid = $1;
+UPDATE jobs SET data = ? WHERE jid = ?;
 
 -- name: DeleteJob :exec
-DELETE FROM jobs WHERE jid = $1;
+DELETE FROM jobs WHERE jid = ?;
 
 -- name: ListJobs :many
 SELECT jid, data FROM jobs;

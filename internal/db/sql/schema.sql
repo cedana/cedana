@@ -1,4 +1,4 @@
 CREATE TABLE IF NOT EXISTS jobs (
-  jid   VARCHAR(255) PRIMARY KEY,
+  jid   TEXT PRIMARY KEY,
   data  BLOB
 );
