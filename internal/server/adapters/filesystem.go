@@ -85,6 +85,8 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 			// Create the compressed tarball
 
+			log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("creating tarball")
+
 			var tarball string
 
 			defer os.RemoveAll(imagesDirectory)
@@ -128,6 +130,8 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 				return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 			}
 			defer os.RemoveAll(imagesDirectory)
+
+			log.Debug().Str("path", path).Str("dir", imagesDirectory).Msg("decompressing dump")
 
 			// Decompress the dump
 			if err := utils.Untar(path, imagesDirectory); err != nil {

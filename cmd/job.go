@@ -77,18 +77,30 @@ var listJobCmd = &cobra.Command{
 			"Job",
 			"Type",
 			"PID",
-			"State",
+			"Status",
 			"Std I/O",
 			"Last Checkpoint",
 			"GPU",
 		})
+
+		statusStr := func(status string) string {
+			switch status {
+			case "running":
+				return style.PositiveColor.Sprintf(status)
+			case "stopped":
+				return style.DisbledColor.Sprintf(status)
+			case "zombie":
+				return style.WarningColor.Sprintf(status)
+			}
+			return style.DisbledColor.Sprintf(status)
+		}
 
 		for _, job := range jobs {
 			row := table.Row{
 				job.GetJID(),
 				job.GetType(),
 				job.GetProcess().GetPID(),
-				style.BoolStr(job.GetProcess().GetInfo().GetIsRunning(), "running", "stopped"),
+				statusStr(job.GetProcess().GetInfo().GetStatus()),
 				job.GetLog(),
 				job.GetCheckpointPath(),
 				style.BoolStr(job.GetGPUEnabled()),
@@ -97,7 +109,7 @@ var listJobCmd = &cobra.Command{
 		}
 
 		style.TableWriter.SortBy([]table.SortBy{
-			{Name: "State"},
+			{Name: "Status"},
 			{Name: "Last Checkpoint"},
 		})
 

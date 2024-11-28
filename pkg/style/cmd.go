@@ -25,6 +25,7 @@ var (
 	PositiveColor = text.Colors{text.FgGreen}
 	NegativeColor = text.Colors{text.FgRed}
 	WarningColor  = text.Colors{text.FgYellow}
+	InfoColor     = text.Colors{text.FgHiBlue}
 	DisbledColor  = text.Colors{text.FgHiBlack}
 )
 

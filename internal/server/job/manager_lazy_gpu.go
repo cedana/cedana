@@ -218,13 +218,14 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 			return err
 		}
 
-		err = m.AttachGPU(ctx, lifetime, jid) // Re-attach a GPU to the job
-		if err != nil {
-			return err
-		}
-
 		go func() {
 			defer close(restoreErr)
+
+			err = m.AttachGPU(ctx, lifetime, jid) // Re-attach a GPU to the job
+			if err != nil {
+				restoreErr <- err
+				return
+			}
 
 			waitCtx, cancel := context.WithTimeout(ctx, GPU_RESTORE_TIMEOUT)
 			defer cancel()

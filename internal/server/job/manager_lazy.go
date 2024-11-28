@@ -211,7 +211,6 @@ func (m *ManagerLazy) Manage(
 		defer m.wg.Done()
 		<-exitedChan
 		log.Info().Str("JID", jid).Uint32("PID", pid).Msg("job exited")
-		job.SetRunning(false)
 
 		gpuController := m.getGPUController(jid)
 		if gpuController != nil {
@@ -283,10 +282,6 @@ func (m *ManagerLazy) initDB(ctx context.Context) (db.DB, error) {
 	for _, proto := range protos {
 		job := fromProto(proto)
 		m.jobs.Store(job.JID, job)
-
-		if job.SetRunningAuto() {
-			m.pending <- action{update, job}
-		}
 
 		if job.GPUEnabled() {
 			m.addCRIUCallbackGPU(ctx, job.JID)

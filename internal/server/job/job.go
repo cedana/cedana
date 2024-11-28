@@ -9,7 +9,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
-	"github.com/cedana/cedana/pkg/utils"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 type Job struct {
@@ -63,6 +63,7 @@ func (j *Job) GetPID() uint32 {
 func (j *Job) GetProto() *daemon.Job {
 	j.RLock()
 	defer j.RUnlock()
+	j.proto.Process = j.GetProcess()
 	return &j.proto
 }
 
@@ -81,6 +82,28 @@ func (j *Job) SetType(jobType string) {
 func (j *Job) GetProcess() *daemon.ProcessState {
 	j.RLock()
 	defer j.RUnlock()
+
+	pid := j.GetPID()
+
+	if j.proto.GetProcess() == nil {
+		j.proto.Process = &daemon.ProcessState{}
+	}
+	if j.proto.GetProcess().GetInfo() == nil {
+		j.proto.Process.Info = &daemon.ProcessInfo{}
+	}
+
+	j.proto.Process.Info.Status = "stopped"
+	j.proto.Process.Info.IsRunning = false
+
+	p, err := process.NewProcess(int32(pid))
+	if err == nil {
+		status, err := p.Status()
+		if err == nil {
+			j.proto.Process.Info.Status = status[0]
+			j.proto.Process.Info.IsRunning = true
+		}
+	}
+
 	return j.proto.Process
 }
 
@@ -126,36 +149,8 @@ func (j *Job) GetCheckpointPath() string {
 	return j.proto.CheckpointPath
 }
 
-func (j *Job) SetRunning(isRunning bool) {
-	j.Lock()
-	defer j.Unlock()
-
-	if j.proto.GetProcess() == nil {
-		j.proto.Process = &daemon.ProcessState{}
-	}
-	if j.proto.GetProcess().GetInfo() == nil {
-		j.proto.Process.Info = &daemon.ProcessInfo{}
-	}
-	j.proto.Process.Info.IsRunning = isRunning
-}
-
 func (j *Job) IsRunning() bool {
-	j.RLock()
-	defer j.RUnlock()
-	return j.proto.GetProcess().GetInfo().GetIsRunning()
-}
-
-// SetRunningAuto sets the running state of the job to false if the PID does not exist.
-// Returns true if the job was updated.
-func (j *Job) SetRunningAuto() bool {
-	pid := j.GetPID()
-	savedRunning := j.IsRunning()
-
-	if savedRunning && !utils.PidExists(pid) {
-		j.SetRunning(false)
-		return true
-	}
-	return false
+	return j.GetProcess().GetInfo().GetIsRunning()
 }
 
 func (j *Job) GPUEnabled() bool {
