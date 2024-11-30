@@ -19,6 +19,7 @@ import (
 
 	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/db"
 	"github.com/cedana/cedana/pkg/jobservice"
 	"github.com/cedana/cedana/pkg/utils"
@@ -33,7 +34,6 @@ import (
 )
 
 const (
-	DEFAULT_HOST          = "0.0.0.0"
 	PROTOCOL              = "tcp"
 	CEDANA_CONTAINER_NAME = "binary-container"
 	SERVER_LOG_MODE       = os.O_APPEND | os.O_CREATE | os.O_WRONLY
@@ -50,7 +50,8 @@ type service struct {
 	machineID       string
 	cadvisorManager manager.Manager
 
-	jobService *jobservice.JobService
+	jobService    *jobservice.JobService
+	vmSnapshotter VMSnapshot
 
 	taskgrpc.UnimplementedTaskServiceServer
 }
@@ -68,9 +69,10 @@ type ServeOpts struct {
 	Port              uint32
 	MetricsEnabled    bool
 	JobServiceEnabled bool
+	VMSocketPath      string
 }
 
-func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
+func NewServer(ctx context.Context, opts *ServeOpts, vmSnapshotter VMSnapshot) (*Server, error) {
 	var err error
 
 	machineID, err := utils.GetMachineID()
@@ -124,6 +126,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		machineID:       machineID,
 		cadvisorManager: nil,
 		jobService:      js,
+		vmSnapshotter:   vmSnapshotter,
 	}
 
 	taskgrpc.RegisterTaskServiceServer(server.grpcServer, service)
@@ -137,7 +140,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		// NOTE: `localhost` server inside kubernetes may or may not work
 		// based on firewall and network configuration, it would only work
 		// on local system, hence for serving use 0.0.0.0
-		address := fmt.Sprintf("%s:%d", DEFAULT_HOST, opts.Port)
+		address := fmt.Sprintf("%s:%d", services.DEFAULT_HOST, opts.Port)
 		listener, err = net.Listen(PROTOCOL, address)
 	}
 
@@ -175,7 +178,10 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
 
-	server, err := NewServer(srvCtx, opts)
+	// For now we only support CloudHypervisor but we should add to the snappshotter more VMs
+	// and choose them at the snapshot function level
+	vmSnapshotter := CloudHypervisorVM{}
+	server, err := NewServer(srvCtx, opts, &vmSnapshotter)
 	if err != nil {
 		return err
 	}
@@ -189,7 +195,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 			}
 		}
 
-		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
+		log.Info().Str("host", services.DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
 
 		err := server.start(srvCtx)
 		if err != nil {

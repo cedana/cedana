@@ -12,7 +12,6 @@ import (
 
 	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
-	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -26,6 +25,7 @@ const (
 	DEFAULT_PROCESS_DEADLINE    = 20 * time.Minute
 	DEFAULT_CONTAINERD_DEADLINE = 10 * time.Minute
 	DEFAULT_RUNC_DEADLINE       = 10 * time.Minute
+	DEFAULT_HOST                = "0.0.0.0"
 )
 
 type ServiceClient struct {
@@ -36,7 +36,7 @@ type ServiceClient struct {
 func NewClient(port uint32) (*ServiceClient, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	address := fmt.Sprintf("%s:%d", api.DEFAULT_HOST, port)
+	address := fmt.Sprintf("%s:%d", DEFAULT_HOST, port)
 	taskConn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err
@@ -379,6 +379,16 @@ func (c *ServiceClient) RuncManage(ctx context.Context, args *task.RuncManageArg
 ///////////////////////////
 // Kata Service Calls //
 ///////////////////////////
+
+func (c *ServiceClient) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	defer cancel()
+	resp, err := c.taskService.HostKataDump(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
 
 func (c *ServiceClient) KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)

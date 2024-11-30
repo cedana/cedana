@@ -18,10 +18,13 @@ import (
 	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
 	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/cedana/cedana/pkg/api/kata"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -45,6 +48,14 @@ const (
 type Bundle struct {
 	ContainerID string
 	Bundle      string
+}
+
+type KataService interface {
+	KataDump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error)
+}
+
+func useKataDump(s KataService) {
+
 }
 
 // prepareDump =/= preDump.
@@ -459,7 +470,18 @@ func (s *service) kataDump(ctx context.Context, state *task.ProcessState, args *
 	opts.ImagesDirFd = proto.Int32(int32(img.Fd()))
 	opts.Pid = proto.Int32(state.PID)
 	opts.External = append(opts.External, fmt.Sprintf("mnt[]:m"))
+	allExternalMounts, err := findAllExternalBindMounts()
+	if err != nil {
+		return err
+	}
+
+	// Here we extend external mounts to include those from the config.json of the container
+	// a 2D array is used as the function does not assume 1 container in kata vm but here
+	// it is assumed we only use the first container found, this is the case for non-side car
+	// containers which we do not yet support.
+	opts.External = append(opts.External, allExternalMounts[0]...)
 	opts.LeaveRunning = proto.Bool(true)
+	opts.OrphanPtsMaster = proto.Bool(true)
 
 	nfy := Notify{}
 
@@ -555,4 +577,118 @@ func (s *service) gpuDump(ctx context.Context, dumpdir string, stream bool, jid 
 	stats.GPUDuration = elapsed.Milliseconds()
 
 	return nil
+}
+
+const requestTimeout = 30 * time.Second
+
+// Does rpc over vsock to kata vm for the cedana KataDump function
+func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs) (*task.HostDumpKataResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	vm := args.VmName
+	port := args.Port
+	dir := args.Dir
+
+	if args.VMSnapshot {
+		err := s.vmSnapshotter.Pause(args.VMSocketPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+		}
+
+		var resumeErr error
+		defer func() {
+			if err := s.vmSnapshotter.Resume(args.VMSocketPath); err != nil {
+				resumeErr = status.Errorf(codes.Internal, "Checkpoint task failed during resume: %v", err)
+			}
+		}()
+
+		err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Checkpoint task failed during snapshot: %v", err)
+		}
+
+		if resumeErr != nil {
+			return nil, resumeErr
+		}
+		return &task.HostDumpKataResp{TarDumpDir: args.Dir}, nil
+	}
+
+	cts, err := kata.NewVSockClient(vm, port)
+	if err != nil {
+		log.Error().Msgf("Error creating client: %v", err)
+		return nil, status.Errorf(codes.Internal, "Error creating client: %v", err)
+	}
+	defer cts.Close()
+
+	id := xid.New().String()
+	log.Info().Msgf("no job id specified, using %s", id)
+
+	cpuDumpArgs := task.DumpArgs{
+		Dir: "/tmp",
+		JID: id,
+	}
+
+	go func() {
+		listener, err := vsock.Listen(9999, nil)
+		if err != nil {
+			log.Error().Msgf("Failed to start vsock listener: %v", err)
+			return
+		}
+		defer listener.Close()
+
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Error().Msgf("Failed to accept connection: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		file, err := os.Create(dir + "/dmp.tar")
+		if err != nil {
+			log.Error().Msgf("Failed to create file: %v", err)
+			return
+		}
+		defer file.Close()
+
+		buffer := make([]byte, 1024)
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Error().Msg("File write operation canceled due to context timeout")
+				return
+			default:
+				bytesReceived, err := conn.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					log.Error().Msgf("Error reading data: %v", err)
+					return
+				}
+
+				_, err = file.Write(buffer[:bytesReceived])
+				if err != nil {
+					log.Error().Msgf("Error writing to file: %v", err)
+					return
+				}
+			}
+		}
+	}()
+
+	resp, err := cts.KataDump(ctx, &cpuDumpArgs)
+	if err != nil {
+		st, ok := status.FromError(err)
+		if ok {
+			log.Error().Msgf("Checkpoint task failed: %v, %v: %v", st.Code(), st.Message(), st.Details())
+			return nil, st.Err()
+		}
+		log.Error().Msgf("Checkpoint task failed: %v", err)
+		return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+	}
+
+	log.Info().Msgf("Response: %v", resp.Message)
+	// TODO implement the host tar dump dir location
+	return &task.HostDumpKataResp{TarDumpDir: "NOT IMPLEMENTED"}, nil
 }

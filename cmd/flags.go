@@ -44,5 +44,7 @@ const (
 	noStdinFlag          = "no-stdin"
 	pidFileFlag          = "pid-file"
 	modeFlag             = "mode"
+	vmSnapshotFlag       = "vm-snapshot"
+	vmSocketPathFlag     = "vm-socket-path"
 	skipInFlightFlag     = "skip-in-flight"
 )
