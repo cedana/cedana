@@ -5,6 +5,7 @@ package job
 // Allows multiple concurrent readers, but only one concurrent writer.
 
 import (
+	"os"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -30,9 +31,8 @@ func newJob(
 	return &Job{
 		JID: jid,
 		proto: daemon.Job{
-			JID:     jid,
-			Type:    jobType,
-			Details: &daemon.Details{},
+			JID:  jid,
+			Type: jobType,
 		},
 		CRIUCallback: &criu.NotifyCallback{},
 	}
@@ -57,13 +57,30 @@ func fromProto(j *daemon.Job) *Job {
 func (j *Job) GetPID() uint32 {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.GetDetails().GetPID()
+	return j.proto.GetProcess().GetPID()
+}
+
+func (j *Job) SetPID(pid uint32) {
+	j.Lock()
+	defer j.Unlock()
+	if j.proto.GetProcess() == nil {
+		j.proto.Process = &daemon.ProcessState{}
+	}
+	if j.proto.GetProcess().GetInfo() == nil {
+		j.proto.Process.Info = &daemon.ProcessInfo{}
+	}
+	j.proto.Process.PID = pid
+	j.proto.Process.Info.PID = pid
 }
 
 func (j *Job) GetProto() *daemon.Job {
 	j.RLock()
 	defer j.RUnlock()
+
+	// Get all latest info
 	j.proto.Process = j.GetProcess()
+	j.proto.Log = j.GetLog()
+
 	return &j.proto
 }
 
@@ -128,7 +145,14 @@ func (j *Job) SetDetails(details *daemon.Details) {
 func (j *Job) GetLog() string {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.Log
+
+	// Check if log file exists
+	log := j.proto.Log
+	if _, e := os.Stat(log); os.IsNotExist(e) {
+		return ""
+	}
+
+	return log
 }
 
 func (j *Job) SetLog(log string) {

@@ -17,7 +17,6 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
-	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -33,31 +32,6 @@ const (
 ////////////////////////
 //// Dump Adapters /////
 ////////////////////////
-
-// Check if the process exists, and is running
-func CheckProcessExistsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
-		pid := req.GetDetails().GetPID()
-		if pid == 0 {
-			return nil, status.Errorf(codes.InvalidArgument, "missing PID")
-		}
-		exists, err := process.PidExistsWithContext(ctx, int32(pid))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to check process: %v", err)
-		}
-		if !exists {
-			return nil, status.Errorf(codes.NotFound, "process PID %d does not exist", pid)
-		}
-
-		if resp.GetState() == nil {
-			resp.State = &daemon.ProcessState{}
-		}
-
-		resp.State.PID = uint32(pid)
-
-		return next(ctx, server, nfy, resp, req)
-	}
-}
 
 // Fills process state in the dump response.
 // Requires at least the PID to be present in the DumpResp.State

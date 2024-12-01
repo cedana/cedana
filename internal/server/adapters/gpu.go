@@ -28,7 +28,7 @@ const featureGPUInterceptionMiddleware plugins.Feature[types.Middleware[types.St
 // Adapter that adds GPU support to the request.
 // GPU Dump/Restore is automatically managed by the job manager using
 // CRIU callbacks. Assumes the job is already created (not running).
-func AddGPUSupport(jobs job.Manager) types.Adapter[types.Start] {
+func GPUSupport(jobs job.Manager) types.Adapter[types.Start] {
 	return func(next types.Start) types.Start {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
 			job := jobs.Get(req.JID)

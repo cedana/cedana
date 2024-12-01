@@ -87,10 +87,12 @@ var listJobCmd = &cobra.Command{
 			switch status {
 			case "running":
 				return style.PositiveColor.Sprintf(status)
-			case "stopped":
-				return style.DisbledColor.Sprintf(status)
+			case "sleep":
+				return style.InfoColor.Sprintf(status)
 			case "zombie":
 				return style.WarningColor.Sprintf(status)
+			case "stopped":
+				return style.DisbledColor.Sprintf(status)
 			}
 			return style.DisbledColor.Sprintf(status)
 		}

@@ -42,9 +42,10 @@ func Manage(jobs job.Manager) types.Adapter[types.Start] {
 				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
 			}
 			job.SetLog(req.Log)
+			job.SetDetails(req.Details)
 
 			if req.GPUEnabled {
-				next = next.With(AddGPUSupport(jobs))
+				next = next.With(GPUSupport(jobs))
 			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
@@ -93,6 +94,7 @@ func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 			// TODO YA: Allow overriding job details, otherwise use saved job details
 			req.Details = job.GetDetails()
 			req.Type = job.GetType()
+			resp.State = job.GetProcess()
 
 			// Import saved notify callbacks
 			nfy.ImportCallback(job.CRIUCallback)

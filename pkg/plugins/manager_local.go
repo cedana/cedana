@@ -146,6 +146,10 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Libraries {
 				src := filepath.Join(srcDir, file)
 				dest := filepath.Join(LibDir, file)
+				if _, e := os.Stat(src); os.IsNotExist(e) {
+					err = fmt.Errorf("No local plugin found")
+					break
+				}
 				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
@@ -155,6 +159,10 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Binaries {
 				src := filepath.Join(srcDir, file)
 				dest := filepath.Join(BinDir, file)
+				if _, e := os.Stat(src); os.IsNotExist(e) {
+					err = fmt.Errorf("No local plugin found")
+					break
+				}
 				os.Remove(dest)
 				if e := os.Link(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)

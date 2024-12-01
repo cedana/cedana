@@ -72,7 +72,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 		t := req.GetType()
 		switch t {
 		case "process":
-			// Nothing to do, yet
+			// Nothing to do
 		default:
 			// Insert plugin-specific middleware
 			err = featureRestoreMiddleware.IfAvailable(func(

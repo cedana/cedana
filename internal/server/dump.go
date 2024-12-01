@@ -71,8 +71,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 		t := req.GetType()
 		switch t {
 		case "process":
-			// Insert adapters for process dump
-			middleware = append(middleware, adapters.CheckProcessExistsForDump)
+			// Nothing to do
 		default:
 			// Insert plugin-specific middleware
 			err = featureDumpMiddleware.IfAvailable(func(

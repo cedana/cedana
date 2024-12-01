@@ -35,11 +35,11 @@ func (s *Server) Attach(stream daemongrpc.Daemon_AttachServer) error {
 	err = slave.Attach(ctx, stream)
 	if err != nil {
 		if err == context.DeadlineExceeded {
-			return status.Errorf(codes.DeadlineExceeded, "likely another master attached")
+			return status.Errorf(codes.DeadlineExceeded, "likely another master IO attached")
 		}
 		return err
 	}
-	log.Info().Uint32("PID", pid).Msgf("master detached from process")
+	log.Debug().Uint32("PID", pid).Msgf("master IO detached from process")
 
 	return nil
 }

@@ -46,7 +46,7 @@ func (s *Server) Start(ctx context.Context, req *daemon.StartReq) (*daemon.Start
 		return nil, err
 	}
 
-	log.Info().Uint32("PID", resp.PID).Msg("job started")
+	log.Info().Uint32("PID", resp.PID).Str("type", req.GetType()).Msg("start successful")
 
 	return resp, nil
 }

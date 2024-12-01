@@ -12,12 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/proto"
 )
 
 const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
@@ -176,18 +174,12 @@ func (m *ManagerLazy) Exists(jid string) bool {
 	return ok
 }
 
-func (m *ManagerLazy) Manage(
-	ctx context.Context,
-	jid string,
-	pid uint32,
-	exited ...<-chan int,
-) error {
+func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited ...<-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
 	job := m.Get(jid)
-	job.SetDetails(&daemon.Details{PID: proto.Uint32(pid)})
 
 	var exitedChan <-chan int
 	if len(exited) == 0 {
@@ -196,15 +188,11 @@ func (m *ManagerLazy) Manage(
 		exitedChan = utils.WaitForPid(pid)
 	}
 
-	if job.GetProcess() == nil {
-		// Attempt to fill process state, if process is still running
-		process := &daemon.ProcessState{}
-		err := utils.FillProcessState(ctx, pid, process)
-		if err == nil {
-			job.SetProcess(process)
-			m.pending <- action{update, job}
-		}
-	}
+	job.SetPID(pid)
+
+	m.pending <- action{update, job}
+
+	log.Info().Str("JID", jid).Uint32("PID", pid).Msg("managing job")
 
 	m.wg.Add(1)
 	go func() {
