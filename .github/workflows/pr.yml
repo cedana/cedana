@@ -136,15 +136,17 @@ jobs:
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
-          sudo cp ./build-start-daemon.sh /build-start-daemon.sh
-          sudo ./setup-host.sh
+          sudo mkdir -p /cedana/scripts
+          sudo cp ./setup-host.sh /cedana/scripts/setup-host.sh
+          sudo cp ./build-start-daemon.sh /cedana/scripts/build-start-daemon.sh
+          sudo /cedana/scripts/setup-host.sh
         env:
           CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU }}"
 
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -181,7 +183,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -227,7 +229,7 @@ jobs:
       id-token: "write"
       pull-requests: "write"
     runs-on: ubicloud-standard-8
-    needs: [build, setup-script-tests]
+    needs: [build]
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
@@ -342,7 +344,7 @@ jobs:
   helper-image-push:
     name: Push Helper Test Image
     runs-on: ubicloud-standard-2
-    needs: [build, setup-script-tests]
+    needs: [build]
     if: ${{ !inputs.skip_helper_image_push }}
     steps:
       - uses: actions/checkout@v4
