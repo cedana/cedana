@@ -50,6 +50,10 @@ type service struct {
 	machineID       string
 	cadvisorManager manager.Manager
 
+	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
+	// to the appropriate clh vm api
+	fdStore sync.Map
+
 	jobService    *jobservice.JobService
 	vmSnapshotter VMSnapshot
 

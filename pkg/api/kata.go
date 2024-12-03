@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 
@@ -80,11 +82,85 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	return &resp, err
 }
 
+func (s *service) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		log.Logger.Warn().Msgf("Not a Unix connection")
+		return
+	}
+
+	// Read file descriptors
+	oob := make([]byte, syscall.CmsgSpace(4*4)) // Space for up to 4 FDs
+	buf := make([]byte, 1024)
+	n, oobn, _, _, err := unixConn.ReadMsgUnix(buf, oob)
+	if err != nil {
+		log.Logger.Warn().Msgf("Failed to read message: %v\n", err)
+		return
+	}
+
+	cmsgs, err := syscall.ParseSocketControlMessage(oob[:oobn])
+	if err != nil {
+		log.Logger.Warn().Msgf("Failed to parse control messages: %v\n", err)
+		return
+	}
+
+	var fds []int
+	for _, cmsg := range cmsgs {
+		fdArr, err := syscall.ParseUnixRights(&cmsg)
+		if err != nil {
+			log.Logger.Warn().Msgf("Failed to parse Unix rights: %v\n", err)
+			return
+		}
+		fds = append(fds, fdArr...)
+	}
+
+	log.Logger.Debug().Msgf("Received FDs: %v, message: %s\n", fds, string(buf[:n]))
+
+	requestID := string(buf[:n]) // Assume request ID is sent with the message
+	s.fdStore.Store(requestID, fds)
+
+}
+
+func (s *service) CreateUnixSocket(ctx context.Context, _ *task.Empty) (*task.SocketResp, error) {
+	tempDir := os.TempDir()
+	socketPath := filepath.Join(tempDir, fmt.Sprintf("ced_fdsock_%d.sock", os.Getpid()))
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Unix socket: %w", err)
+	}
+
+	go func() {
+		defer listener.Close()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				fmt.Printf("Connection error: %v\n", err)
+				break
+			}
+
+			go s.handleConnection(conn)
+		}
+	}()
+
+	return &task.SocketResp{SocketPath: socketPath}, nil
+}
+
 func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKataArgs) (*task.HostRestoreKataResp, error) {
 	isVMSnapshot := args.GetVMSnapshot()
 	snapshot := args.GetVMSnapshotPath()
 	socketPath := args.GetVMSocketPath()
 	restoredNetConfig := args.GetRestoredNetConfig()
+
+	s.fdStore.Range(func(key, value any) bool {
+		requestID := key.(int) // Adjust the type to match the actual key type
+		fds := value.([]int)   // Adjust the type to match the actual value type
+
+		log.Logger.Debug().Msgf("Request ID: %v, FDs: %v\n", requestID, fds)
+
+		return true
+	})
 
 	if isVMSnapshot {
 		err := s.vmSnapshotter.Restore(snapshot, socketPath, restoredNetConfig)
@@ -144,6 +220,7 @@ type SnapshotRequest struct {
 }
 
 type CloudHypervisorVM struct {
+	fdStore sync.Map
 }
 
 func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error {
