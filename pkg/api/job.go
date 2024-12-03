@@ -103,14 +103,16 @@ func (s *service) JobRestore(
 			// Use saved root if not overridden from args
 			opts.Root = state.ContainerRoot
 		}
+		if opts.ContainerID == "" {
+			opts.ContainerID = state.ContainerID
+		}
 		if args.CheckpointPath == "" {
 			args.CheckpointPath = state.CheckpointPath
 		}
 		restoreResp, err := s.RuncRestore(ctx, &task.RuncRestoreArgs{
-			ContainerID: state.ContainerID,
-			ImagePath:   args.CheckpointPath,
-			Opts:        opts,
-			CriuOpts:    args.CriuOpts,
+			ImagePath: args.CheckpointPath,
+			Opts:      opts,
+			CriuOpts:  args.CriuOpts,
 		})
 		if err != nil {
 			return nil, err
