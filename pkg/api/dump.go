@@ -138,7 +138,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// setup cedana-image-streamer
 	var streamCmd *exec.Cmd
 	if args.Stream > 0 {
-		streamCmd, err = s.setupStreamerCapture(dumpDirPath, state.GPU, args.Stream)
+		streamCmd, err = s.setupStreamerCapture(ctx, dumpDirPath, state.GPU, args.Stream)
 		if err != nil {
 			return "", nil, err
 		}
@@ -328,12 +328,12 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(dumpdir string, gpu bool, num_pipes int32) (*exec.Cmd, error) {
+func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu bool, num_pipes int32) (*exec.Cmd, error) {
 	var cmd *exec.Cmd
 	if gpu {
-		cmd = exec.Command("cedana-image-streamer", "--dir", dumpdir, "--gpu", "--num-pipes", fmt.Sprint(num_pipes), "capture")
+		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--gpu", "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	} else {
-		cmd = exec.Command("cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
 	}
 	var err error
 	stdout, err := cmd.StdoutPipe()
