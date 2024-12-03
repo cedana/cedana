@@ -344,7 +344,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
+func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -395,7 +395,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
 
-	err = container.RuncRestore(tempDir, containerId, criuOpts, opts)
+	err = container.RuncRestore(tempDir, opts.ContainerId, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
 		if s.GetGPUController(jid) != nil {
@@ -409,7 +409,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// HACK YA: RACE The container might not exit yet
 	// time.Sleep(1 * time.Second)
 
-	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
+	pid, err := runc.GetPidByContainerId(opts.ContainerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
 		if s.GetGPUController(jid) != nil {
@@ -429,7 +429,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			var status syscall.WaitStatus
 			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+			log.Info().Int32("PID", pid).Str("JID", opts.ContainerId).Int("status", code).Msgf("runc container exited")
 
 			if s.GetGPUController(jid) != nil {
 				err = s.StopGPUController(jid)
@@ -458,10 +458,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		go func() {
 			defer s.wg.Done()
 			<-s.serverCtx.Done()
-			log.Debug().Int32("PID", pid).Str("JID", containerId).Msgf("killing runc container")
+			log.Debug().Int32("PID", pid).Str("JID", opts.ContainerId).Msgf("killing runc container")
 			syscall.Kill(int(pid), syscall.SIGKILL)
 			if err != nil {
-				log.Warn().Err(err).Int32("PID", pid).Str("JID", containerId).Msgf("could not kill runc container")
+				log.Warn().Err(err).Int32("PID", pid).Str("JID", opts.ContainerId).Msgf("could not kill runc container")
 				return
 			}
 		}()

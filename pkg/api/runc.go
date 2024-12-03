@@ -217,6 +217,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		Detach:        args.GetOpts().GetDetach(),
 		NetPid:        int(args.GetOpts().GetNetPid()),
 		StateRoot:     args.GetOpts().GetRoot(),
+		ContainerId:   args.GetOpts().GetContainerID(),
 	}
 
 	criuOpts := &container.CriuOpts{
@@ -227,9 +228,9 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 
 	var jid string
-	state, err := s.getState(ctx, args.ContainerID)
+	state, err := s.getState(ctx, opts.ContainerId)
 	if err == nil {
-		jid = args.ContainerID // For runc, we use the container ID as JID
+		jid = opts.ContainerId // For runc, we use the container ID as JID
 		if state.GPU && s.gpuEnabled == false {
 			return nil, status.Error(codes.FailedPrecondition, "Dump has GPU state and GPU support is not enabled in daemon")
 		}
@@ -245,7 +246,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 	}
 
-	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, args.ContainerID, criuOpts, opts, jid)
+	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, criuOpts, opts, jid)
 	if err != nil {
 		err = status.Error(codes.Internal, fmt.Sprintf("failed to restore runc container: %v", err))
 		return nil, err
@@ -253,7 +254,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 
 	// Only update state if it was a managed job
 	if jid != "" {
-		state, err = s.getState(ctx, args.ContainerID)
+		state, err = s.getState(ctx, opts.ContainerId)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
 		}
@@ -285,7 +286,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	}
 
 	return &task.RuncRestoreResp{
-		Message:      fmt.Sprintf("Restored %v, successfully", args.ContainerID),
+		Message:      fmt.Sprintf("Restored %v, successfully", opts.ContainerId),
 		State:        state,
 		RestoreStats: &restoreStats,
 	}, nil
