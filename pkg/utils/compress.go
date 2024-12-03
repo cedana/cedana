@@ -2,6 +2,7 @@ package utils
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"io"
 	"os"
