@@ -10,7 +10,6 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -51,8 +50,6 @@ func SetPIDForDump(next types.Dump) types.Dump {
 			resp.State = &daemon.ProcessState{}
 		}
 		resp.State.PID = uint32(state.InitProcessPid)
-
-    log.Error().Msgf("PID: %d", state.InitProcessPid)
 
 		return next(ctx, server, nfy, resp, req)
 	}
