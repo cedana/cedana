@@ -246,22 +246,6 @@ func (s *service) WaitGPUController(jid string) error {
 	return nil
 }
 
-func (s *service) UnblockGPUController(ctx context.Context, jid string) error {
-	controller, ok := gpuControllers[jid]
-	if !ok {
-		return fmt.Errorf("no gpu controller found for jid %s", jid)
-	}
-
-	resp, err := controller.Client.UnblockBarrier(ctx, &gpu.UnblockBarrierRequest{})
-	if err != nil {
-		return fmt.Errorf("failed to unblock gpu controller: %v", err)
-	}
-	if !resp.Success {
-		return fmt.Errorf("failed to unblock gpu controller")
-	}
-	return nil
-}
-
 func (s *service) GetGPUController(jid string) *GPUController {
 	controller, ok := gpuControllers[jid]
 	if !ok {

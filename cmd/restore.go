@@ -11,9 +11,9 @@ import (
 	"os/exec"
 	"time"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -319,21 +319,22 @@ var runcRestoreCmd = &cobra.Command{
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
+		img, _ := cmd.Flags().GetString(imgFlag)
+		id, _ := cmd.Flags().GetString(idFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
+
 		opts := &task.RuncOpts{
 			Root:          getRuncRootPath(root),
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detach:        detach,
 			NetPid:        netPid,
+			ContainerID:   id,
 		}
 
-		img, _ := cmd.Flags().GetString(imgFlag)
-		id, _ := cmd.Flags().GetString(idFlag)
-		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   img,
-			ContainerID: id,
-			Opts:        opts,
+			ImagePath: img,
+			Opts:      opts,
 			CriuOpts: &task.CriuOpts{
 				FileLocks:      fileLocks,
 				TcpEstablished: tcpEstablished,

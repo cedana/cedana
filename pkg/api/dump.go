@@ -138,7 +138,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// setup cedana-image-streamer
 	var streamCmd *exec.Cmd
 	if args.Stream > 0 {
-		streamCmd, err = s.setupStreamerCapture(dumpDirPath, args.Stream)
+		streamCmd, err = s.setupStreamerCapture(ctx, dumpDirPath, state.GPU, args.Stream)
 		if err != nil {
 			return "", nil, err
 		}
@@ -218,6 +218,14 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 		log.Error().Err(err)
 		return err
 	}
+
+	ready_path := filepath.Join(dumpdir, "ckpt")
+	ready_file, err := os.Create(ready_path)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	defer ready_file.Close()
+	log.Info().Msg("created ready file, cedana-image-streamer shutting down")
 
 	var size int64
 	if streamCmd != nil {
@@ -320,8 +328,13 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(dumpdir string, num_pipes int32) (*exec.Cmd, error) {
-	cmd := exec.Command("sudo", "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu bool, num_pipes int32) (*exec.Cmd, error) {
+	var cmd *exec.Cmd
+	if gpu {
+		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--gpu", "--num-pipes", fmt.Sprint(num_pipes), "capture")
+	} else {
+		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+	}
 	var err error
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -385,19 +398,6 @@ func (s *service) dump(ctx context.Context, state *task.ProcessState, args *task
 			return err
 		}
 		log.Info().Msg("gpu dumped")
-	} else if args.Stream > 0 {
-		conn, err := imgStreamerInit(dumpdir, O_GPU_DUMP)
-		if err != nil {
-			return err
-		}
-		err = conn.CloseWrite()
-		if err != nil {
-			return fmt.Errorf("UnixConn CloseWrite failed with %v", err)
-		}
-		err = conn.Close()
-		if err != nil {
-			return fmt.Errorf("UnixConn Close failed with %v", err)
-		}
 	}
 
 	img, err := os.Open(dumpdir)
