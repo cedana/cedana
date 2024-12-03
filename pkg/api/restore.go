@@ -45,7 +45,7 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) *exec.Cmd {
+func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) {
 	cmd := exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -90,7 +90,6 @@ func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pi
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
-	return cmd
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -308,7 +307,9 @@ func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Noti
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		if opts.Stream == nil || !*opts.Stream {
+			os.RemoveAll(dir)
+		}
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
