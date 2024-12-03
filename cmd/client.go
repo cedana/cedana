@@ -27,8 +27,34 @@ type Client struct {
 
 func NewClient(host string, port uint32) (*Client, error) {
 	var opts []grpc.DialOption
+	var address string
+
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	address := fmt.Sprintf("%s:%d", host, port)
+	address = fmt.Sprintf("%s:%d", host, port)
+
+	conn, err := grpc.NewClient(address, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	daemonClient := daemongrpc.NewDaemonClient(conn)
+
+	return &Client{
+		daemonClient: daemonClient,
+		conn:         conn,
+	}, nil
+}
+
+func NewVSOCKClient(contextId uint32, port uint32) (*Client, error) {
+	var opts []grpc.DialOption
+	var address string
+
+	opts = append(opts,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(utils.VSOCKDialer(contextId, port)),
+	)
+	address = fmt.Sprintf("vsock://%d:%d", contextId, port)
+
 	conn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err

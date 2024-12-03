@@ -36,11 +36,14 @@ func init() {
 		StringP(flags.HostFlag.Full, flags.HostFlag.Short, "", "host to listen on/connect to")
 	rootCmd.PersistentFlags().
 		BoolP(flags.UseVSOCKFlag.Full, flags.UseVSOCKFlag.Short, false, "use vsock for communication")
+	rootCmd.PersistentFlags().
+		Uint32P(flags.ContextIdFlag.Full, flags.ContextIdFlag.Short, 0, "context id for vsock communication")
 
 	// Bind to config
 	viper.BindPFlag(config.PORT.Key, rootCmd.PersistentFlags().Lookup(flags.PortFlag.Full))
-	viper.BindPFlag(config.PORT.Key, rootCmd.PersistentFlags().Lookup(flags.HostFlag.Full))
+	viper.BindPFlag(config.HOST.Key, rootCmd.PersistentFlags().Lookup(flags.HostFlag.Full))
 	viper.BindPFlag(config.USE_VSOCK.Key, rootCmd.PersistentFlags().Lookup(flags.UseVSOCKFlag.Full))
+	viper.BindPFlag(config.VSOCK_CONTEXT_ID.Key, rootCmd.PersistentFlags().Lookup(flags.ContextIdFlag.Full))
 }
 
 var rootCmd = &cobra.Command{

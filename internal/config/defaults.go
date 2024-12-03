@@ -12,10 +12,11 @@ type ConfigItem[T any] struct {
 }
 
 var (
-	PORT      = ConfigItem[uint32]{"options.port", 8080, "CEDANA_PORT", viper.GetUint32}
-	HOST      = ConfigItem[string]{"options.host", "0.0.0.0", "CEDANA_HOST", viper.GetString}
-	USE_VSOCK = ConfigItem[bool]{"options.use_vsock", false, "CEDANA_USE_VSOCK", viper.GetBool}
-	LOG_LEVEL = ConfigItem[string]{"options.log_level", "info", "CEDANA_LOG_LEVEL", viper.GetString}
+	PORT             = ConfigItem[uint32]{"options.port", 8080, "CEDANA_PORT", viper.GetUint32}
+	HOST             = ConfigItem[string]{"options.host", "0.0.0.0", "CEDANA_HOST", viper.GetString}
+	USE_VSOCK        = ConfigItem[bool]{"options.use_vsock", false, "CEDANA_USE_VSOCK", viper.GetBool}
+	VSOCK_CONTEXT_ID = ConfigItem[uint32]{"options.context_id", 0, "CEDANA_VSOCK_CONTEXT_ID", viper.GetUint32}
+	LOG_LEVEL        = ConfigItem[string]{"options.log_level", "info", "CEDANA_LOG_LEVEL", viper.GetString}
 
 	STORAGE_REMOTE   = ConfigItem[bool]{"storage.remote", false, "CEDANA_REMOTE", viper.GetBool}
 	STORAGE_DUMP_DIR = ConfigItem[string]{

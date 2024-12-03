@@ -5,6 +5,6 @@
 package sql
 
 type Job struct {
-	Jid  string
-	Data []byte
+	Jid   string
+	State []byte
 }

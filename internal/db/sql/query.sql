@@ -1,15 +1,15 @@
 -- name: CreateJob :one
-INSERT INTO jobs (jid, data) VALUES (?, ?)
-RETURNING jid, data;
+INSERT INTO jobs (jid, state) VALUES (?, ?)
+RETURNING jid, state;
 
 -- name: GetJob :one
-SELECT jid, data FROM jobs WHERE jid = ?;
+SELECT jid, state FROM jobs WHERE jid = ?;
 
 -- name: UpdateJob :exec
-UPDATE jobs SET data = ? WHERE jid = ?;
+UPDATE jobs SET state = ? WHERE jid = ?;
 
 -- name: DeleteJob :exec
 DELETE FROM jobs WHERE jid = ?;
 
 -- name: ListJobs :many
-SELECT jid, data FROM jobs;
+SELECT jid, state FROM jobs;

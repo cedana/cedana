@@ -10,19 +10,19 @@ import (
 )
 
 const createJob = `-- name: CreateJob :one
-INSERT INTO jobs (jid, data) VALUES (?, ?)
-RETURNING jid, data
+INSERT INTO jobs (jid, state) VALUES (?, ?)
+RETURNING jid, state
 `
 
 type CreateJobParams struct {
-	Jid  string
-	Data []byte
+	Jid   string
+	State []byte
 }
 
 func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, error) {
-	row := q.db.QueryRowContext(ctx, createJob, arg.Jid, arg.Data)
+	row := q.db.QueryRowContext(ctx, createJob, arg.Jid, arg.State)
 	var i Job
-	err := row.Scan(&i.Jid, &i.Data)
+	err := row.Scan(&i.Jid, &i.State)
 	return i, err
 }
 
@@ -36,18 +36,18 @@ func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
 }
 
 const getJob = `-- name: GetJob :one
-SELECT jid, data FROM jobs WHERE jid = ?
+SELECT jid, state FROM jobs WHERE jid = ?
 `
 
 func (q *Queries) GetJob(ctx context.Context, jid string) (Job, error) {
 	row := q.db.QueryRowContext(ctx, getJob, jid)
 	var i Job
-	err := row.Scan(&i.Jid, &i.Data)
+	err := row.Scan(&i.Jid, &i.State)
 	return i, err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT jid, data FROM jobs
+SELECT jid, state FROM jobs
 `
 
 func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
@@ -59,7 +59,7 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 	var items []Job
 	for rows.Next() {
 		var i Job
-		if err := rows.Scan(&i.Jid, &i.Data); err != nil {
+		if err := rows.Scan(&i.Jid, &i.State); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -74,15 +74,15 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 }
 
 const updateJob = `-- name: UpdateJob :exec
-UPDATE jobs SET data = ? WHERE jid = ?
+UPDATE jobs SET state = ? WHERE jid = ?
 `
 
 type UpdateJobParams struct {
-	Data []byte
-	Jid  string
+	State []byte
+	Jid   string
 }
 
 func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
-	_, err := q.db.ExecContext(ctx, updateJob, arg.Data, arg.Jid)
+	_, err := q.db.ExecContext(ctx, updateJob, arg.State, arg.Jid)
 	return err
 }

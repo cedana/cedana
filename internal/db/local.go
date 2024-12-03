@@ -46,7 +46,7 @@ func (db *LocalDB) GetJob(ctx context.Context, jid string) (*daemon.Job, error) 
 		return nil, err
 	}
 
-	bytes := dbJob.Data
+	bytes := dbJob.State
 
 	// unmarsal the bytes into a Job struct
 	job := daemon.Job{}
@@ -70,13 +70,13 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 	}
 	if _, err := db.queries.GetJob(ctx, jid); err == nil {
 		return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
-			Jid:  jid,
-			Data: bytes,
+			Jid:   jid,
+			State: bytes,
 		})
 	} else {
 		_, err := db.queries.CreateJob(ctx, sql.CreateJobParams{
-			Jid:  jid,
-			Data: bytes,
+			Jid:   jid,
+			State: bytes,
 		})
 		return err
 	}
@@ -104,7 +104,7 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 
 		// unmarsal the bytes into a Job struct
 		job := daemon.Job{}
-		err = json.Unmarshal(dbJob.Data, &job)
+		err = json.Unmarshal(dbJob.State, &job)
 		if err != nil {
 			return nil, err
 		}

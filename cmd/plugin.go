@@ -29,16 +29,20 @@ func init() {
 var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Manage plugins",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		if utils.IsRootUser() == false {
 			return fmt.Errorf("plugin commands must be run as root")
 		}
 
 		manager := plugins.NewManagerLocal()
 
-		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
-		if err != nil {
-			return fmt.Errorf("Error creating client: %v", err)
+		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		var client *Client
+
+		if useVSOCK {
+			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+		} else {
+			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)

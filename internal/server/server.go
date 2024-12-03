@@ -10,6 +10,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/criu"
@@ -29,6 +30,7 @@ type Server struct {
 	criu    *criu.Criu
 	jobs    job.Manager
 	plugins plugins.Manager
+	db      db.DB
 
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	lifetime context.Context // context alive for the duration of the server
@@ -77,9 +79,20 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	var database db.DB
+	if config.Get(config.STORAGE_REMOTE) {
+		database = db.NewRemoteDB(
+			ctx,
+			config.Get(config.CEDANA_URL),
+			config.Get(config.CEDANA_AUTH_TOKEN),
+		)
+	} else {
+		database, err = db.NewLocalDB(ctx)
+	}
+
 	pluginManager := plugins.NewManagerLocal()
 
-	jobManager, err := job.NewManagerDBLazy(ctx, wg, pluginManager)
+	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, database)
 	if err != nil {
 		return nil, err
 	}

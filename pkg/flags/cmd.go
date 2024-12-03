@@ -39,5 +39,6 @@ var (
 	ConfigFlag     = Flag{"config", ""}
 	ConfigDirFlag  = Flag{"config-dir", ""}
 	UseVSOCKFlag   = Flag{"use-vsock", ""}
+	ContextIdFlag  = Flag{"cid", ""}
 	MetricsASRFlag = Flag{"metrics-asr", ""}
 )

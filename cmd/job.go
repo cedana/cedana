@@ -34,8 +34,15 @@ func init() {
 var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		client, err := NewClient(config.Get(config.HOST), config.Get(config.PORT))
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		var client *Client
+
+		if useVSOCK {
+			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+		} else {
+			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+		}
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
@@ -210,7 +217,7 @@ var attachJobCmd = &cobra.Command{
 			return fmt.Errorf("Job %s not found", jid)
 		}
 
-		pid := list.Jobs[0].GetDetails().GetPID()
+		pid := list.Jobs[0].GetProcess().GetPID()
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},

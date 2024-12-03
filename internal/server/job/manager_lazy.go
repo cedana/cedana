@@ -44,7 +44,8 @@ type action struct {
 	job *Job
 }
 
-func NewManagerDBLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) (*ManagerLazy, error) {
+// NewManagerLazy creates a new lazy job manager, that uses a DB as a backing store.
+func NewManagerLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, db db.DB) (*ManagerLazy, error) {
 	manager := &ManagerLazy{
 		jobs:           sync.Map{},
 		gpuControllers: sync.Map{},
@@ -53,7 +54,8 @@ func NewManagerDBLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plu
 		wg:             &sync.WaitGroup{},
 	}
 
-	db, err := manager.initDB(ctx)
+	// Reload all jobs from the DB
+	err := manager.loadFromDB(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DB: %w", err)
 	}
@@ -256,16 +258,10 @@ func (a *action) sync(ctx context.Context, db db.DB) error {
 	return err
 }
 
-// initDB initializes the DB and loads all jobs into memory.
-func (m *ManagerLazy) initDB(ctx context.Context) (db.DB, error) {
-	db, err := db.NewLocalDB(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
 	protos, err := db.ListJobs(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list jobs: %w", err)
+		return fmt.Errorf("failed to list jobs: %w", err)
 	}
 	for _, proto := range protos {
 		job := fromProto(proto)
@@ -276,7 +272,7 @@ func (m *ManagerLazy) initDB(ctx context.Context) (db.DB, error) {
 		}
 	}
 
-	return db, nil
+	return nil
 }
 
 func (m *ManagerLazy) getGPUController(jid string) *gpuController {
