@@ -10,6 +10,8 @@ import (
 	"github.com/pierrec/lz4"
 )
 
+const DefaultBufferSize = 4 * 1024 * 1024
+
 func TarFolder(srcFolder, destTar string) error {
 	file, err := os.Create(destTar)
 	if err != nil {
@@ -65,7 +67,8 @@ func UntarFolder(srcTar, destFolder string) error {
 	}
 	defer file.Close()
 
-	tr := tar.NewReader(file)
+	bufReader := bufio.NewReaderSize(file, DefaultBufferSize)
+	tr := tar.NewReader(bufReader)
 
 	// Iterate through the files in the tarball
 	for {
