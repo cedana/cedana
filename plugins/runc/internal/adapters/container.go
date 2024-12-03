@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -29,6 +30,29 @@ func GetContainerForDump(next types.Dump) types.Dump {
 		}
 
 		ctx = context.WithValue(ctx, runc_keys.DUMP_CONTAINER_CONTEXT_KEY, container)
+
+		return next(ctx, server, nfy, resp, req)
+	}
+}
+
+func SetPIDForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
+		}
+
+		state, err := container.State()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
+		}
+
+		if resp.State == nil {
+			resp.State = &daemon.ProcessState{}
+		}
+		resp.State.PID = uint32(state.InitProcessPid)
+
+    log.Error().Msgf("PID: %d", state.InitProcessPid)
 
 		return next(ctx, server, nfy, resp, req)
 	}

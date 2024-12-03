@@ -48,6 +48,7 @@ func DumpCRIU() types.Dump {
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 		criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 		criuOpts.NotifyScripts = proto.Bool(true)
+		criuOpts.LogToStderr = proto.Bool(false)
 
 		// TODO: Add support for pre-dump
 		// TODO: Add support for lazy migration
@@ -100,7 +101,6 @@ func RestoreCRIU() types.Restore {
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 		criuOpts.NotifyScripts = proto.Bool(true)
 		criuOpts.LogToStderr = proto.Bool(false)
-		criuOpts.OrphanPtsMaster = proto.Bool(false)
 
 		log.Debug().Int("CRIU", version).Msg("CRIU restore starting")
 		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)

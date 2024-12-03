@@ -5,8 +5,10 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
+	"google.golang.org/protobuf/proto"
 )
 
 // This file contains all the adapters that fill in missing request details
@@ -31,6 +33,13 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		if req.GetDetails().GetRunc().GetRoot() == "" {
 			req.Details.Runc.Root = defaultRoot
 		}
+
+		criuOpts := req.GetCriu()
+		if criuOpts == nil {
+			criuOpts = &criu_proto.CriuOpts{}
+		}
+
+		criuOpts.OrphanPtsMaster = proto.Bool(true)
 
 		return next(ctx, server, nfy, resp, req)
 	}

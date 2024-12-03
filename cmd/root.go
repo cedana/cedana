@@ -6,10 +6,14 @@ import (
 
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// Pluggable features
+const featureRootCmd plugins.Feature[*cobra.Command] = "RootCmd"
 
 func init() {
 	// Add main subcommands
@@ -22,7 +26,13 @@ func init() {
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
 
-	// Add aliases
+	// Add root cmds from plugins
+	featureRootCmd.IfAvailable(
+		func(name string, pluginCmd *cobra.Command) error {
+			rootCmd.AddCommand(pluginCmd)
+			return nil
+		},
+	)
 
 	// Add root flags
 	rootCmd.PersistentFlags().

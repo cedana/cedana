@@ -13,6 +13,7 @@ var Version = "dev"
 
 // CMDs
 var (
+	RootCmd    *cobra.Command
 	DumpCmd    *cobra.Command
 	RestoreCmd *cobra.Command
 )
@@ -24,6 +25,7 @@ var (
 )
 
 func init() {
+	RootCmd = cmd.RootCmd
 	DumpCmd = cmd.DumpCmd
 	RestoreCmd = cmd.RestoreCmd
 
@@ -42,12 +44,15 @@ func init() {
 		adapters.AddExternalNamespacesForDump(configs.NEWNET),
 		adapters.AddExternalNamespacesForDump(configs.NEWPID),
 		adapters.AddBindMountsForDump,
-		adapters.AddDeviceMountsForDump,
+		adapters.AddDevicesForDump,
 		adapters.AddMaskedPathsForDump,
+		adapters.ManageCgroupsForDump,
+		adapters.UseCgroupFreezerIfAvailableForDump,
 		adapters.WriteExtDescriptorsForDump,
-	}
 
-	// TODO: Add support for cgroup v2 freezer
+		// Final adapters
+		adapters.SetPIDForDump,
+	}
 
 	RestoreMiddleware = types.Middleware[types.Restore]{}
 }

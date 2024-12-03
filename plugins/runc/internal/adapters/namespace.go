@@ -35,18 +35,12 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
-				return nil, status.Error(
-					codes.FailedPrecondition,
-					"failed to get container from context",
-				)
+				return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
 			}
 
 			version, err := server.CRIU.GetCriuVersion(ctx)
 			if err != nil {
-				return nil, status.Error(
-					codes.Internal,
-					fmt.Sprintf("failed to get CRIU version: %v", err),
-				)
+				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
 			}
 
 			// Check CRIU compatibility for the namespace type
