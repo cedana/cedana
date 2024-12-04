@@ -158,6 +158,7 @@ func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKat
 	restoredNetConfig := args.GetRestoredNetConfig()
 
 	var netFds []int
+	var netFdsInt64 []int64
 	s.fdStore.Range(func(key, value any) bool {
 		requestID := key.(string) // Adjust the type to match the actual key type
 		netFds = value.([]int)    // Adjust the type to match the actual value type
@@ -167,13 +168,12 @@ func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKat
 		return true
 	})
 
-	for i := range restoredNetConfig {
-		var int64Fds []int64
-		for _, fd := range restoredNetConfig[i].Fds {
-			int64Fds = append(int64Fds, int64(fd))
-		}
-		restoredNetConfig[i].Fds = int64Fds
+	netFdsInt64 = make([]int64, len(netFds))
+	for i, fd := range netFds {
+		netFdsInt64[i] = int64(fd)
 	}
+
+	restoredNetConfig[0].Fds = netFdsInt64
 
 	if isVMSnapshot {
 		err := s.vmSnapshotter.Restore(snapshot, socketPath, restoredNetConfig)
