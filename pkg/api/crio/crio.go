@@ -12,12 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/cedana/cedana/pkg/api/runc"
-	"github.com/containers/buildah"
-	"github.com/containers/buildah/define"
-	"github.com/containers/buildah/pkg/cli"
 	"github.com/containers/buildah/pkg/parse"
 	"github.com/containers/buildah/util"
 	"github.com/containers/common/pkg/auth"
@@ -437,46 +433,6 @@ func getStoreBuildah() (storage.Store, error) {
 	return store, err
 }
 
-type commitInputOptions struct {
-	authfile           string
-	omitHistory        bool
-	blobCache          string
-	certDir            string
-	changes            []string
-	configFile         string
-	creds              string
-	cwOptions          string
-	disableCompression bool
-	format             string
-	iidfile            string
-	manifest           string
-	omitTimestamp      bool
-	timestamp          int64
-	quiet              bool
-	referenceTime      string
-	rm                 bool
-	pull               string
-	pullAlways         bool
-	pullNever          bool
-	sbomImgOutput      string
-	sbomImgPurlOutput  string
-	sbomMergeStrategy  string
-	sbomOutput         string
-	sbomPreset         string
-	sbomPurlOutput     string
-	sbomScannerCommand []string
-	sbomScannerImage   string
-	signaturePolicy    string
-	signBy             string
-	squash             bool
-	tlsVerify          bool
-	identityLabel      bool
-	encryptionKeys     []string
-	encryptLayers      []int
-	unsetenvs          []string
-	addFile            []string
-}
-
 // Tail returns a string slice after the first element unless there are
 // not enough elements, then it returns an empty slice.  This is to replace
 // the urfavecli Tail method for args
@@ -487,14 +443,10 @@ func Tail(a []string) []string {
 	return []string{}
 }
 
-
-func commit(args []string, iopts commitInputOptions) error {
+func commit(args []string) error {
 	var dest types.ImageReference
 	if len(args) == 0 {
 		return errors.New("container ID must be specified")
-	}
-	if err := auth.CheckAuthFile(iopts.authfile); err != nil {
-		return err
 	}
 
 	name := args[0]
@@ -506,15 +458,7 @@ func commit(args []string, iopts commitInputOptions) error {
 	if len(args) > 0 {
 		image = args[0]
 	}
-	compress := define.Gzip
-	if iopts.disableCompression {
-		compress = define.Uncompressed
-	}
 
-	format, err := cli.GetFormat(iopts.format)
-	if err != nil {
-		return err
-	}
 	store, err := getStoreBuildah()
 	if err != nil {
 		return err
@@ -551,75 +495,7 @@ func commit(args []string, iopts commitInputOptions) error {
 		}
 	}
 
-	// Add builder identity information.
-	if iopts.identityLabel {
-		builder.SetLabel(buildah.BuilderIdentityAnnotation, define.Version)
-	}
-
-	encConfig, encLayers, err := cli.EncryptConfig(iopts.encryptionKeys, iopts.encryptLayers)
-	if err != nil {
-		return fmt.Errorf("unable to obtain encryption config: %w", err)
-	}
-
-	var addFiles map[string]string
-	if len(iopts.addFile) > 0 {
-		addFiles = make(map[string]string)
-		for _, spec := range iopts.addFile {
-			specSlice := strings.SplitN(spec, ":", 2)
-			if len(specSlice) == 1 {
-				specSlice = []string{specSlice[0], specSlice[0]}
-			}
-			if len(specSlice) != 2 {
-				return fmt.Errorf("parsing add-file argument %q: expected 1 or 2 parts, got %d", spec, len(strings.SplitN(spec, ":", 2)))
-			}
-			st, err := os.Stat(specSlice[0])
-			if err != nil {
-				return fmt.Errorf("parsing add-file argument %q: source %q: %w", spec, specSlice[0], err)
-			}
-			if st.IsDir() {
-				return fmt.Errorf("parsing add-file argument %q: source %q is not a regular file", spec, specSlice[0])
-			}
-			addFiles[specSlice[1]] = specSlice[0]
-		}
-	}
-
-	options := buildah.CommitOptions{
-		PreferredManifestType: format,
-		Manifest:              iopts.manifest,
-		Compression:           compress,
-		SignaturePolicyPath:   iopts.signaturePolicy,
-		SystemContext:         systemContext,
-		IIDFile:               iopts.iidfile,
-		Squash:                iopts.squash,
-		BlobDirectory:         iopts.blobCache,
-		OmitHistory:           iopts.omitHistory,
-		SignBy:                iopts.signBy,
-		OciEncryptConfig:      encConfig,
-		OciEncryptLayers:      encLayers,
-		UnsetEnvs:             iopts.unsetenvs,
-		OverrideChanges:       iopts.changes,
-		OverrideConfig:        overrideConfig,
-		ExtraImageContent:     addFiles,
-	}
-	exclusiveFlags := 0
-	if iopts.omitTimestamp {
-		exclusiveFlags++
-		timestamp := time.Unix(0, 0).UTC()
-		options.HistoryTimestamp = &timestamp
-	}
-
-	if iopts.cwOptions != "" {
-		confidentialWorkloadOptions, err := parse.GetConfidentialWorkloadOptions(iopts.cwOptions)
-		if err != nil {
-			return fmt.Errorf("parsing --cw arguments: %w", err)
-		}
-		options.ConfidentialWorkloadOptions = confidentialWorkloadOptions
-	}
-
-	if !iopts.quiet {
-		options.ReportWriter = os.Stderr
-	}
-	id, ref, _, err := builder.Commit(ctx, dest, options)
+	id, ref, _, err := builder.Commit(ctx, dest)
 	if err != nil {
 		return util.GetFailureCause(err, fmt.Errorf("committing container %q to %q: %w", builder.Container, image, err))
 	}
@@ -632,21 +508,15 @@ func commit(args []string, iopts commitInputOptions) error {
 	} else {
 		logrus.Debugf("wrote image")
 	}
-	if options.IIDFile == "" && id != "" {
-		fmt.Printf("%s\n", id)
-	}
-
-	if iopts.rm {
-		return builder.Delete()
-	}
+	// similar to running buildah rm
+	//	if iopts.rm {
+	//	return builder.Delete()
+	// }
 	return nil
 }
 
-
- func buildahCommit(args string[] iopts commitInputOptions) {
-	containerID := args[0]
-	newImageRef := args[1]
-	commit(containerID, newImageRef)
+func buildahCommit(args []string) {
+	commit(args)
 }
 
 // WARN:
