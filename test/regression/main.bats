@@ -381,3 +381,31 @@ teardown() {
     run restore_task $job_id --stream 4
     [[ "$status" -eq 0 ]]
 }
+
+@test "Dump + restore workload with direct remoting" {
+    local task="./workload.sh"
+    local job_id="workload-remoting-1"
+    local bucket="direct-remoting"
+    rm -rf /test
+    # clear bucket
+    aws s3 rm s3://$bucket --recursive
+
+    # execute, checkpoint, and restore with direct remoting
+    exec_task $task $job_id
+    sleep 1 3>-
+    checkpoint_task $job_id /test --stream 4 --bucket $bucket
+    sleep 1 3>-
+    run restore_task $job_id --stream 4 --bucket $bucket
+
+    # ensure there are num_pipes (4) ckpt files in the bucket
+    num_objs=$(aws s3 ls s3://$bucket --recursive | wc -l)
+    if [ "$num_objs" -ne 4 ]; then
+        echo "Error: object count $num_objs != 4."
+        exit 1
+    fi
+
+    # clear bucket
+    aws s3 rm s3://$bucket --recursive
+
+    [[ "$status" -eq 0 ]]
+}

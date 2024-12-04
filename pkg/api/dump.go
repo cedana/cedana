@@ -338,10 +338,6 @@ func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu 
 	}
 	args = append(args, "capture") // subcommand must be after options
 	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
-	cmd.Env = os.Environ()
-	log.Debug().Msgf("cmd env var = %v", cmd.Env)
-	log.Debug().Msgf("executing cmd %v", cmd)
-	var err error
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
