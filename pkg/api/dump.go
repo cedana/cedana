@@ -138,7 +138,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	// setup cedana-image-streamer
 	var streamCmd *exec.Cmd
 	if args.Stream > 0 {
-		streamCmd, err = s.setupStreamerCapture(ctx, dumpDirPath, state.GPU, args.Stream)
+		streamCmd, err = s.setupStreamerCapture(ctx, dumpDirPath, state.GPU, args.Bucket, args.Stream)
 		if err != nil {
 			return "", nil, err
 		}
@@ -328,13 +328,19 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 	return s.postDump(ctx, imagePath, state, nil)
 }
 
-func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu bool, num_pipes int32) (*exec.Cmd, error) {
-	var cmd *exec.Cmd
+func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu bool, bucket string, num_pipes int32) (*exec.Cmd, error) {
+	args := []string{"--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes)}
 	if gpu {
-		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--gpu", "--num-pipes", fmt.Sprint(num_pipes), "capture")
-	} else {
-		cmd = exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "capture")
+		args = append(args, "--gpu")
 	}
+	if bucket != "" {
+		args = append(args, "--bucket", bucket)
+	}
+	args = append(args, "capture") // subcommand must be after options
+	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
+	cmd.Env = os.Environ()
+	log.Debug().Msgf("cmd env var = %v", cmd.Env)
+	log.Debug().Msgf("executing cmd %v", cmd)
 	var err error
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

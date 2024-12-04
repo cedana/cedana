@@ -45,8 +45,16 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) {
-	cmd := exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, bucket string, num_pipes int32) {
+	args := []string{"--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes)}
+	if bucket != "" {
+		args = append(args, "--bucket", bucket)
+	}
+	args = append(args, "serve") // subcommand must be after options
+	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
+	cmd.Env = os.Environ()
+	log.Debug().Msgf("cmd env var = %v", cmd.Env)
+	log.Debug().Msgf("executing cmd %v", cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -109,7 +117,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(ctx, tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Bucket, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
