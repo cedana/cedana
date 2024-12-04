@@ -12,6 +12,9 @@ import (
 	"strings"
 
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/xid"
@@ -61,18 +64,47 @@ var dumpProcessCmd = &cobra.Command{
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		bucket, _ := cmd.Flags().GetString(bucketFlag)
 
-		log.Info().Msgf("cmd/dump stream = %d", stream)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+			if bucket != "" {
+				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
+					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
+				}
+				if !((os.Getenv("AWS_ACCESS_KEY_ID") == "" && os.Getenv("AWS_SECRET_ACCESS_KEY") == "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") == "") {
+					return fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
+				}
+				cfg, err := config.LoadDefaultConfig(context.TODO())
+				if err != nil {
+					return fmt.Errorf("Unable to load AWS configuration")
+				}
+				if cfg.Region == "" {
+					return fmt.Errorf("AWS region not configured properly, please specify in AWS config file (~/.aws/config) or environment variable AWS_DEFAULT_REGION.")
+				}
+				_, err = cfg.Credentials.Retrieve(context.TODO())
+				if err != nil {
+					return fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
+				}
+				s3Client := s3.NewFromConfig(cfg)
+				_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+					Bucket: aws.String(bucket),
+				})
+				if err != nil {
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
 			Stream: stream,
+			Bucket: bucket,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:    leaveRunning,
 				TcpEstablished:  tcpEstablished,
@@ -205,11 +237,40 @@ var dumpJobCmd = &cobra.Command{
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		bucket, _ := cmd.Flags().GetString(bucketFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+			if bucket != "" {
+				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
+					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
+				}
+				if !((os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "") {
+					return fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
+				}
+				cfg, err := config.LoadDefaultConfig(context.TODO())
+				if err != nil {
+					return fmt.Errorf("Unable to load AWS configuration")
+				}
+				if cfg.Region == "" {
+					return fmt.Errorf("AWS region not configured, please specify in AWS config file (~/.aws/config) or environment variables.")
+				}
+				_, err = cfg.Credentials.Retrieve(context.TODO())
+				if err != nil {
+					return fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables")
+				}
+				s3Client := s3.NewFromConfig(cfg)
+				_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+					Bucket: aws.String(bucket),
+				})
+				if err != nil {
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 
 		var externalNamespaces []string
@@ -229,6 +290,7 @@ var dumpJobCmd = &cobra.Command{
 			JID:    id,
 			Dir:    dir,
 			Stream: stream,
+			Bucket: bucket,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:    leaveRunning,
 				TcpEstablished:  tcpEstablished,
@@ -502,7 +564,8 @@ func init() {
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
-	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
+	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using cedana-image-streamer")
+	dumpProcessCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream to")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpProcessCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
 
@@ -511,7 +574,8 @@ func init() {
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
-	dumpJobCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
+	dumpJobCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using cedana-image-streamer")
+	dumpJobCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream to")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")

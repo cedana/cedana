@@ -45,4 +45,5 @@ const (
 	pidFileFlag          = "pid-file"
 	modeFlag             = "mode"
 	skipInFlightFlag     = "skip-in-flight"
+	bucketFlag           = "bucket"
 )
