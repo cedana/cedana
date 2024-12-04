@@ -303,6 +303,8 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
+	netDeviceAsIoReader := bytes.NewBuffer(jsonData)
+
 	addr, err := net.ResolveUnixAddr("unix", vmSocketPath)
 	if err != nil {
 		return err
@@ -314,12 +316,14 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 	}
 	defer conn.Close()
 
-	req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.restore", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.restore", netDeviceAsIoReader)
 
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Length", strconv.Itoa(int(netDeviceAsIoReader.Len())))
 
 	payload, err := httputil.DumpRequest(req, true)
 	if err != nil {
@@ -332,9 +336,12 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 	}
 
 	oob := syscall.UnixRights(fds...)
-	_, _, err = conn.WriteMsgUnix([]byte(payload), oob, nil)
+	payloadn, oobn, err := conn.WriteMsgUnix([]byte(payload), oob, nil)
 	if err != nil {
 		return err
+	}
+	if payloadn != len(payload) || oobn != len(oob) {
+		return fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
 	}
 
 	reader := bufio.NewReader(conn)
