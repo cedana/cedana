@@ -159,7 +159,7 @@ func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKat
 		requestID := key.(string) // Adjust the type to match the actual key type
 		fds := value.([]int)      // Adjust the type to match the actual value type
 
-		log.Logger.Debug().Msgf("Request ID: %v, FDs: %v\n", requestID, fds)
+		log.Logger.Info().Msgf("Request ID: %v, FDs: %v\n", requestID, fds)
 
 		return true
 	})
