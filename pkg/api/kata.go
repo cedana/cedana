@@ -330,9 +330,22 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return err
 	}
 
+	// This is for closing the open fds after restore has finished
+	var files []*os.File
+	defer func() {
+		for _, file := range files {
+			file.Close()
+		}
+	}()
+
 	var fds []int
 	for _, fd := range data.NetFDs[0].Fds {
 		fds = append(fds, int(fd))
+
+		file := os.NewFile(uintptr(fd), fmt.Sprintf("fd-%d", fd))
+		if file != nil {
+			files = append(files, file)
+		}
 	}
 
 	oob := syscall.UnixRights(fds...)
