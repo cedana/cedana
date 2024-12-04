@@ -82,7 +82,7 @@ func (s *service) KataDump(ctx context.Context, args *task.DumpArgs) (*task.Dump
 	return &resp, err
 }
 
-func (s *service) handleConnection(conn net.Conn) {
+func (s *service) handleConnection(conn net.Conn, socketPath string) {
 	defer conn.Close()
 
 	unixConn, ok := conn.(*net.UnixConn)
@@ -121,6 +121,8 @@ func (s *service) handleConnection(conn net.Conn) {
 	requestID := string(buf[:n]) // Assume request ID is sent with the message
 	s.fdStore.Store(requestID, fds)
 
+	defer os.Remove(socketPath)
+
 }
 
 func (s *service) CreateUnixSocket(ctx context.Context, _ *task.Empty) (*task.SocketResp, error) {
@@ -140,7 +142,7 @@ func (s *service) CreateUnixSocket(ctx context.Context, _ *task.Empty) (*task.So
 				break
 			}
 
-			go s.handleConnection(conn)
+			go s.handleConnection(conn, socketPath)
 		}
 	}()
 
@@ -154,8 +156,8 @@ func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKat
 	restoredNetConfig := args.GetRestoredNetConfig()
 
 	s.fdStore.Range(func(key, value any) bool {
-		requestID := key.(int) // Adjust the type to match the actual key type
-		fds := value.([]int)   // Adjust the type to match the actual value type
+		requestID := key.(string) // Adjust the type to match the actual key type
+		fds := value.([]int)      // Adjust the type to match the actual value type
 
 		log.Logger.Debug().Msgf("Request ID: %v, FDs: %v\n", requestID, fds)
 
