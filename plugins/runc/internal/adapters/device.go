@@ -33,9 +33,8 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// TODO: return early if pre-dump, as we don't do all of this for pre-dump
@@ -47,7 +46,7 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 			hasCgroupns := config.Namespaces.Contains(configs.NEWCGROUP)
 			switch m.Device {
 			case "bind":
-				criuAddExternalMount(criuOpts, m, rootfs)
+				criuAddExternalMount(req.Criu, m, rootfs)
 			case "cgroup":
 				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
 					// real mount(s)
@@ -63,14 +62,14 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 					)
 				}
 				for _, b := range binds {
-					criuAddExternalMount(criuOpts, b, rootfs)
+					criuAddExternalMount(req.Criu, b, rootfs)
 				}
 			}
 		}
 
 		for _, d := range config.Devices {
 			m := &configs.Mount{Destination: d.Path, Source: d.Path}
-			criuAddExternalMount(criuOpts, m, rootfs)
+			criuAddExternalMount(req.Criu, m, rootfs)
 		}
 
 		return next(ctx, server, nfy, resp, req)

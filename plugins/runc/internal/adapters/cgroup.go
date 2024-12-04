@@ -20,12 +20,11 @@ import (
 
 func ManageCgroupsForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		criuOpts.ManageCgroups = proto.Bool(true)
+		req.Criu.ManageCgroups = proto.Bool(true)
 
 		return next(ctx, server, nfy, resp, req)
 	}
@@ -48,9 +47,8 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		// XXX: Create new cgroup manager, as the container's cgroup manager is not accessible (internal)
@@ -62,7 +60,7 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 		if !cgroups.IsCgroup2UnifiedMode() || version >= 31400 {
 			log.Debug().Msg("using cgroup freezer for dump")
 			if fcg := manager.Path("freezer"); fcg != "" {
-				criuOpts.FreezeCgroup = proto.String(fcg)
+				req.Criu.FreezeCgroup = proto.String(fcg)
 			}
 		}
 

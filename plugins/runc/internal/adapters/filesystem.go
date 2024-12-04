@@ -34,15 +34,14 @@ func AddBindMountsForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		for _, m := range container.Config().Mounts {
 			if m.IsBind() {
-				criuOpts.External = append(
-					criuOpts.External,
+				req.Criu.External = append(
+					req.Criu.External,
 					fmt.Sprintf("mnt[%s]:%s", m.Destination, m.Destination),
 				)
 			}
@@ -59,9 +58,8 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.Criu == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		config := container.Config()
@@ -86,7 +84,7 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				Key: proto.String(path),
 				Val: proto.String("/dev/null"),
 			}
-			criuOpts.ExtMnt = append(criuOpts.ExtMnt, extMnt)
+			req.Criu.ExtMnt = append(req.Criu.ExtMnt, extMnt)
 		}
 
 		return next(ctx, server, nfy, resp, req)
@@ -100,9 +98,8 @@ func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
 		state, err := container.State()
@@ -121,7 +118,7 @@ func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
 		}
 
 		err = os.WriteFile(
-			filepath.Join(*criuOpts.ImagesDir, extDescriptorsFilename),
+			filepath.Join(*req.Criu.ImagesDir, extDescriptorsFilename),
 			fdsJSON,
 			0o600,
 		)
@@ -139,7 +136,7 @@ func WriteExtDescriptorsForDump(next types.Dump) types.Dump {
 		}
 
 		// Clean up the file if there was an error
-		os.Remove(filepath.Join(*criuOpts.ImagesDir, extDescriptorsFilename))
+		os.Remove(filepath.Join(*req.Criu.ImagesDir, extDescriptorsFilename))
 
 		return exited, err
 	}

@@ -1,7 +1,7 @@
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-f7151e45691d.1 h1:dntNR+dtWPC0Pp18+Ygc/87Vqs5BEGSkxyr3njO9U7U=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-f7151e45691d.1/go.mod h1:vHvGLSzS6ESeUZjO65sNAA3tE+BtwhN/vYFuzXPfEBo=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1 h1:SseawX9JfkERtsDf5D/GThalFkNcwkQ3h5FK4OEoSCQ=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-39446c800015.1 h1:K+k/HwqVKpDlSQ5UsHllZxg1LW6fswNibpNV3EcgkDM=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-39446c800015.1/go.mod h1:sQwdccXPBcavhh3AT7x+L6JnvXGIeBho9+x0+0QyZGE=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1 h1:XtPYlIWYFVya5/rB5Q0qW+riAXG6+6GsVmuu5y6kyrE=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0 h1:mIdrSO2cPNWQY1truPg6uHLXyKHk3Z5Odx4wjKOASzA=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0/go.mod h1:rrRTN/uSwY2X+BPRl/gkulo9gsKOSAeVp9/K2tv7xZI=
 github.com/containerd/console v1.0.4 h1:F2g4+oChYvBTsASRTz8NP6iIAi97J3TtSAsLbIFn4ro=
@@ -97,8 +97,9 @@ github.com/tklauser/numcpus v0.6.1 h1:ng9scYS7az0Bk4OZLvrNXNSAO2Pxr1XXRAPyjhIx+F
 github.com/tklauser/numcpus v0.6.1/go.mod h1:1XfjsgE2zo8GVw7POkMbHENHzVg3GzmoZ9fESEdAacY=
 github.com/vishvananda/netlink v1.1.0 h1:1iyaYNBLmP6L0220aDnYQpo1QEV4t4hJ+xEEhhJH8j0=
 github.com/vishvananda/netlink v1.1.0/go.mod h1:cTgwzPIzzgDAYoQrMm0EdrjRUBkTqKYppBueQtXaqoE=
-github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df h1:OviZH7qLw/7ZovXvuNyL3XQl8UFofeikI1NW1Gypu7k=
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
+github.com/vishvananda/netns v0.0.4 h1:Oeaw1EM2JMxD51g9uhtC0D7erkIjgmj8+JZc26m1YX8=
+github.com/vishvananda/netns v0.0.4/go.mod h1:SpkAiCQRtJ6TvvxPnOSyH3BMl6unz3xZlaprSwhNNJM=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 golang.org/x/net v0.29.0 h1:5ORfpBpCs4HzDYoodCDBbwHzdR5UrLBZ3sOnUJmFoHo=

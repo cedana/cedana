@@ -78,12 +78,11 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 			}
 			external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, criuNsToKey(t))
 
-			criuOpts := req.GetCriu()
-			if criuOpts == nil {
-				criuOpts = &criu_proto.CriuOpts{}
+			if req.Criu == nil {
+				req.Criu = &criu_proto.CriuOpts{}
 			}
 
-			criuOpts.External = append(criuOpts.External, external)
+			req.Criu.External = append(req.Criu.External, external)
 
 			return next(ctx, server, nfy, resp, req)
 		}

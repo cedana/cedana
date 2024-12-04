@@ -25,7 +25,7 @@
     "noNewPrivileges": true
   },
   "root": {
-    "path": "rootfs",
+    "path": "_rootfs",
     "readonly": false
   },
   "hostname": "runc",

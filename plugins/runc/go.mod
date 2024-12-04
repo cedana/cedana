@@ -5,8 +5,8 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-f7151e45691d.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-87e0bf242d0e.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-39446c800015.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1
 	github.com/cedana/cedana v0.9.231
 	github.com/cyphar/filepath-securejoin v0.3.4
 	github.com/opencontainers/runc v1.2.1
@@ -53,7 +53,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/vishvananda/netlink v1.1.0 // indirect
-	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
+	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect

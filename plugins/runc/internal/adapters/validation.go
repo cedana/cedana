@@ -1,5 +1,7 @@
 package adapters
 
+// This file contains all the adapters that validate the request
+
 import (
 	"context"
 
@@ -10,7 +12,28 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// This file contains all the adapters that validate the request
+////////////////////////
+//// Start Adapters ////
+////////////////////////
+
+func ValidateStartRequest(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+		if req.GetDetails().GetRuncStart() == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "missing process start options")
+		}
+		if req.GetDetails().GetRuncStart().GetRoot() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing root")
+		}
+		if req.GetDetails().GetRuncStart().GetID() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing id")
+		}
+		if req.GetDetails().GetRuncStart().GetBundle() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
+		}
+
+		return next(ctx, server, resp, req)
+	}
+}
 
 ///////////////////////
 //// Dump Adapters ////

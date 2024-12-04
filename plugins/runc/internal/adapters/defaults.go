@@ -1,5 +1,8 @@
 package adapters
 
+// This file contains all the adapters that fill in missing request details
+// with defaults
+
 import (
 	"context"
 
@@ -11,10 +14,29 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// This file contains all the adapters that fill in missing request details
-// with defaults
-
 const defaultRoot = "/run/runc"
+
+////////////////////////
+//// Start Adapters ////
+////////////////////////
+
+func FillMissingStartDefaults(next types.Start) types.Start {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+		if req.GetDetails() == nil {
+			req.Details = &daemon.Details{}
+		}
+		if req.GetDetails().GetRuncStart() == nil {
+			req.Details.RuncStart = &runc.StartDetails{}
+		}
+		if req.GetDetails().GetRuncStart().GetRoot() == "" {
+			req.Details.RuncStart.Root = defaultRoot
+		}
+		if req.GetDetails().GetRuncStart().GetID() == "" {
+			req.Details.RuncStart.ID = req.JID
+		}
+		return next(ctx, server, resp, req)
+	}
+}
 
 ///////////////////////
 //// Dump Adapters ////
@@ -34,12 +56,11 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Details.Runc.Root = defaultRoot
 		}
 
-		criuOpts := req.GetCriu()
-		if criuOpts == nil {
-			criuOpts = &criu_proto.CriuOpts{}
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		criuOpts.OrphanPtsMaster = proto.Bool(true)
+		req.Criu.OrphanPtsMaster = proto.Bool(true)
 
 		return next(ctx, server, nfy, resp, req)
 	}

@@ -4,6 +4,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/cmd"
 	"github.com/cedana/cedana/plugins/runc/internal/adapters"
+	"github.com/cedana/cedana/plugins/runc/internal/handlers"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,7 @@ var (
 var (
 	DumpMiddleware    types.Middleware[types.Dump]
 	RestoreMiddleware types.Middleware[types.Restore]
+	StartHandler      types.Start
 )
 
 func init() {
@@ -55,4 +57,11 @@ func init() {
 	}
 
 	RestoreMiddleware = types.Middleware[types.Restore]{}
+
+	startMiddleware := types.Middleware[types.Start]{
+		adapters.FillMissingStartDefaults,
+		adapters.ValidateStartRequest,
+	}
+
+	StartHandler = handlers.Run().With(startMiddleware...)
 }
