@@ -314,7 +314,7 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 	}
 	defer conn.Close()
 
-	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.restore", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.restore", bytes.NewBuffer(jsonData))
 
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
