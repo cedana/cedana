@@ -3,6 +3,7 @@ package api
 // Implements the task service functions for kata container workloads
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -301,13 +303,16 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", vmSocketPath)
-			},
-		},
+	addr, err := net.ResolveUnixAddr("unix", vmSocketPath)
+	if err != nil {
+		return err
 	}
+
+	conn, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 
 	req, err := http.NewRequest("PUT", "http://localhost/api/v1/vm.restore", bytes.NewBuffer(jsonData))
 
@@ -316,19 +321,38 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	payload, err := httputil.DumpRequest(req, true)
 	if err != nil {
 		return err
 	}
 
+	var fds []int
+	for _, fd := range data.NetFDs[0].Fds {
+		fds = append(fds, int(fd))
+	}
+
+	oob := syscall.UnixRights(fds...)
+	_, _, err = conn.WriteMsgUnix([]byte(payload), oob, nil)
+	if err != nil {
+		return err
+	}
+
+	reader := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(reader, req)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
+
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("error restoring vm: %d, %v, req data: %v, socket path: %s", resp.StatusCode, string(body), string(jsonData), vmSocketPath)
+		return fmt.Errorf("error restoring vm: %d, %v, req data: %v, socket path: %s", resp.StatusCode, string(respBody), string(jsonData), vmSocketPath)
 	}
 
 	return nil
