@@ -76,11 +76,13 @@ GPU=""
 if [ -d /proc/driver/nvidia/gpus/ ]; then
     echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
     if $(/sbin/ldconfig -p | grep -q libcuda.so.1); then
-        echo "CUDA drivers found!"
+        echo "CUDA driver library found!"
     fi
 
     set -e
     echo "Downloading cedana's nvidia interception utilities..."
+
+    mkdir -p /cedana/bin /cedana/lib
 
     wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/cedana-gpu-controller &> /dev/null
     chmod +x /cedana/bin/cedana-gpu-controlller
@@ -95,16 +97,28 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
     mkdir -p /usr/local/cedana/bin
     install /cedana/bin/containerd-shim-runc-v2 /usr/local/cedana/bin/containerd-shim-runc-v2
 
-    PATH_CONTAINERD_CONFIG="/etc/containerd/config.toml"
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
         echo "Containerd config file not found at $PATH_CONTAINERD_CONFIG"
-        echo "Searching for containerd config file..."
-        PATH_CONTAINERD_CONFIG=$(find / -fullname **/containerd/config.toml | head -n 1)
-        if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
-            echo "Containerd config file not found. Exiting..."
-            exit 1
+        if [ $SEARCH_CONTAINERD_CONFIG -eq 1 ]; then
+            echo "Searching for containerd config file..."
+            PATH_CONTAINERD_CONFIG=$(find / -fullname **/containerd/config.toml | head -n 1)
+            if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
+                echo "Containerd config file not found. Exiting..."
+                exit 1
+            fi
+            echo "Found containerd config file at $PATH_CONTAINERD_CONFIG"
+        else
+            echo "Containerd config file not found. Creating default config file at $PATH_CONTAINERD_CONFIG"
+            if [[ $PATH_CONTAINERD_CONFIG == *"k3s"* ]]; then
+                echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
+                cat  > $PATH_CONTAINERD_CONFIG <<'END_CAT'
+                {{ template "base" . }}
+                END_CAT
+            else
+                echo "" > $PATH_CONTAINERD_CONFIG
+            fi
         fi
-        echo "Found containerd config file at $PATH_CONTAINERD_CONFIG"
     fi
 
     echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
@@ -112,6 +126,7 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
           runtime_type = "io.containerd.runc.v2"
           runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
+            [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana".options]
     END_CAT
 
     # SIGHUP is sent to the containerd process to reload the configuration
