@@ -125,7 +125,7 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
           runtime_type = "io.containerd.runc.v2"
           runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
             [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana".options]
-    END_CAT
+END_CAT
 
     # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
