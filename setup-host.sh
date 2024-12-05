@@ -112,9 +112,7 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
             echo "Containerd config file not found. Creating default config file at $PATH_CONTAINERD_CONFIG"
             if [[ $PATH_CONTAINERD_CONFIG == *"k3s"* ]]; then
                 echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
-                cat  > $PATH_CONTAINERD_CONFIG <<'END_CAT'
-                {{ template "base" . }}
-                END_CAT
+                echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
             else
                 echo "" > $PATH_CONTAINERD_CONFIG
             fi
