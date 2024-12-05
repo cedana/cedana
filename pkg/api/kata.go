@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 
@@ -303,6 +304,8 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
+	timeout := time.Minute * 10
+
 	netDeviceAsIoReader := bytes.NewBuffer(jsonData)
 
 	addr, err := net.ResolveUnixAddr("unix", vmSocketPath)
@@ -315,6 +318,8 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return err
 	}
 	defer conn.Close()
+
+	conn.SetDeadline(time.Now().Add(timeout))
 
 	req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.restore", netDeviceAsIoReader)
 
