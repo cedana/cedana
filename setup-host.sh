@@ -79,19 +79,19 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
         echo "CUDA driver library found!"
     fi
 
-    set -e
+    set -eux
     echo "Downloading cedana's nvidia interception utilities..."
 
     mkdir -p /cedana/bin /cedana/lib
 
-    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/cedana-gpu-controller &> /dev/null
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/gpucontroller
     chmod +x /cedana/bin/cedana-gpu-controlller
     install /cedana/bin/cedana-gpu-controlller /usr/local/bin/cedana-gpu-controlller
 
-    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/lib/libcedana-gpu.so $CEDANA_URL/k8s/gpu/libcedana-gpu &> /dev/null
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/lib/libcedana-gpu.so $CEDANA_URL/k8s/gpu/libcedana
     install /cedana/lib/libcedana-gpu.so /usr/local/lib/libcedana-gpu.so
 
-    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -q -O /cedana/bin/containerd-shim-runc-v2 $CEDANA_URL/k8s/cedana-shim/latest &> /dev/null
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/containerd-shim-runc-v2 $CEDANA_URL/k8s/cedana-shim/latest
     chmod +x /cedana/bin/containerd-shim-runc-v2
 
     mkdir -p /usr/local/cedana/bin
@@ -129,9 +129,10 @@ END_CAT
 
     # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
-    kill -HUP $(pidof containerd)
+    systemctl restart containerd
+    # kill -HUP $(pidof containerd)
 
-    set +e
+    set +eux
     GPU="--gpu"
 fi
 
