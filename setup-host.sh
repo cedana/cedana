@@ -108,11 +108,11 @@ if [ -f /proc/driver/nvidia/gpus/ ]; then
     fi
 
     echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-    cat <<'END_CAT'
+    cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
           runtime_type = "io.containerd.runc.v2"
           runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
-    END_CAT >> $PATH_CONTAINERD_CONFIG
+    END_CAT
 
     # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
