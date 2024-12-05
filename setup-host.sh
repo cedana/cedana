@@ -73,7 +73,7 @@ else
 fi
 
 GPU=""
-if [ -f /proc/driver/nvidia/gpus/ ]; then
+if [ -d /proc/driver/nvidia/gpus/ ]; then
     echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
     if $(/sbin/ldconfig -p | grep -q libcuda.so.1); then
         echo "CUDA drivers found!"
