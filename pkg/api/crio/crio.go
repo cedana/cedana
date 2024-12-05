@@ -487,7 +487,7 @@ func commit(args []string) error {
 			if len(candidates) == 0 {
 				return fmt.Errorf("parsing target image name %q", image)
 			}
-			dest2, err2 := storageTransport.Transport.ParseStoreReference(store, candidates[0].String())
+			dest2, err2 := is.Transport.ParseStoreReference(store, candidates[0].String())
 			if err2 != nil {
 				return fmt.Errorf("parsing target image name %q: %w", image, err)
 			}
@@ -627,8 +627,7 @@ func RootfsMerge(ctx context.Context, originalImageRef, newImageRef, rootfsDiffP
 	}
 
 	log.Debug().Msgf("committing to %s", newImageRef)
-	cmd = buildahCommit(containerID, newImageRef)
-	out, err = dcmd.CombinedOutput()
+	buildahCommit(containerID, newImageRef)
 	if err != nil {
 		return fmt.Errorf("issue committing image: %s, %s", err.Error(), string(out))
 	}
