@@ -61,6 +61,7 @@ var dumpProcessCmd = &cobra.Command{
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 
 		log.Info().Msgf("cmd/dump stream = %d", stream)
 		if stream > 0 {
@@ -78,6 +79,7 @@ var dumpProcessCmd = &cobra.Command{
 				TcpEstablished:  tcpEstablished,
 				TcpClose:        tcpClose,
 				TcpSkipInFlight: tcpSkipInFlight,
+				NetworkLock:     networkLock,
 			},
 		}
 		resp, err := cts.Dump(ctx, &cpuDumpArgs)
@@ -201,6 +203,7 @@ var dumpJobCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
+		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -236,6 +239,7 @@ var dumpJobCmd = &cobra.Command{
 				FileLocks:       fileLocks,
 				TcpClose:        tcpClose,
 				TcpSkipInFlight: tcpSkipInFlight,
+				NetworkLock:     networkLock,
 			},
 		}
 
@@ -397,6 +401,7 @@ var dumpRuncCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
+		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
@@ -421,6 +426,7 @@ var dumpRuncCmd = &cobra.Command{
 			TcpEstablished:  tcpEstablished,
 			TcpClose:        tcpClose,
 			TcpSkipInFlight: tcpSkipInFlight,
+			NetworkLock:     networkLock,
 			External:        externalNamespaces,
 			FileLocks:       fileLocks,
 		}
@@ -502,6 +508,7 @@ func init() {
 	dumpProcessCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
+	dumpProcessCmd.Flags().StringP(networkLockFlag, "", "", "network locking/unlocking method")
 	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpProcessCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
@@ -511,6 +518,7 @@ func init() {
 	dumpJobCmd.Flags().StringP(dirFlag, "d", "", "directory to dump to")
 	dumpJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpJobCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
+	dumpJobCmd.Flags().StringP(networkLockFlag, "", "", "network locking/unlocking method")
 	dumpJobCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
@@ -550,6 +558,7 @@ func init() {
 	dumpRuncCmd.MarkFlagRequired(idFlag)
 	dumpRuncCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "tcp established")
 	dumpRuncCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
+	dumpRuncCmd.Flags().StringP(networkLockFlag, "", "", "network locking/unlocking method")
 	dumpRuncCmd.Flags().StringP(wdFlag, "w", "", "working directory")
 	dumpRuncCmd.Flags().StringP(rootFlag, "r", "default", "container root")
 	dumpRuncCmd.Flags().String(externalFlag, "", "external")

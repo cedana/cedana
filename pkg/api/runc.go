@@ -172,6 +172,7 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		TcpEstablished:  isUsingTCP || args.GetCriuOpts().GetTcpEstablished(),
 		TcpClose:        args.GetCriuOpts().GetTcpClose(),
 		TCPInFlight:     args.GetCriuOpts().GetTcpSkipInFlight(),
+		NetworkLock:     args.GetCriuOpts().GetNetworkLock(),
 		MntnsCompatMode: false,
 		External:        args.GetCriuOpts().GetExternal(),
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
