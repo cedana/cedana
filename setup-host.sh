@@ -82,6 +82,9 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
             echo "CUDA driver library found!"
         fi
     else
+        # Bind mount /dev/shm to /run/nvidia/driver/dev/shm
+        # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
+        mount --rbind /dev/shm /run/nvidia/driver/dev/shm
         chroot /run/driver/nvidia bash -c <<'END_CHROOT'
             echo "Nvidia Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
             if /sbin/ldconfig -p | grep -q libcuda.so.1; then
