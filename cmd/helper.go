@@ -73,7 +73,7 @@ var helperCmd = &cobra.Command{
 
 		port, _ := cmd.Flags().GetUint32(portFlag)
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
-    startChroot = startChroot || setupHost
+        startChroot = startChroot || setupHost
 		startHelper(ctx, startChroot, port)
 
 		return nil
