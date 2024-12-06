@@ -304,7 +304,7 @@ func (u *CloudHypervisorVM) Restore(snapshotPath, vmSocketPath string, netConfig
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
-	timeout := time.Minute * 10
+	timeout := time.Minute * 20
 
 	netDeviceAsIoReader := bytes.NewBuffer(jsonData)
 
