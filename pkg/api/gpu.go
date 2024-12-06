@@ -150,6 +150,10 @@ func (s *service) StartGPUController(ctx context.Context, uid, gid int32, groups
 		},
 	}
 
+  if _, err := os.Stat("/run/nvidia/driver"); err == nil {
+    gpuCmd.SysProcAttr.Chroot = "/run/nvidia/driver"
+  }
+
 	outBuf := &bytes.Buffer{}
 	gpuOut := io.MultiWriter(outBuf)
 	gpuCmd.Stderr = gpuOut
