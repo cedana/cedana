@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/utils"
 	runc_flags "github.com/cedana/cedana/plugins/runc/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +20,10 @@ var DumpCmd = &cobra.Command{
 	Short: "Dump a runc container",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		if !ok {
+			return fmt.Errorf("invalid dump request in context")
+		}
 
 		id := args[0]
 

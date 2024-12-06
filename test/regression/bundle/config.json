@@ -5,8 +5,8 @@
       "uid": 0,
       "gid": 0
     },
-    "terminal": true,
-    "args": ["/bin/sh", "-c", "while true; do date >> /out; sleep 1; done"],
+    "terminal": false,
+    "args": ["/bin/sh", "-c", "while true; do date; sleep 1; done"],
     "env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "TERM=xterm"],
     "cwd": "/",
     "capabilities": {

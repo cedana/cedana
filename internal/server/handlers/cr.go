@@ -77,12 +77,14 @@ func DumpCRIU() types.Dump {
 // Returns a CRIU restore handler for the server
 func RestoreCRIU() types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		extraFiles := utils.GetContextValSafe(
-			ctx,
-			keys.RESTORE_EXTRA_FILES_CONTEXT_KEY,
-			[]*os.File{},
-		)
-		ioFiles := utils.GetContextValSafe(ctx, keys.RESTORE_IO_FILES_CONTEXT_KEY, []*os.File{})
+		extraFiles, ok := ctx.Value(keys.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		if !ok {
+			return nil, status.Error(codes.Internal, "invalid extra files in context")
+		}
+		ioFiles, ok := ctx.Value(keys.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
+		if !ok {
+			return nil, status.Error(codes.Internal, "invalid io files in context")
+		}
 
 		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
@@ -115,7 +117,7 @@ func RestoreCRIU() types.Restore {
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)
 		var inWriter, outReader, errReader *os.File
-		if req.Attach {
+		if req.Attachable {
 			if len(ioFiles) != 3 {
 				return nil, status.Error(codes.Internal, "ioFiles did not contain 3 files")
 			}

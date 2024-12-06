@@ -103,9 +103,9 @@ func (c *Client) Restore(
 	return resp, nil
 }
 
-func (c *Client) Start(ctx context.Context, args *daemon.StartReq) (*daemon.StartResp, error) {
+func (c *Client) Run(ctx context.Context, args *daemon.RunReq) (*daemon.RunResp, error) {
 	opts := getDefaultCallOptions()
-	resp, err := c.daemonClient.Start(ctx, args, opts...)
+	resp, err := c.daemonClient.Run(ctx, args, opts...)
 	if err != nil {
 		return nil, utils.GRPCErrorColored(err)
 	}
@@ -156,7 +156,7 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	if err != nil {
 		return utils.GRPCErrorColored(err)
 	}
-	// Send the first start request
+	// Send the first request
 	if err := stream.Send(args); err != nil {
 		return utils.GRPCErrorColored(err)
 	}

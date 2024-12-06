@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -87,10 +86,10 @@ var restoreCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
-			Path:   path,
-			Stream: stream,
-			Log:    log,
-			Attach: attach,
+			Path:       path,
+			Stream:     stream,
+			Log:        log,
+			Attachable: attach,
 			Criu: &criu.CriuOpts{
 				TcpEstablished: proto.Bool(tcpEstablished),
 				TcpClose:       proto.Bool(tcpClose),
@@ -126,18 +125,17 @@ var restoreCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(
-			cmd.Context(),
-			keys.RESTORE_REQ_CONTEXT_KEY,
-			&daemon.RestoreReq{},
-		)
+		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
+		if !ok {
+			return fmt.Errorf("invalid restore request in context")
+		}
 
 		resp, err := client.Restore(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if req.Attach {
+		if req.Attachable {
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
@@ -157,11 +155,10 @@ var processRestoreCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request type
-		req := utils.GetContextValSafe(
-			cmd.Context(),
-			keys.RESTORE_REQ_CONTEXT_KEY,
-			&daemon.RestoreReq{},
-		)
+		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
+		if !ok {
+			return fmt.Errorf("invalid restore request in context")
+		}
 
 		req.Type = "process"
 
@@ -178,11 +175,10 @@ var jobRestoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the job ID, and request type.
-		req := utils.GetContextValSafe(
-			cmd.Context(),
-			keys.RESTORE_REQ_CONTEXT_KEY,
-			&daemon.RestoreReq{},
-		)
+		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
+		if !ok {
+			return fmt.Errorf("invalid restore request in context")
+		}
 
 		if len(args) == 0 {
 			return fmt.Errorf("Job ID is required")

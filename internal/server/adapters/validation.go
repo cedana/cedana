@@ -12,13 +12,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-////////////////////////
-//// Start Adapters ////
-////////////////////////
+//////////////////////
+//// Run Adapters ////
+//////////////////////
 
-// Adapter that validates the start request
-func ValidateStartRequest(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+// Adapter that validates the run request
+func ValidateRunRequest(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		if req.GetType() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
 		}

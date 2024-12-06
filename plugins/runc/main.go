@@ -14,27 +14,33 @@ var Version = "dev"
 
 // CMDs
 var (
-	RootCmd    *cobra.Command
+	RootCmd *cobra.Command
+
+	RunCmd     *cobra.Command
 	DumpCmd    *cobra.Command
 	RestoreCmd *cobra.Command
 )
 
 // Middleware
 var (
+	RunMiddleware  types.Middleware[types.Run]
+	GPUInterceptor types.Adapter[types.Run]
+	RunHandler     types.Run
+
 	DumpMiddleware    types.Middleware[types.Dump]
 	RestoreMiddleware types.Middleware[types.Restore]
-	StartHandler      types.Start
 )
 
 func init() {
 	RootCmd = cmd.RootCmd
 	DumpCmd = cmd.DumpCmd
 	RestoreCmd = cmd.RestoreCmd
+	RunCmd = cmd.RunCmd
 
 	// NOTE: Assumes other basic request details will be validated by the daemon.
 	// Most adapters below are simply lifted from libcontainer/criu_linux.go, which
 	// is how official runc binary does a checkpoint. But here, since CRIU C/R is
-	// handled by the daemon, this plugin is only responsible for doing setup.
+	// handled by the daemon, this plugin is only responsible for doing runc-specific setup.
 
 	DumpMiddleware = types.Middleware[types.Dump]{
 		// Basic adapters
@@ -58,10 +64,15 @@ func init() {
 
 	RestoreMiddleware = types.Middleware[types.Restore]{}
 
-	startMiddleware := types.Middleware[types.Start]{
-		adapters.FillMissingStartDefaults,
-		adapters.ValidateStartRequest,
+	RunMiddleware = types.Middleware[types.Run]{
+		adapters.FillMissingRunDefaults,
+		adapters.ValidateRunRequest,
+		adapters.SetWorkingDirectory,
+		adapters.LoadSpecFromBundle,
+		// Can add other adapters that want to modify the spec in-memory
 	}
 
-	StartHandler = handlers.Run().With(startMiddleware...)
+	GPUInterceptor = adapters.GPUInterceptor
+
+	RunHandler = handlers.Run()
 }

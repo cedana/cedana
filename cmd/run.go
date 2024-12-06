@@ -15,43 +15,43 @@ import (
 )
 
 // Pluggable features
-const featureStartCmd plugins.Feature[*cobra.Command] = "StartCmd"
+const featureRunCmd plugins.Feature[*cobra.Command] = "RunCmd"
 
 func init() {
-	startCmd.AddCommand(processStartCmd)
+	runCmd.AddCommand(processRunCmd)
 
 	// Add common flags
-	startCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
-	startCmd.PersistentFlags().
+	runCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
+	runCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
-	startCmd.PersistentFlags().
+	runCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
-	startCmd.PersistentFlags().
+	runCmd.PersistentFlags().
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
-	startCmd.MarkFlagsMutuallyExclusive(
+	runCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
 	) // only one of these can be set
 
 	// Add aliases
-	rootCmd.AddCommand(utils.AliasOf(processStartCmd, "exec"))
+	rootCmd.AddCommand(utils.AliasOf(processRunCmd, "exec"))
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	featureStartCmd.IfAvailable(
+	featureRunCmd.IfAvailable(
 		func(name string, pluginCmd *cobra.Command) error {
-			startCmd.AddCommand(pluginCmd)
+			runCmd.AddCommand(pluginCmd)
 			return nil
 		},
 	)
 }
 
-// Parent start command
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start a managed process/container (create a job)",
+// Parent run command
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run a managed process/container (create a job)",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
@@ -60,14 +60,14 @@ var startCmd = &cobra.Command{
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 
 		// Create half-baked request
-		req := &daemon.StartReq{
+		req := &daemon.RunReq{
 			JID:        jid,
 			Log:        log,
 			GPUEnabled: gpuEnabled,
-			Attach:     attach,
+			Attachable: attach,
 		}
 
-		ctx := context.WithValue(cmd.Context(), keys.START_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -94,22 +94,21 @@ var startCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(
-			cmd.Context(),
-			keys.START_REQ_CONTEXT_KEY,
-			&daemon.StartReq{},
-		)
+		req, ok := cmd.Context().Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
+		if !ok {
+			return fmt.Errorf("invalid request in context")
+		}
 
-		resp, err := client.Start(cmd.Context(), req)
+		resp, err := client.Run(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if req.Attach {
+		if req.Attachable {
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
-		fmt.Printf("Started managing PID %d\n", resp.PID)
+		fmt.Printf("Running managed PID %d\n", resp.PID)
 
 		return nil
 	},
@@ -119,16 +118,15 @@ var startCmd = &cobra.Command{
 /// Subcommands  ///
 ////////////////////
 
-var processStartCmd = &cobra.Command{
+var processRunCmd = &cobra.Command{
 	Use:   "process <path> [args...]",
-	Short: "Start a managed process (job)",
+	Short: "Run a managed process (job)",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := utils.GetContextValSafe(
-			cmd.Context(),
-			keys.START_REQ_CONTEXT_KEY,
-			&daemon.StartReq{},
-		)
+		req, ok := cmd.Context().Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
+		if !ok {
+			return fmt.Errorf("invalid request in context")
+		}
 
 		path := args[0]
 		args = args[1:]
@@ -144,7 +142,7 @@ var processStartCmd = &cobra.Command{
 
 		req.Type = "process"
 		req.Details = &daemon.Details{
-			ProcessStart: &daemon.ProcessStartDetails{
+			ProcessRun: &daemon.RunDetails{
 				Path:       path,
 				Args:       args,
 				Env:        env,
@@ -155,7 +153,7 @@ var processStartCmd = &cobra.Command{
 			},
 		}
 
-		ctx := context.WithValue(cmd.Context(), keys.START_REQ_CONTEXT_KEY, req)
+		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		return nil

@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -17,17 +18,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	LOG_FILE_PERMS os.FileMode = 0o644
-	LOG_FILE_FLAGS int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
-)
-
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
-func Run() types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (exited chan int, err error) {
-		opts := req.GetDetails().GetProcessStart()
+func Run() types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+		opts := req.GetDetails().GetProcessRun()
 		if opts == nil {
-			return nil, status.Error(codes.InvalidArgument, "missing process start options")
+			return nil, status.Error(codes.InvalidArgument, "missing process run options")
 		}
 		if opts.Path == "" {
 			return nil, status.Error(codes.InvalidArgument, "missing path")
@@ -48,7 +44,7 @@ func Run() types.Start {
 
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)
-		if req.Attach {
+		if req.Attachable {
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
 			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(server.Lifetime, id, exitCode)
@@ -57,11 +53,10 @@ func Run() types.Start {
 			cmd.Stdout = stdOut
 			cmd.Stderr = stdErr
 		} else {
-			logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
+			logFile, ok := ctx.Value(keys.RUN_LOG_FILE_CONTEXT_KEY).(*os.File)
+			if !ok {
+				return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 			}
-			defer logFile.Close()
 			cmd.Stdin = nil // /dev/null
 			cmd.Stdout = logFile
 			cmd.Stderr = logFile

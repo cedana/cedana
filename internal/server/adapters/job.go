@@ -6,11 +6,13 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
 	"google.golang.org/grpc/codes"
@@ -18,17 +20,21 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
+const (
+	DEFAULT_LOG_PATH_FORMATTER string      = "/var/log/cedana-output-%s.log"
+	LOG_FILE_PERMS             os.FileMode = 0o644
+	LOG_FILE_FLAGS             int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
+)
 
-////////////////////////
-//// Start Adapters ////
-////////////////////////
+//////////////////////
+//// Run Adapters ////
+//////////////////////
 
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
-func Manage(jobs job.Manager) types.Adapter[types.Start] {
-	return func(next types.Start) types.Start {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func Manage(jobs job.Manager) types.Adapter[types.Run] {
+	return func(next types.Run) types.Run {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 			if req.JID == "" {
 				req.JID = namegen.GetName(1)
 			}
@@ -38,9 +44,18 @@ func Manage(jobs job.Manager) types.Adapter[types.Start] {
 				return nil, status.Errorf(codes.Internal, "failed to create new job: %v", err)
 			}
 
-			if req.Log == "" {
-				req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
+			if !req.Attachable {
+				if req.Log == "" {
+					req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
+				}
+				logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
+				}
+				defer logFile.Close()
+				ctx = context.WithValue(ctx, keys.RUN_LOG_FILE_CONTEXT_KEY, logFile)
 			}
+
 			job.SetLog(req.Log)
 			job.SetDetails(req.Details)
 

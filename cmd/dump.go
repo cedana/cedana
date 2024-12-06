@@ -16,7 +16,6 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -137,7 +136,10 @@ var dumpCmd = &cobra.Command{
 		defer client.Close()
 
 		// Assuming request is now ready to be sent to the server
-		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		if !ok {
+			return fmt.Errorf("invalid request in context")
+		}
 
 		resp, err := client.Dump(cmd.Context(), req)
 		if err != nil {
@@ -161,7 +163,10 @@ var processDumpCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the PID of the process to dump.
 		// And modify the request type.
-		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		if !ok {
+			return fmt.Errorf("invalid request in context")
+		}
 
 		pid, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -184,7 +189,10 @@ var jobDumpCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the job ID, and request type.
-		req := utils.GetContextValSafe(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, &daemon.DumpReq{})
+		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		if !ok {
+			return fmt.Errorf("invalid request in context")
+		}
 
 		jid := args[0]
 

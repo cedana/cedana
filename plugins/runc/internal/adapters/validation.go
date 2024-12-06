@@ -12,22 +12,22 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-////////////////////////
-//// Start Adapters ////
-////////////////////////
+//////////////////////
+//// Run Adapters ////
+//////////////////////
 
-func ValidateStartRequest(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
-		if req.GetDetails().GetRuncStart() == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "missing process start options")
+func ValidateRunRequest(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		if req.GetDetails().GetRuncRun() == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
 		}
-		if req.GetDetails().GetRuncStart().GetRoot() == "" {
+		if req.GetDetails().GetRuncRun().GetRoot() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing root")
 		}
-		if req.GetDetails().GetRuncStart().GetID() == "" {
+		if req.GetDetails().GetRuncRun().GetID() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing id")
 		}
-		if req.GetDetails().GetRuncStart().GetBundle() == "" {
+		if req.GetDetails().GetRuncRun().GetBundle() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
 		}
 

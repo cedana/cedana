@@ -22,7 +22,7 @@ func init() {
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(manageCmd)
 	rootCmd.AddCommand(pluginCmd)
-	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
 

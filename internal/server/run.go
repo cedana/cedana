@@ -1,0 +1,115 @@
+package server
+
+import (
+	"context"
+
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/server/adapters"
+	"github.com/cedana/cedana/internal/server/handlers"
+	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+const (
+	// Pluggable features
+	featureRunMiddleware plugins.Feature[types.Middleware[types.Run]] = "RunMiddleware"
+	featureRunHandler    plugins.Feature[types.Run]                   = "RunHandler"
+)
+
+func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
+	// Add basic adapters. The order below is the order followed before executing
+	// the final handler, which depends on the type of job being run, thus it will be
+	// inserted from a plugin or will be the built-in process run handler.
+
+	middleware := types.Middleware[types.Run]{
+		// Bare minimum adapters
+		adapters.Manage(s.jobs),
+		adapters.FillMissingRunDefaults,
+		adapters.ValidateRunRequest,
+
+		pluginRunMiddleware, // middleware from plugins
+	}
+
+	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
+
+	// s.ctx is the lifetime context of the server, pass it so that
+	// managed processes maximum lifetime is the same as the server.
+	// It gives adapters the power to control the lifetime of the process. For e.g.,
+	// the GPU adapter can use this context to kill the process when GPU support fails.
+	opts := types.ServerOpts{
+		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
+		WG:       s.wg,
+	}
+	resp := &daemon.RunResp{}
+
+	_, err := run(ctx, opts, resp, req)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info().Uint32("PID", resp.PID).Str("type", req.GetType()).Msg("run successful")
+
+	return resp, nil
+}
+
+//////////////////////////
+//// Helper Adapters /////
+//////////////////////////
+
+// Adapter that inserts new adapters after itself based on the type of run.
+func pluginRunMiddleware(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+		middleware := types.Middleware[types.Run]{}
+		t := req.GetType()
+		switch t {
+		case "process":
+			// Nothing to do
+		default:
+			// Insert plugin-specific middleware
+			err = featureRunMiddleware.IfAvailable(func(
+				name string,
+				pluginMiddleware types.Middleware[types.Run],
+			) error {
+				middleware = append(middleware, pluginMiddleware...)
+				return nil
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.Unimplemented, err.Error())
+			}
+		}
+		return next.With(middleware...)(ctx, server, resp, req)
+	}
+}
+
+//////////////////////////
+//// Helper Handlers /////
+//////////////////////////
+
+// Handler that returns the type-specific handler for the job
+func pluginRunHandler() types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+		t := req.GetType()
+		var handler types.Run
+		switch t {
+		case "process":
+			handler = handlers.Run()
+		default:
+			// Use plugin-specific handler
+			err = featureRunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
+				handler = pluginHandler
+				return nil
+			})
+			if err != nil {
+				return nil, status.Errorf(codes.Unimplemented, err.Error())
+			}
+		}
+		if req.GPUEnabled {
+			handler = handler.With(adapters.GPUInterceptor)
+		}
+		return handler(ctx, server, resp, req)
+	}
+}

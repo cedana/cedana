@@ -21,14 +21,14 @@ type (
 
 	Dump    func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.DumpResp, *daemon.DumpReq) (exited chan int, err error)
 	Restore func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.RestoreResp, *daemon.RestoreReq) (exited chan int, err error)
-	Start   func(context.Context, ServerOpts, *daemon.StartResp, *daemon.StartReq) (exited chan int, err error)
+	Run     func(context.Context, ServerOpts, *daemon.RunResp, *daemon.RunReq) (exited chan int, err error)
 	Manage  func(context.Context, ServerOpts, *daemon.ManageResp, *daemon.ManageReq) (exited chan int, err error)
 
 	// An adapter is a function that takes a Handler and returns a new Handler
-	Adapter[H Dump | Restore | Start | Manage] func(H) H
+	Adapter[H Dump | Restore | Run | Manage] func(H) H
 
 	// A middleware is simply a chain of adapters
-	Middleware[H Dump | Restore | Start | Manage] []Adapter[H]
+	Middleware[H Dump | Restore | Run | Manage] []Adapter[H]
 )
 
 // With is a method on Handler that applies a list of Middleware to the Handler
@@ -42,7 +42,7 @@ func (h Restore) With(middleware ...Adapter[Restore]) Restore {
 }
 
 // With is a method on Handler that applies a list of Middleware to the Handler
-func (h Start) With(middleware ...Adapter[Start]) Start {
+func (h Run) With(middleware ...Adapter[Run]) Run {
 	return adapted(h, middleware...)
 }
 
@@ -57,7 +57,7 @@ func (h Manage) With(middleware ...Adapter[Manage]) Manage {
 
 // Adapted takes a Handler and a list of Adapters, and
 // returns a new Handler that applies the adapters in order.
-func adapted[H Dump | Restore | Start | Manage](h H, adapters ...Adapter[H]) H {
+func adapted[H Dump | Restore | Run | Manage](h H, adapters ...Adapter[H]) H {
 	for i := len(adapters) - 1; i >= 0; i-- {
 		h = adapters[i](h)
 	}

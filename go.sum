@@ -2,10 +2,10 @@ buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-bb4f887328c1.1 
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-bb4f887328c1.1/go.mod h1:u2b1a00SZcVpXwBJYw4lPES4jDB293aTcvELkkD0+0A=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-bb4f887328c1.1 h1:ZCXzz2fRgayskTUu2Hqt3JOzRFPWtOzbIzcMTVw6rd8=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-bb4f887328c1.1/go.mod h1:NJWtqnSI51pFBe7BBN1eC2Rsa43Wbm31VbqyIEJbESg=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-39446c800015.1 h1:OtKr++DvFRiZflewvpTRPE3unL0Vzi/QIPB1pJDrluI=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-39446c800015.1/go.mod h1:OA9wJpmA62WiVKPKp31RveahGOPDZO4qXwbFmPJ/N5Q=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-39446c800015.1 h1:K+k/HwqVKpDlSQ5UsHllZxg1LW6fswNibpNV3EcgkDM=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-39446c800015.1/go.mod h1:sQwdccXPBcavhh3AT7x+L6JnvXGIeBho9+x0+0QyZGE=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-0f808539c141.1 h1:3xljLUBGf8ifNOvSLLExZWKZlbs9aKssaNET8xt4aoI=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-0f808539c141.1/go.mod h1:NlzV6oUQHCSuxyUHBcfTm+T3sStX6rJtsbN3md6L/qo=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1 h1:tKUJ0NNVf0RDGCurQs2bSUGUtaohAnDkzoNw3T9hiAY=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1/go.mod h1:O1ax64hR7vbiocb2riP0XIRLrqhhJNsQW0ksCvA6r34=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1 h1:XtPYlIWYFVya5/rB5Q0qW+riAXG6+6GsVmuu5y6kyrE=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=

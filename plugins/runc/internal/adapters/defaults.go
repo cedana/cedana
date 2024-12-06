@@ -16,23 +16,23 @@ import (
 
 const defaultRoot = "/run/runc"
 
-////////////////////////
-//// Start Adapters ////
-////////////////////////
+//////////////////////
+//// Run Adapters ////
+//////////////////////
 
-func FillMissingStartDefaults(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func FillMissingRunDefaults(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
-		if req.GetDetails().GetRuncStart() == nil {
-			req.Details.RuncStart = &runc.StartDetails{}
+		if req.GetDetails().GetRuncRun() == nil {
+			req.Details.RuncRun = &runc.RunDetails{}
 		}
-		if req.GetDetails().GetRuncStart().GetRoot() == "" {
-			req.Details.RuncStart.Root = defaultRoot
+		if req.GetDetails().GetRuncRun().GetRoot() == "" {
+			req.Details.RuncRun.Root = defaultRoot
 		}
-		if req.GetDetails().GetRuncStart().GetID() == "" {
-			req.Details.RuncStart.ID = req.JID
+		if req.GetDetails().GetRuncRun().GetID() == "" {
+			req.Details.RuncRun.ID = req.JID
 		}
 		return next(ctx, server, resp, req)
 	}

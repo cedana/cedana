@@ -14,13 +14,13 @@ import (
 // This file contains all the adapters that fill in missing request details
 // with defaults
 
-////////////////////////
-//// Start Adapters ////
-////////////////////////
+//////////////////////
+//// Run Adapters ////
+//////////////////////
 
 // Adapter that fills missing info from the request using config defaults
-func FillMissingStartDefaults(next types.Start) types.Start {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.StartResp, req *daemon.StartReq) (chan int, error) {
+func FillMissingRunDefaults(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		// Nothing to fill in for now
 
 		return next(ctx, server, resp, req)

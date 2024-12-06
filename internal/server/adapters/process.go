@@ -202,7 +202,7 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 
 		if info := resp.GetState().GetInfo(); info != nil {
 			// In case of attach, we need to create pipes for stdin, stdout, stderr
-			if req.Attach {
+			if req.Attachable {
 				inReader, inWriter, err := os.Pipe()
 				outReader, outWriter, err := os.Pipe()
 				errReader, errWriter, err := os.Pipe()

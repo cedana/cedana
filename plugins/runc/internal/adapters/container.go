@@ -4,15 +4,71 @@ package adapters
 
 import (
 	"context"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
+	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/opencontainers/runc/libcontainer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+const specConfig = "config.json"
+
+//////////////////////
+//// Run Adapters ////
+//////////////////////
+
+func SetWorkingDirectory(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		opts := req.GetDetails().GetRuncRun()
+		workingDir := opts.GetWorkingDir()
+
+		if workingDir != "" {
+			oldDir, err := os.Getwd()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
+			}
+			err = os.Chdir(workingDir)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
+			}
+			defer os.Chdir(oldDir)
+		}
+
+		return next(ctx, server, resp, req)
+	}
+}
+
+// LoadSpecFromBundle loads the spec from the bundle path, and sets it in the context
+func LoadSpecFromBundle(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		opts := req.GetDetails().GetRuncRun()
+		bundle := opts.GetBundle()
+
+		oldDir, err := os.Getwd()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
+		}
+		err = os.Chdir(bundle)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
+		}
+		defer os.Chdir(oldDir)
+
+		spec, err := runc.LoadSpec(specConfig)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load spec: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, runc_keys.SPEC_CONTEXT_KEY, spec)
+
+		return next(ctx, server, resp, req)
+	}
+}
 
 ///////////////////////
 //// Dump Adapters ////
@@ -28,7 +84,7 @@ func GetContainerForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.NotFound, "failed to load container: %v", err)
 		}
 
-		ctx = context.WithValue(ctx, runc_keys.DUMP_CONTAINER_CONTEXT_KEY, container)
+		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CONTEXT_KEY, container)
 
 		return next(ctx, server, nfy, resp, req)
 	}
@@ -36,7 +92,7 @@ func GetContainerForDump(next types.Dump) types.Dump {
 
 func SetPIDForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
-		container, ok := ctx.Value(runc_keys.DUMP_CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
+		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}

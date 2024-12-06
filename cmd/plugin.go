@@ -52,7 +52,10 @@ var pluginCmd = &cobra.Command{
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 		client.Close()
 		return nil
 	},
@@ -158,7 +161,10 @@ var pluginInstallCmd = &cobra.Command{
 	Short: "Install a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, names []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -210,7 +216,10 @@ var pluginRemoveCmd = &cobra.Command{
 	Short: "Remove a plugin",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")

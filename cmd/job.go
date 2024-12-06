@@ -53,7 +53,10 @@ var jobCmd = &cobra.Command{
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 		client.Close()
 		return nil
 	},
@@ -67,7 +70,10 @@ var listJobCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all managed processes/containers (jobs)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 
 		resp, err := client.List(cmd.Context(), &daemon.ListReq{})
 		if err != nil {
@@ -133,7 +139,10 @@ var killJobCmd = &cobra.Command{
 	Short: "Kill a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 
 		var jid string
 		req := &daemon.KillReq{}
@@ -169,7 +178,10 @@ var deleteJobCmd = &cobra.Command{
 	Short: "Delete a managed process/container (job)",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 
 		var jid string
 		req := &daemon.DeleteReq{}
@@ -205,7 +217,10 @@ var attachJobCmd = &cobra.Command{
 	Short: "Attach stdin/out/err to a managed process/container (job)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := utils.GetContextValSafe(cmd.Context(), keys.CLIENT_CONTEXT_KEY, &Client{})
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
 
 		jid := args[0]
 
