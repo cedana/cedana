@@ -75,7 +75,6 @@ fi
 GPU=""
 if [ -d /proc/driver/nvidia/gpus/ ]; then
     echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
-
     if [ ! -d /run/driver/nvidia ]; then
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
         if /sbin/ldconfig -p | grep -q libcuda.so.1; then
@@ -93,9 +92,7 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
 END_CHROOT
     fi
 
-    set -eux
     echo "Downloading cedana's nvidia interception utilities..."
-
     mkdir -p /cedana/bin /cedana/lib
 
     wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/gpucontroller
@@ -133,19 +130,20 @@ END_CHROOT
         fi
     fi
 
-    echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-    cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
+        echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
           runtime_type = "io.containerd.runc.v2"
           runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
-            [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana".options]
 END_CAT
+    fi
 
     # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
-    kill -HUP $(pidof containerd)
+    systemctl restart containerd
 
-    set +eux
     GPU="--gpu"
 fi
 
