@@ -140,8 +140,7 @@ END_CAT
 
     # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
-    systemctl restart containerd
-    # kill -HUP $(pidof containerd)
+    kill -HUP $(pidof containerd)
 
     set +eux
     GPU="--gpu"
