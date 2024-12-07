@@ -4,7 +4,7 @@ package plugins
 // XXX: This list is needed locally so when all plugins are loaded,
 // we only want to attempt to load the ones that are 'Supported'.
 // GPU plugin, for example, is not 'External' and thus cannot be loaded
-// by Go, so we shouldn't try.
+// by Go, so we shouldn't try, as it's undefined behavior.
 var Registry = []Plugin{
 	// C/R tools
 	{

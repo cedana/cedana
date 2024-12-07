@@ -23,6 +23,8 @@ compose-dev.yaml
 go.work
 go.work.sum
 
+*.bak
+*.old
 *.tar
 *.tar.gz
 rootfs
