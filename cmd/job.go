@@ -8,12 +8,17 @@ import (
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
+
+// Pluggable features
+const featureTheme plugins.Feature[text.Colors] = "Theme"
 
 func init() {
 	jobCmd.AddCommand(listJobCmd)
@@ -112,10 +117,20 @@ var listJobCmd = &cobra.Command{
 			return style.DisbledColor.Sprintf(status)
 		}
 
+		// Color type based on the plugin theme
+		typeStr := func(t string) string {
+			colorToUse := text.Colors{}
+			featureTheme.IfAvailable(func(name string, theme text.Colors) error {
+				colorToUse = theme
+				return nil
+			}, t)
+			return colorToUse.Sprintf(t)
+		}
+
 		for _, job := range jobs {
 			row := table.Row{
 				job.GetJID(),
-				job.GetType(),
+				typeStr(job.GetType()),
 				job.GetProcess().GetPID(),
 				statusStr(job.GetProcess().GetInfo().GetStatus()),
 				job.GetLog(),

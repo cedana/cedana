@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/plugins/runc/cmd"
 	"github.com/cedana/cedana/plugins/runc/internal/adapters"
 	"github.com/cedana/cedana/plugins/runc/internal/handlers"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,8 @@ var (
 	RunCmd     *cobra.Command
 	DumpCmd    *cobra.Command
 	RestoreCmd *cobra.Command
+
+	Theme text.Colors = text.Colors{text.FgHiCyan}
 )
 
 var (
