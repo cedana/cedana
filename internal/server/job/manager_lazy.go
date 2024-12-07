@@ -196,13 +196,13 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 
 	m.pending <- action{update, job}
 
-	log.Info().Str("JID", jid).Uint32("PID", pid).Msg("managing job")
+	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
 		<-exitedChan
-		log.Info().Str("JID", jid).Uint32("PID", pid).Msg("job exited")
+		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
 		gpuController := m.getGPUController(jid)
 		if gpuController != nil {
@@ -236,7 +236,11 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 				"%s plugin exports a custom kill signal `%s`, so cannot use signal `%s`",
 				plugin, pluginSignal, signal[0])
 		}
-		log.Debug().Str("plugin", plugin).Str("signal", pluginSignal.String()).Msg("using custom kill signal exported by plugin")
+		log.Debug().
+			Str("JID", job.JID).
+			Str("type", job.GetType()).
+			Str("signal", pluginSignal.String()).
+			Msg("using custom kill signal exported by plugin")
 		signalToUse = pluginSignal
 		return nil
 	}, job.GetType())
