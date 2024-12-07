@@ -12,6 +12,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -56,14 +57,15 @@ func DumpCRIU() types.Dump {
 		log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
 		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
+		_, err = server.CRIU.Dump(ctx, criuOpts, nfy)
+
 		// Capture internal logs from CRIU
-		go utils.LogFromFile(
+		utils.LogFromFile(
 			log.With().Int("CRIU", version).Logger().WithContext(ctx),
 			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
 			zerolog.TraceLevel,
 		)
 
-		_, err = server.CRIU.Dump(ctx, criuOpts, nfy)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 		}
@@ -107,13 +109,6 @@ func RestoreCRIU() types.Restore {
 		log.Debug().Int("CRIU", version).Msg("CRIU restore starting")
 		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
-		// Capture internal logs from CRIU
-		go utils.LogFromFile(
-			log.With().Int("CRIU", version).Logger().WithContext(ctx),
-			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
-			zerolog.TraceLevel,
-		)
-
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)
 		var inWriter, outReader, errReader *os.File
@@ -124,14 +119,22 @@ func RestoreCRIU() types.Restore {
 			inWriter, outReader, errReader = ioFiles[0], ioFiles[1], ioFiles[2]
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(server.Lifetime, id, exitCode)
-			defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
+			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 			go io.Copy(inWriter, stdIn)
 			go io.Copy(stdOut, outReader)
 			go io.Copy(stdErr, errReader)
 		}
 
 		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, extraFiles...)
+
+		// Capture internal logs from CRIU
+		utils.LogFromFile(
+			log.With().Int("CRIU", version).Logger().WithContext(ctx),
+			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+			zerolog.TraceLevel,
+		)
+
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
 		}
@@ -144,13 +147,13 @@ func RestoreCRIU() types.Restore {
 			server.WG.Add(1)
 			go func() {
 				defer server.WG.Done()
-				var status syscall.WaitStatus
-				_, err := syscall.Wait4(int(resp.PID), &status, 0, nil)
+				p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+				status, err := p.Wait()
 				if err != nil {
-					log.Debug().Err(err).Msg("process Wait4()")
+					log.Debug().Err(err).Msg("process Wait()")
 				}
-				code := status.ExitStatus()
-				log.Debug().Int("code", status.ExitStatus()).Msg("process exited")
+				code := status.ExitCode()
+				log.Debug().Int("code", code).Msg("process exited")
 				exitCode <- code
 				close(exitCode)
 				close(exited)

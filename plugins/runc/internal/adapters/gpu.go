@@ -25,6 +25,6 @@ func GPUInterceptor(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to get spec from context")
 		}
 
-		return nil, fmt.Errorf("not implemented")
+		return nil, fmt.Errorf("GPU support for runc is not implemented")
 	}
 }

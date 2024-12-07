@@ -18,6 +18,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Pluggable features
+const featureKillSignal plugins.Feature[syscall.Signal] = "KillSignal"
+
 const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
 
 type ManagerLazy struct {
@@ -85,7 +88,6 @@ func NewManagerLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugi
 						failedActions = append(failedActions, action)
 					}
 				}
-				close(manager.pending)
 				err = errors.Join(errs...)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to sync DB before shutdown")
@@ -225,11 +227,28 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 		return fmt.Errorf("job %s is not running", jid)
 	}
 
-	if len(signal) == 0 {
-		signal = append(signal, syscall.SIGKILL)
+	signalToUse := syscall.SIGKILL
+
+	// Check if the plugin for the job type exports a custom signal
+	err := featureKillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
+		if len(signal) > 0 {
+			return fmt.Errorf(
+				"%s plugin exports a custom kill signal `%s`, so cannot use signal `%s`",
+				plugin, pluginSignal, signal[0])
+		}
+		log.Debug().Str("plugin", plugin).Str("signal", pluginSignal.String()).Msg("using custom kill signal exported by plugin")
+		signalToUse = pluginSignal
+		return nil
+	}, job.GetType())
+	if err != nil {
+		return err
 	}
 
-	err := syscall.Kill(int(job.GetPID()), signal[0])
+	if len(signal) > 0 {
+		signalToUse = signal[0]
+	}
+
+	err = syscall.Kill(int(job.GetPID()), signalToUse)
 	if err != nil {
 		return fmt.Errorf("failed to kill process: %w", err)
 	}

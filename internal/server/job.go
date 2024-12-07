@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/utils"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,7 +20,7 @@ func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListRes
 	jobProtos := []*daemon.Job{}
 	for _, job := range jobs {
 		proto := *job.GetProto()
-		if job.IsRunning() && utils.GetIOSlave(job.GetPID()) != nil {
+		if job.IsRunning() && cedana_io.GetIOSlave(job.GetPID()) != nil {
 			proto.Log = LOG_ATTACHABLE
 		}
 
@@ -42,7 +41,7 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 
 	for _, job := range jobs {
 		if job.IsRunning() {
-			err := s.jobs.Kill(job.JID, syscall.SIGKILL)
+			err := s.jobs.Kill(job.JID)
 			if err != nil {
 				log.Error().Err(err).Msgf("failed to kill job %s", job.JID)
 			}

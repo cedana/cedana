@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -47,8 +48,8 @@ func Run() types.Run {
 		if req.Attachable {
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			stdIn, stdOut, stdErr := utils.NewStreamIOSlave(server.Lifetime, id, exitCode)
-			defer utils.SetIOSlavePID(id, &resp.PID) // PID should be available then
+			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 			cmd.Stdin = stdIn
 			cmd.Stdout = stdOut
 			cmd.Stderr = stdErr
@@ -64,7 +65,7 @@ func Run() types.Run {
 
 		err = cmd.Start()
 		if err != nil {
-			return nil, err
+			return nil, status.Errorf(codes.Internal, "failed to start process: %v", err)
 		}
 
 		resp.PID = uint32(cmd.Process.Pid)
@@ -85,6 +86,6 @@ func Run() types.Run {
 			close(exited)
 		}()
 
-		return exited, err
+		return exited, nil
 	}
 }

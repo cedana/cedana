@@ -109,7 +109,7 @@ func (j *Job) GetProcess() *daemon.ProcessState {
 		j.proto.Process.Info = &daemon.ProcessInfo{}
 	}
 
-	j.proto.Process.Info.Status = "stopped"
+	j.proto.Process.Info.Status = "halted"
 	j.proto.Process.Info.IsRunning = false
 
 	p, err := process.NewProcess(int32(pid))

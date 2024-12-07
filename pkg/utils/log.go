@@ -6,17 +6,27 @@ import (
 	"bufio"
 	"context"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-// Log messages from a file, until the file exists
-func LogFromFile(ctx context.Context, logfile string, level zerolog.Level) {
+const waitTime = 200 * time.Millisecond
+
+// Log messages from a file.
+// Can provide an arbitrary format function to format the log message.
+// Noop if the current log level is higher than the provided level
+func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, format ...func([]byte) (string, error)) (lastMsg string) {
+	if log.Logger.GetLevel() > level {
+		return
+	}
+
 	log := log.Ctx(ctx)
-	file, err := os.OpenFile(logfile, os.O_RDONLY, 0644)
+	var file *os.File
+
+	file, err := os.Open(logfile)
 	if err != nil {
-		log.WithLevel(level).Str("file", logfile).Msg("failed to open log file")
 		return
 	}
 	defer file.Close()
@@ -27,16 +37,22 @@ func LogFromFile(ctx context.Context, logfile string, level zerolog.Level) {
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			log.WithLevel(level).Msg("context done")
 			return
 		default:
-			log.WithLevel(level).Msg(scanner.Text())
+			if len(format) > 0 {
+				bytes := scanner.Bytes()
+				lastMsg, err = format[0](bytes)
+				if err != nil {
+					log.WithLevel(level).Err(err).Msg("failed to format log message")
+					break
+				}
+			} else {
+				lastMsg = scanner.Text()
+			}
+
+			log.WithLevel(level).Msg(lastMsg)
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		log.WithLevel(level).Err(err).Msg("finished reading log file")
-	} else {
-		log.WithLevel(level).Msg("finished reading log file")
-	}
+	return
 }

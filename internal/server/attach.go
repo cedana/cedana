@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
-	"github.com/cedana/cedana/pkg/utils"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,7 +24,7 @@ func (s *Server) Attach(stream daemongrpc.Daemon_AttachServer) error {
 	}
 
 	// Check if the given process has an available IO slave
-	slave := utils.GetIOSlave(pid)
+	slave := cedana_io.GetIOSlave(pid)
 	if slave == nil {
 		return status.Errorf(codes.NotFound, "process %d has no IO slave", pid)
 	}

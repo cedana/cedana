@@ -13,7 +13,7 @@ import (
 )
 
 // Pluggable features
-const featureRootCmd plugins.Feature[*cobra.Command] = "RootCmd"
+const featureRootCmds plugins.Feature[[]*cobra.Command] = "RootCmds"
 
 func init() {
 	// Add main subcommands
@@ -27,9 +27,9 @@ func init() {
 	rootCmd.AddCommand(jobCmd)
 
 	// Add root cmds from plugins
-	featureRootCmd.IfAvailable(
-		func(name string, pluginCmd *cobra.Command) error {
-			rootCmd.AddCommand(pluginCmd)
+	featureRootCmds.IfAvailable(
+		func(name string, pluginCmds []*cobra.Command) error {
+			rootCmd.AddCommand(pluginCmds...)
 			return nil
 		},
 	)

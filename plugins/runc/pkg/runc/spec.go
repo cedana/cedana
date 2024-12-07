@@ -10,6 +10,8 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
+const SpecConfigFile = "config.json"
+
 // loadSpec loads the specification from the provided path.
 func LoadSpec(cPath string) (spec *specs.Spec, err error) {
 	cf, err := os.Open(cPath)
@@ -40,4 +42,37 @@ func CreateLibContainerRlimit(rlimit specs.POSIXRlimit) (configs.Rlimit, error) 
 		Hard: rlimit.Hard,
 		Soft: rlimit.Soft,
 	}, nil
+}
+
+// UpdateSpec updates the spec in the provided path
+// and creates a backup of the existing spec
+func UpdateSpec(cPath string, spec *specs.Spec) error {
+	// Copy existing bundle/config.json to bundle/config.json.bak
+	err := os.Rename(cPath, cPath+".bak")
+	if err != nil {
+		return fmt.Errorf("failed to backup spec: %v", err)
+	}
+
+	// Write the new spec to bundle/config.json
+	newSpecFile, err := os.Create(cPath)
+	if err != nil {
+		return fmt.Errorf("failed to create new spec file: %v", err)
+	}
+	err = json.NewEncoder(newSpecFile).Encode(spec)
+	if err != nil {
+		return fmt.Errorf("failed to write new spec to file: %v", err)
+	}
+
+	return nil
+}
+
+// RestoreSpec restores the backup of the spec
+func RestoreSpec(cPath string) error {
+	// Restore the backup of the spec
+	err := os.Rename(cPath+".bak", cPath)
+	if err != nil {
+		return fmt.Errorf("failed to restore spec: %v", err)
+	}
+
+	return nil
 }

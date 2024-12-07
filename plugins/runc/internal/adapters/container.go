@@ -16,8 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const specConfig = "config.json"
-
 //////////////////////
 //// Run Adapters ////
 //////////////////////
@@ -59,7 +57,7 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 		}
 		defer os.Chdir(oldDir)
 
-		spec, err := runc.LoadSpec(specConfig)
+		spec, err := runc.LoadSpec(runc.SpecConfigFile)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load spec: %v", err)
 		}

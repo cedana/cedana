@@ -41,6 +41,9 @@ type Manager interface {
 	) error
 
 	// Kill sends a signal to a job with the given JID.
+	// If the plugin for the job type exports a custom signal, it will be used instead.
+	// If you provide a custom signal, it will return error if the plugin for the job type
+	// exports a custom signal.
 	Kill(jid string, signal ...syscall.Signal) error
 
 	///////////////////////

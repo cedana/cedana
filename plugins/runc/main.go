@@ -1,6 +1,8 @@
 package main
 
 import (
+	"syscall"
+
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/cmd"
 	"github.com/cedana/cedana/plugins/runc/internal/adapters"
@@ -9,19 +11,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+///////////////////////////
+//// Exported Features ////
+///////////////////////////
+
 // loaded from ldflag definitions
 var Version = "dev"
 
-// CMDs
 var (
-	RootCmd *cobra.Command
+	RootCmds []*cobra.Command
 
 	RunCmd     *cobra.Command
 	DumpCmd    *cobra.Command
 	RestoreCmd *cobra.Command
 )
 
-// Middleware
 var (
 	RunMiddleware  types.Middleware[types.Run]
 	GPUInterceptor types.Adapter[types.Run]
@@ -31,8 +35,18 @@ var (
 	RestoreMiddleware types.Middleware[types.Restore]
 )
 
+var KillSignal syscall.Signal = handlers.KILL_SIGNAL
+
+////////////////////////
+//// Initialization ////
+////////////////////////
+
 func init() {
-	RootCmd = cmd.RootCmd
+	RootCmds = []*cobra.Command{
+		cmd.RootCmd,
+		cmd.InitCmd,
+	}
+
 	DumpCmd = cmd.DumpCmd
 	RestoreCmd = cmd.RestoreCmd
 	RunCmd = cmd.RunCmd
@@ -69,7 +83,7 @@ func init() {
 		adapters.ValidateRunRequest,
 		adapters.SetWorkingDirectory,
 		adapters.LoadSpecFromBundle,
-		// Can add other adapters that want to modify the spec in-memory
+		// Can add other adapters that wish to modify the spec before running
 	}
 
 	GPUInterceptor = adapters.GPUInterceptor

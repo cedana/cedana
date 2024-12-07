@@ -26,6 +26,7 @@ replace github.com/cedana/cedana => ../..
 
 require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
+	github.com/containerd/go-runc v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ebitengine/purego v0.8.1 // indirect

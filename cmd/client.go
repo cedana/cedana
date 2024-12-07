@@ -10,6 +10,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -161,7 +162,7 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 		return utils.GRPCErrorColored(err)
 	}
 
-	stdIn, stdOut, stdErr, exitCode, errors := utils.NewStreamIOMaster(stream)
+	stdIn, stdOut, stdErr, exitCode, errors := cedana_io.NewStreamIOMaster(stream)
 
 	go io.Copy(stdIn, os.Stdin) // since stdin never closes
 	outDone := utils.CopyNotify(os.Stdout, stdOut)
