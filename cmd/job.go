@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func init() {
@@ -19,6 +20,7 @@ func init() {
 	jobCmd.AddCommand(killJobCmd)
 	jobCmd.AddCommand(deleteJobCmd)
 	jobCmd.AddCommand(attachJobCmd)
+	jobCmd.AddCommand(inspectJobCmd)
 
 	// Add subcommand flags
 	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
@@ -235,5 +237,38 @@ var attachJobCmd = &cobra.Command{
 		pid := list.Jobs[0].GetProcess().GetPID()
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
+	},
+}
+
+var inspectJobCmd = &cobra.Command{
+	Use:   "inspect <JID>",
+	Short: "Inspect a managed process/container (job)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
+
+		jid := args[0]
+
+		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		if err != nil {
+			return err
+		}
+		if len(list.Jobs) == 0 {
+			return fmt.Errorf("Job %s not found", jid)
+		}
+
+		job := list.Jobs[0]
+
+		bytes, err := yaml.Marshal(job)
+		if err != nil {
+			return fmt.Errorf("Error marshalling job: %v", err)
+		}
+
+		fmt.Print(string(bytes))
+
+		return nil
 	},
 }

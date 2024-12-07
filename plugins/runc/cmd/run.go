@@ -45,7 +45,7 @@ var RunCmd = &cobra.Command{
 		}
 
 		req.Type = "runc"
-		req.Details = &daemon.Details{RuncRun: &runc.RunDetails{
+		req.Details = &daemon.Details{Runc: &runc.Runc{
 			Root:         root,
 			Bundle:       bundle,
 			ID:           id,

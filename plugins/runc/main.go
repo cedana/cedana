@@ -44,7 +44,6 @@ var KillSignal syscall.Signal = handlers.KILL_SIGNAL
 func init() {
 	RootCmds = []*cobra.Command{
 		cmd.RootCmd,
-		cmd.InitCmd,
 	}
 
 	DumpCmd = cmd.DumpCmd

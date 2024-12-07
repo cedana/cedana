@@ -22,7 +22,7 @@ import (
 
 func SetWorkingDirectory(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		opts := req.GetDetails().GetRuncRun()
+		opts := req.GetDetails().GetRunc()
 		workingDir := opts.GetWorkingDir()
 
 		if workingDir != "" {
@@ -44,7 +44,7 @@ func SetWorkingDirectory(next types.Run) types.Run {
 // LoadSpecFromBundle loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundle(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		opts := req.GetDetails().GetRuncRun()
+		opts := req.GetDetails().GetRunc()
 		bundle := opts.GetBundle()
 
 		oldDir, err := os.Getwd()

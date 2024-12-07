@@ -7,8 +7,8 @@ toolchain go1.23.1
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-bb4f887328c1.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-bb4f887328c1.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-0f808539c141.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-0b86c4a1e9aa.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1
 	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mdlayher/vsock v1.2.1
@@ -26,7 +26,7 @@ require (
 )
 
 require (
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -64,5 +64,5 @@ require (
 	google.golang.org/protobuf v1.35.2
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 )

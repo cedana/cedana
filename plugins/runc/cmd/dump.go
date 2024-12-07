@@ -30,7 +30,7 @@ var DumpCmd = &cobra.Command{
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 
 		req.Type = "runc"
-		req.Details = &daemon.Details{Runc: &runc.Details{
+		req.Details = &daemon.Details{Runc: &runc.Runc{
 			Root: root,
 			ID:   id,
 		}}

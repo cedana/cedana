@@ -142,7 +142,7 @@ var processRunCmd = &cobra.Command{
 
 		req.Type = "process"
 		req.Details = &daemon.Details{
-			ProcessRun: &daemon.RunDetails{
+			Process: &daemon.Process{
 				Path:       path,
 				Args:       args,
 				Env:        env,

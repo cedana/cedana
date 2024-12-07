@@ -5,10 +5,11 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1
 	github.com/cedana/cedana v0.9.231
 	github.com/containerd/console v1.0.4
+	github.com/containerd/go-runc v1.1.0
 	github.com/cyphar/filepath-securejoin v0.3.4
 	github.com/opencontainers/runc v1.2.2
 	github.com/opencontainers/runtime-spec v1.2.0
@@ -26,7 +27,6 @@ replace github.com/cedana/cedana => ../..
 
 require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
-	github.com/containerd/go-runc v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ebitengine/purego v0.8.1 // indirect

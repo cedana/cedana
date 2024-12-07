@@ -18,16 +18,16 @@ import (
 
 func ValidateRunRequest(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		if req.GetDetails().GetRuncRun() == nil {
+		if req.GetDetails().GetRunc() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
 		}
-		if req.GetDetails().GetRuncRun().GetRoot() == "" {
+		if req.GetDetails().GetRunc().GetRoot() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing root")
 		}
-		if req.GetDetails().GetRuncRun().GetID() == "" {
+		if req.GetDetails().GetRunc().GetID() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing id")
 		}
-		if req.GetDetails().GetRuncRun().GetBundle() == "" {
+		if req.GetDetails().GetRunc().GetBundle() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
 		}
 

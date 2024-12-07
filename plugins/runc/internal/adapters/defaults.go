@@ -25,14 +25,14 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
-		if req.GetDetails().GetRuncRun() == nil {
-			req.Details.RuncRun = &runc.RunDetails{}
+		if req.GetDetails().GetRunc() == nil {
+			req.Details.Runc = &runc.Runc{}
 		}
-		if req.GetDetails().GetRuncRun().GetRoot() == "" {
-			req.Details.RuncRun.Root = defaultRoot
+		if req.GetDetails().GetRunc().GetRoot() == "" {
+			req.Details.Runc.Root = defaultRoot
 		}
-		if req.GetDetails().GetRuncRun().GetID() == "" {
-			req.Details.RuncRun.ID = req.JID
+		if req.GetDetails().GetRunc().GetID() == "" {
+			req.Details.Runc.ID = req.JID
 		}
 		return next(ctx, server, resp, req)
 	}
@@ -49,7 +49,7 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		}
 
 		if req.GetDetails().GetRunc() == nil {
-			req.Details.Runc = &runc.Details{}
+			req.Details.Runc = &runc.Runc{}
 		}
 
 		if req.GetDetails().GetRunc().GetRoot() == "" {

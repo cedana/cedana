@@ -20,7 +20,7 @@ var RestoreCmd = &cobra.Command{
 		}
 
 		req.Type = "runc"
-		req.Details = &daemon.Details{Runc: &runc.Details{}}
+		req.Details = &daemon.Details{Runc: &runc.Runc{}}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

@@ -174,7 +174,7 @@ var processDumpCmd = &cobra.Command{
 		}
 
 		req.Type = "process"
-		req.Details = &daemon.Details{PID: proto.Uint32(uint32(pid))}
+		req.Details = &daemon.Details{Process: &daemon.Process{PID: uint32(pid)}}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

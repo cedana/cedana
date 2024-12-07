@@ -115,12 +115,12 @@ func GPUInterceptorProcess(next types.Run) types.Run {
 			)
 		}
 
-		env := req.GetDetails().GetProcessRun().GetEnv()
+		env := req.GetDetails().GetProcess().GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
 		env = append(env, "CEDANA_JID="+req.JID)
 
-		req.Details.ProcessRun.Env = env
+		req.Details.Process.Env = env
 
 		return next(ctx, server, resp, req)
 	}

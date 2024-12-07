@@ -58,7 +58,7 @@ func RuncLogMsgToString(b []byte) (string, error) {
 
 func Run() types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-		opts := req.GetDetails().GetRuncRun()
+		opts := req.GetDetails().GetRunc()
 		root := opts.GetRoot()
 		id := opts.GetID()
 		noPivot := opts.GetNoPivot()

@@ -1,7 +1,7 @@
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1 h1:tKUJ0NNVf0RDGCurQs2bSUGUtaohAnDkzoNw3T9hiAY=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0f808539c141.1/go.mod h1:O1ax64hR7vbiocb2riP0XIRLrqhhJNsQW0ksCvA6r34=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1 h1:XtPYlIWYFVya5/rB5Q0qW+riAXG6+6GsVmuu5y6kyrE=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-c29cea681613.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1 h1:X/2I/D4rviXNbkyQ7ivMuSeGiPF9TtuelRO86kTampQ=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1/go.mod h1:VfY/PYOKaqU6KIXT7RYpf9/dpmkxxuvzbuAXOTcSAUs=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1 h1:bAeiffFYvMHebhnejdjcTyi656A43tFm4LbIpwI/KfI=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0 h1:mIdrSO2cPNWQY1truPg6uHLXyKHk3Z5Odx4wjKOASzA=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0/go.mod h1:rrRTN/uSwY2X+BPRl/gkulo9gsKOSAeVp9/K2tv7xZI=
 github.com/containerd/console v1.0.4 h1:F2g4+oChYvBTsASRTz8NP6iIAi97J3TtSAsLbIFn4ro=

@@ -22,7 +22,7 @@ import (
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
 func Run() types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-		opts := req.GetDetails().GetProcessRun()
+		opts := req.GetDetails().GetProcess()
 		if opts == nil {
 			return nil, status.Error(codes.InvalidArgument, "missing process run options")
 		}
