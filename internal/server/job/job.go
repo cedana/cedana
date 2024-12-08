@@ -11,6 +11,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/shirou/gopsutil/v4/process"
+	"google.golang.org/protobuf/proto"
 )
 
 type Job struct {
@@ -140,6 +141,7 @@ func (j *Job) SetDetails(details *daemon.Details) {
 	j.Lock()
 	defer j.Unlock()
 	j.proto.Details = details
+	j.proto.Details.JID = proto.String(j.JID)
 }
 
 func (j *Job) GetLog() string {

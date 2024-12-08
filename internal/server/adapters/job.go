@@ -105,6 +105,10 @@ func ManageDump(jobs job.Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.NotFound, "job %s not found", jid)
 			}
 
+			if !job.IsRunning() {
+				return nil, status.Errorf(codes.FailedPrecondition, "job %s is not running", jid)
+			}
+
 			// Fill in dump request details based on saved job info
 			// TODO YA: Allow overriding job details, otherwise use saved job details
 			req.Details = job.GetDetails()
@@ -138,7 +142,7 @@ func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
-			if jid == "" {
+			if jid == "" { // not a managed restore
 				return next(ctx, server, nfy, resp, req)
 			}
 
@@ -158,7 +162,6 @@ func ManageRestore(jobs job.Manager) types.Adapter[types.Restore] {
 				req.Log = job.GetLog() // Use the same log file as it was before dump
 			}
 			req.Details = job.GetDetails()
-			req.Details.JID = proto.String(jid)
 			if req.Path == "" {
 				req.Path = job.GetCheckpointPath()
 			}

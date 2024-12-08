@@ -38,7 +38,11 @@ func Run() types.Run {
 				Gid:    uint32(opts.GID),
 				Groups: utils.Uint32Slice(opts.Groups),
 			},
-			Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+			// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+			// XXX: Above is commented out because if we try to restore a managed job,
+			// one that was started by the daemon,
+			// using a dump path (directly w/ restore -p <path>), instead of using job
+			// restore, the restored process dies immediately.
 		}
 		cmd.Env = opts.Env
 		cmd.Dir = opts.WorkingDir

@@ -33,6 +33,26 @@ const (
 //// Dump Adapters /////
 ////////////////////////
 
+// Sets the PID from the request to the process state
+// if not already set before.
+func SetPIDForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		if resp.GetState() == nil {
+			resp.State = &daemon.ProcessState{}
+		}
+
+		if resp.GetState().GetPID() == 0 {
+			pid := req.GetDetails().GetProcess().GetPID()
+			if pid == 0 {
+				return nil, status.Errorf(codes.InvalidArgument, "missing PID")
+			}
+			resp.State.PID = pid
+		}
+
+		return next(ctx, server, nfy, resp, req)
+	}
+}
+
 // Fills process state in the dump response.
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
@@ -207,11 +227,7 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 				outReader, outWriter, err := os.Pipe()
 				errReader, errWriter, err := os.Pipe()
 				if err != nil {
-					return nil, status.Errorf(
-						codes.Internal,
-						"failed to create pipes for attach: %v",
-						err,
-					)
+					return nil, status.Errorf(codes.Internal, "failed to create pipes for attach: %v", err)
 				}
 				ioFiles = append(ioFiles, inWriter, outReader, errReader)
 				for _, f := range info.GetOpenFiles() {
@@ -264,7 +280,7 @@ func InheritOpenFilesForRestore(next types.Restore) types.Restore {
 				}
 			}
 		} else {
-			log.Warn().Msg("No process info found. it should have been filled by an adapter")
+			log.Warn().Msg("no process info found. it should have been filled by an adapter")
 		}
 
 		ctx = context.WithValue(ctx, keys.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)

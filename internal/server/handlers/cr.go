@@ -113,6 +113,7 @@ func RestoreCRIU() types.Restore {
 		exitCode := make(chan int, 1)
 		var inWriter, outReader, errReader *os.File
 		if req.Attachable {
+			criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 			if len(ioFiles) != 3 {
 				return nil, status.Error(codes.Internal, "ioFiles did not contain 3 files")
 			}
@@ -166,9 +167,6 @@ func RestoreCRIU() types.Restore {
 				<-server.Lifetime.Done()
 				syscall.Kill(int(resp.PID), syscall.SIGKILL)
 			}()
-		} else {
-			close(exitCode)
-			close(exited)
 		}
 
 		log.Debug().Int("CRIU", version).Msg("CRIU restore complete")

@@ -71,7 +71,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 		t := req.GetType()
 		switch t {
 		case "process":
-			// Nothing to do
+			middleware = append(middleware, adapters.SetPIDForDump)
 		default:
 			// Insert plugin-specific middleware
 			err = featureDumpMiddleware.IfAvailable(func(

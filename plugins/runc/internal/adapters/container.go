@@ -112,3 +112,19 @@ func SetPIDForDump(next types.Dump) types.Dump {
 //////////////////////////
 //// Restore Adapters ////
 //////////////////////////
+
+func GetContainerForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		root := req.GetDetails().GetRunc().GetRoot()
+		id := req.GetDetails().GetRunc().GetID()
+
+		container, err := libcontainer.Load(root, id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "failed to load container: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CONTEXT_KEY, container)
+
+		return next(ctx, server, nfy, resp, req)
+	}
+}
