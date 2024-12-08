@@ -58,7 +58,7 @@ func Run() types.Run {
 			cmd.Stdout = stdOut
 			cmd.Stderr = stdErr
 		} else {
-			logFile, ok := ctx.Value(keys.RUN_LOG_FILE_CONTEXT_KEY).(*os.File)
+			logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 			}

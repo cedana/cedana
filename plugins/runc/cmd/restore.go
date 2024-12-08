@@ -16,7 +16,7 @@ func init() {
 	RestoreCmd.Flags().StringP(runc_flags.IdFlag.Full, runc_flags.IdFlag.Short, "", "new id")
 	RestoreCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	RestoreCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
-	RestoreCmd.MarkFlagRequired(runc_flags.BundleFlag.Full)
+	// RestoreCmd.MarkFlagRequired(runc_flags.BundleFlag.Full)
 }
 
 var RestoreCmd = &cobra.Command{

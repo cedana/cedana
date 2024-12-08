@@ -17,7 +17,7 @@ func init() {
 	RunCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
 	RunCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "do not use pivot root to jail process inside rootfs.")
 	RunCmd.Flags().BoolP(runc_flags.NoNewKeyringFlag.Full, runc_flags.NoNewKeyringFlag.Short, false, "do not create a new session keyring.")
-	RunCmd.MarkFlagRequired(runc_flags.BundleFlag.Full)
+	// RunCmd.MarkFlagRequired(runc_flags.BundleFlag.Full)
 }
 
 var RunCmd = &cobra.Command{

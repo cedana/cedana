@@ -53,7 +53,7 @@ func Manage(jobs job.Manager) types.Adapter[types.Run] {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
 				defer logFile.Close()
-				ctx = context.WithValue(ctx, keys.RUN_LOG_FILE_CONTEXT_KEY, logFile)
+				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
 			job.SetLog(req.Log)

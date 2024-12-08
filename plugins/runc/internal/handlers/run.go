@@ -87,7 +87,7 @@ func Run() types.Run {
 			io = runc_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
 			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		} else {
-			logFile, ok := ctx.Value(keys.RUN_LOG_FILE_CONTEXT_KEY).(*os.File)
+			logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 			}

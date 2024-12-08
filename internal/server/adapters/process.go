@@ -4,16 +4,13 @@ package adapters
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -22,12 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	STATE_FILE                         = "process_state.json"
-	DEFAULT_RESTORE_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
-	RESTORE_LOG_FLAGS                  = os.O_CREATE | os.O_WRONLY | os.O_APPEND // no truncate
-	RESTORE_LOG_PERMS                  = 0o644
-)
+const STATE_FILE = "process_state.json"
 
 ////////////////////////
 //// Dump Adapters /////
@@ -211,80 +203,28 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 	}
 }
 
-// Open files from the dump state are inherited by the restored process.
-// For e.g. the standard streams (stdin, stdout, stderr) are inherited to use
-// a log file.
-func InheritOpenFilesForRestore(next types.Restore) types.Restore {
+// Open stdio files from the dump state are inherited by the restored process.
+// They are set to inherit the 0, 1, 2 file descriptors, assuming CRIU cmd
+// will be launched with these set to appropriate files.
+func InheritStdioForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		extraFiles, _ := ctx.Value(keys.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		ioFiles, _ := ctx.Value(keys.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
 		inheritFds := req.GetCriu().GetInheritFd()
 
 		if info := resp.GetState().GetInfo(); info != nil {
-			// In case of attach, we need to create pipes for stdin, stdout, stderr
-			if req.Attachable {
-				inReader, inWriter, err := os.Pipe()
-				outReader, outWriter, err := os.Pipe()
-				errReader, errWriter, err := os.Pipe()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to create pipes for attach: %v", err)
-				}
-				ioFiles = append(ioFiles, inWriter, outReader, errReader)
-				for _, f := range info.GetOpenFiles() {
-					f.Path = strings.TrimPrefix(f.Path, "/")
-					if f.Fd == 0 {
-						extraFiles = append(extraFiles, inReader)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(2 + int32(len(extraFiles))),
-							Key: proto.String(f.Path),
-						})
-						defer inReader.Close()
-					} else if f.Fd == 1 {
-						extraFiles = append(extraFiles, outWriter)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(2 + int32(len(extraFiles))),
-							Key: proto.String(f.Path),
-						})
-						defer outWriter.Close()
-					} else if f.Fd == 2 {
-						extraFiles = append(extraFiles, errWriter)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(2 + int32(len(extraFiles))),
-							Key: proto.String(f.Path),
-						})
-						defer errWriter.Close()
-					}
-				}
-
-				// In case of log, we need to open a log file
-			} else {
-				if req.Log == "" {
-					req.Log = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
-				}
-				restoreLog, err := os.OpenFile(req.Log, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
-				defer restoreLog.Close()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to open restore log: %v", err)
-				}
-				for _, f := range info.GetOpenFiles() {
-					if f.Fd == 1 || f.Fd == 2 {
-						f.Path = strings.TrimPrefix(f.Path, "/")
-						extraFiles = append(extraFiles, restoreLog)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(2 + int32(len(extraFiles))),
-							Key: proto.String(f.Path),
-						})
-					} else {
-						log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
-					}
+			for i, f := range info.GetOpenFiles() {
+				f.Path = strings.TrimPrefix(f.Path, "/")
+				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
+					inheritFds = append(inheritFds, &criu_proto.InheritFd{
+						Fd:  proto.Int32(int32(i)),
+						Key: proto.String(f.Path),
+					})
+				} else {
+					log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
 				}
 			}
 		} else {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")
 		}
-
-		ctx = context.WithValue(ctx, keys.RESTORE_EXTRA_FILES_CONTEXT_KEY, extraFiles)
-		ctx = context.WithValue(ctx, keys.RESTORE_IO_FILES_CONTEXT_KEY, ioFiles)
 
 		// Set the inherited fds
 		if req.GetCriu() == nil {

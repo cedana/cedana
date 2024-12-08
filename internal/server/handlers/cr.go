@@ -4,16 +4,17 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
@@ -27,6 +28,10 @@ const (
 	CRIU_LOG_VERBOSITY_LEVEL = 4
 	CRIU_LOG_FILE            = "criu.log"
 	GHOST_FILE_MAX_SIZE      = 10000000 // 10MB
+
+	DEFAULT_RESTORE_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
+	RESTORE_LOG_FLAGS                  = os.O_CREATE | os.O_WRONLY | os.O_APPEND // no truncate
+	RESTORE_LOG_PERMS                  = 0o644
 )
 
 // Returns a CRIU dump handler for the server
@@ -79,15 +84,6 @@ func DumpCRIU() types.Dump {
 // Returns a CRIU restore handler for the server
 func RestoreCRIU() types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		extraFiles, ok := ctx.Value(keys.RESTORE_EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		if !ok {
-			return nil, status.Error(codes.Internal, "invalid extra files in context")
-		}
-		ioFiles, ok := ctx.Value(keys.RESTORE_IO_FILES_CONTEXT_KEY).([]*os.File)
-		if !ok {
-			return nil, status.Error(codes.Internal, "invalid io files in context")
-		}
-
 		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
@@ -112,23 +108,26 @@ func RestoreCRIU() types.Restore {
 
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)
-		var inWriter, outReader, errReader *os.File
+		var stdin io.Reader
+		var stdout, stderr io.Writer
 		if req.Attachable {
 			criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
-			if len(ioFiles) != 3 {
-				return nil, status.Error(codes.Internal, "ioFiles did not contain 3 files")
-			}
-			inWriter, outReader, errReader = ioFiles[0], ioFiles[1], ioFiles[2]
-			// Use a random number, since we don't have PID yet
-			id := rand.Uint32()
-			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			id := rand.Uint32()                    // Use a random number, since we don't have PID yet
+			stdin, stdout, stderr = cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
 			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
-			go io.Copy(inWriter, stdIn)
-			go io.Copy(stdOut, outReader)
-			go io.Copy(stdErr, errReader)
+		} else {
+			if req.Log == "" {
+				req.Log = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
+			}
+			restoreLog, err := os.OpenFile(req.Log, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to open restore log file: %v", err)
+			}
+			stdout, stderr = restoreLog, restoreLog
+			defer restoreLog.Close()
 		}
 
-		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, extraFiles...)
+		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, stdin, stdout, stderr)
 
 		// Capture internal logs from CRIU
 		utils.LogFromFile(

@@ -11,6 +11,7 @@ require (
 	github.com/containerd/console v1.0.4
 	github.com/containerd/go-runc v1.1.0
 	github.com/cyphar/filepath-securejoin v0.3.4
+	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/opencontainers/runc v1.2.2
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/opencontainers/selinux v1.11.0
@@ -33,7 +34,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.6.2 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
