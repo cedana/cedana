@@ -24,7 +24,7 @@ var errEmptyID = errors.New("container id cannot be empty")
 
 // newProcess returns a new libcontainer Process with the arguments from the
 // spec and stdio from the current process.
-func newProcess(p specs.Process) (*libcontainer.Process, error) {
+func NewProcess(p specs.Process) (*libcontainer.Process, error) {
 	lp := &libcontainer.Process{
 		Args: p.Args,
 		Env:  p.Env,
@@ -73,7 +73,7 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 }
 
 // setupIO modifies the given process config according to the options.
-func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
+func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
 	if createTTY {
 		process.Stdin = nil
 		process.Stdout = nil
@@ -119,7 +119,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 		inheritStdio(process)
 		return &tty{}, nil
 	}
-	return setupProcessPipes(process, rootuid, rootgid, os.Stdin, os.Stdout, os.Stderr)
+	return SetupProcessPipes(process, rootuid, rootgid, os.Stdin, os.Stdout, os.Stderr)
 }
 
 // createPidFile creates a file containing the PID,
@@ -176,7 +176,7 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 	if err = r.CheckTerminal(config); err != nil {
 		return -1, err
 	}
-	process, err := newProcess(*config)
+	process, err := NewProcess(*config)
 	if err != nil {
 		return -1, err
 	}
@@ -210,8 +210,8 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 	// Setting up IO is a two stage process. We need to modify process to deal
 	// with detaching containers, and then we get a tty after the container has
 	// started.
-	handler := newSignalHandler(r.EnableSubreaper, r.NotifySocket)
-	tty, err := setupProcessPipes(process, rootuid, rootgid, r.Stdin, r.Stdout, r.Stderr)
+	handler := NewSignalHandler(r.EnableSubreaper, r.NotifySocket)
+	tty, err := SetupProcessPipes(process, rootuid, rootgid, r.Stdin, r.Stdout, r.Stderr)
 	if err != nil {
 		return -1, err
 	}

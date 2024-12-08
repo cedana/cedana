@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/adapters"
-	"github.com/cedana/cedana/internal/server/handlers"
+	"github.com/cedana/cedana/internal/server/defaults"
+	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/internal/server/process"
+	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -20,15 +22,14 @@ const (
 )
 
 func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
-	// Add basic adapters. The order below is the order followed before executing
+	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
 
 	middleware := types.Middleware[types.Run]{
-		// Bare minimum adapters
-		adapters.Manage(s.jobs),
-		adapters.FillMissingRunDefaults,
-		adapters.ValidateRunRequest,
+		job.Manage(s.jobs),
+		defaults.FillMissingRunDefaults,
+		validation.ValidateRunRequest,
 
 		pluginRunMiddleware, // middleware from plugins
 	}
@@ -96,7 +97,7 @@ func pluginRunHandler() types.Run {
 		var handler types.Run
 		switch t {
 		case "process":
-			handler = handlers.Run()
+			handler = process.Run()
 		default:
 			// Use plugin-specific handler
 			err = featureRunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
@@ -108,7 +109,7 @@ func pluginRunHandler() types.Run {
 			}
 		}
 		if req.GPUEnabled {
-			handler = handler.With(adapters.GPUInterceptor)
+			handler = handler.With(job.GPUInterceptor)
 		}
 		return handler(ctx, server, resp, req)
 	}

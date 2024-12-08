@@ -15,6 +15,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -190,7 +191,7 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.
 	job.CRIUCallback.PreDumpFunc = func(ctx context.Context, opts *criu.CriuOpts) error {
-		err := checkCRIUOptsCompatibilityGPU(opts)
+		err := validation.CheckCRIUOptsCompatibilityGPU(opts)
 		if err != nil {
 			return err
 		}
@@ -213,7 +214,7 @@ func (m *ManagerLazy) addCRIUCallbackGPU(lifetime context.Context, jid string) {
 	// to CRIU restore. We instead block at pre-resume, to maximize concurrency.
 	restoreErr := make(chan error)
 	job.CRIUCallback.PreRestoreFunc = func(ctx context.Context, opts *criu.CriuOpts) error {
-		err := checkCRIUOptsCompatibilityGPU(opts)
+		err := validation.CheckCRIUOptsCompatibilityGPU(opts)
 		if err != nil {
 			return err
 		}
@@ -278,14 +279,6 @@ func (m *ManagerLazy) checkGPUHealth(ctx context.Context, controller *gpuControl
 			controller.stderr.WriteString("GPU health check failed")
 		}
 		return utils.GRPCErrorShort(err, controller.stderr.String())
-	}
-	return nil
-}
-
-// Certain CRIU options are not compatible with GPU support.
-func checkCRIUOptsCompatibilityGPU(opts *criu.CriuOpts) error {
-	if opts.GetLeaveRunning() {
-		return fmt.Errorf("leave_running is not compatible with GPU support")
 	}
 	return nil
 }

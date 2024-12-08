@@ -4,9 +4,14 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/adapters"
-	"github.com/cedana/cedana/internal/server/handlers"
-	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/internal/server/criu"
+	"github.com/cedana/cedana/internal/server/defaults"
+	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/internal/server/network"
+	"github.com/cedana/cedana/internal/server/process"
+	"github.com/cedana/cedana/internal/server/validation"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -18,26 +23,27 @@ import (
 const featureRestoreMiddleware plugins.Feature[types.Middleware[types.Restore]] = "RestoreMiddleware"
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
-	// Add basic adapters. The order below is the order followed before executing
+	// Add adapters. The order below is the order followed before executing
 	// the final handler (handlers.Restore). Post-restore, the order is reversed.
 
 	middleware := types.Middleware[types.Restore]{
-		// Bare minimum adapters
-		adapters.ManageRestore(s.jobs),
-		adapters.FillMissingRestoreDefaults,
-		adapters.ValidateRestoreRequest,
-		adapters.PrepareRestoreDir, // auto-detects compression
+		job.ManageRestore(s.jobs),
+		defaults.FillMissingRestoreDefaults,
+		validation.ValidateRestoreRequest,
+		filesystem.PrepareRestoreDir, // auto-detects compression
 
 		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		adapters.FillProcessStateForRestore,
-		adapters.DetectNetworkOptionsForRestore,
-		adapters.DetectShellJobForRestore,
-		adapters.InheritStdioForRestore,
+		process.FillProcessStateForRestore,
+		process.DetectShellJobForRestore,
+		process.InheritStdioForRestore,
+		network.DetectNetworkOptionsForRestore,
+
+		validation.CheckCompatibilityForRestore,
 	}
 
-	restore := handlers.RestoreCRIU().With(middleware...)
+	restore := criu.Restore().With(middleware...)
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -51,7 +57,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := restore(ctx, opts, &criu.NotifyCallbackMulti{}, resp, req)
+	_, err := restore(ctx, opts, &criu_client.NotifyCallbackMulti{}, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +73,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that inserts new adapters based on the type of restore request
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu_client.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.GetType()
 		switch t {

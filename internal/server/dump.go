@@ -5,9 +5,14 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
-	"github.com/cedana/cedana/internal/server/adapters"
-	"github.com/cedana/cedana/internal/server/handlers"
-	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/internal/server/criu"
+	"github.com/cedana/cedana/internal/server/defaults"
+	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/internal/server/network"
+	"github.com/cedana/cedana/internal/server/process"
+	"github.com/cedana/cedana/internal/server/validation"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -19,28 +24,29 @@ import (
 const featureDumpMiddleware plugins.Feature[types.Middleware[types.Dump]] = "DumpMiddleware"
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
-	// Add basic adapters. The order below is the order followed before executing
+	// The order below is the order followed before executing
 	// the final handler (handlers.Dump). Post-dump, the order is reversed.
 
 	compression := config.Get(config.STORAGE_COMPRESSION)
 
 	middleware := types.Middleware[types.Dump]{
-		// Bare minimum adapters
-		adapters.ManageDump(s.jobs),
-		adapters.FillMissingDumpDefaults,
-		adapters.ValidateDumpRequest,
-		adapters.PrepareDumpDir(compression),
+		job.ManageDump(s.jobs),
+		defaults.FillMissingDumpDefaults,
+		validation.ValidateDumpRequest,
+		filesystem.PrepareDumpDir(compression),
 
 		pluginDumpMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		adapters.FillProcessStateForDump,
-		adapters.DetectNetworkOptionsForDump,
-		adapters.DetectShellJobForDump,
-		adapters.CloseCommonFilesForDump,
+		process.FillProcessStateForDump,
+		process.DetectShellJobForDump,
+		process.CloseCommonFilesForDump,
+		network.DetectNetworkOptionsForDump,
+
+		validation.CheckCompatibilityForDump,
 	}
 
-	dump := handlers.DumpCRIU().With(middleware...)
+	dump := criu.Dump().With(middleware...)
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -50,7 +56,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{}
 
-	_, err := dump(ctx, opts, &criu.NotifyCallbackMulti{}, resp, req)
+	_, err := dump(ctx, opts, &criu_client.NotifyCallbackMulti{}, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +72,12 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu_client.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
 		case "process":
-			middleware = append(middleware, adapters.SetPIDForDump)
+			middleware = append(middleware, process.SetPIDForDump)
 		default:
 			// Insert plugin-specific middleware
 			err = featureDumpMiddleware.IfAvailable(func(
