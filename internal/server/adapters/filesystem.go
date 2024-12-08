@@ -47,7 +47,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 			}
 
 			// Create a unique directory within the dump dir, using type, PID, and timestamp
-			imagesDirectory := filepath.Join(dir, fmt.Sprintf("%s-%d",
+			imagesDirectory := filepath.Join(dir, fmt.Sprintf("dump-%s-%d",
 				req.GetType(),
 				time.Now().Unix()))
 

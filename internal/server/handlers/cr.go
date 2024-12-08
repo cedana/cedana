@@ -103,6 +103,7 @@ func RestoreCRIU() types.Restore {
 		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
 		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+		criuOpts.EvasiveDevices = proto.Bool(true)
 		criuOpts.NotifyScripts = proto.Bool(true)
 		criuOpts.LogToStderr = proto.Bool(false)
 

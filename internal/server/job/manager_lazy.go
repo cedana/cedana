@@ -125,6 +125,10 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 		return nil, fmt.Errorf("missing JID")
 	}
 
+	if m.Exists(jid) {
+		return nil, fmt.Errorf("job %s already exists", jid)
+	}
+
 	job := newJob(jid, jobType)
 	m.jobs.Store(jid, job)
 

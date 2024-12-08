@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	DumpCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "runc root")
+	DumpCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 }
 
 var DumpCmd = &cobra.Command{
@@ -31,8 +31,8 @@ var DumpCmd = &cobra.Command{
 
 		req.Type = "runc"
 		req.Details = &daemon.Details{Runc: &runc.Runc{
-			Root: root,
 			ID:   id,
+			Root: root,
 		}}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)

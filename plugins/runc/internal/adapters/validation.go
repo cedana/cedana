@@ -41,6 +41,9 @@ func ValidateRunRequest(next types.Run) types.Run {
 
 func ValidateDumpRequest(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		if req.GetDetails().GetRunc() == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
+		}
 		if req.GetDetails().GetRunc().GetRoot() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing root")
 		}
@@ -55,3 +58,22 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 //////////////////////////
 //// Restore Adapters ////
 //////////////////////////
+
+func ValidateRestoreRequest(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		if req.GetDetails().GetRunc() == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
+		}
+		if req.GetDetails().GetRunc().GetRoot() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing root")
+		}
+		if req.GetDetails().GetRunc().GetID() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing id")
+		}
+		if req.GetDetails().GetRunc().GetBundle() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
+		}
+
+		return next(ctx, server, nfy, resp, req)
+	}
+}

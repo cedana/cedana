@@ -71,8 +71,9 @@ func init() {
 			// thus it could have specific CLI overrides from plugins.
 
 			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-				jobDumpCmd.Flags().AddFlag(f)
-				f.Usage = fmt.Sprintf("(%s plugin) %s", name, f.Usage) // Add plugin name to usage
+				newFlag := *f
+				jobDumpCmd.Flags().AddFlag(&newFlag)
+				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
 			})
 			return nil
 		},

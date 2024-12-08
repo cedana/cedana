@@ -26,7 +26,7 @@ var (
 	DumpCmd    *cobra.Command
 	RestoreCmd *cobra.Command
 
-	Theme text.Colors = text.Colors{text.FgHiCyan}
+	Theme text.Colors = text.Colors{text.FgCyan}
 )
 
 var (
@@ -53,18 +53,16 @@ func init() {
 	RestoreCmd = cmd.RestoreCmd
 	RunCmd = cmd.RunCmd
 
-	// NOTE: Assumes other basic request details will be validated by the daemon.
+	// Assuming other basic request details will be validated by the daemon.
 	// Most adapters below are simply lifted from libcontainer/criu_linux.go, which
 	// is how official runc binary does a checkpoint. But here, since CRIU C/R is
 	// handled by the daemon, this plugin is only responsible for doing runc-specific setup.
 
 	DumpMiddleware = types.Middleware[types.Dump]{
-		// Basic adapters
 		adapters.FillMissingDumpDefaults,
 		adapters.ValidateDumpRequest,
 		adapters.GetContainerForDump,
 
-		// Container-specific adapters
 		adapters.AddExternalNamespacesForDump(configs.NEWNET),
 		adapters.AddExternalNamespacesForDump(configs.NEWPID),
 		adapters.AddBindMountsForDump,
@@ -74,15 +72,22 @@ func init() {
 		adapters.UseCgroupFreezerIfAvailableForDump,
 		adapters.WriteExtDescriptorsForDump,
 
-		// Final adapters
 		adapters.SetPIDForDump,
 	}
 
-	RestoreMiddleware = types.Middleware[types.Restore]{}
+	RestoreMiddleware = types.Middleware[types.Restore]{
+		adapters.FillMissingRestoreDefaults,
+		adapters.ValidateRestoreRequest,
+
+		adapters.SetWorkingDirectoryForRestore,
+		adapters.LoadSpecFromBundleForRestore,
+		adapters.CreateContainerForRestore,
+	}
 
 	RunMiddleware = types.Middleware[types.Run]{
 		adapters.FillMissingRunDefaults,
 		adapters.ValidateRunRequest,
+
 		adapters.SetWorkingDirectory,
 		adapters.LoadSpecFromBundle,
 		// Can add other adapters that wish to modify the spec before running
