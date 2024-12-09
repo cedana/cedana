@@ -9,8 +9,8 @@ require (
 	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241203191352-2167379de17d.1
 	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241203191352-2167379de17d.1
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
-	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-700854848196.1
-	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-00000000000000-700854848196.1
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-797a04bfd2d7.1
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-00000000000000-797a04bfd2d7.1
 	cloud.google.com/go/pubsub v1.44.0
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
