@@ -136,7 +136,6 @@ setup_ci() {
 
 source_env() {
     source /etc/environment
-    source /etc/aws_conditional_env
 }
 
 start_otelcol() {
