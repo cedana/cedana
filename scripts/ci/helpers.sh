@@ -144,6 +144,8 @@ start_otelcol() {
 
 start_cedana() {
     ./build-start-daemon.sh --no-build
+    echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+    printf "ls -l /etc/aws_conditional_env:\n${ls -l /etc/aws_conditional_env}"
 }
 
 stop_cedana() {
