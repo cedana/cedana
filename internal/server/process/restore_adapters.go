@@ -90,11 +90,11 @@ func InheritStdioForRestore(next types.Restore) types.Restore {
 		inheritFds := req.GetCriu().GetInheritFd()
 
 		if info := resp.GetState().GetInfo(); info != nil {
-			for i, f := range info.GetOpenFiles() {
+			for _, f := range info.GetOpenFiles() {
 				f.Path = strings.TrimPrefix(f.Path, "/")
 				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
 					inheritFds = append(inheritFds, &criu_proto.InheritFd{
-						Fd:  proto.Int32(int32(i)),
+						Fd:  proto.Int32(int32(f.Fd)),
 						Key: proto.String(f.Path),
 					})
 				} else {

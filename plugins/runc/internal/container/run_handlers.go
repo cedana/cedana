@@ -32,12 +32,6 @@ const (
 	RUNC_LOG_FILE  = "runc.log"
 	RUNC_LOG_DEBUG = true
 
-	// SIGINT works since we're not detaching, and the contianer process
-	// is tied to the `runc run` command that's run by the runc client.
-	// SIGKILL fails here, and causes just the `runc run` to exit, but the
-	// container process is left running.
-	KILL_SIGNAL = syscall.SIGINT
-
 	waitForRunErrTimeout = 300 * time.Millisecond
 )
 
@@ -108,7 +102,7 @@ func Run() types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to get runc version: %v", err)
 		}
 
-		pid := make(chan int, 1)
+		started := make(chan int, 1)
 		runErr := make(chan error, 1)
 		exited = make(chan int)
 
@@ -116,10 +110,13 @@ func Run() types.Run {
 		go func() {
 			defer server.WG.Done()
 			code, err := client.Run(server.Lifetime, id, "", &runc_client.CreateOpts{
-				IO:           runc_io.WithCancelSignal(io, KILL_SIGNAL),
+				// Use SIGTERM below as we're not detaching, and if we SIGTERM the `runc run`
+				// command, it will clean up the container gracefully. SIGKILL will abruptly
+				// stop the command without it getting a chance to clean up.
+				IO:           runc_io.WithCancelSignal(io, syscall.SIGTERM),
 				NoPivot:      noPivot,
 				NoNewKeyring: noNewKeyring,
-				Started:      pid,
+				Started:      started,
 			})
 			if err != nil {
 				runErr <- err
@@ -150,7 +147,14 @@ func Run() types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to run container: %v: %s", err, lastMsg)
 		}
 
-		resp.PID = uint32(<-pid)
+		<-started // wait for container to start
+
+		// Get PID of actual container process
+		state, err := client.State(ctx, id)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
+		}
+		resp.PID = uint32(state.Pid)
 
 		return exited, nil
 	}

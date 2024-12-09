@@ -18,7 +18,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
-				return next(ctx, server, nfy, resp, req)
+				return nil, status.Errorf(codes.InvalidArgument, "missing JID for managed dump")
 			}
 
 			job := jobs.Get(jid)

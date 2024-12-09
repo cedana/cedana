@@ -37,7 +37,7 @@ var (
 	Theme      = text.Colors{text.FgCyan}
 )
 
-var KillSignal syscall.Signal = container.KILL_SIGNAL
+var KillSignal = syscall.SIGKILL
 
 var (
 	RunHandler     = container.Run()
@@ -55,8 +55,7 @@ var (
 		container.GetContainerForDump,
 
 		namespace.IgnoreNamespacesForDump(configs.NEWNET),
-		namespace.AddExternalNamespaceForDump(configs.NEWNET),
-		namespace.AddExternalNamespaceForDump(configs.NEWPID),
+		namespace.AddExternalNamespacesForDump(configs.NEWNET, configs.NEWPID),
 		filesystem.AddMountsForDump,
 		filesystem.AddMaskedPathsForDump,
 		cgroup.ManageCgroupsForDump(criu.CriuCgMode_SOFT),
@@ -78,8 +77,7 @@ var (
 		filesystem.AddMountsForRestore,
 		filesystem.AddMaskedPathsForRestore,
 		namespace.IgnoreNamespacesForRestore(configs.NEWNET),
-		namespace.InheritExternalNamespaceForRestore(configs.NEWNET),
-		namespace.InheritExternalNamespaceForRestore(configs.NEWPID),
+		namespace.InheritExternalNamespacesForRestore(configs.NEWNET, configs.NEWPID),
 		namespace.JoinOtherExternalNamespacesForRestore,
 		device.AddDevicesForRestore,
 		device.HandleEvasiveDevicesForRestore,
@@ -89,5 +87,6 @@ var (
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
 		container.UpdateStateOnRestore,
+		container.CleanupOnExitAfterRestore,
 	}
 )

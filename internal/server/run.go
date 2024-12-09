@@ -27,7 +27,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	// inserted from a plugin or will be the built-in process run handler.
 
 	middleware := types.Middleware[types.Run]{
-		job.Manage(s.jobs),
+		job.Manage(s.jobs), // always manage jobs run through daemon
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 
@@ -52,7 +52,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		return nil, err
 	}
 
-	log.Info().Uint32("PID", resp.PID).Str("type", req.GetType()).Msg("run successful")
+	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("run successful")
 
 	return resp, nil
 }

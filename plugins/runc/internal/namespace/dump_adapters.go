@@ -44,7 +44,7 @@ func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[typ
 // will expect that the namespace exists during restore.
 // This basically means that CRIU will ignore the namespace
 // and expect to be setup correctly.
-func AddExternalNamespaceForDump(t configs.NamespaceType) types.Adapter[types.Dump] {
+func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
@@ -59,46 +59,48 @@ func AddExternalNamespaceForDump(t configs.NamespaceType) types.Adapter[types.Du
 
 			// Check CRIU compatibility for the namespace type
 
-			switch t {
-			case configs.NEWNET:
-				minVersion := 31100
-				if version < minVersion {
-					log.Warn().
-						Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
+			for _, t := range nsTypes {
+				switch t {
+				case configs.NEWNET:
+					minVersion := 31100
+					if version < minVersion {
+						log.Warn().
+							Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
+						return next(ctx, server, nfy, resp, req)
+					}
+				case configs.NEWPID:
+					minVersion := 31500
+					if version < minVersion {
+						log.Warn().
+							Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
+						return next(ctx, server, nfy, resp, req)
+					}
+				}
+
+				config := container.Config()
+
+				nsPath := config.Namespaces.PathOf(t)
+				if nsPath == "" {
+					// Nothing to do
 					return next(ctx, server, nfy, resp, req)
 				}
-			case configs.NEWPID:
-				minVersion := 31500
-				if version < minVersion {
-					log.Warn().
-						Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
-					return next(ctx, server, nfy, resp, req)
+
+				// CRIU expects the information about an external namespace
+				// like this: --external <TYPE>[<inode>]:<key>
+				// This <key> is always 'extRoot<TYPE>NS'.
+
+				var ns unix.Stat_t
+				if err := unix.Stat(nsPath, &ns); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
 				}
+				external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, CriuNsToKey(t))
+
+				if req.Criu == nil {
+					req.Criu = &criu_proto.CriuOpts{}
+				}
+
+				req.Criu.External = append(req.Criu.External, external)
 			}
-
-			config := container.Config()
-
-			nsPath := config.Namespaces.PathOf(t)
-			if nsPath == "" {
-				// Nothing to do
-				return next(ctx, server, nfy, resp, req)
-			}
-
-			// CRIU expects the information about an external namespace
-			// like this: --external <TYPE>[<inode>]:<key>
-			// This <key> is always 'extRoot<TYPE>NS'.
-
-			var ns unix.Stat_t
-			if err := unix.Stat(nsPath, &ns); err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
-			}
-			external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, CriuNsToKey(t))
-
-			if req.Criu == nil {
-				req.Criu = &criu_proto.CriuOpts{}
-			}
-
-			req.Criu.External = append(req.Criu.External, external)
 
 			return next(ctx, server, nfy, resp, req)
 		}

@@ -75,7 +75,7 @@ func Restore() types.Restore {
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open restore log file: %v", err)
 			}
-			stdout, stderr = restoreLog, restoreLog
+			stdin, stdout, stderr = restoreLog, restoreLog, restoreLog
 			defer restoreLog.Close()
 		}
 
@@ -95,8 +95,9 @@ func Restore() types.Restore {
 
 		// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
 		// as their could be goroutines waiting on it.
-		exited := make(chan int)
+		var exited chan int
 		if criuOpts.GetRstSibling() {
+			exited = make(chan int)
 			server.WG.Add(1)
 			go func() {
 				defer server.WG.Done()
@@ -106,7 +107,7 @@ func Restore() types.Restore {
 					log.Debug().Err(err).Msg("process Wait()")
 				}
 				code := status.ExitCode()
-				log.Debug().Int("code", code).Msg("process exited")
+				log.Debug().Uint8("code", uint8(code)).Msg("process exited")
 				exitCode <- code
 				close(exitCode)
 				close(exited)

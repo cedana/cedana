@@ -46,7 +46,7 @@ func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[
 // will expect that the namespace exists during restore.
 // This basically means that CRIU will ignore the namespace
 // and expect it to be setup correctly.
-func InheritExternalNamespaceForRestore(t configs.NamespaceType) types.Adapter[types.Restore] {
+func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
@@ -60,11 +60,6 @@ func InheritExternalNamespaceForRestore(t configs.NamespaceType) types.Adapter[t
 
 			config := container.Config()
 
-			// FIXME: !!!!!!!
-			for _, ns := range config.Namespaces {
-				log.Debug().Msgf("NAMESPACE: %v", ns)
-			}
-
 			version, err := server.CRIU.GetCriuVersion(ctx)
 			if err != nil {
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
@@ -72,56 +67,58 @@ func InheritExternalNamespaceForRestore(t configs.NamespaceType) types.Adapter[t
 
 			// Check CRIU compatibility for the namespace type
 
-			switch t {
-			case configs.NEWNET:
-				minVersion := 31100
-				if version < minVersion {
-					log.Warn().
-						Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
+			for _, t := range nsTypes {
+				switch t {
+				case configs.NEWNET:
+					minVersion := 31100
+					if version < minVersion {
+						log.Warn().
+							Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
+						return next(ctx, server, nfy, resp, req)
+					}
+				case configs.NEWPID:
+					minVersion := 31500
+					if version < minVersion {
+						log.Warn().
+							Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
+						return next(ctx, server, nfy, resp, req)
+					}
+				default:
+					log.Warn().Msgf("inherit namespace should only be called for NEWNET or NEWPID. Skipping.")
 					return next(ctx, server, nfy, resp, req)
 				}
-			case configs.NEWPID:
-				minVersion := 31500
-				if version < minVersion {
-					log.Warn().
-						Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
+
+				if !config.Namespaces.Contains(t) {
+					log.Debug().Msgf("container does not have %v namespace. Skipping.", t)
 					return next(ctx, server, nfy, resp, req)
 				}
-			default:
-				log.Warn().Msgf("inherit namespace should only be called for NEWNET or NEWPID. Skipping.")
-				return next(ctx, server, nfy, resp, req)
-			}
 
-			if !config.Namespaces.Contains(t) {
-				log.Debug().Msgf("container does not have %v namespace. Skipping.", t)
-				return next(ctx, server, nfy, resp, req)
-			}
+				nsPath := config.Namespaces.PathOf(t)
+				if nsPath == "" {
+					log.Debug().Msgf("container does not have %v namespace path. Skipping.", t)
+					return next(ctx, server, nfy, resp, req)
+				}
 
-			nsPath := config.Namespaces.PathOf(t)
-			if nsPath == "" {
-				log.Debug().Msgf("container does not have %v namespace path. Skipping.", t)
-				return next(ctx, server, nfy, resp, req)
-			}
+				// CRIU wants the information about an existing namespace
+				// like this: --inherit-fd fd[<fd>]:<key>
+				// The <key> needs to be the same as during checkpointing.
+				// We are always using 'extRoot<TYPE>NS' as the key in this.
 
-			// CRIU wants the information about an existing namespace
-			// like this: --inherit-fd fd[<fd>]:<key>
-			// The <key> needs to be the same as during checkpointing.
-			// We are always using 'extRoot<TYPE>NS' as the key in this.
+				nsFd, err := os.Open(nsPath)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "required namespace file %s does not exist: %v", nsPath, err)
+				}
+				extraFiles = append(extraFiles, nsFd)
 
-			nsFd, err := os.Open(nsPath)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "required namespace file %s does not exist: %v", nsPath, err)
+				criuOpts := req.GetCriu()
+				if criuOpts == nil {
+					criuOpts = &criu_proto.CriuOpts{}
+				}
+				criuOpts.InheritFd = append(criuOpts.InheritFd, &criu_proto.InheritFd{
+					Key: proto.String(CriuNsToKey(t)),
+					Fd:  proto.Int32(int32(2 + len(extraFiles))),
+				})
 			}
-			extraFiles = append(extraFiles, nsFd)
-
-			criuOpts := req.GetCriu()
-			if criuOpts == nil {
-				criuOpts = &criu_proto.CriuOpts{}
-			}
-			criuOpts.InheritFd = append(criuOpts.InheritFd, &criu_proto.InheritFd{
-				Key: proto.String(CriuNsToKey(t)),
-				Fd:  proto.Int32(int32(2 + len(extraFiles))),
-			})
 
 			ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 

@@ -27,7 +27,6 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// the final handler (handlers.Restore). Post-restore, the order is reversed.
 
 	middleware := types.Middleware[types.Restore]{
-		job.ManageRestore(s.jobs),
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		filesystem.PrepareRestoreDir, // auto-detects compression
@@ -43,7 +42,13 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.CheckCompatibilityForRestore,
 	}
 
-	restore := criu.Restore().With(middleware...)
+	var restore types.Restore
+
+	if req.GetDetails().GetJID() != "" { // If using job restore
+		restore = criu.Restore().With(middleware...).With(job.ManageRestore(s.jobs))
+	} else {
+		restore = criu.Restore().With(middleware...)
+	}
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -62,7 +67,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		return nil, err
 	}
 
-	log.Info().Uint32("PID", resp.PID).Msg("restore successful")
+	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
 
 	return resp, nil
 }

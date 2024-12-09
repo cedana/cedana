@@ -19,8 +19,8 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
-			if jid == "" { // not a managed restore
-				return next(ctx, server, nfy, resp, req)
+			if jid == "" {
+				return nil, status.Errorf(codes.InvalidArgument, "missing JID in managed restore")
 			}
 
 			job := jobs.Get(jid)

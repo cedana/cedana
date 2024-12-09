@@ -17,6 +17,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -189,5 +190,36 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 		})
 
 		return next(ctx, server, nfy, resp, req)
+	}
+}
+
+// DestroyOnExitAfterRestore launches a background routine that ensures the container is
+// cleaned up after it exits. Only does so if a valid exit channel is received,
+// ie. when the container managed by the daemon (job).
+func CleanupOnExitAfterRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
+		}
+
+		exited, err = next(ctx, server, nfy, resp, req)
+		if err != nil {
+			return nil, err
+		}
+
+		if exited == nil {
+			return exited, nil
+		}
+
+		server.WG.Add(1)
+		go func() {
+			defer server.WG.Done()
+			<-exited
+			log.Debug().Msg("container exited, cleaning up")
+			container.Destroy()
+		}()
+
+		return exited, nil
 	}
 }

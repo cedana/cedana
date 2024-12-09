@@ -17,6 +17,9 @@ type Manager interface {
 	// Get returns a job with the given JID.
 	Get(jid string) *Job
 
+	// Find returns a job that has the given PID.
+	Find(pid uint32) *Job
+
 	// Delete deletes a job with the given JID.
 	Delete(jid string)
 

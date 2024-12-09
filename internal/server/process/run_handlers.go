@@ -82,7 +82,7 @@ func Run() types.Run {
 				log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
 			}
 			code := cmd.ProcessState.ExitCode()
-			log.Debug().Int("code", code).Uint32("PID", resp.PID).Msg("process exited")
+			log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
 			exitCode <- code
 			close(exitCode)
 			close(exited)

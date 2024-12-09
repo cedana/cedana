@@ -30,7 +30,6 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	compression := config.Get(config.STORAGE_COMPRESSION)
 
 	middleware := types.Middleware[types.Dump]{
-		job.ManageDump(s.jobs),
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 		filesystem.PrepareDumpDir(compression),
@@ -46,7 +45,13 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		validation.CheckCompatibilityForDump,
 	}
 
-	dump := criu.Dump().With(middleware...)
+	var dump types.Dump
+
+	if req.GetDetails().GetJID() != "" { // If using job dump
+		dump = criu.Dump().With(middleware...).With(job.ManageDump(s.jobs))
+	} else {
+		dump = criu.Dump().With(middleware...)
+	}
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -61,7 +66,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		return nil, err
 	}
 
-	log.Info().Str("path", resp.Path).Msg("dump successful")
+	log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 
 	return resp, nil
 }
