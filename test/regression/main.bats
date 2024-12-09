@@ -382,7 +382,10 @@ teardown() {
     [[ "$status" -eq 0 ]]
 }
 
+# INSERT NEW TESTS HERE TO PREVENT UNNECESSARY AWS USE
+
 @test "Dump + restore workload with direct remoting" {
+    echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     local task="./workload.sh"
     local job_id="workload-remoting-1"
     local bucket="direct-remoting"

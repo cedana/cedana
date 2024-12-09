@@ -5,6 +5,7 @@ source ./helpers.sh
 
 function start_regression() {
     echo "Running regression tests in cwd: $(pwd)"
+    echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     bats test/regression/main.bats
 }
 

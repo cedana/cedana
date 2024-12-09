@@ -10,6 +10,7 @@ smoke:
 	./smoke-test.sh || (echo "Smoke test failed" && exit 1)
 
 regression:
+	echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
 	./regression-test.sh || (echo "Regression test failed" && exit 1)
 
 correctness:
