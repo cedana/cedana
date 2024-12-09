@@ -73,18 +73,18 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 					minVersion := 31100
 					if version < minVersion {
 						log.Warn().
-							Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
+							Msgf("CRIU version is less than %d, skipping external NEWNET namespace handling", minVersion)
 						return next(ctx, server, nfy, resp, req)
 					}
 				case configs.NEWPID:
 					minVersion := 31500
 					if version < minVersion {
 						log.Warn().
-							Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
+							Msgf("CRIU version is less than %d, skipping external NEWPID namespace handling", minVersion)
 						return next(ctx, server, nfy, resp, req)
 					}
 				default:
-					log.Warn().Msgf("inherit namespace should only be called for NEWNET or NEWPID. Skipping.")
+					log.Warn().Msgf("inherit namespace should only be called for external NEWNET or NEWPID. Skipping.")
 					return next(ctx, server, nfy, resp, req)
 				}
 
@@ -95,7 +95,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 
 				nsPath := config.Namespaces.PathOf(t)
 				if nsPath == "" {
-					log.Debug().Msgf("container does not have %v namespace path. Skipping.", t)
+					log.Debug().Msgf("container does not have external %v namespace path. Skipping.", t)
 					return next(ctx, server, nfy, resp, req)
 				}
 
@@ -106,7 +106,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 
 				nsFd, err := os.Open(nsPath)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "required namespace file %s does not exist: %v", nsPath, err)
+					return nil, status.Errorf(codes.Internal, "external namespace file %s does not exist: %v", nsPath, err)
 				}
 				extraFiles = append(extraFiles, nsFd)
 

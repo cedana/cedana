@@ -16,6 +16,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
+	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
@@ -179,8 +180,39 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 				return fmt.Errorf("failed to get container state: %v", err)
 			}
 
+			// XXX: Unfortunately, 'state' interface is internal to libcontainer
+			// but it's simple enough to replicate here, as we only need to update
+			// a few fields upon restore, rest should already be set correctly.
+
 			state.Created = time.Now().UTC()
 			state.InitProcessPid = int(pid)
+			stat, err := system.Stat(int(pid))
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to get accurate process start time")
+			} else {
+				state.InitProcessStartTime = stat.StartTime
+			}
+
+			for _, ns := range state.Config.Namespaces {
+				state.NamespacePaths[ns.Type] = ns.GetPath(int(pid))
+			}
+			for _, nsType := range configs.NamespaceTypes() {
+				if !configs.IsNamespaceSupported(nsType) {
+					continue
+				}
+				if _, ok := state.NamespacePaths[nsType]; !ok {
+					ns := configs.Namespace{Type: nsType}
+					state.NamespacePaths[ns.Type] = ns.GetPath(int(pid))
+				}
+			}
+
+			fds, err := GetStdioFds(pid)
+			if err != nil {
+				return fmt.Errorf("failed to get stdio fds: %v", err)
+			} else {
+				state.ExternalDescriptors = fds
+			}
+
 			err = SaveState(root, id, state)
 			if err != nil {
 				return fmt.Errorf("failed to save container state: %v", err)
@@ -216,7 +248,7 @@ func CleanupOnExitAfterRestore(next types.Restore) types.Restore {
 		go func() {
 			defer server.WG.Done()
 			<-exited
-			log.Debug().Msg("container exited, cleaning up")
+			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
 			container.Destroy()
 		}()
 

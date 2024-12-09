@@ -67,7 +67,7 @@ func (n *NotifyCallbackMulti) ImportCallback(nfy *NotifyCallback) {
 	}
 }
 
-func (n *NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int) error {
+func (n *NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) error {
 	for i := len(n.InitializeFunc) - 1; i >= 0; i-- {
 		err := n.InitializeFunc[i](ctx, criuPid)
 		if err != nil {

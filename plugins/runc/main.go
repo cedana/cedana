@@ -61,6 +61,7 @@ var (
 		cgroup.ManageCgroupsForDump(criu.CriuCgMode_SOFT),
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		device.AddDevicesForDump,
+    network.LockNetworkBeforeDump,
 
 		container.SetPIDForDump,
 	}
@@ -82,7 +83,8 @@ var (
 		device.AddDevicesForRestore,
 		device.HandleEvasiveDevicesForRestore,
 
-		network.RestoreNetwork,
+		network.RestoreNetworkConfiguration,
+    network.UnlockNetworkAfterRestore,
 		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,

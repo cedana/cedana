@@ -8,7 +8,7 @@ import (
 
 // Notify interface
 type Notify interface {
-	Initialize(ctx context.Context, criuPid int) error
+	Initialize(ctx context.Context, criuPid int32) error
 	PreDump(ctx context.Context, opts *criu.CriuOpts) error
 	PostDump(ctx context.Context, opts *criu.CriuOpts) error
 	PreRestore(ctx context.Context, opts *criu.CriuOpts) error

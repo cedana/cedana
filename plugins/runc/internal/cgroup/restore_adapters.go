@@ -54,8 +54,8 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 
-		nfy.InitializeFunc = append(nfy.InitializeFunc, func(ctx context.Context, criuPid int) error {
-			err := manager.Apply(criuPid)
+		nfy.InitializeFunc = append(nfy.InitializeFunc, func(ctx context.Context, criuPid int32) error {
+			err := manager.Apply(int(criuPid))
 			if err != nil {
 				return fmt.Errorf("failed to apply cgroups: %v", err)
 			}

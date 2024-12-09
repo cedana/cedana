@@ -170,7 +170,7 @@ func (c *Criu) doSwrkWithResp(
 	}
 
 	if nfy != nil {
-		err := nfy.Initialize(ctx, c.swrkCmd.Process.Pid)
+		err := nfy.Initialize(ctx, int32(c.swrkCmd.Process.Pid))
 		if err != nil {
 			return nil, fmt.Errorf("initialize failed: %w", err)
 		}

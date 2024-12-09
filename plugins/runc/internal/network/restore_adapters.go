@@ -16,7 +16,20 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func RestoreNetwork(next types.Restore) types.Restore {
+func UnlockNetworkAfterRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		nfy.NetworkUnlockFunc = append(nfy.NetworkUnlockFunc, func(ctx context.Context) error {
+			// Not implemented, yet
+			// see: libcontainer/criu_linux.go -> unlockNetwork
+			log.Warn().Msg("not unlocking network - not implemented")
+			return nil
+		})
+
+		return next(ctx, server, nfy, resp, req)
+	}
+}
+
+func RestoreNetworkConfiguration(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {

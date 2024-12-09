@@ -28,10 +28,10 @@ type (
 	NotifyFuncOpts func(ctx context.Context, opts *criu.CriuOpts) error
 	NotifyFuncPid  func(ctx context.Context, pid int32) error
 	NotifyFuncFd   func(ctx context.Context, fd int32) error
-	InitializeFunc func(ctx context.Context, criuPid int) error
+	InitializeFunc func(ctx context.Context, criuPid int32) error
 )
 
-func (n *NotifyCallback) Initialize(ctx context.Context, criuPid int) error {
+func (n *NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
 	if n.InitializeFunc != nil {
 		err := n.InitializeFunc(ctx, criuPid)
 		if err != nil {
