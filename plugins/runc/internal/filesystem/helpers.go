@@ -1,4 +1,4 @@
-package device
+package filesystem
 
 import (
 	"path/filepath"
@@ -11,6 +11,17 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
+
+// IsPathInPrefixList is a small function for CRIU restore to make sure
+// mountpoints, which are on a tmpfs, are not created in the roofs.
+func IsPathInPrefixList(path string, prefix []string) bool {
+	for _, p := range prefix {
+		if strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
 
 // lifted from libcontainer
 func CriuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs string) {

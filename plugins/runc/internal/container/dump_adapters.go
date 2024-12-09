@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -22,6 +23,18 @@ func GetContainerForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.NotFound, "failed to load container: %v", err)
 		}
 
+		state, err := container.State()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
+		}
+
+		// XXX: Create new cgroup manager, as the container's cgroup manager is not accessible (internal)
+		manager, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create cgroup manager: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY, manager)
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CONTEXT_KEY, container)
 
 		return next(ctx, server, nfy, resp, req)

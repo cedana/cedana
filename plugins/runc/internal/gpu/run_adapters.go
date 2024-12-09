@@ -15,7 +15,7 @@ import (
 
 // Adapter that adds Cedana GPU interception to the container.
 // Modifies the spec as necessary.
-func GPUInterceptor(next types.Run) types.Run {
+func Interceptor(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {

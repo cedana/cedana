@@ -13,7 +13,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -212,7 +212,7 @@ func sdNotifyBarrier(client *net.UnixConn) error {
 		return errUnexpectedRead
 	} else if errors.Is(err, os.ErrDeadlineExceeded) {
 		// Probably the other end doesn't support the sd_notify_barrier protocol.
-		logrus.Warn("Timeout after waiting 30s for barrier. Ignored.")
+		log.Warn().Msg("timeout after waiting 30s for barrier. Ignored.")
 		return nil
 	} else if err == io.EOF { //nolint:errorlint // https://github.com/polyfloyd/go-errorlint/issues/49
 		return nil

@@ -17,13 +17,34 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
+	return func(next types.Dump) types.Dump {
+		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+			if req.Criu == nil {
+				req.Criu = &criu_proto.CriuOpts{}
+			}
+
+			emptyNs := req.Criu.GetEmptyNs()
+
+			for _, t := range nsTypes {
+				ns := &configs.Namespace{Type: t}
+				emptyNs |= uint32(ns.Syscall())
+			}
+
+			req.Criu.EmptyNs = &emptyNs
+
+			return next(ctx, server, nfy, resp, req)
+		}
+	}
+}
+
 // If the container is running in a network namespace and has
 // a path to the network namespace configured, we will dump
 // that network namespace as an external namespace and we
 // will expect that the namespace exists during restore.
 // This basically means that CRIU will ignore the namespace
 // and expect to be setup correctly.
-func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.Dump] {
+func AddExternalNamespaceForDump(t configs.NamespaceType) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
@@ -62,9 +83,11 @@ func AddExternalNamespacesForDump(t configs.NamespaceType) types.Adapter[types.D
 				// Nothing to do
 				return next(ctx, server, nfy, resp, req)
 			}
+
 			// CRIU expects the information about an external namespace
 			// like this: --external <TYPE>[<inode>]:<key>
 			// This <key> is always 'extRoot<TYPE>NS'.
+
 			var ns unix.Stat_t
 			if err := unix.Stat(nsPath, &ns); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)

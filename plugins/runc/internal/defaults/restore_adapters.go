@@ -25,7 +25,6 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		if req.GetCriu() == nil {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
-
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 
 		return next(ctx, server, nfy, resp, req)

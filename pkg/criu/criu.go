@@ -36,7 +36,7 @@ func (c *Criu) SetCriuPath(path string) {
 }
 
 // Prepare sets up everything for the RPC communication to CRIU
-func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error {
+func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, extraFiles ...*os.File) error {
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
 	if err != nil {
 		return err
@@ -57,6 +57,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.ExtraFiles = extraFiles
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:    true,
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
@@ -116,8 +117,9 @@ func (c *Criu) doSwrk(
 	nfy Notify,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
+	extraFiles ...*os.File,
 ) (*criu.CriuResp, error) {
-	resp, err := c.doSwrkWithResp(ctx, reqType, opts, nfy, nil, stdin, stdout, stderr)
+	resp, err := c.doSwrkWithResp(ctx, reqType, opts, nfy, nil, stdin, stdout, stderr, extraFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +139,7 @@ func (c *Criu) doSwrkWithResp(
 	features *criu.CriuFeatures,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
+	extraFiles ...*os.File,
 ) (resp *criu.CriuResp, retErr error) {
 	req := criu.CriuReq{
 		Type: &reqType,
@@ -152,7 +155,7 @@ func (c *Criu) doSwrkWithResp(
 	}
 
 	if c.swrkCmd == nil {
-		err := c.Prepare(ctx, stdin, stdout, stderr)
+		err := c.Prepare(ctx, stdin, stdout, stderr, extraFiles...)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +167,13 @@ func (c *Criu) doSwrkWithResp(
 				retErr = errors.Join(retErr, err)
 			}
 		}()
+	}
+
+	if nfy != nil {
+		err := nfy.Initialize(ctx, c.swrkCmd.Process.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("initialize failed: %w", err)
+		}
 	}
 
 	for {
@@ -266,8 +276,9 @@ func (c *Criu) Restore(
 	nfy Notify,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
+	extraFiles ...*os.File,
 ) (*criu.CriuRestoreResp, error) {
-	resp, err := c.doSwrk(ctx, criu.CriuReqType_RESTORE, opts, nfy, stdin, stdout, stderr)
+	resp, err := c.doSwrk(ctx, criu.CriuReqType_RESTORE, opts, nfy, stdin, stdout, stderr, extraFiles...)
 	if err != nil {
 		return nil, err
 	}

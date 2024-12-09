@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
@@ -31,6 +32,11 @@ const (
 // Returns a CRIU restore handler for the server
 func Restore() types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		if !ok {
+			return nil, status.Error(codes.FailedPrecondition, "failed to get extra files from context")
+		}
+
 		if req.GetCriu() == nil {
 			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 		}
@@ -46,7 +52,6 @@ func Restore() types.Restore {
 		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
 		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
-		criuOpts.EvasiveDevices = proto.Bool(true)
 		criuOpts.NotifyScripts = proto.Bool(true)
 		criuOpts.LogToStderr = proto.Bool(false)
 
@@ -74,7 +79,7 @@ func Restore() types.Restore {
 			defer restoreLog.Close()
 		}
 
-		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, stdin, stdout, stderr)
+		criuResp, err := server.CRIU.Restore(ctx, criuOpts, nfy, stdin, stdout, stderr, extraFiles...)
 
 		// Capture internal logs from CRIU
 		utils.LogFromFile(

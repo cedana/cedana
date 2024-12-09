@@ -11,7 +11,7 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 
 	"github.com/opencontainers/runc/libcontainer"
@@ -180,7 +180,7 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	process.LogLevel = strconv.Itoa(int(logrus.GetLevel()))
+	process.LogLevel = strconv.Itoa(int(log.Logger.GetLevel()))
 	// Populate the fields that come from Runner.
 	process.Init = r.Init
 	process.SubCgroupPaths = r.SubCgroupPaths
@@ -265,7 +265,7 @@ func (r *Runner) Run(config *specs.Process) (int, error) {
 func (r *Runner) Destroy() {
 	if r.ShouldDestroy {
 		if err := r.Container.Destroy(); err != nil {
-			logrus.Warn(err)
+			log.Warn().Err(err).Msg("failed to destroy container")
 		}
 	}
 }

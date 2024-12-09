@@ -19,11 +19,7 @@
       "program": "${workspaceFolder}/cedana",
       "console": "integratedTerminal",
       "buildFlags": "-buildvcs=false",
-      "args": ["daemon", "start"],
-      "env": {
-        "PATH": "/usr/local/go/bin:/usr/bin:/usr/sbin",
-        "CHECKPOINT_SERVICE_URL": "http://localhost:1324"
-      }
+      "args": ["daemon", "start"]
     },
     {
       "name": "debug cedana daemon-grpc (GPU enabled)",

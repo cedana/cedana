@@ -7,8 +7,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/rs/zerolog/log"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -22,7 +22,7 @@ func NewSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalH
 	if enableSubreaper {
 		// set us as the subreaper before registering the signal handler for the container
 		if err := system.SetSubreaper(1); err != nil {
-			logrus.Warn(err)
+			log.Warn().Err(err).Msg("set subreaper failed")
 		}
 	}
 	// ensure that we have a large buffer size so that we do not miss any signals
@@ -83,13 +83,10 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 		case unix.SIGCHLD:
 			exits, err := h.reap()
 			if err != nil {
-				logrus.Error(err)
+				log.Error().Err(err).Msg("reap failed")
 			}
 			for _, e := range exits {
-				logrus.WithFields(logrus.Fields{
-					"pid":    e.pid,
-					"status": e.status,
-				}).Debug("process exited")
+				log.Debug().Int("pid", e.pid).Int("status", e.status).Msg("process exited")
 				if e.pid == pid1 {
 					// call Wait() on the process even though we already have the exit
 					// status because we must ensure that any of the go specific process
@@ -105,9 +102,9 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 			// Do nothing.
 		default:
 			us := s.(unix.Signal)
-			logrus.Debugf("forwarding signal %d (%s) to %d", int(us), unix.SignalName(us), pid1)
+			log.Debug().Int("signal", int(us)).Str("name", unix.SignalName(us)).Int("pid", pid1).Msg("forwarding signal")
 			if err := unix.Kill(pid1, us); err != nil {
-				logrus.Error(err)
+				log.Error().Err(err).Int("signal", int(us)).Str("name", unix.SignalName(us)).Int("pid", pid1).Msg("failed to forward signal")
 			}
 		}
 	}

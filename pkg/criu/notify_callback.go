@@ -9,6 +9,7 @@ import (
 )
 
 type NotifyCallback struct {
+	InitializeFunc          InitializeFunc
 	PreDumpFunc             NotifyFuncOpts
 	PostDumpFunc            NotifyFuncOpts
 	PreRestoreFunc          NotifyFuncOpts
@@ -27,7 +28,18 @@ type (
 	NotifyFuncOpts func(ctx context.Context, opts *criu.CriuOpts) error
 	NotifyFuncPid  func(ctx context.Context, pid int32) error
 	NotifyFuncFd   func(ctx context.Context, fd int32) error
+	InitializeFunc func(ctx context.Context, criuPid int) error
 )
+
+func (n *NotifyCallback) Initialize(ctx context.Context, criuPid int) error {
+	if n.InitializeFunc != nil {
+		err := n.InitializeFunc(ctx, criuPid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (n *NotifyCallback) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
 	if n.PreDumpFunc != nil {

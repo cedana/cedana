@@ -11,6 +11,7 @@ import (
 )
 
 type NotifyCallbackMulti struct {
+	InitializeFunc          []InitializeFunc
 	PreDumpFunc             []NotifyFuncOpts
 	PostDumpFunc            []NotifyFuncOpts
 	PreRestoreFunc          []NotifyFuncOpts
@@ -27,6 +28,9 @@ type NotifyCallbackMulti struct {
 func (n *NotifyCallbackMulti) ImportCallback(nfy *NotifyCallback) {
 	if nfy == nil {
 		return
+	}
+	if nfy.InitializeFunc != nil {
+		n.InitializeFunc = append(n.InitializeFunc, nfy.InitializeFunc)
 	}
 	if nfy.PreDumpFunc != nil {
 		n.PreDumpFunc = append(n.PreDumpFunc, nfy.PreDumpFunc)
@@ -61,6 +65,16 @@ func (n *NotifyCallbackMulti) ImportCallback(nfy *NotifyCallback) {
 	if nfy.OrphanPtsMasterFunc != nil {
 		n.OrphanPtsMasterFunc = append(n.OrphanPtsMasterFunc, nfy.OrphanPtsMasterFunc)
 	}
+}
+
+func (n *NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int) error {
+	for i := len(n.InitializeFunc) - 1; i >= 0; i-- {
+		err := n.InitializeFunc[i](ctx, criuPid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (n *NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {

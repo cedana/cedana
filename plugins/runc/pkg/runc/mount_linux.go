@@ -5,10 +5,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/rs/zerolog/log"
 )
 
 // mountSourceType indicates what type of file descriptor is being returned. It
@@ -77,7 +77,7 @@ func (e *mountError) Unwrap() error {
 // mount is a simple unix.Mount wrapper, returning an error with more context
 // in case it failed.
 func Mount(source, target, fstype string, flags uintptr, data string) error {
-	return mountViaFds(source, nil, target, "", fstype, flags, data)
+	return MountViaFds(source, nil, target, "", fstype, flags, data)
 }
 
 // mountViaFds is a unix.Mount wrapper which uses srcFile instead of source,
@@ -92,10 +92,10 @@ func Mount(source, target, fstype string, flags uintptr, data string) error {
 // If a file descriptor is used instead of a source or a target path, the
 // corresponding path is only used to add context to an error in case the mount
 // operation has failed.
-func mountViaFds(source string, srcFile *mountSource, target, dstFd, fstype string, flags uintptr, data string) error {
+func MountViaFds(source string, srcFile *mountSource, target, dstFd, fstype string, flags uintptr, data string) error {
 	// MS_REMOUNT and srcFile don't make sense together.
 	if srcFile != nil && flags&unix.MS_REMOUNT != 0 {
-		logrus.Debugf("mount source passed along with MS_REMOUNT -- ignoring srcFile")
+		log.Debug().Msgf("mount source passed along with MS_REMOUNT -- ignoring srcFile")
 		srcFile = nil
 	}
 	dst := target
