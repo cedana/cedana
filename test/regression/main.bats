@@ -386,7 +386,7 @@ teardown() {
 
 @test "Dump + restore workload with direct remoting" {
     echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
-    printf "ls -l /etc/aws_conditional_env:\n${ls -l /etc/aws_conditional_env}"
+    printf "ls -l /etc/aws_conditional_env:\n$(ls -l /etc/aws_conditional_env)"
 
     local task="./workload.sh"
     local job_id="workload-remoting-1"
