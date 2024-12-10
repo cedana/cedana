@@ -52,9 +52,6 @@ func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, bucket
 	}
 	args = append(args, "serve") // subcommand must be after options
 	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
-	cmd.Env = os.Environ()
-	log.Debug().Msgf("cmd env var = %v", cmd.Env)
-	log.Debug().Msgf("executing cmd %v", cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
