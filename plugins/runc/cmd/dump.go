@@ -16,9 +16,10 @@ func init() {
 }
 
 var DumpCmd = &cobra.Command{
-	Use:   "runc <container-id>",
-	Short: "Dump a runc container",
-	Args:  cobra.ExactArgs(1),
+	Use:               "runc <container-id>",
+	Short:             "Dump a runc container",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
 		if !ok {

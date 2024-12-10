@@ -171,9 +171,10 @@ var processRestoreCmd = &cobra.Command{
 }
 
 var jobRestoreCmd = &cobra.Command{
-	Use:   "job <JID>",
-	Short: "Restore a managed process/container (job)",
-	Args:  cobra.ExactArgs(1),
+	Use:               "job <JID>",
+	Short:             "Restore a managed process/container (job)",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// All we need to do is modify the request to include the job ID, and request type.
 		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)

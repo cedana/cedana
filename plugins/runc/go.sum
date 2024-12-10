@@ -1,5 +1,5 @@
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1 h1:X/2I/D4rviXNbkyQ7ivMuSeGiPF9TtuelRO86kTampQ=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1/go.mod h1:VfY/PYOKaqU6KIXT7RYpf9/dpmkxxuvzbuAXOTcSAUs=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1 h1:mRCPhIdXDtoKHUOJEpCZhXyzraSfBaNW2Ad+EjrbdeY=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1/go.mod h1:V1+5gglQbtF3+CYZGwXfc23EmcJxDy3fo1iCYoRPXcY=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1 h1:bAeiffFYvMHebhnejdjcTyi656A43tFm4LbIpwI/KfI=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
 github.com/checkpoint-restore/go-criu/v6 v6.3.0 h1:mIdrSO2cPNWQY1truPg6uHLXyKHk3Z5Odx4wjKOASzA=

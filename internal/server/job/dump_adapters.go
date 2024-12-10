@@ -44,7 +44,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 				return exited, err
 			}
 
-			job.SetCheckpointPath(resp.GetPath())
+			job.AddCheckpoint(resp.GetPath())
 			job.SetProcess(resp.GetState())
 
 			return exited, nil

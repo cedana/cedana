@@ -107,13 +107,6 @@ var pluginListCmd = &cobra.Command{
 			"Latest version",
 		})
 
-		sizeMibStr := func(bytes int64) string {
-			if bytes == 0 {
-				return "-"
-			}
-			return fmt.Sprintf("%d MiB", utils.Mebibytes(bytes))
-		}
-
 		statusStr := func(s plugins.Status) string {
 			switch s {
 			case plugins.Available:
@@ -130,7 +123,7 @@ var pluginListCmd = &cobra.Command{
 		for _, p := range list {
 			row := table.Row{
 				p.Name,
-				sizeMibStr(p.Size),
+				utils.SizeStr(p.Size),
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,

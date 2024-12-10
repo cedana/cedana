@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/config"
@@ -26,15 +28,23 @@ func init() {
 	jobCmd.AddCommand(deleteJobCmd)
 	jobCmd.AddCommand(attachJobCmd)
 	jobCmd.AddCommand(inspectJobCmd)
+	jobCmd.AddCommand(jobCheckpointCmd)
+
+	jobCheckpointCmd.AddCommand(listJobCheckpointCmd)
+	jobCheckpointCmd.AddCommand(inspectJobCheckpointCmd)
 
 	// Add subcommand flags
 	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
 	killJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "kill all jobs")
 
 	// Add aliases
+	jobCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "ps"))
 	rootCmd.AddCommand(utils.AliasOf(deleteJobCmd))
 	rootCmd.AddCommand(utils.AliasOf(killJobCmd))
+	rootCmd.AddCommand(utils.AliasOf(inspectJobCmd))
+	rootCmd.AddCommand(utils.AliasOf(jobCheckpointCmd))
+	rootCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 }
 
 // Parent job command
@@ -98,9 +108,10 @@ var listJobCmd = &cobra.Command{
 			"Type",
 			"PID",
 			"Status",
-			"Std I/O",
-			"Last Checkpoint",
 			"GPU",
+			"Checkpoint",
+			"Size",
+			"Std I/O",
 		})
 
 		statusStr := func(status string) string {
@@ -127,15 +138,42 @@ var listJobCmd = &cobra.Command{
 			return colorToUse.Sprintf(t)
 		}
 
+		latestCheckpoint := func(checkpoints []*daemon.Checkpoint) (string, string) {
+			if len(checkpoints) == 0 {
+				return "", ""
+			}
+			// sort checkpoints by time
+			sort.Slice(checkpoints, func(i, j int) bool {
+				return checkpoints[i].GetTime() > checkpoints[j].GetTime()
+			})
+			checkpoint := checkpoints[0]
+			timestamp := time.UnixMilli(checkpoint.GetTime())
+			return fmt.Sprintf("%s ago", time.Since(timestamp).Truncate(time.Second)), utils.SizeStr(checkpoint.GetSize())
+		}
+
+		var timeList []string
+		var sizeList []string
 		for _, job := range jobs {
+			if len(job.GetCheckpoints()) == 0 {
+				timeList = append(timeList, "")
+				sizeList = append(sizeList, "")
+			} else {
+				latestTime, latestSize := latestCheckpoint(job.GetCheckpoints())
+				timeList = append(timeList, latestTime)
+				sizeList = append(sizeList, latestSize)
+			}
+		}
+
+		for i, job := range jobs {
 			row := table.Row{
 				job.GetJID(),
 				typeStr(job.GetType()),
 				job.GetProcess().GetPID(),
 				statusStr(job.GetProcess().GetInfo().GetStatus()),
-				job.GetLog(),
-				job.GetCheckpointPath(),
 				style.BoolStr(job.GetGPUEnabled()),
+				timeList[i],
+				sizeList[i],
+				job.GetLog(),
 			}
 			style.TableWriter.AppendRow(row)
 		}
@@ -147,14 +185,19 @@ var listJobCmd = &cobra.Command{
 
 		style.TableWriter.Render()
 
+		fmt.Println()
+		fmt.Printf("Use `%s` for more details about a job\n", inspectJobCmd.Use)
+		fmt.Printf("Use `%s` to list all checkpoints for a job\n", listJobCheckpointCmd.Use)
+
 		return nil
 	},
 }
 
 var killJobCmd = &cobra.Command{
-	Use:   "kill <JID>",
-	Short: "Kill a managed process/container (job)",
-	Args:  cobra.ArbitraryArgs,
+	Use:               "kill <JID>",
+	Short:             "Kill a managed process/container (job)",
+	Args:              cobra.ArbitraryArgs,
+	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
@@ -172,6 +215,9 @@ var killJobCmd = &cobra.Command{
 			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
+			}
+			if !utils.Confirm("Are you sure you want to kill all jobs?") {
+				return nil
 			}
 		}
 
@@ -191,9 +237,10 @@ var killJobCmd = &cobra.Command{
 }
 
 var deleteJobCmd = &cobra.Command{
-	Use:   "delete <JID>",
-	Short: "Delete a managed process/container (job)",
-	Args:  cobra.ArbitraryArgs,
+	Use:               "delete <JID>",
+	Short:             "Delete a managed process/container (job)",
+	Args:              cobra.ArbitraryArgs,
+	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
@@ -211,6 +258,9 @@ var deleteJobCmd = &cobra.Command{
 			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
+			}
+			if !utils.Confirm("Are you sure you want to delete all jobs?") {
+				return nil
 			}
 		}
 
@@ -230,9 +280,10 @@ var deleteJobCmd = &cobra.Command{
 }
 
 var attachJobCmd = &cobra.Command{
-	Use:   "attach <JID>",
-	Short: "Attach stdin/out/err to a managed process/container (job)",
-	Args:  cobra.ExactArgs(1),
+	Use:               "attach <JID>",
+	Short:             "Attach stdin/out/err to a managed process/container (job)",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
@@ -256,9 +307,10 @@ var attachJobCmd = &cobra.Command{
 }
 
 var inspectJobCmd = &cobra.Command{
-	Use:   "inspect <JID>",
-	Short: "Inspect a managed process/container (job)",
-	Args:  cobra.ExactArgs(1),
+	Use:               "inspect <JID>",
+	Short:             "Inspect a managed process/container (job)",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
@@ -283,6 +335,105 @@ var inspectJobCmd = &cobra.Command{
 		}
 
 		fmt.Print(string(bytes))
+
+		return nil
+	},
+}
+
+/////////////////////////////
+//// Checkpoint Commands ////
+/////////////////////////////
+
+var jobCheckpointCmd = &cobra.Command{
+	Use:   "checkpoint",
+	Short: "Manage job checkpoints",
+}
+
+var listJobCheckpointCmd = &cobra.Command{
+	Use:               "list <JID>",
+	Short:             "List all checkpoints for a job",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidJIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
+
+		jid := args[0]
+
+		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		if err != nil {
+			return err
+		}
+		if len(list.Jobs) == 0 {
+			return fmt.Errorf("Job %s not found", jid)
+		}
+
+		job := list.Jobs[0]
+
+		if len(job.GetCheckpoints()) == 0 {
+			fmt.Printf("No checkpoints found for job %s\n", jid)
+			return nil
+		}
+
+		style.TableWriter.AppendHeader(table.Row{
+			"#",
+			"Time",
+			"Size",
+			"Path",
+		})
+
+		checkpoints := job.GetCheckpoints()
+		sort.Slice(checkpoints, func(i, j int) bool {
+			return checkpoints[i].GetTime() > checkpoints[j].GetTime()
+		})
+
+		for i, checkpoint := range job.GetCheckpoints() {
+			timestamp := time.UnixMilli(checkpoint.GetTime())
+			row := table.Row{
+				i + 1,
+				timestamp.Format(time.DateTime),
+				utils.SizeStr(checkpoint.GetSize()),
+				checkpoint.GetPath(),
+			}
+			style.TableWriter.AppendRow(row)
+		}
+
+		style.TableWriter.Render()
+
+		return nil
+	},
+}
+
+var inspectJobCheckpointCmd = &cobra.Command{
+	Use:               "inspect <JID> <CHECKPOINT #>",
+	Short:             "Inspect a checkpoint for a job",
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: ValidJIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
+
+		jid := args[0]
+		// checkpointNum := args[1]
+
+		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		if err != nil {
+			return err
+		}
+		if len(list.Jobs) == 0 {
+			return fmt.Errorf("Job %s not found", jid)
+		}
+
+		job := list.Jobs[0]
+
+		if len(job.GetCheckpoints()) == 0 {
+			fmt.Printf("No checkpoints found for job %s\n", jid)
+			return nil
+		}
 
 		return nil
 	},

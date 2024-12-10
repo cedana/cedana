@@ -40,7 +40,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			}
 			req.Details = job.GetDetails()
 			if req.Path == "" {
-				req.Path = job.GetCheckpointPath()
+				req.Path = job.GetLatestCheckpoint().GetPath()
 			}
 			if req.Path == "" {
 				return nil, status.Errorf(codes.FailedPrecondition, "job % has no saved checkpoint. pass in path to override", jid)

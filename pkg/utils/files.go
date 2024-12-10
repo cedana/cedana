@@ -7,6 +7,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+)
+
+const (
+	BYTE = 1.0 << (10 * iota)
+	KIBIBYTE
+	MEBIBYTE
+	GIBIBYTE
 )
 
 // CreateTarball creates a tarball from the provided sources and writes it to the destination.
@@ -195,4 +203,46 @@ func Mebibytes(bytes int64) int64 {
 
 func Gibibytes(bytes int64) int64 {
 	return bytes / 1024 / 1024 / 1024
+}
+
+// SizeFromPath returns the size of the file or directory at the provided path.
+func SizeFromPath(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
+}
+
+func SizeStr(bytes int64) string {
+	unit := ""
+	value := float64(bytes)
+
+	switch {
+	case bytes >= GIBIBYTE:
+		unit = "GiB"
+		value = value / GIBIBYTE
+	case bytes >= MEBIBYTE:
+		unit = "MiB"
+		value = value / MEBIBYTE
+	case bytes >= KIBIBYTE:
+		unit = "KiB"
+		value = value / KIBIBYTE
+	case bytes >= BYTE:
+		unit = "bytes"
+	case bytes == 0:
+		return "0"
+	}
+
+	stringValue := strings.TrimSuffix(
+		fmt.Sprintf("%.0f", value), ".00",
+	)
+
+	return fmt.Sprintf("%s %s", stringValue, unit)
 }

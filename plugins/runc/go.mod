@@ -5,7 +5,7 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-0b86c4a1e9aa.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-db62363cdea9.1
 	github.com/cedana/cedana v0.9.231
 	github.com/containerd/console v1.0.4

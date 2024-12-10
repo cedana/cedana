@@ -7,9 +7,11 @@ package job
 import (
 	"os"
 	"sync"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/protobuf/proto"
 )
@@ -43,13 +45,13 @@ func fromProto(j *daemon.Job) *Job {
 	return &Job{
 		JID: j.GetJID(),
 		proto: daemon.Job{
-			JID:            j.GetJID(),
-			Type:           j.GetType(),
-			Process:        j.GetProcess(),
-			Details:        j.GetDetails(),
-			Log:            j.GetLog(),
-			CheckpointPath: j.GetCheckpointPath(),
-			GPUEnabled:     j.GetGPUEnabled(),
+			JID:         j.GetJID(),
+			Type:        j.GetType(),
+			Process:     j.GetProcess(),
+			Details:     j.GetDetails(),
+			Log:         j.GetLog(),
+			Checkpoints: j.GetCheckpoints(),
+			GPUEnabled:  j.GetGPUEnabled(),
 		},
 		CRIUCallback: &criu.NotifyCallback{},
 	}
@@ -163,16 +165,35 @@ func (j *Job) SetLog(log string) {
 	j.proto.Log = log
 }
 
-func (j *Job) SetCheckpointPath(path string) {
+func (j *Job) AddCheckpoint(path string) {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.CheckpointPath = path
+	if j.proto.Checkpoints == nil {
+		j.proto.Checkpoints = []*daemon.Checkpoint{}
+	}
+
+	size, _ := utils.SizeFromPath(path)
+
+	j.proto.Checkpoints = append(j.proto.Checkpoints, &daemon.Checkpoint{
+		Path: path,
+		Time: time.Now().UnixMilli(),
+		Size: size,
+	})
 }
 
-func (j *Job) GetCheckpointPath() string {
+func (j *Job) GetCheckpoints() []*daemon.Checkpoint {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.CheckpointPath
+	return j.proto.Checkpoints
+}
+
+func (j *Job) GetLatestCheckpoint() *daemon.Checkpoint {
+	j.RLock()
+	defer j.RUnlock()
+	if len(j.proto.Checkpoints) == 0 {
+		return nil
+	}
+	return j.proto.Checkpoints[len(j.proto.Checkpoints)-1]
 }
 
 func (j *Job) IsRunning() bool {

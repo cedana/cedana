@@ -62,6 +62,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		return fmt.Errorf("could not get process: %v", err)
 	}
 
+	startTime, err := p.CreateTime()
+	if err == nil {
+		state.StartTime = uint64(startTime)
+	}
+
 	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
 	if err != nil {
