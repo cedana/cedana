@@ -24,6 +24,7 @@ CEDANA_JOB_SERVICE=${CEDANA_JOB_SERVICE:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
+$SUDO_USE -E bash setup_aws_env.sh
 
 # Check for --systemctl flag
 for arg in "$@"; do
@@ -110,6 +111,7 @@ Environment=CEDANA_URL=$CEDANA_URL
 Environment=CEDANA_AUTH_TOKEN=$CEDANA_AUTH_TOKEN
 Environment=CONTAINERS_HELPER_BINARY_DIR=/cedana/bin
 Environment="PATH=/cedana/bin:${PATH}"
+EnvironmentFile=/etc/aws_conditional_env
 ExecStart=$APP_PATH daemon start $DAEMON_ARGS --gpu-enabled=$CEDANA_GPU_ENABLED --metrics-enabled=$CEDANA_METRICS_ENABLED --job-service=$CEDANA_JOB_SERVICE
 User=root
 Group=root
