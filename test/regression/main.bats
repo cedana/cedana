@@ -382,8 +382,6 @@ teardown() {
     [[ "$status" -eq 0 ]]
 }
 
-# INSERT NEW TESTS HERE TO PREVENT UNNECESSARY AWS USE
-
 @test "Dump + restore workload with direct remoting" {
     echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     printf "ls -l /etc/aws_conditional_env:\n$(ls -l /etc/aws_conditional_env)"
@@ -403,7 +401,7 @@ teardown() {
     run restore_task $job_id --stream 4 --bucket $bucket
 
     # ensure there are num_pipes (4) ckpt files in the bucket
-    local num_objs=$(aws s3 ls s3://$bucket --recursive | wc -l)
+    num_objs=$(aws s3 ls s3://$bucket --recursive | wc -l)
     if [ "$num_objs" -ne 4 ]; then
         echo "Error: object count $num_objs != 4."
         exit 1
