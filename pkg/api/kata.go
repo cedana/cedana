@@ -299,6 +299,11 @@ func (s *service) HostKataRestore(ctx context.Context, args *task.HostRestoreKat
 			return nil, status.Errorf(codes.Internal, "Restore task failed during vmSnapshotter Restore: %v", err)
 		}
 
+		err = s.vmSnapshotter.Resume(socketPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Restore task failed during vmSnapshotter Restore: %v", err)
+		}
+
 		return &task.HostRestoreKataResp{State: "restored"}, nil
 	}
 	return &task.HostRestoreKataResp{State: "invalid args"}, nil
