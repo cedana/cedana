@@ -39,7 +39,14 @@ var Registry = []Plugin{
 		Libraries: []string{"libcedana-docker.so"},
 	},
 
-	// Checkpoint/Restore
+	// Checkpoint inspection
+	{
+		Name:      "inspector",
+		Type:      Supported,
+		Libraries: []string{"libcedana-inspector.so"},
+	},
+
+	// Others
 	{
 		Name:      "gpu",
 		Type:      External,
@@ -48,15 +55,8 @@ var Registry = []Plugin{
 	},
 	{
 		Name:      "streamer",
-		Type:      Experimental,
+		Type:      External,
 		Libraries: []string{"libcedana-streamer.so"},
 		Binaries:  []string{"cedana-image-streamer"},
-	},
-
-	// Checkpoint inspection
-	{
-		Name:      "inspector",
-		Type:      Supported,
-		Libraries: []string{"libcedana-inspector.so"},
 	},
 }

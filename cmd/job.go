@@ -422,7 +422,7 @@ var (
 			}
 
 			var info func(path string, imgType string) ([]byte, error)
-			features.CheckpointInfo.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
+			features.CheckpointInspect.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
 				info = f
 				return nil
 			})

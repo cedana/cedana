@@ -13,19 +13,23 @@ import (
 )
 
 var (
-	CmdTheme   = plugins.Feature[text.Colors]{Symbol: "CmdTheme", Description: "theme for commands"}
-	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "dump command"}
-	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "restore command"}
-	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "run command"}
-	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "root commands"}
+	// CLI
+	CmdTheme   = plugins.Feature[text.Colors]{Symbol: "CmdTheme", Description: "Theme for commands"}
+	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
+	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
+	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
+	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "Root commands"}
 
-	GPUInterception = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
-
+	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
-	RunMiddleware = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "run middleware"}
-	KillSignal    = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "signal to use for killing the process"}
+	RunMiddleware = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
 
-	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "dump middleware"}
-	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "restore middleware"}
-	CheckpointInfo    = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInfo", Description: "get checkpoint info"}
+	// Dump/Restore
+	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
+	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
+
+	// Other
+	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
+	GPUInterception   = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
+	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}
 )

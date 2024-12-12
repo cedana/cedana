@@ -9,4 +9,4 @@ import "github.com/cedana/cedana/plugins/inspector/internal/checkpoint"
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var CheckpointInfo = checkpoint.Info
+var CheckpointInspect = checkpoint.Inspect

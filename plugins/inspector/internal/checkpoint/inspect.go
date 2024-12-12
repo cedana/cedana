@@ -12,7 +12,7 @@ const (
 
 // Inspects a cedana checkpoint image and returns the information as bytes
 // Automatically decompresses if the image is compressed
-func Info(path string, imgType string) ([]byte, error) {
+func Inspect(path string) ([]byte, error) {
 	// var xData any
 	// var err error
 
