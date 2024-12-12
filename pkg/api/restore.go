@@ -148,7 +148,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 
 		var in_r, in_w, out_r, out_w, er_r, er_w *os.File
 		if stream == nil {
-			filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, fmt.Sprint(time.Now().Unix()))
+			filename := fmt.Sprintf(RESTORE_OUTPUT_LOG_PATH, args.JID)
 			out_w, err = os.Create(filename)
 		} else {
 			in_r, in_w, err = os.Pipe()
