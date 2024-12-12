@@ -3,7 +3,10 @@ package utils
 // Utility functions for the cobra CLI
 
 import (
+	"bufio"
+	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -16,31 +19,8 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 	if src == nil {
 		return nil
 	}
-	cmd := &cobra.Command{
-		Use:                    AliasCommandUse(src, name...),
-		Aliases:                src.Aliases,
-		Example:                src.Example,
-		SuggestFor:             src.SuggestFor,
-		ValidArgsFunction:      src.ValidArgsFunction,
-		ValidArgs:              src.ValidArgs,
-		Version:                src.Version,
-		Short:                  src.Short,
-		Long:                   src.Long,
-		Args:                   src.Args,
-		ArgAliases:             src.ArgAliases,
-		Hidden:                 src.Hidden,
-		PreRun:                 src.PreRun,
-		PreRunE:                src.PreRunE,
-		PersistentPreRun:       src.PersistentPreRun,
-		PersistentPreRunE:      src.PersistentPreRunE,
-		PersistentPostRun:      src.PersistentPostRun,
-		PersistentPostRunE:     src.PersistentPostRunE,
-		PostRun:                src.PostRun,
-		PostRunE:               src.PostRunE,
-		Deprecated:             src.Deprecated,
-		BashCompletionFunction: src.BashCompletionFunction,
-		Annotations:            src.Annotations,
-	}
+	cmd := *src
+	cmd.Use = AliasCommandUse(src, name...)
 
 	cmd.Flags().AddFlagSet(src.LocalFlags())
 	cmd.Flags().AddFlagSet(src.InheritedFlags())
@@ -54,7 +34,7 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 		cmd.RunE = AliasCommandRunE(src)
 	}
 
-	return cmd
+	return &cmd
 }
 
 // Use this for Run to make a command an alias to another command's Run.
@@ -174,16 +154,34 @@ func FullUse(cmd *cobra.Command) string {
 	return use
 }
 
-func Confirm(msg string) bool {
-	var response string
-	for {
-		print(msg + " [y/n]: ")
-		_, _ = fmt.Scanln(&response)
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response == "y" || response == "yes" {
-			return true
-		} else if response == "n" || response == "no" {
-			return false
+func Confirm(ctx context.Context, msg string) bool {
+	reader := bufio.NewReader(os.Stdin)
+	answer := make(chan bool)
+
+	go func() {
+		for {
+			fmt.Print(msg + " [y/n]: ")
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				answer <- false
+				return
+			}
+
+			response = strings.ToLower(strings.TrimSpace(response))
+			if response == "y" || response == "yes" {
+				answer <- true
+				return
+			} else if response == "n" || response == "no" || response == "" {
+				answer <- false
+				return
+			}
 		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case res := <-answer:
+		return res
 	}
 }

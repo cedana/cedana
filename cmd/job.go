@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -220,7 +221,7 @@ var killJobCmd = &cobra.Command{
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
 			}
-			if !utils.Confirm("Are you sure you want to kill all jobs?") {
+			if !utils.Confirm(cmd.Context(), "Are you sure you want to kill all jobs?") {
 				return nil
 			}
 		}
@@ -263,7 +264,7 @@ var deleteJobCmd = &cobra.Command{
 			if !all {
 				return fmt.Errorf("Please provide a job ID or use the --all flag")
 			}
-			if !utils.Confirm("Are you sure you want to delete all jobs?") {
+			if !utils.Confirm(cmd.Context(), "Are you sure you want to delete all jobs?") {
 				return nil
 			}
 		}
@@ -414,11 +415,11 @@ var listJobCheckpointCmd = &cobra.Command{
 }
 
 var (
-	inspectJobCheckpointCmdUse = "inspect <JID> <checkpoint #>"
+	inspectJobCheckpointCmdUse = "inspect <JID> [checkpoint #]"
 	inspectJobCheckpointCmd    = &cobra.Command{
 		Use:               inspectJobCheckpointCmdUse,
 		Short:             fmt.Sprintf("Inspect a checkpoint for a job. Get checkpoint # from `%s`", utils.FullUse(listJobCheckpointCmd)),
-		Args:              cobra.ExactArgs(2),
+		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: ValidJIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
@@ -437,8 +438,13 @@ var (
 				)
 			}
 
+			var index int
 			jid := args[0]
-			index := args[1]
+			if len(args) < 2 {
+				index = 1
+			} else {
+				index, _ = strconv.Atoi(args[1])
+			}
 			imgType, _ := cmd.Flags().GetString(flags.TypeFlag.Full)
 
 			list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
@@ -458,14 +464,14 @@ var (
 
 			var checkpointToInspect *daemon.Checkpoint
 			for i, cp := range job.GetCheckpoints() {
-				if index == fmt.Sprintf("%d", i+1) {
+				if index == i+1 {
 					checkpointToInspect = cp
 					break
 				}
 			}
 
 			if checkpointToInspect == nil {
-				return fmt.Errorf("Checkpoint %s not found for job %s", index, jid)
+				return fmt.Errorf("Checkpoint %d not found for job %s", index, jid)
 			}
 
 			bytes, err := info(checkpointToInspect.GetPath(), imgType)
