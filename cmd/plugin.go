@@ -25,6 +25,9 @@ func init() {
 	// Subcommand flags
 	pluginListCmd.Flags().
 		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "List all available plugins")
+
+	// Add aliases
+	rootCmd.AddCommand(utils.AliasOf(pluginListCmd, "plugins"))
 }
 
 // Parent plugin command
@@ -328,7 +331,6 @@ var pluginFeaturesCmd = &cobra.Command{
 			style.TableWriter.Render()
 			fmt.Println()
 			fmt.Println(featureLegend())
-			fmt.Println()
 		}
 
 		if len(externalPlugins) > 0 {
