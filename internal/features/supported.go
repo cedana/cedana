@@ -32,4 +32,6 @@ var (
 	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
 	GPUInterception   = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
 	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}
+	CheckpointDecode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointDecode", Description: "Checkpoint decode"}
+	CheckpointEncode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointEncode", Description: "Checkpoint encode"}
 )
