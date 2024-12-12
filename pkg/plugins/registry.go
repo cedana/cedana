@@ -52,4 +52,11 @@ var Registry = []Plugin{
 		Libraries: []string{"libcedana-streamer.so"},
 		Binaries:  []string{"cedana-image-streamer"},
 	},
+
+	// Checkpoint inspection
+	{
+		Name:      "inspector",
+		Type:      Supported,
+		Libraries: []string{"libcedana-inspector.so"},
+	},
 }

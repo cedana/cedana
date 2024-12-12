@@ -75,7 +75,8 @@ func Restore() types.Restore {
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open restore log file: %v", err)
 			}
-			stdin, stdout, stderr = restoreLog, restoreLog, restoreLog
+			stdout, stderr = restoreLog, restoreLog
+			// thus stdin will be /dev/null
 			defer restoreLog.Close()
 		}
 

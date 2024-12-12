@@ -5,8 +5,10 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/rand/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -17,10 +19,9 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	runc_io "github.com/cedana/cedana/plugins/runc/pkg/io"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
-	runc_client "github.com/containerd/go-runc"
+	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -29,11 +30,17 @@ import (
 )
 
 const (
+	RUNC_BINARY    = "runc"
 	RUNC_LOG_FILE  = "runc.log"
 	RUNC_LOG_DEBUG = true
 
-	waitForRunErrTimeout = 300 * time.Millisecond
+	waitForRunErrTimeout = 500 * time.Millisecond
 )
+
+type RuncState struct {
+	ID  string `json:"id"`
+	PID int    `json:"pid"`
+}
 
 type RuncLogMsg struct {
 	Msg   string `json:"msg"`
@@ -50,6 +57,7 @@ func RuncLogMsgToString(b []byte) (string, error) {
 	return msg.Msg, nil
 }
 
+// // Run runs a container using CLI directly
 func Run() types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		opts := req.GetDetails().GetRunc()
@@ -72,89 +80,104 @@ func Run() types.Run {
 		}
 		defer runc.RestoreSpec(runc.SpecConfigFile)
 
+		os.Remove(RUNC_LOG_FILE)
+
+		cmd := exec.CommandContext(ctx,
+			RUNC_BINARY,
+			fmt.Sprintf("--root=%s", root),
+			fmt.Sprintf("--log=%s", RUNC_LOG_FILE),
+			fmt.Sprintf("--log-format=%s", "json"),
+			fmt.Sprintf("--debug=%t", RUNC_LOG_DEBUG),
+			"run", "--detach",
+			fmt.Sprintf("--no-pivot=%t", noPivot),
+			fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
+			id,
+		)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Credential: &syscall.Credential{Uid: uint32(0), Gid: uint32(0)},
+			// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+			// XXX: Above is commented out because if we try to restore a managed job,
+			// one that was started by the daemon,
+			// using a dump path (directly w/ restore -p <path>), instead of using job
+			// restore, the restored process dies immediately.
+		}
+
 		// Attach IO if requested, otherwise log to file
 		exitCode := make(chan int, 1)
-		var io runc_client.IO
 		if req.Attachable {
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			io = runc_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
 			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
+			cmd.Stdin = stdIn
+			cmd.Stdout = stdOut
+			cmd.Stderr = stdErr
 		} else {
 			logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 			}
-			io = runc_io.NewFileIO(logFile)
+			cmd.Stdin = nil // /dev/null
+			cmd.Stdout = logFile
+			cmd.Stderr = logFile
 		}
 
-		os.Remove(RUNC_LOG_FILE) // remove old log file
+		err = cmd.Start()
 
-		client := runc_client.Runc{
-			Root:      root,
-			Log:       RUNC_LOG_FILE,
-			LogFormat: runc_client.JSON,
-			Debug:     RUNC_LOG_DEBUG,
-		}
+		time.Sleep(waitForRunErrTimeout)
 
-		version, err := client.Version(ctx)
+		// Capture logs from runc
+		lastMsg := utils.LogFromFile(
+			log.With().
+				Str("spec", spec.Version).
+				Logger().WithContext(ctx),
+			filepath.Join(RUNC_LOG_FILE),
+			zerolog.TraceLevel,
+			RuncLogMsgToString,
+		)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get runc version: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to start container: %v: %s", err, lastMsg)
 		}
 
-		started := make(chan int, 1)
-		runErr := make(chan error, 1)
-		exited = make(chan int)
+		container, err := libcontainer.Load(root, id)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+		}
+		state, err := container.State()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
+		}
 
+		resp.PID = uint32(state.InitProcessPid)
+
+		// Wait for the process to exit, send exit code
+		exited = make(chan int)
 		server.WG.Add(1)
 		go func() {
 			defer server.WG.Done()
-			code, err := client.Run(server.Lifetime, id, "", &runc_client.CreateOpts{
-				// Use SIGTERM below as we're not detaching, and if we SIGTERM the `runc run`
-				// command, it will clean up the container gracefully. SIGKILL will abruptly
-				// stop the command without it getting a chance to clean up.
-				IO:           runc_io.WithCancelSignal(io, syscall.SIGTERM),
-				NoPivot:      noPivot,
-				NoNewKeyring: noNewKeyring,
-				Started:      started,
-			})
+			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+			status, err := p.Wait()
 			if err != nil {
-				runErr <- err
-				close(runErr)
+				log.Debug().Err(err).Msg("runc container Wait()")
 			}
-			log.Debug().Int("code", code).Msg("runc container exited")
+			code := status.ExitCode()
+			log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
+
+			cmd.Wait()
+			container.Destroy()
+
 			exitCode <- code
 			close(exitCode)
 			close(exited)
 		}()
 
-		// Wait for some time to see if there's an error
-		select {
-		case <-time.After(waitForRunErrTimeout):
-		case err := <-runErr:
-			// Capture logs from runc
-			lastMsg := utils.LogFromFile(
-				log.With().
-					Str("runc", version.Runc).
-					Str("spec_max", version.Spec).
-					Str("spec_current", spec.Version).
-					Logger().WithContext(ctx),
-				filepath.Join(RUNC_LOG_FILE),
-				zerolog.TraceLevel,
-				RuncLogMsgToString,
-			)
-
-			return nil, status.Errorf(codes.Internal, "failed to run container: %v: %s", err, lastMsg)
-		}
-
-		<-started // wait for container to start
-
-		// Get PID of actual container process
-		state, err := client.State(ctx, id)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
-		}
-		resp.PID = uint32(state.Pid)
+		// Also kill the container if lifetime expires
+		server.WG.Add(1)
+		go func() {
+			defer server.WG.Done()
+			<-server.Lifetime.Done()
+			syscall.Kill(int(resp.PID), syscall.SIGKILL)
+		}()
 
 		return exited, nil
 	}

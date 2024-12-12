@@ -40,4 +40,8 @@ type (
 		BinaryPath   string `key:"binaryPath"   json:"binary_path"   mapstructure:"binary_path"`
 		LeaveRunning bool   `key:"leaveRunning" json:"leave_running" mapstructure:"leave_running"`
 	}
+	GPU struct {
+		// Number of warm GPU controllers to keep in pool
+		PoolSize int `key:"poolSize" json:"pool_size" mapstructure:"pool_size"`
+	}
 )

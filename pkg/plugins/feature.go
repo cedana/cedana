@@ -5,6 +5,7 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/rs/zerolog/log"
 )
@@ -29,15 +30,18 @@ func (feature Feature[T]) IfAvailable(
 		pluginSet[p] = struct{}{}
 	}
 	for name, p := range loadedPlugins {
-		defer RecoverFromPanic(name)
 		if _, ok := pluginSet[name]; len(pluginSet) > 0 && !ok {
 			continue
 		}
+		defer RecoverFromPanic(name)
 		if symUntyped, err := p.Lookup(string(feature)); err == nil {
-			// Add new subcommand from supported plugins
 			sym, ok := symUntyped.(*T)
 			if !ok {
-				log.Debug().Str("plugin", name).Msgf("%s is not valid", feature)
+				log.Debug().
+					Str("plugin", name).
+					Str("expected", reflect.TypeOf(sym).String()).
+					Str("got", reflect.TypeOf(symUntyped).String()).
+					Msgf("%s is not the expected type", feature)
 				errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
 				continue
 			}
@@ -48,7 +52,7 @@ func (feature Feature[T]) IfAvailable(
 			}
 			errs = append(errs, do(name, *sym))
 		} else {
-			errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
+			errs = append(errs, fmt.Errorf("plugin '%s' exports no %s", name, feature))
 		}
 	}
 	return errors.Join(errs...)

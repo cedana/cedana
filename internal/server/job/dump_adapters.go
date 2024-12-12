@@ -37,7 +37,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			resp.State = job.GetProcess()
 
 			// Import saved notify callbacks
-			nfy.ImportCallback(job.CRIUCallback)
+			nfy.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
 
 			exited, err := next(ctx, server, nfy, resp, req)
 			if err != nil {

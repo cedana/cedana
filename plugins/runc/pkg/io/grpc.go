@@ -1,5 +1,7 @@
 package io
 
+// Implements runc.IO for gRPC streams
+
 import (
 	"context"
 	"os/exec"

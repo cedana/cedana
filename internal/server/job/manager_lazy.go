@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/internal/server/gpu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -24,10 +26,10 @@ const featureKillSignal plugins.Feature[syscall.Signal] = "KillSignal"
 const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
 
 type ManagerLazy struct {
-	jobs           sync.Map
-	gpuControllers sync.Map
+	jobs sync.Map
 
 	plugins plugins.Manager
+	gpus    gpu.Manager
 	db      db.DB
 	pending chan action
 
@@ -38,23 +40,33 @@ type actionType int
 
 const (
 	update actionType = iota
-	remove
 	shutdown
 )
 
 type action struct {
 	typ actionType
-	job *Job
+	JID string
 }
 
 // NewManagerLazy creates a new lazy job manager, that uses a DB as a backing store.
-func NewManagerLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, db db.DB) (*ManagerLazy, error) {
+func NewManagerLazy(
+	ctx context.Context,
+	serverWg *sync.WaitGroup,
+	plugins plugins.Manager,
+	gpus gpu.Manager,
+	db db.DB,
+) (*ManagerLazy, error) {
+	gpuManager := gpus
+	if gpuManager == nil {
+		gpuManager = gpu.ManagerMissing{}
+	}
+
 	manager := &ManagerLazy{
-		jobs:           sync.Map{},
-		gpuControllers: sync.Map{},
-		pending:        make(chan action, 64),
-		plugins:        plugins,
-		wg:             &sync.WaitGroup{},
+		jobs:    sync.Map{},
+		pending: make(chan action, 64),
+		wg:      &sync.WaitGroup{},
+		plugins: plugins,
+		gpus:    gpuManager,
 	}
 
 	// Reload all jobs from the DB
@@ -76,13 +88,13 @@ func NewManagerLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugi
 				var errs []error
 				var failedActions []action
 				manager.wg.Wait() // wait for all background routines
-				manager.pending <- action{shutdown, nil}
+				manager.pending <- action{shutdown, ""}
 				for action := range manager.pending {
 					if action.typ == shutdown {
 						break
 					}
 					ctx := context.WithoutCancel(ctx)
-					err := action.sync(ctx, db)
+					err := manager.sync(ctx, action, db)
 					if err != nil {
 						errs = append(errs, err)
 						failedActions = append(failedActions, action)
@@ -92,14 +104,13 @@ func NewManagerLazy(ctx context.Context, serverWg *sync.WaitGroup, plugins plugi
 				if err != nil {
 					log.Error().Err(err).Msg("failed to sync DB before shutdown")
 					for _, action := range failedActions {
-						log.Debug().Str("JID", action.job.JID).
-							Interface("job", *action.job.GetProto()).
+						log.Debug().Str("JID", action.JID).
 							Msgf("failed %s", action.typ)
 					}
 				}
 				return
 			case action := <-manager.pending:
-				err := action.sync(ctx, db)
+				err := manager.sync(ctx, action, db)
 				if err != nil {
 					manager.pending <- action
 					log.Debug().Err(err).Msg("DB sync failed, retrying in background")
@@ -132,7 +143,7 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	job := newJob(jid, jobType)
 	m.jobs.Store(jid, job)
 
-	m.pending <- action{update, job}
+	m.pending <- action{update, jid}
 
 	return job, nil
 }
@@ -143,30 +154,21 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
+	if job.(*Job).IsRunning() {
+		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
+	}
+
 	return job.(*Job)
 }
 
-func (m *ManagerLazy) Find(pid uint32) *Job {
-	var job *Job
-	m.jobs.Range(func(key any, val any) bool {
-		j := val.(*Job)
-		if j.GetPID() == pid {
-			job = j
-			return false
-		}
-		return true
-	})
-	return job
-}
-
 func (m *ManagerLazy) Delete(jid string) {
-	job, ok := m.jobs.Load(jid)
+	_, ok := m.jobs.Load(jid)
 	if !ok {
 		return
 	}
 	m.jobs.Delete(jid)
 
-	m.pending <- action{remove, job.(*Job)}
+	m.pending <- action{update, jid}
 }
 
 func (m *ManagerLazy) List(jids ...string) []*Job {
@@ -182,6 +184,9 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		job := val.(*Job)
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
+		}
+		if job.IsRunning() {
+			job.SetGPUEnabled(m.gpus.IsAttached(jid))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -211,7 +216,7 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 
 	job.SetPID(pid)
 
-	m.pending <- action{update, job}
+	m.pending <- action{update, jid}
 
 	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
 
@@ -221,11 +226,9 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 		<-exitedChan
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		gpuController := m.getGPUController(jid)
-		if gpuController != nil {
-			gpuController.cmd.Process.Signal(syscall.SIGTERM)
-		}
-		m.pending <- action{update, job}
+		m.gpus.Detach(ctx, jid)
+
+		m.pending <- action{update, jid}
 	}()
 
 	return nil
@@ -277,6 +280,23 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return nil
 }
 
+func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) criu.NotifyCallbackMulti {
+	job := m.Get(jid)
+	if job == nil {
+		return criu.NotifyCallbackMulti{}
+	}
+	multiCallback := criu.NotifyCallbackMulti{}
+	multiCallback.IncludeMulti(job.GetCRIUCallback())
+	if job.GPUEnabled() {
+		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid))
+	}
+	return multiCallback
+}
+
+func (m *ManagerLazy) GPUs() gpu.Manager {
+	return m.gpus
+}
+
 ////////////////////////
 //// Helper Methods ////
 ////////////////////////
@@ -285,15 +305,19 @@ func (i actionType) String() string {
 	return [...]string{"update", "remove", "shutdown"}[i]
 }
 
-func (a *action) sync(ctx context.Context, db db.DB) error {
-	job := a.job
-	typ := a.typ
+func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
+	jid := action.JID
+	typ := action.typ
+
+	job := m.Get(jid)
+
 	var err error
-	switch typ {
-	case update:
-		err = db.PutJob(ctx, job.JID, job.GetProto())
-	case remove:
-		err = db.DeleteJob(ctx, job.JID)
+	if typ == update {
+		if job == nil {
+			err = db.DeleteJob(ctx, jid)
+		} else {
+			err = db.PutJob(ctx, jid, job.GetProto())
+		}
 	}
 	return err
 }
@@ -306,19 +330,7 @@ func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
 	for _, proto := range protos {
 		job := fromProto(proto)
 		m.jobs.Store(job.JID, job)
-
-		if job.GPUEnabled() {
-			m.addCRIUCallbackGPU(ctx, job.JID)
-		}
 	}
 
 	return nil
-}
-
-func (m *ManagerLazy) getGPUController(jid string) *gpuController {
-	controller, ok := m.gpuControllers.Load(jid)
-	if !ok {
-		return nil
-	}
-	return controller.(*gpuController)
 }

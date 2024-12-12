@@ -12,9 +12,10 @@ import (
 
 // Parent attach command
 var attachCmd = &cobra.Command{
-	Use:   "attach <PID>",
-	Short: "Attach stdin/out/err to a process/container",
-	Args:  cobra.ExactArgs(1),
+	Use:               "attach <PID>",
+	Short:             "Attach stdin/out/err to a process/container",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: ValidPIDs,
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
 		var client *Client

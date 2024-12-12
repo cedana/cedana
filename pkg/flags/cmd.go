@@ -25,6 +25,7 @@ var (
 	LogFlag        = Flag{"log", ""}
 	ExternalFlag   = Flag{"external", ""}
 	FileLocksFlag  = Flag{"file-locks", ""}
+	TypeFlag       = Flag{"type", "t"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{"leave-running", ""}

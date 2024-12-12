@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -90,9 +91,17 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		database, err = db.NewLocalDB(ctx)
 	}
 
-	pluginManager := plugins.NewManagerLocal()
+	pluginManager := plugins.NewLocalManager()
 
-	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, database)
+	var gpuManager gpu.Manager
+	gpuPoolSize := config.Get(config.GPU_POOL_SIZE)
+	if gpuPoolSize > 0 {
+		gpuManager = gpu.NewPoolManager(gpuPoolSize)
+	} else {
+		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
+	}
+
+	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)
 	if err != nil {
 		return nil, err
 	}

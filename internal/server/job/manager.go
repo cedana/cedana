@@ -8,6 +8,9 @@ import (
 	"context"
 	"sync"
 	"syscall"
+
+	"github.com/cedana/cedana/internal/server/gpu"
+	"github.com/cedana/cedana/pkg/criu"
 )
 
 type Manager interface {
@@ -16,9 +19,6 @@ type Manager interface {
 
 	// Get returns a job with the given JID.
 	Get(jid string) *Job
-
-	// Find returns a job that has the given PID.
-	Find(pid uint32) *Job
 
 	// Delete deletes a job with the given JID.
 	Delete(jid string)
@@ -36,12 +36,7 @@ type Manager interface {
 	// Since this runs in background, it should be called with a waitgroup,
 	// to ensure the caller can wait for the job to finish. If no exited channel is given,
 	// uses the PID to wait for the job to exit.
-	Manage(
-		ctx context.Context,
-		jid string,
-		pid uint32,
-		exited ...<-chan int,
-	) error
+	Manage(ctx context.Context, jid string, pid uint32, exited ...<-chan int) error
 
 	// Kill sends a signal to a job with the given JID.
 	// If the plugin for the job type exports a custom signal, it will be used instead.
@@ -49,23 +44,9 @@ type Manager interface {
 	// exports a custom signal.
 	Kill(jid string, signal ...syscall.Signal) error
 
-	///////////////////////
-	//// GPU Management ///
-	///////////////////////
+	// CRIUCallback returns the saved CRIU notify callback for the job.
+	CRIUCallback(lifetime context.Context, jid string) criu.NotifyCallbackMulti
 
-	// AttachGPU attaches a GPU controller to a job with the given JID.
-	// Returns error if healthcheck fails.
-	AttachGPU(
-		ctx context.Context,
-		lifetime context.Context,
-		jid string,
-	) error
-
-	// AttachGPUAsync calls AttachGPU in background.
-	// Returns a channel that will receive an error if the attach fails.
-	AttachGPUAsync(
-		ctx context.Context,
-		lifetime context.Context,
-		jid string,
-	) <-chan error
+	// GPUs returns the GPU manager.
+	GPUs() gpu.Manager
 }

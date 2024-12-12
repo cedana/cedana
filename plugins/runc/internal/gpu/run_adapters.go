@@ -15,7 +15,7 @@ import (
 
 // Adapter that adds Cedana GPU interception to the container.
 // Modifies the spec as necessary.
-func Interceptor(next types.Run) types.Run {
+func Interception(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {
@@ -31,6 +31,8 @@ func Interceptor(next types.Run) types.Run {
 			)
 		}
 
+		libraryPath := gpu.LibraryPaths()[0]
+
 		// HACK: Remove nvidia prestart hook as we don't support working around it, yet
 		if spec.Hooks != nil {
 			for i, hook := range spec.Hooks.Prestart {
@@ -41,35 +43,34 @@ func Interceptor(next types.Run) types.Run {
 			}
 		}
 
-		// Remove existing /dev/shm mount
-		for i, m := range spec.Mounts {
+		shmMount := &specs.Mount{}
+
+		// Use existing /dev/shm mount if it exists
+		for _, m := range spec.Mounts {
 			if m.Destination == "/dev/shm" {
-				spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
+				shmMount = &m
 				break
 			}
 		}
 
-		// Mount /dev/shm from host
-		spec.Mounts = append(spec.Mounts, specs.Mount{
-			Destination: "/dev/shm",
-			Source:      "/dev/shm",
-			Type:        "bind",
-			Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
-		})
+		shmMount.Destination = "/dev/shm"
+		shmMount.Source = "/dev/shm"
+		shmMount.Type = "bind"
+		shmMount.Options = []string{"rbind", "rprivate", "nosuid", "nodev", "rw"}
 
 		// Mount the GPU plugin library
 		spec.Mounts = append(spec.Mounts, specs.Mount{
-			Destination: gpu.LibraryPaths()[0],
-			Source:      gpu.LibraryPaths()[0],
+			Destination: libraryPath,
+			Source:      libraryPath,
 			Type:        "bind",
-			Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "r"},
+			Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
 		})
 
 		// Set the env vars
 		if spec.Process == nil {
 			return nil, status.Errorf(codes.FailedPrecondition, "spec does not have a process")
 		}
-		spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
+		spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
 		spec.Process.Env = append(spec.Process.Env, "CEDANA_JID="+req.JID)
 
 		return next(ctx, server, resp, req)

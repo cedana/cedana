@@ -43,7 +43,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				req.Path = job.GetLatestCheckpoint().GetPath()
 			}
 			if req.Path == "" {
-				return nil, status.Errorf(codes.FailedPrecondition, "job % has no saved checkpoint. pass in path to override", jid)
+				return nil, status.Errorf(codes.FailedPrecondition, "job %s has no saved checkpoint. pass in path to override", jid)
 			}
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
@@ -56,7 +56,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			server.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			nfy.ImportCallback(job.CRIUCallback)
+			nfy.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
 
 			exited, err := next(ctx, server, nfy, resp, req)
 			if err != nil {

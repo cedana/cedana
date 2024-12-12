@@ -147,6 +147,33 @@ func AliasCommandUse(aliasOf *cobra.Command, name ...string) string {
 	return aliasOf.Use
 }
 
+func FullUse(cmd *cobra.Command) string {
+	if cmd == nil {
+		return ""
+	}
+
+	parents := []*cobra.Command{}
+	cmd.VisitParents(func(p *cobra.Command) {
+		parents = append(parents, p)
+	})
+	if len(parents) > 1 {
+		parents = parents[:len(parents)-1] // Remove the root command
+	}
+
+	use := ""
+	for i := len(parents) - 1; i >= 0; i-- {
+		p := parents[i]
+		if p.Use != "" {
+			use += p.Use + " "
+		}
+	}
+
+	use += cmd.Use
+	strings.TrimSpace(use)
+
+	return use
+}
+
 func Confirm(msg string) bool {
 	var response string
 	for {

@@ -1,4 +1,4 @@
-package job
+package gpu
 
 // Defines adapters for adding GPU support to a job. GPU controller attachment is agnostic
 // to the job type. GPU interception is specific to the job type. For e.g.,
@@ -19,7 +19,7 @@ import (
 )
 
 // Pluggable features
-const featureGPUInterceptor plugins.Feature[types.Adapter[types.Run]] = "GPUInterceptor"
+const featureGPUInterception plugins.Feature[types.Adapter[types.Run]] = "GPUInterception"
 
 //////////////////////
 //// Run Adapters ////
@@ -28,29 +28,27 @@ const featureGPUInterceptor plugins.Feature[types.Adapter[types.Run]] = "GPUInte
 // Adapter that adds GPU support to the request.
 // GPU Dump/Restore is automatically managed by the job manager using
 // CRIU callbacks. Assumes the job is already created (not running).
-func GPUSupport(jobs Manager) types.Adapter[types.Run] {
+func Attach(gpus Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-			job := jobs.Get(req.JID)
-			if job == nil {
-				return nil, status.Errorf(codes.NotFound, "job %s not found", req.JID)
-			}
-
 			if !server.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(
-					codes.FailedPrecondition,
-					"Please install the GPU plugin to use GPU support",
-				)
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to use GPU support")
 			}
 
-			log.Info().Str("jid", job.JID).Msg("enabling GPU support")
+			jid := req.JID
+			if jid == "" {
+				return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU support")
+			}
+
+			log.Info().Str("jid", jid).Msg("enabling GPU support")
 
 			// Create child lifetime context, so we have cancellation ability over restored
 			// process created by the next handler(s).
 			lifetime, cancel := context.WithCancel(server.Lifetime)
 			server.Lifetime = lifetime
 
-			gpuErr := jobs.AttachGPUAsync(ctx, server.Lifetime, job.JID)
+			pid := make(chan uint32, 1)
+			gpuErr := gpus.AttachAsync(ctx, lifetime, jid, pid)
 
 			exited, err := next(ctx, server, resp, req)
 			if err != nil {
@@ -65,7 +63,9 @@ func GPUSupport(jobs Manager) types.Adapter[types.Run] {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 			}
 
-			log.Info().Str("jid", job.JID).Msg("GPU support enabled")
+			pid <- resp.PID
+
+			log.Info().Str("jid", jid).Msg("GPU support enabled")
 
 			return exited, nil
 		}
@@ -78,22 +78,26 @@ func GPUSupport(jobs Manager) types.Adapter[types.Run] {
 
 // Adapter that adds GPU interception to the request based on the job type.
 // Each plugin must implement its own support for GPU interception.
-func GPUInterceptor(next types.Run) types.Run {
+func Interception(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		if req.JID == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU interception")
+		}
+
 		t := req.GetType()
 		var handler types.Run
 		switch t {
 		case "process":
-			handler = next.With(GPUInterceptorProcess)
+			handler = next.With(ProcessInterception)
 		default:
 			// Use plugin-specific handler
-			err := featureGPUInterceptor.IfAvailable(func(
+			err := featureGPUInterception.IfAvailable(func(
 				name string,
-				pluginInterceptor types.Adapter[types.Run],
+				pluginInterception types.Adapter[types.Run],
 			) error {
-				handler = next.With(pluginInterceptor)
+				handler = next.With(pluginInterception)
 				return nil
-			})
+			}, t)
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
@@ -103,7 +107,7 @@ func GPUInterceptor(next types.Run) types.Run {
 }
 
 // Adapter that adds GPU interception to a process job.
-func GPUInterceptorProcess(next types.Run) types.Run {
+func ProcessInterception(next types.Run) types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin

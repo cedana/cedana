@@ -28,28 +28,29 @@ import (
 var Version string = "dev"
 
 var (
-	RootCmds = []*cobra.Command{
+	RootCmds []*cobra.Command = []*cobra.Command{
 		cmd.RootCmd,
 	}
-	DumpCmd    = cmd.DumpCmd
-	RestoreCmd = cmd.RestoreCmd
-	RunCmd     = cmd.RunCmd
-	Theme      = text.Colors{text.FgCyan}
+	DumpCmd    *cobra.Command = cmd.DumpCmd
+	RestoreCmd *cobra.Command = cmd.RestoreCmd
+	RunCmd     *cobra.Command = cmd.RunCmd
+	Theme      text.Colors    = text.Colors{text.FgCyan}
 )
 
 var KillSignal = syscall.SIGKILL
 
 var (
-	RunHandler     = container.Run()
-	GPUInterceptor = gpu.Interceptor
-	RunMiddleware  = types.Middleware[types.Run]{
+	RunHandler      types.Run                   = container.Run()
+	GPUInterception types.Adapter[types.Run]    = gpu.Interception
+	RunMiddleware   types.Middleware[types.Run] = types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		filesystem.SetWorkingDirectory,
 		container.LoadSpecFromBundle,
+		container.SetUsChildSubreaper,
 	}
 
-	DumpMiddleware = types.Middleware[types.Dump]{
+	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 		container.GetContainerForDump,
@@ -61,12 +62,12 @@ var (
 		cgroup.ManageCgroupsForDump(criu.CriuCgMode_SOFT),
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		device.AddDevicesForDump,
-    network.LockNetworkBeforeDump,
+		network.LockNetworkBeforeDump,
 
 		container.SetPIDForDump,
 	}
 
-	RestoreMiddleware = types.Middleware[types.Restore]{
+	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		filesystem.SetWorkingDirectoryForRestore,
@@ -84,7 +85,7 @@ var (
 		device.HandleEvasiveDevicesForRestore,
 
 		network.RestoreNetworkConfiguration,
-    network.UnlockNetworkAfterRestore,
+		network.UnlockNetworkAfterRestore,
 		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
@@ -49,7 +50,7 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 			job.SetDetails(req.Details)
 
 			if req.GPUEnabled {
-				next = next.With(GPUSupport(jobs))
+				next = next.With(gpu.Attach(jobs.GPUs()))
 			}
 
 			// Create child lifetime context, so we have cancellation ability over started process

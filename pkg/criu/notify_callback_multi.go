@@ -25,50 +25,41 @@ type NotifyCallbackMulti struct {
 	OrphanPtsMasterFunc     []NotifyFuncFd
 }
 
-func (n *NotifyCallbackMulti) ImportCallback(nfy *NotifyCallback) {
-	if nfy == nil {
-		return
-	}
-	if nfy.InitializeFunc != nil {
-		n.InitializeFunc = append(n.InitializeFunc, nfy.InitializeFunc)
-	}
-	if nfy.PreDumpFunc != nil {
-		n.PreDumpFunc = append(n.PreDumpFunc, nfy.PreDumpFunc)
-	}
-	if nfy.PostDumpFunc != nil {
-		n.PostDumpFunc = append(n.PostDumpFunc, nfy.PostDumpFunc)
-	}
-	if nfy.PreRestoreFunc != nil {
-		n.PreRestoreFunc = append(n.PreRestoreFunc, nfy.PreRestoreFunc)
-	}
-	if nfy.PostRestoreFunc != nil {
-		n.PostRestoreFunc = append(n.PostRestoreFunc, nfy.PostRestoreFunc)
-	}
-	if nfy.NetworkLockFunc != nil {
-		n.NetworkLockFunc = append(n.NetworkLockFunc, nfy.NetworkLockFunc)
-	}
-	if nfy.NetworkUnlockFunc != nil {
-		n.NetworkUnlockFunc = append(n.NetworkUnlockFunc, nfy.NetworkUnlockFunc)
-	}
-	if nfy.SetupNamespacesFunc != nil {
-		n.SetupNamespacesFunc = append(n.SetupNamespacesFunc, nfy.SetupNamespacesFunc)
-	}
-	if nfy.PostSetupNamespacesFunc != nil {
-		n.PostSetupNamespacesFunc = append(n.PostSetupNamespacesFunc, nfy.PostSetupNamespacesFunc)
-	}
-	if nfy.PreResumeFunc != nil {
-		n.PreResumeFunc = append(n.PreResumeFunc, nfy.PreResumeFunc)
-	}
-	if nfy.PostResumeFunc != nil {
-		n.PostResumeFunc = append(n.PostResumeFunc, nfy.PostResumeFunc)
-	}
-	if nfy.OrphanPtsMasterFunc != nil {
-		n.OrphanPtsMasterFunc = append(n.OrphanPtsMasterFunc, nfy.OrphanPtsMasterFunc)
-	}
+func (n *NotifyCallbackMulti) Include(nfy NotifyCallback) {
+	n.InitializeFunc = append(n.InitializeFunc, nfy.InitializeFunc)
+	n.PreDumpFunc = append(n.PreDumpFunc, nfy.PreDumpFunc)
+	n.PostDumpFunc = append(n.PostDumpFunc, nfy.PostDumpFunc)
+	n.PreRestoreFunc = append(n.PreRestoreFunc, nfy.PreRestoreFunc)
+	n.PostRestoreFunc = append(n.PostRestoreFunc, nfy.PostRestoreFunc)
+	n.NetworkLockFunc = append(n.NetworkLockFunc, nfy.NetworkLockFunc)
+	n.NetworkUnlockFunc = append(n.NetworkUnlockFunc, nfy.NetworkUnlockFunc)
+	n.SetupNamespacesFunc = append(n.SetupNamespacesFunc, nfy.SetupNamespacesFunc)
+	n.PostSetupNamespacesFunc = append(n.PostSetupNamespacesFunc, nfy.PostSetupNamespacesFunc)
+	n.PreResumeFunc = append(n.PreResumeFunc, nfy.PreResumeFunc)
+	n.PostResumeFunc = append(n.PostResumeFunc, nfy.PostResumeFunc)
+	n.OrphanPtsMasterFunc = append(n.OrphanPtsMasterFunc, nfy.OrphanPtsMasterFunc)
 }
 
-func (n *NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) error {
+func (n *NotifyCallbackMulti) IncludeMulti(nfy NotifyCallbackMulti) {
+	n.InitializeFunc = append(n.InitializeFunc, nfy.InitializeFunc...)
+	n.PreDumpFunc = append(n.PreDumpFunc, nfy.PreDumpFunc...)
+	n.PostDumpFunc = append(n.PostDumpFunc, nfy.PostDumpFunc...)
+	n.PreRestoreFunc = append(n.PreRestoreFunc, nfy.PreRestoreFunc...)
+	n.PostRestoreFunc = append(n.PostRestoreFunc, nfy.PostRestoreFunc...)
+	n.NetworkLockFunc = append(n.NetworkLockFunc, nfy.NetworkLockFunc...)
+	n.NetworkUnlockFunc = append(n.NetworkUnlockFunc, nfy.NetworkUnlockFunc...)
+	n.SetupNamespacesFunc = append(n.SetupNamespacesFunc, nfy.SetupNamespacesFunc...)
+	n.PostSetupNamespacesFunc = append(n.PostSetupNamespacesFunc, nfy.PostSetupNamespacesFunc...)
+	n.PreResumeFunc = append(n.PreResumeFunc, nfy.PreResumeFunc...)
+	n.PostResumeFunc = append(n.PostResumeFunc, nfy.PostResumeFunc...)
+	n.OrphanPtsMasterFunc = append(n.OrphanPtsMasterFunc, nfy.OrphanPtsMasterFunc...)
+}
+
+func (n NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) error {
 	for i := len(n.InitializeFunc) - 1; i >= 0; i-- {
+		if n.InitializeFunc[i] == nil {
+			continue
+		}
 		err := n.InitializeFunc[i](ctx, criuPid)
 		if err != nil {
 			return err
@@ -77,8 +68,11 @@ func (n *NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) err
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PreDumpFunc) - 1; i >= 0; i-- {
+		if n.PreDumpFunc[i] == nil {
+			continue
+		}
 		err := n.PreDumpFunc[i](ctx, opts)
 		if err != nil {
 			return err
@@ -87,8 +81,11 @@ func (n *NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) 
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PostDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallbackMulti) PostDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PostDumpFunc) - 1; i >= 0; i-- {
+		if n.PostDumpFunc[i] == nil {
+			continue
+		}
 		err := n.PostDumpFunc[i](ctx, opts)
 		if err != nil {
 			return err
@@ -97,8 +94,11 @@ func (n *NotifyCallbackMulti) PostDump(ctx context.Context, opts *criu.CriuOpts)
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PreRestore(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallbackMulti) PreRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.PreRestoreFunc) - 1; i >= 0; i-- {
+		if n.PreRestoreFunc[i] == nil {
+			continue
+		}
 		err := n.PreRestoreFunc[i](ctx, opts)
 		if err != nil {
 			return err
@@ -107,8 +107,11 @@ func (n *NotifyCallbackMulti) PreRestore(ctx context.Context, opts *criu.CriuOpt
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PreResume(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PreResume(ctx context.Context, pid int32) error {
 	for i := len(n.PreResumeFunc) - 1; i >= 0; i-- {
+		if n.PreResumeFunc[i] == nil {
+			continue
+		}
 		err := n.PreResumeFunc[i](ctx, pid)
 		if err != nil {
 			return err
@@ -117,8 +120,11 @@ func (n *NotifyCallbackMulti) PreResume(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PostResume(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PostResume(ctx context.Context, pid int32) error {
 	for i := len(n.PostResumeFunc) - 1; i >= 0; i-- {
+		if n.PostResumeFunc[i] == nil {
+			continue
+		}
 		err := n.PostResumeFunc[i](ctx, pid)
 		if err != nil {
 			return err
@@ -127,8 +133,11 @@ func (n *NotifyCallbackMulti) PostResume(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PostRestore(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PostRestore(ctx context.Context, pid int32) error {
 	for i := len(n.PostRestoreFunc) - 1; i >= 0; i-- {
+		if n.PostRestoreFunc[i] == nil {
+			continue
+		}
 		err := n.PostRestoreFunc[i](ctx, pid)
 		if err != nil {
 			return err
@@ -137,8 +146,11 @@ func (n *NotifyCallbackMulti) PostRestore(ctx context.Context, pid int32) error 
 	return nil
 }
 
-func (n *NotifyCallbackMulti) NetworkLock(ctx context.Context) error {
+func (n NotifyCallbackMulti) NetworkLock(ctx context.Context) error {
 	for i := len(n.NetworkLockFunc) - 1; i >= 0; i-- {
+		if n.NetworkLockFunc[i] == nil {
+			continue
+		}
 		err := n.NetworkLockFunc[i](ctx)
 		if err != nil {
 			return err
@@ -147,8 +159,11 @@ func (n *NotifyCallbackMulti) NetworkLock(ctx context.Context) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) NetworkUnlock(ctx context.Context) error {
+func (n NotifyCallbackMulti) NetworkUnlock(ctx context.Context) error {
 	for i := len(n.NetworkUnlockFunc) - 1; i >= 0; i-- {
+		if n.NetworkUnlockFunc[i] == nil {
+			continue
+		}
 		err := n.NetworkUnlockFunc[i](ctx)
 		if err != nil {
 			return err
@@ -157,8 +172,11 @@ func (n *NotifyCallbackMulti) NetworkUnlock(ctx context.Context) error {
 	return nil
 }
 
-func (n *NotifyCallbackMulti) SetupNamespaces(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) SetupNamespaces(ctx context.Context, pid int32) error {
 	for i := len(n.SetupNamespacesFunc) - 1; i >= 0; i-- {
+		if n.SetupNamespacesFunc[i] == nil {
+			continue
+		}
 		err := n.SetupNamespacesFunc[i](ctx, pid)
 		if err != nil {
 			return err
@@ -167,8 +185,11 @@ func (n *NotifyCallbackMulti) SetupNamespaces(ctx context.Context, pid int32) er
 	return nil
 }
 
-func (n *NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context, pid int32) error {
 	for i := len(n.PostSetupNamespacesFunc) - 1; i >= 0; i-- {
+		if n.PostSetupNamespacesFunc[i] == nil {
+			continue
+		}
 		err := n.PostSetupNamespacesFunc[i](ctx, pid)
 		if err != nil {
 			return err
@@ -177,8 +198,11 @@ func (n *NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context, pid int32
 	return nil
 }
 
-func (n *NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {
+func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	for i := len(n.OrphanPtsMasterFunc) - 1; i >= 0; i-- {
+		if n.OrphanPtsMasterFunc[i] == nil {
+			continue
+		}
 		err := n.OrphanPtsMasterFunc[i](ctx, fd)
 		if err != nil {
 			return err

@@ -20,7 +20,10 @@ import (
 )
 
 // Pluggable features
-const featureTheme plugins.Feature[text.Colors] = "Theme"
+const (
+	featureTheme          plugins.Feature[text.Colors]                                       = "Theme"
+	featureCheckpointInfo plugins.Feature[func(path string, imgType string) ([]byte, error)] = "CheckpointInfo"
+)
 
 func init() {
 	jobCmd.AddCommand(listJobCmd)
@@ -36,6 +39,7 @@ func init() {
 	// Add subcommand flags
 	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
 	killJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "kill all jobs")
+	inspectJobCheckpointCmd.Flags().StringP(flags.TypeFlag.Full, flags.TypeFlag.Short, "", "specify image file {ps|fd|mem|rss|sk|gpu}")
 
 	// Add aliases
 	jobCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
@@ -114,6 +118,11 @@ var listJobCmd = &cobra.Command{
 			"Std I/O",
 		})
 
+		style.TableWriter.SortBy([]table.SortBy{
+			{Name: "Status"},
+			{Name: "Checkpoint"},
+		})
+
 		statusStr := func(status string) string {
 			switch status {
 			case "running":
@@ -178,16 +187,11 @@ var listJobCmd = &cobra.Command{
 			style.TableWriter.AppendRow(row)
 		}
 
-		style.TableWriter.SortBy([]table.SortBy{
-			{Name: "Status"},
-			{Name: "Last Checkpoint"},
-		})
-
 		style.TableWriter.Render()
 
 		fmt.Println()
-		fmt.Printf("Use `%s` for more details about a job\n", inspectJobCmd.Use)
-		fmt.Printf("Use `%s` to list all checkpoints for a job\n", listJobCheckpointCmd.Use)
+		fmt.Printf("Use `%s` for more details about a job\n", utils.FullUse(inspectJobCmd))
+		fmt.Printf("Use `%s` to list all checkpoints for a job\n", utils.FullUse(listJobCheckpointCmd))
 
 		return nil
 	},
@@ -402,39 +406,76 @@ var listJobCheckpointCmd = &cobra.Command{
 
 		style.TableWriter.Render()
 
+		fmt.Println()
+		fmt.Printf("Use `%s` to inspect a checkpoint.\n", inspectJobCheckpointCmdUse)
+
 		return nil
 	},
 }
 
-var inspectJobCheckpointCmd = &cobra.Command{
-	Use:               "inspect <JID> <CHECKPOINT #>",
-	Short:             "Inspect a checkpoint for a job",
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: ValidJIDs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
+var (
+	inspectJobCheckpointCmdUse = "inspect <JID> <checkpoint #>"
+	inspectJobCheckpointCmd    = &cobra.Command{
+		Use:               inspectJobCheckpointCmdUse,
+		Short:             fmt.Sprintf("Inspect a checkpoint for a job. Get checkpoint # from `%s`", utils.FullUse(listJobCheckpointCmd)),
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: ValidJIDs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+			if !ok {
+				return fmt.Errorf("invalid client in context")
+			}
 
-		jid := args[0]
-		// checkpointNum := args[1]
+			var info func(path string, imgType string) ([]byte, error)
+			featureCheckpointInfo.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
+				info = f
+				return nil
+			})
+			if info == nil {
+				return fmt.Errorf("Please install a plugin that supports checkpoint inspection. Use `%s` to see available plugins.",
+					utils.FullUse(pluginListCmd),
+				)
+			}
 
-		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
-		if err != nil {
-			return err
-		}
-		if len(list.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
+			jid := args[0]
+			index := args[1]
+			imgType, _ := cmd.Flags().GetString(flags.TypeFlag.Full)
 
-		job := list.Jobs[0]
+			list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+			if err != nil {
+				return err
+			}
+			if len(list.Jobs) == 0 {
+				return fmt.Errorf("Job %s not found", jid)
+			}
 
-		if len(job.GetCheckpoints()) == 0 {
-			fmt.Printf("No checkpoints found for job %s\n", jid)
+			job := list.Jobs[0]
+
+			if len(job.GetCheckpoints()) == 0 {
+				fmt.Printf("No checkpoints found for job %s\n", jid)
+				return nil
+			}
+
+			var checkpointToInspect *daemon.Checkpoint
+			for i, cp := range job.GetCheckpoints() {
+				if index == fmt.Sprintf("%d", i+1) {
+					checkpointToInspect = cp
+					break
+				}
+			}
+
+			if checkpointToInspect == nil {
+				return fmt.Errorf("Checkpoint %s not found for job %s", index, jid)
+			}
+
+			bytes, err := info(checkpointToInspect.GetPath(), imgType)
+			if err != nil {
+				return err
+			}
+
+			fmt.Print(string(bytes))
+
 			return nil
-		}
-
-		return nil
-	},
-}
+		},
+	}
+)

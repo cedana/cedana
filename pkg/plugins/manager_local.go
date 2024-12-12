@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/style"
@@ -18,7 +17,7 @@ type LocalManager struct {
 	srcDir map[string]string // map of plugin name to source directory
 }
 
-func NewManagerLocal() *LocalManager {
+func NewLocalManager() *LocalManager {
 	return &LocalManager{
 		make(map[string]string),
 	}
@@ -90,14 +89,6 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		if _, ok := set[p.Status]; len(set) > 0 && !ok {
 			continue
 		}
-
-		// sort list by status
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].Status == list[j].Status {
-				return list[i].Type < list[j].Type
-			}
-			return list[i].Status > list[j].Status
-		})
 
 		list = append(list, p)
 	}

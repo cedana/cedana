@@ -5,6 +5,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/defaults"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
@@ -38,7 +39,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 
 	// s.ctx is the lifetime context of the server, pass it so that
 	// managed processes maximum lifetime is the same as the server.
-	// It gives adapters the power to control the lifetime of the process. For e.g.,
+	// It also gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -77,7 +78,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
-			})
+			}, t)
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
@@ -103,13 +104,13 @@ func pluginRunHandler() types.Run {
 			err = featureRunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
 				handler = pluginHandler
 				return nil
-			})
+			}, t)
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
 		if req.GPUEnabled {
-			handler = handler.With(job.GPUInterceptor)
+			handler = handler.With(gpu.Interception)
 		}
 		return handler(ctx, server, resp, req)
 	}

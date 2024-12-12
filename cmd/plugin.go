@@ -34,7 +34,7 @@ var pluginCmd = &cobra.Command{
 			return fmt.Errorf("plugin commands must be run as root")
 		}
 
-		manager := plugins.NewManagerLocal()
+		manager := plugins.NewLocalManager()
 
 		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
 		var client *Client
@@ -105,6 +105,10 @@ var pluginListCmd = &cobra.Command{
 			"Status",
 			"Installed version",
 			"Latest version",
+		})
+
+		style.TableWriter.SortBy([]table.SortBy{
+			{Name: "Status", Mode: table.Asc},
 		})
 
 		statusStr := func(s plugins.Status) string {
@@ -196,9 +200,9 @@ var pluginInstallCmd = &cobra.Command{
 		client.ReloadPlugins(cmd.Context(), &daemon.Empty{})
 
 		if installed < len(names) {
-			return fmt.Errorf("Installed %d plugins, %d failed", installed, len(names)-installed)
+			return fmt.Errorf("Installed %d plugin(s), %d failed", installed, len(names)-installed)
 		} else {
-			fmt.Printf("Installed %d plugins\n", installed)
+			fmt.Printf("Installed %d plugin(s)\n", installed)
 			return nil
 		}
 	},

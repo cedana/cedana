@@ -91,7 +91,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
-			})
+			}, t)
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}

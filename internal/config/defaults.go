@@ -83,6 +83,13 @@ var (
 		"CEDANA_CRIU_BINARY_PATH",
 		viper.GetString,
 	}
+
+	GPU_POOL_SIZE = ConfigItem[int]{
+		"gpu.pool_size",
+		0,
+		"CEDANA_GPU_POOL_SIZE",
+		viper.GetInt,
+	}
 )
 
 func init() {
@@ -110,6 +117,9 @@ func setDefaults() {
 	viper.SetDefault(METRICS_OTEL_PORT.Key, METRICS_OTEL_PORT.Default)
 
 	viper.SetDefault(CRIU_LEAVE_RUNNING.Key, CRIU_LEAVE_RUNNING.Default)
+	viper.SetDefault(CRIU_BINARY_PATH.Key, CRIU_BINARY_PATH.Default)
+
+	viper.SetDefault(GPU_POOL_SIZE.Key, GPU_POOL_SIZE.Default)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -135,6 +145,8 @@ func bindEnvVars() {
 
 	viper.BindEnv(CRIU_LEAVE_RUNNING.Key, CRIU_LEAVE_RUNNING.Env)
 	viper.BindEnv(CRIU_BINARY_PATH.Key, CRIU_BINARY_PATH.Env)
+
+	viper.BindEnv(GPU_POOL_SIZE.Key, GPU_POOL_SIZE.Env)
 
 	// Env only
 	viper.BindEnv(LOG_LEVEL.Key, LOG_LEVEL.Env)

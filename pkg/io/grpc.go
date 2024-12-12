@@ -37,13 +37,15 @@ type StreamIOMaster struct {
 
 type StreamIOSlave struct {
 	PID uint32
-	// Channel of masters waiting to attach (only one at a time allowed)
+
+	// Channel of masters waiting to attach
 	master chan grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]
 
 	in       chan<- []byte
 	out      <-chan []byte
 	err      <-chan []byte
 	exitCode <-chan int
+	done     chan any
 }
 
 type StreamIOReader struct {
@@ -53,7 +55,7 @@ type StreamIOReader struct {
 }
 
 type StreamIOWriter struct {
-	io.Writer
+	io.WriteCloser
 	io.ReaderFrom
 	bytes chan<- []byte
 }
@@ -134,6 +136,7 @@ func NewStreamIOSlave(
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
 	err := make(chan []byte, channelBufLen)
+	done := make(chan any, 1)
 
 	slave := &StreamIOSlave{
 		pid,
@@ -142,6 +145,7 @@ func NewStreamIOSlave(
 		out,
 		err,
 		exitCode,
+		done,
 	}
 
 	SetIOSlave(pid, slave)
@@ -156,7 +160,7 @@ func NewStreamIOSlave(
 		for {
 			select {
 			case <-ctx.Done():
-				close(in)
+				close(done)
 				return
 			case master = <-slave.master:
 				break wait_first_master
@@ -208,7 +212,7 @@ func NewStreamIOSlave(
 			}
 		}
 
-		close(in) // BUG: causes race with in's senders in attach
+		close(done)
 		master.Send(
 			&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
 		)
@@ -226,6 +230,7 @@ func (s *StreamIOSlave) Attach(
 	ctx context.Context,
 	master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp],
 ) error {
+	defer close(s.in)
 wait:
 	for {
 		select {
@@ -247,6 +252,8 @@ loop:
 		}
 		select {
 		case <-master.Context().Done():
+			break loop
+		case <-s.done:
 			break loop
 		case s.in <- req.GetStdin():
 		}
@@ -292,6 +299,11 @@ func (s *StreamIOWriter) ReadFrom(r io.Reader) (n int64, err error) {
 			return n, err
 		}
 	}
+}
+
+func (s *StreamIOWriter) Close() error {
+	close(s.bytes)
+	return nil
 }
 
 //////////////////////////

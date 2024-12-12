@@ -5,8 +5,8 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-bb4f887328c1.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-bb4f887328c1.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-12c61b7041f4.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-12c61b7041f4.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-979c451166e9.1
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1
 	github.com/jedib0t/go-pretty/v6 v6.6.2

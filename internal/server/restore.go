@@ -92,7 +92,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
-			})
+			}, t)
 			if err != nil {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}

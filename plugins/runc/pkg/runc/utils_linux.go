@@ -158,108 +158,11 @@ type Runner struct {
 	Container       *libcontainer.Container
 	Action          CtAct
 	NotifySocket    *notifySocket
-	CriuOpts        *libcontainer.CriuOpts
 	SubCgroupPaths  map[string]string
 
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
-}
-
-func (r *Runner) Run(config *specs.Process) (int, error) {
-	var err error
-	defer func() {
-		if err != nil {
-			r.Destroy()
-		}
-	}()
-	if err = r.CheckTerminal(config); err != nil {
-		return -1, err
-	}
-	process, err := NewProcess(*config)
-	if err != nil {
-		return -1, err
-	}
-	process.LogLevel = strconv.Itoa(int(log.Logger.GetLevel()))
-	// Populate the fields that come from Runner.
-	process.Init = r.Init
-	process.SubCgroupPaths = r.SubCgroupPaths
-	if len(r.ListenFDs) > 0 {
-		process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(r.ListenFDs)), "LISTEN_PID=1")
-		process.ExtraFiles = append(process.ExtraFiles, r.ListenFDs...)
-	}
-	baseFd := 3 + len(process.ExtraFiles)
-	procSelfFd, closer := utils.ProcThreadSelf("fd/")
-	defer closer()
-	for i := baseFd; i < baseFd+r.PreserveFDs; i++ {
-		_, err = os.Stat(filepath.Join(procSelfFd, strconv.Itoa(i)))
-		if err != nil {
-			return -1, fmt.Errorf("unable to stat preserved-fd %d (of %d): %w", i-baseFd, r.PreserveFDs, err)
-		}
-		process.ExtraFiles = append(process.ExtraFiles, os.NewFile(uintptr(i), "PreserveFD:"+strconv.Itoa(i)))
-	}
-	rootuid, err := r.Container.Config().HostRootUID()
-	if err != nil {
-		return -1, err
-	}
-	rootgid, err := r.Container.Config().HostRootGID()
-	if err != nil {
-		return -1, err
-	}
-	detach := r.Detach || (r.Action == CT_ACT_CREATE)
-	// Setting up IO is a two stage process. We need to modify process to deal
-	// with detaching containers, and then we get a tty after the container has
-	// started.
-	handler := NewSignalHandler(r.EnableSubreaper, r.NotifySocket)
-	tty, err := SetupProcessPipes(process, rootuid, rootgid, r.Stdin, r.Stdout, r.Stderr)
-	if err != nil {
-		return -1, err
-	}
-	defer tty.Close()
-
-	if r.PidfdSocket != "" {
-		connClose, err := setupPidfdSocket(process, r.PidfdSocket)
-		if err != nil {
-			return -1, err
-		}
-		defer connClose()
-	}
-
-	switch r.Action {
-	case CT_ACT_CREATE:
-		err = r.Container.Start(process)
-	case CT_ACT_RESTORE:
-		err = r.Container.Restore(process, r.CriuOpts)
-	case CT_ACT_RUN:
-		err = r.Container.Run(process)
-	default:
-		panic("Unknown action")
-	}
-	if err != nil {
-		return -1, err
-	}
-	if err = tty.waitConsole(); err != nil {
-		r.Terminate(process)
-		return -1, err
-	}
-	tty.ClosePostStart()
-	if r.PidFile != "" {
-		if err = createPidFile(r.PidFile, process); err != nil {
-			r.Terminate(process)
-			return -1, err
-		}
-	}
-	status, err := handler.forward(process, tty, detach)
-	if err != nil {
-		r.Terminate(process)
-	}
-	if detach {
-		return 0, nil
-	}
-	if err == nil {
-		r.Destroy()
-	}
-	return status, err
 }
 
 func (r *Runner) Destroy() {
