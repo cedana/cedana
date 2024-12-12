@@ -4,14 +4,13 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails().GetRunc() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
 		}
@@ -22,6 +21,6 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "missing id")
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

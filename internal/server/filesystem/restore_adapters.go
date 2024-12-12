@@ -9,7 +9,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -21,7 +20,7 @@ import (
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
 func PrepareRestoreDir(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
@@ -63,6 +62,6 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

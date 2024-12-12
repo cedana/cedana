@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,7 +13,7 @@ import (
 // Post-dump, updates the saved job details.
 func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
@@ -37,9 +36,9 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			resp.State = job.GetProcess()
 
 			// Import saved notify callbacks
-			nfy.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
+			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
 
-			exited, err := next(ctx, server, nfy, resp, req)
+			exited, err := next(ctx, server, resp, req)
 			if err != nil {
 				return exited, err
 			}

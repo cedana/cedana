@@ -7,7 +7,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -21,7 +20,7 @@ import (
 const extDescriptorsFilename = "descriptors.json"
 
 func AddMountsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -61,12 +60,12 @@ func AddMountsForDump(next types.Dump) types.Dump {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 func AddMaskedPathsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -101,6 +100,6 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 			req.Criu.ExtMnt = append(req.Criu.ExtMnt, extMnt)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

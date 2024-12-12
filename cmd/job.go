@@ -8,22 +8,16 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-)
-
-// Pluggable features
-const (
-	featureTheme          plugins.Feature[text.Colors]                                       = "Theme"
-	featureCheckpointInfo plugins.Feature[func(path string, imgType string) ([]byte, error)] = "CheckpointInfo"
 )
 
 func init() {
@@ -141,7 +135,7 @@ var listJobCmd = &cobra.Command{
 		// Color type based on the plugin theme
 		typeStr := func(t string) string {
 			colorToUse := text.Colors{}
-			featureTheme.IfAvailable(func(name string, theme text.Colors) error {
+			features.CmdTheme.IfAvailable(func(name string, theme text.Colors) error {
 				colorToUse = theme
 				return nil
 			}, t)
@@ -428,7 +422,7 @@ var (
 			}
 
 			var info func(path string, imgType string) ([]byte, error)
-			featureCheckpointInfo.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
+			features.CheckpointInfo.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
 				info = f
 				return nil
 			})

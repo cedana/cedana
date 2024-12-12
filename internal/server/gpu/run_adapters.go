@@ -11,15 +11,13 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Pluggable features
-const featureGPUInterception plugins.Feature[types.Adapter[types.Run]] = "GPUInterception"
 
 //////////////////////
 //// Run Adapters ////
@@ -91,7 +89,7 @@ func Interception(next types.Run) types.Run {
 			handler = next.With(ProcessInterception)
 		default:
 			// Use plugin-specific handler
-			err := featureGPUInterception.IfAvailable(func(
+			err := features.GPUInterception.IfAvailable(func(
 				name string,
 				pluginInterception types.Adapter[types.Run],
 			) error {

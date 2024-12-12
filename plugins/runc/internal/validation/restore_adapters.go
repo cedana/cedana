@@ -4,14 +4,13 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func ValidateRestoreRequest(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		if req.GetDetails().GetRunc() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
 		}
@@ -25,6 +24,6 @@ func ValidateRestoreRequest(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

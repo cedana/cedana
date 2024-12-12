@@ -34,7 +34,7 @@ var (
 	DumpCmd    *cobra.Command = cmd.DumpCmd
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
-	Theme      text.Colors    = text.Colors{text.FgCyan}
+	CmdTheme   text.Colors    = text.Colors{text.FgCyan}
 )
 
 var KillSignal = syscall.SIGKILL

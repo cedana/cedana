@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"

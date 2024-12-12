@@ -13,14 +13,15 @@ type (
 	// ServerOpts is intended to be passed by **value** to each handler, so that each handler can modify it
 	// before passing it to the next handler in the chain, without affecting the original value.
 	ServerOpts struct {
-		WG       *sync.WaitGroup
-		CRIU     *criu.Criu
-		Plugins  plugins.Manager
-		Lifetime context.Context
+		WG           *sync.WaitGroup
+		CRIU         *criu.Criu
+		CRIUCallback *criu.NotifyCallbackMulti
+		Plugins      plugins.Manager
+		Lifetime     context.Context
 	}
 
-	Dump    func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.DumpResp, *daemon.DumpReq) (exited chan int, err error)
-	Restore func(context.Context, ServerOpts, *criu.NotifyCallbackMulti, *daemon.RestoreResp, *daemon.RestoreReq) (exited chan int, err error)
+	Dump    func(context.Context, ServerOpts, *daemon.DumpResp, *daemon.DumpReq) (exited chan int, err error)
+	Restore func(context.Context, ServerOpts, *daemon.RestoreResp, *daemon.RestoreReq) (exited chan int, err error)
 	Run     func(context.Context, ServerOpts, *daemon.RunResp, *daemon.RunReq) (exited chan int, err error)
 	Manage  func(context.Context, ServerOpts, *daemon.ManageResp, *daemon.ManageReq) (exited chan int, err error)
 

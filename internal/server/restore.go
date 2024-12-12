@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
@@ -12,15 +13,11 @@ import (
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
 	criu_client "github.com/cedana/cedana/pkg/criu"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Pluggable features
-const featureRestoreMiddleware plugins.Feature[types.Middleware[types.Restore]] = "RestoreMiddleware"
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
@@ -51,10 +48,11 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 
 	opts := types.ServerOpts{
-		Lifetime: s.lifetime,
-		CRIU:     s.criu,
-		Plugins:  s.plugins,
-		WG:       s.wg,
+		Lifetime:     s.lifetime,
+		CRIU:         s.criu,
+		CRIUCallback: &criu_client.NotifyCallbackMulti{},
+		Plugins:      s.plugins,
+		WG:           s.wg,
 	}
 	resp := &daemon.RestoreResp{}
 
@@ -62,7 +60,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := restore(ctx, opts, &criu_client.NotifyCallbackMulti{}, resp, req)
+	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +76,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that inserts new adapters based on the type of restore request
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu_client.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.GetType()
 		switch t {
@@ -86,7 +84,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 			// Nothing to do
 		default:
 			// Insert plugin-specific middleware
-			err = featureRestoreMiddleware.IfAvailable(func(
+			err = features.RestoreMiddleware.IfAvailable(func(
 				name string,
 				pluginMiddleware types.Middleware[types.Restore],
 			) error {
@@ -97,6 +95,6 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...)(ctx, server, nfy, resp, req)
+		return next.With(middleware...)(ctx, server, resp, req)
 	}
 }

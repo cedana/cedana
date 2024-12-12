@@ -13,15 +13,13 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
-
-// Pluggable features
-const featureKillSignal plugins.Feature[syscall.Signal] = "KillSignal"
 
 const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
 
@@ -250,7 +248,7 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	signalToUse := syscall.SIGKILL
 
 	// Check if the plugin for the job type exports a custom signal
-	err := featureKillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
+	err := features.KillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
 		if len(signal) > 0 {
 			return fmt.Errorf(
 				"%s plugin exports a custom kill signal `%s`, so cannot use signal `%s`",

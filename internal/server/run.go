@@ -4,22 +4,16 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	// Pluggable features
-	featureRunMiddleware plugins.Feature[types.Middleware[types.Run]] = "RunMiddleware"
-	featureRunHandler    plugins.Feature[types.Run]                   = "RunHandler"
 )
 
 func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
@@ -72,7 +66,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 			// Nothing to do
 		default:
 			// Insert plugin-specific middleware
-			err = featureRunMiddleware.IfAvailable(func(
+			err = features.RunMiddleware.IfAvailable(func(
 				name string,
 				pluginMiddleware types.Middleware[types.Run],
 			) error {
@@ -101,7 +95,7 @@ func pluginRunHandler() types.Run {
 			handler = process.Run()
 		default:
 			// Use plugin-specific handler
-			err = featureRunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
+			err = features.RunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
 				handler = pluginHandler
 				return nil
 			}, t)

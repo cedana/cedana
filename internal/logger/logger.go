@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"

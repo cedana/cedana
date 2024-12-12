@@ -9,11 +9,11 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/config"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"

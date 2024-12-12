@@ -5,7 +5,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,7 +15,7 @@ import (
 // Post-restore, updates the saved job details.
 func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
@@ -56,9 +55,9 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			server.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			nfy.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
+			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
 
-			exited, err := next(ctx, server, nfy, resp, req)
+			exited, err := next(ctx, server, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err

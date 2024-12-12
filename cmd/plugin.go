@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"

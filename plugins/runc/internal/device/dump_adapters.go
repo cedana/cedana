@@ -5,7 +5,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/internal/filesystem"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
@@ -16,7 +15,7 @@ import (
 )
 
 func AddDevicesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -36,6 +35,6 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 			filesystem.CriuAddExternalMount(req.Criu, m, rootfs)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

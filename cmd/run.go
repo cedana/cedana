@@ -6,16 +6,13 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 )
-
-// Pluggable features
-const featureRunCmd plugins.Feature[*cobra.Command] = "RunCmd"
 
 func init() {
 	runCmd.AddCommand(processRunCmd)
@@ -40,7 +37,7 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	featureRunCmd.IfAvailable(
+	features.RunCmd.IfAvailable(
 		func(name string, pluginCmd *cobra.Command) error {
 			runCmd.AddCommand(pluginCmd)
 			return nil

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const featureVersion Feature[string] = "Version"
+var featureVersion = Feature[string]{"Version", "version"}
 
 type (
 	Type   int

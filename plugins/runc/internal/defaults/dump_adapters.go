@@ -6,13 +6,12 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/protobuf/proto"
 )
 
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -27,6 +26,6 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

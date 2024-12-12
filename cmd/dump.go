@@ -12,18 +12,15 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
-
-// Pluggable features
-const featureDumpCmd plugins.Feature[*cobra.Command] = "DumpCmd"
 
 func init() {
 	dumpCmd.AddCommand(processDumpCmd)
@@ -62,7 +59,7 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	featureDumpCmd.IfAvailable(
+	features.DumpCmd.IfAvailable(
 		func(name string, pluginCmd *cobra.Command) error {
 			dumpCmd.AddCommand(pluginCmd)
 

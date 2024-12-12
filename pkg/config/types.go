@@ -1,4 +1,4 @@
-package types
+package config
 
 // XXX: Config file should have a version field to manage future changes to schema
 type (

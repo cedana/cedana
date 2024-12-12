@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
@@ -26,7 +25,7 @@ import (
 
 // LoadSpecFromBundleForRestore loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		opts := req.GetDetails().GetRunc()
 		bundle := opts.GetBundle()
 
@@ -47,12 +46,12 @@ func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
 
 		ctx = context.WithValue(ctx, runc_keys.SPEC_CONTEXT_KEY, spec)
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
@@ -125,14 +124,14 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY, manager)
 		ctx = context.WithValue(ctx, runc_keys.INIT_PROCESS_CONTEXT_KEY, process)
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 // Adds CRIU callback to run the prestart and create runtime hooks
 // before the namespaces are setup during restore
 func RunHooksOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -140,7 +139,7 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 
-		nfy.SetupNamespacesFunc = append(nfy.SetupNamespacesFunc, func(ctx context.Context, pid int32) error {
+		server.CRIUCallback.SetupNamespacesFunc = append(server.CRIUCallback.SetupNamespacesFunc, func(ctx context.Context, pid int32) error {
 			if config.Hooks != nil {
 				s, err := container.OCIState()
 				if err != nil {
@@ -158,14 +157,14 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 			return nil
 		})
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 // UpdateStateOnRestore updates the container state after restore
 // Without this, runc won't be able to 'detect' the container
 func UpdateStateOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -174,7 +173,7 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
-		nfy.PostRestoreFunc = append(nfy.PostRestoreFunc, func(ctx context.Context, pid int32) error {
+		server.CRIUCallback.PostRestoreFunc = append(server.CRIUCallback.PostRestoreFunc, func(ctx context.Context, pid int32) error {
 			state, err := container.State()
 			if err != nil {
 				return fmt.Errorf("failed to get container state: %v", err)
@@ -221,7 +220,7 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 			return nil
 		})
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
@@ -229,13 +228,13 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 // cleaned up after it exits. Only does so if a valid exit channel is received,
 // ie. when the container managed by the daemon (job).
 func CleanupOnExitAfterRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
 
-		exited, err = next(ctx, server, nfy, resp, req)
+		exited, err = next(ctx, server, resp, req)
 		if err != nil {
 			return nil, err
 		}

@@ -6,7 +6,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -23,7 +22,7 @@ import (
 // Sets the ManageCgroups field in the criu options to true.
 func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -31,14 +30,14 @@ func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Res
 			req.Criu.ManageCgroups = proto.Bool(true)
 			req.Criu.ManageCgroupsMode = &mode
 
-			return next(ctx, server, nfy, resp, req)
+			return next(ctx, server, resp, req)
 		}
 	}
 }
 
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -54,7 +53,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 
-		nfy.InitializeFunc = append(nfy.InitializeFunc, func(ctx context.Context, criuPid int32) error {
+		server.CRIUCallback.InitializeFunc = append(server.CRIUCallback.InitializeFunc, func(ctx context.Context, criuPid int32) error {
 			err := manager.Apply(int(criuPid))
 			if err != nil {
 				return fmt.Errorf("failed to apply cgroups: %v", err)
@@ -82,6 +81,6 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 			return nil
 		})
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

@@ -4,16 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-// Pluggable features
-const featureRootCmds plugins.Feature[[]*cobra.Command] = "RootCmds"
 
 func init() {
 	// Add main subcommands
@@ -27,7 +24,7 @@ func init() {
 	rootCmd.AddCommand(jobCmd)
 
 	// Add root cmds from plugins
-	featureRootCmds.IfAvailable(
+	features.RootCmds.IfAvailable(
 		func(name string, pluginCmds []*cobra.Command) error {
 			rootCmd.AddCommand(pluginCmds...)
 			return nil

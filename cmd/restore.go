@@ -10,17 +10,14 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 )
-
-// Pluggable features
-const featureRestoreCmd plugins.Feature[*cobra.Command] = "RestoreCmd"
 
 func init() {
 	restoreCmd.AddCommand(processRestoreCmd)
@@ -52,7 +49,7 @@ func init() {
 	// Add modifications from supported plugins
 	///////////////////////////////////////////
 
-	featureRestoreCmd.IfAvailable(
+	features.RestoreCmd.IfAvailable(
 		func(name string, pluginCmd *cobra.Command) error {
 			restoreCmd.AddCommand(pluginCmd)
 

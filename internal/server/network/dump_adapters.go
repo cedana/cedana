@@ -6,7 +6,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -21,7 +20,7 @@ import (
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
@@ -59,6 +58,6 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

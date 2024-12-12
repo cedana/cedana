@@ -7,7 +7,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
@@ -21,7 +20,7 @@ import (
 
 func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -35,7 +34,7 @@ func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[
 
 			req.Criu.EmptyNs = &emptyNs
 
-			return next(ctx, server, nfy, resp, req)
+			return next(ctx, server, resp, req)
 		}
 	}
 }
@@ -48,7 +47,7 @@ func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[
 // and expect it to be setup correctly.
 func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
 				return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
@@ -74,29 +73,29 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 					if version < minVersion {
 						log.Warn().
 							Msgf("CRIU version is less than %d, skipping external NEWNET namespace handling", minVersion)
-						return next(ctx, server, nfy, resp, req)
+						return next(ctx, server, resp, req)
 					}
 				case configs.NEWPID:
 					minVersion := 31500
 					if version < minVersion {
 						log.Warn().
 							Msgf("CRIU version is less than %d, skipping external NEWPID namespace handling", minVersion)
-						return next(ctx, server, nfy, resp, req)
+						return next(ctx, server, resp, req)
 					}
 				default:
 					log.Warn().Msgf("inherit namespace should only be called for external NEWNET or NEWPID. Skipping.")
-					return next(ctx, server, nfy, resp, req)
+					return next(ctx, server, resp, req)
 				}
 
 				if !config.Namespaces.Contains(t) {
 					log.Debug().Msgf("container does not have %v namespace. Skipping.", t)
-					return next(ctx, server, nfy, resp, req)
+					return next(ctx, server, resp, req)
 				}
 
 				nsPath := config.Namespaces.PathOf(t)
 				if nsPath == "" {
 					log.Debug().Msgf("container does not have external %v namespace path. Skipping.", t)
-					return next(ctx, server, nfy, resp, req)
+					return next(ctx, server, resp, req)
 				}
 
 				// CRIU wants the information about an existing namespace
@@ -122,7 +121,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 
 			ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 
-			return next(ctx, server, nfy, resp, req)
+			return next(ctx, server, resp, req)
 		}
 	}
 }
@@ -130,7 +129,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 // For all other namespaces except NET and PID CRIU has
 // a simpler way of joining the existing namespace if set
 func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
@@ -167,6 +166,6 @@ func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

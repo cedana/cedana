@@ -7,7 +7,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
@@ -23,7 +22,7 @@ import (
 )
 
 func SetWorkingDirectoryForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		opts := req.GetDetails().GetRunc()
 		workingDir := opts.GetWorkingDir()
 
@@ -39,7 +38,7 @@ func SetWorkingDirectoryForRestore(next types.Restore) types.Restore {
 			defer os.Chdir(oldDir)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
@@ -49,7 +48,7 @@ func SetWorkingDirectoryForRestore(next types.Restore) types.Restore {
 // c.config.Rootfs is bind-mounted to a temporary directory
 // to satisfy these requirements.
 func MountRootDirForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -78,7 +77,7 @@ func MountRootDirForRestore(next types.Restore) types.Restore {
 		}
 		req.Criu.Root = proto.String(criuRoot)
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
@@ -89,7 +88,7 @@ func MountRootDirForRestore(next types.Restore) types.Restore {
 // This function also creates missing mountpoints as long as they
 // are not on top of a tmpfs, as CRIU will restore tmpfs content anyway.
 func SetupMountsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -164,12 +163,12 @@ func SetupMountsForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 func AddMountsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -201,12 +200,12 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 func AddMaskedPathsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -223,6 +222,6 @@ func AddMaskedPathsForRestore(next types.Restore) types.Restore {
 			CriuAddExternalMount(req.Criu, m, config.Rootfs)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

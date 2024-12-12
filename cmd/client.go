@@ -9,7 +9,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/config"
+	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"

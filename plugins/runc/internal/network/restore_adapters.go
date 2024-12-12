@@ -5,7 +5,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -17,20 +16,20 @@ import (
 )
 
 func UnlockNetworkAfterRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		nfy.NetworkUnlockFunc = append(nfy.NetworkUnlockFunc, func(ctx context.Context) error {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		server.CRIUCallback.NetworkUnlockFunc = append(server.CRIUCallback.NetworkUnlockFunc, func(ctx context.Context) error {
 			// Not implemented, yet
 			// see: libcontainer/criu_linux.go -> unlockNetwork
 			log.Warn().Msg("not unlocking network - not implemented")
 			return nil
 		})
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
 func RestoreNetworkConfiguration(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -44,7 +43,7 @@ func RestoreNetworkConfiguration(next types.Restore) types.Restore {
 
 		if ignoredNamespaces&unix.CLONE_NEWNET != 0 {
 			log.Debug().Msg("skipping network restore, marked in EmptyNs")
-			return next(ctx, server, nfy, resp, req)
+			return next(ctx, server, resp, req)
 		}
 
 		config := container.Config()
@@ -61,6 +60,6 @@ func RestoreNetworkConfiguration(next types.Restore) types.Restore {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

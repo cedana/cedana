@@ -7,7 +7,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -18,7 +17,7 @@ import (
 
 // Fill process state in the restore response
 func FillProcessStateForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
@@ -41,7 +40,7 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 
 		resp.State = state
 
-		exited, err := next(ctx, server, nfy, resp, req)
+		exited, err := next(ctx, server, resp, req)
 		if err != nil {
 			return exited, err
 		}
@@ -56,7 +55,7 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if info := resp.GetState().GetInfo(); info != nil {
 			for _, f := range info.GetOpenFiles() {
@@ -78,7 +77,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 			req.Criu.ShellJob = proto.Bool(isShellJob)
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
 
@@ -86,7 +85,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 // They are set to inherit the 0, 1, 2 file descriptors, assuming CRIU cmd
 // will be launched with these set to appropriate files.
 func InheritStdioForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		inheritFds := req.GetCriu().GetInheritFd()
 
 		if info := resp.GetState().GetInfo(); info != nil {
@@ -111,6 +110,6 @@ func InheritStdioForRestore(next types.Restore) types.Restore {
 		}
 		req.GetCriu().InheritFd = inheritFds
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }

@@ -6,7 +6,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -18,7 +17,7 @@ import (
 
 func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -26,13 +25,13 @@ func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] 
 			req.Criu.ManageCgroups = proto.Bool(true)
 			req.Criu.ManageCgroupsMode = &mode
 
-			return next(ctx, server, nfy, resp, req)
+			return next(ctx, server, resp, req)
 		}
 	}
 }
 
 func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, nfy *criu.NotifyCallbackMulti, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		manager, ok := ctx.Value(runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY).(cgroups.Manager)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get cgroup manager from context")
@@ -54,6 +53,6 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 			}
 		}
 
-		return next(ctx, server, nfy, resp, req)
+		return next(ctx, server, resp, req)
 	}
 }
