@@ -45,7 +45,6 @@ type StreamIOSlave struct {
 	out      <-chan []byte
 	err      <-chan []byte
 	exitCode <-chan int
-	done     chan any
 }
 
 type StreamIOReader struct {
@@ -136,7 +135,6 @@ func NewStreamIOSlave(
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
 	err := make(chan []byte, channelBufLen)
-	done := make(chan any, 1)
 
 	slave := &StreamIOSlave{
 		pid,
@@ -145,7 +143,6 @@ func NewStreamIOSlave(
 		out,
 		err,
 		exitCode,
-		done,
 	}
 
 	SetIOSlave(pid, slave)
@@ -160,7 +157,7 @@ func NewStreamIOSlave(
 		for {
 			select {
 			case <-ctx.Done():
-				close(done)
+				close(in)
 				return
 			case master = <-slave.master:
 				break wait_first_master
@@ -212,7 +209,7 @@ func NewStreamIOSlave(
 			}
 		}
 
-		close(done)
+		close(in)
 		master.Send(
 			&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
 		)
@@ -230,7 +227,6 @@ func (s *StreamIOSlave) Attach(
 	ctx context.Context,
 	master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp],
 ) error {
-	defer close(s.in)
 wait:
 	for {
 		select {
@@ -252,8 +248,6 @@ loop:
 		}
 		select {
 		case <-master.Context().Done():
-			break loop
-		case <-s.done:
 			break loop
 		case s.in <- req.GetStdin():
 		}

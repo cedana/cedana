@@ -119,7 +119,7 @@ var listJobCmd = &cobra.Command{
 		})
 
 		style.TableWriter.SortBy([]table.SortBy{
-			{Name: "Status"},
+			{Name: "Status", Mode: table.Dsc},
 			{Name: "Checkpoint"},
 		})
 
