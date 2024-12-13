@@ -35,6 +35,14 @@ cedana dump job job_id -d dump_dir --stream num
 cedana restore job job_id --stream num
 ```
 
+### Direct remoting
+Directly write checkpoint files to and read checkpoint files from AWS S3 bucket without writing them to disk (in-memory streaming). AWS credentials are handled by propagator, so set `CEDANA_URL` and `CEDANA_AUTH_TOKEN` and run:
+```
+cedana dump job job_id -d dump_dir --stream num --bucket bucket-name
+cedana restore job job_id --stream num --bucket bucket-name
+```
+Currently, `bucket-name` `direct-remoting` can be used for testing.
+
 ### Examples
 
 Simple neural network [[source](https://github.com/cedana/cedana-benchmarking)]
