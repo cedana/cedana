@@ -9,9 +9,15 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-12c61b7041f4.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-979c451166e9.1
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1
+	github.com/containerd/console v1.0.4
+	github.com/containerd/go-runc v1.1.0
+	github.com/cyphar/filepath-securejoin v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mdlayher/vsock v1.2.1
+	github.com/opencontainers/runc v1.2.3
+	github.com/opencontainers/runtime-spec v1.2.0
+	github.com/opencontainers/selinux v1.11.1
 	github.com/rb-go/namegen v1.1.0
 	github.com/rs/zerolog v1.33.0
 	github.com/shirou/gopsutil/v4 v4.24.10
@@ -21,8 +27,20 @@ require (
 )
 
 require (
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
+	github.com/cilium/ebpf v0.16.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/moby/sys/mountinfo v0.7.1 // indirect
+	github.com/moby/sys/user v0.3.0 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
+	github.com/mrunalp/fileutils v0.5.1 // indirect
+	github.com/seccomp/libseccomp-golang v0.10.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
+	github.com/vishvananda/netlink v1.1.0 // indirect
+	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 )
 
@@ -59,7 +77,7 @@ require (
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.29.0
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/sys v0.28.0
 	golang.org/x/text v0.18.0 // indirect
 	google.golang.org/grpc v1.68.0
 	google.golang.org/protobuf v1.35.2

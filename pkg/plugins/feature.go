@@ -21,7 +21,6 @@ type Feature[T any] struct {
 // if it is, it calls the provided function with the plugin name and the feature.
 // Always goes through all plugins, even if one of them fails. Later, the errors
 // are returned together, if any. If no filter is provided, all plugins are checked.
-// Ensures that before calling the function, the symbol is checked for nil.
 func (feature Feature[T]) IfAvailable(
 	do func(pluginName string, sym T) error,
 	filter ...string,

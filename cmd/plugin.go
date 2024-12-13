@@ -35,10 +35,6 @@ var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Manage plugins",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		if utils.IsRootUser() == false {
-			return fmt.Errorf("plugin commands must be run as root")
-		}
-
 		manager := plugins.NewLocalManager()
 
 		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
@@ -151,6 +147,10 @@ var pluginInstallCmd = &cobra.Command{
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, names []string) error {
+		if utils.IsRootUser() == false {
+			return fmt.Errorf("this command must be run as root")
+		}
+
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
@@ -207,6 +207,10 @@ var pluginRemoveCmd = &cobra.Command{
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if utils.IsRootUser() == false {
+			return fmt.Errorf("this command must be run as root")
+		}
+
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
@@ -314,22 +318,22 @@ var pluginFeaturesCmd = &cobra.Command{
 
 		if len(pluginNames) > 0 {
 			style.TableWriter.AppendHeader(header)
-			style.TableWriter.AppendRow(featureRow(features.DumpCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.RestoreCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.RunCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.RootCmds, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.DumpCmd, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RootCmds, pluginNames))
 			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(features.DumpMiddleware, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.RestoreMiddleware, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames))
 			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(features.RunHandler, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.RunMiddleware, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.GPUInterception, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.KillSignal, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames))
 			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(features.CheckpointInspect, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.CheckpointDecode, pluginNames))
-			style.TableWriter.AppendRow(featureRow(features.CheckpointEncode, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames))
+			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames))
 
 			style.TableWriter.Render()
 			fmt.Println()
@@ -337,7 +341,7 @@ var pluginFeaturesCmd = &cobra.Command{
 		}
 
 		if len(externalPlugins) > 0 {
-			fmt.Printf("Not showing external plugins: %s\n", strList(externalPlugins))
+			fmt.Printf("Not showing external plugins: %s\n", utils.StrList(externalPlugins))
 		}
 
 		return nil
@@ -348,10 +352,14 @@ var pluginFeaturesCmd = &cobra.Command{
 /// Helper Funcs ///
 ////////////////////
 
-func featureRow[T any](feature plugins.Feature[T], pluginNames []string) table.Row {
+func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], pluginNames []string) table.Row {
 	row := table.Row{feature.Description}
 
 	for _, name := range pluginNames {
+		if manager.IsInstalled(name) == false {
+			row = append(row, style.DisbledColor.Sprint("-"))
+			continue
+		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
 			row = append(row, style.NegativeColor.Sprint("!"))
@@ -364,9 +372,10 @@ func featureRow[T any](feature plugins.Feature[T], pluginNames []string) table.R
 }
 
 func featureLegend() string {
-	return fmt.Sprintf("%s = available, %s = unavailable, %s = incompatible",
+	return fmt.Sprintf("%s = supported, %s = unsupported, %s = not installed, %s = incompatible",
 		style.PositiveColor.Sprint("✔"),
 		style.DisbledColor.Sprint("✘"),
+		style.DisbledColor.Sprint("-"),
 		style.NegativeColor.Sprint("!"))
 }
 
@@ -381,15 +390,4 @@ func statusStr(s plugins.Status) string {
 	default:
 		return s.String()
 	}
-}
-
-func strList(strs []string) string {
-	str := ""
-	for i, s := range strs {
-		str += s
-		if i < len(strs)-1 {
-			str += ", "
-		}
-	}
-	return str
 }

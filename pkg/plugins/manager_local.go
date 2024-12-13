@@ -118,6 +118,10 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 		}
 
 		for _, name := range names {
+			name := strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {
@@ -199,6 +203,10 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 		}
 
 		for _, name := range names {
+			name := strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {

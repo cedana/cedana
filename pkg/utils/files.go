@@ -221,6 +221,9 @@ func SizeFromPath(path string) (int64, error) {
 }
 
 func SizeStr(bytes int64) string {
+	if bytes <= 0 {
+		return ""
+	}
 	unit := ""
 	value := float64(bytes)
 
