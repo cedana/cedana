@@ -1,8 +1,8 @@
 package flags
 
-import "github.com/cedana/cedana/pkg/flags"
-
 // This file contains all the flags used in this plugin's cmd package.
+
+import "github.com/cedana/cedana/pkg/flags"
 
 var (
 	IdFlag           = flags.Flag{Full: "id", Short: "i"}

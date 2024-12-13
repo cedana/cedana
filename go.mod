@@ -7,10 +7,9 @@ toolchain go1.23.1
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-12c61b7041f4.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-12c61b7041f4.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-979c451166e9.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-979c451166e9.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-85626025adba.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-85626025adba.1
 	github.com/containerd/console v1.0.4
-	github.com/containerd/go-runc v1.1.0
 	github.com/cyphar/filepath-securejoin v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/mattn/go-sqlite3 v1.14.24

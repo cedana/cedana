@@ -50,4 +50,6 @@ func init() {
 		With().
 		Timestamp().
 		Logger().Hook(LineInfoHook{})
+
+	log.Logger = DefaultLogger
 }

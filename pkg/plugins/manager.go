@@ -7,10 +7,10 @@ type Manager interface {
 	List(...Status) ([]Plugin, error)
 
 	// Install a list of plugins
-	Install(names []string) (chan int, chan string, chan error)
+	Install(names []string) (installed chan int, msgs chan string, errs chan error)
 
 	// Remove a list of plugins
-	Remove(names []string) (chan int, chan string, chan error)
+	Remove(names []string) (removed chan int, msgs chan string, errs chan error)
 
 	// Get a plugin by name
 	Get(name string) *Plugin

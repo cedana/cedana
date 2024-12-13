@@ -34,6 +34,12 @@ clean:
 test:
 	$(GOTEST) -v ./...
 
+reset:
+	@echo "Resetting cedana..."
+	rm -rf $(OUT_DIR)/$(BINARY)
+	rm -rf $(OUT_DIR)/libcedana-*.so
+	@echo "Unimplemented"
+
 start-daemon: build
 	@sudo ./$(BINARY) daemon start
 

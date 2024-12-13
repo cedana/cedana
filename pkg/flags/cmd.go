@@ -14,32 +14,32 @@ type Flag struct {
 }
 
 var (
-	DirFlag        = Flag{"dir", "d"}
-	PathFlag       = Flag{"path", "p"}
-	StreamFlag     = Flag{"stream", "s"}
-	WorkingDirFlag = Flag{"working-dir", "w"}
-	JidFlag        = Flag{"jid", "j"}
-	GpuEnabledFlag = Flag{"gpu-enabled", "g"}
-	AttachFlag     = Flag{"attach", "a"}
-	AllFlag        = Flag{"all", "a"}
-	LogFlag        = Flag{"log", ""}
-	ExternalFlag   = Flag{"external", ""}
-	FileLocksFlag  = Flag{"file-locks", ""}
-	TypeFlag       = Flag{"type", "t"}
+	DirFlag        = Flag{Full: "dir", Short: "d"}
+	PathFlag       = Flag{Full: "path", Short: "p"}
+	StreamFlag     = Flag{Full: "stream", Short: "s"}
+	WorkingDirFlag = Flag{Full: "working-dir", Short: "w"}
+	JidFlag        = Flag{Full: "jid", Short: "j"}
+	GpuEnabledFlag = Flag{Full: "gpu-enabled", Short: "g"}
+	AttachFlag     = Flag{Full: "attach", Short: "a"}
+	AllFlag        = Flag{Full: "all", Short: "a"}
+	LogFlag        = Flag{Full: "log"}
+	ExternalFlag   = Flag{Full: "external"}
+	FileLocksFlag  = Flag{Full: "file-locks"}
+	TypeFlag       = Flag{Full: "type", Short: "t"}
 
 	// CRIU
-	LeaveRunningFlag    = Flag{"leave-running", ""}
-	LeaveStoppedFlag    = Flag{"leave-stopped", ""}
-	TcpEstablishedFlag  = Flag{"tcp-established", ""}
-	TcpCloseFlag        = Flag{"tcp-close", ""}
-	TcpSkipInFlightFlag = Flag{"skip-in-flight", ""}
+	LeaveRunningFlag    = Flag{Full: "leave-running"}
+	LeaveStoppedFlag    = Flag{Full: "leave-stopped"}
+	TcpEstablishedFlag  = Flag{Full: "tcp-established"}
+	TcpCloseFlag        = Flag{Full: "tcp-close"}
+	TcpSkipInFlightFlag = Flag{Full: "skip-in-flight"}
 
 	// Parent flags
-	PortFlag       = Flag{"port", "P"}
-	HostFlag       = Flag{"host", "H"}
-	ConfigFlag     = Flag{"config", ""}
-	ConfigDirFlag  = Flag{"config-dir", ""}
-	UseVSOCKFlag   = Flag{"use-vsock", ""}
-	ContextIdFlag  = Flag{"cid", ""}
-	MetricsASRFlag = Flag{"metrics-asr", ""}
+	PortFlag       = Flag{Full: "port", Short: "P"}
+	HostFlag       = Flag{Full: "host", Short: "H"}
+	ConfigFlag     = Flag{Full: "config"}
+	ConfigDirFlag  = Flag{Full: "config-dir"}
+	UseVSOCKFlag   = Flag{Full: "use-vsock"}
+	ContextIdFlag  = Flag{Full: "cid"}
+	MetricsASRFlag = Flag{Full: "metrics-asr"}
 )

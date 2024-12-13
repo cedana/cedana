@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/style"
@@ -133,6 +134,47 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				msgs <- fmt.Sprintf("Updating %s...", name)
 			} else {
 				msgs <- fmt.Sprintf("Installing %s...", name)
+			}
+
+			// Install dependencies if not already in list of names
+			dependencies := make([]string, 0)
+			for _, dep := range plugin.Dependencies {
+				if slices.Contains(names, dep) {
+					continue
+				}
+				dependencies = append(dependencies, dep)
+			}
+			if len(dependencies) > 0 {
+				msgs <- fmt.Sprintf("Installing dependencies...")
+				depsInstalled, depsMsgs, depsErrs := m.Install(plugin.Dependencies)
+				var depsErr error
+				select {
+				case i, ok := <-depsInstalled:
+					if !ok {
+						depsInstalled = nil
+						break
+					}
+					installed <- i
+				case msg, ok := <-depsMsgs:
+					if !ok {
+						msgs = nil
+						break
+					}
+					msgs <- msg
+				case err, ok := <-depsErrs:
+					if !ok {
+						errs = nil
+						break
+					}
+					depsErr = err
+				}
+				if depsInstalled == nil && depsMsgs == nil && depsErrs == nil {
+					break
+				}
+				if depsErr != nil {
+					errs <- fmt.Errorf("Failed to install dependencies: %w", depsErr)
+					continue
+				}
 			}
 
 			// Copy the plugin files from the source directory to the installation directory
