@@ -17,7 +17,7 @@ fi
 EOT
 
 # Create Cedana directories
-mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts
+mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries to the host
@@ -39,5 +39,5 @@ env \
     CEDANA_OTEL_ENABLED="$CEDANA_OTEL_ENABLED" \
     CEDANA_OTEL_PORT="$CEDANA_OTEL_PORT" \
     CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
-    SKIPSETUP="$CEDANA_SKIPSETUP" \
+    CONTAINERD_CONFIG_PATH="$CONTAINERD_CONFIG_PATH" \
     chroot /host /bin/bash /cedana/scripts/setup-host.sh
