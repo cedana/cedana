@@ -72,10 +72,14 @@ var dumpProcessCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				err := awsCredentialsSetup()
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to setup AWS credentials")
-					return fmt.Errorf("Failed to setup AWS credentials")
+				env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
+				file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
+				if !env_set && !file_set {
+					err := awsCredentialsSetup()
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to setup AWS credentials")
+						return fmt.Errorf("Failed to setup AWS credentials")
+					}
 				}
 				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
 					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
@@ -249,10 +253,14 @@ var dumpJobCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				err := awsCredentialsSetup()
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to setup AWS credentials")
-					return fmt.Errorf("Failed to setup AWS credentials")
+				env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
+				file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
+				if !env_set && !file_set {
+					err := awsCredentialsSetup()
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to setup AWS credentials")
+						return fmt.Errorf("Failed to setup AWS credentials")
+					}
 				}
 				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
 					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
