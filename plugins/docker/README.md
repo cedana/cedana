@@ -1,14 +1,6 @@
 # Cedana Docker Plugin
 
-Adds docker C/R support for Cedana.
-
-## Support Matrix
-
-| Feature | Supported | CLI |
-| ------- | --------- | --- |
-| Dump    | No        | -   |
-| Restore | No        | -   |
-| Run     | No        | -   |
+Adds docker support for Cedana.
 
 ## Usage
 

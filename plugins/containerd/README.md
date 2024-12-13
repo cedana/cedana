@@ -1,14 +1,6 @@
 # Cedana Containerd Plugin
 
-Adds containerd C/R support for Cedana.
-
-## Support Matrix
-
-| Feature | Supported | CLI |
-| ------- | --------- | --- |
-| Dump    | No        | -   |
-| Restore | No        | -   |
-| Run     | No        | -   |
+Adds containerd support for Cedana.
 
 ## Usage
 

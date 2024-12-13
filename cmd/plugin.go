@@ -106,6 +106,7 @@ var pluginListCmd = &cobra.Command{
 			"Status",
 			"Installed version",
 			"Latest version",
+			"Dependencies",
 		})
 
 		style.TableWriter.SortBy([]table.SortBy{
@@ -119,6 +120,7 @@ var pluginListCmd = &cobra.Command{
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,
+				utils.StrList(p.Dependencies),
 			}
 			style.TableWriter.AppendRow(row)
 		}

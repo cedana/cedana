@@ -27,5 +27,5 @@ var (
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{}
 
-	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{}
+	// RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{}
 )
