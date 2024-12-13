@@ -72,6 +72,11 @@ var dumpProcessCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
+				err := awsCredentialsSetup()
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to setup AWS credentials")
+					return fmt.Errorf("Failed to setup AWS credentials")
+				}
 				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
 					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
 				}
@@ -244,6 +249,11 @@ var dumpJobCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
+				err := awsCredentialsSetup()
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to setup AWS credentials")
+					return fmt.Errorf("Failed to setup AWS credentials")
+				}
 				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
 					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
 				}

@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"cloud.google.com/go/pubsub"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -100,6 +100,70 @@ func getenv(k, d string) string {
 		return s
 	}
 	return d
+}
+
+type AWSCredentials struct {
+	AWS_ACCESS_KEY_ID     string `json:"AWS_ACCESS_KEY_ID"`
+	AWS_DEFAULT_REGION    string `json:"AWS_DEFAULT_REGION"`
+	AWS_SECRET_ACCESS_KEY string `json:"AWS_SECRET_ACCESS_KEY"`
+}
+
+func awsCredentialsSetup() error {
+	cedana_auth_token, ok := os.LookupEnv("CEDANA_AUTH_TOKEN")
+	if !ok {
+		return fmt.Errorf("CEDANA_AUTH_TOKEN not set")
+	}
+	cedana_url, ok := os.LookupEnv("CEDANA_URL")
+	if !ok {
+		return fmt.Errorf("CEDANA_URL not set")
+	}
+
+	// construct + send request
+	url := fmt.Sprintf("%s/streaming/aws/credentials", cedana_url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cedana_auth_token)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error getting AWS credentials: %d", resp.StatusCode)
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %v", err)
+	}
+
+	// unmarshal response
+	var creds AWSCredentials
+	err = json.Unmarshal([]byte(respBody), &creds)
+	if err != nil {
+		log.Err(err).Msg("Error unmarshaling JSON")
+		return err
+	}
+
+	// set env vars
+	err = os.Setenv("AWS_ACCESS_KEY_ID", creds.AWS_ACCESS_KEY_ID)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_ACCESS_KEY_ID")
+		return err
+	}
+	err = os.Setenv("AWS_DEFAULT_REGION", creds.AWS_DEFAULT_REGION)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_DEFAULT_REGION")
+		return err
+	}
+	err = os.Setenv("AWS_SECRET_ACCESS_KEY", creds.AWS_SECRET_ACCESS_KEY)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
+		return err
+	}
+	return nil
 }
 
 func gcloudAdcSetup(ctx context.Context) error {
