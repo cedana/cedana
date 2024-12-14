@@ -18,7 +18,7 @@ var (
 	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
 	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
 	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
-	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "Root commands"}
+	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "Root command(s)"}
 
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}

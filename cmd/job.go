@@ -37,6 +37,7 @@ func init() {
 	inspectJobCheckpointCmd.Flags().StringP(flags.TypeFlag.Full, flags.TypeFlag.Short, "", "specify image file {ps|fd|mem|rss|sk|gpu}")
 
 	// Add aliases
+	jobCmd.AddCommand(utils.AliasOf(listJobCmd, "ls"))
 	jobCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "ps"))
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "jobs"))

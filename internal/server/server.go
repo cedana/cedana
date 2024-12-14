@@ -134,6 +134,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		criu:    criu,
 		plugins: pluginManager,
 		jobs:    jobManager,
+		db:      database,
 		wg:      wg,
 		machine: Machine{
 			ID:       machineID,

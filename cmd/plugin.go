@@ -25,9 +25,13 @@ func init() {
 	// Subcommand flags
 	pluginListCmd.Flags().
 		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "List all available plugins")
+	pluginRemoveCmd.Flags().
+		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "Remove all installed plugins")
 
 	// Add aliases
+	pluginCmd.AddCommand(utils.AliasOf(pluginListCmd, "ls"))
 	rootCmd.AddCommand(utils.AliasOf(pluginListCmd, "plugins"))
+	rootCmd.AddCommand(utils.AliasOf(pluginFeaturesCmd, "features"))
 }
 
 // Parent plugin command
@@ -206,7 +210,7 @@ var pluginInstallCmd = &cobra.Command{
 var pluginRemoveCmd = &cobra.Command{
 	Use:               "remove <plugin>...",
 	Short:             "Remove a plugin",
-	Args:              cobra.MinimumNArgs(1),
+	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if utils.IsRootUser() == false {
@@ -220,6 +224,20 @@ var pluginRemoveCmd = &cobra.Command{
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
+		}
+
+		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
+		if all {
+			list, err := manager.List(plugins.Installed)
+			if err != nil {
+				return err
+			}
+			args = []string{}
+			for _, p := range list {
+				args = append(args, p.Name)
+			}
+		} else if len(args) == 0 {
+			return fmt.Errorf("specify at least one plugin to remove or use --all")
 		}
 
 		removed := 0
@@ -364,7 +382,7 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
-			row = append(row, style.NegativeColor.Sprint("!"))
+			row = append(row, style.NegativeColor.Sprint("✘"))
 		} else {
 			row = append(row, style.BoolStr(available, "✔", "✘"))
 		}
@@ -378,7 +396,7 @@ func featureLegend() string {
 		style.PositiveColor.Sprint("✔"),
 		style.DisbledColor.Sprint("✘"),
 		style.DisbledColor.Sprint("-"),
-		style.NegativeColor.Sprint("!"))
+		style.NegativeColor.Sprint("✘"))
 }
 
 func statusStr(s plugins.Status) string {
