@@ -138,6 +138,10 @@ var dumpCmd = &cobra.Command{
 			return err
 		}
 
+		if config.Global.Profiling.Enabled && resp.Profiling != nil {
+			printProfilingData(resp.Profiling)
+		}
+
 		fmt.Printf("Dumped to %s\n", resp.Path)
 
 		return nil

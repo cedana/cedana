@@ -141,11 +141,11 @@ func Run() types.Run {
 
 		container, err := libcontainer.Load(root, id)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to load container: %v: %s", err, lastMsg)
 		}
 		state, err := container.State()
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v: %s", err, lastMsg)
 		}
 
 		resp.PID = uint32(state.InitProcessPid)

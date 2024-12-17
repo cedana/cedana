@@ -53,7 +53,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
-		Profiling:    &daemon.ProfilingData{Name: "restore"},
+		Profiling:    &daemon.ProfilingData{},
 	}
 	resp := &daemon.RestoreResp{Profiling: opts.Profiling}
 

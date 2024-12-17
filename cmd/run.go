@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 )
 
@@ -105,6 +109,10 @@ var runCmd = &cobra.Command{
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
+		if config.Global.Profiling.Enabled && resp.Profiling != nil {
+			printProfilingData(resp.Profiling)
+		}
+
 		fmt.Printf("Running managed %s PID %d\n", req.Type, resp.PID)
 
 		return nil
@@ -155,4 +163,46 @@ var processRunCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+////////////////////
+/// Helper Funcs ///
+////////////////////
+
+// PrintProfilingData prints the profiling data in a very readable format.
+func printProfilingData(data *daemon.ProfilingData) {
+	total := time.Duration(data.Duration * 1e6)
+
+	data = &daemon.ProfilingData{
+		Duration:   data.Duration,
+		Components: []*daemon.ProfilingData{data},
+	}
+
+	// Since data contains a tree of all components as a tree.
+	utils.FlattenProfilingData(data)
+
+	fmt.Print("Profiling data available:\n\n")
+
+	tableWriter := table.NewWriter()
+	tableWriter.SetStyle(style.TableStyle)
+	tableWriter.SetOutputMirror(os.Stdout)
+
+	for _, p := range data.Components {
+		if p.Duration == 0 {
+			continue
+		}
+		plugin, name := utils.SimplifyFuncName(p.Name)
+		features.CmdTheme.IfAvailable(func(name string, theme text.Colors) error {
+			plugin = theme.Sprint(plugin)
+			return nil
+		}, plugin)
+
+		duration := time.Duration(p.Duration * 1e6)
+		tableWriter.AppendRow([]interface{}{duration, plugin, style.DisbledColor.Sprint(name)})
+	}
+
+	tableWriter.AppendFooter([]interface{}{total, "total"})
+	tableWriter.Render()
+
+	fmt.Println()
 }

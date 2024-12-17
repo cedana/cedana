@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -104,7 +105,11 @@ var listJobCmd = &cobra.Command{
 			return nil
 		}
 
-		style.TableWriter.AppendHeader(table.Row{
+		tableWriter := table.NewWriter()
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.SetOutputMirror(os.Stdout)
+
+		tableWriter.AppendHeader(table.Row{
 			"Job",
 			"Type",
 			"PID",
@@ -115,7 +120,7 @@ var listJobCmd = &cobra.Command{
 			"Std I/O",
 		})
 
-		style.TableWriter.SortBy([]table.SortBy{
+		tableWriter.SortBy([]table.SortBy{
 			{Name: "Status", Mode: table.Dsc},
 			{Name: "Checkpoint"},
 		})
@@ -181,10 +186,10 @@ var listJobCmd = &cobra.Command{
 				sizeList[i],
 				job.GetLog(),
 			}
-			style.TableWriter.AppendRow(row)
+			tableWriter.AppendRow(row)
 		}
 
-		style.TableWriter.Render()
+		tableWriter.Render()
 
 		fmt.Println()
 		fmt.Printf("Use `%s` for more details about a job\n", utils.FullUse(inspectJobCmd))
@@ -378,7 +383,11 @@ var listJobCheckpointCmd = &cobra.Command{
 			return nil
 		}
 
-		style.TableWriter.AppendHeader(table.Row{
+		tableWriter := table.NewWriter()
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.SetOutputMirror(os.Stdout)
+
+		tableWriter.AppendHeader(table.Row{
 			"#",
 			"Time",
 			"Size",
@@ -398,10 +407,10 @@ var listJobCheckpointCmd = &cobra.Command{
 				utils.SizeStr(checkpoint.GetSize()),
 				checkpoint.GetPath(),
 			}
-			style.TableWriter.AppendRow(row)
+			tableWriter.AppendRow(row)
 		}
 
-		style.TableWriter.Render()
+		tableWriter.Render()
 
 		fmt.Println()
 		fmt.Printf("Use `%s` to inspect a checkpoint.\n", inspectJobCheckpointCmdUse)

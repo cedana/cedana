@@ -3,15 +3,12 @@ package style
 // All cmd styling related code should be placed in this file.
 
 import (
-	"os"
-
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 )
 
 var (
-	TableWriter = table.NewWriter()
-	TableStyle  = table.Style{
+	TableStyle = table.Style{
 		Box: table.BoxStyle{
 			PaddingRight: "  ",
 		},
@@ -28,11 +25,6 @@ var (
 	InfoColor     = text.Colors{text.FgHiBlue}
 	DisbledColor  = text.Colors{text.FgHiBlack}
 )
-
-func init() {
-	TableWriter.SetStyle(TableStyle)
-	TableWriter.SetOutputMirror(os.Stdout)
-}
 
 // BoolStr returns a string representation of a boolean value.
 func BoolStr(b bool, s ...string) string {

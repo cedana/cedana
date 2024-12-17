@@ -1,16 +1,51 @@
 package utils
 
 import (
+	"fmt"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 )
 
 // FunctionName returns the name of the function pointed to by f
 func FunctionName(pc uintptr) string {
 	fullname := runtime.FuncForPC(pc).Name()
-	components := strings.Split(fullname, "/")
-	return components[len(components)-1]
+	return fullname
+	// components := strings.Split(fullname, "/")
+	// return components[len(components)-1]
+}
+
+// SimplifyFuncName simplifies the function name to a plugin and a name.
+// Removes the long package prefix. If the function belongs to a plugin, the plugin name is returned.
+func SimplifyFuncName(f string) (plugin string, name string) {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", f // fallback
+	}
+
+	pluginPattern, err := regexp.Compile(
+		fmt.Sprintf(
+			`%s/plugins/([a-zA-Z0-9_]+)(/|\.)`,
+			info.Main.Path,
+		))
+	if err != nil {
+		return "", f // fallback
+	}
+
+	matches := pluginPattern.FindStringSubmatch(f)
+	if len(matches) > 1 {
+		plugin = matches[1]
+	}
+
+	name = filepath.Base(f)
+
+	trailPattern := regexp.MustCompile(`\.func\d+(\.\d+)?$`)
+	name = trailPattern.ReplaceAllString(name, "")
+
+	return
 }
 
 func IsCallerSameAsUs(caller string) bool {

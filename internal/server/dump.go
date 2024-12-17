@@ -56,7 +56,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
-		Profiling:    &daemon.ProfilingData{Name: "dump"},
+		Profiling:    &daemon.ProfilingData{},
 	}
 	resp := &daemon.DumpResp{Profiling: opts.Profiling}
 

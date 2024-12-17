@@ -39,7 +39,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		Lifetime:  s.lifetime,
 		Plugins:   s.plugins,
 		WG:        s.wg,
-		Profiling: &daemon.ProfilingData{Name: "run"},
+		Profiling: &daemon.ProfilingData{},
 	}
 	resp := &daemon.RunResp{Profiling: opts.Profiling}
 

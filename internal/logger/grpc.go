@@ -14,14 +14,14 @@ func StreamLogger() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := log.With().Str("context", "daemon").Logger().WithContext(ss.Context())
 		log := log.Ctx(ctx)
-		log.Debug().Str("method", info.FullMethod).Msg("gRPC stream started")
+		log.Trace().Str("method", info.FullMethod).Msg("gRPC stream started")
 
 		err := handler(srv, ss)
 
 		if err != nil {
 			log.Error().Str("method", info.FullMethod).Err(err).Msg("gRPC stream failed")
 		} else {
-			log.Debug().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
+			log.Trace().Str("method", info.FullMethod).Msg("gRPC stream succeeded")
 		}
 
 		return err
@@ -38,7 +38,7 @@ func UnaryLogger() grpc.UnaryServerInterceptor {
 		if strings.Contains(info.FullMethod, "GetContainerInfo") {
 			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		}
 
 		resp, err := handler(ctx, req)
@@ -46,7 +46,7 @@ func UnaryLogger() grpc.UnaryServerInterceptor {
 		if err != nil {
 			log.Error().Str("method", info.FullMethod).Interface("request", req).Interface("response", resp).Err(err).Msg("gRPC request failed")
 		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+			log.Trace().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
 		}
 
 		return resp, err

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -100,11 +101,14 @@ var pluginListCmd = &cobra.Command{
 			}
 			return nil
 		}
+		tableWriter := table.NewWriter()
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.SetOutputMirror(os.Stdout)
 
-		style.TableWriter.SetStyle(style.TableStyle)
-		style.TableWriter.Style().Options.SeparateRows = false
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.Style().Options.SeparateRows = false
 
-		style.TableWriter.AppendHeader(table.Row{
+		tableWriter.AppendHeader(table.Row{
 			"Plugin",
 			"Size",
 			"Status",
@@ -113,7 +117,7 @@ var pluginListCmd = &cobra.Command{
 			"Dependencies",
 		})
 
-		style.TableWriter.SortBy([]table.SortBy{
+		tableWriter.SortBy([]table.SortBy{
 			{Name: "Status", Mode: table.Asc},
 		})
 
@@ -126,10 +130,10 @@ var pluginListCmd = &cobra.Command{
 				p.LatestVersion,
 				utils.StrList(p.Dependencies),
 			}
-			style.TableWriter.AppendRow(row)
+			tableWriter.AppendRow(row)
 		}
 
-		style.TableWriter.Render()
+		tableWriter.Render()
 
 		installedCount := 0
 		availableCount := 0
@@ -318,8 +322,12 @@ var pluginFeaturesCmd = &cobra.Command{
 			return nil
 		}
 
-		style.TableWriter.SetStyle(style.TableStyle)
-		style.TableWriter.Style().Options.SeparateRows = false
+		tableWriter := table.NewWriter()
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.SetOutputMirror(os.Stdout)
+
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.Style().Options.SeparateRows = false
 
 		header := table.Row{
 			"Feature",
@@ -337,25 +345,25 @@ var pluginFeaturesCmd = &cobra.Command{
 		}
 
 		if len(pluginNames) > 0 {
-			style.TableWriter.AppendHeader(header)
-			style.TableWriter.AppendRow(featureRow(manager, features.DumpCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.RootCmds, pluginNames))
-			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames))
-			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames))
-			style.TableWriter.AppendSeparator()
-			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames))
-			style.TableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames))
+			tableWriter.AppendHeader(header)
+			tableWriter.AppendRow(featureRow(manager, features.DumpCmd, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RootCmds, pluginNames))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames))
 
-			style.TableWriter.Render()
+			tableWriter.Render()
 			fmt.Println()
 			fmt.Println(featureLegend())
 		}
