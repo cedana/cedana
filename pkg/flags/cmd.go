@@ -40,6 +40,8 @@ var (
 	ConfigFlag     = Flag{Full: "config"}
 	ConfigDirFlag  = Flag{Full: "config-dir"}
 	UseVSOCKFlag   = Flag{Full: "use-vsock"}
+	LocalDBFlag    = Flag{Full: "local-db"}
 	ContextIdFlag  = Flag{Full: "cid"}
 	MetricsASRFlag = Flag{Full: "metrics-asr"}
+	ProfilingFlag  = Flag{Full: "profiling"}
 )

@@ -77,12 +77,12 @@ func (j *Job) SetPID(pid uint32) {
 }
 
 func (j *Job) GetProto() *daemon.Job {
-	j.RLock()
-	defer j.RUnlock()
+	j.Lock()
+	defer j.Unlock()
 
 	// Get all latest info
-	j.proto.Process = j.GetProcess()
-	j.proto.Log = j.GetLog()
+	j.proto.Process = j.process()
+	j.proto.Log = j.log()
 
 	return &j.proto
 }
@@ -93,38 +93,11 @@ func (j *Job) GetType() string {
 	return j.proto.Type
 }
 
-func (j *Job) SetType(jobType string) {
+func (j *Job) GetProcess() *daemon.ProcessState {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.Type = jobType
-}
 
-func (j *Job) GetProcess() *daemon.ProcessState {
-	j.RLock()
-	defer j.RUnlock()
-
-	pid := j.GetPID()
-
-	if j.proto.GetProcess() == nil {
-		j.proto.Process = &daemon.ProcessState{}
-	}
-	if j.proto.GetProcess().GetInfo() == nil {
-		j.proto.Process.Info = &daemon.ProcessInfo{}
-	}
-
-	j.proto.Process.Info.Status = "halted"
-	j.proto.Process.Info.IsRunning = false
-
-	p, err := process.NewProcess(int32(pid))
-	if err == nil {
-		status, err := p.Status()
-		if err == nil {
-			j.proto.Process.Info.Status = status[0]
-			j.proto.Process.Info.IsRunning = true
-		}
-	}
-
-	return j.proto.Process
+	return j.process()
 }
 
 func (j *Job) SetProcess(process *daemon.ProcessState) {
@@ -150,13 +123,7 @@ func (j *Job) GetLog() string {
 	j.RLock()
 	defer j.RUnlock()
 
-	// Check if log file exists
-	log := j.proto.Log
-	if _, e := os.Stat(log); os.IsNotExist(e) {
-		return ""
-	}
-
-	return log
+	return j.log()
 }
 
 func (j *Job) SetLog(log string) {
@@ -197,7 +164,9 @@ func (j *Job) GetLatestCheckpoint() *daemon.Checkpoint {
 }
 
 func (j *Job) IsRunning() bool {
-	return j.GetProcess().GetInfo().GetIsRunning()
+	j.Lock()
+	defer j.Unlock()
+	return j.process().GetInfo().GetIsRunning()
 }
 
 func (j *Job) GPUEnabled() bool {
@@ -222,4 +191,46 @@ func (j *Job) AddCRIUCallback(n criu.NotifyCallback) {
 	j.Lock()
 	defer j.Unlock()
 	j.criuCallback.Include(n)
+}
+
+///////////////
+/// Helpers ///
+///////////////
+
+// Functions below don't use locks, so they could be called with locks held.
+
+// WARN: Writes, so call with write lock.
+func (j *Job) process() *daemon.ProcessState {
+	if j.proto.GetProcess() == nil {
+		j.proto.Process = &daemon.ProcessState{}
+	}
+	if j.proto.GetProcess().GetInfo() == nil {
+		j.proto.Process.Info = &daemon.ProcessInfo{}
+	}
+
+	j.proto.Process.Info.Status = "halted"
+	j.proto.Process.Info.IsRunning = false
+
+	pid := j.proto.GetProcess().GetPID()
+
+	p, err := process.NewProcess(int32(pid))
+	if err == nil {
+		status, err := p.Status()
+		if err == nil {
+			j.proto.Process.Info.Status = status[0]
+			j.proto.Process.Info.IsRunning = true
+		}
+	}
+
+	return j.proto.Process
+}
+
+func (j *Job) log() string {
+	// Check if log file exists
+	log := j.proto.Log
+	if _, e := os.Stat(log); os.IsNotExist(e) {
+		return ""
+	}
+
+	return log
 }

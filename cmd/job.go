@@ -53,13 +53,13 @@ var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		useVSOCK := config.Global.UseVSOCK
 		var client *Client
 
 		if useVSOCK {
-			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 		} else {
-			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+			client, err = NewClient(config.Global.Host, config.Global.Port)
 		}
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
@@ -123,15 +123,15 @@ var listJobCmd = &cobra.Command{
 		statusStr := func(status string) string {
 			switch status {
 			case "running":
-				return style.PositiveColor.Sprintf(status)
+				return style.PositiveColor.Sprint(status)
 			case "sleep":
-				return style.InfoColor.Sprintf(status)
+				return style.InfoColor.Sprint(status)
 			case "zombie":
-				return style.WarningColor.Sprintf(status)
+				return style.WarningColor.Sprint(status)
 			case "halted":
-				return style.DisbledColor.Sprintf(status)
+				return style.DisbledColor.Sprint(status)
 			}
-			return style.DisbledColor.Sprintf(status)
+			return style.DisbledColor.Sprint(status)
 		}
 
 		// Color type based on the plugin theme
@@ -141,7 +141,7 @@ var listJobCmd = &cobra.Command{
 				colorToUse = theme
 				return nil
 			}, t)
-			return colorToUse.Sprintf(t)
+			return colorToUse.Sprint(t)
 		}
 
 		latestCheckpoint := func(checkpoints []*daemon.Checkpoint) (string, string) {

@@ -2,46 +2,50 @@ package config
 
 // XXX: Config file should have a version field to manage future changes to schema
 type (
-	// Daemon config
 	Config struct {
-		Options    Options    `key:"options"    json:"options"    mapstructure:"options"`
-		Connection Connection `key:"connection" json:"connection" mapstructure:"connection"`
-		Storage    Storage    `key:"storage"    json:"storage"    mapstructure:"storage"`
-		Metrics    Metrics    `key:"metrics"    json:"metrics"    mapstructure:"metrics"`
-		CRIU       CRIU       `key:"criu"       json:"criu"       mapstructure:"criu"`
-		CLI        CLI        `key:"cli"        json:"cli"        mapstructure:"cli"`
-	}
-	Options struct {
-		Port     uint32 `key:"port"     json:"port"      mapstructure:"port"`
-		Host     string `key:"host"     json:"host"      mapstructure:"host"`
-		UseVSOCK bool   `key:"useVSOCK" json:"use_vsock" mapstructure:"use_vsock"`
+		Port      uint32 `json:"port"      mapstructure:"port"`
+		Host      string `json:"host"      mapstructure:"host"`
+		ContextID uint32 `json:"context_id" mapstructure:"context_id"`
+		UseVSOCK  bool   `json:"use_vsock" mapstructure:"use_vsock"`
+		LogLevel  string `json:"log_level" mapstructure:"log_level"`
+
+		Connection Connection `json:"connection" mapstructure:"connection"`
+		Storage    Storage    `json:"storage"    mapstructure:"storage"`
+		Profiling  Profiling  `json:"profiling"  mapstructure:"profiling"`
+		Metrics    Metrics    `json:"metrics"    mapstructure:"metrics"`
+		CRIU       CRIU       `json:"criu"       mapstructure:"criu"`
+		CLI        CLI        `json:"cli"        mapstructure:"cli"`
+		GPU        GPU        `json:"gpu"        mapstructure:"gpu"`
 	}
 	Connection struct {
-		// for cedana managed systems
-		CedanaUrl       string `key:"cedanaUrl"       json:"cedana_url"        mapstructure:"cedana_url"`
-		CedanaAuthToken string `key:"cedanaAuthToken" json:"cedana_auth_token" mapstructure:"cedana_auth_token"`
+		URL       string `json:"url"    mapstructure:"url"`
+		AuthToken string `json:"auth_token" mapstructure:"auth_token"`
 	}
 	Storage struct {
-		Remote      bool   `key:"remote"      json:"remote"      mapstructure:"remote"`
-		DumpDir     string `key:"dumpDir"     json:"dump_dir"    mapstructure:"dump_dir"`
-		Compression string `key:"compression" json:"compression" mapstructure:"compression"`
+		Remote      bool   `json:"remote"      mapstructure:"remote"`
+		DumpDir     string `json:"dump_dir"    mapstructure:"dump_dir"`
+		Compression string `json:"compression" mapstructure:"compression"`
+	}
+	Profiling struct {
+		Enabled bool `json:"enabled" mapstructure:"enabled"`
 	}
 	Metrics struct {
-		ASR  bool `key:"asr"  json:"asr"  mapstructure:"asr"`
-		Otel struct {
-			Enabled bool `key:"enabled" json:"enabled" mapstructure:"enabled"`
-			Port    int  `key:"port" json:"port" mapstructure:"port"`
-		} `key:"otel" json:"otel" mapstructure:"otel"`
+		ASR  bool `json:"asr"  mapstructure:"asr"`
+		Otel Otel `json:"otel" mapstructure:"otel"`
 	}
 	CLI struct {
-		WaitForReady bool `key:"waitForReady" json:"wait_for_ready" mapstructure:"wait_for_ready"`
+		WaitForReady bool `json:"wait_for_ready" mapstructure:"wait_for_ready"`
 	}
 	CRIU struct {
-		BinaryPath   string `key:"binaryPath"   json:"binary_path"   mapstructure:"binary_path"`
-		LeaveRunning bool   `key:"leaveRunning" json:"leave_running" mapstructure:"leave_running"`
+		BinaryPath   string `json:"binary_path"   mapstructure:"binary_path"`
+		LeaveRunning bool   `json:"leave_running" mapstructure:"leave_running"`
 	}
 	GPU struct {
 		// Number of warm GPU controllers to keep in pool
-		PoolSize int `key:"poolSize" json:"pool_size" mapstructure:"pool_size"`
+		PoolSize int `json:"pool_size" mapstructure:"pool_size"`
+	}
+	Otel struct {
+		Enabled bool `json:"enabled" mapstructure:"enabled"`
+		Port    int  `json:"port" mapstructure:"port"`
 	}
 )

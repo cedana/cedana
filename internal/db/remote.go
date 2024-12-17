@@ -11,19 +11,20 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
+	"github.com/cedana/cedana/pkg/config"
 )
 
 type RemoteDB struct {
-	baseUrl string
-	token   string
-	client  *http.Client
+	baseUrl   string
+	authToken string
+	client    *http.Client
 }
 
-func NewRemoteDB(ctx context.Context, baseUrl string, token string) DB {
+func NewRemoteDB(ctx context.Context, connection config.Connection) *RemoteDB {
 	return &RemoteDB{
-		baseUrl: baseUrl,
-		token:   token,
-		client:  &http.Client{},
+		baseUrl:   connection.URL,
+		authToken: connection.AuthToken,
+		client:    &http.Client{},
 	}
 }
 
@@ -38,7 +39,7 @@ func (db *RemoteDB) GetJob(ctx context.Context, jid string) (*daemon.Job, error)
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -81,7 +82,7 @@ func (db *RemoteDB) PutJob(ctx context.Context, jid string, job *daemon.Job) err
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -107,7 +108,7 @@ func (db *RemoteDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -146,7 +147,7 @@ func (db *RemoteDB) DeleteJob(ctx context.Context, jid string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
 	resp, err := db.client.Do(req)
 	if err != nil {
 		return err

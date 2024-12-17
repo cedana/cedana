@@ -24,7 +24,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (handlers.Dump). Post-dump, the order is reversed.
 
-	compression := config.Get(config.STORAGE_COMPRESSION)
+	compression := config.Global.Storage.Compression
 
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
@@ -56,8 +56,9 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
+		Profiling:    &daemon.ProfilingData{Name: "dump"},
 	}
-	resp := &daemon.DumpResp{}
+	resp := &daemon.DumpResp{Profiling: opts.Profiling}
 
 	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
@@ -91,7 +92,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, server, resp, req)

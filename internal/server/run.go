@@ -36,11 +36,12 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	// It also gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
 	opts := types.ServerOpts{
-		Lifetime: s.lifetime,
-		Plugins:  s.plugins,
-		WG:       s.wg,
+		Lifetime:  s.lifetime,
+		Plugins:   s.plugins,
+		WG:        s.wg,
+		Profiling: &daemon.ProfilingData{Name: "run"},
 	}
-	resp := &daemon.RunResp{}
+	resp := &daemon.RunResp{Profiling: opts.Profiling}
 
 	_, err := run(ctx, opts, resp, req)
 	if err != nil {
@@ -74,7 +75,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, server, resp, req)
@@ -100,7 +101,7 @@ func pluginRunHandler() types.Run {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
 		if req.GPUEnabled {

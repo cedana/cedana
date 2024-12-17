@@ -53,8 +53,9 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
+		Profiling:    &daemon.ProfilingData{Name: "restore"},
 	}
-	resp := &daemon.RestoreResp{}
+	resp := &daemon.RestoreResp{Profiling: opts.Profiling}
 
 	// s.ctx is the lifetime context of the server, pass it so that
 	// managed processes maximum lifetime is the same as the server.
@@ -92,7 +93,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, server, resp, req)

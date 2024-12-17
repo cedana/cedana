@@ -46,14 +46,8 @@ func init() {
 		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "external mountpoints to dump (comma-separated)")
 
 	// Bind to config
-	viper.BindPFlag(
-		config.STORAGE_DUMP_DIR.Key,
-		dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full),
-	)
-	viper.BindPFlag(
-		config.CRIU_LEAVE_RUNNING.Key,
-		dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full),
-	)
+	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
+	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
 	// Add modifications from supported plugins
@@ -83,8 +77,8 @@ var dumpCmd = &cobra.Command{
 	Short: "Dump a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.Get(config.STORAGE_DUMP_DIR)
-		leaveRunning := config.Get(config.CRIU_LEAVE_RUNNING)
+		dir := config.Global.Storage.DumpDir
+		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
@@ -119,13 +113,13 @@ var dumpCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		useVSOCK := config.Global.UseVSOCK
 		var client *Client
 
 		if useVSOCK {
-			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 		} else {
-			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+			client, err = NewClient(config.Global.Host, config.Global.Port)
 		}
 
 		if err != nil {

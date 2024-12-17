@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/internal/logger"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/rs/zerolog/log"
@@ -13,6 +14,8 @@ import (
 )
 
 func init() {
+	cobra.EnableTraverseRunHooks = true
+
 	// Add main subcommands
 	rootCmd.AddCommand(daemonCmd)
 	rootCmd.AddCommand(dumpCmd)
@@ -33,7 +36,7 @@ func init() {
 
 	// Add root flags
 	rootCmd.PersistentFlags().
-		String(flags.ConfigFlag.Full, "", "one-time config JSON string (will merge with existing config)")
+		String(flags.ConfigFlag.Full, "", "one-time config JSON string (merge with existing config)")
 	rootCmd.PersistentFlags().String(flags.ConfigDirFlag.Full, "", "custom config directory")
 	rootCmd.MarkPersistentFlagDirname(flags.ConfigDirFlag.Full)
 	rootCmd.MarkFlagsMutuallyExclusive(flags.ConfigFlag.Full, flags.ConfigDirFlag.Full)
@@ -45,12 +48,15 @@ func init() {
 		BoolP(flags.UseVSOCKFlag.Full, flags.UseVSOCKFlag.Short, false, "use vsock for communication")
 	rootCmd.PersistentFlags().
 		Uint32P(flags.ContextIdFlag.Full, flags.ContextIdFlag.Short, 0, "context id for vsock communication")
+	rootCmd.PersistentFlags().
+		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
 
 	// Bind to config
-	viper.BindPFlag(config.PORT.Key, rootCmd.PersistentFlags().Lookup(flags.PortFlag.Full))
-	viper.BindPFlag(config.HOST.Key, rootCmd.PersistentFlags().Lookup(flags.HostFlag.Full))
-	viper.BindPFlag(config.USE_VSOCK.Key, rootCmd.PersistentFlags().Lookup(flags.UseVSOCKFlag.Full))
-	viper.BindPFlag(config.VSOCK_CONTEXT_ID.Key, rootCmd.PersistentFlags().Lookup(flags.ContextIdFlag.Full))
+	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup(flags.PortFlag.Full))
+	viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup(flags.HostFlag.Full))
+	viper.BindPFlag("use_vsock", rootCmd.PersistentFlags().Lookup(flags.UseVSOCKFlag.Full))
+	viper.BindPFlag("context_id", rootCmd.PersistentFlags().Lookup(flags.ContextIdFlag.Full))
+	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
 }
 
 var rootCmd = &cobra.Command{
@@ -78,6 +84,9 @@ var rootCmd = &cobra.Command{
 		}); err != nil {
 			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
+
+		logger.SetLevel(config.Global.LogLevel)
+
 		return nil
 	},
 }

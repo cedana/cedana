@@ -12,44 +12,40 @@ import (
 )
 
 const (
-	DEFAULT_LOG_LEVEL    = zerolog.InfoLevel
-	LOG_TIME_FORMAT_FULL = time.TimeOnly
-	LOG_CALLER_SKIP      = 3 // stack frame depth
+	LOG_TIME_FORMAT = time.TimeOnly
+	LOG_CALLER_SKIP = 3 // stack frame depth
 )
-
-var DefaultLogger = log.Logger
 
 type LineInfoHook struct{}
 
 func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
-	if l >= zerolog.WarnLevel {
+	if l >= zerolog.ErrorLevel {
 		e.Caller(LOG_CALLER_SKIP)
 	}
 }
 
 func init() {
+	SetLevel(config.Global.LogLevel)
+}
+
+func SetLevel(level string) {
+	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	logLevelStr := config.Get(config.LOG_LEVEL)
-	logLevel, err := zerolog.ParseLevel(logLevelStr)
-	if err != nil || logLevelStr == "" { // allow turning off logging
-		logLevel = DEFAULT_LOG_LEVEL
+	logLevel, err := zerolog.ParseLevel(level)
+	if err != nil || level == "" { // allow turning off logging
+		logLevel = zerolog.Disabled
 	}
 
 	var output io.Writer = zerolog.ConsoleWriter{
 		Out:          os.Stdout,
-		TimeFormat:   LOG_TIME_FORMAT_FULL,
+		TimeFormat:   LOG_TIME_FORMAT,
 		TimeLocation: time.Local,
-		PartsOrder:   []string{"time", "level", "caller", "message"},
-		FieldsOrder:  []string{"time", "level", "caller", "message"},
 	}
 
-	// Set as default logger
-	DefaultLogger = zerolog.New(output).
+	log.Logger = zerolog.New(output).
 		Level(logLevel).
 		With().
 		Timestamp().
 		Logger().Hook(LineInfoHook{})
-
-	log.Logger = DefaultLogger
 }

@@ -64,7 +64,7 @@ func Restore() types.Restore {
 		if req.Attachable {
 			criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 			id := rand.Uint32()                    // Use a random number, since we don't have PID yet
-			stdin, stdout, stderr = cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			stdin, stdout, stderr = cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
 			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		} else {
 			if req.Log == "" {

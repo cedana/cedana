@@ -10,9 +10,9 @@ endif
 all: build plugins
 .PHONY: build plugins
 
-############
-## Cedana ##
-############
+##########
+##@ Cedana
+##########
 
 BINARY=cedana
 BINARY_SOURCES=$(wildcard **/*.go)
@@ -24,14 +24,14 @@ build: $(BINARY_SOURCES) ## Build the binary
 	$(GOCMD) mod tidy
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-start: build plugins ## Build and start the daemon
-	@sudo ./$(BINARY) daemon start
+start: ## Start the daemon
+	@sudo -E ./$(BINARY) daemon start
 
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
 	@sudo pkill -f $(BINARY) -TERM
 
-start-systemd: build plugins ## Build and start the daemon using systemd
+start-systemd: build plugins ## Build and start the systemd daemon
 	@echo "Starting systemd service..."
 	$(SCRIPTS_DIR)/start-systemd.sh --plugins=runc
 
@@ -43,13 +43,13 @@ stop-systemd: ## Stop the systemd daemon
 	fi
 	@echo "No systemd service found."
 
-reset: stop-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset cedana (everything)
+reset: stop-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -rf $(OUT_DIR)/$(BINARY)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
-	@sudo rm -f /tmp/cedana.db
+	@sudo rm -f /tmp/cedana*.db
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
@@ -57,17 +57,17 @@ reset-config: ## Reset configuration files
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
-	@sudo rm -rf /tmp/cedana-*
-	@sudo rm -rf /tmp/dump-*
+	@sudo rm -rf /tmp/cedana*
+	@sudo rm -rf /tmp/dump*
 	@sudo rm -rf /dev/shm/cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
 	sudo rm -rf /var/log/cedana*
 
-#############
-## Plugins ##
-#############
+###########
+##@ Plugins
+###########
 
 PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
 plugins: $(PLUGIN_SOURCES) ## Build & install plugins
@@ -80,33 +80,91 @@ plugins: $(PLUGIN_SOURCES) ## Build & install plugins
 			$(GOBUILD) -C $$path -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
-	sudo $(BINARY) plugin install $$list ;\
+	sudo -E $(BINARY) plugin install $$list ;\
 
-reset-plugins: ## Reset plugins
+reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
 	if [ -p $(OUT_DIR)/$(BINARY) ]; then \
-		sudo $(BINARY) plugin remove --all ;\
+		sudo -E $(BINARY) plugin remove --all ;\
 	fi
 
-#############
-## Testing ##
-#############
+###########
+##@ Testing
+###########
 
-test: test-go ## Run all tests
+PARALLELISM?=8
+BATS_CMD=bats --jobs $(PARALLELISM)
+
+test: test-go test-regression ## Run all tests
 
 test-go: ## Run go tests
 	@echo "Running go tests..."
 	$(GOCMD) test -v ./...
 
-test-regression: ## Run regression tests
-	@echo "Running regression tests..."
-	# TODO: Implement regression tests
+test-regression: ## Run all regression tests (PARALLELISM=<n>)
+	@echo "Running all regression tests..."
+	@echo "Parallelism: $(PARALLELISM)"
+	if [ -f /.dockerenv ]; then \
+		echo "Using unique instance of daemon per test..." ;\
+		$(BATS_CMD) test/regression/*.bats ;\
+		$(BATS_CMD) test/regression/plugins/*.bats ;\
+		echo "Using single instance of daemon across tests..." ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/*.bats ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/*.bats ;\
+	else \
+		$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
+	fi
 
-#############
-## Helpers ##
-#############
+test-regression-cedana: ## Run regression tests for cedana
+	@echo "Running regression tests for cedana..."
+	@echo "Parallelism: $(PARALLELISM)"
+	if [ -f /.dockerenv ]; then \
+		echo "Using unique instance of daemon per test..." ;\
+		$(BATS_CMD) test/regression/*.bats ;\
+		echo "Using single instance of daemon across tests..." ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/*.bats ;\
+	else \
+		$(DOCKER_TEST_RUN) make test-regression-cedana PARALLELISM=$(PARALLELISM) ;\
+	fi
 
+test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
+	@echo "Running regression tests for plugin $$PLUGIN..."
+	@echo "Parallelism: $(PARALLELISM)"
+	if [ -f /.dockerenv ]; then \
+		echo "Using unique instance of daemon per test..." ;\
+		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats
+		echo "Using single instance of daemon across tests..." ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
+	else \
+		$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
+	fi
+
+##########
+##@ Docker
+##########
+
+DOCKER_TEST_IMAGE=cedana/cedana-test:latest
+DOCKER_TEST_RUN=docker run -t --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
+
+docker-test: ## Build the test Docker image
+	@echo "Building test Docker image..."
+	cd test ;\
+	docker build -t $(DOCKER_TEST_IMAGE) . ;\
+	cd -
+
+docker-test-push: ## Push the test Docker image
+	@echo "Pushing test Docker image..."
+	docker push $(DOCKER_TEST_IMAGE)
+
+###########
 ##@ Utility
+###########
+
+format: ## Format all code
+	@echo "Formatting code..."
+	$(GOCMD) fmt ./...
+
+spacing=24
 help:  ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

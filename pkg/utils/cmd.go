@@ -22,8 +22,8 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 	cmd := *src
 	cmd.Use = AliasCommandUse(src, name...)
 
-	cmd.Flags().AddFlagSet(src.LocalFlags())
-	cmd.Flags().AddFlagSet(src.InheritedFlags())
+	cmd.LocalFlags().AddFlagSet(src.LocalFlags())
+	cmd.InheritedFlags().AddFlagSet(src.InheritedFlags())
 
 	if src.HasSubCommands() {
 		for _, c := range src.Commands() {
@@ -39,17 +39,18 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 
 // Use this for Run to make a command an alias to another command's Run.
 // Invokes all persistent hooks for all parents as well.
-func AliasCommandRun(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) {
-	if aliasOf == nil {
+func AliasCommandRun(src *cobra.Command) func(cmd *cobra.Command, args []string) {
+	if src == nil {
 		return nil
 	}
 
-	parents := []*cobra.Command{}
-	aliasOf.VisitParents(func(p *cobra.Command) {
-		parents = append(parents, p)
-	})
-
 	return func(cmd *cobra.Command, args []string) {
+		parents := []*cobra.Command{}
+		src.VisitParents(func(p *cobra.Command) {
+			parents = append(parents, p)
+		})
+		parents = parents[:len(parents)-1] // Remove the root command
+
 		// Run all PersistentPreRunE hooks for immediate parents, reverse order
 		for i := len(parents) - 1; i >= 0; i-- {
 			p := parents[i]
@@ -59,8 +60,8 @@ func AliasCommandRun(aliasOf *cobra.Command) func(cmd *cobra.Command, args []str
 		}
 
 		// Run the alias command
-		if aliasOf.Run != nil {
-			aliasOf.Run(cmd, args)
+		if src.Run != nil {
+			src.Run(cmd, args)
 		}
 
 		// Run all PersistentPostRunE hooks for immediate parents
@@ -74,17 +75,18 @@ func AliasCommandRun(aliasOf *cobra.Command) func(cmd *cobra.Command, args []str
 
 // Use this for RunE to make a command an alias to another command's RunE.
 // Invokes all persistent hooks for all parents as well.
-func AliasCommandRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []string) error {
-	if aliasOf == nil {
+func AliasCommandRunE(src *cobra.Command) func(cmd *cobra.Command, args []string) error {
+	if src == nil {
 		return nil
 	}
 
-	parents := []*cobra.Command{}
-	aliasOf.VisitParents(func(p *cobra.Command) {
-		parents = append(parents, p)
-	})
-
 	return func(cmd *cobra.Command, args []string) error {
+		parents := []*cobra.Command{}
+		src.VisitParents(func(p *cobra.Command) {
+			parents = append(parents, p)
+		})
+		parents = parents[:len(parents)-1] // Remove the root command
+
 		// Run all PersistentPreRunE hooks for immediate parents, reverse order
 		for i := len(parents) - 1; i >= 0; i-- {
 			p := parents[i]
@@ -96,8 +98,8 @@ func AliasCommandRunE(aliasOf *cobra.Command) func(cmd *cobra.Command, args []st
 		}
 
 		// Run the alias command
-		if aliasOf.RunE != nil {
-			if err := aliasOf.RunE(cmd, args); err != nil {
+		if src.RunE != nil {
+			if err := src.RunE(cmd, args); err != nil {
 				return err
 			}
 		}

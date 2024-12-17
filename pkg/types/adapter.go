@@ -1,10 +1,13 @@
 package types
 
+// Defines the types and functions used to create and manage server handlers, adapters, and middleware.
+
 import (
 	"context"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 )
@@ -18,37 +21,29 @@ type (
 		CRIUCallback *criu.NotifyCallbackMulti
 		Plugins      plugins.Manager
 		Lifetime     context.Context
+		Profiling    *daemon.ProfilingData
 	}
 
-	Dump    func(context.Context, ServerOpts, *daemon.DumpResp, *daemon.DumpReq) (exited chan int, err error)
-	Restore func(context.Context, ServerOpts, *daemon.RestoreResp, *daemon.RestoreReq) (exited chan int, err error)
-	Run     func(context.Context, ServerOpts, *daemon.RunResp, *daemon.RunReq) (exited chan int, err error)
-	Manage  func(context.Context, ServerOpts, *daemon.ManageResp, *daemon.ManageReq) (exited chan int, err error)
+	Dump       = Handler[daemon.DumpReq, daemon.DumpResp]
+	Restore    = Handler[daemon.RestoreReq, daemon.RestoreResp]
+	Run        = Handler[daemon.RunReq, daemon.RunResp]
+	ManageDump = Handler[daemon.DumpReq, daemon.DumpResp]
+
+	Handler[REQ, RESP any] func(context.Context, ServerOpts, *RESP, *REQ) (exited chan int, err error)
 
 	// An adapter is a function that takes a Handler and returns a new Handler
-	Adapter[H Dump | Restore | Run | Manage] func(H) H
+	Adapter[H any] func(H) H
 
 	// A middleware is simply a chain of adapters
-	Middleware[H Dump | Restore | Run | Manage] []Adapter[H]
+	Middleware[H any] []Adapter[H]
 )
 
-// With is a method on Handler that applies a list of Middleware to the Handler
-func (h Dump) With(middleware ...Adapter[Dump]) Dump {
-	return adapted(h, middleware...)
-}
-
-// With is a method on Handler that applies a list of Middleware to the Handler
-func (h Restore) With(middleware ...Adapter[Restore]) Restore {
-	return adapted(h, middleware...)
-}
-
-// With is a method on Handler that applies a list of Middleware to the Handler
-func (h Run) With(middleware ...Adapter[Run]) Run {
-	return adapted(h, middleware...)
-}
-
-// With is a method on Handler that applies a list of Middleware to the Handler
-func (h Manage) With(middleware ...Adapter[Manage]) Manage {
+// With applies the given middleware to the handler.
+// When profiling is enabled, a timing profiler is added to the middleware chain.
+func (h Handler[REQ, RESP]) With(middleware ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
+	if config.Global.Profiling.Enabled {
+		return adaptedWithProfiler(h, Timed, middleware...)
+	}
 	return adapted(h, middleware...)
 }
 
@@ -58,9 +53,22 @@ func (h Manage) With(middleware ...Adapter[Manage]) Manage {
 
 // Adapted takes a Handler and a list of Adapters, and
 // returns a new Handler that applies the adapters in order.
-func adapted[H Dump | Restore | Run | Manage](h H, adapters ...Adapter[H]) H {
+func adapted[REQ, RESP any](h Handler[REQ, RESP], adapters ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
 	for i := len(adapters) - 1; i >= 0; i-- {
 		h = adapters[i](h)
 	}
 	return h
+}
+
+// A profiler can be used to measure the performance of each adapter the request
+// goes through before reaching the handler. A profiler is also, itself, an adapter,
+// and is inserted in between any two adapters in the middleware chain.
+func adaptedWithProfiler[REQ, RESP any](h Handler[REQ, RESP], profiler Adapter[Handler[REQ, RESP]], adapters ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
+	newMiddleware := make([]Adapter[Handler[REQ, RESP]], 0, len(adapters)*2+1)
+	for _, m := range adapters {
+		newMiddleware = append(newMiddleware, profiler, m)
+	}
+	newMiddleware = append(newMiddleware, profiler)
+
+	return adapted(h, newMiddleware...)
 }

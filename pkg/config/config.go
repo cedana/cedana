@@ -14,19 +14,51 @@ const (
 	configDirName  = ".cedana"
 	configFileName = "config"
 	configFileType = "json"
+	configDirPerm  = 0o755
+	configFilePerm = 0o644
 	envVarPrefix   = "CEDANA"
-	configDirPerm  = 0755
-	configFilePerm = 0644
 )
+
+// The default global config. This will get overwritten
+// by the config file or env vars if they exist.
+var Global Config = Config{
+	Port:     8080,
+	Host:     "0.0.0.0",
+	LogLevel: "info",
+	Connection: Connection{
+		URL:       "unset",
+		AuthToken: "unset",
+	},
+	Storage: Storage{
+		Remote:      false,
+		DumpDir:     "/tmp",
+		Compression: "none",
+	},
+	Profiling: Profiling{
+		Enabled: true,
+	},
+	Metrics: Metrics{
+		ASR: false,
+		Otel: Otel{
+			Enabled: false,
+			Port:    7777,
+		},
+	},
+	CLI: CLI{
+		WaitForReady: false,
+	},
+	CRIU: CRIU{
+		BinaryPath:   "criu",
+		LeaveRunning: false,
+	},
+	GPU: GPU{
+		PoolSize: 0,
+	},
+}
 
 func init() {
 	setDefaults()
 	bindEnvVars()
-}
-
-// Get a typed config value
-func Get[T any](item ConfigItem[T]) T {
-	return item.Get(item.Key)
 }
 
 type InitArgs struct {
@@ -52,7 +84,6 @@ func Init(args InitArgs) error {
 	viper.SetConfigPermissions(configFilePerm)
 	viper.SetConfigType(configFileType)
 	viper.SetConfigName(configFileName)
-	viper.SetEnvPrefix(envVarPrefix)
 
 	// Create config directory if it does not exist
 	_, err = os.Stat(configDir)
@@ -66,11 +97,6 @@ func Init(args InitArgs) error {
 	gid, _ := strconv.Atoi(user.Gid)
 	os.Chown(configDir, uid, gid)
 
-	// Allow environment variables to be accesses through viper *if* bound.
-	// For e.g. CEDANA_SECRET will be accessible as viper.Get("secret")
-	// However, viper.Get() always first checks the config file
-	viper.AutomaticEnv()
-	viper.SetTypeByDefaultValue(true)
 	viper.ReadInConfig()
 
 	if args.Config != "" {
@@ -81,5 +107,29 @@ func Init(args InitArgs) error {
 		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore error
 	}
 
-	return err
+	return viper.Unmarshal(&Global)
+}
+
+// Loads the global defaults into viper
+func setDefaults() {
+	viper.SetTypeByDefaultValue(true)
+	for _, field := range utils.ListLeaves(Config{}) {
+		tag := utils.GetTag(Config{}, field, configFileType)
+		defaultVal := utils.GetValue(Global, field)
+		viper.SetDefault(tag, defaultVal)
+	}
+}
+
+// Add bindings for env vars so env vars can be used as backup
+// when a value is not found in config. Goes through all the json keys
+// in the config type and binds an env var for it. The env var
+// is prefixed with the envVarPrefix, all uppercase.
+//
+// Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
+func bindEnvVars() {
+	viper.AutomaticEnv()
+	for _, field := range utils.ListLeaves(Config{}, configFileType) {
+		envVar := envVarPrefix + "_" + strings.ToUpper(strings.ReplaceAll(field, ".", "_"))
+		viper.MustBindEnv(field, envVar)
+	}
 }

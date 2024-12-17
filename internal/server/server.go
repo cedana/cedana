@@ -42,10 +42,11 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	UseVSOCK bool
-	Port     uint32
-	Host     string
-	Metrics  MetricOpts
+	UseVSOCK    bool
+	Port        uint32
+	Host        string
+	LocalDBPath string
+	Metrics     config.Metrics
 }
 
 type MetricOpts struct {
@@ -81,21 +82,21 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	var database db.DB
-	if config.Get(config.STORAGE_REMOTE) {
-		database = db.NewRemoteDB(
-			ctx,
-			config.Get(config.CEDANA_URL),
-			config.Get(config.CEDANA_AUTH_TOKEN),
-		)
+	if config.Global.Storage.Remote {
+		database = db.NewRemoteDB(ctx, config.Global.Connection)
 	} else {
-		database, err = db.NewLocalDB(ctx)
+		database, err = db.NewLocalDB(ctx, opts.LocalDBPath)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	pluginManager := plugins.NewLocalManager()
 
 	var gpuManager gpu.Manager
-	gpuPoolSize := config.Get(config.GPU_POOL_SIZE)
+	gpuPoolSize := config.Global.GPU.PoolSize
 	if gpuPoolSize > 0 {
+		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
 		gpuManager = gpu.NewPoolManager(gpuPoolSize)
 	} else {
 		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
@@ -112,14 +113,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	var p *plugins.Plugin
 	if p = pluginManager.Get("criu"); p.Status != plugins.Installed {
 		// Set custom path if specified in config, as a fallback
-		if custom_path := config.Get(config.CRIU_BINARY_PATH); custom_path != "" {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 			criu.SetCriuPath(custom_path)
 		} else {
-			return nil, fmt.Errorf(
-				"Please install CRIU plugin, or specify %s in config or env var %s",
-				config.CRIU_BINARY_PATH.Key,
-				config.CRIU_BINARY_PATH.Env,
-			)
+			return nil, fmt.Errorf("Please install CRIU plugin, or specify path in config or env var.")
 		}
 	} else {
 		criu.SetCriuPath(p.Binaries[0])

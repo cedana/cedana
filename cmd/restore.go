@@ -109,13 +109,13 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		useVSOCK := config.Global.UseVSOCK
 		var client *Client
 
 		if useVSOCK {
-			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 		} else {
-			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+			client, err = NewClient(config.Global.Host, config.Global.Port)
 		}
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)

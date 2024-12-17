@@ -129,6 +129,7 @@ func NewStreamIOMaster(
 
 func NewStreamIOSlave(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	pid uint32,
 	exitCode chan int,
 ) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
@@ -148,7 +149,9 @@ func NewStreamIOSlave(
 	SetIOSlave(pid, slave)
 
 	// Send out/err to master
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer DeleteIOSlave(&slave.PID)
 
 		var master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]
@@ -189,6 +192,7 @@ func NewStreamIOSlave(
 					break exit
 				}
 			}
+
 			// wait for a new master while discarding out/err
 		wait_new_master:
 			for {
@@ -199,12 +203,17 @@ func NewStreamIOSlave(
 					break wait_new_master
 				case _, ok := <-out: // discard out
 					if !ok {
-						break exit
+						out = nil
+						break
 					}
 				case _, ok := <-err: // discard err
 					if !ok {
-						break exit
+						err = nil
+						break
 					}
+				}
+				if out == nil && err == nil { // exit once we've sent all out/err
+					break exit
 				}
 			}
 		}
@@ -290,6 +299,9 @@ func (s *StreamIOWriter) ReadFrom(r io.Reader) (n int64, err error) {
 			n += int64(nr)
 		}
 		if err != nil {
+			if err == io.EOF {
+				return n, nil
+			}
 			return n, err
 		}
 	}

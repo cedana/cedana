@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# This is a helper file assumes its users are in the same directory as the Makefile
+
+export WORKLOADS="test/workloads"
+
+load_lib() {
+    load /usr/lib/bats/bats-"$1"/load
+}
+
+unix_nano() {
+    date +%s%N
+}
+
+random_free_port() {
+    while true; do
+        PORT=$(( ( RANDOM % 64511 ) + 1024 ));
+        if ! ss -lntu | grep -q ":$PORT"; then
+            echo $PORT; break;
+        fi;
+    done
+}
+
+pid_from_port() {
+    local port=$1
+    lsof -t -i:"$port"
+}
+
+kill_at_port() {
+    local port=$1
+    local signal=${2:-9}
+    pid=$(pid_from_port "$port")
+    kill -"$signal" "$pid"
+}
+
+env_exists() {
+    local var=$1
+    [ -n "${!var}" ]
+}

@@ -7,21 +7,20 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/spf13/cobra"
 )
 
 // ValidJIDs returns a list of valid JIDs for shell completion
 func ValidJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+	useVSOCK := config.Global.UseVSOCK
 	var client *Client
 	var err error
 
 	if useVSOCK {
-		client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 	} else {
-		client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+		client, err = NewClient(config.Global.Host, config.Global.Port)
 	}
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -42,14 +41,14 @@ func ValidJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, 
 
 // ValidPIDs returns a list of valid PIDs of jobs for shell completion
 func ValidPIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+	useVSOCK := config.Global.UseVSOCK
 	var client *Client
 	var err error
 
 	if useVSOCK {
-		client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 	} else {
-		client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+		client, err = NewClient(config.Global.Host, config.Global.Port)
 	}
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError

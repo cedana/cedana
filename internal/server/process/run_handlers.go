@@ -50,7 +50,7 @@ func Run() types.Run {
 		if req.Attachable {
 			// Use a random number, since we don't have PID yet
 			id := rand.Uint32()
-			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, id, exitCode)
+			stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
 			defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 			cmd.Stdin = stdIn
 			cmd.Stdout = stdOut

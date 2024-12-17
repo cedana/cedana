@@ -14,7 +14,7 @@ import (
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetDir() == "" {
-			req.Dir = config.Get(config.STORAGE_DUMP_DIR)
+			req.Dir = config.Global.Storage.DumpDir
 		}
 
 		if req.GetCriu() == nil {
@@ -23,7 +23,7 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 
 		// Only override if unset
 		if req.GetCriu().LeaveRunning == nil {
-			req.Criu.LeaveRunning = proto.Bool(config.Get(config.CRIU_LEAVE_RUNNING))
+			req.Criu.LeaveRunning = proto.Bool(config.Global.CRIU.LeaveRunning)
 		}
 
 		return next(ctx, server, resp, req)

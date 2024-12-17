@@ -41,13 +41,13 @@ var pluginCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		manager := plugins.NewLocalManager()
 
-		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		useVSOCK := config.Global.UseVSOCK
 		var client *Client
 
 		if useVSOCK {
-			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 		} else {
-			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+			client, err = NewClient(config.Global.Host, config.Global.Port)
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)

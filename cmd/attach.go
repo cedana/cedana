@@ -6,7 +6,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -17,13 +16,13 @@ var attachCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidPIDs,
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK, _ := cmd.Flags().GetBool(flags.UseVSOCKFlag.Full)
+		useVSOCK := config.Global.UseVSOCK
 		var client *Client
 
 		if useVSOCK {
-			client, err = NewVSOCKClient(config.Get(config.VSOCK_CONTEXT_ID), config.Get(config.PORT))
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
 		} else {
-			client, err = NewClient(config.Get(config.HOST), config.Get(config.PORT))
+			client, err = NewClient(config.Global.Host, config.Global.Port)
 		}
 
 		if err != nil {

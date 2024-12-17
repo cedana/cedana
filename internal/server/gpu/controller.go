@@ -15,6 +15,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -23,16 +24,15 @@ import (
 )
 
 const (
-	CONTROLLER_HOST               = "localhost"
-	CONTROLLER_LOG_PATH_FORMATTER = "/tmp/cedana-gpu-controller-%s.log"
-	CONTROLLER_LOG_FLAGS          = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-	CONTROLLER_LOG_PERMS          = 0644
+	CONTROLLER_HOST = "localhost"
 
 	// Signal sent to job when GPU controller exits prematurely. The intercepted job
 	// is guaranteed to exit upon receiving this signal, and prints to stderr
 	// about the GPU controller's failure.
 	CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1
 )
+
+var CONTROLLER_LOGS_ENABLED = log.Logger.GetLevel() <= zerolog.TraceLevel
 
 type Controller struct {
 	ErrBuf *bytes.Buffer
@@ -66,7 +66,11 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 	}
 
 	controller.Stderr = controller.ErrBuf
-	controller.Stdout = nil // TODO: capture controller logs
+	controller.Stdin = nil
+	controller.Stdout = nil
+	if CONTROLLER_LOGS_ENABLED {
+		controller.Stdout = os.Stdout
+	}
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGTERM,
 	}

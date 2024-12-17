@@ -194,7 +194,7 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty) (*daemon
 
 func getDefaultCallOptions() []grpc.CallOption {
 	opts := []grpc.CallOption{}
-	if config.Get(config.CLI_WAIT_FOR_READY) {
+	if config.Global.CLI.WaitForReady {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts

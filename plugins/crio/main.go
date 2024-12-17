@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/jedib0t/go-pretty/v6/text"
 )
 
 ///////////////////////////

@@ -14,14 +14,18 @@ import (
 	json "google.golang.org/protobuf/encoding/protojson"
 )
 
-const name = "cedana.db"
+var default_path = filepath.Join(os.TempDir(), "cedana.db")
 
 type LocalDB struct {
 	queries *sql.Queries
 }
 
-func NewLocalDB(ctx context.Context) (*LocalDB, error) {
-	db, err := dbsql.Open("sqlite3", filepath.Join(os.TempDir(), name))
+func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
+	if path == "" {
+		path = default_path
+	}
+
+	db, err := dbsql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
