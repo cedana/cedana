@@ -1,9 +1,7 @@
 name: PR
 
 on:
-  pull_request:
-    branches:
-      - main
+  push: # TODO: revert to PR once conflicts resolved
   workflow_dispatch:
     inputs:
       debug_build:
