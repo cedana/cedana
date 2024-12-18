@@ -164,9 +164,9 @@ var processDumpCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		pid, err := strconv.Atoi(args[0])
+		pid, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
-			return fmt.Errorf("PID must be an number")
+			return fmt.Errorf("PID must be a valid number within the range of uint32")
 		}
 
 		req.Type = "process"
