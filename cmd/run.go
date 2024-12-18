@@ -16,7 +16,6 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -174,8 +173,6 @@ var processRunCmd = &cobra.Command{
 // PrintProfilingData prints the profiling data in a very readable format.
 func printProfilingData(data *daemon.ProfilingData) {
 	total := time.Duration(data.Duration)
-
-  log.Warn().Interface("profiling_data", data).Msg("Profiling data received")
 
 	profiling.CleanData(data)
 	profiling.FlattenData(data) // Since we want to print as a list
