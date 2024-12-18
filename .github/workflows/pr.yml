@@ -204,7 +204,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    needs: [build]
+    needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
         with:
