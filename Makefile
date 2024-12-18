@@ -7,7 +7,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: build plugins
+all: build plugins plugins-install
 .PHONY: build plugins
 
 ##########
@@ -70,14 +70,22 @@ reset-logs: ## Reset logs
 ###########
 
 PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
-plugins: $(PLUGIN_SOURCES) ## Build & install plugins
+plugins: $(PLUGIN_SOURCES) ## Build plugins
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			echo "Building plugin $$name..."; \
+			$(GOBUILD) -C $$path -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+		fi ;\
+	done ;\
+
+plugins-install: ## Install plugins
+	@echo "Installing plugins..."
 	list=""
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
 			list="$$name $$list"; \
-			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 	sudo -E $(BINARY) plugin install $$list ;\
