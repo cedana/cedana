@@ -183,6 +183,8 @@ func printProfilingData(data *daemon.ProfilingData) {
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
 
+	categoryMap := make(map[string]time.Duration)
+
 	for _, p := range data.Components {
 		if p.Duration <= 0 {
 			continue
@@ -196,11 +198,32 @@ func printProfilingData(data *daemon.ProfilingData) {
 		}, categoryName)
 
 		duration := time.Duration(p.Duration)
+
+		if categoryName != "" {
+			categoryMap[category] += duration
+		} else {
+			categoryMap[style.DisbledColor.Sprint("other")] += duration
+		}
+
 		tableWriter.AppendRow([]interface{}{duration, category, style.DisbledColor.Sprint(name)})
 	}
 
 	tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})
 	tableWriter.Render()
+
+	if len(categoryMap) > 1 {
+		fmt.Println()
+		tableWriter = table.NewWriter()
+		tableWriter.SetStyle(style.TableStyle)
+		tableWriter.SetOutputMirror(os.Stdout)
+
+		for category, duration := range categoryMap {
+			percentage := (float64(duration) / float64(total)) * 100
+			tableWriter.AppendRow([]interface{}{duration, fmt.Sprintf("%.2f%%", percentage), category})
+		}
+
+		tableWriter.Render()
+	}
 
 	fmt.Println()
 }
