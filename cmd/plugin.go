@@ -32,7 +32,6 @@ func init() {
 	// Add aliases
 	pluginCmd.AddCommand(utils.AliasOf(pluginListCmd, "ls"))
 	rootCmd.AddCommand(utils.AliasOf(pluginListCmd, "plugins"))
-	rootCmd.AddCommand(utils.AliasOf(pluginFeaturesCmd, "features"))
 }
 
 // Parent plugin command

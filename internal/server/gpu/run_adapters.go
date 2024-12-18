@@ -58,7 +58,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, err
 			}
 
-			start := time.Now()
+			started := time.Now()
 
 			err = <-gpuErr
 			if err != nil {
@@ -67,7 +67,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			}
 
 			if config.Global.Profiling.Enabled {
-				profiling.RecordDurationCategory(start, server.Profiling, "gpu", gpus.AttachAsync)
+				profiling.RecordDurationCategory(started, server.Profiling, "gpu", gpus.AttachAsync)
 			}
 
 			pid <- resp.PID

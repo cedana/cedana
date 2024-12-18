@@ -33,7 +33,8 @@ func RecordDuration(start time.Time, profiling *daemon.ProfilingData, f ...any) 
 
 // RecordComponentDuration records the elapsed time since start into the profiling data.
 // Unlike RecordDuration, this adds the data as a new component of the profiling data.
-func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f ...any) {
+// Also returns the component that was added.
+func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f ...any) *daemon.ProfilingData {
 	duration := time.Since(start)
 
 	var pc uintptr
@@ -44,19 +45,22 @@ func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f
 	}
 	name := utils.FunctionName(pc)
 
-	profiling.Duration += duration.Nanoseconds()
-	profiling.Components = append(profiling.Components, &daemon.ProfilingData{
+	component := &daemon.ProfilingData{
 		Name:     name,
 		Duration: duration.Nanoseconds(),
-	})
+	}
+
+	profiling.Duration += duration.Nanoseconds()
+	profiling.Components = append(profiling.Components, component)
 
 	log.Trace().Str("in", name).Msgf("spent %s", duration)
+	return component
 }
 
 // RecordDurationCategory records the elapsed time since start into the profiling data.
 // Instead of directly inserting a component like RecordDurationComponent, this adds the data as a nested component,
-// with the name matching the category provided.
-func RecordDurationCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) {
+// with the name matching the category provided. Also returns the component that was added to the category.
+func RecordDurationCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) *daemon.ProfilingData {
 	var categoryComponent *daemon.ProfilingData
 	for _, component := range profiling.Components {
 		if component.Name == category {
@@ -71,7 +75,7 @@ func RecordDurationCategory(start time.Time, profiling *daemon.ProfilingData, ca
 		profiling.Components = append(profiling.Components, categoryComponent)
 	}
 
-	RecordDurationComponent(start, categoryComponent, f...)
+	return RecordDurationComponent(start, categoryComponent, f...)
 }
 
 // LogDuration logs the elapsed time since start.

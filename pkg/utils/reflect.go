@@ -41,7 +41,7 @@ func SimplifyFuncName(f string) (category string, name string) {
 	} else {
 		splits := strings.Split(f, ":")
 		if len(splits) > 1 {
-			category = splits[0]
+			category = splits[len(splits)-2]
 		}
 	}
 

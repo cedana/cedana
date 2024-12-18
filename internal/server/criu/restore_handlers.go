@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
@@ -81,9 +82,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		defer restoreLog.Close()
 	}
 
-	if config.Global.Profiling.Enabled {
-		server.Profiling.Components = append(server.Profiling.Components, server.CRIUCallback.Profiling)
-	}
+	started := time.Now()
 
 	criuResp, err := server.CRIU.Restore(
 		ctx,
@@ -93,6 +92,11 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		stdout,
 		stderr,
 		extraFiles...)
+
+	if config.Global.Profiling.Enabled {
+		criuProfiling := profiling.RecordDurationCategory(started, server.Profiling, "criu", server.CRIU.Restore)
+		criuProfiling.Components = append(criuProfiling.Components, server.CRIUCallback.Profiling)
+	}
 
 	// Capture internal logs from CRIU
 	utils.LogFromFile(

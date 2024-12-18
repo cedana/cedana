@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -43,8 +42,10 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.CheckCompatibilityForRestore,
 	}
 
+	restore := criu.Restore.With(middleware...)
+
 	if req.GetDetails().GetJID() != "" { // If using job restore
-		middleware = slices.Insert(middleware, 0, job.ManageRestore(s.jobs))
+		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
 	var profilingData *daemon.ProfilingData
@@ -63,11 +64,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 	resp := &daemon.RestoreResp{Profiling: profilingData}
 
-	// s.ctx is the lifetime context of the server, pass it so that
-	// managed processes maximum lifetime is the same as the server.
-	// It gives adapters the power to control the lifetime of the process. For e.g.,
-	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := criu.Restore.With(middleware...)(ctx, opts, resp, req)
+	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}

@@ -45,13 +45,13 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 			log.Debug().Str("path", path).Str("dir", imagesDirectory).Msg("decompressing dump")
 
 			// Decompress the dump
-			compressionStart := time.Now()
+			started := time.Now()
 			if err := utils.Untar(path, imagesDirectory); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
 			}
 
 			if config.Global.Profiling.Enabled {
-				profiling.RecordDurationCategory(compressionStart, server.Profiling, "compression", utils.Untar)
+				profiling.RecordDurationCategory(started, server.Profiling, "compression", utils.Untar)
 			}
 		}
 

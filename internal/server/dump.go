@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -45,8 +44,10 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		validation.CheckCompatibilityForDump,
 	}
 
+	dump := criu.Dump.With(middleware...)
+
 	if req.GetDetails().GetJID() != "" { // If using job dump
-		middleware = slices.Insert(middleware, 0, job.ManageDump(s.jobs))
+		dump = dump.With(job.ManageDump(s.jobs))
 	}
 
 	var profilingData *daemon.ProfilingData
@@ -65,7 +66,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{Profiling: profilingData}
 
-	_, err := criu.Dump.With(middleware...)(ctx, opts, resp, req)
+	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
