@@ -152,7 +152,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
-	if job.(*Job).IsRunning() {
+	if !job.(*Job).GPUEnabled() { // FIXME: need a better way
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
 	}
 
@@ -183,7 +183,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		if job.IsRunning() {
+		if !job.GPUEnabled() { // FIXME: need a better way
 			job.SetGPUEnabled(m.gpus.IsAttached(jid))
 		}
 		jobs = append(jobs, job)
@@ -278,12 +278,12 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return nil
 }
 
-func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) criu.NotifyCallbackMulti {
+func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti {
 	job := m.Get(jid)
 	if job == nil {
-		return criu.NotifyCallbackMulti{}
+		return nil
 	}
-	multiCallback := criu.NotifyCallbackMulti{}
+	multiCallback := &criu.NotifyCallbackMulti{}
 	multiCallback.IncludeMulti(job.GetCRIUCallback())
 	if job.GPUEnabled() {
 		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid))

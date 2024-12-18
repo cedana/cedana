@@ -5,6 +5,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -17,12 +18,15 @@ import (
 
 func UnlockNetworkAfterRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		server.CRIUCallback.NetworkUnlockFunc = append(server.CRIUCallback.NetworkUnlockFunc, func(ctx context.Context) error {
-			// Not implemented, yet
-			// see: libcontainer/criu_linux.go -> unlockNetwork
-			log.Warn().Msg("not unlocking network - not implemented")
-			return nil
-		})
+		callback := &criu.NotifyCallback{
+			NetworkUnlockFunc: func(ctx context.Context) error {
+				// Not implemented, yet
+				// see: libcontainer/criu_linux.go -> unlockNetwork
+				log.Warn().Msg("not unlocking network - not implemented")
+				return nil
+			},
+		}
+		server.CRIUCallback.Include(callback)
 
 		return next(ctx, server, resp, req)
 	}

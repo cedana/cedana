@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog/log"
@@ -114,8 +116,12 @@ func (m *ManagerSimple) IsAttached(jid string) bool {
 	return m.controllers.Get(jid) != nil
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) criu.NotifyCallback {
-	callback := criu.NotifyCallback{}
+func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback {
+	callback := &criu.NotifyCallback{}
+
+	if config.Global.Profiling.Enabled {
+		callback.Profiling = &daemon.ProfilingData{Name: "gpu"}
+	}
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.

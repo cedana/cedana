@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"slices"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -42,12 +43,8 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		validation.CheckCompatibilityForDump,
 	}
 
-	var dump types.Dump
-
 	if req.GetDetails().GetJID() != "" { // If using job dump
-		dump = criu.Dump().With(middleware...).With(job.ManageDump(s.jobs))
-	} else {
-		dump = criu.Dump().With(middleware...)
+		middleware = slices.Insert(middleware, 0, job.ManageDump(s.jobs))
 	}
 
 	opts := types.ServerOpts{
@@ -60,7 +57,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{Profiling: opts.Profiling}
 
-	_, err := dump(ctx, opts, resp, req)
+	_, err := criu.Dump.With(middleware...)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}

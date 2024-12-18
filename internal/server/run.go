@@ -78,6 +78,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
+
 		return next.With(middleware...)(ctx, server, resp, req)
 	}
 }

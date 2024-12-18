@@ -171,37 +171,38 @@ var processRunCmd = &cobra.Command{
 
 // PrintProfilingData prints the profiling data in a very readable format.
 func printProfilingData(data *daemon.ProfilingData) {
-	total := time.Duration(data.Duration * 1e6)
+	total := time.Duration(data.Duration)
 
 	data = &daemon.ProfilingData{
 		Duration:   data.Duration,
 		Components: []*daemon.ProfilingData{data},
 	}
 
-	// Since data contains a tree of all components as a tree.
+	// Since data contains all components as a tree.
 	utils.FlattenProfilingData(data)
 
-	fmt.Print("Profiling data available:\n\n")
+	fmt.Print("Profiling data received (flattened):\n\n")
 
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
 
 	for _, p := range data.Components {
-		if p.Duration == 0 {
+		if p.Duration <= 0 {
 			continue
 		}
 		plugin, name := utils.SimplifyFuncName(p.Name)
+
 		features.CmdTheme.IfAvailable(func(name string, theme text.Colors) error {
 			plugin = theme.Sprint(plugin)
 			return nil
 		}, plugin)
 
-		duration := time.Duration(p.Duration * 1e6)
+		duration := time.Duration(p.Duration)
 		tableWriter.AppendRow([]interface{}{duration, plugin, style.DisbledColor.Sprint(name)})
 	}
 
-	tableWriter.AppendFooter([]interface{}{total, "total"})
+	tableWriter.AppendFooter([]interface{}{total, "", "total"})
 	tableWriter.Render()
 
 	fmt.Println()

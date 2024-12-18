@@ -181,13 +181,13 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 	j.proto.GPUEnabled = enabled
 }
 
-func (j *Job) GetCRIUCallback() criu.NotifyCallbackMulti {
+func (j *Job) GetCRIUCallback() *criu.NotifyCallbackMulti {
 	j.RLock()
 	defer j.RUnlock()
-	return j.criuCallback
+	return &j.criuCallback
 }
 
-func (j *Job) AddCRIUCallback(n criu.NotifyCallback) {
+func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
 	j.Lock()
 	defer j.Unlock()
 	j.criuCallback.Include(n)

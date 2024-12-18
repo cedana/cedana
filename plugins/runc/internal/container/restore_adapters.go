@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
@@ -139,23 +140,26 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 
-		server.CRIUCallback.SetupNamespacesFunc = append(server.CRIUCallback.SetupNamespacesFunc, func(ctx context.Context, pid int32) error {
-			if config.Hooks != nil {
-				s, err := container.OCIState()
-				if err != nil {
-					return nil
-				}
-				s.Pid = int(pid)
+		callback := &criu.NotifyCallback{
+			SetupNamespacesFunc: func(ctx context.Context, pid int32) error {
+				if config.Hooks != nil {
+					s, err := container.OCIState()
+					if err != nil {
+						return nil
+					}
+					s.Pid = int(pid)
 
-				if err := config.Hooks.Run(configs.Prestart, s); err != nil {
-					return fmt.Errorf("failed to run prestart hooks: %v", err)
+					if err := config.Hooks.Run(configs.Prestart, s); err != nil {
+						return fmt.Errorf("failed to run prestart hooks: %v", err)
+					}
+					if err := config.Hooks.Run(configs.CreateRuntime, s); err != nil {
+						return fmt.Errorf("failed to run create runtime hooks: %v", err)
+					}
 				}
-				if err := config.Hooks.Run(configs.CreateRuntime, s); err != nil {
-					return fmt.Errorf("failed to run create runtime hooks: %v", err)
-				}
-			}
-			return nil
-		})
+				return nil
+			},
+		}
+		server.CRIUCallback.Include(callback)
 
 		return next(ctx, server, resp, req)
 	}
@@ -173,52 +177,55 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
-		server.CRIUCallback.PostRestoreFunc = append(server.CRIUCallback.PostRestoreFunc, func(ctx context.Context, pid int32) error {
-			state, err := container.State()
-			if err != nil {
-				return fmt.Errorf("failed to get container state: %v", err)
-			}
-
-			// XXX: Unfortunately, 'state' interface is internal to libcontainer
-			// but it's simple enough to replicate here, as we only need to update
-			// a few fields upon restore, rest should already be set correctly.
-
-			state.Created = time.Now().UTC()
-			state.InitProcessPid = int(pid)
-			stat, err := system.Stat(int(pid))
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to get accurate process start time")
-			} else {
-				state.InitProcessStartTime = stat.StartTime
-			}
-
-			for _, ns := range state.Config.Namespaces {
-				state.NamespacePaths[ns.Type] = ns.GetPath(int(pid))
-			}
-			for _, nsType := range configs.NamespaceTypes() {
-				if !configs.IsNamespaceSupported(nsType) {
-					continue
+		callback := &criu.NotifyCallback{
+			PostRestoreFunc: func(ctx context.Context, pid int32) error {
+				state, err := container.State()
+				if err != nil {
+					return fmt.Errorf("failed to get container state: %v", err)
 				}
-				if _, ok := state.NamespacePaths[nsType]; !ok {
-					ns := configs.Namespace{Type: nsType}
+
+				// XXX: Unfortunately, 'state' interface is internal to libcontainer
+				// but it's simple enough to replicate here, as we only need to update
+				// a few fields upon restore, rest should already be set correctly.
+
+				state.Created = time.Now().UTC()
+				state.InitProcessPid = int(pid)
+				stat, err := system.Stat(int(pid))
+				if err != nil {
+					log.Warn().Err(err).Msg("failed to get accurate process start time")
+				} else {
+					state.InitProcessStartTime = stat.StartTime
+				}
+
+				for _, ns := range state.Config.Namespaces {
 					state.NamespacePaths[ns.Type] = ns.GetPath(int(pid))
 				}
-			}
+				for _, nsType := range configs.NamespaceTypes() {
+					if !configs.IsNamespaceSupported(nsType) {
+						continue
+					}
+					if _, ok := state.NamespacePaths[nsType]; !ok {
+						ns := configs.Namespace{Type: nsType}
+						state.NamespacePaths[ns.Type] = ns.GetPath(int(pid))
+					}
+				}
 
-			fds, err := GetStdioFds(pid)
-			if err != nil {
-				return fmt.Errorf("failed to get stdio fds: %v", err)
-			} else {
-				state.ExternalDescriptors = fds
-			}
+				fds, err := GetStdioFds(pid)
+				if err != nil {
+					return fmt.Errorf("failed to get stdio fds: %v", err)
+				} else {
+					state.ExternalDescriptors = fds
+				}
 
-			err = SaveState(root, id, state)
-			if err != nil {
-				return fmt.Errorf("failed to save container state: %v", err)
-			}
+				err = SaveState(root, id, state)
+				if err != nil {
+					return fmt.Errorf("failed to save container state: %v", err)
+				}
 
-			return nil
-		})
+				return nil
+			},
+		}
+		server.CRIUCallback.Include(callback)
 
 		return next(ctx, server, resp, req)
 	}

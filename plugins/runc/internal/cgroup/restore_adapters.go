@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
@@ -53,33 +54,36 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 
-		server.CRIUCallback.InitializeFunc = append(server.CRIUCallback.InitializeFunc, func(ctx context.Context, criuPid int32) error {
-			err := manager.Apply(int(criuPid))
-			if err != nil {
-				return fmt.Errorf("failed to apply cgroups: %v", err)
-			}
-			err = manager.Set(config.Cgroups.Resources)
-			if err != nil {
-				return fmt.Errorf("failed to set cgroup resources: %v", err)
-			}
-
-			// TODO Should we use c.cgroupManager.GetPaths()
-			// instead of reading /proc/pid/cgroup?
-			path := fmt.Sprintf("/proc/%d/cgroup", criuPid)
-			cgroupsPaths, err := cgroups.ParseCgroupFile(path)
-			if err != nil {
-				return err
-			}
-			for c, p := range cgroupsPaths {
-				cgroupRoot := &criu_proto.CgroupRoot{
-					Ctrl: proto.String(c),
-					Path: proto.String(p),
+		callback := &criu.NotifyCallback{
+			InitializeFunc: func(ctx context.Context, criuPid int32) error {
+				err := manager.Apply(int(criuPid))
+				if err != nil {
+					return fmt.Errorf("failed to apply cgroups: %v", err)
 				}
-				req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
-			}
+				err = manager.Set(config.Cgroups.Resources)
+				if err != nil {
+					return fmt.Errorf("failed to set cgroup resources: %v", err)
+				}
 
-			return nil
-		})
+				// TODO Should we use c.cgroupManager.GetPaths()
+				// instead of reading /proc/pid/cgroup?
+				path := fmt.Sprintf("/proc/%d/cgroup", criuPid)
+				cgroupsPaths, err := cgroups.ParseCgroupFile(path)
+				if err != nil {
+					return err
+				}
+				for c, p := range cgroupsPaths {
+					cgroupRoot := &criu_proto.CgroupRoot{
+						Ctrl: proto.String(c),
+						Path: proto.String(p),
+					}
+					req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
+				}
+
+				return nil
+			},
+		}
+		server.CRIUCallback.Include(callback)
 
 		return next(ctx, server, resp, req)
 	}

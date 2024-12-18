@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
@@ -20,49 +21,53 @@ const (
 	GHOST_FILE_MAX_SIZE      = 10000000 // 10MB
 )
 
+var Dump types.Dump = dump
+
 // Returns a CRIU dump handler for the server
-func Dump() types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
-		if req.GetCriu() == nil {
-			return nil, status.Error(codes.InvalidArgument, "criu options is nil")
-		}
-
-		version, err := server.CRIU.GetCriuVersion(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
-		}
-
-		criuOpts := req.GetCriu()
-
-		// Set CRIU server
-		criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
-		criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
-		criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
-		criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
-		criuOpts.NotifyScripts = proto.Bool(true)
-		criuOpts.LogToStderr = proto.Bool(false)
-
-		// TODO: Add support for pre-dump
-		// TODO: Add support for lazy migration
-
-		log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
-		// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
-
-		_, err = server.CRIU.Dump(ctx, criuOpts, server.CRIUCallback)
-
-		// Capture internal logs from CRIU
-		utils.LogFromFile(
-			log.With().Int("CRIU", version).Logger().WithContext(ctx),
-			filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
-			zerolog.TraceLevel,
-		)
-
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
-		}
-
-		log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
-
-		return utils.WaitForPid(resp.State.PID), nil
+func dump(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	if req.GetCriu() == nil {
+		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
+
+	version, err := server.CRIU.GetCriuVersion(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
+	}
+
+	criuOpts := req.GetCriu()
+
+	// Set CRIU server
+	criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
+	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
+	criuOpts.NotifyScripts = proto.Bool(true)
+	criuOpts.LogToStderr = proto.Bool(false)
+
+	// TODO: Add support for pre-dump
+	// TODO: Add support for lazy migration
+
+	log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
+	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
+
+	if config.Global.Profiling.Enabled {
+		server.Profiling.Components = append(server.Profiling.Components, server.CRIUCallback.Profiling)
+	}
+
+	_, err = server.CRIU.Dump(ctx, criuOpts, server.CRIUCallback)
+
+	// Capture internal logs from CRIU
+	utils.LogFromFile(
+		log.With().Int("CRIU", version).Logger().WithContext(ctx),
+		filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+		zerolog.TraceLevel,
+	)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
+	}
+
+	log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
+
+	return utils.WaitForPid(resp.State.PID), nil
 }

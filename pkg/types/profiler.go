@@ -1,6 +1,7 @@
 package types
 
-// A profiler is just an adapter
+// A profiler is just an adapter, that records profiling data for the next handler.
+// Profilers can be chained in between adapters to record profiling data for each one.
 
 import (
 	"context"
@@ -11,29 +12,17 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 )
 
-// Generic timing adapter that adds timing data for the next handler.
+// Generic profiler for recording timing information.
 func Timed[REQ, RESP any](next Handler[REQ, RESP]) Handler[REQ, RESP] {
 	var timedHandler Handler[REQ, RESP]
 	nextPc := reflect.ValueOf(next).Pointer()
 
-	record := func(start time.Time, profiling *daemon.ProfilingData) {
-		elapsed := time.Since(start)
-
-		elapsedMs := float64(elapsed.Nanoseconds()) / 1e6
-
-		profiling.Duration = elapsedMs
-		profiling.Name = utils.FunctionName(nextPc)
-	}
-
 	timedHandler = func(ctx context.Context, server ServerOpts, resp *RESP, req *REQ) (chan int, error) {
-		// We also skip profiling if the next handler is the profiler itself
+		// We skip profiling if the next handler is the profiler itself
 		if server.Profiling != nil && nextPc != reflect.ValueOf(timedHandler).Pointer() {
-			defer record(time.Now(), server.Profiling)
+			defer utils.RecordDuration(time.Now(), server.Profiling, next)
 
 			newProfilingData := &daemon.ProfilingData{}
-			if server.Profiling.Components == nil {
-				server.Profiling.Components = []*daemon.ProfilingData{}
-			}
 			server.Profiling.Components = append(server.Profiling.Components, newProfilingData)
 			server.Profiling = newProfilingData
 		}

@@ -18,9 +18,9 @@ func FunctionName(pc uintptr) string {
 	// return components[len(components)-1]
 }
 
-// SimplifyFuncName simplifies the function name to a plugin and a name.
+// SimplifyFuncName simplifies the function name to a category and a name.
 // Removes the long package prefix. If the function belongs to a plugin, the plugin name is returned.
-func SimplifyFuncName(f string) (plugin string, name string) {
+func SimplifyFuncName(f string) (category string, name string) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "", f // fallback
@@ -37,7 +37,12 @@ func SimplifyFuncName(f string) (plugin string, name string) {
 
 	matches := pluginPattern.FindStringSubmatch(f)
 	if len(matches) > 1 {
-		plugin = matches[1]
+		category = matches[1]
+	} else {
+		splits := strings.Split(f, ":")
+		if len(splits) > 1 {
+			category = splits[0]
+		}
 	}
 
 	name = filepath.Base(f)

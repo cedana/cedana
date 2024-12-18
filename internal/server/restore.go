@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"slices"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -39,12 +40,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.CheckCompatibilityForRestore,
 	}
 
-	var restore types.Restore
-
 	if req.GetDetails().GetJID() != "" { // If using job restore
-		restore = criu.Restore().With(middleware...).With(job.ManageRestore(s.jobs))
-	} else {
-		restore = criu.Restore().With(middleware...)
+		middleware = slices.Insert(middleware, 0, job.ManageRestore(s.jobs))
 	}
 
 	opts := types.ServerOpts{
@@ -61,7 +58,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// managed processes maximum lifetime is the same as the server.
 	// It gives adapters the power to control the lifetime of the process. For e.g.,
 	// the GPU adapter can use this context to kill the process when GPU support fails.
-	_, err := restore(ctx, opts, resp, req)
+	_, err := criu.Restore.With(middleware...)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
