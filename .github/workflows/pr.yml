@@ -1,7 +1,10 @@
 name: PR
 
 on:
-  push: # TODO: revert to PR once conflicts resolved
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       debug_build:
@@ -96,7 +99,7 @@ jobs:
           name: build
           path: ./cedana
 
-  build-pugins:
+  build-plugins:
     name: Build (plugins)
     runs-on: ubicloud-standard-8
     container:
