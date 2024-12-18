@@ -2,7 +2,6 @@ name: PR
 
 on:
   pull_request:
-    types: [opened, synchronize]
     branches:
       - main
   workflow_dispatch:
