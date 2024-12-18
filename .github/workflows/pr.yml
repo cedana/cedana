@@ -1,10 +1,7 @@
 name: PR
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-    branches:
-      - main
+  push: # TODO: revert after resolving merge conflicts
   workflow_dispatch:
     inputs:
       debug_build:
