@@ -21,6 +21,7 @@ var (
 	JidFlag        = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag = Flag{Full: "gpu-enabled", Short: "g"}
 	AttachFlag     = Flag{Full: "attach", Short: "a"}
+	AttachableFlag = Flag{Full: "attachable"}
 	AllFlag        = Flag{Full: "all", Short: "a"}
 	LogFlag        = Flag{Full: "log"}
 	ExternalFlag   = Flag{Full: "external"}

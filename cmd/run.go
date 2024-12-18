@@ -29,6 +29,8 @@ func init() {
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	runCmd.PersistentFlags().
+		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
+	runCmd.PersistentFlags().
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
 	runCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
@@ -60,13 +62,14 @@ var runCmd = &cobra.Command{
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RunReq{
 			JID:        jid,
 			Log:        log,
 			GPUEnabled: gpuEnabled,
-			Attachable: attach,
+			Attachable: attach || attachable,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
@@ -106,12 +109,13 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		if req.Attachable {
-			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-		}
-
 		if config.Global.Profiling.Enabled && resp.Profiling != nil {
 			printProfilingData(resp.Profiling)
+		}
+
+		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		if attach {
+			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
 		fmt.Printf("Running managed %s PID %d\n", req.Type, resp.PID)

@@ -11,3 +11,5 @@ while :; do
     i=$((i + 1))
     [ $i -ge "$COUNT" ] && break
 done
+
+exit "$2"

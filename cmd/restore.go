@@ -133,12 +133,12 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		if req.Attachable {
-			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-		}
-
 		if config.Global.Profiling.Enabled && resp.Profiling != nil {
 			printProfilingData(resp.Profiling)
+		}
+
+		if req.Attachable {
+			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
 		fmt.Printf("Restored successfully, PID: %d\n", resp.PID)

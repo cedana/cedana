@@ -2,9 +2,10 @@
 
 # This is a helper file assumes its users are in the same directory as the Makefile
 
-export PATH="./:$PATH"
+export PATH="./:$PATH" # ensure binaries are available
 export CEDANA_LOG_LEVEL=trace
 export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$PWD
+export CEDANA_PROFILING_ENABLED=false
 
 ##################
 # BATS LIFECYCLE #
@@ -87,3 +88,11 @@ daemon_log_file() {
     local port=$1
     echo /var/log/cedana-daemon-"$port".log
 }
+
+pid_for_jid() {
+    local port=$1
+    local jid=$2
+    table=$(cedana -P "$port" ps)
+    echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
+}
+

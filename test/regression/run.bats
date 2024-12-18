@@ -78,3 +78,27 @@ load_lib file
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 }
+
+@test "attach (using PID)" {
+    jid=$(unix_nano)
+    code=42
+
+    cedana -P "$PORT" run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+
+    pid=$(pid_for_jid "$PORT" "$jid")
+
+    run cedana -P "$PORT" attach "$pid"
+
+    assert_equal $status $code
+}
+
+@test "attach job" {
+    jid=$(unix_nano)
+    code=42
+
+    cedana -P "$PORT" run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+
+    run cedana -P "$PORT" job attach "$jid"
+
+    assert_equal $status $code
+}
