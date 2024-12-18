@@ -159,6 +159,19 @@ func (m *ManagerLazy) Get(jid string) *Job {
 	return job.(*Job)
 }
 
+func (m *ManagerLazy) Find(pid uint32) *Job {
+	var found *Job
+	m.jobs.Range(func(key any, val any) bool {
+		job := val.(*Job)
+		if job.GetPID() == pid {
+			found = job
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 func (m *ManagerLazy) Delete(jid string) {
 	_, ok := m.jobs.Load(jid)
 	if !ok {
@@ -203,16 +216,25 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
+	if m.Find(pid) != nil {
+		return fmt.Errorf("job %s with PID %d already exists. please delete it first", jid, pid)
+	}
+
 	job := m.Get(jid)
 
 	var exitedChan <-chan int
-	if len(exited) == 0 {
+	if len(exited) > 0 {
 		exitedChan = exited[0]
 	} else {
 		exitedChan = utils.WaitForPid(pid)
 	}
 
-	job.SetPID(pid)
+	// Try to update the process state with the latest information,
+	// Only possible if process is still running, otherwise ignore errors.
+	err := job.FillProcess(ctx, pid)
+	if err != nil {
+		log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("ignoring: failed to fill process state after manage")
+	}
 
 	m.pending <- action{update, jid}
 

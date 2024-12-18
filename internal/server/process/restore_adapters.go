@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Fill process state in the restore response
-func FillProcessStateForRestore(next types.Restore) types.Restore {
+// Reload process state from the dump dir in the restore response
+func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
@@ -44,10 +44,6 @@ func FillProcessStateForRestore(next types.Restore) types.Restore {
 		if err != nil {
 			return exited, err
 		}
-
-		// Try to update the process state with the latest information,
-		// Only possible if process is still running, otherwise ignore.
-		_ = utils.FillProcessState(ctx, state.PID, state)
 
 		return exited, err
 	}

@@ -18,11 +18,15 @@ var (
 	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
 	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
 	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
+	ManageCmd  = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}
 	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "Root command(s)"}
 
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
 	RunMiddleware = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
+
+	// Manage
+	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}
 
 	// Dump/Restore
 	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}

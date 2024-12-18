@@ -227,9 +227,9 @@ func WaitForPid(pid uint32) chan int {
 	return exitCh
 }
 
-// Returns a channel that will be closed when a non-child process exits
-// Since, we cannot use the process.Wait() method to wait for a non-child process to exit
-// It waits until the process is a zombie process, or the process is not found
+// Returns a channel that will be closed when a non-child process exits.
+// Since, we cannot use the process.Wait() method to wait for a non-child process to exit.
+// It waits until the process is a zombie process, or the process is not found.
 func WaitForPidCtx(ctx context.Context, pid uint32) chan int {
 	exitCh := make(chan int)
 

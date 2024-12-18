@@ -166,7 +166,7 @@ var processDumpCmd = &cobra.Command{
 
 		pid, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
-			return fmt.Errorf("PID must be a valid number within the range of uint32")
+			return fmt.Errorf("invalid pid: %v", err)
 		}
 
 		req.Type = "process"

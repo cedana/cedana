@@ -64,7 +64,6 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			}
 
 			job.SetLog(req.Log)
-			job.SetProcess(resp.GetState())
 
 			err = jobs.Manage(ctx, jid, resp.PID, exited)
 			if err != nil {

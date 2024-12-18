@@ -20,7 +20,7 @@ export CEDANA_PROFILING_ENABLED=true
     assert_output --partial "total"
 }
 
-@test "run process (profiling off CLI)" {
+@test "run process (profiling output off)" {
     jid=$(unix_nano)
 
     run cedana -P "$PORT" run process echo hello --jid "$jid" --profiling=false

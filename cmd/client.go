@@ -113,7 +113,7 @@ func (c *Client) Run(ctx context.Context, args *daemon.RunReq) (*daemon.RunResp,
 	return resp, nil
 }
 
-func (c *Client) Manage(ctx context.Context, args *daemon.ManageReq) (*daemon.ManageResp, error) {
+func (c *Client) Manage(ctx context.Context, args *daemon.RunReq) (*daemon.RunResp, error) {
 	opts := getDefaultCallOptions()
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {

@@ -5,6 +5,7 @@ package job
 // Allows multiple concurrent readers, but only one concurrent writer.
 
 import (
+	"context"
 	"os"
 	"sync"
 	"time"
@@ -61,19 +62,6 @@ func (j *Job) GetPID() uint32 {
 	return j.proto.GetProcess().GetPID()
 }
 
-func (j *Job) SetPID(pid uint32) {
-	j.Lock()
-	defer j.Unlock()
-	if j.proto.GetProcess() == nil {
-		j.proto.Process = &daemon.ProcessState{}
-	}
-	if j.proto.GetProcess().GetInfo() == nil {
-		j.proto.Process.Info = &daemon.ProcessInfo{}
-	}
-	j.proto.Process.PID = pid
-	j.proto.Process.Info.PID = pid
-}
-
 func (j *Job) GetProto() *daemon.Job {
 	j.Lock()
 	defer j.Unlock()
@@ -102,6 +90,13 @@ func (j *Job) SetProcess(process *daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
 	j.proto.Process = process
+}
+
+func (j *Job) FillProcess(ctx context.Context, pid uint32) error {
+	j.Lock()
+	defer j.Unlock()
+
+	return utils.FillProcessState(ctx, pid, j.proto.Process)
 }
 
 func (j *Job) GetDetails() *daemon.Details {

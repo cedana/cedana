@@ -24,10 +24,9 @@ type (
 		Profiling    *daemon.ProfilingData
 	}
 
-	Dump       = Handler[daemon.DumpReq, daemon.DumpResp]
-	Restore    = Handler[daemon.RestoreReq, daemon.RestoreResp]
-	Run        = Handler[daemon.RunReq, daemon.RunResp]
-	ManageDump = Handler[daemon.DumpReq, daemon.DumpResp]
+	Dump    = Handler[daemon.DumpReq, daemon.DumpResp]
+	Restore = Handler[daemon.RestoreReq, daemon.RestoreResp]
+	Run     = Handler[daemon.RunReq, daemon.RunResp]
 
 	Handler[REQ, RESP any] func(context.Context, ServerOpts, *RESP, *REQ) (exited chan int, err error)
 

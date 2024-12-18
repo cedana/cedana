@@ -31,7 +31,7 @@ var attachCmd = &cobra.Command{
 
 		pid, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
-			return fmt.Errorf("PID must be a valid unsigned 32-bit integer")
+      return fmt.Errorf("invalid pid: %v", err)
 		}
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: uint32(pid)})

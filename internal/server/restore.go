@@ -34,7 +34,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		process.FillProcessStateForRestore,
+		process.ReloadProcessStateForRestore,
 		process.DetectShellJobForRestore,
 		process.InheritStdioForRestore,
 		network.DetectNetworkOptionsForRestore,
