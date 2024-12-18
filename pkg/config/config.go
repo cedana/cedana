@@ -32,7 +32,7 @@ var Global Config = Config{
 	Storage: Storage{
 		Remote:      false,
 		DumpDir:     "/tmp",
-		Compression: "none",
+		Compression: "tar",
 	},
 	Profiling: Profiling{
 		Enabled: true,
