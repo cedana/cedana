@@ -141,8 +141,14 @@ func Untar(tarball string, dest string) error {
 			return err
 		}
 
+		// Clean and validate the path
+		cleanedPath := filepath.Clean(header.Name)
+		if strings.Contains(cleanedPath, "..") {
+			return fmt.Errorf("invalid file path: %s", cleanedPath)
+		}
+
 		// Construct the full path for the file
-		target := filepath.Join(dest, header.Name)
+		target := filepath.Join(dest, cleanedPath)
 
 		// Check the type of the file
 		switch header.Typeflag {
