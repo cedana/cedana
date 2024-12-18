@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"slices"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -13,7 +14,9 @@ import (
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -44,15 +47,21 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		middleware = slices.Insert(middleware, 0, job.ManageRestore(s.jobs))
 	}
 
+	var profilingData *daemon.ProfilingData
+	if config.Global.Profiling.Enabled {
+		profilingData = &daemon.ProfilingData{Name: "restore"}
+		defer profiling.RecordDuration(time.Now(), profilingData)
+	}
+
 	opts := types.ServerOpts{
 		Lifetime:     s.lifetime,
 		CRIU:         s.criu,
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
-		Profiling:    &daemon.ProfilingData{},
+		Profiling:    profilingData,
 	}
-	resp := &daemon.RestoreResp{Profiling: opts.Profiling}
+	resp := &daemon.RestoreResp{Profiling: profilingData}
 
 	// s.ctx is the lifetime context of the server, pass it so that
 	// managed processes maximum lifetime is the same as the server.

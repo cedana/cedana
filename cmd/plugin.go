@@ -390,7 +390,7 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
-			row = append(row, style.NegativeColor.Sprint("✘"))
+			row = append(row, style.NegativeColor.Sprint("!"))
 		} else {
 			row = append(row, style.BoolStr(available, "✔", "✘"))
 		}
@@ -404,7 +404,7 @@ func featureLegend() string {
 		style.PositiveColor.Sprint("✔"),
 		style.DisbledColor.Sprint("✘"),
 		style.DisbledColor.Sprint("-"),
-		style.NegativeColor.Sprint("✘"))
+		style.NegativeColor.Sprint("!"))
 }
 
 func statusStr(s plugins.Status) string {

@@ -1,4 +1,4 @@
-package utils
+package profiling
 
 import (
 	"reflect"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -14,23 +15,25 @@ import (
 // If no f is provided, uses the caller.
 func RecordDuration(start time.Time, profiling *daemon.ProfilingData, f ...any) {
 	duration := time.Since(start)
-
-	var pc uintptr
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-	} else {
-		pc = reflect.ValueOf(f[0]).Pointer()
-	}
-
 	profiling.Duration = duration.Nanoseconds()
-	profiling.Name = FunctionName(pc)
+
+	if profiling.Name == "" {
+		var pc uintptr
+		if len(f) == 0 {
+			pc, _, _, _ = runtime.Caller(1)
+		} else {
+			pc = reflect.ValueOf(f[0]).Pointer()
+		}
+
+		profiling.Name = utils.FunctionName(pc)
+	}
 
 	log.Trace().Str("in", profiling.Name).Msgf("spent %s", duration)
 }
 
 // RecordComponentDuration records the elapsed time since start into the profiling data.
 // Unlike RecordDuration, this adds the data as a new component of the profiling data.
-func RecordComponentDuration(start time.Time, profiling *daemon.ProfilingData, f ...any) {
+func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f ...any) {
 	duration := time.Since(start)
 
 	var pc uintptr
@@ -39,8 +42,7 @@ func RecordComponentDuration(start time.Time, profiling *daemon.ProfilingData, f
 	} else {
 		pc = reflect.ValueOf(f[0]).Pointer()
 	}
-
-	name := FunctionName(pc)
+	name := utils.FunctionName(pc)
 
 	profiling.Duration += duration.Nanoseconds()
 	profiling.Components = append(profiling.Components, &daemon.ProfilingData{
@@ -49,6 +51,27 @@ func RecordComponentDuration(start time.Time, profiling *daemon.ProfilingData, f
 	})
 
 	log.Trace().Str("in", name).Msgf("spent %s", duration)
+}
+
+// RecordDurationCategory records the elapsed time since start into the profiling data.
+// Instead of directly inserting a component like RecordDurationComponent, this adds the data as a nested component,
+// with the name matching the category provided.
+func RecordDurationCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) {
+	var categoryComponent *daemon.ProfilingData
+	for _, component := range profiling.Components {
+		if component.Name == category {
+			categoryComponent = component
+			break
+		}
+	}
+	if categoryComponent == nil {
+		categoryComponent = &daemon.ProfilingData{
+			Name: category,
+		}
+		profiling.Components = append(profiling.Components, categoryComponent)
+	}
+
+	RecordDurationComponent(start, categoryComponent, f...)
 }
 
 // LogDuration logs the elapsed time since start.
@@ -64,34 +87,6 @@ func LogDuration(start time.Time, f ...any) {
 		pc = reflect.ValueOf(f[0]).Pointer()
 	}
 
-	name := FunctionName(pc)
+	name := utils.FunctionName(pc)
 	log.Trace().Str("in", name).Msgf("spent %s", duration)
-}
-
-// FlattenProfilingData flattens the profiling data into a single list of components.
-// This is such that the duration of each component is purely the time spent in that component
-// excluding the time spent in its children.
-func FlattenProfilingData(data *daemon.ProfilingData) {
-	length := len(data.Components)
-
-	for i := 0; i < length; i++ {
-		component := data.Components[i]
-
-		data.Duration -= component.Duration
-
-		FlattenProfilingData(component)
-
-		data.Components = append(data.Components, component.Components...)
-		component.Components = nil
-
-	}
-
-	// If the data has no duration, it is just a category wrapper for its components.
-	// so we append its name to the name of its children.
-
-	if data.Duration == 0 && data.Name != "" {
-		for _, component := range data.Components {
-			component.Name = data.Name + ":" + component.Name
-		}
-	}
 }

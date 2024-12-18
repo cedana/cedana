@@ -93,12 +93,12 @@ reset-plugins: ## Reset & uninstall plugins
 ##@ Testing
 ###########
 
-PARALLELISM?=8
+PARALLELISM?=1
 BATS_CMD=bats --jobs $(PARALLELISM)
 
-test: test-go test-regression ## Run all tests
+test: test-unit test-regression ## Run all tests
 
-test-go: ## Run go tests
+test-unit: ## Run unit tests
 	@echo "Running go tests..."
 	$(GOCMD) test -v ./...
 
@@ -107,11 +107,9 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>)
 	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
-		$(BATS_CMD) test/regression/*.bats ;\
-		$(BATS_CMD) test/regression/plugins/*.bats ;\
+		$(BATS_CMD) -r test/regression ;\
 		echo "Using single instance of daemon across tests..." ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/*.bats ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/*.bats ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
 	else \
 		$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
 	fi
@@ -121,9 +119,9 @@ test-regression-cedana: ## Run regression tests for cedana
 	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
-		$(BATS_CMD) test/regression/*.bats ;\
+		$(BATS_CMD) test/regression ;\
 		echo "Using single instance of daemon across tests..." ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/*.bats ;\
+		PERSIST_DAEMON=1 $(BATS_CMD) test/regression ;\
 	else \
 		$(DOCKER_TEST_RUN) make test-regression-cedana PARALLELISM=$(PARALLELISM) ;\
 	fi

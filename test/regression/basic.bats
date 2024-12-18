@@ -27,23 +27,22 @@ load_lib file
     assert_output --partial "$jid"
 }
 
-@test "plugin list (local)" {
+# Do in single test so parallel runs don't interfere with each other
+@test "plugin commands (local)" {
     run cedana -P "$PORT" plugin list -a
     assert_success
-}
+    assert_output --partial "criu"
+    assert_output --partial "runc"
 
-@test "plugin features (local)" {
+    run cedana -P "$PORT" plugin install runc
+    assert_success
+
     run cedana -P "$PORT" plugin features
     assert_success
-}
+    assert_output --partial "RUNC"
+    assert_output --partial "✔"
 
-@test "plugin install (local)" {
-    run cedana -P "$PORT" plugin features
-    assert_success
-}
-
-@test "plugin remove (local)" {
-    run cedana -P "$PORT" plugin features
+    run cedana -P "$PORT" plugin remove runc
     assert_success
 }
 

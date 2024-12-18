@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -10,6 +11,8 @@ import (
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -31,17 +34,19 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
-	// s.ctx is the lifetime context of the server, pass it so that
-	// managed processes maximum lifetime is the same as the server.
-	// It also gives adapters the power to control the lifetime of the process. For e.g.,
-	// the GPU adapter can use this context to kill the process when GPU support fails.
+	var profilingData *daemon.ProfilingData
+	if config.Global.Profiling.Enabled {
+		profilingData = &daemon.ProfilingData{Name: "run"}
+		defer profiling.RecordDuration(time.Now(), profilingData)
+	}
+
 	opts := types.ServerOpts{
 		Lifetime:  s.lifetime,
 		Plugins:   s.plugins,
 		WG:        s.wg,
-		Profiling: &daemon.ProfilingData{},
+		Profiling: profilingData,
 	}
-	resp := &daemon.RunResp{Profiling: opts.Profiling}
+	resp := &daemon.RunResp{Profiling: profilingData}
 
 	_, err := run(ctx, opts, resp, req)
 	if err != nil {

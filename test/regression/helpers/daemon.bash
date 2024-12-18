@@ -65,7 +65,9 @@ start_daemon_at() {
 
 wait_for_start() {
     local port=$1
-    CEDANA_CLI_WAIT_FOR_READY=true cedana -P "$port" ps
+    while ! cedana --port "$port" ps &> /dev/null; do
+        sleep 0.1
+    done
 }
 
 stop_daemon_at() {

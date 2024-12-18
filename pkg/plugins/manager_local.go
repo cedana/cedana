@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/pkg/style"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 var searchPath = os.Getenv("CEDANA_PLUGINS_LOCAL_SEARCH_PATH")
@@ -188,7 +189,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 					break
 				}
 				os.Remove(dest)
-				if e := os.Link(src, dest); e != nil {
+				if e := utils.CopyFile(src, dest); e != nil {
 					err = fmt.Errorf("Failed to install %s: %w", name, e)
 					break
 				}

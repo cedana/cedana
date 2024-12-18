@@ -11,6 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -173,13 +174,8 @@ var processRunCmd = &cobra.Command{
 func printProfilingData(data *daemon.ProfilingData) {
 	total := time.Duration(data.Duration)
 
-	data = &daemon.ProfilingData{
-		Duration:   data.Duration,
-		Components: []*daemon.ProfilingData{data},
-	}
-
-	// Since data contains all components as a tree.
-	utils.FlattenProfilingData(data)
+	profiling.CleanData(data)
+	profiling.FlattenData(data) // Since we want to print as a list
 
 	fmt.Print("Profiling data received (flattened):\n\n")
 
@@ -191,18 +187,19 @@ func printProfilingData(data *daemon.ProfilingData) {
 		if p.Duration <= 0 {
 			continue
 		}
-		plugin, name := utils.SimplifyFuncName(p.Name)
+		categoryName, name := utils.SimplifyFuncName(p.Name)
 
+		category := style.WarningColor.Sprint(categoryName)
 		features.CmdTheme.IfAvailable(func(name string, theme text.Colors) error {
-			plugin = theme.Sprint(plugin)
+			category = theme.Sprint(categoryName)
 			return nil
-		}, plugin)
+		}, categoryName)
 
 		duration := time.Duration(p.Duration)
-		tableWriter.AppendRow([]interface{}{duration, plugin, style.DisbledColor.Sprint(name)})
+		tableWriter.AppendRow([]interface{}{duration, category, style.DisbledColor.Sprint(name)})
 	}
 
-	tableWriter.AppendFooter([]interface{}{total, "", "total"})
+	tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})
 	tableWriter.Render()
 
 	fmt.Println()

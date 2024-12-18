@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"slices"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -15,6 +16,7 @@ import (
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -47,15 +49,21 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		middleware = slices.Insert(middleware, 0, job.ManageDump(s.jobs))
 	}
 
+	var profilingData *daemon.ProfilingData
+	if config.Global.Profiling.Enabled {
+		profilingData = &daemon.ProfilingData{Name: "dump"}
+		defer profiling.RecordDuration(time.Now(), profilingData)
+	}
+
 	opts := types.ServerOpts{
 		Lifetime:     s.lifetime,
 		CRIU:         s.criu,
 		CRIUCallback: &criu_client.NotifyCallbackMulti{},
 		Plugins:      s.plugins,
 		WG:           s.wg,
-		Profiling:    &daemon.ProfilingData{},
+		Profiling:    profilingData,
 	}
-	resp := &daemon.DumpResp{Profiling: opts.Profiling}
+	resp := &daemon.DumpResp{Profiling: profilingData}
 
 	_, err := criu.Dump.With(middleware...)(ctx, opts, resp, req)
 	if err != nil {

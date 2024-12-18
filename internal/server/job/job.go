@@ -22,7 +22,7 @@ type Job struct {
 
 	// Notify callbacks that can be saved for later use.
 	// Will be called each time the job is C/R'd.
-	criuCallback criu.NotifyCallbackMulti
+	criuCallback *criu.NotifyCallbackMulti
 
 	sync.RWMutex
 }
@@ -37,7 +37,6 @@ func newJob(
 			JID:  jid,
 			Type: jobType,
 		},
-		criuCallback: criu.NotifyCallbackMulti{},
 	}
 }
 
@@ -53,7 +52,6 @@ func fromProto(j *daemon.Job) *Job {
 			Checkpoints: j.GetCheckpoints(),
 			GPUEnabled:  j.GetGPUEnabled(),
 		},
-		criuCallback: criu.NotifyCallbackMulti{},
 	}
 }
 
@@ -184,12 +182,15 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 func (j *Job) GetCRIUCallback() *criu.NotifyCallbackMulti {
 	j.RLock()
 	defer j.RUnlock()
-	return &j.criuCallback
+	return j.criuCallback
 }
 
 func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
 	j.Lock()
 	defer j.Unlock()
+	if j.criuCallback == nil {
+		j.criuCallback = &criu.NotifyCallbackMulti{}
+	}
 	j.criuCallback.Include(n)
 }
 

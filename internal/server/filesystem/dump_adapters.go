@@ -9,6 +9,8 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -80,12 +82,16 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 			log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("creating tarball")
 
-			var tarball string
-
 			defer os.RemoveAll(imagesDirectory)
 
-			if tarball, err = utils.Tar(imagesDirectory, imagesDirectory, compression); err != nil {
+			compressionStart := time.Now()
+			tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
+			if err != nil {
 				return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
+			}
+
+			if config.Global.Profiling.Enabled {
+				profiling.RecordDurationCategory(compressionStart, server.Profiling, "compression", utils.Tar)
 			}
 
 			resp.Path = tarball

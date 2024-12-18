@@ -23,13 +23,11 @@ const (
 // XXX: Works only with files, not directories.
 func Tar(src string, tarball string, compression string) (string, error) {
 	switch compression {
-	case "gzip":
+	case "gzip", "gz":
 		tarball += ".tar.gz"
 	case "tar":
 		tarball += ".tar"
-	case "none":
-		tarball += ".tar"
-	case "":
+	case "", "none":
 		tarball += ".tar"
 	default:
 		return "", fmt.Errorf("Unsupported compression format: %s", compression)
@@ -44,14 +42,12 @@ func Tar(src string, tarball string, compression string) (string, error) {
 	var writer io.WriteCloser
 
 	switch compression {
-	case "gzip":
+	case "gzip", "gz":
 		writer = gzip.NewWriter(file)
 		defer writer.Close()
 	case "tar":
 		writer = file
-	case "none":
-		writer = file
-	case "":
+	case "", "none":
 		writer = file
 	default:
 		os.Remove(tarball)
@@ -248,4 +244,25 @@ func SizeStr(bytes int64) string {
 	)
 
 	return fmt.Sprintf("%s %s", stringValue, unit)
+}
+
+func CopyFile(src, dest string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("Could not open source file: %s", err)
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("Could not create destination file: %s", err)
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("Could not copy file contents: %s", err)
+	}
+
+	return nil
 }

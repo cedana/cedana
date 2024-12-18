@@ -42,7 +42,7 @@ type (
 // When profiling is enabled, a timing profiler is added to the middleware chain.
 func (h Handler[REQ, RESP]) With(middleware ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
 	if config.Global.Profiling.Enabled {
-		return adaptedWithProfiler(h, Timed, middleware...)
+		return adaptedWithProfiler(h, Timing, middleware...)
 	}
 	return adapted(h, middleware...)
 }
@@ -60,8 +60,8 @@ func adapted[REQ, RESP any](h Handler[REQ, RESP], adapters ...Adapter[Handler[RE
 	return h
 }
 
-// A profiler can be used to measure the performance of each adapter the request
-// goes through before reaching the handler. A profiler is also, itself, an adapter,
+// A profiler can be used to profile each adapter the request
+// goes through before reaching the final handler. A profiler is also, itself, an adapter,
 // and is inserted in between any two adapters in the middleware chain.
 func adaptedWithProfiler[REQ, RESP any](h Handler[REQ, RESP], profiler Adapter[Handler[REQ, RESP]], adapters ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
 	newMiddleware := make([]Adapter[Handler[REQ, RESP]], 0, len(adapters)*2+1)
