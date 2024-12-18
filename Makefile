@@ -22,7 +22,7 @@ LDFLAGS=-X main.Version=$(VERSION)
 build: $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
-	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 start: ## Start the daemon
 	@sudo -E ./$(BINARY) daemon start
@@ -77,7 +77,7 @@ plugins: $(PLUGIN_SOURCES) ## Build & install plugins
 			name=$$(basename $$path); \
 			list="$$name $$list"; \
 			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			$(GOBUILD) -C $$path -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 	sudo -E $(BINARY) plugin install $$list ;\
