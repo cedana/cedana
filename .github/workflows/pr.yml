@@ -265,6 +265,117 @@ jobs:
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: make test-regression-plugin PLUGIN=runc
 
+  regression-test-containerd:
+    name: Regression Tests (containerd)
+    runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    needs: [build, build-plugins]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+        run: make test-regression-plugin PLUGIN=containerd
+
+  regression-test-crio:
+    name: Regression Tests (crio)
+    runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    needs: [build, build-plugins]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+        run: make test-regression-plugin PLUGIN=crio
+
+  regression-test-gpu:
+    name: Regression Tests (gpu)
+    runs-on: ubicloud-standard-8
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    needs: [build, build-plugins]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          CI_BRANCH: ${{ github.ref_name }}
+          SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+        run: make test-regression-plugin PLUGIN=gpu
+
   # benchmark:
   #   name: Benchmark
   #   if: ${{ !inputs.skip_bench }}
