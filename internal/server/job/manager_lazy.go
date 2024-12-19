@@ -211,7 +211,7 @@ func (m *ManagerLazy) Exists(jid string) bool {
 	return ok
 }
 
-func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited ...<-chan int) error {
+func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, exited ...<-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
@@ -231,7 +231,7 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 
 	// Try to update the process state with the latest information,
 	// Only possible if process is still running, otherwise ignore errors.
-	err := job.FillProcess(ctx, pid)
+	err := job.FillProcess(lifetime, pid)
 	if err != nil {
 		log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("ignoring: failed to fill process state after manage")
 	}
@@ -243,10 +243,15 @@ func (m *ManagerLazy) Manage(ctx context.Context, jid string, pid uint32, exited
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		<-exitedChan
+
+		select {
+		case <-lifetime.Done():
+		case <-exitedChan:
+		}
+
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		m.gpus.Detach(ctx, jid)
+		m.gpus.Detach(lifetime, jid)
 
 		m.pending <- action{update, jid}
 	}()

@@ -32,12 +32,14 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			}
 
 			// Fill in restore request details based on saved job info
-			// TODO YA: Allow overriding job details, otherwise use saved job details
+
 			req.Type = job.GetType()
 			if req.Log == "" {
 				req.Log = job.GetLog() // Use the same log file as it was before dump
 			}
-			req.Details = job.GetDetails()
+
+			proto.Merge(req.Details, job.GetDetails()) // override missing fields with saved details
+
 			if req.Path == "" {
 				req.Path = job.GetLatestCheckpoint().GetPath()
 			}

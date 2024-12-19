@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,10 +33,12 @@ func (feature Feature[T]) IfAvailable(
 	for _, p := range filter {
 		pluginSet[p] = struct{}{}
 	}
+	noValidPlugins := true
 	for name, p := range loadedPlugins {
 		if _, ok := pluginSet[name]; len(pluginSet) > 0 && !ok {
 			continue
 		}
+		noValidPlugins = false
 		defer RecoverFromPanic(name)
 		if symUntyped, err := p.Lookup(feature.Symbol); err == nil {
 			sym, ok := symUntyped.(*T)
@@ -57,6 +60,9 @@ func (feature Feature[T]) IfAvailable(
 		} else {
 			errs = append(errs, fmt.Errorf("plugin '%s' exports no %s", name, feature))
 		}
+	}
+	if noValidPlugins {
+		errs = append(errs, fmt.Errorf("feature '%s' is not available in %s", feature, utils.StrList(filter)))
 	}
 	return errors.Join(errs...)
 }

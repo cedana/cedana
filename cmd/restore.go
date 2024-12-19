@@ -99,6 +99,22 @@ var restoreCmd = &cobra.Command{
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
+		useVSOCK := config.Global.UseVSOCK
+		var client *Client
+		var err error
+
+		if useVSOCK {
+			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
+		} else {
+			client, err = NewClient(config.Global.Host, config.Global.Port)
+		}
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
+		cmd.SetContext(ctx)
+
 		return nil
 	},
 
@@ -109,16 +125,9 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK := config.Global.UseVSOCK
-		var client *Client
-
-		if useVSOCK {
-			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-		} else {
-			client, err = NewClient(config.Global.Host, config.Global.Port)
-		}
-		if err != nil {
-			return fmt.Errorf("Error creating client: %v", err)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
 		}
 		defer client.Close()
 
@@ -177,18 +186,40 @@ var jobRestoreCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// All we need to do is modify the request to include the job ID, and request type.
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
+
+		jid := args[0]
+
+		// Get the job type, so we can call the plugin command to override request details
+		jobs, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		if err != nil {
+			return err
+		}
+		if len(jobs.Jobs) == 0 {
+			return fmt.Errorf("Job %s not found", jid)
+		}
+		jobType := jobs.Jobs[0].Type
+
+		err = features.RestoreCmd.IfAvailable(
+			func(name string, pluginCmd *cobra.Command) error {
+				// Call the plugin command to override request details
+				return pluginCmd.RunE(cmd, args)
+			}, jobType,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Since the request details have been modified by the plugin command, we need to fetch it
 		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		if len(args) == 0 {
-			return fmt.Errorf("Job ID is required")
-		}
-		jid := args[0]
-
-		req.Details = &daemon.Details{JID: proto.String(jid)}
+		req.Details.JID = proto.String(jid)
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

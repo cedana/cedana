@@ -34,13 +34,14 @@ var (
 	DumpCmd    *cobra.Command = cmd.DumpCmd
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
+	ManageCmd  *cobra.Command = cmd.ManageCmd
 	CmdTheme   text.Colors    = text.Colors{text.FgCyan}
 )
 
 var KillSignal = syscall.SIGKILL
 
 var (
-	RunHandler      types.Run                   = container.Run()
+	RunHandler      types.Run                   = container.Run
 	GPUInterception types.Adapter[types.Run]    = gpu.Interception
 	RunMiddleware   types.Middleware[types.Run] = types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
@@ -49,6 +50,8 @@ var (
 		container.LoadSpecFromBundle,
 		container.SetUsChildSubreaper,
 	}
+
+	ManageHandler types.Run = container.Manage
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,

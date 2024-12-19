@@ -73,7 +73,7 @@ func pluginManageHandler() types.Run {
 			handler = process.Manage
 		default:
 			// Use plugin-specific handler
-			err = features.RunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
+			err = features.ManageHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
 				handler = pluginHandler
 				return nil
 			}, t)
