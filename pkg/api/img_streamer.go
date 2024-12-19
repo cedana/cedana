@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	img_streamer "buf.build/gen/go/cedana/img-streamer/protocolbuffers/go"
 	"google.golang.org/protobuf/proto"
@@ -47,11 +48,16 @@ func socketNameForMode(mode int) string {
 func imgStreamerInit(imageDir string, mode int) (*net.UnixConn, error) {
 	imgStreamerMode = mode
 	socketPath := filepath.Join(imageDir, socketNameForMode(mode))
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to image streamer socket %s: %v", socketPath, err)
+	var err error
+	for i := 0; i < 5; i++ {
+		conn, err := net.Dial("unix", socketPath)
+		if err == nil {
+			return conn.(*net.UnixConn), nil
+		}
+		time.Sleep(time.Millisecond * 10)
 	}
-	return conn.(*net.UnixConn), nil
+
+	return nil, fmt.Errorf("unable to connect to image streamer socket: %v", err)
 }
 
 func imgStreamerFinish(socket_fd int, criu_fd int, streamer_fd int) {

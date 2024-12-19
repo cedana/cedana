@@ -30,6 +30,7 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			PID:      state.PID,
 			Dir:      args.Dir,
 			Stream:   args.Stream,
+			Bucket:   args.Bucket,
 			CriuOpts: args.CriuOpts,
 		})
 		if err != nil {
@@ -79,6 +80,7 @@ func (s *service) JobRestore(
 		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
 			JID:            args.JID,
 			Stream:         args.Stream,
+			Bucket:         args.Bucket,
 			CriuOpts:       args.CriuOpts,
 			CheckpointPath: args.CheckpointPath,
 		})
