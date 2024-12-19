@@ -10,9 +10,9 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/logging"
+	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/telemetry"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
@@ -93,8 +93,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.ChainStreamInterceptor(logging.StreamLogger(), telemetry.StreamTracer(machine)),
-			grpc.ChainUnaryInterceptor(logging.UnaryLogger(), telemetry.UnaryTracer(machine)),
+			grpc.ChainStreamInterceptor(logging.StreamLogger(), metrics.StreamTracer(machine)),
+			grpc.ChainUnaryInterceptor(logging.UnaryLogger(), metrics.UnaryTracer(machine)),
 		),
 		plugins: pluginManager,
 		jobs:    jobManager,
@@ -131,7 +131,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	lifetime, cancel := context.WithCancelCause(ctx)
 	s.lifetime = lifetime
 
-	shutdown, err := telemetry.InitOtel(ctx, s.version)
+	shutdown, err := metrics.InitOtel(ctx, s.version)
 	defer func() {
 		err = shutdown(ctx)
 	}()
