@@ -34,8 +34,6 @@ var startDaemonCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		log := log.Ctx(ctx)
 		if utils.IsRootUser() == false {
 			return fmt.Errorf("daemon must be run as root")
 		}
@@ -46,19 +44,20 @@ var startDaemonCmd = &cobra.Command{
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		server, err := server.NewServer(ctx, &server.ServeOpts{
+		server, err := server.NewServer(cmd.Context(), &server.ServeOpts{
 			UseVSOCK:    config.Global.UseVSOCK,
 			Port:        config.Global.Port,
 			Host:        config.Global.Host,
 			Metrics:     config.Global.Metrics,
 			LocalDBPath: localDBPath,
+			Version:     cmd.Version,
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		err = server.Launch()
+		err = server.Launch(cmd.Context())
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err

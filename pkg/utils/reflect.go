@@ -102,7 +102,10 @@ func GetTag(i interface{}, field string, tag string) string {
 		if !ok {
 			return ""
 		}
-		vals = append(vals, f.Tag.Get(tag))
+		tag := f.Tag.Get(tag)
+		if tag != "" {
+			vals = append(vals, tag)
+		}
 		t = f.Type
 	}
 	return strings.Join(vals, ".")

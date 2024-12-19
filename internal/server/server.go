@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/internal/logger"
+	"github.com/cedana/cedana/internal/logging"
+	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/config"
@@ -34,7 +34,8 @@ type Server struct {
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	lifetime context.Context // context alive for the duration of the server
 
-	machine Machine
+	machine utils.Machine
+	version string
 
 	daemongrpc.UnimplementedDaemonServer
 }
@@ -45,17 +46,12 @@ type ServeOpts struct {
 	Host        string
 	LocalDBPath string
 	Metrics     config.Metrics
+	Version     string
 }
 
 type MetricOpts struct {
 	ASR  bool
 	OTel bool
-}
-
-type Machine struct {
-	ID       string
-	MACAddr  string
-	Hostname string
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -64,17 +60,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	wg := &sync.WaitGroup{}
 
-	machineID, err := utils.GetMachineID()
-	if err != nil {
-		return nil, err
-	}
-
-	macAddr, err := utils.GetMACAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	hostname, err := os.Hostname()
+	machine, err := utils.GetMachine()
 	if err != nil {
 		return nil, err
 	}
@@ -106,20 +92,16 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	server := &Server{
-		lifetime: ctx,
 		grpcServer: grpc.NewServer(
-			grpc.StreamInterceptor(logger.StreamLogger()),
-			grpc.UnaryInterceptor(logger.UnaryLogger()),
+			grpc.ChainStreamInterceptor(logging.StreamLogger(), metrics.StreamTracer(machine)),
+			grpc.ChainUnaryInterceptor(logging.UnaryLogger(), metrics.UnaryTracer(machine)),
 		),
 		plugins: pluginManager,
 		jobs:    jobManager,
 		db:      database,
 		wg:      wg,
-		machine: Machine{
-			ID:       machineID,
-			MACAddr:  macAddr,
-			Hostname: hostname,
-		},
+		machine: machine,
+		version: opts.Version,
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
@@ -145,8 +127,14 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 // Takes in a context that allows for cancellation from the cmdline
-func (s *Server) Launch() error {
-	ctx, cancel := context.WithCancelCause(s.lifetime)
+func (s *Server) Launch(ctx context.Context) (err error) {
+	lifetime, cancel := context.WithCancelCause(ctx)
+	s.lifetime = lifetime
+
+	shutdown, err := metrics.InitOtel(ctx, s.version)
+	defer func() {
+		err = shutdown(ctx)
+	}()
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
@@ -157,8 +145,8 @@ func (s *Server) Launch() error {
 
 	log.Info().Str("address", s.listener.Addr().String()).Msg("server listening")
 
-	<-ctx.Done()
-	err := ctx.Err()
+	<-lifetime.Done()
+	err = lifetime.Err()
 
 	// Wait for all background go routines to finish
 	// WARN: Careful before changing beflow order, as it may cause deadlock
@@ -166,7 +154,7 @@ func (s *Server) Launch() error {
 	s.wg.Wait()
 	s.Stop()
 
-	return err
+	return
 }
 
 func (s *Server) Stop() {

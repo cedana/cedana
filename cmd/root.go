@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/internal/features"
-	"github.com/cedana/cedana/internal/logger"
+	"github.com/cedana/cedana/internal/logging"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/rs/zerolog/log"
@@ -85,7 +85,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
 
-		logger.SetLevel(config.Global.LogLevel)
+		logging.SetLevel(config.Global.LogLevel)
 
 		return nil
 	},

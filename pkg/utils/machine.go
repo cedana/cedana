@@ -6,6 +6,36 @@ import (
 	"strings"
 )
 
+type Machine struct {
+	ID       string
+	MACAddr  string
+	Hostname string
+}
+
+func GetMachine() (Machine, error) {
+	machine := Machine{}
+
+	machineID, err := GetMachineID()
+	if err != nil {
+		return machine, err
+	}
+	machine.ID = machineID
+
+	macAddr, err := GetMACAddress()
+	if err != nil {
+		return machine, err
+	}
+	machine.MACAddr = macAddr
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return machine, err
+	}
+	machine.Hostname = hostname
+
+	return machine, nil
+}
+
 func GetMachineID() (string, error) {
 	// read from /etc/machine-id
 	data, err := os.ReadFile("/etc/machine-id")

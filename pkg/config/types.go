@@ -1,6 +1,7 @@
 package config
 
 // XXX: Config file should have a version field to manage future changes to schema
+
 type (
 	Config struct {
 		Port      uint32 `json:"port"      mapstructure:"port"`
@@ -18,8 +19,8 @@ type (
 		GPU        GPU        `json:"gpu"        mapstructure:"gpu"`
 	}
 	Connection struct {
-		URL       string `json:"url"    mapstructure:"url"`
-		AuthToken string `json:"auth_token" mapstructure:"auth_token"`
+		URL       string `json:"url"    mapstructure:"url" env_aliases:"CEDANA_URL"`
+		AuthToken string `json:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
 	}
 	Storage struct {
 		Remote      bool   `json:"remote"      mapstructure:"remote"`

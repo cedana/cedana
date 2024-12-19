@@ -1,4 +1,4 @@
-package logger
+package logging
 
 // Defines gRPC interceptors for logging
 
@@ -12,8 +12,6 @@ import (
 
 func StreamLogger() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx := log.With().Str("context", "daemon").Logger().WithContext(ss.Context())
-		log := log.Ctx(ctx)
 		log.Trace().Str("method", info.FullMethod).Msg("gRPC stream started")
 
 		err := handler(srv, ss)
@@ -31,9 +29,6 @@ func StreamLogger() grpc.StreamServerInterceptor {
 // TODO NR - this needs a deep copy to properly redact
 func UnaryLogger() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx = log.With().Str("context", "daemon").Logger().WithContext(ctx)
-		log := log.Ctx(ctx)
-
 		// log the GetContainerInfo method to trace
 		if strings.Contains(info.FullMethod, "GetContainerInfo") {
 			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")

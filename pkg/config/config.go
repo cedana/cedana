@@ -25,10 +25,6 @@ var Global Config = Config{
 	Port:     8080,
 	Host:     "0.0.0.0",
 	LogLevel: "info",
-	Connection: Connection{
-		URL:       "unset",
-		AuthToken: "unset",
-	},
 	Storage: Storage{
 		Remote:      false,
 		DumpDir:     "/tmp",
@@ -128,8 +124,16 @@ func setDefaults() {
 // Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
 func bindEnvVars() {
 	viper.AutomaticEnv()
-	for _, field := range utils.ListLeaves(Config{}, configFileType) {
-		envVar := envVarPrefix + "_" + strings.ToUpper(strings.ReplaceAll(field, ".", "_"))
-		viper.MustBindEnv(field, envVar)
+
+	for _, field := range utils.ListLeaves(Config{}) {
+		tag := utils.GetTag(Config{}, field, configFileType)
+		envVar := envVarPrefix + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))
+
+		// get env aliases from struct tag
+		aliasesStr := utils.GetTag(Config{}, field, "env_aliases")
+		aliases := []string{tag, envVar}
+		aliases = append(aliases, strings.Split(aliasesStr, ",")...)
+
+		viper.MustBindEnv(aliases...)
 	}
 }
