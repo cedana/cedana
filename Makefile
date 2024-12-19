@@ -101,8 +101,8 @@ reset-plugins: ## Reset & uninstall plugins
 ##@ Testing
 ###########
 
-PARALLELISM?=1
-BATS_CMD=bats --jobs $(PARALLELISM) --pretty
+PARALLELISM?=8
+BATS_CMD=bats --jobs $(PARALLELISM)
 
 test: test-unit test-regression ## Run all tests
 
@@ -113,7 +113,7 @@ test-unit: ## Run unit tests
 test-regression: ## Run all regression tests (PARALLELISM=<n>)
 	@echo "Running all regression tests..."
 	@echo "Parallelism: $(PARALLELISM)"
-	if [ -n "${CI}" ]; then \
+	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) -r test/regression ;\
 		echo "Using single instance of daemon across tests..." ;\
@@ -125,7 +125,7 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>)
 test-regression-cedana: ## Run regression tests for cedana
 	@echo "Running regression tests for cedana..."
 	@echo "Parallelism: $(PARALLELISM)"
-	if [ -n "${CI}" ]; then \
+	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression ;\
 		echo "Using single instance of daemon across tests..." ;\
@@ -137,7 +137,7 @@ test-regression-cedana: ## Run regression tests for cedana
 test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 	@echo "Running regression tests for plugin $$PLUGIN..."
 	@echo "Parallelism: $(PARALLELISM)"
-	if [ -n "${CI}" ]; then \
+	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 		echo "Using single instance of daemon across tests..." ;\

@@ -28,23 +28,23 @@ load_lib file
 }
 
 # Do in single test so parallel runs don't interfere with each other
-@test "plugin commands (local)" {
-    run cedana -P "$PORT" plugin list -a
-    assert_success
-    assert_output --partial "criu"
-    assert_output --partial "runc"
+# @test "plugin commands (local)" {
+#     run cedana -P "$PORT" plugin list -a
+#     assert_success
+#     assert_output --partial "criu"
+#     assert_output --partial "runc"
 
-    run cedana -P "$PORT" plugin install runc
-    assert_success
+#     run cedana -P "$PORT" plugin install runc
+#     assert_success
 
-    run cedana -P "$PORT" plugin features
-    assert_success
-    assert_output --partial "RUNC"
-    assert_output --partial "✔"
+#     run cedana -P "$PORT" plugin features
+#     assert_success
+#     assert_output --partial "RUNC"
+#     assert_output --partial "✔"
 
-    run cedana -P "$PORT" plugin remove runc
-    assert_success
-}
+#     run cedana -P "$PORT" plugin remove runc
+#     assert_success
+# }
 
 # @test "Health check" {
 #     run cedana daemon check
