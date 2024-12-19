@@ -203,7 +203,7 @@ var killJobCmd = &cobra.Command{
 	Use:               "kill <JID>",
 	Short:             "Kill a managed process/container (job)",
 	Args:              cobra.ArbitraryArgs,
-	ValidArgsFunction: ValidJIDs,
+	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
@@ -289,7 +289,7 @@ var attachJobCmd = &cobra.Command{
 	Use:               "attach <JID>",
 	Short:             "Attach stdin/out/err to a managed process/container (job)",
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: ValidJIDs,
+	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {

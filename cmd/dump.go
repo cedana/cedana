@@ -196,7 +196,7 @@ var jobDumpCmd = &cobra.Command{
 	Use:               "job <JID>",
 	Short:             "Dump a managed process/container (job)",
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: ValidJIDs,
+	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {

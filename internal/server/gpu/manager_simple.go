@@ -53,33 +53,10 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 		return err
 	}
 
-	controller, exited, err := spawnController(ctx, lifetime, m.wg, binary, jid)
+	err := m.controllers.Spawn(ctx, lifetime, m.wg, binary, jid, pid)
 	if err != nil {
 		return err
 	}
-
-	// _, err = controller.Attach(ctx, &gpu.AttachRequest{JID: jid}, grpc.WaitForReady(true))
-	// if err != nil {
-	// 	return utils.GRPCErrorShort(err, controller.ErrBuf.String())
-	// }
-
-	m.controllers.Store(jid, controller)
-
-	// Wait for exit to clean up
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		select {
-		case <-exited:
-		case <-lifetime.Done():
-		}
-		select {
-		case <-lifetime.Done():
-		case pid := <-pid:
-			syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL)
-		}
-		m.controllers.Delete(jid)
-	}()
 
 	log.Debug().Str("JID", jid).Msg("GPU controller ready")
 

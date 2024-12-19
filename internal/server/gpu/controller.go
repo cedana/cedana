@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"sync"
@@ -14,6 +13,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"github.com/cedana/cedana/internal/logging"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -31,8 +31,6 @@ const (
 	// about the GPU controller's failure.
 	CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1
 )
-
-var CONTROLLER_LOGS_ENABLED = log.Logger.GetLevel() <= zerolog.TraceLevel
 
 type Controller struct {
 	ErrBuf *bytes.Buffer
@@ -54,10 +52,17 @@ func (m *Controllers) Get(jid string) *Controller {
 	return c.(*Controller)
 }
 
-func spawnController(ctx context.Context, lifetime context.Context, wg *sync.WaitGroup, binary string, jid string) (*Controller, chan int, error) {
+func (m *Controllers) Spawn(
+	ctx context.Context,
+	lifetime context.Context,
+	wg *sync.WaitGroup,
+	binary string,
+	jid string,
+	pid <-chan uint32,
+) error {
 	port, err := utils.GetFreePort()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get free port: %w", err)
+		return fmt.Errorf("failed to get free port: %w", err)
 	}
 
 	controller := &Controller{
@@ -67,10 +72,7 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 
 	controller.Stderr = controller.ErrBuf
 	controller.Stdin = nil
-	controller.Stdout = nil
-	if CONTROLLER_LOGS_ENABLED {
-		controller.Stdout = os.Stdout
-	}
+	controller.Stdout = logging.Writer("gpu-controller", jid, zerolog.TraceLevel)
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGTERM,
 	}
@@ -78,7 +80,7 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 
 	err = controller.Start()
 	if err != nil {
-		return nil, nil, fmt.Errorf(
+		return fmt.Errorf(
 			"failed to start GPU controller: %w",
 			utils.GRPCErrorShort(err, controller.ErrBuf.String()),
 		)
@@ -88,7 +90,7 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 	conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", CONTROLLER_HOST, port), opts...)
 	if err != nil {
 		controller.Process.Signal(syscall.SIGTERM)
-		return nil, nil, fmt.Errorf(
+		return fmt.Errorf(
 			"failed to create GPU controller client: %w",
 			utils.GRPCErrorShort(err, controller.ErrBuf.String()),
 		)
@@ -96,13 +98,13 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 	controller.ClientConn = conn
 	controller.ControllerClient = gpugrpc.NewControllerClient(conn)
 
+	m.Store(jid, controller)
+
 	// Cleanup controller on exit, and signal job of its exit
 
-	exited := make(chan int, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(exited)
 		defer conn.Close()
 
 		err := controller.Wait()
@@ -110,6 +112,14 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 			log.Trace().Err(err).Msg("GPU controller Wait()")
 		}
 		log.Debug().Int("code", controller.ProcessState.ExitCode()).Msg("GPU controller exited")
+
+		m.Delete(jid)
+
+		select {
+		case <-lifetime.Done():
+		case pid := <-pid:
+			syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL)
+		}
 	}()
 
 	log.Debug().Int("port", port).Msg("waiting for GPU controller...")
@@ -118,10 +128,10 @@ func spawnController(ctx context.Context, lifetime context.Context, wg *sync.Wai
 	if err != nil {
 		controller.Process.Signal(syscall.SIGTERM)
 		conn.Close()
-		return nil, nil, err
+		return err
 	}
 
-	return controller, exited, nil
+	return nil
 }
 
 // Health checks the GPU controller, blocking on connection until ready.

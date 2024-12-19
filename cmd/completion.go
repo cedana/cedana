@@ -39,6 +39,35 @@ func ValidJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, 
 	return jids, cobra.ShellCompDirectiveNoFileComp
 }
 
+func RunningJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	useVSOCK := config.Global.UseVSOCK
+	var client *Client
+	var err error
+
+	if useVSOCK {
+		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
+	} else {
+		client, err = NewClient(config.Global.Host, config.Global.Port)
+	}
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	jids := []string{}
+	resp, err := client.List(cmd.Context(), &daemon.ListReq{})
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	for _, job := range resp.Jobs {
+		if job.GetProcess().GetInfo().GetIsRunning() {
+			jid := job.GetJID()
+			jids = append(jids, jid)
+		}
+	}
+
+	return jids, cobra.ShellCompDirectiveNoFileComp
+}
+
 // ValidPIDs returns a list of valid PIDs of jobs for shell completion
 func ValidPIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	useVSOCK := config.Global.UseVSOCK
