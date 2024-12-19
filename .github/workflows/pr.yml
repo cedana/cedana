@@ -187,6 +187,11 @@ jobs:
         with:
           name: plugins
 
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_unit_test }}
@@ -216,6 +221,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -255,6 +265,11 @@ jobs:
         with:
           name: plugins
 
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
@@ -292,6 +307,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -331,6 +351,11 @@ jobs:
         with:
           name: plugins
 
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
@@ -368,6 +393,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3

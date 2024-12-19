@@ -7,6 +7,8 @@ export CEDANA_LOG_LEVEL=trace
 export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$PWD
 export CEDANA_PROFILING_ENABLED=false
 
+WAIT_TIMEOUT=100
+
 ##################
 # BATS LIFECYCLE #
 ##################
@@ -66,8 +68,14 @@ start_daemon_at() {
 
 wait_for_start() {
     local port=$1
+    local i=0
     while ! cedana --port "$port" ps &> /dev/null; do
         sleep 0.1
+        i=$((i + 1))
+        if [ $i -gt $WAIT_TIMEOUT ]; then
+            echo "Daemon failed to start"
+            exit 1
+        fi
     done
 }
 
@@ -79,8 +87,14 @@ stop_daemon_at() {
 
 wait_for_stop() {
     local port=$1
+    local i=0
     while cedana --port "$port" ps &> /dev/null; do
         sleep 0.1
+        i=$((i + 1))
+        if [ $i -gt $WAIT_TIMEOUT ]; then
+            echo "Daemon failed to stop"
+            exit 1
+        fi
     done
 }
 
