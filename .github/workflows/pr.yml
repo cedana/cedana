@@ -232,6 +232,9 @@ jobs:
         run: |
           chmod +x ./cedana
 
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
@@ -274,6 +277,9 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -318,6 +324,9 @@ jobs:
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
 
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
@@ -361,6 +370,9 @@ jobs:
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
 
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
@@ -403,6 +415,9 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
