@@ -10,7 +10,6 @@ load_lib assert
 load_lib file
 
 @test "cedana --version" {
-    git config --global --add safe.directory "$(pwd)"
     expected_version=$(git describe --tags --always)
 
     run cedana -P "$PORT" --version

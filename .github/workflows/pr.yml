@@ -81,6 +81,9 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
@@ -109,6 +112,9 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
