@@ -151,7 +151,7 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 ##########
 
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
-DOCKER_TEST_RUN=docker run --privileged -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_RUN=docker run --privileged --init -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
 
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."
