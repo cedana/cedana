@@ -12,9 +12,6 @@ import (
 	"time"
 
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
 	"github.com/rs/zerolog/log"
@@ -63,37 +60,9 @@ var restoreProcessCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
-				file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
-				if !env_set && !file_set {
-					err := awsCredentialsSetup()
-					if err != nil {
-						log.Error().Err(err).Msg("Failed to setup AWS credentials")
-						return fmt.Errorf("Failed to setup AWS credentials")
-					}
-				}
-				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
-					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
-				}
-				if !((os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "") {
-					return fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
-				}
-				cfg, err := config.LoadDefaultConfig(context.TODO())
+				err := awsSetup(bucket, ctx, false)
 				if err != nil {
-					return fmt.Errorf("Unable to load AWS configuration")
-				}
-				if cfg.Region == "" {
-					return fmt.Errorf("AWS region not configured, please specify in AWS config file (~/.aws/config) or environment variables.")
-				}
-				_, err = cfg.Credentials.Retrieve(context.TODO())
-				if err != nil {
-					return fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables")
-				}
-				s3Client := s3.NewFromConfig(cfg)
-				_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-					Bucket: aws.String(bucket),
-				})
-				if err != nil {
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err
 				}
 			}
@@ -151,38 +120,10 @@ var restoreJobCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
-				file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
-				if !env_set && !file_set {
-					err := awsCredentialsSetup()
-					if err != nil {
-						log.Error().Err(err).Msg("Failed to setup AWS credentials")
-						return fmt.Errorf("Failed to setup AWS credentials")
-					}
-				}
-				if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
-					return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
-				}
-				if !((os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "") {
-					return fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
-				}
-				cfg, err := config.LoadDefaultConfig(context.TODO())
+				err := awsSetup(bucket, ctx, false)
 				if err != nil {
-					return fmt.Errorf("Unable to load AWS configuration")
-				}
-				if cfg.Region == "" {
-					return fmt.Errorf("AWS region not configured, please specify in AWS config file (~/.aws/config) or environment variables.")
-				}
-				_, err = cfg.Credentials.Retrieve(context.TODO())
-				if err != nil {
-					return fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables")
-				}
-				s3Client := s3.NewFromConfig(cfg)
-				_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-					Bucket: aws.String(bucket),
-				})
-				if err != nil {
-					return fmt.Errorf("Error accessing bucket %s: %v", bucket, err)
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
+					return err
 				}
 			}
 		} else if bucket != "" {

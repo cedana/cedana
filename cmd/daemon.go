@@ -11,6 +11,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"cloud.google.com/go/pubsub"
 	"github.com/cedana/cedana/pkg/api"
@@ -162,6 +167,91 @@ func awsCredentialsSetup() error {
 	if err != nil {
 		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
 		return err
+	}
+
+	// bind env vars
+	viper.BindEnv("aws_access_key_id", "AWS_ACCESS_KEY_ID")
+	viper.BindEnv("aws_default_region", "AWS_DEFAULT_REGION")
+	viper.BindEnv("aws_secret_access_key", "AWS_SECRET_ACCESS_KEY")
+	return nil
+}
+
+func awsSetup(bucket string, ctx context.Context, clear bool) error {
+	env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
+	file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
+	if !env_set && !file_set {
+		err := awsCredentialsSetup()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to setup AWS credentials")
+			return fmt.Errorf("Failed to setup AWS credentials")
+		}
+	}
+	if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
+		return fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
+	}
+	if !((os.Getenv("AWS_ACCESS_KEY_ID") == "" && os.Getenv("AWS_SECRET_ACCESS_KEY") == "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") == "") {
+		return fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
+	}
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return fmt.Errorf("Unable to load AWS configuration")
+	}
+	if cfg.Region == "" {
+		return fmt.Errorf("AWS region not configured properly, please specify in AWS config file (~/.aws/config) or environment variable AWS_DEFAULT_REGION.")
+	}
+	_, err = cfg.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
+	}
+	s3Client := s3.NewFromConfig(cfg)
+	_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		return err
+	}
+
+	if clear { // clear bucket on dump
+		var objectsToDelete []types.ObjectIdentifier
+		var page *s3.ListObjectsV2Output
+		paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+		})
+		for paginator.HasMorePages() {
+			page, err = paginator.NextPage(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to list objects in bucket: %v", err)
+			}
+		}
+		for _, obj := range page.Contents {
+			objectsToDelete = append(objectsToDelete, types.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+		for i := 0; i < len(objectsToDelete); i += 1000 {
+			end := i + 1000
+			if end > len(objectsToDelete) {
+				end = len(objectsToDelete)
+			}
+			_, err = s3Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+				Bucket: aws.String(bucket),
+				Delete: &types.Delete{
+					Objects: objectsToDelete[i:end],
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to delete objects: %v", err)
+			}
+		}
+		output, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list objects in bucket: %v", err)
+		}
+		if len(output.Contents) != 0 {
+			return fmt.Errorf("failed to clear bucket: %v objects remain", len(output.Contents))
+		}
 	}
 	return nil
 }
