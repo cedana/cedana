@@ -173,6 +173,7 @@ func (s *service) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp
 		return nil, err
 	}
 
+	log.Info().Msgf("pkg/api/process.go:dump(ctx = %v)", ctx)
 	err = s.dump(ctx, state, args)
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

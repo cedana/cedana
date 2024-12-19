@@ -25,6 +25,7 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 
 	// Check if normal process or container
 	if state.ContainerID == "" {
+		log.Info().Msgf("pkg/api/job.go:dump(ctx = %v)", ctx)
 		dumpResp, err := s.Dump(ctx, &task.DumpArgs{
 			JID:      args.JID,
 			PID:      state.PID,

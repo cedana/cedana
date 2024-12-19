@@ -32,6 +32,9 @@ var dumpCmd = &cobra.Command{
 			return fmt.Errorf("Error creating client: %v", err)
 		}
 		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
+		log.Info().Msgf("initial ctx = %v", ctx)
+		ctx = context.WithValue(ctx, "AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"))
+		log.Info().Msgf("ctx after AWS_DEFAULT_REGION = %v", ctx)
 		cmd.SetContext(ctx)
 		return nil
 	},
