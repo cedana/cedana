@@ -34,6 +34,7 @@ var (
 	TcpEstablishedFlag  = Flag{Full: "tcp-established"}
 	TcpCloseFlag        = Flag{Full: "tcp-close"}
 	TcpSkipInFlightFlag = Flag{Full: "skip-in-flight"}
+	ShellJobFlag        = Flag{Full: "shell-job"}
 
 	// Parent flags
 	PortFlag       = Flag{Full: "port", Short: "P"}

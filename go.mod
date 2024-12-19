@@ -5,8 +5,8 @@ go 1.23.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-a61937b67ca8.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-a61937b67ca8.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-055786fc4302.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-055786fc4302.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-2034ac478a17.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-2034ac478a17.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-e36c0375dbaf.1
 	github.com/containerd/console v1.0.4
 	github.com/cyphar/filepath-securejoin v0.3.5

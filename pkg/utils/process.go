@@ -67,6 +67,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		state.StartTime = uint64(startTime)
 	}
 
+	sid, _, errno := syscall.Syscall(syscall.SYS_GETSID, uintptr(pid), 0, 0)
+	if errno == 0 {
+		state.SID = uint32(sid)
+	}
+
 	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
 	if err != nil {

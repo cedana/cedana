@@ -44,6 +44,8 @@ func init() {
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "dump file locks")
 	dumpCmd.PersistentFlags().
 		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "external mountpoints to dump (comma-separated)")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 
 	// Bind to config
 	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
