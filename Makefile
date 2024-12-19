@@ -101,7 +101,7 @@ reset-plugins: ## Reset & uninstall plugins
 ##@ Testing
 ###########
 
-PARALLELISM?=1
+PARALLELISM?=8
 BATS_CMD=bats --jobs $(PARALLELISM)
 
 test: test-unit test-regression ## Run all tests
