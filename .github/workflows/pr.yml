@@ -204,6 +204,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      options: --privileged -t
     needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
@@ -236,6 +237,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      options: --privileged -t
     needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
@@ -273,6 +275,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      options: --privileged -t
     needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
@@ -310,6 +313,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      options: --privileged -t
     needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
@@ -347,6 +351,7 @@ jobs:
       credentials:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      options: --privileged -t
     needs: [build, build-plugins]
     steps:
       - uses: actions/checkout@v4
