@@ -49,7 +49,7 @@ func dump(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, r
 	// TODO: Add support for pre-dump
 	// TODO: Add support for lazy migration
 
-	log.Debug().Int("CRIU", version).Msg("CRIU dump starting")
+	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 	started := time.Now()

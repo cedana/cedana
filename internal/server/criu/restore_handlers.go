@@ -57,7 +57,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
 
-	log.Debug().Int("CRIU", version).Msg("CRIU restore starting")
+	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 	// Attach IO if requested, otherwise log to file

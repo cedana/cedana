@@ -67,7 +67,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 
 			job.SetLog(req.Log)
 
-			err = jobs.Manage(ctx, jid, resp.PID, exited)
+			err = jobs.Manage(server.Lifetime, jid, resp.PID, exited)
 			if err != nil {
 				cancel()
 				return nil, status.Errorf(codes.Internal, "failed to manage restored job: %v", err)

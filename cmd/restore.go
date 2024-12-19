@@ -40,6 +40,8 @@ func init() {
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
@@ -79,6 +81,7 @@ var restoreCmd = &cobra.Command{
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
+		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 
@@ -93,6 +96,7 @@ var restoreCmd = &cobra.Command{
 				TcpClose:       proto.Bool(tcpClose),
 				LeaveStopped:   proto.Bool(leaveStopped),
 				FileLocks:      proto.Bool(fileLocks),
+				ShellJob:       proto.Bool(shellJob),
 			},
 		}
 
@@ -203,14 +207,16 @@ var jobRestoreCmd = &cobra.Command{
 		}
 		jobType := jobs.Jobs[0].Type
 
-		err = features.RestoreCmd.IfAvailable(
-			func(name string, pluginCmd *cobra.Command) error {
-				// Call the plugin command to override request details
-				return pluginCmd.RunE(cmd, args)
-			}, jobType,
-		)
-		if err != nil {
-			return err
+		if jobType != "process" {
+			err = features.RestoreCmd.IfAvailable(
+				func(name string, pluginCmd *cobra.Command) error {
+					// Call the plugin command to override request details
+					return pluginCmd.RunE(cmd, args)
+				}, jobType,
+			)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Since the request details have been modified by the plugin command, we need to fetch it
@@ -219,6 +225,9 @@ var jobRestoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
+		if req.Details == nil {
+			req.Details = &daemon.Details{}
+		}
 		req.Details.JID = proto.String(jid)
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)

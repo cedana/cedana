@@ -87,6 +87,7 @@ var dumpCmd = &cobra.Command{
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetString(flags.ExternalFlag.Full)
+		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
@@ -99,6 +100,7 @@ var dumpCmd = &cobra.Command{
 				TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
 				FileLocks:       proto.Bool(fileLocks),
 				External:        strings.Split(external, ","),
+				ShellJob:        proto.Bool(shellJob),
 			},
 		}
 
@@ -213,14 +215,16 @@ var jobDumpCmd = &cobra.Command{
 		}
 		jobType := jobs.Jobs[0].Type
 
-		err = features.DumpCmd.IfAvailable(
-			func(name string, pluginCmd *cobra.Command) error {
-				// Call the plugin command to override request details
-				return pluginCmd.RunE(cmd, args)
-			}, jobType,
-		)
-		if err != nil {
-			return err
+		if jobType != "process" {
+			err = features.DumpCmd.IfAvailable(
+				func(name string, pluginCmd *cobra.Command) error {
+					// Call the plugin command to override request details
+					return pluginCmd.RunE(cmd, args)
+				}, jobType,
+			)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Since the request details have been modified by the plugin command, we need to fetch it
@@ -229,6 +233,9 @@ var jobDumpCmd = &cobra.Command{
 			return fmt.Errorf("invalid dump request in context")
 		}
 
+		if req.Details == nil {
+			req.Details = &daemon.Details{}
+		}
 		req.Details.JID = proto.String(jid)
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)

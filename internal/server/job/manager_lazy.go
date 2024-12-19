@@ -216,10 +216,6 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
-	if m.Find(pid) != nil {
-		return fmt.Errorf("job %s with PID %d already exists. please delete it first", jid, pid)
-	}
-
 	job := m.Get(jid)
 
 	var exitedChan <-chan int
@@ -275,7 +271,7 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	signalToUse := syscall.SIGKILL
 
 	// Check if the plugin for the job type exports a custom signal
-	err := features.KillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
+	features.KillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
 		if len(signal) > 0 {
 			return fmt.Errorf(
 				"%s plugin exports a custom kill signal `%s`, so cannot use signal `%s`",
@@ -289,15 +285,12 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 		signalToUse = pluginSignal
 		return nil
 	}, job.GetType())
-	if err != nil {
-		return err
-	}
 
 	if len(signal) > 0 {
 		signalToUse = signal[0]
 	}
 
-	err = syscall.Kill(int(job.GetPID()), signalToUse)
+	err := syscall.Kill(int(job.GetPID()), signalToUse)
 	if err != nil {
 		return fmt.Errorf("failed to kill process: %w", err)
 	}
