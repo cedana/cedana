@@ -181,7 +181,7 @@ func printProfilingData(data *daemon.ProfilingData) {
 	profiling.CleanData(data)
 	profiling.FlattenData(data) // Since we want to print as a list
 
-	fmt.Print("Profiling data received (flattened):\n\n")
+	fmt.Print("Profiling is enabled in daemon.\n\n")
 
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)

@@ -49,8 +49,6 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		dump = dump.With(job.ManageDump(s.jobs))
 	}
 
-	dump = dump.With(criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)) // use a new instance per request
-
 	var profilingData *daemon.ProfilingData
 	if config.Global.Profiling.Enabled {
 		profilingData = &daemon.ProfilingData{Name: "dump"}
@@ -65,7 +63,9 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{Profiling: profilingData}
 
-	_, err := dump(ctx, opts, resp, req)
+	criu := criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)
+
+	_, err := criu(dump)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}

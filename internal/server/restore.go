@@ -47,8 +47,6 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
-	restore = restore.With(criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)) // use a new instance per request
-
 	var profilingData *daemon.ProfilingData
 	if config.Global.Profiling.Enabled {
 		profilingData = &daemon.ProfilingData{Name: "restore"}
@@ -63,7 +61,9 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 	resp := &daemon.RestoreResp{Profiling: profilingData}
 
-	_, err := restore(ctx, opts, resp, req)
+	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
+
+	_, err := criu(restore)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
