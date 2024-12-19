@@ -59,8 +59,9 @@ var restoreProcessCmd = &cobra.Command{
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+      var err error
 			if bucket != "" {
-				err := awsSetup(bucket, ctx, false)
+				ctx, err = awsSetup(bucket, ctx, false)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err
@@ -119,8 +120,9 @@ var restoreJobCmd = &cobra.Command{
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+      var err error
 			if bucket != "" {
-				err := awsSetup(bucket, ctx, false)
+				ctx, err = awsSetup(bucket, ctx, false)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err

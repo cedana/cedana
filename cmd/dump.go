@@ -69,7 +69,7 @@ var dumpProcessCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				err = awsSetup(bucket, ctx, true)
+				ctx, err = awsSetup(bucket, ctx, true)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err
@@ -221,8 +221,9 @@ var dumpJobCmd = &cobra.Command{
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+			var err error
 			if bucket != "" {
-				err := awsSetup(bucket, ctx, true)
+				ctx, err = awsSetup(bucket, ctx, true)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err

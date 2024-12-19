@@ -337,10 +337,7 @@ func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu 
 		args = append(args, "--bucket", bucket)
 	}
 	args = append(args, "capture") // subcommand must be after options
-	log.Info().Msgf("daemon env vars = %v", os.Environ())
-	log.Info().Msgf("aws_access_key_id = %v, aws_default_region = %v, aws_secret_access_key = %v", viper.GetString("aws_access_key_id"), viper.GetString("aws_default_region"), viper.GetString("aws_secret_access_key"))
 	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
-	log.Info().Msgf("cmd env vars = %v", cmd.Env)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

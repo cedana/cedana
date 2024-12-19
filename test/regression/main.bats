@@ -9,7 +9,7 @@ setup_file() {
 
 setup() {
     # assuming WD is the root of the project
-    start_cedana
+    start_cedana --remote
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,

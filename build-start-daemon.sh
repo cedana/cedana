@@ -21,6 +21,7 @@ CEDANA_GPU_ENABLED=${CEDANA_GPU_ENABLED:-false}
 CEDANA_GPU_DEBUGGING_ENABLED=${CEDANA_GPU_DEBUGGING_ENABLED:-0}
 CEDANA_METRICS_ENABLED=${CEDANA_METRICS_ENABLED:-false}
 CEDANA_JOB_SERVICE=${CEDANA_JOB_SERVICE:-false}
+CEDANA_REMOTING_ENABLED=${CEDANA_REMOTING_ENABLED:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
@@ -39,6 +40,10 @@ for arg in "$@"; do
     if [ "$arg" == "--gpu" ]; then
         echo "GPU support enabled"
         CEDANA_GPU_ENABLED=true
+    fi
+    if [ "$arg" == "--remote" ]; then
+        echo "Direct remoting support enabled"
+        DIRECT_REMOTING_ENABLED=true
     fi
     if [[ $arg == --args=* ]]; then
         value="${arg#*=}"
@@ -85,6 +90,10 @@ if [ "$CEDANA_GPU_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU support..."
 fi
 
+if [ "$DIRECT_REMOTING_ENABLED" = "true" ]; then
+    echo "Starting daemon with direct remoting support..."
+fi
+
 if [ "$CEDANA_GPU_DEBUGGING_ENABLED" = "true" ]; then
     echo "Starting daemon with GPU debugging support..."
 fi
@@ -112,7 +121,7 @@ Environment=CEDANA_AUTH_TOKEN=$CEDANA_AUTH_TOKEN
 Environment=CONTAINERS_HELPER_BINARY_DIR=/cedana/bin
 Environment="PATH=/cedana/bin:${PATH}"
 EnvironmentFile=/etc/aws_conditional_env
-ExecStart=$APP_PATH daemon start $DAEMON_ARGS --gpu-enabled=$CEDANA_GPU_ENABLED --metrics-enabled=$CEDANA_METRICS_ENABLED --job-service=$CEDANA_JOB_SERVICE
+ExecStart=$APP_PATH daemon start $DAEMON_ARGS --gpu-enabled=$CEDANA_GPU_ENABLED --remote=$CEDANA_REMOTING_ENABLED --metrics-enabled=$CEDANA_METRICS_ENABLED --job-service=$CEDANA_JOB_SERVICE
 User=root
 Group=root
 Restart=no
