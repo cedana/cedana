@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	CRIU_LOG_VERBOSITY_LEVEL = 4
+	CRIU_LOG_VERBOSITY_LEVEL = 3
 	CRIU_LOG_FILE            = "criu.log"
 	GHOST_FILE_MAX_SIZE      = 10000000 // 10MB
 )
