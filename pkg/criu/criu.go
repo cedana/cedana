@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"google.golang.org/protobuf/proto"
@@ -42,13 +43,15 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		return err
 	}
 
-	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
+	id := time.Now().UnixNano()
+
+	cln := os.NewFile(uintptr(fds[0]), fmt.Sprintf("criu-xprt-cln-%d", id))
 	clnNet, err := net.FileConn(cln)
 	cln.Close()
 	if err != nil {
 		return err
 	}
-	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
+	srv := os.NewFile(uintptr(fds[1]), fmt.Sprintf("criu-xprt-srv-%d", id))
 	defer srv.Close()
 
 	args := []string{"swrk", strconv.Itoa(fds[1])}

@@ -53,5 +53,6 @@ EOT
 VOLUME ["/src"]
 WORKDIR /src
 RUN git config --global --add safe.directory `pwd`
+ENV CI=true
 
 CMD ["/bin/bash"]

@@ -36,7 +36,7 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 			imagesDirectory = path
 		} else {
 			// Create a temporary directory for the restore
-			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().Unix()))
+			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
 			if err := os.Mkdir(imagesDirectory, RESTORE_DIR_PERMS); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 			}
