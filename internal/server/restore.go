@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/config"
-	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -48,6 +47,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
+	restore = restore.With(criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)) // use a new instance per request
+
 	var profilingData *daemon.ProfilingData
 	if config.Global.Profiling.Enabled {
 		profilingData = &daemon.ProfilingData{Name: "restore"}
@@ -55,12 +56,10 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 
 	opts := types.ServerOpts{
-		Lifetime:     s.lifetime,
-		CRIU:         s.criu,
-		CRIUCallback: &criu_client.NotifyCallbackMulti{},
-		Plugins:      s.plugins,
-		WG:           s.wg,
-		Profiling:    profilingData,
+		Lifetime:  s.lifetime,
+		Plugins:   s.plugins,
+		WG:        s.wg,
+		Profiling: profilingData,
 	}
 	resp := &daemon.RestoreResp{Profiling: profilingData}
 

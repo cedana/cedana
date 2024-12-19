@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
@@ -28,7 +27,6 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
-	criu    *criu.Criu
 	jobs    job.Manager
 	plugins plugins.Manager
 	db      db.DB
@@ -107,28 +105,12 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
-	criu := criu.MakeCriu()
-
-	// Check if CRIU plugin is installed, then use that binary
-	var p *plugins.Plugin
-	if p = pluginManager.Get("criu"); p.Status != plugins.Installed {
-		// Set custom path if specified in config, as a fallback
-		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-			criu.SetCriuPath(custom_path)
-		} else {
-			return nil, fmt.Errorf("Please install CRIU plugin, or specify path in config or env var.")
-		}
-	} else {
-		criu.SetCriuPath(p.Binaries[0])
-	}
-
 	server := &Server{
 		lifetime: ctx,
 		grpcServer: grpc.NewServer(
 			grpc.StreamInterceptor(logger.StreamLogger()),
 			grpc.UnaryInterceptor(logger.UnaryLogger()),
 		),
-		criu:    criu,
 		plugins: pluginManager,
 		jobs:    jobManager,
 		db:      database,

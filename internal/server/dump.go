@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/config"
-	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -50,6 +49,8 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		dump = dump.With(job.ManageDump(s.jobs))
 	}
 
+	dump = dump.With(criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)) // use a new instance per request
+
 	var profilingData *daemon.ProfilingData
 	if config.Global.Profiling.Enabled {
 		profilingData = &daemon.ProfilingData{Name: "dump"}
@@ -57,12 +58,10 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 
 	opts := types.ServerOpts{
-		Lifetime:     s.lifetime,
-		CRIU:         s.criu,
-		CRIUCallback: &criu_client.NotifyCallbackMulti{},
-		Plugins:      s.plugins,
-		WG:           s.wg,
-		Profiling:    profilingData,
+		Lifetime:  s.lifetime,
+		Plugins:   s.plugins,
+		WG:        s.wg,
+		Profiling: profilingData,
 	}
 	resp := &daemon.DumpResp{Profiling: profilingData}
 

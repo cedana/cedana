@@ -34,7 +34,7 @@ load_lib file
     run cedana -P "$PORT" run process "$WORKLOADS/date-loop.sh" --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana -P "$PORT" dump job "$jid" --shell-job
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
