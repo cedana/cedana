@@ -210,7 +210,7 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
       options: --privileged -t
-    needs: [build, build-plugins]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -225,7 +225,6 @@ jobs:
       - name: Make executable
         run: |
           chmod +x ./cedana
-          chmod +x ./libcedana-*.so
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
