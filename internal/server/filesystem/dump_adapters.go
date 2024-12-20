@@ -84,7 +84,7 @@ func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 
 			defer os.RemoveAll(imagesDirectory)
 
-			started := time.Now()
+      ctx, ended := profiling.StartTiming(ctx, server.Profiling, "compression")
 			tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
 			if err != nil {
 				return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)

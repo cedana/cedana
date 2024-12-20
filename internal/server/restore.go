@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
@@ -13,8 +12,6 @@ import (
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
-	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -47,19 +44,12 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
-	var profilingData *daemon.ProfilingData
-	if config.Global.Profiling.Enabled {
-		profilingData = &daemon.ProfilingData{Name: "restore"}
-		defer profiling.RecordDuration(time.Now(), profilingData)
-	}
-
 	opts := types.ServerOpts{
-		Lifetime:  s.lifetime,
-		Plugins:   s.plugins,
-		WG:        s.wg,
-		Profiling: profilingData,
+		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
+		WG:       s.wg,
 	}
-	resp := &daemon.RestoreResp{Profiling: profilingData}
+	resp := &daemon.RestoreResp{}
 
 	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
 

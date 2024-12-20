@@ -8,43 +8,59 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/metrics"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 )
 
-// RecordDuration records the elapsed time since start into the profiling data.
-// Use with defer to record the time spent in a function.
-// If no f is provided, uses the caller.
-func RecordDuration(ctx context.Context, profiling *daemon.ProfilingData, f ...any) (childCtx context.Context, end func()) {
-	start := time.Now()
-	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, "RecordDuration")
+// StartTiming starts a timer and returns a function that should be called to end the timer.
+// If no f is provided, uses the caller to get the function name.
+func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
+	var data *daemon.ProfilingData
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*daemon.ProfilingData)
+	if !ok {
+		data = &daemon.ProfilingData{}
+	}
 
-	return childCtx, func() {
-		duration := time.Since(start)
-		span.End()
-		profiling.Duration = duration.Nanoseconds()
-
-		if profiling.Name == "" {
-			var pc uintptr
-			if len(f) == 0 {
-				pc, _, _, _ = runtime.Caller(1)
-			} else {
-				pc = reflect.ValueOf(f[0]).Pointer()
-			}
-
-			profiling.Name = utils.FunctionName(pc)
+	if data.Name == "" {
+		var pc uintptr
+		if len(f) == 0 {
+			pc, _, _, _ = runtime.Caller(1)
+		} else {
+			pc = reflect.ValueOf(f[0]).Pointer()
 		}
 
-		log.Trace().Str("in", profiling.Name).Msgf("spent %s", duration)
+		data.Name = utils.FunctionName(pc)
 	}
+
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, data.Name)
+	defer span.End()
+
+	end = func() {
+		duration := time.Since(start)
+		span.End()
+		data.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+	}
+
+	component := &daemon.ProfilingData{}
+	data.Components = append(data.Components, component)
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
+
+	return
 }
 
-// RecordComponentDuration records the elapsed time since start into the profiling data.
-// Unlike RecordDuration, this adds the data as a new component of the profiling data.
-// Also returns the component that was added.
-func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f ...any) *daemon.ProfilingData {
-	duration := time.Since(start)
+// StartTimingComponent starts a timer and returns a function that should be called to end the timer.
+// Unlike StartTiming, this adds the data as a new component of the profiling data.
+func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
+	var data *daemon.ProfilingData
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*daemon.ProfilingData)
+	if !ok {
+		data = &daemon.ProfilingData{}
+	}
 
 	var pc uintptr
 	if len(f) == 0 {
@@ -54,22 +70,18 @@ func RecordDurationComponent(start time.Time, profiling *daemon.ProfilingData, f
 	}
 	name := utils.FunctionName(pc)
 
-	component := &daemon.ProfilingData{
-		Name:     name,
-		Duration: duration.Nanoseconds(),
-	}
+	component := &daemon.ProfilingData{Name: name}
 
-	profiling.Duration += duration.Nanoseconds()
-	profiling.Components = append(profiling.Components, component)
+	data.Components = append(profiling.Components, component)
 
 	log.Trace().Str("in", name).Msgf("spent %s", duration)
 	return component
 }
 
-// RecordDurationCategory records the elapsed time since start into the profiling data.
-// Instead of directly inserting a component like RecordDurationComponent, this adds the data as a nested component,
+// StartTimingCategory starts a timer and returns a function that should be called to end the timer.
+// Instead of directly inserting a component like StartTimingComponent, this adds the data as a nested component,
 // with the name matching the category provided. Also returns the component that was added to the category.
-func RecordDurationCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) *daemon.ProfilingData {
+func StartTimingCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) *daemon.ProfilingData {
 	var categoryComponent *daemon.ProfilingData
 	for _, component := range profiling.Components {
 		if component.Name == category {

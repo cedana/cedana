@@ -7,7 +7,6 @@ import (
 	"context"
 	"reflect"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/profiling"
 )
 
@@ -20,13 +19,9 @@ func Timing[REQ, RESP any](next Handler[REQ, RESP]) Handler[REQ, RESP] {
 
 	timedHandler = func(ctx context.Context, server ServerOpts, resp *RESP, req *REQ) (chan int, error) {
 		// We skip profiling if the next handler is itself
-		if server.Profiling != nil && nextPc != reflect.ValueOf(timedHandler).Pointer() {
-			newProfilingData := &daemon.ProfilingData{}
-			server.Profiling.Components = append(server.Profiling.Components, newProfilingData)
-			server.Profiling = newProfilingData
-
+		if nextPc != reflect.ValueOf(timedHandler).Pointer() {
 			var end func()
-			ctx, end = profiling.RecordDuration(ctx, newProfilingData, next)
+			ctx, end = profiling.StartTiming(ctx, next)
 			defer end()
 		}
 

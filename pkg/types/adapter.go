@@ -21,7 +21,6 @@ type (
 		CRIUCallback *criu.NotifyCallbackMulti
 		Plugins      plugins.Manager
 		Lifetime     context.Context
-		Profiling    *daemon.ProfilingData
 	}
 
 	Dump    = Handler[daemon.DumpReq, daemon.DumpResp]
