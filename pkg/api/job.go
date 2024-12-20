@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+  "os"
 
 	taskrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
@@ -13,6 +14,7 @@ import (
 
 func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
     log.Info().Msgf("job.go:dump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
+    log.Info().Msgf("job.go:dump envvar region %v key %v secret %v", os.Getenv("AWS_DEFAULT_REGION"), os.Getenv("AWS_ACCESS_KEY_ID"),os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	res := &task.JobDumpResp{}
 
 	state, err := s.getState(ctx, args.JID)

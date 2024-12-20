@@ -171,16 +171,19 @@ func awsCredentialsSetup() error {
 		log.Err(err).Msg("Error setting AWS_ACCESS_KEY_ID")
 		return err
 	}
+  log.Info().Msgf("os.Getenv(AWS_ACCESS_KEY_ID) = %v", os.Getenv("AWS_ACCESS_KEY_ID"))
 	err = os.Setenv("AWS_DEFAULT_REGION", creds.AWS_DEFAULT_REGION)
 	if err != nil {
 		log.Err(err).Msg("Error setting AWS_DEFAULT_REGION")
 		return err
 	}
+  log.Info().Msgf("os.Getenv(AWS_DEFAULT_REGION) = %v", os.Getenv("AWS_DEFAULT_REGION"))
 	err = os.Setenv("AWS_SECRET_ACCESS_KEY", creds.AWS_SECRET_ACCESS_KEY)
 	if err != nil {
 		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
 		return err
 	}
+  log.Info().Msgf("os.Getenv(AWS_SECRET_ACCESS_KEY) = %v", os.Getenv("AWS_SECRET_ACCESS_KEY"))
 
 	// bind env vars
 	viper.BindEnv("aws_access_key_id", "AWS_ACCESS_KEY_ID")
