@@ -11,7 +11,7 @@ function start_regression() {
 main() {
     pushd ../..
     print_env
-    source_env
+    #source_env
     start_regression
 
     popd
