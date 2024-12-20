@@ -52,7 +52,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	var profilingData *daemon.ProfilingData
 	if config.Global.Profiling.Enabled {
 		profilingData = &daemon.ProfilingData{Name: "dump"}
-		defer profiling.RecordDuration(time.Now(), profilingData)
+		defer profiling.RecordDuration(profilingData)
 	}
 
 	opts := types.ServerOpts{

@@ -12,10 +12,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+const API_TRACER = "cedana/api"
+
 func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		tp := otel.GetTracerProvider()
-		tracer := tp.Tracer("cedana/api")
+		tracer := otel.Tracer(API_TRACER)
 
 		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
 		resp, err := handler(ctx, req)
@@ -28,7 +29,7 @@ func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
 			attribute.String("server.id", machine.ID),
 			attribute.String("server.mac", machine.MACAddr),
 			attribute.String("server.hostname", machine.Hostname),
-			attribute.String("server.opts.cedanaurl", config.Global.Connection.URL),
+			attribute.String("config.connection.url", config.Global.Connection.URL),
 		)
 
 		if err != nil {
@@ -42,8 +43,7 @@ func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
 
 func StreamTracer(machine utils.Machine) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		tp := otel.GetTracerProvider()
-		tracer := tp.Tracer("cedana/api")
+		tracer := otel.Tracer(API_TRACER)
 
 		ctx := ss.Context()
 		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
@@ -55,7 +55,7 @@ func StreamTracer(machine utils.Machine) grpc.StreamServerInterceptor {
 			attribute.String("server.id", machine.ID),
 			attribute.String("server.mac", machine.MACAddr),
 			attribute.String("server.hostname", machine.Hostname),
-			attribute.String("server.opts.cedanaurl", config.Global.Connection.URL),
+			attribute.String("config.connection.url", config.Global.Connection.URL),
 		)
 
 		if err != nil {

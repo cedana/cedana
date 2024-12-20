@@ -1,34 +1,43 @@
 package profiling
 
 import (
+	"context"
 	"reflect"
 	"runtime"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // RecordDuration records the elapsed time since start into the profiling data.
 // Use with defer to record the time spent in a function.
 // If no f is provided, uses the caller.
-func RecordDuration(start time.Time, profiling *daemon.ProfilingData, f ...any) {
-	duration := time.Since(start)
-	profiling.Duration = duration.Nanoseconds()
+func RecordDuration(ctx context.Context, profiling *daemon.ProfilingData, f ...any) (childCtx context.Context, end func()) {
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, "RecordDuration")
 
-	if profiling.Name == "" {
-		var pc uintptr
-		if len(f) == 0 {
-			pc, _, _, _ = runtime.Caller(1)
-		} else {
-			pc = reflect.ValueOf(f[0]).Pointer()
+	return childCtx, func() {
+		duration := time.Since(start)
+		span.End()
+		profiling.Duration = duration.Nanoseconds()
+
+		if profiling.Name == "" {
+			var pc uintptr
+			if len(f) == 0 {
+				pc, _, _, _ = runtime.Caller(1)
+			} else {
+				pc = reflect.ValueOf(f[0]).Pointer()
+			}
+
+			profiling.Name = utils.FunctionName(pc)
 		}
 
-		profiling.Name = utils.FunctionName(pc)
+		log.Trace().Str("in", profiling.Name).Msgf("spent %s", duration)
 	}
-
-	log.Trace().Str("in", profiling.Name).Msgf("spent %s", duration)
 }
 
 // RecordComponentDuration records the elapsed time since start into the profiling data.

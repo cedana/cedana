@@ -6,7 +6,6 @@ package types
 import (
 	"context"
 	"reflect"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -26,7 +25,9 @@ func Timing[REQ, RESP any](next Handler[REQ, RESP]) Handler[REQ, RESP] {
 			server.Profiling.Components = append(server.Profiling.Components, newProfilingData)
 			server.Profiling = newProfilingData
 
-			defer profiling.RecordDuration(time.Now(), newProfilingData, next)
+			var end func()
+			ctx, end = profiling.RecordDuration(ctx, newProfilingData, next)
+			defer end()
 		}
 
 		return next(ctx, server, resp, req)
