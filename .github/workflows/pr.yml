@@ -172,6 +172,7 @@ jobs:
         env:
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           CEDANA_URL: ${{ vars.CEDANA_URL }}
+          CEDANA_REMOTING_ENABLED: true
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
 

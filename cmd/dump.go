@@ -221,7 +221,7 @@ var dumpJobCmd = &cobra.Command{
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
-      var err error
+			var err error
 			if bucket != "" {
 				ctx, err = awsSetup(bucket, ctx, true)
 				if err != nil {

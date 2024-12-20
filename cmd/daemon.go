@@ -54,22 +54,17 @@ var startDaemonCmd = &cobra.Command{
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
-		bucket, _ := cmd.Flags().GetString(bucketFlag)
-		log.Info().Msgf("bucket = %v", bucket)
-		directRemotingEnabled := bucket != ""
-		log.Info().Msgf("direct remoting enabled = %v", directRemotingEnabled)
+		remotingEnabled, _ := cmd.Flags().GetBool(remotingEnabledFlag)
 		port, _ := cmd.Flags().GetUint32(portFlag)
 		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
 		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
 
-		if directRemotingEnabled {
-			log.Info().Msgf("direct remoting enabled")
-			ctx, err = awsSetup(bucket, ctx, false)
+		if remotingEnabled {
+			ctx, err = awsSetup("", ctx, false)
 			if err != nil {
 				return err
 			}
 		}
-		log.Info().Msgf("startDaemonCmd got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
@@ -171,19 +166,16 @@ func awsCredentialsSetup() error {
 		log.Err(err).Msg("Error setting AWS_ACCESS_KEY_ID")
 		return err
 	}
-  log.Info().Msgf("os.Getenv(AWS_ACCESS_KEY_ID) = %v", os.Getenv("AWS_ACCESS_KEY_ID"))
 	err = os.Setenv("AWS_DEFAULT_REGION", creds.AWS_DEFAULT_REGION)
 	if err != nil {
 		log.Err(err).Msg("Error setting AWS_DEFAULT_REGION")
 		return err
 	}
-  log.Info().Msgf("os.Getenv(AWS_DEFAULT_REGION) = %v", os.Getenv("AWS_DEFAULT_REGION"))
 	err = os.Setenv("AWS_SECRET_ACCESS_KEY", creds.AWS_SECRET_ACCESS_KEY)
 	if err != nil {
 		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
 		return err
 	}
-  log.Info().Msgf("os.Getenv(AWS_SECRET_ACCESS_KEY) = %v", os.Getenv("AWS_SECRET_ACCESS_KEY"))
 
 	// bind env vars
 	viper.BindEnv("aws_access_key_id", "AWS_ACCESS_KEY_ID")
@@ -219,14 +211,16 @@ func awsSetup(bucket string, ctx context.Context, clear bool) (context.Context, 
 	if err != nil {
 		return ctx, fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
 	}
-	s3Client := s3.NewFromConfig(cfg)
-	_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	if err != nil {
-		return ctx, err
-	}
 
+	s3Client := s3.NewFromConfig(cfg)
+	if bucket != "" {
+		_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			return ctx, err
+		}
+	}
 	if clear { // clear bucket on dump
 		var objectsToDelete []types.ObjectIdentifier
 		var page *s3.ListObjectsV2Output
@@ -445,7 +439,7 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().Bool(vsockEnabledFlag, false, "start daemon with vsock support")
-	startDaemonCmd.Flags().String(bucketFlag, "", "start daemon with direct remoting support")
+	startDaemonCmd.Flags().BoolP(remotingEnabledFlag, "r", false, "start daemon with direct remoting support")
 	startDaemonCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
 	startDaemonCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
 }
