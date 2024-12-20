@@ -183,6 +183,15 @@ jobs:
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
 
+      - name: Upload daemon log
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedana-daemon.log
+          path: |
+            /var/log/cedana-daemon.log
+
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-8
