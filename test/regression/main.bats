@@ -388,6 +388,7 @@ teardown() {
     local bucket="direct-remoting"
     rm -rf /test
 
+    stop_cedana
     start_cedana --bucket "direct-remoting"
     # execute, checkpoint, and restore with direct remoting
     exec_task $task $job_id
