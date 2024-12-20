@@ -64,7 +64,7 @@ var startDaemonCmd = &cobra.Command{
 
 		if directRemotingEnabled {
 			log.Info().Msgf("direct remoting enabled")
-			ctx, err = awsSetup(bucket, ctx, true)
+			ctx, err = awsSetup(bucket, ctx, false)
 			if err != nil {
 				return err
 			}
