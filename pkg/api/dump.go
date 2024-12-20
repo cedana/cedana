@@ -55,6 +55,7 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	if !ok {
 		return "", nil, fmt.Errorf("could not get dump stats from context")
 	}
+  log.Info().Msgf("prepareDump got %v", ctx.Value("AWS_DEFAULT_REGION"))
 
 	start := time.Now()
 
@@ -329,6 +330,7 @@ func (s *service) containerdDump(ctx context.Context, imagePath, containerID str
 }
 
 func (s *service) setupStreamerCapture(ctx context.Context, dumpdir string, gpu bool, bucket string, num_pipes int32) (*exec.Cmd, error) {
+  log.Info().Msgf("prepareDump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	args := []string{"--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes)}
 	if gpu {
 		args = append(args, "--gpu")

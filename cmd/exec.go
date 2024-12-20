@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"bufio"
+  "context"
 	"fmt"
 	"os"
 
@@ -135,6 +136,11 @@ var execTaskCmd = &cobra.Command{
 
 			// TODO: Add signal handling properly
 		} else {
+      ctx = context.WithValue(ctx, "AWS_ACCESS_KEY_ID", os.Getenv("AWS_ACCESS_KEY_ID"))
+       ctx = context.WithValue(ctx, "AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"))
+       ctx = context.WithValue(ctx, "AWS_SECRET_ACCESS_KEY", os.Getenv("AWS_SECRET_ACCESS_KEY"))
+
+      log.Info().Msgf("exec.go:execTaskCmd got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 			resp, err := cts.Start(ctx, taskArgs)
 			if err != nil {
 				st, ok := status.FromError(err)

@@ -6,11 +6,13 @@ import (
 
 	taskrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
+    log.Info().Msgf("job.go:dump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	res := &task.JobDumpResp{}
 
 	state, err := s.getState(ctx, args.JID)
@@ -26,6 +28,7 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 	// Check if normal process or container
 	if state.ContainerID == "" {
 		log.Info().Msgf("pkg/api/job.go:dump(ctx = %v)", ctx)
+    log.Info().Msgf("job.go:dump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 		dumpResp, err := s.Dump(ctx, &task.DumpArgs{
 			JID:      args.JID,
 			PID:      state.PID,

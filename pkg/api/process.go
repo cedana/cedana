@@ -30,6 +30,8 @@ const (
 )
 
 func (s *service) Start(ctx context.Context, args *task.StartArgs) (*task.StartResp, error) {
+  log.Info().Msgf("entered start")
+  log.Info().Msgf("process.go:start got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	return s.startHelper(ctx, args, nil)
 }
 
@@ -40,6 +42,7 @@ func (s *service) StartAttach(stream grpc.BidiStreamingServer[task.AttachArgs, t
 	}
 	args := in.GetStartArgs()
 
+  log.Info().Msgf("entered StartAttach")
 	_, err = s.startHelper(stream.Context(), args, stream)
 	return err
 }
@@ -219,6 +222,7 @@ func (s *service) RestoreAttach(stream grpc.BidiStreamingServer[task.AttachArgs,
 //////////////////////////
 
 func (s *service) startHelper(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (*task.StartResp, error) {
+  log.Info().Msgf("process.go:startHelper got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	if args.Task == "" {
 		args.Task = viper.GetString("client.task")
 	}
@@ -407,6 +411,7 @@ func (s *service) restoreHelper(ctx context.Context, args *task.RestoreArgs, str
 }
 
 func (s *service) run(ctx context.Context, args *task.StartArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp]) (int32, chan int, error) {
+  log.Info().Msgf("job.go:run got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	var pid int32
 	if args.Task == "" {
 		return 0, nil, fmt.Errorf("could not find task")

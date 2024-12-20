@@ -152,7 +152,9 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 }
 
 func (s *Server) start(ctx context.Context) error {
+  log.Info().Msgf("server.go:start got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	if s.service.jobService != nil {
+    log.Info().Msgf("s.service.jobService != nil")
 		go func() {
 			if err := s.service.jobService.Start(ctx); err != nil {
 				// note: at the time of writing this comment, below is unreachable
@@ -160,8 +162,10 @@ func (s *Server) start(ctx context.Context) error {
 				log.Error().Err(err).Msg("failed to run job service")
 			}
 		}()
-	}
-	return s.grpcServer.Serve(s.listener)
+	} else {
+    log.Info().Msgf("s.service.jobService == nil")
+  }
+  return s.grpcServer.Serve(s.listener)
 }
 
 func (s *Server) stop() error {
@@ -171,6 +175,7 @@ func (s *Server) stop() error {
 
 // Takes in a context that allows for cancellation from the cmdline
 func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
+  log.Info().Msgf("server.go:startserver cmdCtx got region %v key %v secret %v", cmdCtx.Value("AWS_DEFAULT_REGION"), cmdCtx.Value("AWS_ACCESS_KEY_ID"), cmdCtx.Value("AWS_SECRET_ACCESS_KEY"))
 	// Create a child context for the server
 	srvCtx, cancel := context.WithCancelCause(cmdCtx)
 	defer cancel(nil)
@@ -191,6 +196,7 @@ func StartServer(cmdCtx context.Context, opts *ServeOpts) error {
 
 		log.Info().Str("host", DEFAULT_HOST).Uint32("port", opts.Port).Msg("server listening")
 
+    log.Info().Msgf("server.go:startserver srvCtx before call of start got region %v key %v secret %v", srvCtx.Value("AWS_DEFAULT_REGION"), srvCtx.Value("AWS_ACCESS_KEY_ID"), srvCtx.Value("AWS_SECRET_ACCESS_KEY"))
 		err := server.start(srvCtx)
 		if err != nil {
 			cancel(err)

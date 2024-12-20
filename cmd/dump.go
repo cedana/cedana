@@ -32,9 +32,10 @@ var dumpCmd = &cobra.Command{
 			return fmt.Errorf("Error creating client: %v", err)
 		}
 		ctx := context.WithValue(cmd.Context(), utils.CtsKey, cts)
-		log.Info().Msgf("initial ctx = %v", ctx)
-		ctx = context.WithValue(ctx, "AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"))
-		log.Info().Msgf("ctx after AWS_DEFAULT_REGION = %v", ctx)
+		//log.Info().Msgf("initial ctx = %v", ctx)
+		//ctx = context.WithValue(ctx, "AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"))
+		//log.Info().Msgf("ctx after AWS_DEFAULT_REGION = %v", ctx)
+    //log.Info().Msgf("prepareDump got %v", ctx.Value("AWS_DEFAULT_REGION"))
 		cmd.SetContext(ctx)
 		return nil
 	},
@@ -72,7 +73,7 @@ var dumpProcessCmd = &cobra.Command{
 				return err
 			}
 			if bucket != "" {
-				err = awsSetup(bucket, ctx, true)
+				ctx, err = awsSetup(bucket, ctx, true)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err
@@ -224,12 +225,17 @@ var dumpJobCmd = &cobra.Command{
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+      var err error
 			if bucket != "" {
-				err := awsSetup(bucket, ctx, true)
+				ctx, err = awsSetup(bucket, ctx, true)
 				if err != nil {
 					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
 					return err
 				}
+		ctx = context.WithValue(ctx, "AWS_ACCESS_KEY_ID", os.Getenv("AWS_ACCESS_KEY_ID"))
+		ctx = context.WithValue(ctx, "AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"))
+		ctx = context.WithValue(ctx, "AWS_SECRET_ACCESS_KEY", os.Getenv("AWS_SECRET_ACCESS_KEY"))
+    log.Info().Msgf("dumpJobCmd got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 			}
 		} else if bucket != "" {
 			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
