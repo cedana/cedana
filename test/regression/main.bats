@@ -9,7 +9,7 @@ setup_file() {
 
 setup() {
     # assuming WD is the root of the project
-    start_cedana --bucket "direct-remoting"
+    start_cedana
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
@@ -388,6 +388,7 @@ teardown() {
     local bucket="direct-remoting"
     rm -rf /test
 
+    start_cedana --bucket "direct-remoting"
     # execute, checkpoint, and restore with direct remoting
     exec_task $task $job_id
     sleep 1 3>-
