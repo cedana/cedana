@@ -28,6 +28,62 @@ teardown() {
     sleep 1 3>-
 }
 
+@test "Check cedana --version" {
+    expected_version=$(git describe --tags --always)
+
+    actual_version=$(cedana --version)
+
+    echo "Expected version: $expected_version"
+    echo "Actual version: $actual_version"
+
+    echo "$actual_version" | grep -q "$expected_version"
+
+    if [ $? -ne 0 ]; then
+        echo "Version mismatch: expected $expected_version but got $actual_version"
+        return 1
+    fi
+}
+
+@test "Daemon health check" {
+    cedana daemon check
+}
+
+@test "Output file created and has some data" {
+    local task="./workload.sh"
+    local job_id="workload"
+
+    # execute a process as a cedana job
+    exec_task $task $job_id
+
+    # check the output file
+    sleep 1 3>-
+    [ -f /var/log/cedana-output.log ]
+    sleep 2 3>-
+    [ -s /var/log/cedana-output.log ]
+}
+
+@test "Ensure correct logging post restore" {
+    local task="./workload.sh"
+    local job_id="workload2"
+
+    # execute, checkpoint and restore a job
+    exec_task $task $job_id
+    sleep 2 3>-
+    checkpoint_task $job_id /tmp
+    sleep 2 3>-
+    restore_task $job_id
+
+    # get the post-restore log file
+    local file=$(ls /var/log/ | grep cedana-output- | tail -1)
+    local rawfile="/var/log/$file"
+
+    # check the post-restore log files
+    sleep 1 3>-
+    [ -f $rawfile ]
+    sleep 2 3>-
+    [ -s $rawfile ]
+}
+
 @test "Dump + restore workload with direct remoting" {
     local task="./workload.sh"
     local job_id="workload-remoting-1"
