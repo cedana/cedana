@@ -9,11 +9,11 @@ import (
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/internal/logging"
 	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -35,7 +35,7 @@ type Server struct {
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	lifetime context.Context // context alive for the duration of the server
 
-	machine utils.Machine
+	host    *daemon.Host
 	version string
 
 	daemongrpc.UnimplementedDaemonServer
@@ -61,9 +61,9 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	wg := &sync.WaitGroup{}
 
-	machine, err := utils.GetMachine()
+	host, err := utils.GetHost(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get host info: %w", err)
 	}
 
 	var database db.DB
@@ -96,11 +96,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
 				logging.StreamLogger(),
-				metrics.StreamTracer(machine),
+				metrics.StreamTracer(host),
 			),
 			grpc.ChainUnaryInterceptor(
 				logging.UnaryLogger(),
-				metrics.UnaryTracer(machine),
+				metrics.UnaryTracer(host),
 				profiling.UnaryProfiler(),
 			),
 		),
@@ -108,7 +108,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		jobs:    jobManager,
 		db:      database,
 		wg:      wg,
-		machine: machine,
+		host:    host,
 		version: opts.Version,
 	}
 
@@ -131,6 +131,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 	server.listener = listener
 
+	log.Info().Str("mac", host.MAC).Str("id", host.ID).Str("hostname", host.Hostname).Msg("host")
+
 	return server, err
 }
 
@@ -139,7 +141,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	lifetime, cancel := context.WithCancelCause(ctx)
 	s.lifetime = lifetime
 
-	shutdown, err := metrics.InitOtel(ctx, s.version)
+	shutdown, _ := metrics.InitOtel(ctx, s.version)
 	defer func() {
 		err = shutdown(ctx)
 	}()

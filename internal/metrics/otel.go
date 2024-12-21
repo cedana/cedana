@@ -34,10 +34,6 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 		return err
 	}
 
-	if !config.Global.Metrics.Otel.Enabled {
-		return
-	}
-
 	handleErr := func(inErr error) {
 		err = errors.Join(inErr, shutdown(ctx))
 		log.Debug().Err(err).Msg("failed to set up otel, will use noop")
@@ -61,7 +57,7 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 	otel.SetTracerProvider(tracerProvider)
 
-	log.Debug().Msg("otel initialized")
+	log.Info().Str("endpoint", endpoint).Msg("otel initialized")
 
 	return
 }

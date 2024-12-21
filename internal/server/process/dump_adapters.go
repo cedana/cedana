@@ -82,8 +82,8 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 func DetectShellJobForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		var isShellJob bool
-		if info := resp.GetState().GetInfo(); info != nil {
-			for _, f := range info.GetOpenFiles() {
+		if state := resp.GetState(); state != nil {
+			for _, f := range state.GetOpenFiles() {
 				if strings.Contains(f.Path, "pts") {
 					isShellJob = true
 					break

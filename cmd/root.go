@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/cedana/cedana/internal/features"
-	"github.com/cedana/cedana/internal/logging"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

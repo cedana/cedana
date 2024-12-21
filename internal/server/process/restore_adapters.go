@@ -53,8 +53,8 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 func DetectShellJobForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
-		if info := resp.GetState().GetInfo(); info != nil {
-			for _, f := range info.GetOpenFiles() {
+		if state := resp.GetState(); state != nil {
+			for _, f := range state.GetOpenFiles() {
 				if strings.Contains(f.Path, "pts") {
 					isShellJob = true
 					break
@@ -84,8 +84,8 @@ func InheritStdioForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		inheritFds := req.GetCriu().GetInheritFd()
 
-		if info := resp.GetState().GetInfo(); info != nil {
-			for _, f := range info.GetOpenFiles() {
+		if state := resp.GetState(); state != nil {
+			for _, f := range state.GetOpenFiles() {
 				f.Path = strings.TrimPrefix(f.Path, "/")
 				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
 					inheritFds = append(inheritFds, &criu_proto.InheritFd{

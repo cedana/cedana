@@ -59,7 +59,7 @@ func RunningJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string
 		return nil, cobra.ShellCompDirectiveError
 	}
 	for _, job := range resp.Jobs {
-		if job.GetProcess().GetInfo().GetIsRunning() {
+		if job.GetState().GetIsRunning() {
 			jid := job.GetJID()
 			jids = append(jids, jid)
 		}
@@ -89,7 +89,7 @@ func ValidPIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, 
 		return nil, cobra.ShellCompDirectiveError
 	}
 	for _, job := range resp.Jobs {
-		pidInt := int(job.GetProcess().GetPID())
+		pidInt := int(job.GetState().GetPID())
 		if pidInt == 0 {
 			continue
 		}

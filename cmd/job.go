@@ -179,8 +179,8 @@ var listJobCmd = &cobra.Command{
 			row := table.Row{
 				job.GetJID(),
 				typeStr(job.GetType()),
-				job.GetProcess().GetPID(),
-				statusStr(job.GetProcess().GetInfo().GetStatus()),
+				job.GetState().GetPID(),
+				statusStr(job.GetState().GetStatus()),
 				style.BoolStr(job.GetGPUEnabled()),
 				timeList[i],
 				sizeList[i],
@@ -306,7 +306,7 @@ var attachJobCmd = &cobra.Command{
 			return fmt.Errorf("Job %s not found", jid)
 		}
 
-		pid := list.Jobs[0].GetProcess().GetPID()
+		pid := list.Jobs[0].GetState().GetPID()
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},

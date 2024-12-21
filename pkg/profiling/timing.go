@@ -84,7 +84,7 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 		span.End()
 		component.Duration = duration.Nanoseconds()
 
-		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
 
 	return

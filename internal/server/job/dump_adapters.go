@@ -33,7 +33,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			// TODO YA: Allow overriding job details, otherwise use saved job details
 			req.Details = job.GetDetails()
 			req.Type = job.GetType()
-			resp.State = job.GetProcess()
+			resp.State = job.GetState()
 
 			// Import saved notify callbacks
 			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
@@ -44,7 +44,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			}
 
 			job.AddCheckpoint(resp.GetPath())
-			job.SetProcess(resp.GetState())
+			job.SetState(resp.GetState())
 
 			return exited, nil
 		}

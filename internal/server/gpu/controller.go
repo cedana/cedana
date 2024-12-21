@@ -13,7 +13,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
-	"github.com/cedana/cedana/internal/logging"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

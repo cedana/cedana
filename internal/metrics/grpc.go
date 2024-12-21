@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/utils"
 	"go.opentelemetry.io/otel"
@@ -14,8 +15,12 @@ import (
 
 const API_TRACER = "cedana/api"
 
-func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
+func UnaryTracer(host *daemon.Host) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if !config.Global.Metrics.Otel.Enabled {
+			return handler(ctx, req)
+		}
+
 		tracer := otel.Tracer(API_TRACER)
 
 		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
@@ -26,9 +31,9 @@ func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
 			attribute.String("grpc.method", info.FullMethod),
 			attribute.String("grpc.request", utils.ProtoToJSON(req)),
 			attribute.String("grpc.response", utils.ProtoToJSON(resp)),
-			attribute.String("server.id", machine.ID),
-			attribute.String("server.mac", machine.MACAddr),
-			attribute.String("server.hostname", machine.Hostname),
+			attribute.String("server.id", host.ID),
+			attribute.String("server.mac", host.MAC),
+			attribute.String("server.hostname", host.Hostname),
 			attribute.String("config.connection.url", config.Global.Connection.URL),
 		)
 
@@ -41,8 +46,12 @@ func UnaryTracer(machine utils.Machine) grpc.UnaryServerInterceptor {
 	}
 }
 
-func StreamTracer(machine utils.Machine) grpc.StreamServerInterceptor {
+func StreamTracer(host *daemon.Host) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if !config.Global.Metrics.Otel.Enabled {
+			return handler(srv, ss)
+		}
+
 		tracer := otel.Tracer(API_TRACER)
 
 		ctx := ss.Context()
@@ -52,9 +61,9 @@ func StreamTracer(machine utils.Machine) grpc.StreamServerInterceptor {
 
 		span.SetAttributes(
 			attribute.String("grpc.method", info.FullMethod),
-			attribute.String("server.id", machine.ID),
-			attribute.String("server.mac", machine.MACAddr),
-			attribute.String("server.hostname", machine.Hostname),
+			attribute.String("server.id", host.ID),
+			attribute.String("server.mac", host.MAC),
+			attribute.String("server.hostname", host.Hostname),
 			attribute.String("config.connection.url", config.Global.Connection.URL),
 		)
 

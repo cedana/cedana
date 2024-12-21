@@ -35,8 +35,9 @@ func newJob(
 	return &Job{
 		JID: jid,
 		proto: daemon.Job{
-			JID:  jid,
-			Type: jobType,
+			JID:   jid,
+			State: &daemon.ProcessState{},
+			Type:  jobType,
 		},
 	}
 }
@@ -47,7 +48,7 @@ func fromProto(j *daemon.Job) *Job {
 		proto: daemon.Job{
 			JID:         j.GetJID(),
 			Type:        j.GetType(),
-			Process:     j.GetProcess(),
+			State:       j.GetState(),
 			Details:     j.GetDetails(),
 			Log:         j.GetLog(),
 			Checkpoints: j.GetCheckpoints(),
@@ -59,7 +60,7 @@ func fromProto(j *daemon.Job) *Job {
 func (j *Job) GetPID() uint32 {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.GetProcess().GetPID()
+	return j.proto.GetState().GetPID()
 }
 
 func (j *Job) GetProto() *daemon.Job {
@@ -67,7 +68,7 @@ func (j *Job) GetProto() *daemon.Job {
 	defer j.Unlock()
 
 	// Get all latest info
-	j.proto.Process = j.process()
+	j.proto.State = j.state()
 	j.proto.Log = j.log()
 
 	return &j.proto
@@ -79,24 +80,24 @@ func (j *Job) GetType() string {
 	return j.proto.Type
 }
 
-func (j *Job) GetProcess() *daemon.ProcessState {
+func (j *Job) GetState() *daemon.ProcessState {
 	j.Lock()
 	defer j.Unlock()
 
-	return j.process()
+	return j.state()
 }
 
-func (j *Job) SetProcess(process *daemon.ProcessState) {
+func (j *Job) SetState(state *daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.Process = process
+	j.proto.State = state
 }
 
-func (j *Job) FillProcess(ctx context.Context, pid uint32) error {
+func (j *Job) FillState(ctx context.Context, pid uint32) error {
 	j.Lock()
 	defer j.Unlock()
 
-	return utils.FillProcessState(ctx, pid, j.proto.Process)
+	return utils.FillProcessState(ctx, pid, j.proto.State)
 }
 
 func (j *Job) GetDetails() *daemon.Details {
@@ -159,7 +160,7 @@ func (j *Job) GetLatestCheckpoint() *daemon.Checkpoint {
 func (j *Job) IsRunning() bool {
 	j.Lock()
 	defer j.Unlock()
-	return j.process().GetInfo().GetIsRunning()
+	return j.state().GetIsRunning()
 }
 
 func (j *Job) GPUEnabled() bool {
@@ -196,29 +197,26 @@ func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
 // Functions below don't use locks, so they could be called with locks held.
 
 // WARN: Writes, so call with write lock.
-func (j *Job) process() *daemon.ProcessState {
-	if j.proto.GetProcess() == nil {
-		j.proto.Process = &daemon.ProcessState{}
-	}
-	if j.proto.GetProcess().GetInfo() == nil {
-		j.proto.Process.Info = &daemon.ProcessInfo{}
+func (j *Job) state() *daemon.ProcessState {
+	if j.proto.GetState() == nil {
+		j.proto.State = &daemon.ProcessState{}
 	}
 
-	j.proto.Process.Info.Status = "halted"
-	j.proto.Process.Info.IsRunning = false
+	j.proto.State.Status = "halted"
+	j.proto.State.IsRunning = false
 
-	pid := j.proto.GetProcess().GetPID()
+	pid := j.proto.GetState().GetPID()
 
 	p, err := process.NewProcess(int32(pid))
 	if err == nil {
 		status, err := p.Status()
 		if err == nil {
-			j.proto.Process.Info.Status = status[0]
-			j.proto.Process.Info.IsRunning = true
+			j.proto.State.Status = status[0]
+			j.proto.State.IsRunning = true
 		}
 	}
 
-	return j.proto.Process
+	return j.proto.State
 }
 
 func (j *Job) log() string {

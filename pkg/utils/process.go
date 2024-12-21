@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,9 +10,6 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/host"
-	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -51,11 +49,19 @@ func CloseCommonFds(ctx context.Context, parentPID, childPID int32) error {
 	return nil
 }
 
+func GetProcessState(ctx context.Context, pid uint32) (*daemon.ProcessState, error) {
+	state := &daemon.ProcessState{}
+	err := FillProcessState(ctx, pid, state)
+	return state, err
+}
+
 func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessState) error {
 	if state == nil {
 		return fmt.Errorf("state is nil")
 	}
 	state.PID = pid
+
+	errs := []error{}
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
@@ -63,6 +69,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	}
 
 	startTime, err := p.CreateTime()
+	errs = append(errs, err)
 	if err == nil {
 		state.StartTime = uint64(startTime)
 	}
@@ -89,7 +96,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	state.GIDs = gids
 	state.Groups = groups
 
-	var openFiles []*daemon.OpenFilesStat
+	var openFiles []*daemon.File
 	of, err := p.OpenFilesWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get open files: %v", err)
@@ -101,7 +108,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 			mode = file.Mode().Perm().String()
 		}
 
-		openFiles = append(openFiles, &daemon.OpenFilesStat{
+		openFiles = append(openFiles, &daemon.File{
 			Fd:   f.Fd,
 			Path: f.Path,
 			Mode: mode,
@@ -109,7 +116,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	}
 
 	// used for network barriers (TODO: NR)
-	var openConnections []*daemon.ConnectionStat
+	var openConnections []*daemon.Connection
 	conns, err := p.ConnectionsWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get connections: %v", err)
@@ -123,7 +130,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 			IP:   conn.Raddr.IP,
 			Port: conn.Raddr.Port,
 		}
-		openConnections = append(openConnections, &daemon.ConnectionStat{
+		openConnections = append(openConnections, &daemon.Connection{
 			Fd:     conn.Fd,
 			Family: conn.Family,
 			Type:   conn.Type,
@@ -135,71 +142,23 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		})
 	}
 
-	memoryUsed, _ := p.MemoryPercentWithContext(ctx)
-	isRunning, err := p.IsRunningWithContext(ctx)
-	if err != nil {
-		return fmt.Errorf("could not get process status: %v", err)
-	}
+	memoryUsed, err := p.MemoryPercentWithContext(ctx)
+	errs = append(errs, err)
+	proccessStatus, err := p.StatusWithContext(ctx)
+	errs = append(errs, err)
+	cwd, err := p.CwdWithContext(ctx)
+	errs = append(errs, err)
 
-	// if the process is actually running, we don't care that
-	// we're potentially overriding a failed flag here.
-	// In the case of a restored/resuscitated process this is a good thing
+	state.MemoryPercent = memoryUsed
+	state.OpenFiles = openFiles
+	state.OpenConnections = openConnections
+	state.WorkingDir = cwd
+	state.Status = strings.Join(proccessStatus, "")
 
-	// this is the status as returned by gopsutil.
-	// ideally we want more than this, or some parsing to happen from this end
-	proccessStatus, _ := p.StatusWithContext(ctx)
+	state.Host, err = GetHost(ctx)
+	errs = append(errs, err)
 
-	// we need the cwd to ensure that it exists on the other side of the restore.
-	// if it doesn't - we inheritFd it?
-	cwd, _ := p.CwdWithContext(ctx)
-
-	// system information
-	cpuinfo, err := cpu.InfoWithContext(ctx)
-	vcpus, err := cpu.CountsWithContext(ctx, true)
-	if err == nil {
-		state.CPUInfo = &daemon.CPUInfo{
-			Count:      int32(vcpus),
-			CPU:        cpuinfo[0].CPU,
-			VendorID:   cpuinfo[0].VendorID,
-			Family:     cpuinfo[0].Family,
-			PhysicalID: cpuinfo[0].PhysicalID,
-		}
-	}
-
-	mem, err := mem.VirtualMemoryWithContext(ctx)
-	if err == nil {
-		state.MemoryInfo = &daemon.MemoryInfo{
-			Total:     mem.Total,
-			Available: mem.Available,
-			Used:      mem.Used,
-		}
-	}
-
-	host, err := host.InfoWithContext(ctx)
-	if err == nil {
-		state.HostInfo = &daemon.HostInfo{
-			HostID:               host.HostID,
-			Hostname:             host.Hostname,
-			OS:                   host.OS,
-			Platform:             host.Platform,
-			KernelVersion:        host.KernelVersion,
-			KernelArch:           host.KernelArch,
-			VirtualizationSystem: host.VirtualizationSystem,
-			VirtualizationRole:   host.VirtualizationRole,
-		}
-	}
-
-	// ignore sending network for now, little complicated
-	state.Info = &daemon.ProcessInfo{
-		OpenFiles:       openFiles,
-		WorkingDir:      cwd,
-		MemoryPercent:   memoryUsed,
-		IsRunning:       isRunning,
-		OpenConnections: openConnections,
-		Status:          strings.Join(proccessStatus, ""),
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 // Returns a channel that will be closed when a non-child process exits
@@ -265,6 +224,7 @@ func WaitForPidCtx(ctx context.Context, pid uint32) chan int {
 	return exitCh
 }
 
+// PidExists checks if a process with the given PID exists
 func PidExists(pid uint32) bool {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {

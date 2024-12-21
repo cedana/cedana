@@ -24,7 +24,7 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
-			for _, Conn := range state.GetInfo().GetOpenConnections() {
+			for _, Conn := range state.GetOpenConnections() {
 				if Conn.Type == syscall.SOCK_STREAM { // TCP
 					hasTCP = true
 				}
