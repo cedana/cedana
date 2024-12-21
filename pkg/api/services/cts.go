@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"net"
 	"time"
-  "os"
 
-  "github.com/rs/zerolog/log"
 	"github.com/mdlayher/vsock"
 
 	taskgrpc "buf.build/gen/go/cedana/task/grpc/go/_gogrpc"
@@ -147,15 +145,11 @@ func (c *ServiceClient) StartAttach(ctx context.Context, args *task.AttachArgs) 
 }
 
 func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
-	log.Info().Msgf("pkg/api/services/cts.go:dump(ctx = %v)", ctx)
-  log.Info().Msgf("cts.go:dump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
-    log.Info().Msgf("cts.go:dump envvar region %v key %v secret %v", os.Getenv("AWS_DEFAULT_REGION"), os.Getenv("AWS_ACCESS_KEY_ID"),os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	// TODO NR - timeouts here need to be fixed
-  var cancel context.CancelFunc
+	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
 	opts := getDefaultCallOptions()
-  log.Info().Msgf("cts.go:dump sending region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	resp, err := c.taskService.Dump(ctx, args, opts...)
 	if err != nil {
 		return nil, err
@@ -204,8 +198,6 @@ func (c *ServiceClient) Manage(ctx context.Context, args *task.ManageArgs) (*tas
 
 func (c *ServiceClient) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.JobDumpResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
-	log.Info().Msgf("pkg/api/services/cts.go:jobdump(ctx = %v)", ctx)
-  log.Info().Msgf("cts.go:jobdump got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.taskService.JobDump(ctx, args, opts...)

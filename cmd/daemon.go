@@ -176,11 +176,6 @@ func awsCredentialsSetup() error {
 		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
 		return err
 	}
-
-	// bind env vars
-	viper.BindEnv("aws_access_key_id", "AWS_ACCESS_KEY_ID")
-	viper.BindEnv("aws_default_region", "AWS_DEFAULT_REGION")
-	viper.BindEnv("aws_secret_access_key", "AWS_SECRET_ACCESS_KEY")
 	return nil
 }
 
