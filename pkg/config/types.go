@@ -23,7 +23,7 @@ type (
 		AuthToken string `json:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
 	}
 	Storage struct {
-		Remote      bool   `json:"remote"      mapstructure:"remote"`
+		Remote      bool   `json:"remote"      mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
 		DumpDir     string `json:"dump_dir"    mapstructure:"dump_dir"`
 		Compression string `json:"compression" mapstructure:"compression"`
 	}

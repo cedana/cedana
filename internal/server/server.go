@@ -46,8 +46,8 @@ type ServeOpts struct {
 	Port        uint32
 	Host        string
 	LocalDBPath string
-	Metrics     config.Metrics
 	Version     string
+	Metrics     config.Metrics
 }
 
 type MetricOpts struct {
