@@ -14,7 +14,7 @@
     "rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 1024, "soft": 1024 }],
     "noNewPrivileges": true
   },
-  "root": { "path": "_rootfs" },
+  "root": { "path": "../_rootfs" },
   "hostname": "runc",
   "mounts": [
     { "destination": "/proc", "type": "proc", "source": "proc" },

@@ -12,7 +12,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     pkg-config libbsd-dev runc libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
-    zip
+    zip jq
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
@@ -52,6 +52,7 @@ EOT
 
 VOLUME ["/src"]
 WORKDIR /src
+ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
 CMD ["/bin/bash"]

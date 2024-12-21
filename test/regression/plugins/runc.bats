@@ -1,0 +1,163 @@
+#!/usr/bin/env bats
+
+# This file assumes its being run from the same directory as the Makefile
+
+load ../helpers/utils
+load ../helpers/daemon
+load ../helpers/runc
+
+load_lib support
+load_lib assert
+load_lib file
+
+@test "run container" {
+    jid=$(unix_nano)
+    log_file="/var/log/cedana-output-$jid.log"
+    bundle="$(create_cmd_bundle "echo hello")"
+
+    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+
+    assert_success
+    assert_exists "$log_file"
+    assert_file_contains "$log_file" "hello"
+
+    run cedana -P "$PORT" ps
+
+    assert_success
+    assert_output --partial "$jid"
+}
+
+@test "run non-existent container" {
+    jid=$(unix_nano)
+
+    run cedana -P "$PORT" run runc --bundle "/non-existent" --jid "$jid"
+
+    assert_failure
+
+    run cedana -P "$PORT" ps
+
+    assert_success
+    refute_output --partial "$jid"
+}
+
+@test "run container with custom log" {
+    jid=$(unix_nano)
+    log_file="/tmp/$jid.log"
+    bundle="$(create_cmd_bundle "echo hello")"
+
+    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --log "$log_file"
+
+    assert_success
+    assert_exists "$log_file"
+    assert_file_contains "$log_file" "hello"
+}
+
+# FIXME: BATS PROBLEM WITH IO FAILS WHEN USING PARALLELISM
+
+# @test "run container with attach" {
+#     jid=$(unix_nano)
+#     bundle="$(create_cmd_bundle "echo hello")"
+
+#     run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach
+
+#     assert_success
+#     assert_output --partial "hello"
+# }
+
+# @test "run container with attach (exit code)" {
+#     jid=$(unix_nano)
+#     code=42
+#     bundle="$(create_workload_bundle "exit-code.sh" "$code")"
+
+#     run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach
+
+#     assert_equal $status $code
+# }
+
+@test "dump container" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --bundle "$bundle" "$jid" &
+
+    sleep 1
+
+    run cedana -P "$PORT" dump runc "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$jid" KILL
+    run runc delete "$jid"
+}
+
+@test "dump container (job)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+    assert_success
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" kill "$jid"
+}
+
+@test "dump container (job, attached)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach &
+    sleep 1
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" kill "$jid"
+}
+
+@test "restore container (job)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+    assert_success
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" restore job "$jid"
+    assert_success
+
+    run cedana -P "$PORT" kill "$jid"
+}
+
+@test "restore container (job, attached)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach &
+    sleep 1
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" restore job "$jid"
+    assert_success
+
+    run cedana -P "$PORT" kill "$jid"
+}

@@ -49,6 +49,20 @@ load_lib file
     assert_file_contains "$log_file" "hello"
 }
 
+@test "exec (run process alias)" {
+    jid=$(unix_nano)
+
+    run cedana -P "$PORT" exec echo hello --jid "$jid"
+
+    log_file="/var/log/cedana-output-$jid.log"
+
+    assert_success
+    assert_exists "$log_file"
+    assert_file_contains "$log_file" "hello"
+}
+
+# FIXME: BATS PROBLEM WITH IO FAILS WHEN USING PARALLELISM
+
 # @test "run process with attach" {
 #     jid=$(unix_nano)
 
@@ -66,18 +80,6 @@ load_lib file
 
 #     assert_equal $status $code
 # }
-
-@test "exec (run process alias)" {
-    jid=$(unix_nano)
-
-    run cedana -P "$PORT" exec echo hello --jid "$jid"
-
-    log_file="/var/log/cedana-output-$jid.log"
-
-    assert_success
-    assert_exists "$log_file"
-    assert_file_contains "$log_file" "hello"
-}
 
 # @test "attach (using PID)" {
 #     jid=$(unix_nano)

@@ -2,6 +2,7 @@ OUT_DIR=$(PWD)
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+SUDO=sudo -E env "PATH=$(PATH)"
 
 ifndef VERBOSE
 .SILENT:
@@ -25,11 +26,11 @@ build: $(BINARY_SOURCES) ## Build the binary
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 start: ## Start the daemon
-	@sudo -E ./$(BINARY) daemon start
+	$(SUDO) ./$(BINARY) daemon start
 
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
-	@sudo pkill -f $(BINARY) -TERM
+	$(SUDO) pkill -f $(BINARY) -TERM
 
 start-systemd: build plugins ## Build and start the systemd daemon
 	@echo "Starting systemd service..."
@@ -39,7 +40,7 @@ stop-systemd: ## Stop the systemd daemon
 	@echo "Stopping systemd service..."
 	if [ -f /etc/systemd/system/cedana.service ]; then \
 		$(SCRIPTS_DIR)/stop-systemd.sh ;\
-		@sudo rm -f /etc/systemd/system/cedana.service ;\
+		$(SUDO) rm -f /etc/systemd/system/cedana.service ;\
 	fi
 	@echo "No systemd service found."
 
@@ -49,7 +50,7 @@ reset: stop-systemd stop reset-plugins reset-db reset-config reset-tmp reset-log
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
-	@sudo rm -f /tmp/cedana*.db
+	$(SUDO) rm -f /tmp/cedana*.db
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
@@ -57,13 +58,13 @@ reset-config: ## Reset configuration files
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
-	@sudo rm -rf /tmp/cedana*
-	@sudo rm -rf /tmp/dump*
-	@sudo rm -rf /dev/shm/cedana*
+	$(SUDO) rm -rf /tmp/cedana*
+	$(SUDO) rm -rf /tmp/dump*
+	$(SUDO) rm -rf /dev/shm/cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
-	sudo rm -rf /var/log/cedana*
+	$(SUDO) rm -rf /var/log/cedana*
 
 ###########
 ##@ Plugins
@@ -88,13 +89,13 @@ plugins-install: ## Install plugins
 			list="$$name $$list"; \
 		fi ;\
 	done ;\
-	sudo -E $(BINARY) plugin install $$list ;\
+	$(SUDO) $(BINARY) plugin install $$list ;\
 
 reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
 	if [ -p $(OUT_DIR)/$(BINARY) ]; then \
-		sudo -E $(BINARY) plugin remove --all ;\
+		$(SUDO) $(BINARY) plugin remove --all ;\
 	fi
 
 ###########
@@ -114,6 +115,7 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>)
 	@echo "Running all regression tests..."
 	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
+		make plugins-install > /dev/null ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) -r test/regression ;\
 		echo "Using single instance of daemon across tests..." ;\
@@ -138,6 +140,7 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 	@echo "Running regression tests for plugin $$PLUGIN..."
 	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
+		make plugins-install > /dev/null ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 		echo "Using single instance of daemon across tests..." ;\
@@ -151,7 +154,7 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 ##########
 
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
-DOCKER_TEST_RUN=docker run --privileged --init -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_RUN=docker run --privileged --init --cgroupns=private -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
 
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."

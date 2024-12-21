@@ -12,4 +12,8 @@ while :; do
     [ $i -ge "$COUNT" ] && break
 done
 
+if [ "$#" -ne 2 ]; then
+    exit 0
+fi
+
 exit "$2"
