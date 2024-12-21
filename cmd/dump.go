@@ -48,7 +48,7 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 
 	// Bind to config
-	viper.BindPFlag("storage.dump_dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
+	viper.BindPFlag("checkpoints.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
@@ -79,7 +79,7 @@ var dumpCmd = &cobra.Command{
 	Short: "Dump a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.Global.Storage.DumpDir
+		dir := config.Global.Checkpoints.Dir
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)

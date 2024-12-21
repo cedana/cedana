@@ -62,7 +62,7 @@ teardown() {
 
 start_daemon_at() {
     local port=$1
-    cedana daemon start -P "$port" --local-db /tmp/cedana-"$port".db | tee "$(daemon_log_file "$port")" &
+    cedana daemon start -P "$port" --db /tmp/cedana-"$port".db | tee "$(daemon_log_file "$port")" &
     wait_for_start "$port"
 }
 

@@ -23,12 +23,10 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (handlers.Dump). Post-dump, the order is reversed.
 
-	compression := config.Global.Storage.Compression
-
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		filesystem.PrepareDumpDir(compression),
+		filesystem.PrepareDumpDir(config.Global.Checkpoints.Compression),
 
 		pluginDumpMiddleware, // middleware from plugins
 

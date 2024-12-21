@@ -14,7 +14,7 @@ import (
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetDir() == "" {
-			req.Dir = config.Global.Storage.DumpDir
+			req.Dir = config.Global.Checkpoints.Dir
 		}
 
 		if req.GetCriu() == nil {

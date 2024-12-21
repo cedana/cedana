@@ -25,10 +25,13 @@ var Global Config = Config{
 	Port:     8080,
 	Host:     "0.0.0.0",
 	LogLevel: "info",
-	Storage: Storage{
-		Remote:      false,
-		DumpDir:     "/tmp",
+	Checkpoints: Checkpoints{
+		Dir:         "/tmp",
 		Compression: "tar",
+	},
+	DB: DB{
+		Remote: false,
+		Path:   filepath.Join(os.TempDir(), "cedana.db"),
 	},
 	Profiling: Profiling{
 		Enabled: true,

@@ -5,8 +5,7 @@ package db
 import (
 	"context"
 	dbsql "database/sql"
-	"os"
-	"path/filepath"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
@@ -14,15 +13,13 @@ import (
 	json "google.golang.org/protobuf/encoding/protojson"
 )
 
-var default_path = filepath.Join(os.TempDir(), "cedana.db")
-
 type LocalDB struct {
 	queries *sql.Queries
 }
 
 func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
 	if path == "" {
-		path = default_path
+		return nil, fmt.Errorf("please provide a DB path")
 	}
 
 	db, err := dbsql.Open("sqlite3", path)

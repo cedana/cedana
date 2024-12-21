@@ -42,12 +42,11 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	UseVSOCK    bool
-	Port        uint32
-	Host        string
-	LocalDBPath string
-	Version     string
-	Metrics     config.Metrics
+	UseVSOCK bool
+	Port     uint32
+	Host     string
+	Version  string
+	Metrics  config.Metrics
 }
 
 type MetricOpts struct {
@@ -67,10 +66,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	var database db.DB
-	if config.Global.Storage.Remote {
+	if config.Global.DB.Remote {
 		database = db.NewRemoteDB(ctx, config.Global.Connection)
 	} else {
-		database, err = db.NewLocalDB(ctx, opts.LocalDBPath)
+		database, err = db.NewLocalDB(ctx, config.Global.DB.Path)
 	}
 	if err != nil {
 		return nil, err

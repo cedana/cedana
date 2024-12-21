@@ -10,22 +10,26 @@ type (
 		UseVSOCK  bool   `json:"use_vsock" mapstructure:"use_vsock"`
 		LogLevel  string `json:"log_level" mapstructure:"log_level"`
 
-		Connection Connection `json:"connection" mapstructure:"connection"`
-		Storage    Storage    `json:"storage"    mapstructure:"storage"`
-		Profiling  Profiling  `json:"profiling"  mapstructure:"profiling"`
-		Metrics    Metrics    `json:"metrics"    mapstructure:"metrics"`
-		CRIU       CRIU       `json:"criu"       mapstructure:"criu"`
-		CLI        CLI        `json:"cli"        mapstructure:"cli"`
-		GPU        GPU        `json:"gpu"        mapstructure:"gpu"`
+		Connection  Connection  `json:"connection" mapstructure:"connection"`
+		Checkpoints Checkpoints `json:"checkpoints" mapstructure:"checkpoints"`
+		DB          DB          `json:"db"         mapstructure:"db"`
+		Profiling   Profiling   `json:"profiling"  mapstructure:"profiling"`
+		Metrics     Metrics     `json:"metrics"    mapstructure:"metrics"`
+		CRIU        CRIU        `json:"criu"       mapstructure:"criu"`
+		CLI         CLI         `json:"cli"        mapstructure:"cli"`
+		GPU         GPU         `json:"gpu"        mapstructure:"gpu"`
 	}
 	Connection struct {
 		URL       string `json:"url"    mapstructure:"url" env_aliases:"CEDANA_URL"`
 		AuthToken string `json:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
 	}
-	Storage struct {
-		Remote      bool   `json:"remote"      mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
-		DumpDir     string `json:"dump_dir"    mapstructure:"dump_dir"`
+	Checkpoints struct {
+		Dir         string `json:"dir"         mapstructure:"dir"`
 		Compression string `json:"compression" mapstructure:"compression"`
+	}
+	DB struct {
+		Remote bool   `json:"remote"      mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
+		Path   string `json:"path" mapstructure:"path"`
 	}
 	Profiling struct {
 		Enabled bool `json:"enabled" mapstructure:"enabled"`

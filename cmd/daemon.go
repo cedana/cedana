@@ -19,10 +19,11 @@ func init() {
 	startDaemonCmd.PersistentFlags().
 		BoolP(flags.MetricsASRFlag.Full, flags.MetricsASRFlag.Short, false, "enable metrics for ASR")
 	startDaemonCmd.PersistentFlags().
-		StringP(flags.LocalDBFlag.Full, flags.LocalDBFlag.Short, "", "path to local database")
+		StringP(flags.DBFlag.Full, flags.DBFlag.Short, "", "path to local database")
 
 	// Bind to config
 	viper.BindPFlag("metrics.asr", startDaemonCmd.PersistentFlags().Lookup(flags.MetricsASRFlag.Full))
+	viper.BindPFlag("db.path", startDaemonCmd.PersistentFlags().Lookup(flags.DBFlag.Full))
 }
 
 var daemonCmd = &cobra.Command{
@@ -38,19 +39,16 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		localDBPath, _ := cmd.Flags().GetString(flags.LocalDBFlag.Full)
-
 		var err error
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
 		server, err := server.NewServer(cmd.Context(), &server.ServeOpts{
-			UseVSOCK:    config.Global.UseVSOCK,
-			Port:        config.Global.Port,
-			Host:        config.Global.Host,
-			Metrics:     config.Global.Metrics,
-			LocalDBPath: localDBPath,
-			Version:     cmd.Version,
+			UseVSOCK: config.Global.UseVSOCK,
+			Port:     config.Global.Port,
+			Host:     config.Global.Host,
+			Metrics:  config.Global.Metrics,
+			Version:  cmd.Version,
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
