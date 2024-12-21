@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -82,7 +81,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		defer restoreLog.Close()
 	}
 
-	started := time.Now()
+	ctx, end := profiling.StartTimingCategory(ctx, "criu", server.CRIU.Restore)
 
 	criuResp, err := server.CRIU.Restore(
 		ctx,
@@ -93,10 +92,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		stderr,
 		extraFiles...)
 
-	if config.Global.Profiling.Enabled {
-		criuProfiling := profiling.RecordDurationCategory(started, server.Profiling, "criu", server.CRIU.Restore)
-		criuProfiling.Components = append(criuProfiling.Components, server.CRIUCallback.Profiling)
-	}
+	end()
 
 	// Capture internal logs from CRIU
 	utils.LogFromFile(

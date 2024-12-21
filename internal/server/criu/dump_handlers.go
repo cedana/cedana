@@ -3,10 +3,8 @@ package criu
 import (
 	"context"
 	"path/filepath"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -52,14 +50,11 @@ func dump(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, r
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
-	started := time.Now()
+	ctx, end := profiling.StartTimingCategory(ctx, "criu", server.CRIU.Dump)
 
 	_, err = server.CRIU.Dump(ctx, criuOpts, server.CRIUCallback)
 
-	if config.Global.Profiling.Enabled {
-		criuProfiling := profiling.RecordDurationCategory(started, server.Profiling, "criu", server.CRIU.Dump)
-		criuProfiling.Components = append(criuProfiling.Components, server.CRIUCallback.Profiling)
-	}
+	end()
 
 	// Capture internal logs from CRIU
 	utils.LogFromFile(

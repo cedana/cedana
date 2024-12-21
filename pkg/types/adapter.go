@@ -40,7 +40,7 @@ type (
 // When profiling is enabled, a timing profiler is added to the middleware chain.
 func (h Handler[REQ, RESP]) With(middleware ...Adapter[Handler[REQ, RESP]]) Handler[REQ, RESP] {
 	if config.Global.Profiling.Enabled {
-		return adaptedWithProfiler(h, Timing, middleware...)
+		return adaptedWithProfiler(h, Timer, middleware...)
 	}
 	return adapted(h, middleware...)
 }

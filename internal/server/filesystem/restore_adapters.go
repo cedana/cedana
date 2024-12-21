@@ -9,7 +9,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -45,13 +44,12 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 			log.Debug().Str("path", path).Str("dir", imagesDirectory).Msg("decompressing dump")
 
 			// Decompress the dump
-			started := time.Now()
-			if err := utils.Untar(path, imagesDirectory); err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
-			}
 
-			if config.Global.Profiling.Enabled {
-				profiling.RecordDurationCategory(started, server.Profiling, "compression", utils.Untar)
+			_, end := profiling.StartTimingCategory(ctx, "compression", utils.Untar)
+			err = utils.Untar(path, imagesDirectory)
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
 			}
 		}
 

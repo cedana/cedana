@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"time"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
@@ -15,12 +14,14 @@ import (
 )
 
 // StartTiming starts a timer and returns a function that should be called to end the timer.
-// If no f is provided, uses the caller to get the function name.
+// Uses the profiling data in ctx to store the data, and returns a child context that should be used by the children of
+// the function. If no f is provided, uses the caller to get the function name.
+// This should only be called for the top most leader in the tree.
 func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
-	var data *daemon.ProfilingData
-	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*daemon.ProfilingData)
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
 	if !ok {
-		data = &daemon.ProfilingData{}
+		return ctx, func() {}
 	}
 
 	if data.Name == "" {
@@ -36,7 +37,6 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 
 	start := time.Now()
 	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, data.Name)
-	defer span.End()
 
 	end = func() {
 		duration := time.Since(start)
@@ -46,7 +46,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
 	}
 
-	component := &daemon.ProfilingData{}
+	component := &Data{}
 	data.Components = append(data.Components, component)
 	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
 
@@ -54,12 +54,14 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 }
 
 // StartTimingComponent starts a timer and returns a function that should be called to end the timer.
-// Unlike StartTiming, this adds the data as a new component of the profiling data.
+// Unlike StartTiming, this adds the data as a new component of the current data in ctx.
+// Returns childCtx, which should be used by the children of the new component.
+// If not data found in passed ctx, just returns noops, as like parent is not being profiled.
 func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
-	var data *daemon.ProfilingData
-	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*daemon.ProfilingData)
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
 	if !ok {
-		data = &daemon.ProfilingData{}
+		return ctx, func() {}
 	}
 
 	var pc uintptr
@@ -70,33 +72,77 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 	}
 	name := utils.FunctionName(pc)
 
-	component := &daemon.ProfilingData{Name: name}
+	component := &Data{Name: name}
+	data.Components = append(data.Components, component)
 
-	data.Components = append(profiling.Components, component)
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, component.Name)
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
 
-	log.Trace().Str("in", name).Msgf("spent %s", duration)
-	return component
+	end = func() {
+		duration := time.Since(start)
+		span.End()
+		component.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+	}
+
+	return
 }
 
 // StartTimingCategory starts a timer and returns a function that should be called to end the timer.
-// Instead of directly inserting a component like StartTimingComponent, this adds the data as a nested component,
-// with the name matching the category provided. Also returns the component that was added to the category.
-func StartTimingCategory(start time.Time, profiling *daemon.ProfilingData, category string, f ...any) *daemon.ProfilingData {
-	var categoryComponent *daemon.ProfilingData
-	for _, component := range profiling.Components {
+// Instead of directly inserting a component like StartTimingComponent, this adds the data as a child component
+// to an empty component (category component) whose name is matching the category provided.
+// Returns childCtx, which should be used by the children of the new component.
+// If not data found in passed ctx, just returns noops, as like parent is not being profiled.
+func StartTimingCategory(ctx context.Context, category string, f ...any) (childCtx context.Context, end func()) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return ctx, func() {}
+	}
+
+	var categoryComponent *Data
+	// Add to existing category component if it exists
+	for _, component := range data.Components {
 		if component.Name == category {
 			categoryComponent = component
 			break
 		}
 	}
 	if categoryComponent == nil {
-		categoryComponent = &daemon.ProfilingData{
+		categoryComponent = &Data{
 			Name: category,
 		}
-		profiling.Components = append(profiling.Components, categoryComponent)
+		data.Components = append(data.Components, categoryComponent)
 	}
 
-	return RecordDurationComponent(start, categoryComponent, f...)
+	var pc uintptr
+	if len(f) == 0 {
+		pc, _, _, _ = runtime.Caller(1)
+	} else {
+		pc = reflect.ValueOf(f[0]).Pointer()
+	}
+	name := utils.FunctionName(pc)
+
+	childComponent := &Data{Name: name}
+	categoryComponent.Components = append(categoryComponent.Components, childComponent)
+
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, childComponent.Name)
+
+	end = func() {
+		duration := time.Since(start)
+		span.End()
+		categoryComponent.Duration += duration.Nanoseconds()
+		childComponent.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+	}
+
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, childComponent)
+
+	return
 }
 
 // LogDuration logs the elapsed time since start.

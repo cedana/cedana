@@ -7,14 +7,11 @@ package criu
 import (
 	"context"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 )
 
 type NotifyCallbackMulti struct {
 	callbacks []Notify
-
-	Profiling *daemon.ProfilingData
 }
 
 func (n *NotifyCallbackMulti) Include(nfy *NotifyCallback) {
@@ -23,13 +20,6 @@ func (n *NotifyCallbackMulti) Include(nfy *NotifyCallback) {
 	}
 
 	n.callbacks = append(n.callbacks, nfy)
-
-	if nfy.Profiling != nil {
-		if n.Profiling == nil {
-			n.Profiling = &daemon.ProfilingData{}
-		}
-		n.Profiling.Components = append(n.Profiling.Components, nfy.Profiling)
-	}
 }
 
 func (n *NotifyCallbackMulti) IncludeMulti(nfy *NotifyCallbackMulti) {
@@ -38,13 +28,6 @@ func (n *NotifyCallbackMulti) IncludeMulti(nfy *NotifyCallbackMulti) {
 	}
 
 	n.callbacks = append(n.callbacks, nfy.callbacks...)
-
-	if nfy.Profiling != nil {
-		if n.Profiling == nil {
-			n.Profiling = &daemon.ProfilingData{}
-		}
-		n.Profiling.Components = append(n.Profiling.Components, nfy.Profiling)
-	}
 }
 
 func (n NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) error {

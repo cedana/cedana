@@ -141,13 +141,13 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		resp, err := client.Restore(cmd.Context(), req)
+		resp, profiling, err := client.Restore(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && resp.Profiling != nil {
-			printProfilingData(resp.Profiling)
+		if config.Global.Profiling.Enabled && profiling != nil {
+			printProfilingData(profiling)
 		}
 
 		if req.Attachable {

@@ -146,13 +146,13 @@ var dumpCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, err := client.Dump(cmd.Context(), req)
+		resp, profiling, err := client.Dump(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && resp.Profiling != nil {
-			printProfilingData(resp.Profiling)
+		if config.Global.Profiling.Enabled && profiling != nil {
+			printProfilingData(profiling)
 		}
 
 		fmt.Printf("Dumped to %s\n", resp.Path)

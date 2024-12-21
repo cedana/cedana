@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -29,7 +30,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 		validation.ValidateRunRequest,
 	}
 
-	run := pluginManageHandler().With(middleware...) // even the handler depends on the type of job
+	manage := pluginManageHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.ServerOpts{
 		Lifetime: s.lifetime,
@@ -39,7 +40,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 
 	resp := &daemon.RunResp{}
 
-	_, err := run(ctx, opts, resp, req)
+	_, err := manage(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +71,9 @@ func pluginManageHandler() types.Run {
 			if err != nil {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
+			var end func()
+			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+			defer end()
 		}
 		if req.GPUEnabled {
 			log.Warn().Msg("GPU interception must be manually enabled, as it can't be added for already running process/container")

@@ -11,9 +11,11 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -79,51 +81,92 @@ func (c *Client) Close() {
 ///// Methods /////
 ///////////////////
 
-func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq) (*daemon.DumpResp, error) {
+func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
 	defer cancel()
-	opts := getDefaultCallOptions()
+	addDefaultOptions(opts...)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
+		return nil, nil, utils.GRPCErrorColored(err)
 	}
-	return resp, nil
+
+	data, err := profiling.GetData(trailer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp, data, nil
 }
 
 func (c *Client) Restore(
 	ctx context.Context,
 	args *daemon.RestoreReq,
-) (*daemon.RestoreResp, error) {
+	opts ...grpc.CallOption,
+) (*daemon.RestoreResp, *profiling.Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RESTORE_TIMEOUT)
 	defer cancel()
-	opts := getDefaultCallOptions()
+	addDefaultOptions(opts...)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
+		return nil, nil, utils.GRPCErrorColored(err)
 	}
-	return resp, nil
+
+	data, err := profiling.GetData(trailer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp, data, nil
 }
 
-func (c *Client) Run(ctx context.Context, args *daemon.RunReq) (*daemon.RunResp, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) Run(ctx context.Context, args *daemon.RunReq, opts ...grpc.CallOption) (*daemon.RunResp, *profiling.Data, error) {
+	addDefaultOptions(opts...)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
 	resp, err := c.daemonClient.Run(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
+		return nil, nil, utils.GRPCErrorColored(err)
 	}
-	return resp, nil
+
+	data, err := profiling.GetData(trailer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp, data, nil
 }
 
-func (c *Client) Manage(ctx context.Context, args *daemon.RunReq) (*daemon.RunResp, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.CallOption) (*daemon.RunResp, *profiling.Data, error) {
+	addDefaultOptions(opts...)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
+		return nil, nil, utils.GRPCErrorColored(err)
 	}
-	return resp, nil
+
+	data, err := profiling.GetData(trailer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp, data, nil
 }
 
-func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListResp, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) List(ctx context.Context, args *daemon.ListReq, opts ...grpc.CallOption) (*daemon.ListResp, error) {
+	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.List(ctx, args, opts...)
 	if err != nil {
 		return nil, utils.GRPCErrorColored(err)
@@ -131,8 +174,8 @@ func (c *Client) List(ctx context.Context, args *daemon.ListReq) (*daemon.ListRe
 	return resp, nil
 }
 
-func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillResp, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) Kill(ctx context.Context, args *daemon.KillReq, opts ...grpc.CallOption) (*daemon.KillResp, error) {
+	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
 	if err != nil {
 		return nil, utils.GRPCErrorColored(err)
@@ -140,8 +183,8 @@ func (c *Client) Kill(ctx context.Context, args *daemon.KillReq) (*daemon.KillRe
 	return resp, nil
 }
 
-func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.DeleteResp, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq, opts ...grpc.CallOption) (*daemon.DeleteResp, error) {
+	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
 	if err != nil {
 		return nil, utils.GRPCErrorColored(err)
@@ -151,8 +194,8 @@ func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq) (*daemon.De
 
 // Attach attaches to a managed process/container. Exits the program
 // with the exit code of the process.
-func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
-	opts := getDefaultCallOptions()
+func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grpc.CallOption) error {
+	addDefaultOptions(opts...)
 	stream, err := c.daemonClient.Attach(ctx, opts...)
 	if err != nil {
 		return utils.GRPCErrorColored(err)
@@ -179,8 +222,8 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq) error {
 	return nil
 }
 
-func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty) (*daemon.Empty, error) {
-	opts := getDefaultCallOptions()
+func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...grpc.CallOption) (*daemon.Empty, error) {
+	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.ReloadPlugins(ctx, args, opts...)
 	if err != nil {
 		return nil, utils.GRPCErrorColored(err)
@@ -192,10 +235,8 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty) (*daemon
 //    Helpers    //
 ///////////////////
 
-func getDefaultCallOptions() []grpc.CallOption {
-	opts := []grpc.CallOption{}
+func addDefaultOptions(opts ...grpc.CallOption) {
 	if config.Global.CLI.WaitForReady {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
-	return opts
 }

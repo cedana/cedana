@@ -9,11 +9,9 @@ package gpu
 
 import (
 	"context"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/features"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -58,16 +56,14 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, err
 			}
 
-			started := time.Now()
-
+			// Since we are waiting on the AttachSync, can add a component for it
+			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.AttachAsync)
 			err = <-gpuErr
+			end()
+
 			if err != nil {
 				cancel()
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
-			}
-
-			if config.Global.Profiling.Enabled {
-				profiling.RecordDurationCategory(started, server.Profiling, "gpu", gpus.AttachAsync)
 			}
 
 			pid <- resp.PID

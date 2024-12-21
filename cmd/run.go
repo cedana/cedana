@@ -104,13 +104,13 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, err := client.Run(cmd.Context(), req)
+		resp, profiling, err := client.Run(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && resp.Profiling != nil {
-			printProfilingData(resp.Profiling)
+		if config.Global.Profiling.Enabled && profiling != nil {
+			printProfilingData(profiling)
 		}
 
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
@@ -175,13 +175,10 @@ var processRunCmd = &cobra.Command{
 ////////////////////
 
 // PrintProfilingData prints the profiling data in a very readable format.
-func printProfilingData(data *daemon.ProfilingData) {
-	total := time.Duration(data.Duration)
+func printProfilingData(data *profiling.Data) {
+	var total time.Duration
 
-	profiling.CleanData(data)
-	profiling.FlattenData(data) // Since we want to print as a list
-
-	fmt.Print("Profiling is enabled in daemon.\n\n")
+	fmt.Print("Profiling data received from daemon:\n\n")
 
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
@@ -189,9 +186,8 @@ func printProfilingData(data *daemon.ProfilingData) {
 
 	categoryMap := make(map[string]time.Duration)
 
-	remainingDuration := total
 	for _, p := range data.Components {
-		if p.Duration <= 0 {
+		if p.Duration == 0 {
 			continue
 		}
 		categoryName, name := utils.SimplifyFuncName(p.Name)
@@ -203,7 +199,7 @@ func printProfilingData(data *daemon.ProfilingData) {
 		}, categoryName)
 
 		duration := time.Duration(p.Duration)
-		remainingDuration -= duration
+		total += duration
 
 		if categoryName != "" {
 			categoryMap[category] += duration
@@ -222,8 +218,6 @@ func printProfilingData(data *daemon.ProfilingData) {
 		tableWriter = table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
-
-		categoryMap[string(style.DisbledColor.Sprint("other"))] += remainingDuration
 
 		for category, duration := range categoryMap {
 			percentage := (float64(duration) / float64(total)) * 100

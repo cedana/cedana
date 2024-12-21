@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -85,7 +86,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 // Handler that returns the type-specific handler for the job
 func pluginRunHandler() types.Run {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-		t := req.GetType()
+		t := req.Type
 		var handler types.Run
 		switch t {
 		case "process":
@@ -99,10 +100,15 @@ func pluginRunHandler() types.Run {
 			if err != nil {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
+			var end func()
+			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+			defer end()
+
 		}
 		if req.GPUEnabled {
 			handler = handler.With(gpu.Interception)
 		}
+
 		return handler(ctx, server, resp, req)
 	}
 }

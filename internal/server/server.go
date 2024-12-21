@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
@@ -93,8 +94,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		grpcServer: grpc.NewServer(
-			grpc.ChainStreamInterceptor(logging.StreamLogger(), metrics.StreamTracer(machine)),
-			grpc.ChainUnaryInterceptor(logging.UnaryLogger(), metrics.UnaryTracer(machine)),
+			grpc.ChainStreamInterceptor(
+				logging.StreamLogger(),
+				metrics.StreamTracer(machine),
+			),
+			grpc.ChainUnaryInterceptor(
+				logging.UnaryLogger(),
+				metrics.UnaryTracer(machine),
+				profiling.UnaryProfiler(),
+			),
 		),
 		plugins: pluginManager,
 		jobs:    jobManager,
