@@ -154,74 +154,60 @@ func NewStreamIOSlave(
 		defer wg.Done()
 		defer DeleteIOSlave(&slave.PID)
 
-		var master grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]
-		// Wait for first master before doing anything
+		masters := map[grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]]any{}
+		// Wait for first master before doing anything, so that no out/err is lost
 	wait_first_master:
 		for {
 			select {
 			case <-ctx.Done():
 				close(in)
 				return
-			case master = <-slave.master:
+			case master := <-slave.master:
+				masters[master] = nil
 				break wait_first_master
 			}
 		}
 	exit:
 		for {
-		stream:
-			for {
-				select {
-				case <-ctx.Done():
-					break exit
-				case <-master.Context().Done():
-					break stream // and wait for new master
-				case b, ok := <-out:
-					if !ok {
-						out = nil
-						break
-					}
-					master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stdout{Stdout: b}})
-				case b, ok := <-err:
-					if !ok {
-						err = nil
-						break
-					}
-					master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stderr{Stderr: b}})
+			select {
+			case <-ctx.Done():
+				break exit
+			case master := <-slave.master: // wait for a new master to attach
+				masters[master] = nil
+			case b, ok := <-out:
+				if !ok {
+					out = nil
+					break
 				}
-				if out == nil && err == nil { // exit once we've sent all out/err
-					break exit
+				for master := range masters {
+					err := master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stdout{Stdout: b}})
+					if err != nil {
+						delete(masters, master)
+					}
+				}
+			case b, ok := <-err:
+				if !ok {
+					err = nil
+					break
+				}
+				for master := range masters {
+					err := master.Send(&daemon.AttachResp{Output: &daemon.AttachResp_Stderr{Stderr: b}})
+					if err != nil {
+						delete(masters, master)
+					}
 				}
 			}
-
-			// wait for a new master while discarding out/err
-		wait_new_master:
-			for {
-				select {
-				case <-ctx.Done():
-					break exit
-				case master = <-slave.master: // wait for a new master to attach
-					break wait_new_master
-				case _, ok := <-out: // discard out
-					if !ok {
-						out = nil
-						break
-					}
-				case _, ok := <-err: // discard err
-					if !ok {
-						err = nil
-						break
-					}
-				}
-				if out == nil && err == nil { // exit once we've sent all out/err
-					break exit
-				}
+			if out == nil && err == nil { // exit once we've sent all out/err
+				break exit
 			}
 		}
 
 		close(in)
-		master.Send(
-			&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
-		)
+		for master := range masters {
+			master.Send(
+				&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
+			)
+		}
 	}()
 
 	stdIn = &StreamIOReader{bytes: in}
