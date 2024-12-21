@@ -8,7 +8,7 @@ function install_cedana() {
 }
 
 function start_cedana() {
-    sudo cedana daemon start $@ &
+    sudo -E cedana daemon start "$@" 2>&1 | sudo tee -a /var/log/cedana-daemon.log &
 }
 
 function stop_cedana() {
@@ -22,27 +22,27 @@ function exec_task() {
     local task="$1"
     local job_id="$2"
     shift 2
-    cedana exec -w "$DIR" "$task" -i "$job_id" $@
+    cedana exec -w "$DIR" "$task" -i "$job_id" "$@"
 }
 
 function checkpoint_task() {
     local job_id="$1"
     local dir="$2"
     shift 2
-    cedana dump job "$job_id" -d "$dir" $@
+    cedana dump job "$job_id" -d "$dir" "$@"
 }
 
 function restore_task() {
     local job_id="$1"
     shift 1
-    cedana restore job "$job_id" $@
+    cedana restore job "$job_id" "$@"
 }
 
 function restore_task_img() { # override the image
     local job_id="$1"
     local img="$2"
     shift 2
-    cedana restore job "$job_id" --image "$img" $@
+    cedana restore job "$job_id" --image "$img" "$@"
 }
 
 function start_busybox(){
@@ -106,7 +106,7 @@ function runc_checkpoint() {
     local dir="$1"
     local job_id="$2"
     shift 2
-    cedana dump runc --dir "$dir" --id "$job_id" $@
+    cedana dump runc --dir "$dir" --id "$job_id" "$@"
 }
 
 function runc_restore() {
@@ -129,7 +129,7 @@ function runc_restore_tty() {
 function runc_manage() {
     local id="$1"
     shift 1
-    cedana manage runc --id "$id" $@
+    cedana manage runc --id "$id" "$@"
 }
 
 function fail() {

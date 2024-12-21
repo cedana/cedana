@@ -146,7 +146,8 @@ func (c *ServiceClient) StartAttach(ctx context.Context, args *task.AttachArgs) 
 
 func (c *ServiceClient) Dump(ctx context.Context, args *task.DumpArgs) (*task.DumpResp, error) {
 	// TODO NR - timeouts here need to be fixed
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, DEFAULT_PROCESS_DEADLINE)
 	defer cancel()
 	opts := getDefaultCallOptions()
 	resp, err := c.taskService.Dump(ctx, args, opts...)

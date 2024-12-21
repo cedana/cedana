@@ -154,6 +154,7 @@ func (jqs *JobService) containerdCheckpoint(containerName, sandboxName, imageNam
 }
 
 func (js *JobService) Start(ctx context.Context) error {
+  log.Info().Msgf("jobservice/service.go:start got region %v key %v secret %v", ctx.Value("AWS_DEFAULT_REGION"), ctx.Value("AWS_ACCESS_KEY_ID"), ctx.Value("AWS_SECRET_ACCESS_KEY"))
 	log.Info().Msg("Started the Job Service")
 	var wg sync.WaitGroup
 	wg.Add(2)
