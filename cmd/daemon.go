@@ -120,11 +120,9 @@ var checkDaemonCmd = &cobra.Command{
 				if len(component.Errors) > 0 {
 					status = statusErr
 					data = style.NegativeColor.Sprint(data)
-					errorCount++
 				} else if len(component.Warnings) > 0 {
 					status = statusWarn
 					data = style.WarningColor.Sprint(data)
-					warningCount++
 				} else {
 					status = statusOk
 				}
@@ -132,6 +130,7 @@ var checkDaemonCmd = &cobra.Command{
 				maxLinelen := 60
 				rows := []table.Row{{component.Name, data, status}}
 				for _, err := range component.Errors {
+					errorCount++
 					err = style.BreakLine(err, maxLinelen)
 					err = style.DisabledColor.Sprint(err)
 					if len(rows) == 1 && len(rows[0]) == 3 {
@@ -141,6 +140,7 @@ var checkDaemonCmd = &cobra.Command{
 					rows = append(rows, table.Row{"", "", statusErr, err})
 				}
 				for _, warn := range component.Warnings {
+					warningCount++
 					warn = style.BreakLine(warn, maxLinelen)
 					warn = style.DisabledColor.Sprint(warn)
 					if len(rows) == 1 && len(rows[0]) == 3 {
@@ -158,6 +158,9 @@ var checkDaemonCmd = &cobra.Command{
 		fmt.Println()
 
 		if errorCount > 0 {
+			if warningCount > 0 {
+				return fmt.Errorf("Failed with %d error(s) and %d warning(s).", errorCount, warningCount)
+			}
 			return fmt.Errorf("Failed with %d error(s).", errorCount)
 		} else if warningCount > 0 {
 			fmt.Printf("Looks good, with %d warning(s).\n", warningCount)
