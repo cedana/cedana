@@ -134,9 +134,9 @@ var listJobCmd = &cobra.Command{
 			case "zombie":
 				return style.WarningColor.Sprint(status)
 			case "halted":
-				return style.DisbledColor.Sprint(status)
+				return style.DisabledColor.Sprint(status)
 			}
-			return style.DisbledColor.Sprint(status)
+			return style.DisabledColor.Sprint(status)
 		}
 
 		// Color type based on the plugin theme

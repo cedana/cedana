@@ -21,6 +21,12 @@ var (
 	ManageCmd  = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}
 	RootCmds   = plugins.Feature[[]*cobra.Command]{Symbol: "RootCmds", Description: "Root command(s)"}
 
+	// Dump/Restore
+	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
+	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
+	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
+	GPUInterception   = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
+
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
 	RunMiddleware = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
@@ -28,14 +34,11 @@ var (
 	// Manage
 	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}
 
-	// Dump/Restore
-	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
-	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
-
-	// Other
-	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
-	GPUInterception   = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
+	// Checkpoints
 	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}
 	CheckpointDecode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointDecode", Description: "Checkpoint decode"}
 	CheckpointEncode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointEncode", Description: "Checkpoint encode"}
+
+	// Health check
+	HealthChecks = plugins.Feature[types.Checks]{Symbol: "HealthChecks", Description: "Health checks"}
 )

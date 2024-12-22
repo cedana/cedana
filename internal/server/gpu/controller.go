@@ -13,14 +13,13 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -30,9 +29,11 @@ const (
 	// is guaranteed to exit upon receiving this signal, and prints to stderr
 	// about the GPU controller's failure.
 	CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1
+
+	MIN_SHM_SIZE = 8 << 30 // 8 GiB
 )
 
-type Controller struct {
+type controller struct {
 	ErrBuf *bytes.Buffer
 
 	*exec.Cmd
@@ -40,32 +41,64 @@ type Controller struct {
 	*grpc.ClientConn
 }
 
-type Controllers struct {
+type controllers struct {
 	sync.Map
 }
 
-func (m *Controllers) Get(jid string) *Controller {
+func (m *controllers) get(jid string) *controller {
 	c, ok := m.Load(jid)
 	if !ok {
 		return nil
 	}
-	return c.(*Controller)
+	return c.(*controller)
 }
 
-func (m *Controllers) Spawn(
+// Spawns a GPU controller and blocks until it is ready. Performs
+// a blocking health check call to the controller to ensure it is ready.
+// Takes an optional PID chan, to tell the which process is it being attached to.
+// If the controller dies prematurely, a special signal is sent to the process.
+func (m *controllers) spawn(
 	ctx context.Context,
 	lifetime context.Context,
 	wg *sync.WaitGroup,
 	binary string,
 	jid string,
-	pid <-chan uint32,
+	pid ...<-chan uint32,
+) error {
+	err := m.spawnAsync(ctx, lifetime, wg, binary, jid, pid...)
+	if err != nil {
+		return err
+	}
+
+	controller := m.get(jid)
+
+	log.Debug().Str("jid", jid).Msg("waiting for GPU controller...")
+
+	_, err = controller.waitForHealthCheck(ctx, wg)
+	if err != nil {
+		controller.Process.Signal(syscall.SIGTERM)
+		controller.Close()
+		return err
+	}
+
+	return nil
+}
+
+// Spawns a GPU controller in the background
+func (m *controllers) spawnAsync(
+	ctx context.Context,
+	lifetime context.Context,
+	wg *sync.WaitGroup,
+	binary string,
+	jid string,
+	pid ...<-chan uint32,
 ) error {
 	port, err := utils.GetFreePort()
 	if err != nil {
 		return fmt.Errorf("failed to get free port: %w", err)
 	}
 
-	controller := &Controller{
+	controller := &controller{
 		ErrBuf: &bytes.Buffer{},
 		Cmd:    exec.CommandContext(lifetime, binary, jid, "--port", strconv.Itoa(port)),
 	}
@@ -115,28 +148,30 @@ func (m *Controllers) Spawn(
 
 		m.Delete(jid)
 
-		select {
-		case <-lifetime.Done():
-		case pid := <-pid:
-			syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL)
+		if len(pid) > 0 {
+			select {
+			case <-lifetime.Done():
+			case pid := <-pid[0]:
+				syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL)
+			}
 		}
 	}()
 
-	log.Debug().Int("port", port).Msg("waiting for GPU controller...")
+	return nil
+}
 
-	err = controller.WaitForHealthCheck(ctx, wg)
-	if err != nil {
-		controller.Process.Signal(syscall.SIGTERM)
-		conn.Close()
-		return err
+func (m *controllers) kill(jid string) error {
+	controller := m.get(jid)
+	if controller == nil {
+		return fmt.Errorf("No GPU controller attached for %s", jid)
 	}
-
+	controller.Process.Signal(syscall.SIGTERM)
 	return nil
 }
 
 // Health checks the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
-func (controller *Controller) WaitForHealthCheck(ctx context.Context, wg *sync.WaitGroup) error {
+func (controller *controller) waitForHealthCheck(ctx context.Context, wg *sync.WaitGroup) ([]*daemon.HealthCheckComponent, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, HEALTH_TIMEOUT)
 	defer cancel()
 
@@ -148,22 +183,31 @@ func (controller *Controller) WaitForHealthCheck(ctx context.Context, wg *sync.W
 		cancel()
 	}()
 
-	resp, err := controller.HealthCheck(waitCtx, &gpu.HealthCheckRequest{}, grpc.WaitForReady(true))
+	resp, err := controller.HealthCheck(waitCtx, &gpu.HealthCheckReq{}, grpc.WaitForReady(true))
+	var components []*daemon.HealthCheckComponent
 	if resp != nil {
-		log.Debug().
-			Int32("devices", resp.DeviceCount).
-			Str("version", resp.Version).
-			Int32("driver", resp.GetAvailableAPIs().GetDriverVersion()).
-			Msg("GPU health check")
+		l := log.Debug()
+		for _, c := range resp.Components {
+			l = l.Str(c.Name, c.Data)
+			for _, w := range c.Warnings {
+				log.Warn().Str(c.Name, c.Data).Msg(w)
+			}
+			for _, e := range c.Errors {
+				log.Error().Str(c.Name, c.Data).Msg(e)
+			}
+			components = append(components, &daemon.HealthCheckComponent{
+				Name:     c.Name,
+				Data:     c.Data,
+				Warnings: c.Warnings,
+				Errors:   c.Errors,
+			})
+		}
+		l.Msg("GPU health check")
 	}
-	if err != nil || !resp.Success {
+	if err != nil {
 		controller.Process.Signal(syscall.SIGTERM)
 		controller.Close()
-		if err == nil {
-			err = status.Errorf(codes.FailedPrecondition, "GPU health check failed")
-			controller.ErrBuf.WriteString("GPU health check failed")
-		}
-		return utils.GRPCErrorShort(err, controller.ErrBuf.String())
+		return components, utils.GRPCErrorShort(err, controller.ErrBuf.String())
 	}
-	return nil
+	return components, nil
 }

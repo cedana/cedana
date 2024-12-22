@@ -4,6 +4,7 @@ package criu
 
 import (
 	"context"
+	"os/exec"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
@@ -25,6 +26,8 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 				// Set custom path if specified in config, as a fallback
 				if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 					criuInstance.SetCriuPath(custom_path)
+				} else if path, err := exec.LookPath("criu"); err == nil {
+					criuInstance.SetCriuPath(path)
 				} else {
 					return nil, status.Error(codes.FailedPrecondition, "Please install CRIU plugin, or specify path in config or env var.")
 				}

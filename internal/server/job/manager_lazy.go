@@ -48,7 +48,7 @@ type action struct {
 
 // NewManagerLazy creates a new lazy job manager, that uses a DB as a backing store.
 func NewManagerLazy(
-	ctx context.Context,
+	lifetime context.Context,
 	serverWg *sync.WaitGroup,
 	plugins plugins.Manager,
 	gpus gpu.Manager,
@@ -68,7 +68,7 @@ func NewManagerLazy(
 	}
 
 	// Reload all jobs from the DB
-	err := manager.loadFromDB(ctx, db)
+	err := manager.loadFromDB(lifetime, db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DB: %w", err)
 	}
@@ -81,7 +81,7 @@ func NewManagerLazy(
 		defer serverWg.Done()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-lifetime.Done():
 				log.Info().Msg("syncing DB before shutdown")
 				var errs []error
 				var failedActions []action
@@ -91,7 +91,7 @@ func NewManagerLazy(
 					if action.typ == shutdown {
 						break
 					}
-					ctx := context.WithoutCancel(ctx)
+					ctx := context.WithoutCancel(lifetime)
 					err := manager.sync(ctx, action, db)
 					if err != nil {
 						errs = append(errs, err)
@@ -108,7 +108,7 @@ func NewManagerLazy(
 				}
 				return
 			case action := <-manager.pending:
-				err := manager.sync(ctx, action, db)
+				err := manager.sync(lifetime, action, db)
 				if err != nil {
 					manager.pending <- action
 					log.Debug().Err(err).Msg("DB sync failed, retrying in background")
@@ -247,7 +247,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		m.gpus.Detach(lifetime, jid)
+		m.gpus.Detach(jid)
 
 		m.pending <- action{update, jid}
 	}()
@@ -306,7 +306,7 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.N
 	multiCallback := &criu.NotifyCallbackMulti{}
 	multiCallback.IncludeMulti(job.GetCRIUCallback())
 	if job.GPUEnabled() {
-		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid))
+		multiCallback.Include(m.gpus.CRIUCallback(jid))
 	}
 	return multiCallback
 }

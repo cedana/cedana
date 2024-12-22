@@ -203,9 +203,10 @@ func NewStreamIOSlave(
 		}
 
 		close(in)
+		code := <-exitCode
 		for master := range masters {
 			master.Send(
-				&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(<-exitCode)}},
+				&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(code)}},
 			)
 		}
 	}()

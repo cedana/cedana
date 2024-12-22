@@ -47,7 +47,6 @@ var Global Config = Config{
 		WaitForReady: false,
 	},
 	CRIU: CRIU{
-		BinaryPath:   "criu",
 		LeaveRunning: false,
 	},
 	GPU: GPU{

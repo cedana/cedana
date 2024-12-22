@@ -35,7 +35,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.InheritStdioForRestore,
 		network.DetectNetworkOptionsForRestore,
 
-		validation.CheckCompatibilityForRestore,
+		criu.CheckOptsForRestore,
 	}
 
 	restore := criu.Restore.With(middleware...)

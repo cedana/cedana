@@ -222,6 +222,15 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 	return nil
 }
 
+func (c *Client) HealthCheck(ctx context.Context, args *daemon.HealthCheckReq, opts ...grpc.CallOption) (*daemon.HealthCheckResp, error) {
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.HealthCheck(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCErrorColored(err)
+	}
+	return resp, nil
+}
+
 func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...grpc.CallOption) (*daemon.Empty, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.ReloadPlugins(ctx, args, opts...)

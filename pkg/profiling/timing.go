@@ -28,11 +28,13 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 		var pc uintptr
 		if len(f) == 0 {
 			pc, _, _, _ = runtime.Caller(1)
-		} else {
+			data.Name = utils.FunctionName(pc)
+		} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
 			pc = reflect.ValueOf(f[0]).Pointer()
+			data.Name = utils.FunctionName(pc)
+		} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
+			data.Name = f[0].(string)
 		}
-
-		data.Name = utils.FunctionName(pc)
 	}
 
 	start := time.Now()
@@ -65,12 +67,16 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 	}
 
 	var pc uintptr
+	var name string
 	if len(f) == 0 {
 		pc, _, _, _ = runtime.Caller(1)
-	} else {
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
 		pc = reflect.ValueOf(f[0]).Pointer()
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
+		name = f[0].(string)
 	}
-	name := utils.FunctionName(pc)
 
 	component := &Data{Name: name}
 	data.Components = append(data.Components, component)
@@ -86,6 +92,35 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 
 		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
+
+	return
+}
+
+// AddTimingComponent is just like StartTimingComponent, but for adding a duration directly.
+func AddTimingComponent(ctx context.Context, duration time.Duration, f ...any) (childCtx context.Context) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return ctx
+	}
+
+	var pc uintptr
+	var name string
+	if len(f) == 0 {
+		pc, _, _, _ = runtime.Caller(1)
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
+		pc = reflect.ValueOf(f[0]).Pointer()
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
+		name = f[0].(string)
+	}
+
+	component := &Data{Name: name, Duration: duration.Nanoseconds()}
+	data.Components = append(data.Components, component)
+
+	childCtx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, component)
+	log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 
 	return
 }
@@ -118,12 +153,16 @@ func StartTimingCategory(ctx context.Context, category string, f ...any) (childC
 	}
 
 	var pc uintptr
+	var name string
 	if len(f) == 0 {
 		pc, _, _, _ = runtime.Caller(1)
-	} else {
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
 		pc = reflect.ValueOf(f[0]).Pointer()
+		name = utils.FunctionName(pc)
+	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
+		name = f[0].(string)
 	}
-	name := utils.FunctionName(pc)
 
 	childComponent := &Data{Name: name}
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)

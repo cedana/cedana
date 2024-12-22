@@ -36,7 +36,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		process.CloseCommonFilesForDump,
 		network.DetectNetworkOptionsForDump,
 
-		validation.CheckCompatibilityForDump,
+		criu.CheckOptsForDump,
 	}
 
 	dump := criu.Dump.With(middleware...)

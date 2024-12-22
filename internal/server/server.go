@@ -29,6 +29,7 @@ type Server struct {
 	listener   net.Listener
 
 	jobs    job.Manager
+	gpus    gpu.Manager
 	plugins plugins.Manager
 	db      db.DB
 
@@ -81,9 +82,9 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	gpuPoolSize := config.Global.GPU.PoolSize
 	if gpuPoolSize > 0 {
 		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
-		gpuManager = gpu.NewPoolManager(gpuPoolSize)
+		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
 	} else {
-		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
+		gpuManager = gpu.NewSimpleManager(ctx, wg, pluginManager)
 	}
 
 	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)
@@ -105,6 +106,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		),
 		plugins: pluginManager,
 		jobs:    jobManager,
+		gpus:    gpuManager,
 		db:      database,
 		wg:      wg,
 		host:    host,

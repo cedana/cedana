@@ -204,10 +204,10 @@ func printProfilingData(data *profiling.Data) {
 		if categoryName != "" {
 			categoryMap[category] += duration
 		} else {
-			categoryMap[style.DisbledColor.Sprint("other")] += duration
+			categoryMap[style.DisabledColor.Sprint("other")] += duration
 		}
 
-		tableWriter.AppendRow([]interface{}{duration, category, style.DisbledColor.Sprint(name)})
+		tableWriter.AppendRow([]interface{}{duration, category, style.DisabledColor.Sprint(name)})
 	}
 
 	tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})

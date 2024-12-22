@@ -387,14 +387,14 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 
 	for _, name := range pluginNames {
 		if manager.IsInstalled(name) == false {
-			row = append(row, style.DisbledColor.Sprint("-"))
+			row = append(row, style.DisabledColor.Sprint(style.DashMark))
 			continue
 		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
-			row = append(row, style.NegativeColor.Sprint("!"))
+			row = append(row, style.NegativeColor.Sprint(style.CrossMark))
 		} else {
-			row = append(row, style.BoolStr(available, "✔", "✘"))
+			row = append(row, style.BoolStr(available, style.TickMark, style.BulletMark))
 		}
 	}
 
@@ -402,11 +402,11 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 }
 
 func featureLegend() string {
-	return fmt.Sprintf("%s = supported, %s = unsupported, %s = not installed, %s = incompatible",
-		style.PositiveColor.Sprint("✔"),
-		style.DisbledColor.Sprint("✘"),
-		style.DisbledColor.Sprint("-"),
-		style.NegativeColor.Sprint("!"))
+	return fmt.Sprintf("%s = implemented, %s = unimplemented, %s = not installed, %s = incompatible",
+		style.PositiveColor.Sprint(style.TickMark),
+		style.DisabledColor.Sprint(style.BulletMark),
+		style.DisabledColor.Sprint(style.DashMark),
+		style.NegativeColor.Sprint(style.CrossMark))
 }
 
 func statusStr(s plugins.Status) string {
@@ -416,7 +416,7 @@ func statusStr(s plugins.Status) string {
 	case plugins.Installed:
 		return style.PositiveColor.Sprint(s.String())
 	case plugins.Unknown:
-		return style.DisbledColor.Sprint(s.String())
+		return style.DisabledColor.Sprint(s.String())
 	default:
 		return s.String()
 	}

@@ -8,14 +8,15 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/server/validation"
-	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/internal/server/criu"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,20 +27,22 @@ const (
 )
 
 type ManagerSimple struct {
-	controllers Controllers
+	controllers controllers
 	plugins     plugins.Manager
 	wg          *sync.WaitGroup
+	lifetime    context.Context
 }
 
-func NewSimpleManager(serverWg *sync.WaitGroup, plugins plugins.Manager) *ManagerSimple {
+func NewSimpleManager(lifetime context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) *ManagerSimple {
 	return &ManagerSimple{
-		controllers: Controllers{},
+		controllers: controllers{},
 		plugins:     plugins,
 		wg:          serverWg,
+		lifetime:    lifetime,
 	}
 }
 
-func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) error {
+func (m *ManagerSimple) Attach(ctx context.Context, jid string, pid <-chan uint32) error {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); gpuPlugin.Status != plugins.Installed {
@@ -51,7 +54,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 		return err
 	}
 
-	err := m.controllers.Spawn(ctx, lifetime, m.wg, binary, jid, pid)
+	err := m.controllers.spawn(ctx, m.lifetime, m.wg, binary, jid, pid)
 	if err != nil {
 		return err
 	}
@@ -61,7 +64,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 	return nil
 }
 
-func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) <-chan error {
+func (m *ManagerSimple) AttachAsync(ctx context.Context, jid string, pid <-chan uint32) <-chan error {
 	err := make(chan error)
 
 	m.wg.Add(1)
@@ -71,33 +74,75 @@ func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Contex
 		select {
 		case <-ctx.Done():
 			err <- ctx.Err()
-		case err <- m.Attach(ctx, lifetime, jid, pid):
+		case err <- m.Attach(ctx, jid, pid):
 		}
 	}()
 
 	return err
 }
 
-func (m *ManagerSimple) Detach(ctx context.Context, jid string) error {
-	controller := m.controllers.Get(jid)
-	if controller != nil {
-		m.controllers.Delete(jid)
-		return controller.Process.Signal(syscall.SIGTERM)
-	}
-	return fmt.Errorf("No GPU attached to job %s", jid)
+func (m *ManagerSimple) Detach(jid string) error {
+	return m.controllers.kill(jid)
 }
 
 func (m *ManagerSimple) IsAttached(jid string) bool {
-	return m.controllers.Get(jid) != nil
+	return m.controllers.get(jid) != nil
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback {
-	callback := &criu.NotifyCallback{Name: "gpu"}
+func (m *ManagerSimple) Checks() types.Checks {
+	check := func(ctx context.Context) []*daemon.HealthCheckComponent {
+		statusComponent := &daemon.HealthCheckComponent{Name: "Status"}
+
+		// Check if GPU plugin is installed
+		var gpuPlugin *plugins.Plugin
+		if gpuPlugin = m.plugins.Get("gpu"); gpuPlugin.Status != plugins.Installed {
+			statusComponent.Data = "Missing"
+			statusComponent.Errors = append(statusComponent.Errors, "Please install the GPU plugin to use GPU support.")
+			return []*daemon.HealthCheckComponent{statusComponent}
+		}
+		binary := gpuPlugin.BinaryPaths()[0]
+		if _, err := os.Stat(binary); err != nil {
+			statusComponent.Data = "Invalid"
+			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Invalid binary: %v. Try reinstalling plugin.", err))
+			return []*daemon.HealthCheckComponent{statusComponent}
+		}
+
+		// Spawn a random controller and perform a health check
+		jid := fmt.Sprintf("health-check-%d", time.Now().UnixNano())
+		err := m.controllers.spawnAsync(ctx, m.lifetime, m.wg, binary, jid)
+		if err != nil {
+			statusComponent.Data = "Failed"
+			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
+			return []*daemon.HealthCheckComponent{statusComponent}
+		}
+
+		controller := m.controllers.get(jid)
+		components, err := controller.waitForHealthCheck(ctx, m.wg)
+		defer m.controllers.kill(jid)
+		if components == nil && err != nil {
+			statusComponent.Data = "Failed"
+			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller health check: %v", err))
+			return []*daemon.HealthCheckComponent{statusComponent}
+		}
+
+		statusComponent.Data = "Available"
+
+		return append([]*daemon.HealthCheckComponent{statusComponent}, components...)
+	}
+
+	return types.Checks{
+		Name: "gpu",
+		List: []types.Check{check},
+	}
+}
+
+func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
+	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := validation.CheckCRIUOptsCompatibilityGPU(opts)
+		err := criu.CheckOptsGPU(opts)
 		if err != nil {
 			return err
 		}
@@ -105,9 +150,9 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 		waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 		defer cancel()
 
-		controller := m.controllers.Get(jid)
+		controller := m.controllers.get(jid)
 
-		_, err = controller.Checkpoint(waitCtx, &gpu.CheckpointRequest{Directory: opts.GetImagesDir()})
+		_, err = controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir()})
 		if err != nil {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 			return err
@@ -121,12 +166,12 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := validation.CheckCRIUOptsCompatibilityGPU(opts)
+		err := criu.CheckOptsGPU(opts)
 		if err != nil {
 			return err
 		}
 
-		err = m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+		err = m.Attach(ctx, jid, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -137,14 +182,22 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
 			defer cancel()
 
-			controller := m.controllers.Get(jid)
-			_, err = controller.Restore(waitCtx, &gpu.RestoreRequest{Directory: opts.GetImagesDir()})
+			controller := m.controllers.get(jid)
+			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir()})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
 				restoreErr <- err
 				return
 			}
 			log.Info().Str("JID", jid).Msg("GPU restore complete")
+
+			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
+			// the restore happens inside a goroutine, the timing components belong to the restore goroutine.
+
+			// copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
+			// replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
+			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
+			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
 		return nil
 	}

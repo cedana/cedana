@@ -352,3 +352,13 @@ func (c *Criu) IsCriuAtLeast(ctx context.Context, version int) (bool, error) {
 
 	return false, nil
 }
+
+// Runs the criu check
+func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
+	args := []string{"check"}
+	args = append(args, flags...)
+
+	cmd := exec.Command(c.swrkPath, args...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
