@@ -91,18 +91,18 @@ func (m *ManagerSimple) IsAttached(jid string) bool {
 
 func (m *ManagerSimple) Checks() types.Checks {
 	check := func(ctx context.Context) []*daemon.HealthCheckComponent {
-		statusComponent := &daemon.HealthCheckComponent{Name: "Status"}
+		statusComponent := &daemon.HealthCheckComponent{Name: "status"}
 
 		// Check if GPU plugin is installed
 		var gpuPlugin *plugins.Plugin
 		if gpuPlugin = m.plugins.Get("gpu"); gpuPlugin.Status != plugins.Installed {
-			statusComponent.Data = "Missing"
+			statusComponent.Data = "missing"
 			statusComponent.Errors = append(statusComponent.Errors, "Please install the GPU plugin to use GPU support.")
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 		binary := gpuPlugin.BinaryPaths()[0]
 		if _, err := os.Stat(binary); err != nil {
-			statusComponent.Data = "Invalid"
+			statusComponent.Data = "invalid"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Invalid binary: %v. Try reinstalling plugin.", err))
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
@@ -111,7 +111,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 		jid := fmt.Sprintf("health-check-%d", time.Now().UnixNano())
 		err := m.controllers.spawnAsync(ctx, m.lifetime, m.wg, binary, jid)
 		if err != nil {
-			statusComponent.Data = "Failed"
+			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
@@ -120,12 +120,12 @@ func (m *ManagerSimple) Checks() types.Checks {
 		components, err := controller.waitForHealthCheck(ctx, m.wg)
 		defer m.controllers.kill(jid)
 		if components == nil && err != nil {
-			statusComponent.Data = "Failed"
+			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller health check: %v", err))
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 
-		statusComponent.Data = "Available"
+		statusComponent.Data = "available"
 
 		return append([]*daemon.HealthCheckComponent{statusComponent}, components...)
 	}

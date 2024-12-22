@@ -24,7 +24,7 @@ func CheckVersion(manager plugins.Manager) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		c := criu.MakeCriu()
 
-		component := &daemon.HealthCheckComponent{Name: "Version"}
+		component := &daemon.HealthCheckComponent{Name: "version"}
 
 		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
@@ -55,14 +55,14 @@ func CheckVersion(manager plugins.Manager) types.Check {
 			version, err := c.GetCriuVersion(ctx)
 			if err == nil {
 				component.Data = strconv.Itoa(version)
+				if version < CRIU_MIN_VERSION {
+					component.Errors = append(component.Errors,
+						fmt.Sprintf("Version %d is not supported. Minimum supported is %d", version, CRIU_MIN_VERSION),
+					)
+				}
 			} else {
-				component.Data = "Unknown"
-			}
-
-			if version < CRIU_MIN_VERSION {
-				component.Errors = append(component.Errors,
-					fmt.Sprintf("CRIU version %d is not supported. Minimum supported is %d", version, CRIU_MIN_VERSION),
-				)
+				component.Data = "unknown"
+				component.Errors = append(component.Errors, fmt.Sprintf("Failed to get version: %v", err))
 			}
 		}
 
@@ -77,7 +77,7 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		c := criu.MakeCriu()
 
-		component := &daemon.HealthCheckComponent{Name: "Features"}
+		component := &daemon.HealthCheckComponent{Name: "features"}
 
 		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
@@ -105,9 +105,9 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 			component.Warnings = append(component.Warnings, warnings...)
 			component.Errors = append(component.Errors, errors...)
 			if err == nil {
-				component.Data = "Available"
+				component.Data = "available"
 			} else {
-				component.Data = "Missing"
+				component.Data = "missing"
 				if len(component.Errors) == 0 {
 					component.Errors = append(component.Errors, "Check failed, but no errors were reported")
 				}

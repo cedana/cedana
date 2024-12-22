@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"slices"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/criu"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 )
 
@@ -41,5 +44,24 @@ func (s *Server) pluginChecklist() types.Checklist {
 	}
 
 	// Add health checks from other plugins
+	features.HealthChecks.IfAvailable(func(Name string, pluginChecks types.Checks) error {
+		pluginChecks.Name = Name
+		pluginChecks.List = slices.Insert(pluginChecks.List, 0, checkPluginVersion(s.plugins, Name))
+		checklist = append(checklist, pluginChecks)
+		return nil
+	})
+
 	return checklist
+}
+
+// Assumes plugin is installed
+func checkPluginVersion(plugins plugins.Manager, plugin string) types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		component := &daemon.HealthCheckComponent{Name: "plugin version"}
+
+		p := plugins.Get(plugin)
+		component.Data = p.Version
+
+		return []*daemon.HealthCheckComponent{component}
+	}
 }

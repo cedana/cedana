@@ -7,6 +7,8 @@ import (
 	"github.com/jedib0t/go-pretty/v6/text"
 )
 
+const MAX_LINE_LENGTH = 80
+
 var (
 	TickMark   = "✔"
 	BulletMark = "•"
@@ -30,7 +32,7 @@ var (
 	NegativeColor = text.Colors{text.FgRed}
 	WarningColor  = text.Colors{text.FgYellow}
 	InfoColor     = text.Colors{text.FgHiBlue}
-	DisabledColor  = text.Colors{text.FgHiBlack}
+	DisabledColor = text.Colors{text.FgHiBlack}
 )
 
 // BoolStr returns a string representation of a boolean value.

@@ -129,9 +129,10 @@ var checkDaemonCmd = &cobra.Command{
 					status = statusOk
 				}
 
+				maxLinelen := 60
 				rows := []table.Row{{component.Name, data, status}}
 				for _, err := range component.Errors {
-					err = style.BreakLine(err, 80)
+					err = style.BreakLine(err, maxLinelen)
 					err = style.DisabledColor.Sprint(err)
 					if len(rows) == 1 && len(rows[0]) == 3 {
 						rows[0] = append(rows[0], err)
@@ -140,7 +141,7 @@ var checkDaemonCmd = &cobra.Command{
 					rows = append(rows, table.Row{"", "", statusErr, err})
 				}
 				for _, warn := range component.Warnings {
-					warn = style.BreakLine(warn, 80)
+					warn = style.BreakLine(warn, maxLinelen)
 					warn = style.DisabledColor.Sprint(warn)
 					if len(rows) == 1 && len(rows[0]) == 3 {
 						rows[0] = append(rows[0], warn)
@@ -157,11 +158,11 @@ var checkDaemonCmd = &cobra.Command{
 		fmt.Println()
 
 		if errorCount > 0 {
-			return fmt.Errorf("Health check failed with %d errors.", errorCount)
+			return fmt.Errorf("Failed with %d error(s).", errorCount)
 		} else if warningCount > 0 {
 			fmt.Printf("Looks good, with %d warning(s).\n", warningCount)
 		} else {
-			fmt.Println("All looks good.")
+			fmt.Println("All good.")
 		}
 
 		return nil

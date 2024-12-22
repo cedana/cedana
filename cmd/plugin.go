@@ -364,6 +364,8 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames))
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames))
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.HealthChecks, pluginNames))
 
 			tableWriter.Render()
 			fmt.Println()

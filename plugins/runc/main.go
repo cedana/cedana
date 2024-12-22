@@ -40,6 +40,13 @@ var (
 
 var KillSignal = syscall.SIGKILL
 
+var HealthChecks types.Checks = types.Checks{
+	List: []types.Check{
+		container.CheckBinary(),
+		container.CheckVersion(),
+	},
+}
+
 var (
 	RunHandler      types.Run                   = container.Run
 	GPUInterception types.Adapter[types.Run]    = gpu.Interception
