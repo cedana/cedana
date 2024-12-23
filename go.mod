@@ -5,8 +5,8 @@ go 1.23.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-8c9357872983.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-8c9357872983.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-e7eb9087c743.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-e7eb9087c743.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-44f2c484714b.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-44f2c484714b.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-d85bc02c3d74.1
 	github.com/containerd/console v1.0.4
 	github.com/cyphar/filepath-securejoin v0.3.5
@@ -61,7 +61,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/moby/sys/mountinfo v0.7.1 // indirect
+	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect

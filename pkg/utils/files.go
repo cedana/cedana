@@ -17,13 +17,6 @@ const (
 	GIBIBYTE
 )
 
-type FdInfo struct {
-	Pos   int
-	Flags int
-	MntId int
-	Inode int
-}
-
 // CreateTarball creates a tarball from the provided sources and writes it to the destination.
 // The desination should be a path without any file extension, as the function will add extension
 // based on the compression format specified.
@@ -278,37 +271,4 @@ func CopyFile(src, dest string) error {
 	}
 
 	return nil
-}
-
-// FdInfo returns file descriptor information for the provided process and file descriptor.
-func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
-	path := fmt.Sprintf("/proc/%d/fdinfo/%d", pid, fd)
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("Could not read fdinfo file: %s", err)
-	}
-
-	// Parse the fdinfo file
-	var info FdInfo
-	lines := strings.Split(string(contents), "\n")
-	for _, line := range lines {
-		parts := strings.Split(line, ":")
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		switch key {
-		case "pos":
-			fmt.Sscanf(value, "%d", &info.Pos)
-		case "flags":
-			fmt.Sscanf(value, "%d", &info.Flags)
-		case "mnt_id":
-			fmt.Sscanf(value, "%d", &info.MntId)
-		case "ino":
-			fmt.Sscanf(value, "%d", &info.Inode)
-		}
-	}
-
-	return &info, nil
 }

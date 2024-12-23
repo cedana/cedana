@@ -2,13 +2,11 @@ package criu
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -21,12 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-)
-
-const (
-	DEFAULT_RESTORE_LOG_PATH_FORMATTER = "/var/log/cedana-restore-%d.log"
-	RESTORE_LOG_FLAGS                  = os.O_CREATE | os.O_WRONLY | os.O_APPEND // no truncate
-	RESTORE_LOG_PERMS                  = 0o644
 )
 
 var Restore types.Restore = restore
@@ -69,16 +61,11 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 	} else {
-		if req.Log == "" {
-			req.Log = fmt.Sprintf(DEFAULT_RESTORE_LOG_PATH_FORMATTER, time.Now().Unix())
+		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		if ok {
+			stdout, stderr = logFile, logFile
+			// stdin will be nil, ie. /dev/null
 		}
-		restoreLog, err := os.OpenFile(req.Log, RESTORE_LOG_FLAGS, RESTORE_LOG_PERMS)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to open restore log file: %v", err)
-		}
-		stdout, stderr = restoreLog, restoreLog
-		// thus stdin will be /dev/null
-		defer restoreLog.Close()
 	}
 
 	ctx, end := profiling.StartTimingCategory(ctx, "criu", server.CRIU.Restore)

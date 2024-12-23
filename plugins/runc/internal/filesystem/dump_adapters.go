@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -100,40 +98,6 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				Val: proto.String("/dev/null"),
 			}
 			req.Criu.ExtMnt = append(req.Criu.ExtMnt, extMnt)
-		}
-
-		return next(ctx, server, resp, req)
-	}
-}
-
-// Sets appropriate CRIU options for container's external descriptors
-func AddExternalFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
-		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
-		if !ok {
-			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
-		}
-
-		if req.Criu == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
-
-		state, err := container.State()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container state: %v", err)
-		}
-
-		for fd, name := range state.ExternalDescriptors {
-			if strings.HasPrefix(name, "pipe:") || name == os.DevNull {
-				continue
-			}
-
-			info, err := utils.GetFdInfo(uint32(state.InitProcessPid), fd)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to get fd info: %v", err)
-			}
-
-			req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", info.MntId, info.Inode))
 		}
 
 		return next(ctx, server, resp, req)

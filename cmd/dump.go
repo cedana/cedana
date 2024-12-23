@@ -43,7 +43,7 @@ func init() {
 	dumpCmd.PersistentFlags().
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "dump file locks")
 	dumpCmd.PersistentFlags().
-		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "external mountpoints to dump (comma-separated)")
+		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "resources from external namespaces (comma-separated)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 

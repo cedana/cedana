@@ -2,9 +2,12 @@ package job
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,8 +37,20 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			// Fill in restore request details based on saved job info
 
 			req.Type = job.GetType()
-			if req.Log == "" {
-				req.Log = job.GetLog() // Use the same log file as it was before dump
+
+			if !req.Attachable {
+				if req.Log == "" {
+					req.Log = job.GetLog() // Use the same log file as it was before dump
+				}
+				if req.Log == "" {
+					req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
+				}
+				logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
+				}
+				defer logFile.Close()
+				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
 			proto.Merge(req.Details, job.GetDetails()) // override missing fields with saved details

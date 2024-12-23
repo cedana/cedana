@@ -2,9 +2,9 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -83,11 +83,8 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
-			for _, f := range state.GetOpenFiles() {
-				if strings.Contains(f.Path, "pts") {
-					isShellJob = true
-					break
-				}
+			if state.SID != state.PID {
+				isShellJob = true
 			}
 		} else {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
@@ -97,10 +94,7 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		// Only set unless already set
-		if req.GetCriu().ShellJob == nil {
-			req.Criu.ShellJob = proto.Bool(isShellJob)
-		}
+		req.Criu.ShellJob = proto.Bool(isShellJob)
 
 		return next(ctx, server, resp, req)
 	}
@@ -120,6 +114,38 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 		err = utils.CloseCommonFds(ctx, int32(os.Getpid()), int32(pid))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to close common fds: %v", err)
+		}
+
+		return next(ctx, server, resp, req)
+	}
+}
+
+// Detects any open files that are in an external namespace
+// and sets appropriate options for CRIU.
+func AddExternalFilesForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			log.Warn().Msg("no process info found. it should have been filled by an adapter")
+			return next(ctx, server, resp, req)
+		}
+
+		files := state.GetOpenFiles()
+		mounts := state.GetMounts()
+
+		mountIds := make(map[int32]any)
+		for _, m := range mounts {
+			mountIds[m.ID] = nil
+		}
+
+		if req.GetCriu() == nil {
+			req.Criu = &criu_proto.CriuOpts{}
+		}
+
+		for _, f := range files {
+			if _, ok := mountIds[f.MountID]; !ok {
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
+			}
 		}
 
 		return next(ctx, server, resp, req)

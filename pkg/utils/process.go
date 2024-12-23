@@ -10,43 +10,15 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/moby/sys/mountinfo"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-// CloseCommonFdscloses any common FDs between the parent and child process
-func CloseCommonFds(ctx context.Context, parentPID, childPID int32) error {
-	parent, err := process.NewProcessWithContext(ctx, parentPID)
-	if err != nil {
-		return err
-	}
-
-	child, err := process.NewProcessWithContext(ctx, childPID)
-	if err != nil {
-		return err
-	}
-
-	parentFds, err := parent.OpenFilesWithContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	childFds, err := child.OpenFilesWithContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, pfd := range parentFds {
-		for _, cfd := range childFds {
-			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
-				// we have a match, close the FD
-				err := syscall.Close(int(cfd.Fd))
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
+type FdInfo struct {
+	Pos   int32
+	Flags int32
+	MntId int32
+	Inode int32
 }
 
 func GetProcessState(ctx context.Context, pid uint32) (*daemon.ProcessState, error) {
@@ -106,12 +78,39 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		file, err := os.Stat(f.Path)
 		if err == nil {
 			mode = file.Mode().Perm().String()
-		}
+			fdInfo, err := GetFdInfo(pid, int(f.Fd))
+			if err != nil {
+				return fmt.Errorf("could not get fd info: %v", err)
+			}
 
-		openFiles = append(openFiles, &daemon.File{
-			Fd:   f.Fd,
-			Path: f.Path,
-			Mode: mode,
+			openFiles = append(openFiles, &daemon.File{
+				Fd:      f.Fd,
+				Path:    f.Path,
+				Mode:    mode,
+				MountID: fdInfo.MntId,
+				Inode:   fdInfo.Inode,
+			})
+		}
+	}
+
+	mountinfoFile, err := os.Open(fmt.Sprintf("/proc/%d/mountinfo", pid))
+	if err != nil {
+		return fmt.Errorf("could not open mountinfo: %v", err)
+	}
+	mounts, err := mountinfo.GetMountsFromReader(mountinfoFile, nil)
+	if err != nil {
+		return fmt.Errorf("could not get mounts: %v", err)
+	}
+	for _, m := range mounts {
+		state.Mounts = append(state.Mounts, &daemon.Mount{
+			ID:         int32(m.ID),
+			Parent:     int32(m.Parent),
+			Major:      int32(m.Major),
+			Minor:      int32(m.Minor),
+			Root:       m.Root,
+			MountPoint: m.Mountpoint,
+			Options:    m.Options,
+			FSType:     m.FSType,
 		})
 	}
 
@@ -159,6 +158,42 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	errs = append(errs, err)
 
 	return errors.Join(errs...)
+}
+
+// CloseCommonFdscloses any common FDs between the parent and child process
+func CloseCommonFds(ctx context.Context, parentPID, childPID int32) error {
+	parent, err := process.NewProcessWithContext(ctx, parentPID)
+	if err != nil {
+		return err
+	}
+
+	child, err := process.NewProcessWithContext(ctx, childPID)
+	if err != nil {
+		return err
+	}
+
+	parentFds, err := parent.OpenFilesWithContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	childFds, err := child.OpenFilesWithContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, pfd := range parentFds {
+		for _, cfd := range childFds {
+			if pfd.Path == cfd.Path && strings.Contains(pfd.Path, ".pid") {
+				// we have a match, close the FD
+				err := syscall.Close(int(cfd.Fd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // Returns a channel that will be closed when a non-child process exits
@@ -235,4 +270,37 @@ func PidExists(pid uint32) bool {
 		return false
 	}
 	return true
+}
+
+// FdInfo returns file descriptor information for the provided process and file descriptor.
+func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
+	path := fmt.Sprintf("/proc/%d/fdinfo/%d", pid, fd)
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Could not read fdinfo file: %s", err)
+	}
+
+	// Parse the fdinfo file
+	var info FdInfo
+	lines := strings.Split(string(contents), "\n")
+	for _, line := range lines {
+		parts := strings.Split(line, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		switch key {
+		case "pos":
+			fmt.Sscanf(value, "%d", &info.Pos)
+		case "flags":
+			fmt.Sscanf(value, "%d", &info.Flags)
+		case "mnt_id":
+			fmt.Sscanf(value, "%d", &info.MntId)
+		case "ino":
+			fmt.Sscanf(value, "%d", &info.Inode)
+		}
+	}
+
+	return &info, nil
 }

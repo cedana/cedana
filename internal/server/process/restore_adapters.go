@@ -2,8 +2,8 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -54,11 +54,8 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
-			for _, f := range state.GetOpenFiles() {
-				if strings.Contains(f.Path, "pts") {
-					isShellJob = true
-					break
-				}
+			if state.SID != state.PID {
+				isShellJob = true
 			}
 		} else {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
@@ -68,36 +65,62 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		// Only set unless already set
-		if req.GetCriu().ShellJob == nil {
-			req.Criu.ShellJob = proto.Bool(isShellJob)
-		}
+		req.Criu.ShellJob = proto.Bool(isShellJob)
 
 		return next(ctx, server, resp, req)
 	}
 }
 
-// Open stdio files from the dump state are inherited by the restored process.
-// They are set to inherit the 0, 1, 2 file descriptors, assuming CRIU cmd
-// will be launched with these set to appropriate files.
-func InheritStdioForRestore(next types.Restore) types.Restore {
+// If req.Log or req.Attachable is set, inherit fd is set to 0, 1, 2
+// assuming CRIU will be spawned with these set to appropriate files.
+// If these options are not set, it is assumed that these files still exist
+// and the restore will just fail if they don't.
+//
+// If there were any external (namespace) files during dump, they are also
+// added to be inherited. Note that this would still fail if the files don't exist.
+func InheritFilesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		state := resp.GetState()
+		if state == nil {
+			log.Warn().Msg("no process info found. it should have been filled by an adapter")
+			return next(ctx, server, resp, req)
+		}
+
 		inheritFds := req.GetCriu().GetInheritFd()
 
-		if state := resp.GetState(); state != nil {
-			for _, f := range state.GetOpenFiles() {
-				f.Path = strings.TrimPrefix(f.Path, "/")
+		files := state.GetOpenFiles()
+		mounts := state.GetMounts()
+
+		mountIds := make(map[int32]any)
+		for _, m := range mounts {
+			mountIds[m.ID] = nil
+		}
+
+		for _, f := range files {
+			_, ok := mountIds[f.MountID]
+			external := !ok
+
+			if external {
+				inheritFds = append(inheritFds, &criu_proto.InheritFd{
+					Fd:  proto.Int32(int32(f.Fd)),
+					Key: proto.String(fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)),
+				})
+				log.Warn().Msgf("inherited external file %s with fd %d. assuming it still exists", f.Path, f.Fd)
+			} else {
 				if f.Fd == 0 || f.Fd == 1 || f.Fd == 2 {
-					inheritFds = append(inheritFds, &criu_proto.InheritFd{
-						Fd:  proto.Int32(int32(f.Fd)),
-						Key: proto.String(f.Path),
-					})
+					if req.Log != "" || req.Attachable {
+						inheritFds = append(inheritFds, &criu_proto.InheritFd{
+							Fd:  proto.Int32(int32(f.Fd)),
+							Key: proto.String(f.Path),
+						})
+					} else {
+						log.Warn().Msgf("found stdio open file %s with fd %d and req.Log/Attachable is not set. assuming it still exists",
+							f.Path, f.Fd)
+					}
 				} else {
-					log.Warn().Msgf("found non-stdio open file %s with fd %d", f.Path, f.Fd)
+					log.Warn().Msgf("found non-stdio open file %s with fd %d. assuming it still exists", f.Path, f.Fd)
 				}
 			}
-		} else {
-			log.Warn().Msg("no process info found. it should have been filled by an adapter")
 		}
 
 		// Set the inherited fds

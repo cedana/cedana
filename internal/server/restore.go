@@ -32,7 +32,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		// Process state-dependent adapters
 		process.ReloadProcessStateForRestore,
 		process.DetectShellJobForRestore,
-		process.InheritStdioForRestore,
+		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
 
 		criu.CheckOptsForRestore,

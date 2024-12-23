@@ -13,7 +13,7 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana -P "$PORT" dump process $pid --shell-job
+    run cedana -P "$PORT" dump process $pid
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -48,7 +48,7 @@ load_lib file
 #     "$WORKLOADS"/date-loop.sh &
 #     pid=$!
 
-#     run cedana -P "$PORT" dump process $pid --shell-job
+#     run cedana -P "$PORT" dump process $pid
 #     assert_success
 
 #     dump_file=$(echo "$output" | awk '{print $NF}')
