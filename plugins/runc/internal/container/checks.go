@@ -75,7 +75,7 @@ func parseVersion(out string) [][]string {
 			parts = append(parts, []string{"runc version", strings.Split(line, " ")[2]})
 			continue
 		}
-		if strings.Contains(line, "commit") || strings.Contains(line, "go") {
+		if strings.HasPrefix(line, "commit") || strings.HasPrefix(line, "go") {
 			continue
 		}
 		part := strings.SplitN(line, ": ", 2)

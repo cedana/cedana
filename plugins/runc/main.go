@@ -69,6 +69,7 @@ var (
 		namespace.AddExternalNamespacesForDump(configs.NEWNET, configs.NEWPID),
 		filesystem.AddMountsForDump,
 		filesystem.AddMaskedPathsForDump,
+    filesystem.AddExternalFilesForDump,
 		cgroup.ManageCgroupsForDump(criu.CriuCgMode_SOFT),
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		device.AddDevicesForDump,
