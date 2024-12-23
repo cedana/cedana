@@ -7,12 +7,11 @@ package plugins
 // cannot be accessed, the feature that depends on it is just disabled.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"plugin"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 var Load = sync.OnceValue(loadPlugins)
@@ -29,19 +28,8 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 	loadedPlugins = map[string]*plugin.Plugin{}
 
-	if LibDir == "" {
-		log.Debug().Msg("No installation directory set for plugins")
-		return nil
-	}
-
 	if _, err := os.Stat(LibDir); os.IsNotExist(err) {
-		log.Debug().Msg("Installation directory for plugins does not exist")
 		return nil
-	}
-
-	_, err := os.ReadDir(LibDir)
-	if err != nil {
-		log.Debug().Msg("Error reading installation directory for plugins")
 	}
 
 	for _, t := range Registry {
@@ -57,7 +45,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 			p, err := plugin.Open(path)
 			if err != nil {
-				log.Debug().Err(err).Str("plugin", t.Name).Msgf("Error loading plugin")
+				fmt.Printf("Error loading plugin: %s\n", t.Name)
 				continue
 			}
 
@@ -72,6 +60,6 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 // and log the error. It should only be used with defer.
 func RecoverFromPanic(plugin string) {
 	if r := recover(); r != nil {
-		log.Debug().Err(r.(error)).Str("plugin", plugin).Msg("plugin failure")
+		fmt.Printf("Plugin %s failed: %s\n", plugin, r)
 	}
 }

@@ -28,6 +28,8 @@ func init() {
 		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "List all available plugins")
 	pluginRemoveCmd.Flags().
 		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "Remove all installed plugins")
+	pluginFeaturesCmd.Flags().
+		BoolP(flags.ErrorsFlag.Full, flags.ErrorsFlag.Short, false, "Show all errors")
 
 	// Add aliases
 	pluginCmd.AddCommand(utils.AliasOf(pluginListCmd, "ls"))
@@ -343,29 +345,31 @@ var pluginFeaturesCmd = &cobra.Command{
 			header = append(header, p.Name)
 		}
 
+		errs := []error{}
+
 		if len(pluginNames) > 0 {
 			tableWriter.AppendHeader(header)
-			tableWriter.AppendRow(featureRow(manager, features.DumpCmd, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.ManageCmd, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.RootCmds, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.DumpCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.ManageCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RootCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames))
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.HealthChecks, pluginNames))
+			tableWriter.AppendRow(featureRow(manager, features.HealthChecks, pluginNames, &errs))
 
 			tableWriter.Render()
 			fmt.Println()
@@ -376,6 +380,16 @@ var pluginFeaturesCmd = &cobra.Command{
 			fmt.Printf("Not showing external plugins: %s\n", utils.StrList(externalPlugins))
 		}
 
+		showErrors, _ := cmd.Flags().GetBool(flags.ErrorsFlag.Full)
+
+		if showErrors && len(errs) > 0 {
+			fmt.Println()
+			for _, err := range errs {
+				fmt.Println(style.NegativeColor.Sprint(err))
+			}
+			return fmt.Errorf("Found %d issue(s). Try updating.", len(errs))
+		}
+
 		return nil
 	},
 }
@@ -384,7 +398,7 @@ var pluginFeaturesCmd = &cobra.Command{
 /// Helper Funcs ///
 ////////////////////
 
-func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], pluginNames []string) table.Row {
+func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], pluginNames []string, errs *[]error) table.Row {
 	row := table.Row{feature.Description}
 
 	for _, name := range pluginNames {
@@ -394,6 +408,7 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
+			*errs = append(*errs, err)
 			row = append(row, style.NegativeColor.Sprint(style.CrossMark))
 		} else {
 			row = append(row, style.BoolStr(available, style.TickMark, style.BulletMark))

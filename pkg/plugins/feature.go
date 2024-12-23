@@ -8,7 +8,6 @@ import (
 	"reflect"
 
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog/log"
 )
 
 // Feature is a typed symbol that a plugin can export
@@ -43,26 +42,21 @@ func (feature Feature[T]) IfAvailable(
 		if symUntyped, err := p.Lookup(feature.Symbol); err == nil {
 			sym, ok := symUntyped.(*T)
 			if !ok {
-				log.Debug().
-					Str("plugin", name).
-					Str("expected", reflect.TypeOf(sym).String()).
-					Str("got", reflect.TypeOf(symUntyped).String()).
-					Msgf("%s is not the expected type", feature.Description)
-				errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
+				errs = append(errs, fmt.Errorf("plugin '%s' has incompatible '%s'. expected '%s', got '%s'",
+					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
 			if sym == nil {
-				log.Debug().Str("plugin", name).Msgf("%s is nil", feature)
-				errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
+				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s'", name, feature))
 				continue
 			}
 			errs = append(errs, do(name, *sym))
 		} else {
-			errs = append(errs, fmt.Errorf("plugin '%s' exports no %s", name, feature))
+			errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s'", name, feature))
 		}
 	}
 	if noValidPlugins {
-		errs = append(errs, fmt.Errorf("feature '%s' is not available in %s", feature, utils.StrList(filter)))
+		errs = append(errs, fmt.Errorf("plugin(s) %s exports no '%s'", utils.StrList(filter), feature))
 	}
 	return errors.Join(errs...)
 }
@@ -88,11 +82,12 @@ func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 		if symUntyped, err := p.Lookup(feature.Symbol); err == nil {
 			sym, ok := symUntyped.(*T)
 			if !ok {
-				errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
+				errs = append(errs, fmt.Errorf("plugin '%s' has incompatible '%s'. expected '%s', got '%s'",
+					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
 			if sym == nil {
-				errs = append(errs, fmt.Errorf("plugin '%s' has no valid %s", name, feature))
+				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s", name, feature))
 				continue
 			}
 			available = true

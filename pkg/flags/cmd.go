@@ -28,6 +28,7 @@ var (
 	FileLocksFlag  = Flag{Full: "file-locks"}
 	TypeFlag       = Flag{Full: "type", Short: "t"}
 	FullFlag       = Flag{Full: "full"}
+	ErrorsFlag     = Flag{Full: "errors"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}
