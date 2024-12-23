@@ -40,15 +40,21 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		return fmt.Errorf("could not get process: %v", err)
 	}
 
+	name, _ := p.NameWithContext(ctx)
+	args, _ := p.CmdlineSliceWithContext(ctx)
+	if name != "" {
+		state.Task = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+
 	startTime, err := p.CreateTime()
 	errs = append(errs, err)
 	if err == nil {
 		state.StartTime = uint64(startTime)
 	}
 
-	sid, _, errno := syscall.Syscall(syscall.SYS_GETSID, uintptr(pid), 0, 0)
-	if errno == 0 {
-		state.SID = uint32(sid)
+	sid, err := GetSID(pid)
+	if err == nil {
+		state.SID = sid
 	}
 
 	// get process uids, gids, and groups
@@ -303,4 +309,28 @@ func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
 	}
 
 	return &info, nil
+}
+
+func GetSID(pid uint32) (uint32, error) {
+	sid, _, errno := syscall.Syscall(syscall.SYS_GETSID, uintptr(pid), 0, 0)
+	if errno != 0 {
+		return 0, fmt.Errorf("errno: %v", errno)
+	}
+	return uint32(sid), nil
+}
+
+func GetCmd(ctx context.Context, pid uint32) (string, []string, error) {
+	p, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return "", nil, err
+	}
+	name, err := p.NameWithContext(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	args, err := p.CmdlineSliceWithContext(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	return name, args, nil
 }
