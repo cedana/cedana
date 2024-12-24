@@ -32,9 +32,6 @@ type Manager interface {
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
 
-	// GetWG returns the waitgroup for the manager.
-	GetWG() *sync.WaitGroup
-
 	// Starts managing a running job, updating state once it exits.
 	// Since this runs in background, it should be called with a waitgroup,
 	// to ensure the caller can wait for the job to finish. If no exited channel is given,
@@ -47,9 +44,15 @@ type Manager interface {
 	// exports a custom signal.
 	Kill(jid string, signal ...syscall.Signal) error
 
+	// AddCheckpoint adds a checkpoint path to the job.
+	AddCheckpoint(jid string, path string)
+
 	// CRIUCallback returns the saved CRIU notify callback for the job.
 	CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti
 
 	// GPUs returns the GPU manager.
 	GPUs() gpu.Manager
+
+	// GetWG returns the waitgroup for the manager.
+	GetWG() *sync.WaitGroup
 }

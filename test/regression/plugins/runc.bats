@@ -154,7 +154,7 @@ load_lib file
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore runc "$id" --path "$dump_file" --bundle "$bundle"
+    run cedana -P "$PORT" restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
     assert_success
 
     run runc kill "$id" KILL

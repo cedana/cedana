@@ -298,6 +298,16 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return nil
 }
 
+func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
+	job := m.Get(jid)
+	if job == nil {
+		return
+	}
+	job.AddCheckpoint(path)
+
+	m.pending <- action{update, jid}
+}
+
 func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti {
 	job := m.Get(jid)
 	if job == nil {
