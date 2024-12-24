@@ -231,6 +231,7 @@ jobs:
       - name: Make executable
         run: |
           chmod +x ./cedana
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -245,7 +246,6 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-cedana
 
   regression-test-runc:
@@ -278,6 +278,7 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -292,7 +293,6 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=runc
 
   regression-test-containerd:
@@ -325,6 +325,7 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -339,7 +340,6 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=containerd
 
   regression-test-crio:
@@ -372,6 +372,7 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -386,7 +387,6 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=crio
 
   regression-test-gpu:
@@ -419,6 +419,7 @@ jobs:
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -433,7 +434,6 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
-          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=gpu
 
   # benchmark:
