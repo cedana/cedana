@@ -9,6 +9,10 @@ load_lib support
 load_lib assert
 load_lib file
 
+############
+### Dump ###
+############
+
 @test "dump process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -66,6 +70,10 @@ load_lib file
 
     assert_failure
 }
+
+###############
+### Restore ###
+###############
 
 @test "restore process" {
     "$WORKLOADS"/date-loop.sh &

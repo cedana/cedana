@@ -127,7 +127,6 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		})
 	}
 
-	// used for network barriers (TODO: NR)
 	var openConnections []*daemon.Connection
 	conns, err := p.ConnectionsWithContext(ctx)
 	if err != nil {

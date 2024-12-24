@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // Adapter that fills in dump request details based on saved job info.
@@ -30,10 +31,12 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			}
 
 			// Fill in dump request details based on saved job info
-			// TODO YA: Allow overriding job details, otherwise use saved job details
-			req.Details = job.GetDetails()
+
 			req.Type = job.GetType()
 			resp.State = job.GetState()
+
+			// Use saved job details, but allow overriding from request
+			proto.Merge(req.Details, job.GetDetails())
 
 			// Import saved notify callbacks
 			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))

@@ -3,7 +3,7 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export PATH="./:$PATH" # ensure binaries are available
-export CEDANA_LOG_LEVEL=trace
+export CEDANA_LOG_LEVEL=debug
 export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$PWD
 export CEDANA_PROFILING_ENABLED=false
 

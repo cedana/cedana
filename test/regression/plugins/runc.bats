@@ -10,6 +10,10 @@ load_lib support
 load_lib assert
 load_lib file
 
+###########
+### Run ###
+###########
+
 @test "run container" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
@@ -74,6 +78,10 @@ load_lib file
 #     assert_equal $status $code
 # }
 
+############
+### Dump ###
+############
+
 @test "dump container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -108,7 +116,7 @@ load_lib file
     run runc delete "$jid"
 }
 
-@test "dump container (job)" {
+@test "dump container (new job)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
@@ -124,7 +132,7 @@ load_lib file
     run cedana -P "$PORT" kill "$jid"
 }
 
-@test "dump container (job, attached)" {
+@test "dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
@@ -139,6 +147,32 @@ load_lib file
 
     run cedana -P "$PORT" kill "$jid"
 }
+
+@test "dump container (manage existing job)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana -P "$PORT" manage runc "$id" --jid "$jid"
+    assert_success
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+###############
+### Restore ###
+###############
 
 @test "restore container" {
     id=$(unix_nano)
@@ -185,7 +219,7 @@ load_lib file
 #     run runc delete "$id"
 # }
 
-@test "restore container (job)" {
+@test "restore container (new job)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
@@ -204,7 +238,7 @@ load_lib file
     run cedana -P "$PORT" kill "$jid"
 }
 
-@test "restore container (job, attached)" {
+@test "restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 

@@ -36,10 +36,6 @@ var Registry = []Plugin{
 		Name:      "kata",
 		Libraries: []string{"libcedana-kata.so"},
 	},
-	{
-		Name:      "docker",
-		Libraries: []string{"libcedana-docker.so"},
-	},
 
 	// Checkpoint inspection
 	{

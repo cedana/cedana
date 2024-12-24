@@ -18,14 +18,17 @@ func init() {
 var DumpCmd = &cobra.Command{
 	Use:   "runc <container-id>",
 	Short: "Dump a runc container",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
 		if !ok {
 			return fmt.Errorf("invalid dump request in context")
 		}
 
-		id := args[0]
+		var id string
+		if len(args) > 0 {
+			id = args[0]
+		}
 
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 

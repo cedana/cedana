@@ -219,7 +219,7 @@ var jobDumpCmd = &cobra.Command{
 			err = features.DumpCmd.IfAvailable(
 				func(name string, pluginCmd *cobra.Command) error {
 					// Call the plugin command to override request details
-					return pluginCmd.RunE(cmd, args)
+					return pluginCmd.RunE(cmd, nil) // don't pass any args
 				}, jobType,
 			)
 			if err != nil {

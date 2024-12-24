@@ -53,7 +53,8 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
-			proto.Merge(req.Details, job.GetDetails()) // override missing fields with saved details
+			// Use saved job details, but allow overriding from request
+			proto.Merge(req.Details, job.GetDetails())
 
 			if req.Path == "" {
 				req.Path = job.GetLatestCheckpoint().GetPath()
