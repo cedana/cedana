@@ -145,6 +145,7 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 		for _, f := range files {
 			if _, ok := mountIds[f.MountID]; !ok {
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
+				continue
 			}
 		}
 

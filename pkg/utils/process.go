@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/mattn/go-isatty"
 	"github.com/moby/sys/mountinfo"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -83,10 +84,14 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		var mode string
 		file, err := os.Stat(f.Path)
 		if err == nil {
-			mode = file.Mode().Perm().String()
+			mode = file.Mode().String()
 			fdInfo, err := GetFdInfo(pid, int(f.Fd))
 			if err != nil {
 				return fmt.Errorf("could not get fd info: %v", err)
+			}
+			isTTY, err := IsTTY(f.Path)
+			if err != nil {
+				return fmt.Errorf("could not get tty info: %v", err)
 			}
 
 			openFiles = append(openFiles, &daemon.File{
@@ -95,6 +100,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 				Mode:    mode,
 				MountID: fdInfo.MntId,
 				Inode:   fdInfo.Inode,
+				IsTTY:   isTTY,
 			})
 		}
 	}
@@ -333,4 +339,12 @@ func GetCmd(ctx context.Context, pid uint32) (string, []string, error) {
 		return "", nil, err
 	}
 	return name, args, nil
+}
+
+func IsTTY(path string) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	return isatty.IsTerminal(file.Fd()), nil
 }

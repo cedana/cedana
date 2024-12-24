@@ -64,7 +64,6 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
 		if ok {
 			stdout, stderr = logFile, logFile
-			// stdin will be nil, ie. /dev/null
 		}
 	}
 

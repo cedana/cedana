@@ -22,13 +22,7 @@ load_lib file
     run kill $pid
 }
 
-@test "dump non-existent process" {
-    run cedana -P "$PORT" dump process 999999999
-
-    assert_failure
-}
-
-@test "dump process (job)" {
+@test "dump process (new job)" {
     jid=$(unix_nano)
 
     run cedana -P "$PORT" run process "$WORKLOADS/date-loop.sh" --jid "$jid"
@@ -43,34 +37,57 @@ load_lib file
     run cedana -P "$PORT" job kill "$jid"
 }
 
-# FIXME: Doesnt work due to tty issues
-# @test "restore process" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
+@test "dump process (manage existing job)" {
+    jid=$(unix_nano)
 
-#     run cedana -P "$PORT" dump process $pid
-#     assert_success
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
 
-#     dump_file=$(echo "$output" | awk '{print $NF}')
-#     assert_exists "$dump_file"
+    run cedana manage process $pid --jid "$jid"
+    assert_success
 
-#     run cedana -P "$PORT" restore process --path "$dump_file"
-#     assert_success
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
 
-#     run ps --pid $pid
-#     assert_success
-#     assert_output --partial "$pid"
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
 
-#     run kill $pid
-# }
+    run cedana -P "$PORT" job kill "$jid"
+}
 
-@test "restore non-existent process" {
-    run cedana -P "$PORT" restore process --path /tmp/non-existent
+@test "dump non-existent process" {
+    run cedana -P "$PORT" dump process 999999999
 
     assert_failure
 }
 
-@test "restore process (job)" {
+@test "dump non-existent job" {
+    run cedana -P "$PORT" dump job 999999999
+
+    assert_failure
+}
+
+@test "restore process" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana -P "$PORT" dump process $pid
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" restore process --path "$dump_file"
+    assert_success
+
+    run ps --pid $pid
+    assert_success
+    assert_output --partial "$pid"
+
+    run kill $pid
+}
+
+@test "restore process (new job)" {
     jid=$(unix_nano)
 
     run cedana -P "$PORT" run process "$WORKLOADS/date-loop.sh" --jid "$jid"
@@ -90,4 +107,46 @@ load_lib file
     assert_output --partial "$jid"
 
     run cedana -P "$PORT" job kill "$jid"
+}
+
+@test "restore process (manage existing job)" {
+    jid=$(unix_nano)
+    log="/tmp/restore-$jid.log"
+
+    "$WORKLOADS"/date-loop.sh &> "$log" < /dev/null &
+    pid=$!
+
+    run cedana manage process $pid --jid "$jid"
+    assert_success
+
+    run cedana -P "$PORT" dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" restore job "$jid"
+    assert_success
+
+    run cedana -P "$PORT" ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana -P "$PORT" job kill "$jid"
+}
+
+@test "restore non-existent process" {
+    run cedana -P "$PORT" restore process --path /tmp/non-existent
+
+    assert_failure
+
+    run ps --pid 999999999
+    assert_failure
+}
+
+
+@test "restore non-existent job" {
+    run cedana -P "$PORT" restore job 999999999
+
+    assert_failure
 }

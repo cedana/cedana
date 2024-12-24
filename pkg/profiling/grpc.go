@@ -3,7 +3,6 @@ package profiling
 import (
 	"bytes"
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 
@@ -30,7 +29,16 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 		resp, err := handler(chilCtx, req)
 		end()
 
-		return resp, errors.Join(err, AttachData(ctx))
+		if err != nil {
+			return nil, err
+		}
+
+		err = AttachData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, nil
 	}
 }
 

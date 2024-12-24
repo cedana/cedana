@@ -27,6 +27,16 @@ load_lib file
     assert_output --partial "$jid"
 }
 
+@test "Health check" {
+    run cedana daemon check
+    assert_success
+}
+
+@test "Health check (full)" {
+    run cedana daemon check --full
+    assert_success
+}
+
 # Do in single test so parallel runs don't interfere with each other
 # @test "plugin commands (local)" {
 #     run cedana -P "$PORT" plugin list -a
@@ -44,10 +54,6 @@ load_lib file
 
 #     run cedana -P "$PORT" plugin remove runc
 #     assert_success
-# }
-
-# @test "Health check" {
-#     run cedana daemon check
 # }
 
 # @test "Ensure correct logging post restore" {

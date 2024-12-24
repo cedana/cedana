@@ -11,7 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 )
 
-const CRIU_EXPERIMENTAL_CHECKS = true
+const CRIU_EXPERIMENTAL_CHECKS = false
 
 func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*daemon.HealthCheckResp, error) {
 	checklist := types.Checklist{
