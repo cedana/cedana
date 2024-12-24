@@ -140,7 +140,7 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 	@echo "Running regression tests for plugin $$PLUGIN..."
 	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
-		make plugins-install > /dev/null ;\
+		$(SUDO) $(BINARY) plugin install $$PLUGIN > /dev/null ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 		echo "Using single instance of daemon across tests..." ;\

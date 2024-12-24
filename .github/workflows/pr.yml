@@ -245,6 +245,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-cedana
 
   regression-test-runc:
@@ -291,6 +292,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=runc
 
   regression-test-containerd:
@@ -337,6 +339,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=containerd
 
   regression-test-crio:
@@ -383,6 +386,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=crio
 
   regression-test-gpu:
@@ -429,6 +433,7 @@ jobs:
         env:
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
+          PATH: ${{ github.workspace }}:$PATH
         run: make test-regression-plugin PLUGIN=gpu
 
   # benchmark:
