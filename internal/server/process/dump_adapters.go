@@ -122,6 +122,7 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 
 // Detects any open files that are in an external namespace
 // and sets appropriate options for CRIU.
+// Also detects any TTY files and sets options for CRIU.
 func AddExternalFilesForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
@@ -133,7 +134,7 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 		files := state.GetOpenFiles()
 		mounts := state.GetMounts()
 
-		mountIds := make(map[int32]any)
+		mountIds := make(map[uint64]any)
 		for _, m := range mounts {
 			mountIds[m.ID] = nil
 		}
@@ -146,6 +147,10 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			if _, ok := mountIds[f.MountID]; !ok {
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
 				continue
+			}
+
+			if f.IsTTY {
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
 			}
 		}
 

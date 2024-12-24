@@ -90,12 +90,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return next(ctx, server, resp, req)
 		}
 
-		inheritFds := req.GetCriu().GetInheritFd()
+		// Set the inherited fds
+		if req.Criu == nil {
+			req.Criu = &criu_proto.CriuOpts{}
+		}
+		inheritFds := req.Criu.InheritFd
 
 		files := state.GetOpenFiles()
 		mounts := state.GetMounts()
 
-		mountIds := make(map[int32]any)
+		mountIds := make(map[uint64]any)
 		for _, m := range mounts {
 			mountIds[m.ID] = nil
 		}
@@ -138,11 +142,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		// Set the inherited fds
-		if req.GetCriu() == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
-		req.GetCriu().InheritFd = inheritFds
+		req.Criu.InheritFd = inheritFds
 
 		return next(ctx, server, resp, req)
 	}

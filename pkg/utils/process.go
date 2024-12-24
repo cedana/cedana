@@ -16,10 +16,8 @@ import (
 )
 
 type FdInfo struct {
-	Pos   int32
-	Flags int32
-	MntId int32
-	Inode int32
+	MntId uint64
+	Inode uint64
 }
 
 func GetProcessState(ctx context.Context, pid uint32) (*daemon.ProcessState, error) {
@@ -93,6 +91,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 			if err != nil {
 				return fmt.Errorf("could not get tty info: %v", err)
 			}
+			sys := file.Sys().(*syscall.Stat_t)
 
 			openFiles = append(openFiles, &daemon.File{
 				Fd:      f.Fd,
@@ -101,6 +100,8 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 				MountID: fdInfo.MntId,
 				Inode:   fdInfo.Inode,
 				IsTTY:   isTTY,
+				Dev:     sys.Dev,
+				Rdev:    sys.Rdev,
 			})
 		}
 	}
@@ -115,7 +116,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	}
 	for _, m := range mounts {
 		state.Mounts = append(state.Mounts, &daemon.Mount{
-			ID:         int32(m.ID),
+			ID:         uint64(m.ID),
 			Parent:     int32(m.Parent),
 			Major:      int32(m.Major),
 			Minor:      int32(m.Minor),
@@ -303,10 +304,6 @@ func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 		switch key {
-		case "pos":
-			fmt.Sscanf(value, "%d", &info.Pos)
-		case "flags":
-			fmt.Sscanf(value, "%d", &info.Flags)
 		case "mnt_id":
 			fmt.Sscanf(value, "%d", &info.MntId)
 		case "ino":

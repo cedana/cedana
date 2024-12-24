@@ -75,12 +75,28 @@ load_lib file
 # }
 
 @test "dump container" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana -P "$PORT" dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+@test "dump container (detached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    runc run --bundle "$bundle" "$jid" &
-
-    sleep 1
+    runc run --bundle "$bundle" "$jid" --detach
 
     run cedana -P "$PORT" dump runc "$jid"
     assert_success
@@ -123,6 +139,51 @@ load_lib file
 
     run cedana -P "$PORT" kill "$jid"
 }
+
+@test "restore container" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana -P "$PORT" dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana -P "$PORT" restore runc "$id" --path "$dump_file" --bundle "$bundle"
+    assert_success
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+# FIXME: Below test fails because when using detach, TTY is inherited
+# and CRIU does not know how to restore that.
+
+# @test "restore container (detached)" {
+#     id=$(unix_nano)
+#     bundle="$(create_workload_bundle "date-loop.sh")"
+
+#     runc run --bundle "$bundle" "$id" --detach
+
+#     run cedana -P "$PORT" dump runc "$id"
+#     assert_success
+
+#     dump_file=$(echo "$output" | awk '{print $NF}')
+#     assert_exists "$dump_file"
+
+#     run runc delete "$id"
+
+#     run cedana -P "$PORT" restore runc "$id" --path "$dump_file" --bundle "$bundle"
+#     assert_success
+
+#     run runc kill "$id" KILL
+#     run runc delete "$id"
+# }
 
 @test "restore container (job)" {
     jid=$(unix_nano)

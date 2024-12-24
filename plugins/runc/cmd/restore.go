@@ -13,22 +13,21 @@ import (
 )
 
 func init() {
-	RestoreCmd.Flags().StringP(runc_flags.IdFlag.Full, runc_flags.IdFlag.Short, "", "new id")
 	RestoreCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	RestoreCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
 }
 
 var RestoreCmd = &cobra.Command{
-	Use:   "runc [optional-new-id]",
+	Use:   "runc [new-id]",
 	Short: "Restore a runc container",
-	Args:  cobra.NoArgs,
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		id, _ := cmd.Flags().GetString(runc_flags.IdFlag.Full)
+		id := args[0]
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 		bundle, _ := cmd.Flags().GetString(runc_flags.BundleFlag.Full)
 		wd, err := os.Getwd()
