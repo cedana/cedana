@@ -198,14 +198,11 @@ var jobRestoreCmd = &cobra.Command{
 		jid := args[0]
 
 		// Get the job type, so we can call the plugin command to override request details
-		jobs, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		resp, err := client.Get(cmd.Context(), &daemon.GetReq{JID: jid})
 		if err != nil {
 			return err
 		}
-		if len(jobs.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
-		jobType := jobs.Jobs[0].Type
+		jobType := resp.GetJob().GetType()
 
 		if jobType != "process" {
 			err = features.RestoreCmd.IfAvailable(

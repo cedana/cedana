@@ -1,3 +1,7 @@
+--------------------------------
+---------- Job Queries ---------
+--------------------------------
+
 -- name: CreateJob :one
 INSERT INTO jobs (jid, state) VALUES (?, ?)
 RETURNING jid, state;

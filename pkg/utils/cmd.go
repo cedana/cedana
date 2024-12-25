@@ -25,11 +25,7 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 	cmd.LocalFlags().AddFlagSet(src.LocalFlags())
 	cmd.InheritedFlags().AddFlagSet(src.InheritedFlags())
 
-	if src.HasSubCommands() {
-		for _, c := range src.Commands() {
-			cmd.AddCommand(AliasOf(c))
-		}
-	} else {
+	if !src.HasSubCommands() {
 		cmd.Run = AliasCommandRun(src)
 		cmd.RunE = AliasCommandRunE(src)
 	}

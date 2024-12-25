@@ -6,7 +6,9 @@ plugins:
       sha256: e8206081686f95b461daf91a307e108a761526c6768d6f3eca9781b0726b7ec8
 sql:
   - schema: schema.sql
-    queries: query.sql
+    queries:
+      - job.sql
+      - checkpoint.sql
     engine: sqlite
     codegen:
       - plugin: golang

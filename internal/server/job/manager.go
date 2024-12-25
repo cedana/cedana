@@ -9,11 +9,16 @@ import (
 	"sync"
 	"syscall"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 )
 
 type Manager interface {
+	//////////////
+	//// Jobs ////
+	//////////////
+
 	// New creates a new job with the given details.
 	New(jid string, jobType string) (*Job, error)
 
@@ -44,14 +49,34 @@ type Manager interface {
 	// exports a custom signal.
 	Kill(jid string, signal ...syscall.Signal) error
 
+	/////////////////////
+	//// Checkpoints ////
+	/////////////////////
+
 	// AddCheckpoint adds a checkpoint path to the job.
 	AddCheckpoint(jid string, path string)
 
-	// CRIUCallback returns the saved CRIU notify callback for the job.
-	CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti
+	// Get a specific checkpoint.
+	GetCheckpoint(id string) *daemon.Checkpoint
+
+	// GetCheckpoints returns the saved checkpoints for the job.
+	ListCheckpoints(jid string) []*daemon.Checkpoint
+
+	// GetLatestCheckpoint returns the latest checkpoint for the job.
+	GetLatestCheckpoint(jid string) *daemon.Checkpoint
+
+	// DeleteCheckpoint deletes a checkpoint with the given ID.
+	DeleteCheckpoint(id string)
+
+	//////////////
+	//// Misc ////
+	//////////////
 
 	// GPUs returns the GPU manager.
 	GPUs() gpu.Manager
+
+	// CRIUCallback returns the saved CRIU notify callback for the job.
+	CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti
 
 	// GetWG returns the waitgroup for the manager.
 	GetWG() *sync.WaitGroup

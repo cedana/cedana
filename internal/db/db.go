@@ -10,15 +10,18 @@ import (
 )
 
 type DB interface {
-	// Getters
+	//// Job ////
+
 	GetJob(ctx context.Context, jid string) (*daemon.Job, error)
-
-	// Setters (create or update)
 	PutJob(ctx context.Context, jid string, job *daemon.Job) error
-
-	// Listers (list jobs if no jids are provided, otherwise list the jobs with the provided jids)
-	ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error)
-
-	// Deleters
+	ListJobs(ctx context.Context) ([]*daemon.Job, error)
 	DeleteJob(ctx context.Context, jid string) error
+
+	//// Checkpoint ////
+
+	GetCheckpoint(ctx context.Context, id string) (*daemon.Checkpoint, error)
+	CreateCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error
+	ListCheckpoints(ctx context.Context, jid string) ([]*daemon.Checkpoint, error)
+	GetLatestCheckpoint(ctx context.Context, jid string) (*daemon.Checkpoint, error)
+	DeleteCheckpoint(ctx context.Context, id string) error
 }

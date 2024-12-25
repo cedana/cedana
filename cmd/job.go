@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -18,6 +17,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -149,27 +149,21 @@ var listJobCmd = &cobra.Command{
 			return colorToUse.Sprint(t)
 		}
 
-		latestCheckpoint := func(checkpoints []*daemon.Checkpoint) (string, string) {
-			if len(checkpoints) == 0 {
-				return "", ""
-			}
-			// sort checkpoints by time
-			sort.Slice(checkpoints, func(i, j int) bool {
-				return checkpoints[i].GetTime() > checkpoints[j].GetTime()
-			})
-			checkpoint := checkpoints[0]
-			timestamp := time.UnixMilli(checkpoint.GetTime())
-			return fmt.Sprintf("%s ago", time.Since(timestamp).Truncate(time.Second)), utils.SizeStr(checkpoint.GetSize())
-		}
-
 		var timeList []string
 		var sizeList []string
 		for _, job := range jobs {
-			if len(job.GetCheckpoints()) == 0 {
+			resp, err := client.GetCheckpoint(cmd.Context(), &daemon.GetCheckpointReq{JID: proto.String(job.JID)})
+			if err != nil {
+				return err
+			}
+			checkpoint := resp.Checkpoint
+
+			if checkpoint == nil {
 				timeList = append(timeList, "")
 				sizeList = append(sizeList, "")
 			} else {
-				latestTime, latestSize := latestCheckpoint(job.GetCheckpoints())
+				latestTime := fmt.Sprintf("%s ago", time.Since(time.UnixMilli(checkpoint.GetTime())).Truncate(time.Second))
+				latestSize := utils.SizeStr(checkpoint.GetSize())
 				timeList = append(timeList, latestTime)
 				sizeList = append(sizeList, latestSize)
 			}
@@ -368,17 +362,12 @@ var listJobCheckpointCmd = &cobra.Command{
 
 		jid := args[0]
 
-		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		resp, err := client.ListCheckpoints(cmd.Context(), &daemon.ListCheckpointsReq{JID: jid})
 		if err != nil {
 			return err
 		}
-		if len(list.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
 
-		job := list.Jobs[0]
-
-		if len(job.GetCheckpoints()) == 0 {
+		if len(resp.Checkpoints) == 0 {
 			fmt.Printf("No checkpoints found for job %s\n", jid)
 			return nil
 		}
@@ -394,12 +383,12 @@ var listJobCheckpointCmd = &cobra.Command{
 			"Path",
 		})
 
-		checkpoints := job.GetCheckpoints()
+		checkpoints := resp.GetCheckpoints()
 		sort.Slice(checkpoints, func(i, j int) bool {
 			return checkpoints[i].GetTime() > checkpoints[j].GetTime()
 		})
 
-		for i, checkpoint := range job.GetCheckpoints() {
+		for i, checkpoint := range checkpoints {
 			timestamp := time.UnixMilli(checkpoint.GetTime())
 			row := table.Row{
 				i + 1,
@@ -420,16 +409,23 @@ var listJobCheckpointCmd = &cobra.Command{
 }
 
 var (
-	inspectJobCheckpointCmdUse = "inspect <JID> [checkpoint #]"
+	inspectJobCheckpointCmdUse = "inspect <checkpoint-id>"
 	inspectJobCheckpointCmd    = &cobra.Command{
-		Use:               inspectJobCheckpointCmdUse,
-		Short:             fmt.Sprintf("Inspect a checkpoint for a job. Get checkpoint # from `%s`", utils.FullUse(listJobCheckpointCmd)),
-		Args:              cobra.MinimumNArgs(1),
-		ValidArgsFunction: ValidJIDs,
+		Use:   inspectJobCheckpointCmdUse,
+		Short: "Inspect a checkpoint",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 			if !ok {
 				return fmt.Errorf("invalid client in context")
+			}
+
+			id := args[0]
+			imgType, _ := cmd.Flags().GetString(flags.TypeFlag.Full)
+
+			resp, err := client.GetCheckpoint(cmd.Context(), &daemon.GetCheckpointReq{ID: proto.String(id)})
+			if err != nil {
+				return err
 			}
 
 			var info func(path string, imgType string) ([]byte, error)
@@ -443,43 +439,7 @@ var (
 				)
 			}
 
-			var index int
-			jid := args[0]
-			if len(args) < 2 {
-				index = 1
-			} else {
-				index, _ = strconv.Atoi(args[1])
-			}
-			imgType, _ := cmd.Flags().GetString(flags.TypeFlag.Full)
-
-			list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
-			if err != nil {
-				return err
-			}
-			if len(list.Jobs) == 0 {
-				return fmt.Errorf("Job %s not found", jid)
-			}
-
-			job := list.Jobs[0]
-
-			if len(job.GetCheckpoints()) == 0 {
-				fmt.Printf("No checkpoints found for job %s\n", jid)
-				return nil
-			}
-
-			var checkpointToInspect *daemon.Checkpoint
-			for i, cp := range job.GetCheckpoints() {
-				if index == i+1 {
-					checkpointToInspect = cp
-					break
-				}
-			}
-
-			if checkpointToInspect == nil {
-				return fmt.Errorf("Checkpoint %d not found for job %s", index, jid)
-			}
-
-			bytes, err := info(checkpointToInspect.GetPath(), imgType)
+			bytes, err := info(resp.GetCheckpoint().GetPath(), imgType)
 			if err != nil {
 				return err
 			}

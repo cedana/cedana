@@ -4,6 +4,14 @@
 
 package sql
 
+type Checkpoint struct {
+	ID   string
+	Jid  string
+	Path string
+	Time int64
+	Size int64
+}
+
 type Job struct {
 	Jid   string
 	State []byte

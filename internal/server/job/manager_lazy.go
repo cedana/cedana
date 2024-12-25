@@ -12,19 +12,22 @@ import (
 	"syscall"
 	"time"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
 
 type ManagerLazy struct {
-	jobs sync.Map
+	jobs        sync.Map
+	checkpoints sync.Map
 
 	plugins plugins.Manager
 	gpus    gpu.Manager
@@ -37,13 +40,14 @@ type ManagerLazy struct {
 type actionType int
 
 const (
-	update actionType = iota
+	updateJob actionType = iota
+	updateCheckpoint
 	shutdown
 )
 
 type action struct {
 	typ actionType
-	JID string
+	id  string
 }
 
 // NewManagerLazy creates a new lazy job manager, that uses a DB as a backing store.
@@ -102,7 +106,7 @@ func NewManagerLazy(
 				if err != nil {
 					log.Error().Err(err).Msg("failed to sync DB before shutdown")
 					for _, action := range failedActions {
-						log.Debug().Str("JID", action.JID).
+						log.Debug().Str("id", action.id).
 							Msgf("failed %s", action.typ)
 					}
 				}
@@ -141,7 +145,7 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	job := newJob(jid, jobType)
 	m.jobs.Store(jid, job)
 
-	m.pending <- action{update, jid}
+	m.pending <- action{updateJob, jid}
 
 	return job, nil
 }
@@ -179,7 +183,12 @@ func (m *ManagerLazy) Delete(jid string) {
 	}
 	m.jobs.Delete(jid)
 
-	m.pending <- action{update, jid}
+	m.pending <- action{updateJob, jid}
+
+	checkpoints := m.ListCheckpoints(jid)
+	for _, checkpoint := range checkpoints {
+		m.DeleteCheckpoint(checkpoint.ID)
+	}
 }
 
 func (m *ManagerLazy) List(jids ...string) []*Job {
@@ -232,7 +241,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 		log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("ignoring: failed to fill process state after manage")
 	}
 
-	m.pending <- action{update, jid}
+	m.pending <- action{updateJob, jid}
 
 	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
 
@@ -257,7 +266,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 		// 	}
 		// }
 
-		m.pending <- action{update, jid}
+		m.pending <- action{updateJob, jid}
 	}()
 
 	return nil
@@ -311,9 +320,66 @@ func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
 	if job == nil {
 		return
 	}
-	job.AddCheckpoint(path)
 
-	m.pending <- action{update, jid}
+	size, _ := utils.SizeFromPath(path)
+	checkpoint := &daemon.Checkpoint{
+		ID:   uuid.New().String(),
+		JID:  jid,
+		Path: path,
+		Time: time.Now().UnixMilli(),
+		Size: size,
+	}
+	m.checkpoints.Store(checkpoint.ID, checkpoint)
+
+	m.pending <- action{updateCheckpoint, checkpoint.ID}
+}
+
+func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {
+	checkpoint, ok := m.checkpoints.Load(id)
+	if !ok {
+		return nil
+	}
+	return checkpoint.(*daemon.Checkpoint)
+}
+
+func (m *ManagerLazy) ListCheckpoints(jid string) []*daemon.Checkpoint {
+	var checkpoints []*daemon.Checkpoint
+
+	m.checkpoints.Range(func(key any, val any) bool {
+		checkpoint := val.(*daemon.Checkpoint)
+		if checkpoint.JID == jid {
+			checkpoints = append(checkpoints, checkpoint)
+		}
+		return true
+	})
+
+	return checkpoints
+}
+
+func (m *ManagerLazy) GetLatestCheckpoint(jid string) *daemon.Checkpoint {
+	var latest *daemon.Checkpoint
+
+	m.checkpoints.Range(func(key any, val any) bool {
+		checkpoint := val.(*daemon.Checkpoint)
+		if checkpoint.JID == jid {
+			if latest == nil || checkpoint.Time > latest.Time {
+				latest = checkpoint
+			}
+		}
+		return true
+	})
+
+	return latest
+}
+
+func (m *ManagerLazy) DeleteCheckpoint(id string) {
+	_, ok := m.checkpoints.Load(id)
+	if !ok {
+		return
+	}
+	m.checkpoints.Delete(id)
+
+	m.pending <- action{updateCheckpoint, id}
 }
 
 func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti {
@@ -342,30 +408,46 @@ func (i actionType) String() string {
 }
 
 func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
-	jid := action.JID
 	typ := action.typ
 
-	job := m.Get(jid)
-
 	var err error
-	if typ == update {
+	switch typ {
+	case updateJob:
+		jid := action.id
+		job := m.Get(jid)
 		if job == nil {
 			err = db.DeleteJob(ctx, jid)
 		} else {
 			err = db.PutJob(ctx, jid, job.GetProto())
+		}
+	case updateCheckpoint:
+		id := action.id
+		checkpoint, ok := m.checkpoints.Load(id)
+		if !ok {
+			err = db.DeleteCheckpoint(ctx, id)
+		} else {
+			err = db.CreateCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
 		}
 	}
 	return err
 }
 
 func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
-	protos, err := db.ListJobs(ctx)
+	jobProtos, err := db.ListJobs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list jobs: %w", err)
 	}
-	for _, proto := range protos {
+	for _, proto := range jobProtos {
 		job := fromProto(proto)
 		m.jobs.Store(job.JID, job)
+
+		checkpoints, err := db.ListCheckpoints(ctx, job.JID)
+		if err != nil {
+			return fmt.Errorf("failed to list checkpoints: %w", err)
+		}
+		for _, checkpoint := range checkpoints {
+			m.checkpoints.Store(checkpoint.ID, checkpoint)
+		}
 	}
 
 	return nil

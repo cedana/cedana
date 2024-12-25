@@ -37,9 +37,9 @@ func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
 	}, nil
 }
 
-/////////////
-// Getters //
-/////////////
+///////////
+/// Job ///
+///////////
 
 func (db *LocalDB) GetJob(ctx context.Context, jid string) (*daemon.Job, error) {
 	dbJob, err := db.queries.GetJob(ctx, jid)
@@ -58,10 +58,6 @@ func (db *LocalDB) GetJob(ctx context.Context, jid string) (*daemon.Job, error) 
 
 	return &job, nil
 }
-
-/////////////
-// Setters //
-/////////////
 
 func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) error {
 	// marshal the Job struct into bytes
@@ -83,26 +79,11 @@ func (db *LocalDB) PutJob(ctx context.Context, jid string, job *daemon.Job) erro
 	}
 }
 
-/////////////
-// Listers //
-/////////////
-
-func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
+func (db *LocalDB) ListJobs(ctx context.Context) ([]*daemon.Job, error) {
 	dbJobs, err := db.queries.ListJobs(ctx)
-
-	jidSet := make(map[string]struct{})
-	for _, jid := range jids {
-		jidSet[jid] = struct{}{}
-	}
 
 	jobs := []*daemon.Job{}
 	for _, dbJob := range dbJobs {
-		if len(jids) > 0 {
-			if _, ok := jidSet[dbJob.Jid]; !ok {
-				continue
-			}
-		}
-
 		// unmarsal the bytes into a Job struct
 		job := daemon.Job{}
 		err = json.Unmarshal(dbJob.State, &job)
@@ -116,10 +97,71 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 	return jobs, nil
 }
 
-//////////////
-// Deleters //
-//////////////
-
 func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
 	return db.queries.DeleteJob(ctx, jid)
+}
+
+//////////////////
+/// Checkpoint ///
+//////////////////
+
+func (db *LocalDB) GetCheckpoint(ctx context.Context, id string) (*daemon.Checkpoint, error) {
+	dbCheckpoint, err := db.queries.GetCheckpoint(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return fromDBCheckpoint(dbCheckpoint), nil
+}
+
+func (db *LocalDB) CreateCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
+	_, err := db.queries.CreateCheckpoint(ctx, sql.CreateCheckpointParams{
+		ID:   checkpoint.ID,
+		Jid:  checkpoint.JID,
+		Path: checkpoint.Path,
+		Time: checkpoint.Time,
+		Size: checkpoint.Size,
+	})
+	return err
+}
+
+func (db *LocalDB) ListCheckpoints(ctx context.Context, jid string) ([]*daemon.Checkpoint, error) {
+	dbCheckpoints, err := db.queries.ListCheckpoints(ctx, jid)
+	if err != nil {
+		return nil, err
+	}
+
+	checkpoints := []*daemon.Checkpoint{}
+	for _, dbCheckpoint := range dbCheckpoints {
+		checkpoints = append(checkpoints, fromDBCheckpoint(dbCheckpoint))
+	}
+
+	return checkpoints, nil
+}
+
+func (db *LocalDB) GetLatestCheckpoint(ctx context.Context, jid string) (*daemon.Checkpoint, error) {
+	dbCheckpoint, err := db.queries.GetLatestCheckpoint(ctx, jid)
+	if err != nil {
+		return nil, err
+	}
+
+	return fromDBCheckpoint(dbCheckpoint), nil
+}
+
+func (db *LocalDB) DeleteCheckpoint(ctx context.Context, id string) error {
+	return db.queries.DeleteCheckpoint(ctx, id)
+}
+
+///////////////
+/// Helpers ///
+///////////////
+
+func fromDBCheckpoint(dbCheckpoint sql.Checkpoint) *daemon.Checkpoint {
+	return &daemon.Checkpoint{
+		ID:   dbCheckpoint.ID,
+		JID:  dbCheckpoint.Jid,
+		Path: dbCheckpoint.Path,
+		Time: dbCheckpoint.Time,
+		Size: dbCheckpoint.Size,
+	}
 }

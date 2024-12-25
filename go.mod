@@ -5,11 +5,12 @@ go 1.23.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-89fb437ece33.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-89fb437ece33.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-706a80ede2b8.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-706a80ede2b8.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-935d6023e398.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-5023a67faa0b.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-5023a67faa0b.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-ea9d0b84170a.1
 	github.com/containerd/console v1.0.4
 	github.com/cyphar/filepath-securejoin v0.3.5
+	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.5
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mdlayher/vsock v1.2.1
@@ -36,7 +37,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel/metric v1.33.0 // indirect

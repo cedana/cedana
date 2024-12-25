@@ -165,6 +165,15 @@ func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.C
 	return resp, data, nil
 }
 
+func (c *Client) Get(ctx context.Context, args *daemon.GetReq, opts ...grpc.CallOption) (*daemon.GetResp, error) {
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.Get(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCErrorColored(err)
+	}
+	return resp, nil
+}
+
 func (c *Client) List(ctx context.Context, args *daemon.ListReq, opts ...grpc.CallOption) (*daemon.ListResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.List(ctx, args, opts...)
@@ -220,6 +229,34 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 	os.Exit(<-exitCode)
 
 	return nil
+}
+
+func (c *Client) GetCheckpoint(ctx context.Context, args *daemon.GetCheckpointReq, opts ...grpc.CallOption) (*daemon.GetCheckpointResp, error) {
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.GetCheckpoint(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCErrorColored(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) ListCheckpoints(ctx context.Context, args *daemon.ListCheckpointsReq, opts ...grpc.CallOption) (*daemon.ListCheckpointsResp, error) {
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.ListCheckpoints(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCErrorColored(err)
+	}
+
+	return resp, nil
+}
+
+func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckpointReq, opts ...grpc.CallOption) (*daemon.DeleteCheckpointResp, error) {
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.DeleteCheckpoint(ctx, args, opts...)
+	if err != nil {
+		return nil, utils.GRPCErrorColored(err)
+	}
+	return resp, nil
 }
 
 func (c *Client) HealthCheck(ctx context.Context, args *daemon.HealthCheckReq, opts ...grpc.CallOption) (*daemon.HealthCheckResp, error) {
