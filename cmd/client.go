@@ -94,7 +94,7 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.Ca
 		return nil, nil, utils.GRPCErrorColored(err)
 	}
 
-	data, err := profiling.GetData(trailer)
+	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +119,7 @@ func (c *Client) Restore(
 		return nil, nil, utils.GRPCErrorColored(err)
 	}
 
-	data, err := profiling.GetData(trailer)
+	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -138,7 +138,7 @@ func (c *Client) Run(ctx context.Context, args *daemon.RunReq, opts ...grpc.Call
 		return nil, nil, utils.GRPCErrorColored(err)
 	}
 
-	data, err := profiling.GetData(trailer)
+	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -157,7 +157,7 @@ func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.C
 		return nil, nil, utils.GRPCErrorColored(err)
 	}
 
-	data, err := profiling.GetData(trailer)
+	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -249,6 +249,14 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 		m.gpus.Detach(jid)
 
+		// TODO: separate checkpoint DB which also avoids race b/w job exit and checkpoint addition
+		// if !config.Global.DB.LeaveDead {
+		// 	// Delete the job if no checkpoints were made as it's good for nothing
+		// 	if len(job.GetCheckpoints()) == 0 {
+		// 		m.Delete(jid)
+		// 	}
+		// }
+
 		m.pending <- action{update, jid}
 	}()
 

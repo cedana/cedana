@@ -39,11 +39,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		return fmt.Errorf("could not get process: %v", err)
 	}
 
-	name, _ := p.NameWithContext(ctx)
-	args, _ := p.CmdlineSliceWithContext(ctx)
-	if name != "" {
-		state.Task = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	cmdline, err := p.CmdlineWithContext(ctx)
+	if err != nil {
+		return fmt.Errorf("could not get cmdline: %v", err)
 	}
+	state.Cmdline = cmdline
 
 	startTime, err := p.CreateTime()
 	errs = append(errs, err)
@@ -164,7 +164,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	state.OpenFiles = openFiles
 	state.OpenConnections = openConnections
 	state.WorkingDir = cwd
-	state.Status = strings.Join(proccessStatus, "")
+	state.Status = proccessStatus[0]
 
 	state.Host, err = GetHost(ctx)
 	errs = append(errs, err)

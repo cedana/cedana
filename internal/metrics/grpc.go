@@ -17,7 +17,7 @@ const API_TRACER = "cedana/api"
 
 func UnaryTracer(host *daemon.Host) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if !config.Global.Metrics.Otel.Enabled {
+		if !config.Global.Metrics.Otel {
 			return handler(ctx, req)
 		}
 
@@ -48,7 +48,7 @@ func UnaryTracer(host *daemon.Host) grpc.UnaryServerInterceptor {
 
 func StreamTracer(host *daemon.Host) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if !config.Global.Metrics.Otel.Enabled {
+		if !config.Global.Metrics.Otel {
 			return handler(srv, ss)
 		}
 

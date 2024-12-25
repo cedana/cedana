@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/protobuf/proto"
 )
@@ -68,8 +69,8 @@ func (j *Job) GetProto() *daemon.Job {
 	defer j.Unlock()
 
 	// Get all latest info
-	j.proto.State = j.state()
-	j.proto.Log = j.log()
+	j.proto.State = j.latestState()
+	j.proto.Log = j.latestLog()
 
 	return &j.proto
 }
@@ -84,7 +85,7 @@ func (j *Job) GetState() *daemon.ProcessState {
 	j.Lock()
 	defer j.Unlock()
 
-	return j.state()
+	return j.latestState()
 }
 
 func (j *Job) SetState(state *daemon.ProcessState) {
@@ -117,7 +118,7 @@ func (j *Job) GetLog() string {
 	j.RLock()
 	defer j.RUnlock()
 
-	return j.log()
+	return j.latestLog()
 }
 
 func (j *Job) SetLog(log string) {
@@ -160,7 +161,13 @@ func (j *Job) GetLatestCheckpoint() *daemon.Checkpoint {
 func (j *Job) IsRunning() bool {
 	j.Lock()
 	defer j.Unlock()
-	return j.state().GetIsRunning()
+	return j.latestState().GetIsRunning()
+}
+
+func (j *Job) IsRemote() bool {
+	j.Lock()
+	defer j.Unlock()
+	return j.latestState().GetStatus() == "remote"
 }
 
 func (j *Job) GPUEnabled() bool {
@@ -197,29 +204,58 @@ func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
 // Functions below don't use locks, so they could be called with locks held.
 
 // WARN: Writes, so call with write lock.
-func (j *Job) state() *daemon.ProcessState {
-	if j.proto.GetState() == nil {
-		j.proto.State = &daemon.ProcessState{}
+func (j *Job) latestState() (state *daemon.ProcessState) {
+	if j.proto.State == nil {
+		return nil
+	}
+	state = j.proto.State
+
+	// Check if job belongs to this machine
+
+	hostId, _ := host.HostID()
+	if state.GetHost().GetID() != hostId {
+		state.Status = "remote"
+		return
 	}
 
-	j.proto.State.Status = "halted"
-	j.proto.State.IsRunning = false
+	state.Status = "halted"
+	state.IsRunning = false
 
-	pid := j.proto.GetState().GetPID()
+	// Get latest status and isRunning
 
+	pid := state.PID
 	p, err := process.NewProcess(int32(pid))
-	if err == nil {
-		status, err := p.Status()
-		if err == nil {
-			j.proto.State.Status = status[0]
-			j.proto.State.IsRunning = true
-		}
+	if err != nil {
+		return
 	}
 
-	return j.proto.State
+	// Now check if this exact process is running on this
+	// machine. Because, you could simply have another process
+	// running right now with this saved job PID.
+	// This is especially important since the job DB is shared
+	// across multiple machines.
+	// XXX: Cmdline is not a fool-proof check but it's something.
+
+	cmdline, err := p.Cmdline()
+	if err != nil {
+		return
+	}
+	if cmdline != state.Cmdline {
+		return
+	}
+
+	status, err := p.Status()
+	if err != nil {
+		return
+	}
+
+	state.Status = status[0]
+	state.IsRunning = true
+
+	return
 }
 
-func (j *Job) log() string {
+func (j *Job) latestLog() string {
 	// Check if log file exists
 	log := j.proto.Log
 	if _, e := os.Stat(log); os.IsNotExist(e) {

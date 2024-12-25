@@ -33,7 +33,7 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 			return nil, err
 		}
 
-		err = AttachData(ctx)
+		err = AttachTrailer(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -43,7 +43,7 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 }
 
 // Attaches profiling data from the context as a grpc trailer.
-func AttachData(ctx context.Context) error {
+func AttachTrailer(ctx context.Context) error {
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
 	if !ok {
 		return nil
@@ -75,7 +75,7 @@ func AttachData(ctx context.Context) error {
 	return grpc.SetTrailer(ctx, md)
 }
 
-func GetData(trailer metadata.MD) (*Data, error) {
+func FromTrailer(trailer metadata.MD) (*Data, error) {
 	data, ok := trailer[PROFILING_METADATA_KEY]
 	if !ok {
 		return nil, nil

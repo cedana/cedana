@@ -127,12 +127,12 @@ var listJobCmd = &cobra.Command{
 
 		statusStr := func(status string) string {
 			switch status {
-			case "running":
+			case "running", "sleep":
 				return style.PositiveColor.Sprint(status)
-			case "sleep":
-				return style.InfoColor.Sprint(status)
 			case "zombie":
 				return style.WarningColor.Sprint(status)
+			case "remote":
+				return style.InfoColor.Sprint(status)
 			case "halted":
 				return style.DisabledColor.Sprint(status)
 			}

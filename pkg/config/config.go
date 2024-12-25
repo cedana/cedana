@@ -20,7 +20,7 @@ const (
 )
 
 // The default global config. This will get overwritten
-// by the config file or env vars if they exist.
+// by the config file or env vars during startup, if they exist.
 var Global Config = Config{
 	Port:     8080,
 	Host:     "0.0.0.0",
@@ -30,18 +30,16 @@ var Global Config = Config{
 		Compression: "tar",
 	},
 	DB: DB{
-		Remote: false,
-		Path:   filepath.Join(os.TempDir(), "cedana.db"),
+		Remote:    false,
+		Path:      filepath.Join(os.TempDir(), "cedana.db"),
+		LeaveDead: false,
 	},
 	Profiling: Profiling{
 		Enabled: true,
 	},
 	Metrics: Metrics{
-		ASR: false,
-		Otel: Otel{
-			Enabled: false,
-			Port:    7777,
-		},
+		ASR:  false,
+		Otel: false,
 	},
 	CLI: CLI{
 		WaitForReady: false,

@@ -3,11 +3,11 @@ module github.com/cedana/cedana
 go 1.23.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-8c9357872983.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-8c9357872983.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ba6d5bb5e515.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-ba6d5bb5e515.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-d85bc02c3d74.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-89fb437ece33.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-89fb437ece33.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-706a80ede2b8.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-706a80ede2b8.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-935d6023e398.1
 	github.com/containerd/console v1.0.4
 	github.com/cyphar/filepath-securejoin v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.5
