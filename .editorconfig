@@ -16,6 +16,15 @@ indent_size = 4
 indent_size = 2
 max_line_length = 120
 
+[*.yml]
+indent_size = 2
+
+[*.yaml]
+indent_size = 2
+
+[*.sql]
+indent_size = 4
+
 [*.json]
 
 [*.md]

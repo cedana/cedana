@@ -7,31 +7,49 @@ package sql
 
 import (
 	"context"
+	"strings"
 )
 
-const createJob = `-- name: CreateJob :one
-
-INSERT INTO jobs (jid, state) VALUES (?, ?)
-RETURNING jid, state
+const createJob = `-- name: CreateJob :exec
+INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateJobParams struct {
-	Jid   string
-	State []byte
+	Jid        string
+	Type       string
+	Gpuenabled int64
+	Log        string
+	Details    []byte
+	Pid        int64
+	Cmdline    string
+	Starttime  int64
+	Workingdir string
+	Status     string
+	Isrunning  int64
+	Hostid     string
 }
 
-// ------------------------------
-// -------- Job Queries ---------
-// ------------------------------
-func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, error) {
-	row := q.db.QueryRowContext(ctx, createJob, arg.Jid, arg.State)
-	var i Job
-	err := row.Scan(&i.Jid, &i.State)
-	return i, err
+func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) error {
+	_, err := q.db.ExecContext(ctx, createJob,
+		arg.Jid,
+		arg.Type,
+		arg.Gpuenabled,
+		arg.Log,
+		arg.Details,
+		arg.Pid,
+		arg.Cmdline,
+		arg.Starttime,
+		arg.Workingdir,
+		arg.Status,
+		arg.Isrunning,
+		arg.Hostid,
+	)
+	return err
 }
 
 const deleteJob = `-- name: DeleteJob :exec
-DELETE FROM jobs WHERE jid = ?
+DELETE FROM jobs WHERE JID = ?
 `
 
 func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
@@ -39,31 +57,128 @@ func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
 	return err
 }
 
-const getJob = `-- name: GetJob :one
-SELECT jid, state FROM jobs WHERE jid = ?
+const listJobs = `-- name: ListJobs :many
+SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+JOIN cpus ON hosts.CPUID = cpus.PhysicalID
 `
 
-func (q *Queries) GetJob(ctx context.Context, jid string) (Job, error) {
-	row := q.db.QueryRowContext(ctx, getJob, jid)
-	var i Job
-	err := row.Scan(&i.Jid, &i.State)
-	return i, err
+type ListJobsRow struct {
+	Job  Job
+	Host Host
+	Cpu  Cpu
 }
 
-const listJobs = `-- name: ListJobs :many
-SELECT jid, state FROM jobs
-`
-
-func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
+func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listJobs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Job
+	var items []ListJobsRow
 	for rows.Next() {
-		var i Job
-		if err := rows.Scan(&i.Jid, &i.State); err != nil {
+		var i ListJobsRow
+		if err := rows.Scan(
+			&i.Job.Jid,
+			&i.Job.Type,
+			&i.Job.Gpuenabled,
+			&i.Job.Log,
+			&i.Job.Details,
+			&i.Job.Pid,
+			&i.Job.Cmdline,
+			&i.Job.Starttime,
+			&i.Job.Workingdir,
+			&i.Job.Status,
+			&i.Job.Isrunning,
+			&i.Job.Hostid,
+			&i.Host.ID,
+			&i.Host.Mac,
+			&i.Host.Hostname,
+			&i.Host.Os,
+			&i.Host.Platform,
+			&i.Host.Kernelversion,
+			&i.Host.Kernelarch,
+			&i.Host.Cpuid,
+			&i.Cpu.Physicalid,
+			&i.Cpu.Vendorid,
+			&i.Cpu.Family,
+			&i.Cpu.Count,
+			&i.Cpu.Memtotal,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobsByJIDs = `-- name: ListJobsByJIDs :many
+SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+JOIN cpus ON hosts.CPUID = cpus.PhysicalID
+WHERE jobs.JID IN (/*SLICE:jids*/?)
+`
+
+type ListJobsByJIDsRow struct {
+	Job  Job
+	Host Host
+	Cpu  Cpu
+}
+
+func (q *Queries) ListJobsByJIDs(ctx context.Context, jids []string) ([]ListJobsByJIDsRow, error) {
+	query := listJobsByJIDs
+	var queryParams []interface{}
+	if len(jids) > 0 {
+		for _, v := range jids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:jids*/?", strings.Repeat(",?", len(jids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:jids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobsByJIDsRow
+	for rows.Next() {
+		var i ListJobsByJIDsRow
+		if err := rows.Scan(
+			&i.Job.Jid,
+			&i.Job.Type,
+			&i.Job.Gpuenabled,
+			&i.Job.Log,
+			&i.Job.Details,
+			&i.Job.Pid,
+			&i.Job.Cmdline,
+			&i.Job.Starttime,
+			&i.Job.Workingdir,
+			&i.Job.Status,
+			&i.Job.Isrunning,
+			&i.Job.Hostid,
+			&i.Host.ID,
+			&i.Host.Mac,
+			&i.Host.Hostname,
+			&i.Host.Os,
+			&i.Host.Platform,
+			&i.Host.Kernelversion,
+			&i.Host.Kernelarch,
+			&i.Host.Cpuid,
+			&i.Cpu.Physicalid,
+			&i.Cpu.Vendorid,
+			&i.Cpu.Family,
+			&i.Cpu.Count,
+			&i.Cpu.Memtotal,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -78,15 +193,50 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 }
 
 const updateJob = `-- name: UpdateJob :exec
-UPDATE jobs SET state = ? WHERE jid = ?
+UPDATE jobs SET
+    Type = ?,
+    GPUEnabled = ?,
+    Log = ?,
+    Details = ?,
+    PID = ?,
+    Cmdline = ?,
+    StartTime = ?,
+    WorkingDir = ?,
+    Status = ?,
+    IsRunning = ?,
+    HostID = ?
+WHERE JID = ?
 `
 
 type UpdateJobParams struct {
-	State []byte
-	Jid   string
+	Type       string
+	Gpuenabled int64
+	Log        string
+	Details    []byte
+	Pid        int64
+	Cmdline    string
+	Starttime  int64
+	Workingdir string
+	Status     string
+	Isrunning  int64
+	Hostid     string
+	Jid        string
 }
 
 func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
-	_, err := q.db.ExecContext(ctx, updateJob, arg.State, arg.Jid)
+	_, err := q.db.ExecContext(ctx, updateJob,
+		arg.Type,
+		arg.Gpuenabled,
+		arg.Log,
+		arg.Details,
+		arg.Pid,
+		arg.Cmdline,
+		arg.Starttime,
+		arg.Workingdir,
+		arg.Status,
+		arg.Isrunning,
+		arg.Hostid,
+		arg.Jid,
+	)
 	return err
 }

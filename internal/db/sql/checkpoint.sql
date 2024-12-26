@@ -1,19 +1,24 @@
---------------------------------
------- Checkpoint Queries ------
---------------------------------
+-- name: CreateCheckpoint :exec
+INSERT INTO checkpoints (ID, JID, Path, Time, Size) VALUES (?, ?, ?, ?, ?);
 
--- name: CreateCheckpoint :one
-INSERT INTO checkpoints (id, jid, path, time, size) VALUES (?, ?, ?, ?, ?)
-RETURNING id, jid, path, time, size;
-
--- name: GetCheckpoint :one
-SELECT id, jid, path, time, size FROM checkpoints WHERE id = ?;
+-- name: UpdateCheckpoint :exec
+UPDATE checkpoints SET
+    JID = ?,
+    Path = ?,
+    Time = ?,
+    Size = ?
+WHERE ID = ?;
 
 -- name: ListCheckpoints :many
-SELECT id, jid, path, time, size FROM checkpoints WHERE jid = ?;
+SELECT ID, JID, Path, Time, Size FROM checkpoints ORDER BY Time DESC;
 
--- name: GetLatestCheckpoint :one
-SELECT id, jid, path, time, size FROM checkpoints WHERE jid = ? ORDER BY time DESC LIMIT 1;
+-- name: ListCheckpointsByIDs :many
+SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE ID in (sqlc.slice('ids'))
+ORDER BY Time DESC;
+
+-- name: ListCheckpointsByJIDs :many
+SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE JID in (sqlc.slice('jids'))
+ORDER BY Time DESC;
 
 -- name: DeleteCheckpoint :exec
-DELETE FROM checkpoints WHERE id = ?;
+DELETE FROM checkpoints WHERE ID = ?;

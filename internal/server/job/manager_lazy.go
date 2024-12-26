@@ -74,7 +74,7 @@ func NewManagerLazy(
 	// Reload all jobs from the DB
 	err := manager.loadFromDB(lifetime, db)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize DB: %w", err)
+		return nil, err
 	}
 	manager.db = db
 
@@ -418,7 +418,7 @@ func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
 		if job == nil {
 			err = db.DeleteJob(ctx, jid)
 		} else {
-			err = db.PutJob(ctx, jid, job.GetProto())
+			err = db.PutJob(ctx, job.GetProto())
 		}
 	case updateCheckpoint:
 		id := action.id
@@ -426,7 +426,7 @@ func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
 		if !ok {
 			err = db.DeleteCheckpoint(ctx, id)
 		} else {
-			err = db.CreateCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
+			err = db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
 		}
 	}
 	return err
@@ -435,7 +435,7 @@ func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
 func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
 	jobProtos, err := db.ListJobs(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list jobs: %w", err)
+		return fmt.Errorf("failed to load jobs from DB: %w", err)
 	}
 	for _, proto := range jobProtos {
 		job := fromProto(proto)
@@ -443,7 +443,7 @@ func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
 
 		checkpoints, err := db.ListCheckpoints(ctx, job.JID)
 		if err != nil {
-			return fmt.Errorf("failed to list checkpoints: %w", err)
+			return fmt.Errorf("failed to load checkpoints from DB: %w", err)
 		}
 		for _, checkpoint := range checkpoints {
 			m.checkpoints.Store(checkpoint.ID, checkpoint)

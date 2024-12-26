@@ -5,6 +5,7 @@ package db
 
 import (
 	"context"
+	"errors"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 )
@@ -12,16 +13,66 @@ import (
 type DB interface {
 	//// Job ////
 
-	GetJob(ctx context.Context, jid string) (*daemon.Job, error)
-	PutJob(ctx context.Context, jid string, job *daemon.Job) error
-	ListJobs(ctx context.Context) ([]*daemon.Job, error)
+	PutJob(ctx context.Context, job *daemon.Job) error
+	ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error)
 	DeleteJob(ctx context.Context, jid string) error
+
+	//// Host ////
+
+	PutHost(ctx context.Context, host *daemon.Host) error
+	ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error)
+	DeleteHost(ctx context.Context, id string) error
 
 	//// Checkpoint ////
 
-	GetCheckpoint(ctx context.Context, id string) (*daemon.Checkpoint, error)
-	CreateCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error
-	ListCheckpoints(ctx context.Context, jid string) ([]*daemon.Checkpoint, error)
-	GetLatestCheckpoint(ctx context.Context, jid string) (*daemon.Checkpoint, error)
+	PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error
+	ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error)
+	ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error)
 	DeleteCheckpoint(ctx context.Context, id string) error
+}
+
+/////////////////
+//// Helpers ////
+/////////////////
+
+type UnimplementedDB struct{}
+
+func (UnimplementedDB) PutJob(ctx context.Context, job *daemon.Job) error {
+	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (UnimplementedDB) DeleteJob(ctx context.Context, jid string) error {
+	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) PutHost(ctx context.Context, host *daemon.Host) error {
+	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (UnimplementedDB) DeleteHost(ctx context.Context, id string) error {
+	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
+	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (UnimplementedDB) ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (UnimplementedDB) DeleteCheckpoint(ctx context.Context, id string) error {
+	return errors.New("unimplemented")
 }

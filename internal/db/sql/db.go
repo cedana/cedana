@@ -7,11 +7,7 @@ package sql
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 )
-
-//go:embed schema.sql
-var Ddl string
 
 type DBTX interface {
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)

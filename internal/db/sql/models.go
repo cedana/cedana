@@ -4,15 +4,48 @@
 
 package sql
 
+import (
+	"time"
+)
+
 type Checkpoint struct {
 	ID   string
 	Jid  string
 	Path string
-	Time int64
+	Time time.Time
 	Size int64
 }
 
+type Cpu struct {
+	Physicalid string
+	Vendorid   string
+	Family     string
+	Count      int64
+	Memtotal   int64
+}
+
+type Host struct {
+	ID            string
+	Mac           string
+	Hostname      string
+	Os            string
+	Platform      string
+	Kernelversion string
+	Kernelarch    string
+	Cpuid         string
+}
+
 type Job struct {
-	Jid   string
-	State []byte
+	Jid        string
+	Type       string
+	Gpuenabled int64
+	Log        string
+	Details    []byte
+	Pid        int64
+	Cmdline    string
+	Starttime  int64
+	Workingdir string
+	Status     string
+	Isrunning  int64
+	Hostid     string
 }

@@ -76,6 +76,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, err
 	}
 
+	err = database.PutHost(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to put host info: %w", err)
+	}
+
 	pluginManager := plugins.NewLocalManager()
 
 	var gpuManager gpu.Manager
@@ -89,7 +94,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
 
 	server := &Server{

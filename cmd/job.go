@@ -377,7 +377,7 @@ var listJobCheckpointCmd = &cobra.Command{
 		tableWriter.SetOutputMirror(os.Stdout)
 
 		tableWriter.AppendHeader(table.Row{
-			"#",
+			"ID",
 			"Time",
 			"Size",
 			"Path",
@@ -388,10 +388,10 @@ var listJobCheckpointCmd = &cobra.Command{
 			return checkpoints[i].GetTime() > checkpoints[j].GetTime()
 		})
 
-		for i, checkpoint := range checkpoints {
+		for _, checkpoint := range checkpoints {
 			timestamp := time.UnixMilli(checkpoint.GetTime())
 			row := table.Row{
-				i + 1,
+				checkpoint.GetID(),
 				timestamp.Format(time.DateTime),
 				utils.SizeStr(checkpoint.GetSize()),
 				checkpoint.GetPath(),

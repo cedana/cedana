@@ -1,19 +1,34 @@
---------------------------------
----------- Job Queries ---------
---------------------------------
-
--- name: CreateJob :one
-INSERT INTO jobs (jid, state) VALUES (?, ?)
-RETURNING jid, state;
-
--- name: GetJob :one
-SELECT jid, state FROM jobs WHERE jid = ?;
+-- name: CreateJob :exec
+INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateJob :exec
-UPDATE jobs SET state = ? WHERE jid = ?;
-
--- name: DeleteJob :exec
-DELETE FROM jobs WHERE jid = ?;
+UPDATE jobs SET
+    Type = ?,
+    GPUEnabled = ?,
+    Log = ?,
+    Details = ?,
+    PID = ?,
+    Cmdline = ?,
+    StartTime = ?,
+    WorkingDir = ?,
+    Status = ?,
+    IsRunning = ?,
+    HostID = ?
+WHERE JID = ?;
 
 -- name: ListJobs :many
-SELECT jid, state FROM jobs;
+SELECT sqlc.embed(jobs), sqlc.embed(hosts), sqlc.embed(cpus)
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+JOIN cpus ON hosts.CPUID = cpus.PhysicalID;
+
+-- name: ListJobsByJIDs :many
+SELECT sqlc.embed(jobs), sqlc.embed(hosts), sqlc.embed(cpus)
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+JOIN cpus ON hosts.CPUID = cpus.PhysicalID
+WHERE jobs.JID IN (sqlc.slice('ids'));
+
+-- name: DeleteJob :exec
+DELETE FROM jobs WHERE JID = ?;
