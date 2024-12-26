@@ -29,11 +29,20 @@ var pushCRIOImage = &cobra.Command{
 		if err != nil {
 			log.Error().Msgf("Error getting container storage path: %v", err)
 		}
+		containerStorage, err := cmd.Flags().GetString(containerStorageFlag)
+		if err != nil {
+			log.Error().Msgf("Error getting container storage path: %v", err)
+		}
+
+		if containerStorage == "" {
+			containerStorage = "/var/lib/containers/storage/overlay-containers"
+		}
 
 		pushArgs := task.CRIOImagePushArgs{
 			OriginalImageRef: originalImageRef,
 			NewImageRef:      newImageRef,
 			RootfsDiffPath:   rootfsDiffPath,
+			ContainerStorage: containerStorage,
 		}
 
 		resp, err := cts.CRIOImagePush(ctx, &pushArgs)
@@ -58,6 +67,7 @@ func init() {
 	pushCRIOImage.MarkFlagRequired(refFlag)
 	pushCRIOImage.Flags().StringP(newRefFlag, "", "", "directory to dump to")
 	pushCRIOImage.MarkFlagRequired(newRefFlag)
-	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "crio container storage location")
+	pushCRIOImage.Flags().StringP(rootfsDiffPathFlag, "r", "", "container rootfs dif tar file path")
 	pushCRIOImage.MarkFlagRequired(rootfsDiffPathFlag)
+	pushCRIOImage.Flags().String(containerStorageFlag, "", "crio container storage location")
 }

@@ -490,6 +490,7 @@ var dumpCRIORootfs = &cobra.Command{
 			}
 			return err
 		}
+
 		log.Info().Msgf("Response: %v", resp)
 
 		return nil
@@ -565,6 +566,8 @@ func init() {
 	dumpCRIORootfs.MarkFlagRequired(destFlag)
 	dumpCRIORootfs.Flags().StringP(containerStorageFlag, "s", "", "crio container storage location")
 	dumpCRIORootfs.MarkFlagRequired(containerStorageFlag)
+
+	dumpCmd.AddCommand(pushCRIOImage)
 
 	rootCmd.AddCommand(dumpCmd)
 }
