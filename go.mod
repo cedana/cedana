@@ -6,12 +6,12 @@ toolchain go1.22.2
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-20241120213244-d99a43b0c85e.1
-	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241203191352-2167379de17d.1
-	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241203191352-2167379de17d.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241219165343-7b552a043dd4.2
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.36.1-20241219165343-7b552a043dd4.1
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
-	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241203191352-12c25eb032cd.1
-	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-00000000000000-70bc2933c8db.1
-	cloud.google.com/go/pubsub v1.44.0
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-897e16170a7d.2
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.36.1-00000000000000-897e16170a7d.1
+	cloud.google.com/go/pubsub v1.42.0
 	github.com/aws/aws-sdk-go-v2 v1.30.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.24
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.4
@@ -24,7 +24,7 @@ require (
 	github.com/containerd/errdefs v0.1.0
 	github.com/containerd/platforms v0.2.1
 	github.com/containerd/typeurl/v2 v2.2.0
-	github.com/containers/common v0.60.4
+	github.com/containers/common v0.59.1
 	github.com/containers/image/v5 v5.32.2
 	github.com/containers/ocicrypt v1.2.0
 	github.com/containers/storage v1.55.0
@@ -33,7 +33,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.3.1
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
-	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mdlayher/vsock v1.2.1
@@ -59,7 +58,7 @@ require (
 	golang.org/x/time v0.6.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
 	google.golang.org/grpc v1.66.2
-	google.golang.org/protobuf v1.35.2
+	google.golang.org/protobuf v1.36.1
 	k8s.io/client-go v0.30.2
 	k8s.io/cri-api v0.30.2
 	k8s.io/klog/v2 v2.130.0
@@ -68,7 +67,6 @@ require (
 replace github.com/cri-o/cri-o => github.com/cri-o/cri-o v1.30.1-0.20240625065658-9d6a596aecea
 
 require (
-	buf.build/gen/go/cedana/criu/grpc/go v1.5.1-20241120213244-d99a43b0c85e.1 // indirect
 	cloud.google.com/go v0.115.1 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
@@ -153,6 +151,7 @@ require (
 	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/google/renameio v1.0.1 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
