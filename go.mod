@@ -6,11 +6,11 @@ toolchain go1.22.2
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-20241120213244-d99a43b0c85e.1
-	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241203191352-2167379de17d.1
-	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.35.2-20241203191352-2167379de17d.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241219165343-7b552a043dd4.2
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.36.1-20241219165343-7b552a043dd4.1
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
-	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241203191352-12c25eb032cd.1
-	buf.build/gen/go/cedana/task/protocolbuffers/go v1.35.2-20241203191352-12c25eb032cd.1
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-20241219165343-74c01b90370e.2
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.36.1-20241219165343-74c01b90370e.1
 	cloud.google.com/go/pubsub v1.44.0
 	github.com/cedana/runc v1.10.2
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0
@@ -55,7 +55,7 @@ require (
 	golang.org/x/time v0.6.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
 	google.golang.org/grpc v1.66.2
-	google.golang.org/protobuf v1.35.2
+	google.golang.org/protobuf v1.36.1
 	k8s.io/client-go v0.30.2
 	k8s.io/cri-api v0.30.2
 	k8s.io/klog/v2 v2.130.0
