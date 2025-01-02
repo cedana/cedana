@@ -151,6 +151,9 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 		defer cancel()
 
 		controller := m.controllers.get(jid)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the task still running?")
+		}
 
 		_, err = controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir()})
 		if err != nil {
@@ -183,6 +186,10 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 			defer cancel()
 
 			controller := m.controllers.get(jid)
+			if controller == nil {
+				restoreErr <- fmt.Errorf("GPU controller not found, is the task still running?")
+			}
+
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir()})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")

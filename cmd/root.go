@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cedana/cedana/internal/features"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"

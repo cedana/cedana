@@ -5,8 +5,8 @@ import (
 	"slices"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/internal/server/criu"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 )

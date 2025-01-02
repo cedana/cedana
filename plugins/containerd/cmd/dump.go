@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	DumpCmd.Flags().StringP(containerd_flags.ImageFlag.Full, containerd_flags.ImageFlag.Short, "", "image ref (rootfs)")
+	DumpCmd.Flags().StringP(containerd_flags.ImageFlag.Full, containerd_flags.ImageFlag.Short, "", "image ref (rootfs). leave empty to skip rootfs")
 	DumpCmd.Flags().StringP(containerd_flags.AddressFlag.Full, containerd_flags.AddressFlag.Short, "", "containerd socket address")
 	DumpCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
 }
@@ -20,15 +20,18 @@ func init() {
 var DumpCmd = &cobra.Command{
 	Use:   "containerd <container-id>",
 	Short: "Dump a containerd container (w/ rootfs)",
-	Long:  "If an image ref is provided, rootfs will also be dumped",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Dump a containerd container (w/ rootfs). If an image ref is provided, rootfs will also be dumped",
+	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
 		if !ok {
 			return fmt.Errorf("invalid dump request in context")
 		}
 
-		id := args[0]
+		var id string
+		if len(args) > 0 {
+			id = args[0]
+		}
 
 		image, _ := cmd.Flags().GetString(containerd_flags.ImageFlag.Full)
 		address, _ := cmd.Flags().GetString(containerd_flags.AddressFlag.Full)

@@ -12,13 +12,13 @@ import (
 func ValidateDumpRequest(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails().GetRunc() == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc details")
 		}
 		if req.GetDetails().GetRunc().GetRoot() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing root")
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc root")
 		}
 		if req.GetDetails().GetRunc().GetID() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing id")
+			return nil, status.Errorf(codes.InvalidArgument, "missing runc id")
 		}
 
 		return next(ctx, server, resp, req)

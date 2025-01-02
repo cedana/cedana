@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"

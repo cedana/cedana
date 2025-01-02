@@ -11,8 +11,6 @@ import (
 )
 
 // Generic profiler for recording timing information. Populates the profiling data for the next handler.
-// Thus, the handler can simply populate more components if it wants to. The total time will be recorded
-// here itself.
 func Timer[REQ, RESP any](next Handler[REQ, RESP]) Handler[REQ, RESP] {
 	var timedHandler Handler[REQ, RESP]
 	nextPc := reflect.ValueOf(next).Pointer()

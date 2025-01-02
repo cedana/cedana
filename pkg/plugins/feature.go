@@ -56,8 +56,9 @@ func (feature Feature[T]) IfAvailable(
 		}
 	}
 	if noValidPlugins {
-		errs = append(errs, fmt.Errorf("plugin(s) %s exports no '%s'", utils.StrList(filter), feature))
+		errs = append(errs, fmt.Errorf("plugin(s) %s were not found", utils.StrList(filter)))
 	}
+
 	return errors.Join(errs...)
 }
 

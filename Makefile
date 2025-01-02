@@ -100,7 +100,7 @@ plugins-install: ## Install plugins
 reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	if [ -p $(OUT_DIR)/$(BINARY) ]; then \
+	if [ -f $(OUT_DIR)/$(BINARY) ]; then \
 		$(SUDO) $(BINARY) plugin remove --all ;\
 	fi
 
@@ -124,7 +124,7 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>)
 		make plugins-install > /dev/null ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) -r test/regression ;\
-		echo "Using single instance of daemon across tests..." ;\
+		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
 	else \
 		$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
@@ -136,7 +136,7 @@ test-regression-cedana: ## Run regression tests for cedana
 	if [ -f /.dockerenv ]; then \
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression ;\
-		echo "Using single instance of daemon across tests..." ;\
+		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) test/regression ;\
 	else \
 		$(DOCKER_TEST_RUN) make test-regression-cedana PARALLELISM=$(PARALLELISM) ;\
@@ -149,7 +149,7 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 		$(SUDO) $(BINARY) plugin install $$PLUGIN > /dev/null ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
-		echo "Using single instance of daemon across tests..." ;\
+		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 	else \
 		$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\

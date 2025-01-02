@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/features"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -34,6 +34,7 @@ func init() {
 	// Add aliases
 	pluginCmd.AddCommand(utils.AliasOf(pluginListCmd, "ls"))
 	rootCmd.AddCommand(utils.AliasOf(pluginListCmd, "plugins"))
+	rootCmd.AddCommand(utils.AliasOf(pluginFeaturesCmd, "features"))
 }
 
 // Parent plugin command
