@@ -11,12 +11,12 @@ import (
 )
 
 const createJob = `-- name: CreateJob :exec
-INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
+INSERT INTO jobs (ID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateJobParams struct {
-	Jid        string
+	ID         string
 	Type       string
 	Gpuenabled int64
 	Log        string
@@ -32,7 +32,7 @@ type CreateJobParams struct {
 
 func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) error {
 	_, err := q.db.ExecContext(ctx, createJob,
-		arg.Jid,
+		arg.ID,
 		arg.Type,
 		arg.Gpuenabled,
 		arg.Log,
@@ -49,25 +49,23 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) error {
 }
 
 const deleteJob = `-- name: DeleteJob :exec
-DELETE FROM jobs WHERE JID = ?
+DELETE FROM jobs WHERE ID = ?
 `
 
-func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
-	_, err := q.db.ExecContext(ctx, deleteJob, jid)
+func (q *Queries) DeleteJob(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteJob, id)
 	return err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
+SELECT jobs.id, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
 `
 
 type ListJobsRow struct {
 	Job  Job
 	Host Host
-	Cpu  Cpu
 }
 
 func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
@@ -80,7 +78,7 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 	for rows.Next() {
 		var i ListJobsRow
 		if err := rows.Scan(
-			&i.Job.Jid,
+			&i.Job.ID,
 			&i.Job.Type,
 			&i.Job.Gpuenabled,
 			&i.Job.Log,
@@ -99,12 +97,11 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 			&i.Host.Platform,
 			&i.Host.Kernelversion,
 			&i.Host.Kernelarch,
-			&i.Host.Cpuid,
-			&i.Cpu.Physicalid,
-			&i.Cpu.Vendorid,
-			&i.Cpu.Family,
-			&i.Cpu.Count,
-			&i.Cpu.Memtotal,
+			&i.Host.Cpuphysicalid,
+			&i.Host.Cpuvendorid,
+			&i.Host.Cpufamily,
+			&i.Host.Cpucount,
+			&i.Host.Memtotal,
 		); err != nil {
 			return nil, err
 		}
@@ -119,41 +116,39 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 	return items, nil
 }
 
-const listJobsByJIDs = `-- name: ListJobsByJIDs :many
-SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
+const listJobsByIDs = `-- name: ListJobsByIDs :many
+SELECT jobs.id, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
-WHERE jobs.JID IN (/*SLICE:jids*/?)
+WHERE jobs.ID IN (/*SLICE:ids*/?)
 `
 
-type ListJobsByJIDsRow struct {
+type ListJobsByIDsRow struct {
 	Job  Job
 	Host Host
-	Cpu  Cpu
 }
 
-func (q *Queries) ListJobsByJIDs(ctx context.Context, jids []string) ([]ListJobsByJIDsRow, error) {
-	query := listJobsByJIDs
+func (q *Queries) ListJobsByIDs(ctx context.Context, ids []string) ([]ListJobsByIDsRow, error) {
+	query := listJobsByIDs
 	var queryParams []interface{}
-	if len(jids) > 0 {
-		for _, v := range jids {
+	if len(ids) > 0 {
+		for _, v := range ids {
 			queryParams = append(queryParams, v)
 		}
-		query = strings.Replace(query, "/*SLICE:jids*/?", strings.Repeat(",?", len(jids))[1:], 1)
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
 	} else {
-		query = strings.Replace(query, "/*SLICE:jids*/?", "NULL", 1)
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
 	}
 	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListJobsByJIDsRow
+	var items []ListJobsByIDsRow
 	for rows.Next() {
-		var i ListJobsByJIDsRow
+		var i ListJobsByIDsRow
 		if err := rows.Scan(
-			&i.Job.Jid,
+			&i.Job.ID,
 			&i.Job.Type,
 			&i.Job.Gpuenabled,
 			&i.Job.Log,
@@ -172,12 +167,11 @@ func (q *Queries) ListJobsByJIDs(ctx context.Context, jids []string) ([]ListJobs
 			&i.Host.Platform,
 			&i.Host.Kernelversion,
 			&i.Host.Kernelarch,
-			&i.Host.Cpuid,
-			&i.Cpu.Physicalid,
-			&i.Cpu.Vendorid,
-			&i.Cpu.Family,
-			&i.Cpu.Count,
-			&i.Cpu.Memtotal,
+			&i.Host.Cpuphysicalid,
+			&i.Host.Cpuvendorid,
+			&i.Host.Cpufamily,
+			&i.Host.Cpucount,
+			&i.Host.Memtotal,
 		); err != nil {
 			return nil, err
 		}
@@ -205,7 +199,7 @@ UPDATE jobs SET
     Status = ?,
     IsRunning = ?,
     HostID = ?
-WHERE JID = ?
+WHERE ID = ?
 `
 
 type UpdateJobParams struct {
@@ -220,7 +214,7 @@ type UpdateJobParams struct {
 	Status     string
 	Isrunning  int64
 	Hostid     string
-	Jid        string
+	ID         string
 }
 
 func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
@@ -236,7 +230,7 @@ func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
 		arg.Status,
 		arg.Isrunning,
 		arg.Hostid,
-		arg.Jid,
+		arg.ID,
 	)
 	return err
 }

@@ -1,6 +1,6 @@
 -- name: CreateHost :exec
-INSERT INTO hosts (ID, MAC, Hostname, OS, Platform, KernelVersion, KernelArch, CPUID)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO hosts (ID, MAC, Hostname, OS, Platform, KernelVersion, KernelArch, CPUPhysicalID, CPUVendorID, CPUFamily, CPUCount, MemTotal)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateHost :exec
 UPDATE hosts SET
@@ -10,19 +10,18 @@ UPDATE hosts SET
     Platform = ?,
     KernelVersion = ?,
     KernelArch = ?,
-    CPUID = ?
+    CPUPhysicalID = ?,
+    CPUVendorID = ?,
+    CPUFamily = ?,
+    CPUCount = ?,
+    MemTotal = ?
 WHERE ID = ?;
 
 -- name: ListHosts :many
-SELECT sqlc.embed(hosts), sqlc.embed(cpus)
-FROM hosts
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID;
+SELECT * FROM hosts;
 
 -- name: ListHostsByIDs :many
-SELECT sqlc.embed(hosts), sqlc.embed(cpus)
-FROM hosts
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
-WHERE hosts.ID IN (sqlc.slice('ids'));
+SELECT * FROM hosts WHERE ID in (sqlc.slice('ids'));
 
 -- name: DeleteHost :exec
 DELETE FROM hosts WHERE ID = ?;

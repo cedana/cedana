@@ -16,14 +16,6 @@ type Checkpoint struct {
 	Size int64
 }
 
-type Cpu struct {
-	Physicalid string
-	Vendorid   string
-	Family     string
-	Count      int64
-	Memtotal   int64
-}
-
 type Host struct {
 	ID            string
 	Mac           string
@@ -32,11 +24,15 @@ type Host struct {
 	Platform      string
 	Kernelversion string
 	Kernelarch    string
-	Cpuid         string
+	Cpuphysicalid string
+	Cpuvendorid   string
+	Cpufamily     string
+	Cpucount      int64
+	Memtotal      int64
 }
 
 type Job struct {
-	Jid        string
+	ID         string
 	Type       string
 	Gpuenabled int64
 	Log        string

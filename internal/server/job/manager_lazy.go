@@ -40,8 +40,9 @@ type ManagerLazy struct {
 type actionType int
 
 const (
-	updateJob actionType = iota
-	updateCheckpoint
+	initialize actionType = iota
+	putJob
+	putCheckpoint
 	shutdown
 )
 
@@ -71,12 +72,10 @@ func NewManagerLazy(
 		gpus:    gpuManager,
 	}
 
-	// Reload all jobs from the DB
-	err := manager.loadFromDB(lifetime, db)
+	err := manager.syncWithDB(lifetime, action{initialize, ""}, db)
 	if err != nil {
 		return nil, err
 	}
-	manager.db = db
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
@@ -96,7 +95,7 @@ func NewManagerLazy(
 						break
 					}
 					ctx := context.WithoutCancel(lifetime)
-					err := manager.sync(ctx, action, db)
+					err := manager.syncWithDB(ctx, action, db)
 					if err != nil {
 						errs = append(errs, err)
 						failedActions = append(failedActions, action)
@@ -104,18 +103,17 @@ func NewManagerLazy(
 				}
 				err = errors.Join(errs...)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to sync DB before shutdown")
-					for _, action := range failedActions {
-						log.Debug().Str("id", action.id).
-							Msgf("failed %s", action.typ)
+					log.Error().Msg("failed to sync DB before shutdown")
+					for i, action := range failedActions {
+						log.Debug().Err(errs[i]).Str("id", action.id).Str("type", action.typ.String()).Send()
 					}
 				}
 				return
 			case action := <-manager.pending:
-				err := manager.sync(lifetime, action, db)
+				err := manager.syncWithDB(lifetime, action, db)
 				if err != nil {
 					manager.pending <- action
-					log.Debug().Err(err).Msg("DB sync failed, retrying in background")
+					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("DB sync failed, retrying...")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
 				}
 			}
@@ -144,8 +142,6 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 
 	job := newJob(jid, jobType)
 	m.jobs.Store(jid, job)
-
-	m.pending <- action{updateJob, jid}
 
 	return job, nil
 }
@@ -183,7 +179,7 @@ func (m *ManagerLazy) Delete(jid string) {
 	}
 	m.jobs.Delete(jid)
 
-	m.pending <- action{updateJob, jid}
+	m.pending <- action{putJob, jid}
 
 	checkpoints := m.ListCheckpoints(jid)
 	for _, checkpoint := range checkpoints {
@@ -241,7 +237,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 		log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("ignoring: failed to fill process state after manage")
 	}
 
-	m.pending <- action{updateJob, jid}
+	m.pending <- action{putJob, jid}
 
 	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
 
@@ -266,7 +262,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 		// 	}
 		// }
 
-		m.pending <- action{updateJob, jid}
+		m.pending <- action{putJob, jid}
 	}()
 
 	return nil
@@ -331,7 +327,7 @@ func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
 	}
 	m.checkpoints.Store(checkpoint.ID, checkpoint)
 
-	m.pending <- action{updateCheckpoint, checkpoint.ID}
+	m.pending <- action{putCheckpoint, checkpoint.ID}
 }
 
 func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {
@@ -379,7 +375,7 @@ func (m *ManagerLazy) DeleteCheckpoint(id string) {
 	}
 	m.checkpoints.Delete(id)
 
-	m.pending <- action{updateCheckpoint, id}
+	m.pending <- action{putCheckpoint, id}
 }
 
 func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti {
@@ -404,15 +400,32 @@ func (m *ManagerLazy) GPUs() gpu.Manager {
 ////////////////////////
 
 func (i actionType) String() string {
-	return [...]string{"update", "remove", "shutdown"}[i]
+	return [...]string{"init", "putJob", "putCheckpoint", "shutdown"}[i]
 }
 
-func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
+func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) error {
 	typ := action.typ
 
 	var err error
 	switch typ {
-	case updateJob:
+	case initialize:
+		jobProtos, err := db.ListJobs(ctx)
+		if err != nil {
+			break
+		}
+		for _, proto := range jobProtos {
+			job := fromProto(proto)
+			m.jobs.Store(job.JID, job)
+
+			checkpoints, err := db.ListCheckpointsByJID(ctx, job.JID)
+			if err != nil {
+				break
+			}
+			for _, checkpoint := range checkpoints {
+				m.checkpoints.Store(checkpoint.ID, checkpoint)
+			}
+		}
+	case putJob:
 		jid := action.id
 		job := m.Get(jid)
 		if job == nil {
@@ -420,7 +433,7 @@ func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
 		} else {
 			err = db.PutJob(ctx, job.GetProto())
 		}
-	case updateCheckpoint:
+	case putCheckpoint:
 		id := action.id
 		checkpoint, ok := m.checkpoints.Load(id)
 		if !ok {
@@ -430,25 +443,4 @@ func (m *ManagerLazy) sync(ctx context.Context, action action, db db.DB) error {
 		}
 	}
 	return err
-}
-
-func (m *ManagerLazy) loadFromDB(ctx context.Context, db db.DB) error {
-	jobProtos, err := db.ListJobs(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load jobs from DB: %w", err)
-	}
-	for _, proto := range jobProtos {
-		job := fromProto(proto)
-		m.jobs.Store(job.JID, job)
-
-		checkpoints, err := db.ListCheckpoints(ctx, job.JID)
-		if err != nil {
-			return fmt.Errorf("failed to load checkpoints from DB: %w", err)
-		}
-		for _, checkpoint := range checkpoints {
-			m.checkpoints.Store(checkpoint.ID, checkpoint)
-		}
-	}
-
-	return nil
 }

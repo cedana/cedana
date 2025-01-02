@@ -10,14 +10,14 @@ UPDATE checkpoints SET
 WHERE ID = ?;
 
 -- name: ListCheckpoints :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints ORDER BY Time DESC;
+SELECT * FROM checkpoints ORDER BY Time DESC;
 
 -- name: ListCheckpointsByIDs :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE ID in (sqlc.slice('ids'))
+SELECT * FROM checkpoints WHERE ID in (sqlc.slice('ids'))
 ORDER BY Time DESC;
 
 -- name: ListCheckpointsByJIDs :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE JID in (sqlc.slice('jids'))
+SELECT * FROM checkpoints WHERE JID in (sqlc.slice('jids'))
 ORDER BY Time DESC;
 
 -- name: DeleteCheckpoint :exec

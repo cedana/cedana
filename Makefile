@@ -2,13 +2,14 @@ OUT_DIR=$(PWD)
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
 ifndef VERBOSE
 .SILENT:
 endif
 
-all: build plugins plugins-install
+all: build install plugins plugins-install ## Build and install with all plugins
 .PHONY: build plugins
 
 ##########
@@ -24,6 +25,10 @@ build: $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+
+install: ## Install the binary
+	@echo "Installing $(BINARY)..."
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 
 start: ## Start the daemon
 	$(SUDO) ./$(BINARY) daemon start
@@ -46,7 +51,8 @@ stop-systemd: ## Stop the systemd daemon
 
 reset: stop-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
-	rm -rf $(OUT_DIR)/$(BINARY)
+	rm -f $(OUT_DIR)/$(BINARY)
+	$(SUDO) rm -f /usr/local/bin/$(BINARY)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
@@ -107,9 +113,9 @@ BATS_CMD=bats --jobs $(PARALLELISM)
 
 test: test-unit test-regression ## Run all tests
 
-test-unit: ## Run unit tests
-	@echo "Running go tests..."
-	$(GOCMD) test -v ./...
+test-unit: ## Run unit tests (with benchmarks)
+	@echo "Running unit tests..."
+	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
 test-regression: ## Run all regression tests (PARALLELISM=<n>)
 	@echo "Running all regression tests..."

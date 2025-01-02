@@ -11,8 +11,8 @@ import (
 )
 
 const createHost = `-- name: CreateHost :exec
-INSERT INTO hosts (ID, MAC, Hostname, OS, Platform, KernelVersion, KernelArch, CPUID)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO hosts (ID, MAC, Hostname, OS, Platform, KernelVersion, KernelArch, CPUPhysicalID, CPUVendorID, CPUFamily, CPUCount, MemTotal)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateHostParams struct {
@@ -23,7 +23,11 @@ type CreateHostParams struct {
 	Platform      string
 	Kernelversion string
 	Kernelarch    string
-	Cpuid         string
+	Cpuphysicalid string
+	Cpuvendorid   string
+	Cpufamily     string
+	Cpucount      int64
+	Memtotal      int64
 }
 
 func (q *Queries) CreateHost(ctx context.Context, arg CreateHostParams) error {
@@ -35,7 +39,11 @@ func (q *Queries) CreateHost(ctx context.Context, arg CreateHostParams) error {
 		arg.Platform,
 		arg.Kernelversion,
 		arg.Kernelarch,
-		arg.Cpuid,
+		arg.Cpuphysicalid,
+		arg.Cpuvendorid,
+		arg.Cpufamily,
+		arg.Cpucount,
+		arg.Memtotal,
 	)
 	return err
 }
@@ -50,39 +58,31 @@ func (q *Queries) DeleteHost(ctx context.Context, id string) error {
 }
 
 const listHosts = `-- name: ListHosts :many
-SELECT hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
-FROM hosts
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
+SELECT id, mac, hostname, os, platform, kernelversion, kernelarch, cpuphysicalid, cpuvendorid, cpufamily, cpucount, memtotal FROM hosts
 `
 
-type ListHostsRow struct {
-	Host Host
-	Cpu  Cpu
-}
-
-func (q *Queries) ListHosts(ctx context.Context) ([]ListHostsRow, error) {
+func (q *Queries) ListHosts(ctx context.Context) ([]Host, error) {
 	rows, err := q.db.QueryContext(ctx, listHosts)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListHostsRow
+	var items []Host
 	for rows.Next() {
-		var i ListHostsRow
+		var i Host
 		if err := rows.Scan(
-			&i.Host.ID,
-			&i.Host.Mac,
-			&i.Host.Hostname,
-			&i.Host.Os,
-			&i.Host.Platform,
-			&i.Host.Kernelversion,
-			&i.Host.Kernelarch,
-			&i.Host.Cpuid,
-			&i.Cpu.Physicalid,
-			&i.Cpu.Vendorid,
-			&i.Cpu.Family,
-			&i.Cpu.Count,
-			&i.Cpu.Memtotal,
+			&i.ID,
+			&i.Mac,
+			&i.Hostname,
+			&i.Os,
+			&i.Platform,
+			&i.Kernelversion,
+			&i.Kernelarch,
+			&i.Cpuphysicalid,
+			&i.Cpuvendorid,
+			&i.Cpufamily,
+			&i.Cpucount,
+			&i.Memtotal,
 		); err != nil {
 			return nil, err
 		}
@@ -98,18 +98,10 @@ func (q *Queries) ListHosts(ctx context.Context) ([]ListHostsRow, error) {
 }
 
 const listHostsByIDs = `-- name: ListHostsByIDs :many
-SELECT hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuid, cpus.physicalid, cpus.vendorid, cpus.family, cpus.count, cpus.memtotal
-FROM hosts
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
-WHERE hosts.ID IN (/*SLICE:ids*/?)
+SELECT id, mac, hostname, os, platform, kernelversion, kernelarch, cpuphysicalid, cpuvendorid, cpufamily, cpucount, memtotal FROM hosts WHERE ID in (/*SLICE:ids*/?)
 `
 
-type ListHostsByIDsRow struct {
-	Host Host
-	Cpu  Cpu
-}
-
-func (q *Queries) ListHostsByIDs(ctx context.Context, ids []string) ([]ListHostsByIDsRow, error) {
+func (q *Queries) ListHostsByIDs(ctx context.Context, ids []string) ([]Host, error) {
 	query := listHostsByIDs
 	var queryParams []interface{}
 	if len(ids) > 0 {
@@ -125,23 +117,22 @@ func (q *Queries) ListHostsByIDs(ctx context.Context, ids []string) ([]ListHosts
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListHostsByIDsRow
+	var items []Host
 	for rows.Next() {
-		var i ListHostsByIDsRow
+		var i Host
 		if err := rows.Scan(
-			&i.Host.ID,
-			&i.Host.Mac,
-			&i.Host.Hostname,
-			&i.Host.Os,
-			&i.Host.Platform,
-			&i.Host.Kernelversion,
-			&i.Host.Kernelarch,
-			&i.Host.Cpuid,
-			&i.Cpu.Physicalid,
-			&i.Cpu.Vendorid,
-			&i.Cpu.Family,
-			&i.Cpu.Count,
-			&i.Cpu.Memtotal,
+			&i.ID,
+			&i.Mac,
+			&i.Hostname,
+			&i.Os,
+			&i.Platform,
+			&i.Kernelversion,
+			&i.Kernelarch,
+			&i.Cpuphysicalid,
+			&i.Cpuvendorid,
+			&i.Cpufamily,
+			&i.Cpucount,
+			&i.Memtotal,
 		); err != nil {
 			return nil, err
 		}
@@ -164,7 +155,11 @@ UPDATE hosts SET
     Platform = ?,
     KernelVersion = ?,
     KernelArch = ?,
-    CPUID = ?
+    CPUPhysicalID = ?,
+    CPUVendorID = ?,
+    CPUFamily = ?,
+    CPUCount = ?,
+    MemTotal = ?
 WHERE ID = ?
 `
 
@@ -175,7 +170,11 @@ type UpdateHostParams struct {
 	Platform      string
 	Kernelversion string
 	Kernelarch    string
-	Cpuid         string
+	Cpuphysicalid string
+	Cpuvendorid   string
+	Cpufamily     string
+	Cpucount      int64
+	Memtotal      int64
 	ID            string
 }
 
@@ -187,7 +186,11 @@ func (q *Queries) UpdateHost(ctx context.Context, arg UpdateHostParams) error {
 		arg.Platform,
 		arg.Kernelversion,
 		arg.Kernelarch,
-		arg.Cpuid,
+		arg.Cpuphysicalid,
+		arg.Cpuvendorid,
+		arg.Cpufamily,
+		arg.Cpucount,
+		arg.Memtotal,
 		arg.ID,
 	)
 	return err

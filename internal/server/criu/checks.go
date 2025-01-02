@@ -33,12 +33,12 @@ func CheckVersion(manager plugins.Manager) types.Check {
 			// Set custom path if specified in config, as a fallback
 			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but a custom CRIU path was provided.\nIt's recommended to install the plugin for full feature support.",
+					"CRIU plugin not installed but a custom CRIU path was provided. It's recommended to install the plugin for full feature support.",
 				)
 				c.SetCriuPath(custom_path)
 			} else if path, err := exec.LookPath("criu"); err == nil {
 				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but CRIU binary found in PATH.\nIt's recommended to install the plugin for full feature support.",
+					"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
 				)
 				c.SetCriuPath(path)
 			} else {
@@ -107,14 +107,18 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 			if err == nil {
 				component.Data = "available"
 			} else {
-				component.Data = "missing"
 				if len(component.Errors) == 0 {
-					component.Errors = append(component.Errors, "Check failed, but no errors were reported")
+					component.Data = "available"
+					component.Warnings = append(component.Warnings, "Not ideal, but no red flags either")
+				} else {
+					component.Data = "unavailable"
 				}
 			}
+
+			return []*daemon.HealthCheckComponent{component}
 		}
 
-		return []*daemon.HealthCheckComponent{component}
+		return nil
 	}
 }
 

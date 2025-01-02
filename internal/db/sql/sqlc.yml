@@ -10,7 +10,6 @@ sql:
     queries:
       - job.sql
       - host.sql
-      - cpu.sql
       - checkpoint.sql
     codegen:
       - plugin: golang

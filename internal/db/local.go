@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"time"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	_ "embed"
+
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog/log"
 	json "google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -61,9 +61,9 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	if job.GetState().GetIsRunning() {
 		isRunning = 1
 	}
-	if list, _ := db.queries.ListJobsByJIDs(ctx, []string{job.JID}); len(list) > 0 {
+	if list, _ := db.queries.ListJobsByIDs(ctx, []string{job.JID}); len(list) > 0 {
 		return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
-			Jid:        job.JID,
+			ID:         job.JID,
 			Type:       job.Type,
 			Gpuenabled: gpuEnabled,
 			Log:        job.Log,
@@ -78,9 +78,8 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 		})
 	}
 
-	log.Warn().Msg("Creating new job")
 	return db.queries.CreateJob(ctx, sql.CreateJobParams{
-		Jid:        job.JID,
+		ID:         job.JID,
 		Type:       job.Type,
 		Gpuenabled: gpuEnabled,
 		Log:        job.Log,
@@ -97,14 +96,14 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 
 func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
 	if len(jids) > 0 {
-		rows, err := db.queries.ListJobsByJIDs(ctx, jids)
+		rows, err := db.queries.ListJobsByIDs(ctx, jids)
 		if err != nil {
 			return nil, err
 		}
 
 		jobs := []*daemon.Job{}
 		for _, row := range rows {
-			job, err := fromListJobRow(row)
+			job, err := fromDBJobRow(row)
 			if err != nil {
 				return nil, err
 			}
@@ -121,7 +120,7 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 
 		jobs := []*daemon.Job{}
 		for _, row := range rows {
-			job, err := fromListJobRow(row)
+			job, err := fromDBJobRow(row)
 			if err != nil {
 				return nil, err
 			}
@@ -143,29 +142,7 @@ func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
 
 func (db *LocalDB) PutHost(ctx context.Context, host *daemon.Host) error {
 	if host.CPU == nil || host.Memory == nil {
-		return fmt.Errorf("CPU and Memory info missing")
-	}
-
-	var err error
-	if list, _ := db.queries.ListCPUsByIDs(ctx, []string{host.CPU.PhysicalID}); len(list) > 0 {
-		err = db.queries.UpdateCPU(ctx, sql.UpdateCPUParams{
-			Physicalid: host.CPU.PhysicalID,
-			Vendorid:   host.CPU.VendorID,
-			Family:     host.CPU.Family,
-			Count:      int64(host.CPU.Count),
-			Memtotal:   int64(host.Memory.Total),
-		})
-	} else {
-		err = db.queries.CreateCPU(ctx, sql.CreateCPUParams{
-			Physicalid: host.CPU.PhysicalID,
-			Vendorid:   host.CPU.VendorID,
-			Family:     host.CPU.Family,
-			Count:      int64(host.CPU.Count),
-			Memtotal:   int64(host.Memory.Total),
-		})
-	}
-	if err != nil {
-		return err
+		return fmt.Errorf("CPU or Memory info missing")
 	}
 
 	if list, _ := db.queries.ListHostsByIDs(ctx, []string{host.ID}); len(list) > 0 {
@@ -177,7 +154,11 @@ func (db *LocalDB) PutHost(ctx context.Context, host *daemon.Host) error {
 			Platform:      host.Platform,
 			Kernelversion: host.KernelVersion,
 			Kernelarch:    host.KernelArch,
-			Cpuid:         host.CPU.PhysicalID,
+			Cpuphysicalid: host.CPU.PhysicalID,
+			Cpuvendorid:   host.CPU.VendorID,
+			Cpufamily:     host.CPU.Family,
+			Cpucount:      int64(host.CPU.Count),
+			Memtotal:      int64(host.Memory.Total),
 		})
 	}
 
@@ -189,20 +170,24 @@ func (db *LocalDB) PutHost(ctx context.Context, host *daemon.Host) error {
 		Platform:      host.Platform,
 		Kernelversion: host.KernelVersion,
 		Kernelarch:    host.KernelArch,
-		Cpuid:         host.CPU.PhysicalID,
+		Cpuphysicalid: host.CPU.PhysicalID,
+		Cpuvendorid:   host.CPU.VendorID,
+		Cpufamily:     host.CPU.Family,
+		Cpucount:      int64(host.CPU.Count),
+		Memtotal:      int64(host.Memory.Total),
 	})
 }
 
 func (db *LocalDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
 	hosts := []*daemon.Host{}
 	if len(ids) == 0 {
-		rows, err := db.queries.ListHosts(ctx)
+		dbHosts, err := db.queries.ListHosts(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		for _, row := range rows {
-			host, err := fromListHostRow(row)
+		for _, dbHost := range dbHosts {
+			host, err := fromDBHost(&dbHost)
 			if err != nil {
 				return nil, err
 			}
@@ -211,12 +196,12 @@ func (db *LocalDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host
 
 		return hosts, nil
 	} else {
-		rows, err := db.queries.ListHostsByIDs(ctx, ids)
+		dbHosts, err := db.queries.ListHostsByIDs(ctx, ids)
 		if err != nil {
 			return nil, err
 		}
-		for _, row := range rows {
-			host, err := fromListHostRow(row)
+		for _, dbHost := range dbHosts {
+			host, err := fromDBHost(&dbHost)
 			if err != nil {
 				return nil, err
 			}
@@ -271,7 +256,7 @@ func (db *LocalDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemo
 
 	checkpoints := []*daemon.Checkpoint{}
 	for _, dbCheckpoint := range dbCheckpoints {
-		checkpoints = append(checkpoints, fromDBCheckpoint(dbCheckpoint))
+		checkpoints = append(checkpoints, fromDBCheckpoint(&dbCheckpoint))
 	}
 
 	return checkpoints, nil
@@ -293,7 +278,7 @@ func (db *LocalDB) ListCheckpointsByJID(ctx context.Context, jids ...string) ([]
 
 	checkpoints := []*daemon.Checkpoint{}
 	for _, dbCheckpoint := range dbCheckpoints {
-		checkpoints = append(checkpoints, fromDBCheckpoint(dbCheckpoint))
+		checkpoints = append(checkpoints, fromDBCheckpoint(&dbCheckpoint))
 	}
 
 	return checkpoints, nil
@@ -307,7 +292,7 @@ func (db *LocalDB) DeleteCheckpoint(ctx context.Context, id string) error {
 /// Helpers ///
 ///////////////
 
-func fromDBCheckpoint(dbCheckpoint sql.Checkpoint) *daemon.Checkpoint {
+func fromDBCheckpoint(dbCheckpoint *sql.Checkpoint) *daemon.Checkpoint {
 	return &daemon.Checkpoint{
 		ID:   dbCheckpoint.ID,
 		JID:  dbCheckpoint.Jid,
@@ -317,20 +302,17 @@ func fromDBCheckpoint(dbCheckpoint sql.Checkpoint) *daemon.Checkpoint {
 	}
 }
 
-func fromListJobRow(row any) (*daemon.Job, error) {
+func fromDBJobRow(row any) (*daemon.Job, error) {
 	var job sql.Job
 	var host sql.Host
-	var cpu sql.Cpu
 
 	switch row := row.(type) {
 	case sql.ListJobsRow:
 		job = row.Job
 		host = row.Host
-		cpu = row.Cpu
-	case sql.ListJobsByJIDsRow:
+	case sql.ListJobsByIDsRow:
 		job = row.Job
 		host = row.Host
-		cpu = row.Cpu
 	default:
 		return nil, fmt.Errorf("unknown row type")
 	}
@@ -342,7 +324,7 @@ func fromListJobRow(row any) (*daemon.Job, error) {
 	}
 
 	return &daemon.Job{
-		JID:        job.Jid,
+		JID:        job.ID,
 		Type:       job.Type,
 		GPUEnabled: job.Gpuenabled > 0,
 		Log:        job.Log,
@@ -363,34 +345,20 @@ func fromListJobRow(row any) (*daemon.Job, error) {
 				KernelVersion: host.Kernelversion,
 				KernelArch:    host.Kernelarch,
 				CPU: &daemon.CPU{
-					PhysicalID: cpu.Physicalid,
-					VendorID:   cpu.Vendorid,
-					Family:     cpu.Family,
-					Count:      int32(cpu.Count),
+					PhysicalID: host.Cpuphysicalid,
+					VendorID:   host.Cpuvendorid,
+					Family:     host.Cpufamily,
+					Count:      int32(host.Cpucount),
 				},
 				Memory: &daemon.Memory{
-					Total: uint64(cpu.Memtotal),
+					Total: uint64(host.Memtotal),
 				},
 			},
 		},
 	}, nil
 }
 
-func fromListHostRow(row any) (*daemon.Host, error) {
-	var host sql.Host
-	var cpu sql.Cpu
-
-	switch row := row.(type) {
-	case sql.ListHostsRow:
-		host = row.Host
-		cpu = row.Cpu
-	case sql.ListHostsByIDsRow:
-		host = row.Host
-		cpu = row.Cpu
-	default:
-		return nil, fmt.Errorf("unknown row type")
-	}
-
+func fromDBHost(host *sql.Host) (*daemon.Host, error) {
 	return &daemon.Host{
 		ID:            host.ID,
 		MAC:           host.Mac,
@@ -400,13 +368,13 @@ func fromListHostRow(row any) (*daemon.Host, error) {
 		KernelVersion: host.Kernelversion,
 		KernelArch:    host.Kernelarch,
 		CPU: &daemon.CPU{
-			PhysicalID: cpu.Physicalid,
-			VendorID:   cpu.Vendorid,
-			Family:     cpu.Family,
-			Count:      int32(cpu.Count),
+			PhysicalID: host.Cpuphysicalid,
+			VendorID:   host.Cpuvendorid,
+			Family:     host.Cpufamily,
+			Count:      int32(host.Cpucount),
 		},
 		Memory: &daemon.Memory{
-			Total: uint64(cpu.Memtotal),
+			Total: uint64(host.Memtotal),
 		},
 	}, nil
 }

@@ -44,7 +44,7 @@ func (q *Queries) DeleteCheckpoint(ctx context.Context, id string) error {
 }
 
 const listCheckpoints = `-- name: ListCheckpoints :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints ORDER BY Time DESC
+SELECT id, jid, path, time, size FROM checkpoints ORDER BY Time DESC
 `
 
 func (q *Queries) ListCheckpoints(ctx context.Context) ([]Checkpoint, error) {
@@ -77,7 +77,7 @@ func (q *Queries) ListCheckpoints(ctx context.Context) ([]Checkpoint, error) {
 }
 
 const listCheckpointsByIDs = `-- name: ListCheckpointsByIDs :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE ID in (/*SLICE:ids*/?)
+SELECT id, jid, path, time, size FROM checkpoints WHERE ID in (/*SLICE:ids*/?)
 ORDER BY Time DESC
 `
 
@@ -121,7 +121,7 @@ func (q *Queries) ListCheckpointsByIDs(ctx context.Context, ids []string) ([]Che
 }
 
 const listCheckpointsByJIDs = `-- name: ListCheckpointsByJIDs :many
-SELECT ID, JID, Path, Time, Size FROM checkpoints WHERE JID in (/*SLICE:jids*/?)
+SELECT id, jid, path, time, size FROM checkpoints WHERE JID in (/*SLICE:jids*/?)
 ORDER BY Time DESC
 `
 

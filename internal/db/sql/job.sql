@@ -1,5 +1,5 @@
 -- name: CreateJob :exec
-INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
+INSERT INTO jobs (ID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateJob :exec
@@ -15,20 +15,18 @@ UPDATE jobs SET
     Status = ?,
     IsRunning = ?,
     HostID = ?
-WHERE JID = ?;
+WHERE ID = ?;
 
 -- name: ListJobs :many
-SELECT sqlc.embed(jobs), sqlc.embed(hosts), sqlc.embed(cpus)
+SELECT sqlc.embed(jobs), sqlc.embed(hosts)
 FROM jobs
-JOIN hosts ON hosts.ID = jobs.HostID
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID;
+JOIN hosts ON hosts.ID = jobs.HostID;
 
--- name: ListJobsByJIDs :many
-SELECT sqlc.embed(jobs), sqlc.embed(hosts), sqlc.embed(cpus)
+-- name: ListJobsByIDs :many
+SELECT sqlc.embed(jobs), sqlc.embed(hosts)
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
-JOIN cpus ON hosts.CPUID = cpus.PhysicalID
-WHERE jobs.JID IN (sqlc.slice('ids'));
+WHERE jobs.ID IN (sqlc.slice('ids'));
 
 -- name: DeleteJob :exec
-DELETE FROM jobs WHERE JID = ?;
+DELETE FROM jobs WHERE ID = ?;
