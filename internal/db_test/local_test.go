@@ -12,7 +12,10 @@ import (
 	"github.com/cedana/cedana/internal/db"
 )
 
-func TestLocalDB(t *testing.T) {
+// TestLocalDBPersistent tests the in-memory local db implementation.
+// All tests here use a persistent db across multiple operations.
+// Some tests are dependent on each other, so they should be run in order.
+func TestLocalDBPersistent(t *testing.T) {
 	ctx := context.TODO()
 	path := filepath.Join(t.TempDir(), "cedana.db")
 	t.Logf("using DB path: %s", path)
@@ -117,6 +120,45 @@ func TestLocalDB(t *testing.T) {
 			if _, ok := foundSet[j.JID]; !ok {
 				t.Errorf("missing job: %v", j)
 			}
+		}
+	})
+
+	t.Run("DeleteHost", func(t *testing.T) {
+		err := db.DeleteHost(ctx, testHosts[0].ID)
+		if err != nil {
+			t.Fatalf("failed to delete host: %v", err)
+		}
+
+		hosts, err := db.ListHosts(ctx)
+		if err != nil {
+			t.Fatalf("failed to list hosts: %v", err)
+		}
+		if len(hosts) != n-1 {
+			t.Fatalf("expected %d hosts, got %d", n-1, len(hosts))
+		}
+
+		// this should also delete all jobs associated with the host
+		jobs, err := db.ListJobs(ctx)
+		if err != nil {
+			t.Fatalf("failed to list jobs: %v", err)
+		}
+		if len(jobs) != n-1 {
+			t.Fatalf("expected %d jobs, got %d", n-1, len(jobs))
+		}
+	})
+
+	t.Run("DeleteJob", func(t *testing.T) {
+		err := db.DeleteJob(ctx, testJobs[1].JID)
+		if err != nil {
+			t.Fatalf("failed to delete job: %v", err)
+		}
+
+		jobs, err := db.ListJobs(ctx)
+		if err != nil {
+			t.Fatalf("failed to list jobs: %v", err)
+		}
+		if len(jobs) != n-2 {
+			t.Fatalf("expected %d jobs, got %d", n-2, len(jobs))
 		}
 	})
 
