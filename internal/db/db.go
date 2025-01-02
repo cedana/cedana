@@ -15,6 +15,7 @@ type DB interface {
 
 	PutJob(ctx context.Context, job *daemon.Job) error
 	ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error)
+	ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error)
 	DeleteJob(ctx context.Context, jid string) error
 
 	//// Host ////
@@ -27,7 +28,7 @@ type DB interface {
 
 	PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error
 	ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error)
-	ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error)
+	ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error)
 	DeleteCheckpoint(ctx context.Context, id string) error
 }
 

@@ -132,6 +132,25 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 	}
 }
 
+func (db *LocalDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
+	rows, err := db.queries.ListJobsByHostIDs(ctx, hostIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	jobs := []*daemon.Job{}
+	for _, row := range rows {
+		job, err := fromDBJobRow(row)
+		if err != nil {
+			return nil, err
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	return jobs, nil
+}
+
 func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
 	return db.queries.DeleteJob(ctx, jid)
 }
@@ -262,7 +281,7 @@ func (db *LocalDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemo
 	return checkpoints, nil
 }
 
-func (db *LocalDB) ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (db *LocalDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
 	var dbCheckpoints []sql.Checkpoint
 	var err error
 

@@ -33,6 +33,7 @@ func init() {
 	jobCheckpointCmd.AddCommand(inspectJobCheckpointCmd)
 
 	// Add subcommand flags
+	listJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "include jobs from remote hosts")
 	deleteJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "delete all jobs")
 	killJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "kill all jobs")
 	inspectJobCheckpointCmd.Flags().StringP(flags.TypeFlag.Full, flags.TypeFlag.Short, "", "specify image file {ps|fd|mem|rss|sk|gpu}")
@@ -94,7 +95,14 @@ var listJobCmd = &cobra.Command{
 			return fmt.Errorf("invalid client in context")
 		}
 
-		resp, err := client.List(cmd.Context(), &daemon.ListReq{})
+		req := &daemon.ListReq{}
+
+		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
+		if all {
+			req.Remote = true
+		}
+
+		resp, err := client.List(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
@@ -194,65 +202,56 @@ var listJobCmd = &cobra.Command{
 }
 
 var killJobCmd = &cobra.Command{
-	Use:               "kill <JID>",
+	Use:               "kill <JID>...",
 	Short:             "Kill a managed process/container (job)",
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: RunningJIDs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, jids []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
 
-		var jid string
 		req := &daemon.KillReq{}
 
-		if len(args) == 1 {
-			jid = args[0]
-			req.JIDs = []string{jid}
+		if len(jids) > 0 {
+			req.JIDs = jids
 		} else {
 			// Check if the all flag is set
 			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 			if !all {
-				return fmt.Errorf("Please provide a job ID or use the --all flag")
+				return fmt.Errorf("Please provide at least one JID or use the --all flag")
 			}
 			if !utils.Confirm(cmd.Context(), "Are you sure you want to kill all jobs?") {
 				return nil
 			}
 		}
 
-		_, err := client.Kill(cmd.Context(), req)
-		if err != nil {
-			return err
+		resp, err := client.Kill(cmd.Context(), req)
+
+		if resp.GetMessage() != "" {
+			fmt.Println(resp.Message)
 		}
 
-		if jid != "" {
-			fmt.Printf("Killed job %s\n", jid)
-		} else {
-			fmt.Println("Killed jobs")
-		}
-
-		return nil
+		return err
 	},
 }
 
 var deleteJobCmd = &cobra.Command{
-	Use:               "delete <JID>",
+	Use:               "delete <JID>...",
 	Short:             "Delete a managed process/container (job)",
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: ValidJIDs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, jids []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
 
-		var jid string
 		req := &daemon.DeleteReq{}
 
-		if len(args) == 1 {
-			jid = args[0]
-			req.JIDs = []string{jid}
+		if len(jids) > 0 {
+			req.JIDs = jids
 		} else {
 			// Check if the all flag is set
 			all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
@@ -264,18 +263,13 @@ var deleteJobCmd = &cobra.Command{
 			}
 		}
 
-		_, err := client.Delete(cmd.Context(), req)
-		if err != nil {
-			return err
+		resp, err := client.Delete(cmd.Context(), req)
+
+		if resp.GetMessage() != "" {
+			fmt.Println(resp.Message)
 		}
 
-		if jid != "" {
-			fmt.Printf("Deleted job %s\n", jid)
-		} else {
-			fmt.Println("Deleted jobs")
-		}
-
-		return nil
+		return err
 	},
 }
 

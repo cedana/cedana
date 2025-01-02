@@ -28,5 +28,11 @@ FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
 WHERE jobs.ID IN (sqlc.slice('ids'));
 
+-- name: ListJobsByHostIDs :many
+SELECT sqlc.embed(jobs), sqlc.embed(hosts)
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+WHERE jobs.HostID IN (sqlc.slice('host_ids'));
+
 -- name: DeleteJob :exec
 DELETE FROM jobs WHERE ID = ?;

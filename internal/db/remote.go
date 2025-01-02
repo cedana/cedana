@@ -101,6 +101,41 @@ func (db *RemoteDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job
 	return jobs, nil
 }
 
+func (db *RemoteDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
+	url := fmt.Sprintf("%s", db.baseUrl)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+
+	resp, err := db.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to list jobs: %s", resp.Status)
+	}
+
+	var jobs []*daemon.Job
+	var jobsRaw []sql.Job
+	if err := json.NewDecoder(resp.Body).Decode(&jobsRaw); err != nil {
+		return nil, err
+	}
+	// for _, jobRaw := range jobsRaw {
+	// 	job := daemon.Job{}
+	// 	if err := json.Unmarshal(jobRaw.State, &job); err != nil {
+	// 		return nil, err
+	// 	}
+	// 	jobs = append(jobs, &job)
+	// }
+
+	return jobs, nil
+}
+
 func (db *RemoteDB) DeleteJob(ctx context.Context, jid string) error {
 	url := fmt.Sprintf("%s/%s", db.baseUrl, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
@@ -184,7 +219,7 @@ func (db *RemoteDB) ListCheckpoints(ctx context.Context, jids ...string) ([]*dae
 	return checkpoints, nil
 }
 
-func (db *RemoteDB) ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (db *RemoteDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
 	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

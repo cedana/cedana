@@ -91,12 +91,12 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.Ca
 
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
-		return nil, nil, utils.GRPCErrorColored(err)
+		return resp, nil, utils.GRPCErrorColored(err)
 	}
 
 	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
-		return nil, nil, err
+		return resp, nil, err
 	}
 
 	return resp, data, nil
@@ -116,12 +116,12 @@ func (c *Client) Restore(
 
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
-		return nil, nil, utils.GRPCErrorColored(err)
+		return resp, nil, utils.GRPCErrorColored(err)
 	}
 
 	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
-		return nil, nil, err
+		return resp, nil, err
 	}
 
 	return resp, data, nil
@@ -135,12 +135,12 @@ func (c *Client) Run(ctx context.Context, args *daemon.RunReq, opts ...grpc.Call
 
 	resp, err := c.daemonClient.Run(ctx, args, opts...)
 	if err != nil {
-		return nil, nil, utils.GRPCErrorColored(err)
+		return resp, nil, utils.GRPCErrorColored(err)
 	}
 
 	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
-		return nil, nil, err
+		return resp, nil, err
 	}
 
 	return resp, data, nil
@@ -154,12 +154,12 @@ func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.C
 
 	resp, err := c.daemonClient.Manage(ctx, args, opts...)
 	if err != nil {
-		return nil, nil, utils.GRPCErrorColored(err)
+		return resp, nil, utils.GRPCErrorColored(err)
 	}
 
 	data, err := profiling.FromTrailer(trailer)
 	if err != nil {
-		return nil, nil, err
+		return resp, nil, err
 	}
 
 	return resp, data, nil
@@ -168,37 +168,25 @@ func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.C
 func (c *Client) Get(ctx context.Context, args *daemon.GetReq, opts ...grpc.CallOption) (*daemon.GetResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Get(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) List(ctx context.Context, args *daemon.ListReq, opts ...grpc.CallOption) (*daemon.ListResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.List(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) Kill(ctx context.Context, args *daemon.KillReq, opts ...grpc.CallOption) (*daemon.KillResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq, opts ...grpc.CallOption) (*daemon.DeleteResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 // Attach attaches to a managed process/container. Exits the program
@@ -234,47 +222,31 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 func (c *Client) GetCheckpoint(ctx context.Context, args *daemon.GetCheckpointReq, opts ...grpc.CallOption) (*daemon.GetCheckpointResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.GetCheckpoint(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) ListCheckpoints(ctx context.Context, args *daemon.ListCheckpointsReq, opts ...grpc.CallOption) (*daemon.ListCheckpointsResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.ListCheckpoints(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckpointReq, opts ...grpc.CallOption) (*daemon.DeleteCheckpointResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.DeleteCheckpoint(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) HealthCheck(ctx context.Context, args *daemon.HealthCheckReq, opts ...grpc.CallOption) (*daemon.HealthCheckResp, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.HealthCheck(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...grpc.CallOption) (*daemon.Empty, error) {
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.ReloadPlugins(ctx, args, opts...)
-	if err != nil {
-		return nil, utils.GRPCErrorColored(err)
-	}
-	return resp, nil
+	return resp, utils.GRPCErrorColored(err)
 }
 
 ///////////////////

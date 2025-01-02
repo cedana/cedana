@@ -152,7 +152,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
-	if !job.(*Job).GPUEnabled() { // FIXME: need a better way
+	if !job.(*Job).GPUEnabled() {
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
 	}
 
@@ -201,8 +201,33 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		if !job.GPUEnabled() { // FIXME: need a better way
+		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(jid))
+		}
+		jobs = append(jobs, job)
+		return true
+	})
+
+	return jobs
+}
+
+func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
+	var jobs []*Job
+
+	hostIDSet := make(map[string]any)
+	for _, hostID := range hostIDs {
+		hostIDSet[hostID] = nil
+	}
+
+	m.jobs.Range(func(key any, val any) bool {
+		job := val.(*Job)
+		hostID := job.GetState().GetHost().GetID()
+
+		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
+			return true
+		}
+		if !job.GPUEnabled() {
+			job.SetGPUEnabled(m.gpus.IsAttached(job.JID))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -417,7 +442,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 			job := fromProto(proto)
 			m.jobs.Store(job.JID, job)
 
-			checkpoints, err := db.ListCheckpointsByJID(ctx, job.JID)
+			checkpoints, err := db.ListCheckpointsByJIDs(ctx, job.JID)
 			if err != nil {
 				break
 			}

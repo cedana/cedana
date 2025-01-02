@@ -116,6 +116,76 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 	return items, nil
 }
 
+const listJobsByHostIDs = `-- name: ListJobsByHostIDs :many
+SELECT jobs.id, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
+FROM jobs
+JOIN hosts ON hosts.ID = jobs.HostID
+WHERE jobs.HostID IN (/*SLICE:host_ids*/?)
+`
+
+type ListJobsByHostIDsRow struct {
+	Job  Job
+	Host Host
+}
+
+func (q *Queries) ListJobsByHostIDs(ctx context.Context, hostIds []string) ([]ListJobsByHostIDsRow, error) {
+	query := listJobsByHostIDs
+	var queryParams []interface{}
+	if len(hostIds) > 0 {
+		for _, v := range hostIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:host_ids*/?", strings.Repeat(",?", len(hostIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:host_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobsByHostIDsRow
+	for rows.Next() {
+		var i ListJobsByHostIDsRow
+		if err := rows.Scan(
+			&i.Job.ID,
+			&i.Job.Type,
+			&i.Job.Gpuenabled,
+			&i.Job.Log,
+			&i.Job.Details,
+			&i.Job.Pid,
+			&i.Job.Cmdline,
+			&i.Job.Starttime,
+			&i.Job.Workingdir,
+			&i.Job.Status,
+			&i.Job.Isrunning,
+			&i.Job.Hostid,
+			&i.Host.ID,
+			&i.Host.Mac,
+			&i.Host.Hostname,
+			&i.Host.Os,
+			&i.Host.Platform,
+			&i.Host.Kernelversion,
+			&i.Host.Kernelarch,
+			&i.Host.Cpuphysicalid,
+			&i.Host.Cpuvendorid,
+			&i.Host.Cpufamily,
+			&i.Host.Cpucount,
+			&i.Host.Memtotal,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobsByIDs = `-- name: ListJobsByIDs :many
 SELECT jobs.id, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs

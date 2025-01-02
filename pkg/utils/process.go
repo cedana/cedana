@@ -26,6 +26,8 @@ func GetProcessState(ctx context.Context, pid uint32) (*daemon.ProcessState, err
 	return state, err
 }
 
+// Tries to fill as much as possible of the process state.
+// Only returns early if the process does not exist at all.
 func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessState) error {
 	if state == nil {
 		return fmt.Errorf("state is nil")
@@ -41,7 +43,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	cmdline, err := p.CmdlineWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get cmdline: %v", err)
+		errs = append(errs, err)
 	}
 	state.Cmdline = cmdline
 
@@ -59,15 +61,15 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get uids: %v", err)
+		errs = append(errs, err)
 	}
 	gids, err := p.GidsWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get gids: %v", err)
+		errs = append(errs, err)
 	}
 	groups, err := p.GroupsWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get groups: %v", err)
+		errs = append(errs, err)
 	}
 	state.UIDs = uids
 	state.GIDs = gids
@@ -76,91 +78,95 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	var openFiles []*daemon.File
 	of, err := p.OpenFilesWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get open files: %v", err)
-	}
-	for _, f := range of {
-		var mode string
-		file, err := os.Stat(f.Path)
-		if err == nil {
-			mode = file.Mode().String()
-			fdInfo, err := GetFdInfo(pid, int(f.Fd))
-			if err != nil {
-				return fmt.Errorf("could not get fd info: %v", err)
-			}
-			isTTY, err := IsTTY(f.Path)
-			if err != nil {
-				return fmt.Errorf("could not get tty info: %v", err)
-			}
-			sys := file.Sys().(*syscall.Stat_t)
+		errs = append(errs, err)
+	} else {
+		for _, f := range of {
+			var mode string
+			file, err := os.Stat(f.Path)
+			if err == nil {
+				mode = file.Mode().String()
+				fdInfo, err := GetFdInfo(pid, int(f.Fd))
+				if err != nil {
+					errs = append(errs, err)
+				} else {
+					isTTY, err := IsTTY(f.Path)
+					if err != nil {
+						errs = append(errs, err)
+					} else {
+						sys := file.Sys().(*syscall.Stat_t)
 
-			openFiles = append(openFiles, &daemon.File{
-				Fd:      f.Fd,
-				Path:    f.Path,
-				Mode:    mode,
-				MountID: fdInfo.MntId,
-				Inode:   fdInfo.Inode,
-				IsTTY:   isTTY,
-				Dev:     sys.Dev,
-				Rdev:    sys.Rdev,
-			})
+						openFiles = append(openFiles, &daemon.File{
+							Fd:      f.Fd,
+							Path:    f.Path,
+							Mode:    mode,
+							MountID: fdInfo.MntId,
+							Inode:   fdInfo.Inode,
+							IsTTY:   isTTY,
+							Dev:     sys.Dev,
+							Rdev:    sys.Rdev,
+						})
+					}
+				}
+			}
 		}
 	}
 
 	mountinfoFile, err := os.Open(fmt.Sprintf("/proc/%d/mountinfo", pid))
 	if err != nil {
-		return fmt.Errorf("could not open mountinfo: %v", err)
-	}
-	mounts, err := mountinfo.GetMountsFromReader(mountinfoFile, nil)
-	if err != nil {
-		return fmt.Errorf("could not get mounts: %v", err)
-	}
-	for _, m := range mounts {
-		state.Mounts = append(state.Mounts, &daemon.Mount{
-			ID:         uint64(m.ID),
-			Parent:     int32(m.Parent),
-			Major:      int32(m.Major),
-			Minor:      int32(m.Minor),
-			Root:       m.Root,
-			MountPoint: m.Mountpoint,
-			Options:    m.Options,
-			FSType:     m.FSType,
-		})
+		errs = append(errs, err)
+	} else {
+		mounts, err := mountinfo.GetMountsFromReader(mountinfoFile, nil)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			for _, m := range mounts {
+				state.Mounts = append(state.Mounts, &daemon.Mount{
+					ID:         uint64(m.ID),
+					Parent:     int32(m.Parent),
+					Major:      int32(m.Major),
+					Minor:      int32(m.Minor),
+					Root:       m.Root,
+					MountPoint: m.Mountpoint,
+					Options:    m.Options,
+					FSType:     m.FSType,
+				})
+			}
+		}
 	}
 
 	var openConnections []*daemon.Connection
 	conns, err := p.ConnectionsWithContext(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get connections: %v", err)
-	}
-	for _, conn := range conns {
-		Laddr := &daemon.Addr{
-			IP:   conn.Laddr.IP,
-			Port: conn.Laddr.Port,
+		errs = append(errs, err)
+	} else {
+		for _, conn := range conns {
+			Laddr := &daemon.Addr{
+				IP:   conn.Laddr.IP,
+				Port: conn.Laddr.Port,
+			}
+			Raddr := &daemon.Addr{
+				IP:   conn.Raddr.IP,
+				Port: conn.Raddr.Port,
+			}
+			openConnections = append(openConnections, &daemon.Connection{
+				Fd:     conn.Fd,
+				Family: conn.Family,
+				Type:   conn.Type,
+				Laddr:  Laddr,
+				Raddr:  Raddr,
+				Status: conn.Status,
+				PID:    uint32(conn.Pid),
+				UIDs:   conn.Uids,
+			})
 		}
-		Raddr := &daemon.Addr{
-			IP:   conn.Raddr.IP,
-			Port: conn.Raddr.Port,
-		}
-		openConnections = append(openConnections, &daemon.Connection{
-			Fd:     conn.Fd,
-			Family: conn.Family,
-			Type:   conn.Type,
-			Laddr:  Laddr,
-			Raddr:  Raddr,
-			Status: conn.Status,
-			PID:    uint32(conn.Pid),
-			UIDs:   conn.Uids,
-		})
 	}
 
-	memoryUsed, err := p.MemoryPercentWithContext(ctx)
 	errs = append(errs, err)
 	proccessStatus, err := p.StatusWithContext(ctx)
 	errs = append(errs, err)
 	cwd, err := p.CwdWithContext(ctx)
 	errs = append(errs, err)
 
-	state.MemoryPercent = memoryUsed
 	state.OpenFiles = openFiles
 	state.OpenConnections = openConnections
 	state.WorkingDir = cwd

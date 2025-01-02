@@ -2,10 +2,11 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/server/job"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -29,7 +30,13 @@ func (s *Server) Get(ctx context.Context, req *daemon.GetReq) (*daemon.GetResp, 
 }
 
 func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListResp, error) {
-	jobs := s.jobs.List(req.GetJIDs()...)
+	var jobs []*job.Job
+
+	if req.Remote {
+		jobs = s.jobs.ListByHostIDs(s.host.ID)
+	} else {
+		jobs = s.jobs.List(req.JIDs...)
+	}
 
 	jobProtos := []*daemon.Job{}
 	for _, job := range jobs {
@@ -51,19 +58,25 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 		return nil, status.Errorf(codes.NotFound, "no jobs found")
 	}
 
-	errs := []error{}
+	messages := []string{}
 
 	for _, job := range jobs {
 		if job.IsRunning() {
+			if job.IsRemote() {
+				messages = append(messages, fmt.Sprintf("Cannot kill remote job %s", job.JID))
+				continue
+			}
 			err := s.jobs.Kill(job.JID)
 			if err != nil {
 				log.Error().Err(err).Msgf("failed to kill job %s", job.JID)
+				messages = append(messages, fmt.Sprintf("Failed to kill job %s: %v", job.JID, err))
+				continue
 			}
-			errs = append(errs, err)
+			messages = append(messages, fmt.Sprintf("Killed job %s", job.JID))
 		}
 	}
 
-	return &daemon.KillResp{}, errors.Join(errs...)
+	return &daemon.KillResp{Message: strings.Join(messages, "\n")}, nil
 }
 
 func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.DeleteResp, error) {
@@ -73,18 +86,23 @@ func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.Del
 		return nil, status.Errorf(codes.NotFound, "no jobs found")
 	}
 
-	errs := []error{}
+	messages := []string{}
 
 	for _, job := range jobs {
 		// Don't delete running jobs
 		if job.IsRunning() {
-			errs = append(errs, fmt.Errorf("job %s is running", job.JID))
+			messages = append(messages, fmt.Sprintf("Job %s is running, please kill it first", job.JID))
 			continue
 		}
+		if job.IsRemote() {
+			messages = append(messages, fmt.Sprintf("Cannot delete remote job %s", job.JID))
+			continue
+		}
+		messages = append(messages, fmt.Sprintf("Deleted job %s", job.JID))
 		s.jobs.Delete(job.JID)
 	}
 
-	return &daemon.DeleteResp{}, errors.Join(errs...)
+	return &daemon.DeleteResp{Message: strings.Join(messages, "\n")}, nil
 }
 
 func (s *Server) GetCheckpoint(ctx context.Context, req *daemon.GetCheckpointReq) (*daemon.GetCheckpointResp, error) {

@@ -16,6 +16,9 @@ import (
 )
 
 func GRPCError(err error, extra ...string) error {
+	if err == nil {
+		return nil
+	}
 	st, ok := status.FromError(err)
 	var extraStr string
 	if len(extra) > 0 {
@@ -42,6 +45,9 @@ func GRPCError(err error, extra ...string) error {
 }
 
 func GRPCErrorShort(err error, extra ...string) error {
+	if err == nil {
+		return nil
+	}
 	st, ok := status.FromError(err)
 	var extraStr string
 	if len(extra) > 0 {
@@ -62,6 +68,9 @@ func GRPCErrorShort(err error, extra ...string) error {
 }
 
 func GRPCErrorColored(err error, extra ...string) error {
+	if err == nil {
+		return nil
+	}
 	st, ok := status.FromError(err)
 	var extraStr string
 	if len(extra) > 0 {
@@ -88,6 +97,9 @@ func GRPCErrorColored(err error, extra ...string) error {
 }
 
 func GRPCErrorColoredShort(err error, extra ...string) error {
+	if err == nil {
+		return nil
+	}
 	st, ok := status.FromError(err)
 	var extraStr string
 	if len(extra) > 0 {

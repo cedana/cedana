@@ -34,6 +34,9 @@ type Manager interface {
 	// Get returns a job with the given JID.
 	List(jids ...string) []*Job
 
+	// ListByHostIDs returns a list of jobs with the given host IDs.
+	ListByHostIDs(hostIDs ...string) []*Job
+
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
 
