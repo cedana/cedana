@@ -81,33 +81,33 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		errs = append(errs, err)
 	} else {
 		for _, f := range of {
-			var mode string
-			file, err := os.Stat(f.Path)
-			if err == nil {
-				mode = file.Mode().String()
-				fdInfo, err := GetFdInfo(pid, int(f.Fd))
-				if err != nil {
-					errs = append(errs, err)
-				} else {
-					isTTY, err := IsTTY(f.Path)
-					if err != nil {
-						errs = append(errs, err)
-					} else {
-						sys := file.Sys().(*syscall.Stat_t)
-
-						openFiles = append(openFiles, &daemon.File{
-							Fd:      f.Fd,
-							Path:    f.Path,
-							Mode:    mode,
-							MountID: fdInfo.MntId,
-							Inode:   fdInfo.Inode,
-							IsTTY:   isTTY,
-							Dev:     sys.Dev,
-							Rdev:    sys.Rdev,
-						})
-					}
-				}
+			file := &daemon.File{
+				Fd:   f.Fd,
+				Path: f.Path,
 			}
+
+			stat, err := os.Stat(f.Path)
+			if err == nil {
+				mode := stat.Mode().String()
+				file.Mode = mode
+			}
+
+			fdInfo, err := GetFdInfo(pid, int(f.Fd))
+			if err == nil {
+				file.MountID = fdInfo.MntId
+				file.Inode = fdInfo.Inode
+			}
+
+			isTTY, err := IsTTY(f.Path)
+			if err == nil {
+				sys := stat.Sys().(*syscall.Stat_t)
+
+				file.IsTTY = isTTY
+				file.Dev = sys.Dev
+				file.Rdev = sys.Rdev
+			}
+
+			openFiles = append(openFiles, file)
 		}
 	}
 

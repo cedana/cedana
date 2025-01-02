@@ -107,8 +107,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		for _, f := range files {
 			_, ok := mountIds[f.MountID]
 			external := !ok
+			isPipe := strings.HasPrefix(f.Path, "pipe")
 
-			if external {
+			if external && !isPipe {
 				inheritFds = append(inheritFds, &criu_proto.InheritFd{
 					Fd:  proto.Int32(int32(f.Fd)),
 					Key: proto.String(fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)),
