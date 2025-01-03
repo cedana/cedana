@@ -213,9 +213,9 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 
 			if plugin.Status == Installed {
-				msgs <- style.WarningColor.Sprintf("Updated %s", name)
+				msgs <- style.WarningColors.Sprintf("Updated %s", name)
 			} else {
-				msgs <- style.PositiveColor.Sprintf("Installed %s", name)
+				msgs <- style.PositiveColors.Sprintf("Installed %s", name)
 			}
 			installed <- 1
 		}
@@ -279,7 +279,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 				}
 			}
 
-			msgs <- style.NegativeColor.Sprintf("Removed %s", name)
+			msgs <- style.NegativeColors.Sprintf("Removed %s", name)
 			removed <- 1
 		}
 	}()

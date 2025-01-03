@@ -136,15 +136,15 @@ var listJobCmd = &cobra.Command{
 		statusStr := func(status string) string {
 			switch status {
 			case "running", "sleep":
-				return style.PositiveColor.Sprint(status)
+				return style.PositiveColors.Sprint(status)
 			case "zombie":
-				return style.WarningColor.Sprint(status)
+				return style.WarningColors.Sprint(status)
 			case "remote":
-				return style.InfoColor.Sprint(status)
+				return style.InfoColors.Sprint(status)
 			case "halted":
-				return style.DisabledColor.Sprint(status)
+				return style.DisabledColors.Sprint(status)
 			}
-			return style.DisabledColor.Sprint(status)
+			return style.DisabledColors.Sprint(status)
 		}
 
 		// Color type based on the plugin theme

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/cmd"
 	"github.com/cedana/cedana/plugins/containerd/internal/client"
@@ -23,12 +24,16 @@ var (
 	DumpCmd    *cobra.Command = cmd.DumpCmd
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
-	CmdTheme   text.Colors    = text.Colors{text.FgMagenta}
+	CmdTheme   text.Colors    = style.HighLevelRuntimeColors
 )
 
 var (
-	RunHandler    types.Run                   = nil
-	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{}
+	RunHandler    types.Run                   = client.Run
+	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{
+		defaults.FillMissingRunDefaults,
+		validation.ValidateRunRequest,
+		client.SetupForRun,
+	}
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
@@ -36,7 +41,7 @@ var (
 		client.SetupForDump,
 		filesystem.AddRootfsToDump,
 
-		runtime.DumpMiddleware, // Simply plug in the runtime's dump middleware for the rest
+		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{}

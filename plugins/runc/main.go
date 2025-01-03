@@ -4,6 +4,7 @@ import (
 	"syscall"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/cmd"
 	"github.com/cedana/cedana/plugins/runc/internal/cgroup"
@@ -35,7 +36,7 @@ var (
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
 	ManageCmd  *cobra.Command = cmd.ManageCmd
-	CmdTheme   text.Colors    = text.Colors{text.FgCyan}
+	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
 )
 
 var KillSignal = syscall.SIGKILL

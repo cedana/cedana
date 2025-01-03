@@ -386,7 +386,7 @@ var pluginFeaturesCmd = &cobra.Command{
 		if showErrors && len(errs) > 0 {
 			fmt.Println()
 			for _, err := range errs {
-				fmt.Println(style.NegativeColor.Sprint(err))
+				fmt.Println(style.NegativeColors.Sprint(err))
 			}
 			return fmt.Errorf("Found %d issue(s). Try updating.", len(errs))
 		}
@@ -404,13 +404,13 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 
 	for _, name := range pluginNames {
 		if manager.IsInstalled(name) == false {
-			row = append(row, style.DisabledColor.Sprint(style.DashMark))
+			row = append(row, style.DisabledColors.Sprint(style.DashMark))
 			continue
 		}
 		available, err := feature.IsAvailable(name)
 		if err != nil {
 			*errs = append(*errs, err)
-			row = append(row, style.NegativeColor.Sprint(style.CrossMark))
+			row = append(row, style.NegativeColors.Sprint(style.CrossMark))
 		} else {
 			row = append(row, style.BoolStr(available, style.TickMark, style.BulletMark))
 		}
@@ -421,20 +421,20 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 
 func featureLegend() string {
 	return fmt.Sprintf("%s = implemented, %s = unimplemented, %s = not installed, %s = incompatible",
-		style.PositiveColor.Sprint(style.TickMark),
-		style.DisabledColor.Sprint(style.BulletMark),
-		style.DisabledColor.Sprint(style.DashMark),
-		style.NegativeColor.Sprint(style.CrossMark))
+		style.PositiveColors.Sprint(style.TickMark),
+		style.DisabledColors.Sprint(style.BulletMark),
+		style.DisabledColors.Sprint(style.DashMark),
+		style.NegativeColors.Sprint(style.CrossMark))
 }
 
 func statusStr(s plugins.Status) string {
 	switch s {
 	case plugins.Available:
-		return style.WarningColor.Sprint(s.String())
+		return style.WarningColors.Sprint(s.String())
 	case plugins.Installed:
-		return style.PositiveColor.Sprint(s.String())
+		return style.PositiveColors.Sprint(s.String())
 	case plugins.Unknown:
-		return style.DisabledColor.Sprint(s.String())
+		return style.DisabledColors.Sprint(s.String())
 	default:
 		return s.String()
 	}

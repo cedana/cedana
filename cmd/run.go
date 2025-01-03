@@ -192,7 +192,7 @@ func printProfilingData(data *profiling.Data) {
 		}
 		categoryName, name := utils.SimplifyFuncName(p.Name)
 
-		category := style.WarningColor.Sprint(categoryName)
+		category := style.WarningColors.Sprint(categoryName)
 		features.CmdTheme.IfAvailable(func(name string, theme text.Colors) error {
 			category = theme.Sprint(categoryName)
 			return nil
@@ -204,10 +204,10 @@ func printProfilingData(data *profiling.Data) {
 		if categoryName != "" {
 			categoryMap[category] += duration
 		} else {
-			categoryMap[style.DisabledColor.Sprint("other")] += duration
+			categoryMap[style.DisabledColors.Sprint("other")] += duration
 		}
 
-		tableWriter.AppendRow([]interface{}{duration, category, style.DisabledColor.Sprint(name)})
+		tableWriter.AppendRow([]interface{}{duration, category, style.DisabledColors.Sprint(name)})
 	}
 
 	tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})

@@ -81,14 +81,14 @@ func GRPCErrorColored(err error, extra ...string) error {
 		if extraStr != "" {
 			return fmt.Errorf(
 				"%s: %s: %s",
-				style.NegativeColor.Sprint(st.Code().String()),
+				style.NegativeColors.Sprint(st.Code().String()),
 				st.Message(),
 				strings.TrimSpace(extra[0]),
 			)
 		} else {
 			return fmt.Errorf(
 				"%s: %s",
-				style.NegativeColor.Sprint(st.Code().String()),
+				style.NegativeColors.Sprint(st.Code().String()),
 				st.Message(),
 			)
 		}
@@ -109,11 +109,11 @@ func GRPCErrorColoredShort(err error, extra ...string) error {
 		if extraStr != "" {
 			return fmt.Errorf(
 				"%s: %s",
-				style.NegativeColor.Sprint(st.Code().String()),
+				style.NegativeColors.Sprint(st.Code().String()),
 				strings.TrimSpace(extra[0]),
 			)
 		} else {
-			return fmt.Errorf("%s", style.NegativeColor.Sprint(st.Code().String()))
+			return fmt.Errorf("%s", style.NegativeColors.Sprint(st.Code().String()))
 		}
 	}
 	return err

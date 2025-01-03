@@ -28,25 +28,28 @@ var (
 			Header: text.Colors{text.Bold},
 		},
 	}
-	PositiveColor = text.Colors{text.FgGreen}
-	NegativeColor = text.Colors{text.FgRed}
-	WarningColor  = text.Colors{text.FgYellow}
-	InfoColor     = text.Colors{text.FgHiBlue}
-	DisabledColor = text.Colors{text.FgHiBlack}
+	PositiveColors = text.Colors{text.FgGreen}
+	NegativeColors = text.Colors{text.FgRed}
+	WarningColors  = text.Colors{text.FgYellow}
+	InfoColors     = text.Colors{text.FgHiBlue}
+	DisabledColors = text.Colors{text.FgHiBlack}
+
+	HighLevelRuntimeColors = text.Colors{text.FgMagenta}
+	LowLevelRuntimeColors  = text.Colors{text.FgCyan}
 )
 
 // BoolStr returns a string representation of a boolean value.
 func BoolStr(b bool, s ...string) string {
 	if len(s) == 2 {
 		if b {
-			return PositiveColor.Sprint(s[0])
+			return PositiveColors.Sprint(s[0])
 		}
-		return DisabledColor.Sprint(s[1])
+		return DisabledColors.Sprint(s[1])
 	}
 	if b {
-		return PositiveColor.Sprint("yes")
+		return PositiveColors.Sprint("yes")
 	}
-	return DisabledColor.Sprint("no")
+	return DisabledColors.Sprint("no")
 }
 
 // Breaks a like if it's larger than certain length, by adding

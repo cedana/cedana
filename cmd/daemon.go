@@ -112,17 +112,17 @@ var checkDaemonCmd = &cobra.Command{
 			name := strings.ToUpper(result.Name)
 			tableWriter.AppendRow(table.Row{text.Bold.Sprint(name), "", ""})
 			for _, component := range result.Components {
-				statusErr := style.NegativeColor.Sprint(style.CrossMark)
-				statusWarn := style.WarningColor.Sprint(style.BulletMark)
-				statusOk := style.PositiveColor.Sprint(style.TickMark)
+				statusErr := style.NegativeColors.Sprint(style.CrossMark)
+				statusWarn := style.WarningColors.Sprint(style.BulletMark)
+				statusOk := style.PositiveColors.Sprint(style.TickMark)
 				data := component.Data
 				var status string
 				if len(component.Errors) > 0 {
 					status = statusErr
-					data = style.NegativeColor.Sprint(data)
+					data = style.NegativeColors.Sprint(data)
 				} else if len(component.Warnings) > 0 {
 					status = statusWarn
-					data = style.WarningColor.Sprint(data)
+					data = style.WarningColors.Sprint(data)
 				} else {
 					status = statusOk
 				}
@@ -132,7 +132,7 @@ var checkDaemonCmd = &cobra.Command{
 				for _, err := range component.Errors {
 					errorCount++
 					err = style.BreakLine(err, maxLinelen)
-					err = style.DisabledColor.Sprint(err)
+					err = style.DisabledColors.Sprint(err)
 					if len(rows) == 1 && len(rows[0]) == 3 {
 						rows[0] = append(rows[0], err)
 						continue
@@ -142,7 +142,7 @@ var checkDaemonCmd = &cobra.Command{
 				for _, warn := range component.Warnings {
 					warningCount++
 					warn = style.BreakLine(warn, maxLinelen)
-					warn = style.DisabledColor.Sprint(warn)
+					warn = style.DisabledColors.Sprint(warn)
 					if len(rows) == 1 && len(rows[0]) == 3 {
 						rows[0] = append(rows[0], warn)
 						continue

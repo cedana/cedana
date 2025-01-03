@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/jedib0t/go-pretty/v6/text"
 )
@@ -12,7 +13,7 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var CmdTheme text.Colors = text.Colors{text.FgMagenta}
+var CmdTheme text.Colors = style.HighLevelRuntimeColors
 
 var (
 	RunHandler    types.Run                   = nil

@@ -9,7 +9,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: build install plugins plugins-install ## Build and install with all plugins
+all: reset-plugins build install plugins plugins-install ## Build and install (with all plugins)
 .PHONY: build plugins
 
 ##########

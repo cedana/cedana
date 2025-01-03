@@ -5,12 +5,17 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
 )
 
-func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+const (
+	DEFAULT_NAMESPACE = "default"
+	BASE_RUNTIME_DIR  = "/run/containerd"
+	DEFAULT_ADDRESS   = "/run/containerd/containerd.sock"
+)
+
+func FillMissingRunDefaults(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -23,8 +28,8 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		if req.GetDetails().GetContainerd().GetNamespace() == "" {
 			req.Details.Containerd.Namespace = DEFAULT_NAMESPACE
 		}
-		if req.GetCriu() == nil {
-			req.Criu = &criu_proto.CriuOpts{}
+		if req.GetDetails().GetContainerd().GetID() == "" {
+			req.Details.Containerd.ID = req.JID
 		}
 
 		return next(ctx, server, resp, req)
