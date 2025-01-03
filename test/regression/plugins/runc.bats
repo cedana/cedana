@@ -157,7 +157,7 @@ load_lib file
 
     sleep 1
 
-    run cedana -P "$PORT" manage runc "$id" --jid "$jid"
+    run cedana -P "$PORT" manage runc "$id" --jid "$jid" --bundle "$bundle"
     assert_success
 
     run cedana -P "$PORT" dump job "$jid"

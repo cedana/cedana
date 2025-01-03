@@ -24,6 +24,7 @@ var (
 	DumpCmd    *cobra.Command = cmd.DumpCmd
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
+	ManageCmd  *cobra.Command = cmd.ManageCmd
 	CmdTheme   text.Colors    = style.HighLevelRuntimeColors
 )
 
