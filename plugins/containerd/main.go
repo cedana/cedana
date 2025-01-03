@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/plugins/containerd/internal/client"
 	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
 	"github.com/cedana/cedana/plugins/containerd/internal/filesystem"
+	"github.com/cedana/cedana/plugins/containerd/internal/gpu"
 	"github.com/cedana/cedana/plugins/containerd/internal/runtime"
 	"github.com/cedana/cedana/plugins/containerd/internal/validation"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -34,7 +35,9 @@ var (
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		client.SetupForRun,
+		client.CreateContainerForRun,
 	}
+	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
 	ManageHandler types.Run = client.Manage
 

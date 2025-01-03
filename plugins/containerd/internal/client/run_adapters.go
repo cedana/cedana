@@ -29,3 +29,34 @@ func SetupForRun(next types.Run) types.Run {
 		return next(ctx, server, resp, req)
 	}
 }
+
+func CreateContainerForRun(next types.Run) types.Run {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+		details := req.GetDetails().GetContainerd()
+
+		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get client from context")
+		}
+
+		image, err := client.GetImage(ctx, details.Image)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
+		}
+
+		container, err := client.NewContainer(
+			ctx,
+			details.ID,
+			containerd.WithImage(image),
+		)
+		defer func() {
+			if err != nil {
+				container.Delete(ctx)
+			}
+		}()
+
+		ctx = context.WithValue(ctx, containerd_keys.CONTAINER_CONTEXT_KEY, container)
+
+		return next(ctx, server, resp, req)
+	}
+}

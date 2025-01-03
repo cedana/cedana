@@ -23,31 +23,10 @@ var (
 )
 
 func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	details := req.GetDetails().GetContainerd()
-
-	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
+	container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 	if !ok {
-		return nil, status.Errorf(codes.FailedPrecondition, "failed to get containerd client from context")
+		return nil, status.Errorf(codes.Internal, "failed to get container from context")
 	}
-
-	image, err := client.GetImage(ctx, details.Image)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
-	}
-
-	container, err := client.NewContainer(
-		ctx,
-		details.ID,
-		containerd.WithImage(image),
-	)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
-	}
-	defer func() {
-		if err != nil {
-			container.Delete(ctx)
-		}
-	}()
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)

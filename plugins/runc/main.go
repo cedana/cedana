@@ -49,15 +49,15 @@ var HealthChecks types.Checks = types.Checks{
 }
 
 var (
-	RunHandler      types.Run                   = container.Run
-	GPUInterception types.Adapter[types.Run]    = gpu.Interception
-	RunMiddleware   types.Middleware[types.Run] = types.Middleware[types.Run]{
+	RunHandler    types.Run                   = container.Run
+	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		filesystem.SetWorkingDirectory,
 		container.LoadSpecFromBundle,
 		container.SetUsChildSubreaper,
 	}
+	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
 	ManageHandler types.Run = container.Manage
 
