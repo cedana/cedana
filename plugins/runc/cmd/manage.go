@@ -13,6 +13,7 @@ import (
 
 func init() {
 	ManageCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
+	ManageCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
 }
 
 var ManageCmd = &cobra.Command{
@@ -28,11 +29,13 @@ var ManageCmd = &cobra.Command{
 		id := args[0]
 
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
+		bundle, _ := cmd.Flags().GetString(runc_flags.BundleFlag.Full)
 
 		req.Type = "runc"
 		req.Details = &daemon.Details{Runc: &runc.Runc{
-			Root: root,
-			ID:   id,
+			Root:   root,
+			Bundle: bundle,
+			ID:     id,
 		}}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)

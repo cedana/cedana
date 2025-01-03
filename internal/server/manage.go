@@ -28,6 +28,8 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 		job.Manage(s.jobs, true),
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+
+		pluginRunMiddleware, // middleware from plugins
 	}
 
 	manage := pluginManageHandler().With(middleware...) // even the handler depends on the type of job

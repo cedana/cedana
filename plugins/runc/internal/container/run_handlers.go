@@ -189,16 +189,16 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 
 // manage simply sets the PID in response, if the container exists, and returns a valid exited channel
 func manage(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	opts := req.GetDetails().GetRunc()
-	if opts == nil {
+	details := req.GetDetails().GetRunc()
+	if details == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing runc options")
 	}
-	if opts.ID == "" {
+	if details.ID == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing ID")
 	}
 
-	root := opts.GetRoot()
-	id := opts.GetID()
+	root := details.Root
+	id := details.ID
 
 	if root == "" {
 		root = defaults.DEFAULT_ROOT

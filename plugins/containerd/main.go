@@ -35,6 +35,8 @@ var (
 		client.SetupForRun,
 	}
 
+	ManageHandler types.Run = client.Manage
+
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequst,

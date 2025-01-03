@@ -15,6 +15,7 @@ import (
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
 	"github.com/opencontainers/image-spec/identity"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -35,6 +36,7 @@ func AddRootfsToDump(next types.Dump) types.Dump {
 		details := req.GetDetails().GetContainerd()
 		id := details.ID
 		ref := details.Image
+		rootfsOnly := req.Dir == ""
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
@@ -46,87 +48,112 @@ func AddRootfsToDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", id, err)
 		}
 
-		// Add CRIU callback for dumping rootfs
+		if rootfsOnly {
+			log.Debug().Str("container", id).Msg("dumping rootfs only")
+
+			task, err := container.Task(ctx, nil)
+			err = task.Pause(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", id, err)
+			}
+			defer task.Resume(ctx)
+
+			err = dumpRootfs(ctx, client, container, ref)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
+			}
+
+			return nil, nil // return early without calling next handler
+		}
+
+		// When doing a full dump, we instead add a post-dump callback to dump the rootfs
+		// making use of cgroup freeze called by CRIU.
 
 		callback := &criu.NotifyCallback{Name: "rootfs"}
 
 		callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-			info, err := container.Info(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get container info: %v", err)
-			}
-
-			baseImgNoPlatform, err := client.ImageService().Get(ctx, info.Image)
-			if err != nil {
-				return fmt.Errorf("failed to get container image: %v", err)
-			}
-
-			platformLabel := info.Labels[CEDANA_PLATFORM]
-			if platformLabel == "" {
-				platformLabel = platforms.DefaultString()
-			}
-
-			ocispecPlatform, err := platforms.Parse(platformLabel)
-			if err != nil {
-				return err
-			}
-
-			platform := platforms.Only(ocispecPlatform)
-
-			baseImg := containerd.NewImageWithPlatform(client, baseImgNoPlatform, platform)
-
-			baseImgConfig, _, err := readImageConfig(ctx, baseImg)
-			if err != nil {
-				return err
-			}
-
-			var (
-				differ       = client.DiffService()
-				snapshotter  = client.SnapshotService(info.Snapshotter)
-				contentStore = client.ContentStore()
-			)
-
-			diffLayerDesc, diffID, err := createDiff(ctx, id, contentStore, snapshotter, differ)
-			if err != nil {
-				return fmt.Errorf("failed to export layer: %w", err)
-			}
-
-			imageConfig, err := generateCommitImageConfig(ctx, container, baseImgConfig, diffID)
-			if err != nil {
-				return fmt.Errorf("failed to generate commit image config: %w", err)
-			}
-			rootfsID := identity.ChainID(imageConfig.RootFS.DiffIDs).String()
-
-			if err := applyDiffLayer(ctx, rootfsID, baseImgConfig, snapshotter, differ, diffLayerDesc); err != nil {
-				return fmt.Errorf("failed to apply diff: %w", err)
-			}
-
-			commitManifestDesc, _, err := writeContentsForImage(ctx, info.Snapshotter, baseImg, imageConfig, diffLayerDesc)
-			if err != nil {
-				return err
-			}
-
-			img := images.Image{
-				Name:      ref,
-				Target:    commitManifestDesc,
-				CreatedAt: time.Now(),
-			}
-
-			if _, err := client.ImageService().Update(ctx, img); err != nil {
-				if !errdefs.IsNotFound(err) {
-					return err
-				}
-
-				if _, err := client.ImageService().Create(ctx, img); err != nil {
-					return fmt.Errorf("failed to create new image %s: %w", ref, err)
-				}
-			}
-
-			return nil
+			return dumpRootfs(ctx, client, container, ref)
 		}
 
 		server.CRIUCallback.Include(callback)
 
 		return next(ctx, server, resp, req)
 	}
+}
+
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string) error {
+	id := container.ID()
+
+	info, err := container.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get container info: %v", err)
+	}
+
+	baseImgNoPlatform, err := client.ImageService().Get(ctx, info.Image)
+	if err != nil {
+		return fmt.Errorf("failed to get container image: %v", err)
+	}
+
+	platformLabel := info.Labels[CEDANA_PLATFORM]
+	if platformLabel == "" {
+		platformLabel = platforms.DefaultString()
+	}
+
+	ocispecPlatform, err := platforms.Parse(platformLabel)
+	if err != nil {
+		return err
+	}
+
+	platform := platforms.Only(ocispecPlatform)
+
+	baseImg := containerd.NewImageWithPlatform(client, baseImgNoPlatform, platform)
+
+	baseImgConfig, _, err := readImageConfig(ctx, baseImg)
+	if err != nil {
+		return err
+	}
+
+	var (
+		differ       = client.DiffService()
+		snapshotter  = client.SnapshotService(info.Snapshotter)
+		contentStore = client.ContentStore()
+	)
+
+	diffLayerDesc, diffID, err := createDiff(ctx, id, contentStore, snapshotter, differ)
+	if err != nil {
+		return fmt.Errorf("failed to export layer: %w", err)
+	}
+
+	imageConfig, err := generateCommitImageConfig(ctx, container, baseImgConfig, diffID)
+	if err != nil {
+		return fmt.Errorf("failed to generate commit image config: %w", err)
+	}
+	rootfsID := identity.ChainID(imageConfig.RootFS.DiffIDs).String()
+
+	if err := applyDiffLayer(ctx, rootfsID, baseImgConfig, snapshotter, differ, diffLayerDesc); err != nil {
+		return fmt.Errorf("failed to apply diff: %w", err)
+	}
+
+	commitManifestDesc, _, err := writeContentsForImage(ctx, info.Snapshotter, baseImg, imageConfig, diffLayerDesc)
+	if err != nil {
+		return err
+	}
+
+	img := images.Image{
+		Name:      ref,
+		Target:    commitManifestDesc,
+		CreatedAt: time.Now(),
+	}
+
+	if _, err := client.ImageService().Update(ctx, img); err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+
+		if _, err := client.ImageService().Create(ctx, img); err != nil {
+			return fmt.Errorf("failed to create new image %s: %w", ref, err)
+		}
+	}
+
+	return nil
 }

@@ -100,9 +100,14 @@ plugins-install: ## Install plugins
 reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	if [ -f $(OUT_DIR)/$(BINARY) ]; then \
-		$(SUDO) $(BINARY) plugin remove --all ;\
-	fi
+	list=""
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			list="$$name $$list"; \
+		fi ;\
+	done ;\
+	$(SUDO) $(BINARY) plugin remove $$list || true ;\
 
 ###########
 ##@ Testing

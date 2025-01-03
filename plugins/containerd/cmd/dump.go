@@ -15,6 +15,7 @@ func init() {
 	DumpCmd.Flags().StringP(containerd_flags.ImageFlag.Full, containerd_flags.ImageFlag.Short, "", "image ref (rootfs). leave empty to skip rootfs")
 	DumpCmd.Flags().StringP(containerd_flags.AddressFlag.Full, containerd_flags.AddressFlag.Short, "", "containerd socket address")
 	DumpCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
+	DumpCmd.Flags().Bool(containerd_flags.RootfsOnlyFlag.Full, false, "dump only the rootfs")
 }
 
 var DumpCmd = &cobra.Command{
@@ -36,6 +37,13 @@ var DumpCmd = &cobra.Command{
 		image, _ := cmd.Flags().GetString(containerd_flags.ImageFlag.Full)
 		address, _ := cmd.Flags().GetString(containerd_flags.AddressFlag.Full)
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
+		rootfsOnly, _ := cmd.Flags().GetBool(containerd_flags.RootfsOnlyFlag.Full)
+
+		// For rootfs-only, we set the dump dir to empty string to indicate
+		// as we only need the image ref
+		if rootfsOnly {
+			req.Dir = ""
+		}
 
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
