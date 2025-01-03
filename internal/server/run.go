@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/defaults"
@@ -45,6 +46,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("run successful")
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Running managed %s PID %d\n", req.Type, resp.PID))
 
 	return resp, nil
 }

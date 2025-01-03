@@ -9,6 +9,7 @@ import (
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -99,18 +100,5 @@ func manage(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, 
 
 	resp.PID = uint32(task.Pid())
 
-	exited = make(chan int)
-
-	server.WG.Add(1)
-	go func() {
-		defer server.WG.Done()
-		statusChan, err := task.Wait(context.WithoutCancel(ctx))
-		if err != nil {
-			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
-		}
-		<-statusChan
-		close(exited)
-	}()
-
-	return exited, nil
+	return utils.WaitForPid(resp.PID), nil
 }

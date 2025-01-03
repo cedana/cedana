@@ -65,11 +65,11 @@ var (
 
 // run runs a container using CLI directly
 func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	opts := req.GetDetails().GetRunc()
-	root := opts.GetRoot()
-	id := opts.GetID()
-	noPivot := opts.GetNoPivot()
-	noNewKeyring := opts.GetNoNewKeyring()
+	details := req.GetDetails().GetRunc()
+	root := details.GetRoot()
+	id := details.GetID()
+	noPivot := details.GetNoPivot()
+	noNewKeyring := details.GetNoNewKeyring()
 
 	spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 	if !ok {

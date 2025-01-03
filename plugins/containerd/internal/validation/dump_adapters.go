@@ -23,8 +23,8 @@ func ValidateDumpRequst(next types.Dump) types.Dump {
 		if req.GetDetails().GetContainerd().GetID() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd id")
 		}
-		if req.GetDir() == "" && req.GetDetails().GetContainerd().GetImage() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "require at least dump dir or image ref (for rootfs)")
+		if req.GetDetails().GetContainerd().GetRootfsOnly() && req.GetDetails().GetContainerd().GetImage() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing image ref for rootfs-only dump")
 		}
 
 		return next(ctx, server, resp, req)

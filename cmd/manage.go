@@ -89,7 +89,9 @@ var manageCmd = &cobra.Command{
 			printProfilingData(profiling)
 		}
 
-		fmt.Printf("Managing %s PID %d\n", req.Type, resp.PID)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
+		}
 
 		return nil
 	},

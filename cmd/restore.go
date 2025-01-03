@@ -154,7 +154,9 @@ var restoreCmd = &cobra.Command{
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
-		fmt.Printf("Restored successfully, PID: %d\n", resp.PID)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
+		}
 
 		return nil
 	},

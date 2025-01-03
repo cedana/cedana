@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/criu"
@@ -59,6 +60,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Restored successfully, PID: %d\n", resp.PID))
 
 	return resp, nil
 }

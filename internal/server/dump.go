@@ -33,6 +33,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		// Process state-dependent adapters
 		process.FillProcessStateForDump,
 		process.DetectShellJobForDump,
+		process.DetectIOUringForDump,
 		process.CloseCommonFilesForDump,
 		process.AddExternalFilesForDump,
 		network.DetectNetworkOptionsForDump,
@@ -60,7 +61,10 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		return nil, err
 	}
 
-	log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
+	if !req.External {
+		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
+		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
+	}
 
 	return resp, nil
 }

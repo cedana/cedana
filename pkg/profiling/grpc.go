@@ -49,12 +49,6 @@ func AttachTrailer(ctx context.Context) error {
 		return nil
 	}
 
-	data = &Data{
-		Name:       data.Name,
-		Duration:   data.Duration,
-		Components: data.Components,
-	}
-
 	CleanData(data)
 	FlattenData(data)
 

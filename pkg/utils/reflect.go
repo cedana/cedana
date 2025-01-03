@@ -26,23 +26,22 @@ func SimplifyFuncName(f string) (category string, name string) {
 		return "", f // fallback
 	}
 
-	pluginPattern, err := regexp.Compile(
-		fmt.Sprintf(
-			`%s/plugins/([a-zA-Z0-9_]+)(/|\.)`,
-			info.Main.Path,
-		))
-	if err != nil {
-		return "", f // fallback
-	}
-
-	matches := pluginPattern.FindStringSubmatch(f)
-	if len(matches) > 1 {
-		category = matches[1]
+	splits := strings.Split(f, ":")
+	if len(splits) > 1 {
+		category = splits[len(splits)-2]
+		f = splits[len(splits)-1]
 	} else {
-		splits := strings.Split(f, ":")
-		if len(splits) > 1 {
-			category = splits[len(splits)-2]
-			f = splits[len(splits)-1]
+		pluginPattern, err := regexp.Compile(
+			fmt.Sprintf(
+				`%s/plugins/([a-zA-Z0-9_]+)(/|\.)`,
+				info.Main.Path,
+			))
+		if err != nil {
+			return "", f // fallback
+		}
+		matches := pluginPattern.FindStringSubmatch(f)
+		if len(matches) > 1 {
+			category = matches[1]
 		}
 	}
 

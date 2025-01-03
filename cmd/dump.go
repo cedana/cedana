@@ -155,7 +155,9 @@ var dumpCmd = &cobra.Command{
 			printProfilingData(profiling)
 		}
 
-		fmt.Printf("Dumped to %s\n", resp.Path)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
+		}
 
 		return nil
 	},

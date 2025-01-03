@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/job"
@@ -76,7 +75,7 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 		}
 	}
 
-	return &daemon.KillResp{Message: strings.Join(messages, "\n")}, nil
+	return &daemon.KillResp{Messages: messages}, nil
 }
 
 func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.DeleteResp, error) {
@@ -102,7 +101,7 @@ func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.Del
 		s.jobs.Delete(job.JID)
 	}
 
-	return &daemon.DeleteResp{Message: strings.Join(messages, "\n")}, nil
+	return &daemon.DeleteResp{Messages: messages}, nil
 }
 
 func (s *Server) GetCheckpoint(ctx context.Context, req *daemon.GetCheckpointReq) (*daemon.GetCheckpointResp, error) {

@@ -39,19 +39,15 @@ var DumpCmd = &cobra.Command{
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
 		rootfsOnly, _ := cmd.Flags().GetBool(containerd_flags.RootfsOnlyFlag.Full)
 
-		// For rootfs-only, we set the dump dir to empty string to indicate
-		// as we only need the image ref
-		if rootfsOnly {
-			req.Dir = ""
-		}
-
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
-			ID:        id,
-			Image:     image,
-			Address:   address,
-			Namespace: namespace,
+			ID:         id,
+			Image:      image,
+			Address:    address,
+			Namespace:  namespace,
+			RootfsOnly: rootfsOnly,
 		}}
+		req.External = rootfsOnly
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

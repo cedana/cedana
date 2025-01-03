@@ -229,8 +229,8 @@ var killJobCmd = &cobra.Command{
 
 		resp, err := client.Kill(cmd.Context(), req)
 
-		if resp.GetMessage() != "" {
-			fmt.Println(resp.Message)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
 		}
 
 		return err
@@ -265,8 +265,8 @@ var deleteJobCmd = &cobra.Command{
 
 		resp, err := client.Delete(cmd.Context(), req)
 
-		if resp.GetMessage() != "" {
-			fmt.Println(resp.Message)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
 		}
 
 		return err

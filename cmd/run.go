@@ -118,7 +118,9 @@ var runCmd = &cobra.Command{
 			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
-		fmt.Printf("Running managed %s PID %d\n", req.Type, resp.PID)
+		for _, message := range resp.GetMessages() {
+			fmt.Println(message)
+		}
 
 		return nil
 	},

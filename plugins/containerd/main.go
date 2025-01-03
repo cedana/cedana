@@ -45,7 +45,7 @@ var (
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequst,
 		client.SetupForDump,
-		filesystem.AddRootfsToDump,
+		filesystem.DumpRootfs,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}

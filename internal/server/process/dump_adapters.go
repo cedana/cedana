@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -95,6 +96,27 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 		}
 
 		req.Criu.ShellJob = proto.Bool(isShellJob)
+
+		return next(ctx, server, resp, req)
+	}
+}
+
+// Detects if the process is using IOUring and sets appropriate options for CRIU
+// XXX: Currently IO uring C/R is not supported by CRIU, so we return an error.
+// ref: https://criu.org/Google_Summer_of_Code_Ideas#IOUring_support
+func DetectIOUringForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			log.Warn().Msg("no process info found. it should have been filled by an adapter")
+			return next(ctx, server, resp, req)
+		}
+
+		for _, f := range state.GetOpenFiles() {
+			if strings.Contains(f.Path, "io_uring") {
+				return nil, status.Errorf(codes.Unimplemented, "IOUring dump is not supported at the moment")
+			}
+		}
 
 		return next(ctx, server, resp, req)
 	}

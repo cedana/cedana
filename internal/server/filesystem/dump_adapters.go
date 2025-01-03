@@ -33,6 +33,10 @@ const (
 func PrepareDumpDir(compression string) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+			if req.External { // if dump is managed by an external plugin, skip
+				return next(ctx, server, resp, req)
+			}
+
 			dir := req.GetDir()
 
 			// Check if the provided dir exists

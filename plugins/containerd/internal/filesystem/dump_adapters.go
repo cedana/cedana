@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
@@ -20,45 +19,48 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const CEDANA_PLATFORM = "cedana/platform"
-
 // Adds a post-dump CRIU callback to dump the container's rootfs
 // Using post-dump ensures that the container is in a frozen state
 // Assumes client is already setup in context.
 // TODO: Do rootfs dump parallel to CRIU dump, possible using multiple CRIU callbacks and synchronizing them
-func AddRootfsToDump(next types.Dump) types.Dump {
+func DumpRootfs(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		details := req.GetDetails().GetContainerd()
+
 		// Skip rootfs if image ref is not provided
-		if req.GetDetails().GetContainerd().GetImage() == "" {
+		if details.GetImage() == "" {
 			return next(ctx, server, resp, req)
 		}
-
-		details := req.GetDetails().GetContainerd()
-		id := details.ID
-		ref := details.Image
-		rootfsOnly := req.Dir == ""
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		container, err := client.LoadContainer(ctx, id)
+		container, err := client.LoadContainer(ctx, details.ID)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", id, err)
+			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
 		}
 
-		if rootfsOnly {
-			log.Debug().Str("container", id).Msg("dumping rootfs only")
+		task, err := container.Task(ctx, nil)
+		err = task.Pause(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", details.ID, err)
+		}
+		defer task.Resume(ctx)
 
-			task, err := container.Task(ctx, nil)
-			err = task.Pause(ctx)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", id, err)
+		// When doing a rootfs dump only, we can return early after dumping the rootfs
+
+		defer func() {
+			if err == nil {
+				resp.Messages = append(resp.Messages, fmt.Sprintf("Dumped rootfs to image %s", details.Image))
 			}
-			defer task.Resume(ctx)
+		}()
 
-			err = dumpRootfs(ctx, client, container, ref)
+		if details.RootfsOnly {
+			log.Debug().Str("container", details.ID).Msg("dumping rootfs only")
+
+			err = dumpRootfs(ctx, client, container, details.Image)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
 			}
@@ -66,18 +68,30 @@ func AddRootfsToDump(next types.Dump) types.Dump {
 			return nil, nil // return early without calling next handler
 		}
 
-		// When doing a full dump, we instead add a post-dump callback to dump the rootfs
-		// making use of cgroup freeze called by CRIU.
+		// When doing a full dump, we instead start a rootfs dump async and wait for it to finish
 
-		callback := &criu.NotifyCallback{Name: "rootfs"}
+		rootfsErr := make(chan error, 1)
 
-		callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-			return dumpRootfs(ctx, client, container, ref)
+		go func() {
+			rootfsErr <- dumpRootfs(ctx, client, container, details.Image)
+		}()
+
+		exited, err = next(ctx, server, resp, req)
+		if err != nil {
+			<-rootfsErr // wait for rootfs dump cleanup
+			return nil, err
 		}
 
-		server.CRIUCallback.Include(callback)
+		// Since we are waiting on the rootfs dump, can add a component for it
+		_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
+		err = <-rootfsErr
+		end()
 
-		return next(ctx, server, resp, req)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
+		}
+
+		return exited, nil
 	}
 }
 
@@ -91,19 +105,14 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 
 	baseImgNoPlatform, err := client.ImageService().Get(ctx, info.Image)
 	if err != nil {
-		return fmt.Errorf("failed to get container image: %v", err)
+		return fmt.Errorf("failed to get container base image: %v", err)
 	}
 
-	platformLabel := info.Labels[CEDANA_PLATFORM]
-	if platformLabel == "" {
-		platformLabel = platforms.DefaultString()
-	}
-
+	platformLabel := platforms.DefaultString()
 	ocispecPlatform, err := platforms.Parse(platformLabel)
 	if err != nil {
 		return err
 	}
-
 	platform := platforms.Only(ocispecPlatform)
 
 	baseImg := containerd.NewImageWithPlatform(client, baseImgNoPlatform, platform)
