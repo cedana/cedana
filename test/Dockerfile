@@ -50,6 +50,19 @@ dpkg -i criu_4.0-3_amd64.deb
 rm criu_4.0-3_amd64.deb
 EOT
 
+# register containerd daemon
+RUN <<EOT
+set -eux
+cat <<EOF > /etc/supervisor/conf.d/containerd.conf
+[program:containerd]
+command=/usr/local/bin/containerd
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/containerd.err.log
+stdout_logfile=/var/log/containerd.out.log
+EOF
+EOT
+
 VOLUME ["/src"]
 WORKDIR /src
 ENV PATH=${PATH}:/src
