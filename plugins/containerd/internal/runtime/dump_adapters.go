@@ -2,14 +2,11 @@ package runtime
 
 import (
 	"context"
-	"path/filepath"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"google.golang.org/grpc/codes"
@@ -29,18 +26,14 @@ func DumpMiddleware(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		runtime := client.Runtime()
-		plugin, err := pluginForRuntime(runtime)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to determine plugin for runtime: %v", err)
-		}
+		plugin := PluginForRuntime(client.Runtime())
 
 		err = features.DumpMiddleware.IfAvailable(func(_ string, runtimeMiddleware types.Middleware[types.Dump]) error {
 			next = next.With(runtimeMiddleware...)
 			return nil
 		}, plugin)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to plug in %s runtime middleware: %v", plugin, err)
+			return nil, status.Errorf(codes.FailedPrecondition, "unsupported runtime %s: %v", client.Runtime(), err)
 		}
 
 		// Add runtime-specific details to the request
@@ -49,28 +42,12 @@ func DumpMiddleware(next types.Dump) types.Dump {
 		case "runc":
 			details.Runc = &runc.Runc{
 				ID:   id,
-				Root: rootFromPlugin(plugin, namespace),
+				Root: RootFromPlugin(plugin, namespace),
 			}
 		default:
-			return nil, status.Errorf(codes.Unimplemented, "unsupported containerd runtime %s", runtime)
+			return nil, status.Errorf(codes.Unimplemented, "unsupported plugin %s", plugin)
 		}
 
 		return next(ctx, server, resp, req)
 	}
-}
-
-// E.g. io.containerd.runc.v2 -> runc
-func pluginForRuntime(runtime string) (string, error) {
-	parts := strings.Split(runtime, ".")
-	if len(parts) < 3 {
-		return "", status.Errorf(codes.InvalidArgument, "unrecognized runtime format: %s", runtime)
-	}
-
-	return parts[2], nil
-}
-
-// Get the root runtime directory for the namespace (e.g. runc)
-// E.g. /run/containerd/runc/default
-func rootFromPlugin(plugin, namespace string) string {
-	return filepath.Join(defaults.BASE_RUNTIME_DIR, plugin, namespace)
 }

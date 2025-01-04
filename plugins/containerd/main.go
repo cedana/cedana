@@ -29,6 +29,13 @@ var (
 	CmdTheme   text.Colors    = style.HighLevelRuntimeColors
 )
 
+var HealthChecks types.Checks = types.Checks{
+	List: []types.Check{
+		client.CheckVersion(),
+		client.CheckRuntime(),
+	},
+}
+
 var (
 	RunHandler    types.Run                   = client.Run
 	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{
