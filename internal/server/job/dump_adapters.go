@@ -36,7 +36,9 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			resp.State = job.GetState()
 
 			// Use saved job details, but allow overriding from request
-			proto.Merge(req.Details, job.GetDetails())
+			mergedDetails := proto.Clone(job.GetDetails()).(*daemon.Details)
+			proto.Merge(mergedDetails, req.GetDetails())
+			req.Details = mergedDetails
 
 			// Import saved notify callbacks
 			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))

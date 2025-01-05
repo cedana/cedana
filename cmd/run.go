@@ -70,6 +70,7 @@ var runCmd = &cobra.Command{
 			Log:        log,
 			GPUEnabled: gpuEnabled,
 			Attachable: attach || attachable,
+			Action:     daemon.RunAction_START_NEW,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)

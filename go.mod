@@ -5,8 +5,8 @@ go 1.23.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-c2c5b1bb3b93.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-c2c5b1bb3b93.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-b34bad2f4682.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-b34bad2f4682.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ba089a43a3b0.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-ba089a43a3b0.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-a0d6ed1862f5.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24

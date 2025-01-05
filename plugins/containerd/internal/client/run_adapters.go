@@ -39,21 +39,37 @@ func CreateContainerForRun(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to get client from context")
 		}
 
-		image, err := client.GetImage(ctx, details.Image)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
-		}
+		var container containerd.Container
 
-		container, err := client.NewContainer(
-			ctx,
-			details.ID,
-			containerd.WithImage(image),
-		)
-		defer func() {
+		switch req.Action {
+		case daemon.RunAction_START_NEW:
+
+			image, err := client.GetImage(ctx, details.Image)
 			if err != nil {
-				container.Delete(ctx)
+				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
 			}
-		}()
+
+			container, err = client.NewContainer(
+				ctx,
+				details.ID,
+				containerd.WithImage(image),
+			)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
+			}
+			defer func() {
+				if err != nil {
+					container.Delete(ctx)
+				}
+			}()
+
+		case daemon.RunAction_MANAGE_EXISTING:
+
+			container, err = client.LoadContainer(ctx, details.ID)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+			}
+		}
 
 		ctx = context.WithValue(ctx, containerd_keys.CONTAINER_CONTEXT_KEY, container)
 

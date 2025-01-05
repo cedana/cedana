@@ -28,7 +28,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
-		if details.GetImage() == "" {
+		if details.Image == "" {
 			return next(ctx, server, resp, req)
 		}
 
@@ -40,6 +40,15 @@ func DumpRootfs(next types.Dump) types.Dump {
 		container, err := client.LoadContainer(ctx, details.ID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
+		}
+
+		info, err := container.Info(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
+		}
+
+		if info.Image == details.Image {
+			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image")
 		}
 
 		task, err := container.Task(ctx, nil)
@@ -65,6 +74,8 @@ func DumpRootfs(next types.Dump) types.Dump {
 		if details.RootfsOnly {
 			log.Debug().Str("container", details.ID).Msg("dumping rootfs only")
 
+			_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
+			defer end()
 			err = dumpRootfs(ctx, client, container, details.Image)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)

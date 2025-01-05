@@ -54,7 +54,9 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			}
 
 			// Use saved job details, but allow overriding from request
-			proto.Merge(req.Details, job.GetDetails())
+			mergedDetails := proto.Clone(job.GetDetails()).(*daemon.Details)
+			proto.Merge(mergedDetails, req.GetDetails())
+			req.Details = mergedDetails
 
 			if req.Path == "" {
 				req.Path = jobs.GetLatestCheckpoint(jid).GetPath()

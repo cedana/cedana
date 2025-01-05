@@ -125,7 +125,7 @@ var listJobCmd = &cobra.Command{
 			"GPU",
 			"Checkpoint",
 			"Size",
-			"Std I/O",
+			"Log",
 		})
 
 		tableWriter.SortBy([]table.SortBy{

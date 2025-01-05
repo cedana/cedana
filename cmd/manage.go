@@ -46,6 +46,7 @@ var manageCmd = &cobra.Command{
 		req := &daemon.RunReq{
 			JID:        jid,
 			GPUEnabled: gpuEnabled,
+			Action:     daemon.RunAction_MANAGE_EXISTING,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
