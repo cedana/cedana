@@ -64,7 +64,7 @@ var dumpProcessCmd = &cobra.Command{
 		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 
 		log.Info().Msgf("cmd/dump networkLock = %s", networkLock)
-		if networkLock != "nftables" && networkLock != "iptables" {
+		if networkLock != "" && networkLock != "nftables" && networkLock != "iptables" {
 			log.Error().Msgf("Invalid networkLock option: %s", networkLock)
 			return err
 		}
