@@ -11,7 +11,7 @@ require (
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
 	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-897e16170a7d.2
 	buf.build/gen/go/cedana/task/protocolbuffers/go v1.36.1-00000000000000-897e16170a7d.1
-	cloud.google.com/go/pubsub v1.42.0
+	cloud.google.com/go/pubsub v1.44.0
 	github.com/aws/aws-sdk-go-v2 v1.30.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.24
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.4
