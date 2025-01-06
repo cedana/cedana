@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pierrec/lz4"
 )
 
 const (
@@ -17,12 +19,23 @@ const (
 	GIBIBYTE
 )
 
+var SUPPORTED_COMPRESSIONS = map[string]bool{
+	"":     true,
+	"none": true,
+	"tar":  true,
+	"gzip": true,
+	"gz":   true,
+	"lz4":  true,
+}
+
 // CreateTarball creates a tarball from the provided sources and writes it to the destination.
 // The desination should be a path without any file extension, as the function will add extension
 // based on the compression format specified.
 // XXX: Works only with files, not directories.
 func Tar(src string, tarball string, compression string) (string, error) {
 	switch compression {
+	case "lz4":
+		tarball += ".tar.lz4"
 	case "gzip", "gz":
 		tarball += ".tar.gz"
 	case "tar":
@@ -42,6 +55,9 @@ func Tar(src string, tarball string, compression string) (string, error) {
 	var writer io.WriteCloser
 
 	switch compression {
+	case "lz4":
+		writer = lz4.NewWriter(file)
+		defer writer.Close()
 	case "gzip", "gz":
 		writer = gzip.NewWriter(file)
 		defer writer.Close()
@@ -106,11 +122,12 @@ func Untar(tarball string, dest string) error {
 	}
 	defer file.Close()
 
-	var reader io.ReadCloser
-
+	var reader io.Reader
 	var compression string
 
 	switch filepath.Ext(tarball) {
+	case ".lz4":
+		compression = "lz4"
 	case ".gz":
 		compression = "gzip"
 	case ".tar":
@@ -119,13 +136,18 @@ func Untar(tarball string, dest string) error {
 		return fmt.Errorf("Unsupported compression format: %s", compression)
 	}
 
-	if compression == "gzip" {
-		reader, err = gzip.NewReader(file)
+	switch compression {
+	case "lz4":
+		reader = lz4.NewReader(file)
+	case "gzip":
+		var readCloser io.ReadCloser
+		readCloser, err = gzip.NewReader(file)
 		if err != nil {
 			return fmt.Errorf("Could not create gzip reader: %s", err)
 		}
-		defer reader.Close()
-	} else {
+		defer readCloser.Close()
+		reader = readCloser
+	default:
 		reader = file
 	}
 

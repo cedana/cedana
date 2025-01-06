@@ -2,12 +2,12 @@ buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3f133ddf4795.1 
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3f133ddf4795.1/go.mod h1:JhUamyncahl/+ErmCBrvZOMlohwexSo0Fa1Utju1hlQ=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-3f133ddf4795.1 h1:DQZbFHLY1NU0jCdvdWDF/zIelumBPqSEZ2EMF3RM01E=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-3f133ddf4795.1/go.mod h1:NJWtqnSI51pFBe7BBN1eC2Rsa43Wbm31VbqyIEJbESg=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7be273212c02.1 h1:9cTiIP9lDVNzrvTWovLg89SAeCBvS8LKRs88To3U8Ec=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7be273212c02.1/go.mod h1:vwC36sUr2uE63/P0/LejBOnwWXoMqo+M2evybCAeHUs=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7be273212c02.1 h1:8EpzMAmuNZPkc9zeNMHUCX+nb7ovJJQ2alPVYe2iuuU=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7be273212c02.1/go.mod h1:hdaIT3GqMjcekVm2LXhwkurPsqgsha6SZFnMtMC7NC8=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-3d8f20293f2d.1 h1:69oslbx6EqQAfT98OFbeYjOcZBib4xEGK+oiHiQIlX0=
-buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-3d8f20293f2d.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7cb703841f20.1 h1:FP27bbOjmmL7bVGjY0lh/RrtTZ4qS3YEGSrW3Gtos/s=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7cb703841f20.1/go.mod h1:pjnZTAihgyfNIkMcNzAUNN9HnMPj8NgJLAW+YWykTwE=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7cb703841f20.1 h1:J76V2TnuloUy8N4eaosbf+HhD7gYrLR2o5gJicrjIhg=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7cb703841f20.1/go.mod h1:SIw2WoVG4/bg2a0U1I8+T0UvPNCrOEIuJLAdM8qKr50=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-f1d2f35adef3.1 h1:xPPiELZYqaMeEGNGs/XyVeATlUZTqpMd0XOkkQ8kCs4=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-f1d2f35adef3.1/go.mod h1:ofnhw5Hq9KvpTiQ4twD3xnR4RX7MLw7TK/Q5sfZbARc=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 h1:bvDV9vkmnHYOMsOr4WLk+Vo07yKIzd94sVoIqshQ4bU=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
@@ -187,6 +187,8 @@ github.com/opencontainers/selinux v1.11.1 h1:nHFvthhM0qY8/m+vfhJylliSshm8G1jJ2jD
 github.com/opencontainers/selinux v1.11.1/go.mod h1:E5dMC3VPuVvVHDYmi78qvhJp8+M586T4DlDRYpFkyec=
 github.com/pelletier/go-toml/v2 v2.2.2 h1:aYUidT7k73Pcl9nb2gScu7NSrKCSHIDE89b3+6Wq+LM=
 github.com/pelletier/go-toml/v2 v2.2.2/go.mod h1:1t835xjRzz80PqgE6HHgN2JOsmgYu/h4qDAS4n929Rs=
+github.com/pierrec/lz4 v2.6.1+incompatible h1:9UY3+iC23yxF0UfGaYrGplQ+79Rg+h/q9FV9ix19jjM=
+github.com/pierrec/lz4 v2.6.1+incompatible/go.mod h1:pdkljMzZIN41W+lC3N2tnIh5sFi+IEE17M5jbnwPHcY=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

@@ -14,21 +14,22 @@ type Flag struct {
 }
 
 var (
-	DirFlag        = Flag{Full: "dir", Short: "d"}
-	PathFlag       = Flag{Full: "path", Short: "p"}
-	StreamFlag     = Flag{Full: "stream", Short: "s"}
-	WorkingDirFlag = Flag{Full: "working-dir", Short: "w"}
-	JidFlag        = Flag{Full: "jid", Short: "j"}
-	GpuEnabledFlag = Flag{Full: "gpu-enabled", Short: "g"}
-	AttachFlag     = Flag{Full: "attach", Short: "a"}
-	AttachableFlag = Flag{Full: "attachable"}
-	AllFlag        = Flag{Full: "all", Short: "a"}
-	LogFlag        = Flag{Full: "log"}
-	ExternalFlag   = Flag{Full: "external"}
-	FileLocksFlag  = Flag{Full: "file-locks"}
-	TypeFlag       = Flag{Full: "type", Short: "t"}
-	FullFlag       = Flag{Full: "full"}
-	ErrorsFlag     = Flag{Full: "errors"}
+	DirFlag         = Flag{Full: "dir", Short: "d"}
+	PathFlag        = Flag{Full: "path", Short: "p"}
+	StreamFlag      = Flag{Full: "stream", Short: "s"}
+	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
+	JidFlag         = Flag{Full: "jid", Short: "j"}
+	GpuEnabledFlag  = Flag{Full: "gpu-enabled", Short: "g"}
+	AttachFlag      = Flag{Full: "attach", Short: "a"}
+	AttachableFlag  = Flag{Full: "attachable"}
+	AllFlag         = Flag{Full: "all", Short: "a"}
+	LogFlag         = Flag{Full: "log"}
+	ExternalFlag    = Flag{Full: "external"}
+	FileLocksFlag   = Flag{Full: "file-locks"}
+	TypeFlag        = Flag{Full: "type", Short: "t"}
+	FullFlag        = Flag{Full: "full"}
+	ErrorsFlag      = Flag{Full: "errors"}
+	CompressionFlag = Flag{Full: "compression"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}

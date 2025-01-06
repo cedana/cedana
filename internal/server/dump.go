@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -26,7 +25,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		filesystem.PrepareDumpDir(config.Global.Checkpoints.Compression),
+		filesystem.PrepareDumpDir,
 
 		pluginDumpMiddleware, // middleware from plugins
 

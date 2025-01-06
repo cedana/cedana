@@ -28,8 +28,10 @@ func init() {
 
 	// Add common flags
 	dumpCmd.PersistentFlags().
-		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump to")
+		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
+	dumpCmd.PersistentFlags().
+		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "tar", "compression algorithm (tar, gzip, lz4, none)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	dumpCmd.PersistentFlags().
@@ -49,6 +51,7 @@ func init() {
 
 	// Bind to config
 	viper.BindPFlag("checkpoints.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
+	viper.BindPFlag("checkpoints.compression", dumpCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
@@ -80,6 +83,7 @@ var dumpCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := config.Global.Checkpoints.Dir
+		compression := config.Global.Checkpoints.Compression
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
@@ -91,8 +95,9 @@ var dumpCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:    dir,
-			Stream: stream,
+			Dir:         dir,
+			Compression: compression,
+			Stream:      stream,
 			Criu: &criu.CriuOpts{
 				LeaveRunning:    proto.Bool(leaveRunning),
 				TcpEstablished:  proto.Bool(tcpEstablished),

@@ -5,9 +5,9 @@ go 1.23.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3f133ddf4795.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.35.2-00000000000000-3f133ddf4795.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7be273212c02.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7be273212c02.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-3d8f20293f2d.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-7cb703841f20.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.35.2-00000000000000-7cb703841f20.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-00000000000000-f1d2f35adef3.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -95,6 +95,7 @@ require (
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
+	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
