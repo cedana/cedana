@@ -21,7 +21,7 @@ import (
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	// The order below is the order followed before executing
-	// the final handler (handlers.Dump). Post-dump, the order is reversed.
+	// the final handler (criu.Dump).
 
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,

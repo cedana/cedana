@@ -21,7 +21,7 @@ import (
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
-	// the final handler (handlers.Restore). Post-restore, the order is reversed.
+	// the final handler (criu.Restore).
 
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
