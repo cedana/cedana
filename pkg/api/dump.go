@@ -18,6 +18,8 @@ import (
 	criu "buf.build/gen/go/cedana/criu/protocolbuffers/go"
 	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -150,7 +152,29 @@ func (s *service) prepareDump(ctx context.Context, state *task.ProcessState, arg
 	return dumpDirPath, streamCmd, nil
 }
 
-func (s *service) getDumpdirSize(path string) (int64, error) {
+func getBucketSize(bucket string) (int64, error) {
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	s3Client := s3.NewFromConfig(cfg)
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+		Bucket: &bucket,
+	})
+	var totalSize int64 = 0
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(context.Background())
+		if err != nil {
+			return 0, err
+		}
+		for _, obj := range page.Contents {
+			totalSize += *obj.Size
+		}
+	}
+	return totalSize, nil
+}
+
+func getDumpdirSize(path string) (int64, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var size int64
@@ -231,7 +255,20 @@ func (s *service) postDump(ctx context.Context, dumpdir string, state *task.Proc
 	if streamCmd != nil {
 		streamCmd.Wait()
 		log.Info().Str("Path", compressedCheckpointPath).Msg("getting checkpoint size")
-		size, err = s.getDumpdirSize(compressedCheckpointPath)
+		var bucket string
+		remote := false
+		for i, arg := range streamCmd.Args {
+			if arg == "--bucket" && i+1 < len(streamCmd.Args) {
+				bucket = streamCmd.Args[i+1] // bucket name follows bucket flag
+				remote = true
+				break
+			}
+		}
+		if remote {
+			size, err = getBucketSize(bucket)
+		} else {
+			size, err = getDumpdirSize(compressedCheckpointPath)
+		}
 		if err != nil {
 			log.Fatal().Err(err)
 		}
