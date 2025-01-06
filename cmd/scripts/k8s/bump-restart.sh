@@ -25,6 +25,7 @@ mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/cedana/scripts/build-start-daemon.sh
 cp /usr/local/bin/setup-host.sh /host/cedana/scripts/setup-host.sh
+cp /usr/local/bin/setup_aws_env.sh /host/cedana/setup_aws_env.sh
 
 cp /usr/local/bin/buildah /host/cedana/bin/buildah
 cp /usr/local/bin/netavark /host/cedana/bin/netavark
