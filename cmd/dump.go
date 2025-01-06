@@ -63,6 +63,12 @@ var dumpProcessCmd = &cobra.Command{
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
 		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 
+		log.Info().Msgf("cmd/dump networkLock = %s", networkLock)
+		if networkLock != "nftables" && networkLock != "iptables" {
+			log.Error().Msgf("Invalid networkLock option: %s", networkLock)
+			return err
+		}
+
 		log.Info().Msgf("cmd/dump stream = %d", stream)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
