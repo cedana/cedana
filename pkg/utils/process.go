@@ -34,7 +34,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	}
 	state.PID = pid
 
+	var err error
 	errs := []error{}
+
+	state.Host, err = GetHost(ctx)
+	errs = append(errs, err)
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
@@ -171,9 +175,6 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	state.OpenConnections = openConnections
 	state.WorkingDir = cwd
 	state.Status = proccessStatus[0]
-
-	state.Host, err = GetHost(ctx)
-	errs = append(errs, err)
 
 	return errors.Join(errs...)
 }
