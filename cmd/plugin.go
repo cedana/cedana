@@ -32,7 +32,6 @@ func init() {
 		BoolP(flags.ErrorsFlag.Full, flags.ErrorsFlag.Short, false, "Show all errors")
 
 	// Add aliases
-	pluginCmd.AddCommand(utils.AliasOf(pluginListCmd, "ls"))
 	rootCmd.AddCommand(utils.AliasOf(pluginListCmd, "plugins"))
 	rootCmd.AddCommand(utils.AliasOf(pluginFeaturesCmd, "features"))
 }
@@ -74,9 +73,10 @@ var pluginCmd = &cobra.Command{
 ////////////////////
 
 var pluginListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List plugins",
-	Args:  cobra.NoArgs,
+	Use:     "list",
+	Short:   "List plugins",
+	Aliases: []string{"ls"},
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {

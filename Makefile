@@ -4,6 +4,7 @@ GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
+export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$(PWD)
 
 ifndef VERBOSE
 .SILENT:
@@ -77,7 +78,7 @@ reset-logs: ## Reset logs
 ###########
 
 PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
-plugins: $(PLUGIN_SOURCES) ## Build plugins
+plugins: $(PLUGIN_SOURCES) ## Build all plugins
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
@@ -86,7 +87,7 @@ plugins: $(PLUGIN_SOURCES) ## Build plugins
 		fi ;\
 	done ;\
 
-plugins-install: ## Install plugins
+plugins-install: ## Install all plugins
 	@echo "Installing plugins..."
 	list=""
 	for path in $(wildcard plugins/*); do \

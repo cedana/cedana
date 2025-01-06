@@ -39,7 +39,6 @@ func init() {
 	inspectJobCheckpointCmd.Flags().StringP(flags.TypeFlag.Full, flags.TypeFlag.Short, "", "specify image file {ps|fd|mem|rss|sk|gpu}")
 
 	// Add aliases
-	jobCmd.AddCommand(utils.AliasOf(listJobCmd, "ls"))
 	jobCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "ps"))
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "jobs"))
@@ -87,8 +86,9 @@ var jobCmd = &cobra.Command{
 ////////////////////
 
 var listJobCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all managed processes/containers (jobs)",
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List all managed processes/containers (jobs)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
 		if !ok {

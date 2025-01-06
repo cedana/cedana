@@ -4,7 +4,6 @@
 
 export PATH="./:$PATH" # ensure binaries are available
 export CEDANA_LOG_LEVEL=debug
-export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$PWD
 export CEDANA_PROFILING_ENABLED=false
 
 WAIT_TIMEOUT=100
