@@ -27,7 +27,7 @@ build: $(BINARY_SOURCES) ## Build the binary
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: ## Install the binary
+install: $(BINARY) ## Install the binary
 	@echo "Installing $(BINARY)..."
 	$(SUDO) cp $(OUT_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 
@@ -78,6 +78,8 @@ reset-logs: ## Reset logs
 ###########
 
 PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
+PLUGIN_BINARIES=$(wildcard $(OUT_DIR)/libcedana-*.so)
+
 plugins: $(PLUGIN_SOURCES) ## Build all plugins
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
@@ -87,7 +89,7 @@ plugins: $(PLUGIN_SOURCES) ## Build all plugins
 		fi ;\
 	done ;\
 
-plugins-install: ## Install all plugins
+plugins-install: $(PLUGIN_BINARIES) ## Install all plugins
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
