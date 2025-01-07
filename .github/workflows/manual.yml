@@ -181,3 +181,50 @@ jobs:
         run: |
           utils/results-summary > summary.md
           cat summary.md > $GITHUB_STEP_SUMMARY
+
+  cedana-helm-install-gke-test:
+    name: Checkpoint Restore tests on GKE
+    runs-on: ubuntu-latest
+    env:
+      cedana_auth_token: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      cedana_url: ${{ secrets.CEDANA_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: 'recursive'
+
+      - name: GCP Authentication
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Get credentials for GKE
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER }}
+          location: ${{ vars.GKE_ZONE }}
+
+      - name: Set up commit hash and branch name
+        run: |
+          echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
+          echo "GIT_BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" | sed -e 's/\//-/g' >> $GITHUB_ENV
+
+      - name: Install Cedana helm chart
+        run: |
+          sudo apt install bats -y
+          sudo -E make -C scripts/ci helm-install
+        env:
+          image_repository: docker.io/cedana/cedana-controller-test
+          image_tag: ${{ env.GIT_BRANCH }}-${{ env.GIT_HASH }}
+
+      - name: Uninstall helm chart
+        if: always()
+        run: |
+          sudo -E make -C scripts/ci helm-uninstall
+
+      - name: Print GKE test Logs
+        if: always()
+        run: |
+          grep -v "traces export: context deadline exceeded:" /tmp/detik/*
