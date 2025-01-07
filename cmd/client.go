@@ -58,8 +58,8 @@ func NewClient(address, protocol string) (*Client, error) {
 			return nil, fmt.Errorf("address must be in the format 'contextId:port'")
 		}
 		parts := strings.Split(address, ":")
-		contextId, err := strconv.Atoi(parts[0])
-		port, err := strconv.Atoi(parts[1])
+		contextId, err := strconv.ParseUint(parts[0], 10, 32)
+		port, err := strconv.ParseUint(parts[1], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse vsock address: %w", err)
 		}
