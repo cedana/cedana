@@ -838,11 +838,15 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 		return fmt.Errorf("could not get restore stats from context")
 	}
 
-	err := s.StartGPUController(ctx, uid, gid, groups, jid)
-	if err != nil {
-		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
-		return err
-	}
+  if _, err := s.getState(ctx, jid); err == nil {
+    log.Info().Msgf("GPU restore requested for managed job %s, assuming gpu controller already started", jid)
+  } else {
+    err := s.StartGPUController(ctx, uid, gid, groups, jid)
+    if err != nil {
+      log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
+      return err
+    }
+  }
 
 	gpuController := s.GetGPUController(jid)
 
