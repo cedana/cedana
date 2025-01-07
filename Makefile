@@ -38,7 +38,7 @@ stop: ## Stop the daemon
 	@echo "Stopping cedana..."
 	$(SUDO) pkill -f $(BINARY) -TERM
 
-start-systemd: build plugins ## Build and start the systemd daemon
+start-systemd: ## Start the systemd daemon
 	@echo "Starting systemd service..."
 	$(SCRIPTS_DIR)/start-systemd.sh --plugins=runc
 
@@ -88,29 +88,23 @@ plugins: $(PLUGIN_SOURCES) ## Build all plugins
 	done ;\
 
 plugins-install: ## Install all plugins
-	@echo "Installing plugins..."
-	list=""
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
-			list="$$name $$list"; \
+			echo "Installing plugin $$name..."; \
+			$(SUDO) cp $(OUT_DIR)/libcedana-$$name.so /usr/local/lib ;\
 		fi ;\
 	done ;\
-	$(SUDO) $(BINARY) plugin install $$list ;\
 
 reset-plugins: ## Reset & uninstall plugins
-	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	if [ -f $(OUT_DIR)/$(BINARY) ]; then \
-		list="" ;\
-		for path in $(wildcard plugins/*); do \
-			if [ -f $$path/*.go ]; then \
-				name=$$(basename $$path); \
-				list="$$name $$list"; \
-			fi ;\
-		done ;\
-		$(SUDO) $(BINARY) plugin remove $$list || true ;\
-	fi
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			echo "Uninstalling plugin $$name..."; \
+			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
+		fi ;\
+	done ;\
 
 ###########
 ##@ Testing
