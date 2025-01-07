@@ -226,11 +226,11 @@ func (c *Criu) doSwrkWithResp(
 		case "setup-namespaces":
 			err = nfy.SetupNamespaces(ctx, notify.GetPid())
 		case "post-setup-namespaces":
-			err = nfy.PostSetupNamespaces(ctx, notify.GetPid())
+			err = nfy.PostSetupNamespaces(ctx)
 		case "pre-resume":
-			err = nfy.PreResume(ctx, notify.GetPid())
+			err = nfy.PreResume(ctx)
 		case "post-resume":
-			err = nfy.PostResume(ctx, notify.GetPid())
+			err = nfy.PostResume(ctx)
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {

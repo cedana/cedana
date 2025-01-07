@@ -210,7 +210,7 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 	}
 
 	// Wait for GPU restore to finish before resuming the process
-	callback.PreResumeFunc = func(ctx context.Context, pid int32) error {
+	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		pidChan <- uint32(pid)
 		return <-restoreErr
 	}

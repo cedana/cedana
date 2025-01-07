@@ -70,9 +70,9 @@ func (n NotifyCallbackMulti) PreRestore(ctx context.Context, opts *criu.CriuOpts
 	return nil
 }
 
-func (n NotifyCallbackMulti) PreResume(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PreResume(ctx context.Context) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].PreResume(ctx, pid)
+		err := n.callbacks[i].PreResume(ctx)
 		if err != nil {
 			return err
 		}
@@ -80,9 +80,9 @@ func (n NotifyCallbackMulti) PreResume(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (n NotifyCallbackMulti) PostResume(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PostResume(ctx context.Context) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].PostResume(ctx, pid)
+		err := n.callbacks[i].PostResume(ctx)
 		if err != nil {
 			return err
 		}
@@ -130,9 +130,9 @@ func (n NotifyCallbackMulti) SetupNamespaces(ctx context.Context, pid int32) err
 	return nil
 }
 
-func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].PostSetupNamespaces(ctx, pid)
+		err := n.callbacks[i].PostSetupNamespaces(ctx)
 		if err != nil {
 			return err
 		}

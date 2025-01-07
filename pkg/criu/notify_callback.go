@@ -18,9 +18,9 @@ type NotifyCallback struct {
 	NetworkLockFunc         NotifyFunc
 	NetworkUnlockFunc       NotifyFunc
 	SetupNamespacesFunc     NotifyFuncPid
-	PostSetupNamespacesFunc NotifyFuncPid
-	PreResumeFunc           NotifyFuncPid
-	PostResumeFunc          NotifyFuncPid
+	PostSetupNamespacesFunc NotifyFunc
+	PreResumeFunc           NotifyFunc
+	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
 
 	Name string // to give some context to this callback
@@ -86,12 +86,12 @@ func (n NotifyCallback) PreRestore(ctx context.Context, opts *criu.CriuOpts) err
 	return nil
 }
 
-func (n NotifyCallback) PreResume(ctx context.Context, pid int32) error {
+func (n NotifyCallback) PreResume(ctx context.Context) error {
 	if n.PreResumeFunc != nil {
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.PreResumeFunc(ctx, pid)
+		err := n.PreResumeFunc(ctx)
 		if err != nil {
 			return err
 		}
@@ -151,12 +151,12 @@ func (n NotifyCallback) SetupNamespaces(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (n NotifyCallback) PostSetupNamespaces(ctx context.Context, pid int32) error {
+func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
 	if n.PostSetupNamespacesFunc != nil {
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.PostSetupNamespacesFunc(ctx, pid)
+		err := n.PostSetupNamespacesFunc(ctx)
 		if err != nil {
 			return err
 		}
@@ -164,12 +164,12 @@ func (n NotifyCallback) PostSetupNamespaces(ctx context.Context, pid int32) erro
 	return nil
 }
 
-func (n NotifyCallback) PostResume(ctx context.Context, pid int32) error {
+func (n NotifyCallback) PostResume(ctx context.Context) error {
 	if n.PostResumeFunc != nil {
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.PostResumeFunc(ctx, pid)
+		err := n.PostResumeFunc(ctx)
 		if err != nil {
 			return err
 		}
