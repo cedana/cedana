@@ -240,7 +240,7 @@ func (s *service) WaitGPUController(jid string) error {
 		}
 		log.Info().Int("PID", cmd.Process.Pid).
 			Int("status", cmd.ProcessState.ExitCode()).
-			Str("stdout/stderr", gpuController.Output.String()).
+			// Str("stdout/stderr", gpuController.Output.String()).
 			Msg("GPU controller exited")
 	}
 

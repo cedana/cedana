@@ -246,7 +246,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 	}
 
-	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, criuOpts, opts, jid)
+	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, criuOpts, opts, jid, args.CheckpointID)
 	if err != nil {
 		err = status.Error(codes.Internal, fmt.Sprintf("failed to restore runc container: %v", err))
 		return nil, err

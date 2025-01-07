@@ -344,7 +344,13 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
+func (s *service) runcRestore(
+	ctx context.Context,
+	imgPath string,
+	criuOpts *container.CriuOpts,
+	opts *container.RuncOpts,
+	jid, sleepingContainerId string,
+) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -371,7 +377,6 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
 		}
 	}
-	defer os.RemoveAll(tempDir) // since it's a temporary directory
 
 	err := utils.UntarFolder(imgPath, tempDir)
 	if err != nil {
@@ -385,8 +390,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
+		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, "gpu-checkpoint")
 		if err != nil {
+			s.StopGPUController(sleepingContainerId)
+			s.WaitGPUController(sleepingContainerId)
 			return 0, nil, err
 		}
 	}
@@ -398,9 +405,9 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 	err = container.RuncRestore(tempDir, opts.ContainerId, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(jid) != nil {
-			s.StopGPUController(jid)
-			s.WaitGPUController(jid)
+		if s.GetGPUController(sleepingContainerId) != nil {
+			s.StopGPUController(sleepingContainerId)
+			s.WaitGPUController(sleepingContainerId)
 		}
 
 		return 0, nil, err
@@ -412,9 +419,9 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 	pid, err := runc.GetPidByContainerId(opts.ContainerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(jid) != nil {
-			s.StopGPUController(jid)
-			s.WaitGPUController(jid)
+		if s.GetGPUController(sleepingContainerId) != nil {
+			s.StopGPUController(sleepingContainerId)
+			s.WaitGPUController(sleepingContainerId)
 		}
 
 		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
@@ -431,8 +438,8 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 			code := status.ExitStatus()
 			log.Info().Int32("PID", pid).Str("JID", opts.ContainerId).Int("status", code).Msgf("runc container exited")
 
-			if s.GetGPUController(jid) != nil {
-				err = s.StopGPUController(jid)
+			if s.GetGPUController(sleepingContainerId) != nil {
+				err = s.StopGPUController(sleepingContainerId)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
 				}
@@ -442,11 +449,11 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if s.GetGPUController(jid) != nil {
+		if s.GetGPUController(sleepingContainerId) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				s.WaitGPUController(jid)
+				s.WaitGPUController(sleepingContainerId)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(pid), syscall.SIGKILL)
@@ -831,24 +838,25 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, jid string) error {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, sleepingContainerId string) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return fmt.Errorf("could not get restore stats from context")
 	}
 
-  if _, err := s.getState(ctx, jid); err == nil {
-    log.Info().Msgf("GPU restore requested for managed job %s, assuming gpu controller already started", jid)
-  } else {
-    err := s.StartGPUController(ctx, uid, gid, groups, jid)
-    if err != nil {
-      log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
-      return err
-    }
-  }
-
-	gpuController := s.GetGPUController(jid)
+	gpuController := s.GetGPUController(sleepingContainerId)
+	if gpuController == nil {
+		err := s.StartGPUController(ctx, uid, gid, groups, sleepingContainerId)
+		if err != nil {
+			log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
+			return err
+		}
+		gpuController = s.GetGPUController(sleepingContainerId)
+		if gpuController == nil {
+			return fmt.Errorf("could not get gpu controller")
+		}
+	}
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
@@ -881,7 +889,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	stats.GPUDuration = elapsed.Milliseconds()
 
 	// HACK: Create empty log file for intercepted process to avoid CRIU errors
-	soLogFileName := fmt.Sprintf("cedana-so-%s.log", jid)
+	soLogFileName := fmt.Sprintf("cedana-so-%s.log", sleepingContainerId)
 	if _, err := os.Stat(filepath.Join(os.TempDir(), soLogFileName)); os.IsNotExist(err) {
 		os.Create(filepath.Join(os.TempDir(), soLogFileName))
 	}

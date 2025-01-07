@@ -185,11 +185,10 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 				},
 			})
 			// Get the server-assigned message ID
-			id, err := result.Get(ctx)
+			_, err = result.Get(ctx)
 			if err != nil {
 				log.Error().Msgf("Failed to publish message: %v", err)
 			}
-			log.Info().Msgf("Published message with ID: %v\n", id)
 			time.Sleep(ASR_POLL_INTERVAL)
 		}
 	}()
