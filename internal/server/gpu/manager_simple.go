@@ -165,7 +165,7 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
-	// to CRIU restore. We instead block at pre-resume, to maximize concurrency.
+	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {

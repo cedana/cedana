@@ -37,6 +37,9 @@ func init() {
 		flags.LogFlag.Full,
 	) // only one of these can be set
 
+	processRunCmd.PersistentFlags().
+		BoolP(flags.AsRootFlag.Full, flags.AsRootFlag.Short, false, "run as root")
+
 	// Add aliases
 	rootCmd.AddCommand(utils.AliasOf(processRunCmd, "exec"))
 
@@ -141,6 +144,8 @@ var processRunCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
+		asRoot, _ := cmd.Flags().GetBool(flags.AsRootFlag.Full)
+
 		path := args[0]
 		args = args[1:]
 		env := os.Environ()
@@ -148,9 +153,16 @@ var processRunCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("Error getting working directory: %v", err)
 		}
-		groups, err := os.Getgroups()
-		if err != nil {
-			return fmt.Errorf("Error getting groups: %v", err)
+
+		var uid, gid int
+		var groups []int
+		if !asRoot {
+			uid = os.Getuid()
+			gid = os.Getgid()
+			groups, err = os.Getgroups()
+			if err != nil {
+				return fmt.Errorf("Error getting groups: %v", err)
+			}
 		}
 
 		req.Type = "process"
@@ -160,8 +172,8 @@ var processRunCmd = &cobra.Command{
 				Args:       args,
 				Env:        env,
 				WorkingDir: wd,
-				UID:        int32(os.Getuid()),
-				GID:        int32(os.Getgid()),
+				UID:        int32(uid),
+				GID:        int32(gid),
 				Groups:     utils.Int32Slice(groups),
 			},
 		}

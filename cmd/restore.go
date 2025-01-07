@@ -31,7 +31,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
-		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to be exist on restore")
+		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to exist on restore")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.LeaveStoppedFlag.Full, flags.LeaveStoppedFlag.Short, false, "leave the process stopped after restore")
 	restoreCmd.PersistentFlags().
