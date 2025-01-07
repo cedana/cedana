@@ -166,7 +166,13 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 		}
 
 		for _, f := range files {
-			if _, ok := mountIds[f.MountID]; !ok {
+			isPipe := strings.HasPrefix(f.Path, "pipe")
+			isSocket := strings.HasPrefix(f.Path, "socket")
+			_, internal := mountIds[f.MountID]
+
+			external := !(internal || isPipe || isSocket) // sockets and pipes are always in external mounts
+
+			if external {
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
 				continue
 			}

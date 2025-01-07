@@ -199,7 +199,7 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 			log.Info().Str("JID", jid).Msg("GPU restore complete")
 
 			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
-			// the restore happens inside a goroutine, the timing components belong to the restore goroutine.
+			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
 
 			// copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
 			// replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond

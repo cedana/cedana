@@ -105,11 +105,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		for _, f := range files {
-			_, ok := mountIds[f.MountID]
-			external := !ok
 			isPipe := strings.HasPrefix(f.Path, "pipe")
+			isSocket := strings.HasPrefix(f.Path, "socket")
+			_, internal := mountIds[f.MountID]
 
-			if external && !isPipe {
+			external := !(internal || isPipe || isSocket) // sockets and pipes are always in external mounts
+
+			if external {
 				inheritFds = append(inheritFds, &criu_proto.InheritFd{
 					Fd:  proto.Int32(int32(f.Fd)),
 					Key: proto.String(fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)),
@@ -143,7 +145,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		req.Criu.InheritFd = inheritFds
+		req.Criu.InheritFd = append(req.Criu.InheritFd, inheritFds...)
 
 		return next(ctx, server, resp, req)
 	}

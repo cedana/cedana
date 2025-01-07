@@ -39,8 +39,6 @@ func init() {
 	dumpCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "dump tcp established connections")
 	dumpCmd.PersistentFlags().
-		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "close tcp connections")
-	dumpCmd.PersistentFlags().
 		BoolP(flags.TcpSkipInFlightFlag.Full, flags.TcpSkipInFlightFlag.Short, false, "skip in-flight tcp connections")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "dump file locks")
@@ -87,7 +85,6 @@ var dumpCmd = &cobra.Command{
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
-		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetString(flags.ExternalFlag.Full)
@@ -101,7 +98,6 @@ var dumpCmd = &cobra.Command{
 			Criu: &criu.CriuOpts{
 				LeaveRunning:    proto.Bool(leaveRunning),
 				TcpEstablished:  proto.Bool(tcpEstablished),
-				TcpClose:        proto.Bool(tcpClose),
 				TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
 				FileLocks:       proto.Bool(fileLocks),
 				External:        strings.Split(external, ","),
