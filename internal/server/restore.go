@@ -60,7 +60,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
-	resp.Messages = append(resp.Messages, fmt.Sprintf("Restored successfully, PID: %d\n", resp.PID))
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Restored successfully, PID: %d", resp.PID))
 
 	return resp, nil
 }

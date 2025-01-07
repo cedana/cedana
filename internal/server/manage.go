@@ -49,7 +49,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("manage successful")
-	resp.Messages = append(resp.Messages, fmt.Sprintf("Managing %s PID %d\n", req.Type, resp.PID))
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Managing %s PID %d", req.Type, resp.PID))
 
 	return resp, nil
 }
