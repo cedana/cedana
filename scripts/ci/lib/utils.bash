@@ -92,10 +92,6 @@ ddump() {
 	echo "$1"
 	return $res
 }
-port-forward-service() {
-	kubectl port-forward service/cedana-cedana-helm-manager-service -n cedana-operator-system 1324:1324 &
-	sleep 30
-}
 get_cedana_log_check() {
 	helper_response=$(kubectl logs $(kubectl get po -n cedana-operator-system | grep "cedana-helm-helper" | cut -d " " -f 1) -n cedana-operator-system)
     debug "cedana_helper logs: $helper_response"
@@ -104,16 +100,4 @@ get_cedana_log_check() {
         debug "daemon_log_errors: $error_logs"
         exit 1
     fi
-	sleep 10
-    manager_response=$(kubectl logs $(kubectl get po -n cedana-operator-system | grep "cedana-helm-manager" | cut -d " " -f 1) -n cedana-operator-system)
-	debug "cedana_controller logs: $manager_response"
-    error_logs=$(echo "$manager_response" | grep ERR)
-    if [[ -n $error_logs ]]; then
-        debug "controller_log_errors: $error_logs"
-        exit 1
-    fi
-}
-healthcheck() {
-	curl http://localhost:1324/healthcheck
-	debug "healthcheck request made .."
 }
