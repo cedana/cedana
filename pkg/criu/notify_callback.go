@@ -22,16 +22,18 @@ type NotifyCallback struct {
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
+	OnRestoreErrorFunc      NotifyFuncNoError
 
 	Name string // to give some context to this callback
 }
 
 type (
-	NotifyFunc     func(ctx context.Context) error
-	NotifyFuncOpts func(ctx context.Context, opts *criu.CriuOpts) error
-	NotifyFuncPid  func(ctx context.Context, pid int32) error
-	NotifyFuncFd   func(ctx context.Context, fd int32) error
-	InitializeFunc func(ctx context.Context, criuPid int32) error
+	NotifyFuncNoError func(ctx context.Context)
+	NotifyFunc        func(ctx context.Context) error
+	NotifyFuncOpts    func(ctx context.Context, opts *criu.CriuOpts) error
+	NotifyFuncPid     func(ctx context.Context, pid int32) error
+	NotifyFuncFd      func(ctx context.Context, fd int32) error
+	InitializeFunc    func(ctx context.Context, criuPid int32) error
 )
 
 func (n NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
@@ -188,4 +190,13 @@ func (n NotifyCallback) OrphanPtsMaster(ctx context.Context, fd int32) error {
 		}
 	}
 	return nil
+}
+
+func (n NotifyCallback) OnRestoreError(ctx context.Context) {
+	if n.OnRestoreErrorFunc != nil {
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		n.OnRestoreErrorFunc(ctx)
+	}
 }

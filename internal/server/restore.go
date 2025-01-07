@@ -9,7 +9,7 @@ import (
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/server/network"
+	// "github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/features"
@@ -34,7 +34,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.ReloadProcessStateForRestore,
 		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
-		network.DetectNetworkOptionsForRestore,
+		// network.DetectNetworkOptionsForRestore,
 
 		criu.CheckOptsForRestore,
 	}

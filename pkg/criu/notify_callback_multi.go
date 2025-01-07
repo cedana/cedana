@@ -149,3 +149,9 @@ func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) erro
 	}
 	return nil
 }
+
+func (n NotifyCallbackMulti) OnRestoreError(ctx context.Context) {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		n.callbacks[i].OnRestoreError(ctx)
+	}
+}

@@ -20,6 +20,7 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
+	OnRestoreError(ctx context.Context)
 }
 
 // NoNotify struct
@@ -82,4 +83,7 @@ func (c NoNotify) PostResume(ctx context.Context) error {
 
 func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
+}
+
+func (c NoNotify) OnRestoreError(ctx context.Context) {
 }

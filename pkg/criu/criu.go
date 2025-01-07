@@ -197,6 +197,9 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		if !resp.GetSuccess() {
+			if resp.GetType() == criu.CriuReqType_RESTORE {
+				nfy.OnRestoreError(ctx)
+			}
 			return resp, fmt.Errorf("operation failed (msg:%s err:%d)",
 				resp.GetCrErrmsg(), resp.GetCrErrno())
 		}

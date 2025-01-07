@@ -215,5 +215,13 @@ func (m *ManagerSimple) CRIUCallback(jid string) *criu_client.NotifyCallback {
 		return <-restoreErr
 	}
 
+	// If CRIU fails to restore, detach the GPU controller
+	callback.OnRestoreErrorFunc = func(ctx context.Context) {
+		err := m.Detach(jid)
+		if err != nil {
+			log.Warn().Err(err).Str("JID", jid).Msg("failed to detach GPU controller on restore error")
+		}
+	}
+
 	return callback
 }
