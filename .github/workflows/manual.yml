@@ -23,6 +23,11 @@ on:
           description: 'Run the benchmark with debugging enabled'
           required: false
           default: false
+        cedana-helm-install-gke-test:
+          type: boolean
+          description: 'Install cedana daemon through helm charts on gke cluster'
+          required: false
+          default: false
 
 concurrency:
   group: manual-${{ github.ref }}
