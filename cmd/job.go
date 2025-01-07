@@ -54,14 +54,7 @@ var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK := config.Global.UseVSOCK
-		var client *Client
-
-		if useVSOCK {
-			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-		} else {
-			client, err = NewClient(config.Global.Host, config.Global.Port)
-		}
+		client, err := NewClient(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}

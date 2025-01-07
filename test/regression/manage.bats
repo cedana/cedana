@@ -15,11 +15,11 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana -P "$PORT" manage process $pid --jid "$jid"
+    run cedana manage process $pid --jid "$jid"
 
     assert_success
 
-    run cedana -P "$PORT" ps
+    run cedana ps
 
     assert_success
     assert_output --partial "$jid"
@@ -30,11 +30,11 @@ load_lib file
 @test "manage non-existent process" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" manage process 999999 --jid "$jid"
+    run cedana manage process 999999 --jid "$jid"
 
     assert_failure
 
-    run cedana -P "$PORT" ps
+    run cedana ps
 
     assert_success
     refute_output --partial "$jid"

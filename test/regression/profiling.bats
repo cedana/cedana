@@ -14,7 +14,7 @@ export CEDANA_PROFILING_ENABLED=true
 @test "run process (profiling)" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" run process echo hello --jid "$jid"
+    run cedana run process echo hello --jid "$jid"
 
     assert_success
     assert_output --partial "total"
@@ -23,7 +23,7 @@ export CEDANA_PROFILING_ENABLED=true
 @test "run process (profiling output off)" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" run process echo hello --jid "$jid" --profiling=false
+    run cedana run process echo hello --jid "$jid" --profiling=false
 
     assert_success
     refute_output --partial "total"

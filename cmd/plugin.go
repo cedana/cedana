@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
@@ -43,27 +41,9 @@ var pluginCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		manager := plugins.NewLocalManager()
 
-		useVSOCK := config.Global.UseVSOCK
-		var client *Client
-
-		if useVSOCK {
-			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-		} else {
-			client, err = NewClient(config.Global.Host, config.Global.Port)
-		}
-
 		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)
-		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
 
-		return nil
-	},
-	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
-		client.Close()
 		return nil
 	},
 }
@@ -163,10 +143,6 @@ var pluginInstallCmd = &cobra.Command{
 			return fmt.Errorf("this command must be run as root")
 		}
 
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -201,9 +177,6 @@ var pluginInstallCmd = &cobra.Command{
 			}
 		}
 
-		// Tell daemon to reload plugins
-		client.ReloadPlugins(cmd.Context(), &daemon.Empty{})
-
 		if installed < len(names) {
 			return fmt.Errorf("Installed %d plugin(s), %d failed", installed, len(names)-installed)
 		} else {
@@ -223,10 +196,6 @@ var pluginRemoveCmd = &cobra.Command{
 			return fmt.Errorf("this command must be run as root")
 		}
 
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -274,9 +243,6 @@ var pluginRemoveCmd = &cobra.Command{
 				break
 			}
 		}
-
-		// Tell daemon to reload plugins
-		client.ReloadPlugins(cmd.Context(), &daemon.Empty{})
 
 		if removed < len(args) {
 			return fmt.Errorf("Removed %d plugins, %d failed", removed, len(args)-removed)

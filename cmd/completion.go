@@ -13,15 +13,7 @@ import (
 
 // ValidJIDs returns a list of valid JIDs for shell completion
 func ValidJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	useVSOCK := config.Global.UseVSOCK
-	var client *Client
-	var err error
-
-	if useVSOCK {
-		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-	} else {
-		client, err = NewClient(config.Global.Host, config.Global.Port)
-	}
+	client, err := NewClient(config.Global.Address, config.Global.Protocol)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -40,15 +32,7 @@ func ValidJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, 
 }
 
 func RunningJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	useVSOCK := config.Global.UseVSOCK
-	var client *Client
-	var err error
-
-	if useVSOCK {
-		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-	} else {
-		client, err = NewClient(config.Global.Host, config.Global.Port)
-	}
+	client, err := NewClient(config.Global.Address, config.Global.Protocol)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -70,15 +54,7 @@ func RunningJIDs(cmd *cobra.Command, args []string, toComplete string) ([]string
 
 // ValidPIDs returns a list of valid PIDs of jobs for shell completion
 func ValidPIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	useVSOCK := config.Global.UseVSOCK
-	var client *Client
-	var err error
-
-	if useVSOCK {
-		client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-	} else {
-		client, err = NewClient(config.Global.Host, config.Global.Port)
-	}
+	client, err := NewClient(config.Global.Address, config.Global.Protocol)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

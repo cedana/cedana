@@ -19,13 +19,13 @@ load_lib file
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_cmd_bundle "echo hello")"
 
-    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+    run cedana run runc --bundle "$bundle" --jid "$jid"
 
     assert_success
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 
-    run cedana -P "$PORT" ps
+    run cedana ps
 
     assert_success
     assert_output --partial "$jid"
@@ -34,11 +34,11 @@ load_lib file
 @test "run non-existent container" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" run runc --bundle "/non-existent" --jid "$jid"
+    run cedana run runc --bundle "/non-existent" --jid "$jid"
 
     assert_failure
 
-    run cedana -P "$PORT" ps
+    run cedana ps
 
     assert_success
     refute_output --partial "$jid"
@@ -49,7 +49,7 @@ load_lib file
     log_file="/tmp/$jid.log"
     bundle="$(create_cmd_bundle "echo hello")"
 
-    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --log "$log_file"
+    run cedana run runc --bundle "$bundle" --jid "$jid" --log "$log_file"
 
     assert_success
     assert_exists "$log_file"
@@ -62,7 +62,7 @@ load_lib file
 #     jid=$(unix_nano)
 #     bundle="$(create_cmd_bundle "echo hello")"
 
-#     run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach
+#     run cedana run runc --bundle "$bundle" --jid "$jid" --attach
 
 #     assert_success
 #     assert_output --partial "hello"
@@ -73,7 +73,7 @@ load_lib file
 #     code=42
 #     bundle="$(create_workload_bundle "exit-code.sh" "$code")"
 
-#     run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach
+#     run cedana run runc --bundle "$bundle" --jid "$jid" --attach
 
 #     assert_equal $status $code
 # }
@@ -90,7 +90,7 @@ load_lib file
 
     sleep 1
 
-    run cedana -P "$PORT" dump runc "$id"
+    run cedana dump runc "$id"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -106,7 +106,7 @@ load_lib file
 
     runc run --bundle "$bundle" "$jid" --detach
 
-    run cedana -P "$PORT" dump runc "$jid"
+    run cedana dump runc "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -120,32 +120,32 @@ load_lib file
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+    run cedana run runc --bundle "$bundle" --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" kill "$jid"
+    run cedana kill "$jid"
 }
 
 @test "dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
     sleep 1
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" kill "$jid"
+    run cedana kill "$jid"
 }
 
 @test "dump container (manage existing job)" {
@@ -157,10 +157,10 @@ load_lib file
 
     sleep 1
 
-    run cedana -P "$PORT" manage runc "$id" --jid "$jid" --bundle "$bundle"
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -182,13 +182,13 @@ load_lib file
 
     sleep 1
 
-    run cedana -P "$PORT" dump runc "$id"
+    run cedana dump runc "$id"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
     assert_success
 
     run runc kill "$id" KILL
@@ -223,36 +223,36 @@ load_lib file
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    run cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid"
+    run cedana run runc --bundle "$bundle" --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore job "$jid"
+    run cedana restore job "$jid"
     assert_success
 
-    run cedana -P "$PORT" kill "$jid"
+    run cedana kill "$jid"
 }
 
 @test "restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    cedana -P "$PORT" run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
     sleep 1
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore job "$jid"
+    run cedana restore job "$jid"
     assert_success
 
-    run cedana -P "$PORT" kill "$jid"
+    run cedana kill "$jid"
 }

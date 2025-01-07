@@ -8,15 +8,11 @@ type (
 	// `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
-		// Port is the port on which the daemon listens for incoming connections
-		Port uint32 `json:"port"      mapstructure:"port"`
-		// Host is the address on which the daemon listens for incoming connections
-		Host string `json:"host"      mapstructure:"host"`
-		// ContextID is the context ID to use for VSOCK connections
-		ContextID uint32 `json:"context_id" mapstructure:"context_id"`
-		// UseVSOCK sets whether to use VSOCK instead for connections
-		UseVSOCK bool `json:"use_vsock" mapstructure:"use_vsock"`
-		// LogLevel is the log level to use for the daemon
+		// Address to use for incoming/outgoing connections
+		Address string `json:"address" mapstructure:"address"`
+		// Protocol to use for incoming/outgoing connections (TCP, UNIX, VSOCK)
+		Protocol string `json:"protocol" mapstructure:"protocol"`
+		// LogLevel is the default log level used by the server
 		LogLevel string `json:"log_level" mapstructure:"log_level"`
 
 		// Connection settings

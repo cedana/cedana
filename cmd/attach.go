@@ -16,22 +16,14 @@ var attachCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidPIDs,
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		useVSOCK := config.Global.UseVSOCK
-		var client *Client
-
-		if useVSOCK {
-			client, err = NewVSOCKClient(config.Global.ContextID, config.Global.Port)
-		} else {
-			client, err = NewClient(config.Global.Host, config.Global.Port)
-		}
-
+		client, err := NewClient(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
 
 		pid, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
-      return fmt.Errorf("invalid pid: %v", err)
+			return fmt.Errorf("invalid pid: %v", err)
 		}
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: uint32(pid)})

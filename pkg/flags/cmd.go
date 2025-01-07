@@ -41,13 +41,11 @@ var (
 	ShellJobFlag        = Flag{Full: "shell-job"}
 
 	// Parent flags
-	PortFlag       = Flag{Full: "port", Short: "P"}
-	HostFlag       = Flag{Full: "host", Short: "H"}
+	AddressFlag    = Flag{Full: "address"}
+	ProtocolFlag   = Flag{Full: "protocol"}
 	ConfigFlag     = Flag{Full: "config"}
 	ConfigDirFlag  = Flag{Full: "config-dir"}
-	UseVSOCKFlag   = Flag{Full: "use-vsock"}
 	DBFlag         = Flag{Full: "db"}
-	ContextIdFlag  = Flag{Full: "cid"}
 	MetricsASRFlag = Flag{Full: "metrics-asr"}
 	ProfilingFlag  = Flag{Full: "profiling"}
 )

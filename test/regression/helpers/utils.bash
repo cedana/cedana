@@ -21,6 +21,10 @@ random_free_port() {
     done
 }
 
+random_sock() {
+    echo "/tmp/$(unix_nano)"
+}
+
 pid_from_port() {
     local port=$1
     lsof -t -i:"$port"
@@ -31,6 +35,17 @@ kill_at_port() {
     local signal=${2:-9}
     pid=$(pid_from_port "$port")
     kill -"$signal" "$pid"
+}
+
+pid_from_sock() {
+    local sock=$1
+    fuser "$sock" | awk '{print $2}'
+}
+
+kill_at_sock() {
+    local sock=$1
+    local signal=${2:-9}
+    fuser "$sock" -k -"$signal"
 }
 
 env_exists() {

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
@@ -21,8 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
-
-const DEFAULT_PROTOCOL = "tcp"
 
 type Server struct {
 	grpcServer *grpc.Server
@@ -43,9 +44,8 @@ type Server struct {
 }
 
 type ServeOpts struct {
-	UseVSOCK bool
-	Port     uint32
-	Host     string
+	Address  string
+	Protocol string
 	Version  string
 	Metrics  config.Metrics
 }
@@ -122,19 +122,43 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	var listener net.Listener
 
-	if opts.UseVSOCK {
-		listener, err = vsock.Listen(opts.Port, nil)
-	} else {
-		// NOTE: `localhost` server inside kubernetes may or may not work
-		// based on firewall and network configuration, it would only work
-		// on local system, hence for serving use 0.0.0.0
-		address := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
-		listener, err = net.Listen(DEFAULT_PROTOCOL, address)
-	}
+	protocol := strings.ToLower(opts.Protocol)
+	address := opts.Address
 
+	switch protocol {
+	case "tcp":
+		if address == "" {
+			address = config.DEFAULT_TCP_ADDR
+		}
+		listener, err = net.Listen("tcp", address)
+	case "unix":
+		if address == "" {
+			address = config.DEFAULT_SOCK_ADDR
+		}
+		listener, err = net.Listen("unix", address)
+		if err == nil {
+			err = os.Chmod(address, config.DEFAULT_SOCK_PERMS)
+		}
+	case "vsock":
+		if address == "" {
+			return nil, fmt.Errorf("vsock address is required")
+		}
+		if !strings.Contains(address, ":") {
+			return nil, fmt.Errorf("vsock address must be in the format cid:port")
+		}
+		portStr := strings.Split(address, ":")[1]
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vsock port: %w", err)
+		}
+		listener, err = vsock.Listen(uint32(port), nil)
+	default:
+		err = fmt.Errorf("invalid protocol: %s", protocol)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	server.listener = listener
 
 	log.Info().Str("mac", host.MAC).Str("id", host.ID).Str("hostname", host.Hostname).Msg("host")

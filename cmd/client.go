@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
@@ -25,17 +27,48 @@ const (
 
 type Client struct {
 	daemonClient daemongrpc.DaemonClient
-	conn         *grpc.ClientConn
+	*grpc.ClientConn
 }
 
-func NewClient(host string, port uint32) (*Client, error) {
+func NewClient(address, protocol string) (*Client, error) {
+	var conn *grpc.ClientConn
+	var err error
 	var opts []grpc.DialOption
-	var address string
 
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	address = fmt.Sprintf("%s:%d", host, port)
 
-	conn, err := grpc.NewClient(address, opts...)
+	protocol = strings.ToLower(protocol)
+
+	switch protocol {
+	case "tcp":
+		if address == "" {
+			address = config.DEFAULT_TCP_ADDR
+		}
+		conn, err = grpc.NewClient(address, opts...)
+	case "unix":
+		if address == "" {
+			address = config.DEFAULT_SOCK_ADDR
+		}
+		conn, err = grpc.NewClient(fmt.Sprintf("unix://%s", address), opts...)
+	case "vsock":
+		if address == "" {
+			return nil, fmt.Errorf("address must be provided for vsock")
+		}
+		if !strings.Contains(address, ":") {
+			return nil, fmt.Errorf("address must be in the format 'contextId:port'")
+		}
+		parts := strings.Split(address, ":")
+		contextId, err := strconv.Atoi(parts[0])
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vsock address: %w", err)
+		}
+		opts = append(opts, grpc.WithContextDialer(utils.VSOCKDialer(uint32(contextId), uint32(port))))
+		conn, err = grpc.NewClient(fmt.Sprintf("vsock://%d:%d", contextId, port), opts...)
+	default:
+		err = fmt.Errorf("invalid protocol: %s", protocol)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -44,37 +77,8 @@ func NewClient(host string, port uint32) (*Client, error) {
 
 	return &Client{
 		daemonClient: daemonClient,
-		conn:         conn,
+		ClientConn:   conn,
 	}, nil
-}
-
-func NewVSOCKClient(contextId uint32, port uint32) (*Client, error) {
-	var opts []grpc.DialOption
-	var address string
-
-	opts = append(opts,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(utils.VSOCKDialer(contextId, port)),
-	)
-	address = fmt.Sprintf("vsock://%d:%d", contextId, port)
-
-	conn, err := grpc.NewClient(address, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	daemonClient := daemongrpc.NewDaemonClient(conn)
-
-	return &Client{
-		daemonClient: daemonClient,
-		conn:         conn,
-	}, nil
-}
-
-func (c *Client) Close() {
-	if c.conn != nil {
-		c.conn.Close()
-	}
 }
 
 ///////////////////

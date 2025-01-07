@@ -12,17 +12,17 @@ load_lib file
 @test "cedana --version" {
     expected_version=$(git describe --tags --always)
 
-    run cedana -P "$PORT" --version
+    run cedana --version
     assert_success
     assert_output --partial "$expected_version"
 }
 
 @test "cedana ps" {
     jid=$(unix_nano)
-    run cedana -P "$PORT" exec echo hello --jid "$jid"
+    run cedana exec echo hello --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" ps
+    run cedana ps
     assert_success
     assert_output --partial "$jid"
 }

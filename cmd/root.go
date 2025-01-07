@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/rs/zerolog/log"
@@ -41,21 +41,15 @@ func init() {
 	rootCmd.MarkPersistentFlagDirname(flags.ConfigDirFlag.Full)
 	rootCmd.MarkFlagsMutuallyExclusive(flags.ConfigFlag.Full, flags.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().
-		Uint32P(flags.PortFlag.Full, flags.PortFlag.Short, 0, "port to listen on/connect to")
+		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
 	rootCmd.PersistentFlags().
-		StringP(flags.HostFlag.Full, flags.HostFlag.Short, "", "host to listen on/connect to")
-	rootCmd.PersistentFlags().
-		BoolP(flags.UseVSOCKFlag.Full, flags.UseVSOCKFlag.Short, false, "use vsock for communication")
-	rootCmd.PersistentFlags().
-		Uint32P(flags.ContextIdFlag.Full, flags.ContextIdFlag.Short, 0, "context id for vsock communication")
+		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
 
-	// Bind to config
-	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup(flags.PortFlag.Full))
-	viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup(flags.HostFlag.Full))
-	viper.BindPFlag("use_vsock", rootCmd.PersistentFlags().Lookup(flags.UseVSOCKFlag.Full))
-	viper.BindPFlag("context_id", rootCmd.PersistentFlags().Lookup(flags.ContextIdFlag.Full))
+		// Bind to config
+	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
+	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
 	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
 }
 

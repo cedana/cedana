@@ -17,7 +17,7 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana -P "$PORT" dump process $pid
+    run cedana dump process $pid
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -29,16 +29,16 @@ load_lib file
 @test "dump process (new job)" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" run process "$WORKLOADS/date-loop.sh" --jid "$jid"
+    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" job kill "$jid"
+    run cedana job kill "$jid"
 }
 
 @test "dump process (manage existing job)" {
@@ -50,23 +50,23 @@ load_lib file
     run cedana manage process $pid --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" job kill "$jid"
+    run cedana job kill "$jid"
 }
 
 @test "dump non-existent process" {
-    run cedana -P "$PORT" dump process 999999999
+    run cedana dump process 999999999
 
     assert_failure
 }
 
 @test "dump non-existent job" {
-    run cedana -P "$PORT" dump job 999999999
+    run cedana dump job 999999999
 
     assert_failure
 }
@@ -79,13 +79,13 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana -P "$PORT" dump process $pid
+    run cedana dump process $pid
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore process --path "$dump_file"
+    run cedana restore process --path "$dump_file"
     assert_success
 
     run ps --pid $pid
@@ -98,23 +98,23 @@ load_lib file
 @test "restore process (new job)" {
     jid=$(unix_nano)
 
-    run cedana -P "$PORT" run process "$WORKLOADS/date-loop.sh" --jid "$jid"
+    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore job "$jid"
+    run cedana restore job "$jid"
     assert_success
 
-    run cedana -P "$PORT" ps
+    run cedana ps
     assert_success
     assert_output --partial "$jid"
 
-    run cedana -P "$PORT" job kill "$jid"
+    run cedana job kill "$jid"
 }
 
 @test "restore process (manage existing job)" {
@@ -127,24 +127,24 @@ load_lib file
     run cedana manage process $pid --jid "$jid"
     assert_success
 
-    run cedana -P "$PORT" dump job "$jid"
+    run cedana dump job "$jid"
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana -P "$PORT" restore job "$jid"
+    run cedana restore job "$jid"
     assert_success
 
-    run cedana -P "$PORT" ps
+    run cedana ps
     assert_success
     assert_output --partial "$jid"
 
-    run cedana -P "$PORT" job kill "$jid"
+    run cedana job kill "$jid"
 }
 
 @test "restore non-existent process" {
-    run cedana -P "$PORT" restore process --path /tmp/non-existent
+    run cedana restore process --path /tmp/non-existent
 
     assert_failure
 
@@ -154,7 +154,7 @@ load_lib file
 
 
 @test "restore non-existent job" {
-    run cedana -P "$PORT" restore job 999999999
+    run cedana restore job 999999999
 
     assert_failure
 }

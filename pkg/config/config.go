@@ -17,14 +17,25 @@ const (
 	configDirPerm  = 0o755
 	configFilePerm = 0o644
 	envVarPrefix   = "CEDANA"
+
+	// NOTE: `localhost` server inside kubernetes may or may not work
+	// based on firewall and network configuration, it would only work
+	// on local system, hence for serving default is 0.0.0.0
+	DEFAULT_TCP_ADDR   = "0.0.0.0:8080"
+	DEFAULT_SOCK_ADDR  = "/run/cedana.sock"
+	DEFAULT_SOCK_PERMS = 0o666
+
+	DEFAULT_PROTOCOL  = "tcp"
+	DEFAULT_LOG_LEVEL = "info"
 )
 
 // The default global config. This will get overwritten
 // by the config file or env vars during startup, if they exist.
 var Global Config = Config{
-	Port:     8080,
-	Host:     "0.0.0.0",
-	LogLevel: "info",
+	// NOTE: Don't specify default address here as it depends on default protocol.
+	// Use above constants for default address for each protocol.
+	Protocol: DEFAULT_PROTOCOL,
+	LogLevel: DEFAULT_LOG_LEVEL,
 	Checkpoints: Checkpoints{
 		Dir:         "/tmp",
 		Compression: "tar",

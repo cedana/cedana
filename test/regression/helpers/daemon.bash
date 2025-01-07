@@ -3,6 +3,7 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export PATH="./:$PATH" # ensure binaries are available
+export CEDANA_PROTOCOL="unix"
 export CEDANA_LOG_LEVEL=debug
 export CEDANA_PROFILING_ENABLED=false
 
@@ -13,11 +14,11 @@ WAIT_TIMEOUT=100
 ##################
 
 # Below setup ensures that a new daemon is started for each 'test'
-# using a unique port. This is done to avoid tests interfering
+# using a unique unix socket. This is done to avoid tests interfering
 # when running in parallel.
 #
 # If `PERSIST_DAEMON` is set, the daemon is started once for an
-# entire 'file' and the port is exported to the environment. This
+# entire 'file' and the socket is exported to the environment. This
 # is useful to test scenarios where the daemon is started once
 # and multiple tests are run against it.
 #
@@ -26,30 +27,30 @@ WAIT_TIMEOUT=100
 
 setup_file() {
     if env_exists "PERSIST_DAEMON"; then
-        PORT=$(random_free_port)
-        start_daemon_at "$PORT"
-        export PORT
+        SOCK=$(random_sock)
+        start_daemon_at "$SOCK"
+        export CEDANA_ADDRESS="$SOCK"
     fi
 }
 teardown_file() {
     if env_exists "PERSIST_DAEMON"; then
-        stop_daemon_at "$PORT"
+        stop_daemon_at "$SOCK"
     fi
 }
 setup() {
     if ! env_exists "PERSIST_DAEMON"; then
-        PORT=$(random_free_port)
-        start_daemon_at "$PORT"
-        export PORT
+        SOCK=$(random_sock)
+        start_daemon_at "$SOCK"
+        export CEDANA_ADDRESS="$SOCK"
     else
-        log_file=$(daemon_log_file "$PORT")
+        log_file=$(daemon_log_file "$CEDANA_ADDRESS")
         tail -f "$log_file" &
         export TAIL_PID=$!
     fi
 }
 teardown() {
     if ! env_exists "PERSIST_DAEMON"; then
-        stop_daemon_at "$PORT"
+        stop_daemon_at "$SOCK"
     else
         kill "$TAIL_PID"
     fi
@@ -60,15 +61,16 @@ teardown() {
 ##################
 
 start_daemon_at() {
-    local port=$1
-    cedana daemon start -P "$port" --db /tmp/cedana-"$port".db | tee "$(daemon_log_file "$port")" &
-    wait_for_start "$port"
+    local sock=$1
+    id=$(basename "$sock")
+    cedana daemon start --address "$sock" --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    wait_for_start "$sock"
 }
 
 wait_for_start() {
-    local port=$1
+    local sock=$1
     local i=0
-    while ! cedana --port "$port" ps &> /dev/null; do
+    while ! cedana --address "$sock" ps &> /dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -79,15 +81,15 @@ wait_for_start() {
 }
 
 stop_daemon_at() {
-    local port=$1
-    kill_at_port "$port" TERM
-    wait_for_stop "$port"
+    local sock=$1
+    kill_at_sock "$sock" TERM
+    wait_for_stop "$sock"
 }
 
 wait_for_stop() {
-    local port=$1
+    local sock=$1
     local i=0
-    while cedana --port "$port" ps &> /dev/null; do
+    while cedana --address "$sock" ps &> /dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -98,14 +100,14 @@ wait_for_stop() {
 }
 
 daemon_log_file() {
-    local port=$1
-    echo /var/log/cedana-daemon-"$port".log
+    local sock=$1
+    id=$(basename "$sock")
+    echo /var/log/cedana-daemon-"$id".log
 }
 
 pid_for_jid() {
-    local port=$1
-    local jid=$2
-    table=$(cedana -P "$port" ps)
+    local jid=$1
+    table=$(cedana ps)
     echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
 }
 
