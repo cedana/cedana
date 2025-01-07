@@ -159,19 +159,6 @@ func (m *ManagerLazy) Get(jid string) *Job {
 	return job.(*Job)
 }
 
-func (m *ManagerLazy) Find(pid uint32) *Job {
-	var found *Job
-	m.jobs.Range(func(key any, val any) bool {
-		job := val.(*Job)
-		if job.GetPID() == pid {
-			found = job
-			return false
-		}
-		return true
-	})
-	return found
-}
-
 func (m *ManagerLazy) Delete(jid string) {
 	_, ok := m.jobs.Load(jid)
 	if !ok {

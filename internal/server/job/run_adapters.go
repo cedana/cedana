@@ -22,8 +22,8 @@ const (
 
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
-// Allows management of external processes as well (not started by the daemon).
-func Manage(jobs Manager, external bool) types.Adapter[types.Run] {
+// Allows management of existing processes as well (not started by the daemon).
+func Manage(jobs Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
 		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 			if req.JID == "" {
@@ -66,7 +66,7 @@ func Manage(jobs Manager, external bool) types.Adapter[types.Run] {
 
 			err = jobs.Manage(server.Lifetime, job.JID, resp.PID, exited)
 			if err != nil {
-				if !external { // we don't want to cancel if manage was called for external process
+				if req.Action == daemon.RunAction_START_NEW { // we don't want to cancel if manage was called for an existing process
 					cancel()
 				}
 				jobs.Delete(job.JID)

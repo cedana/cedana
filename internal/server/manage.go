@@ -26,7 +26,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 	// inserted from a plugin or will be the built-in process run handler.
 
 	middleware := types.Middleware[types.Run]{
-		job.Manage(s.jobs, true),
+		job.Manage(s.jobs),
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 

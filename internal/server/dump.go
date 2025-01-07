@@ -33,8 +33,8 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		process.FillProcessStateForDump,
 		process.DetectShellJobForDump,
 		process.DetectIOUringForDump,
-		process.CloseCommonFilesForDump,
 		process.AddExternalFilesForDump,
+		process.CloseCommonFilesForDump,
 		network.DetectNetworkOptionsForDump,
 
 		criu.CheckOptsForDump,

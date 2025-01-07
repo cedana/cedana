@@ -50,13 +50,8 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		// Only set unless already set
-		if req.GetCriu().TcpEstablished == nil {
-			req.Criu.TcpEstablished = proto.Bool(hasTCP)
-		}
-		if req.GetCriu().ExtUnixSk == nil {
-			req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
-		}
+		req.Criu.TcpEstablished = proto.Bool(hasTCP)
+		req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 
 		return next(ctx, server, resp, req)
 	}
