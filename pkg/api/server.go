@@ -245,10 +245,10 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr stri
 		)
 
 		// log the GetContainerInfo method to trace
-		if strings.Contains(info.FullMethod, "GetContainerInfo") {
+		if strings.Contains(info.FullMethod, "Check") {
 			log.Trace().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
+			log.Info().Str("method", info.FullMethod).Interface("request", req).Msg("gRPC request received")
 		}
 
 		resp, err := handler(ctx, req)
@@ -262,7 +262,11 @@ func loggingUnaryInterceptor(serveOpts ServeOpts, machineID string, macAddr stri
 			span.SetStatus(codes.Error, err.Error())
 			span.RecordError(err)
 		} else {
-			log.Debug().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+      if strings.Contains(info.FullMethod, "Check") {
+        log.Trace().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+      } else {
+        log.Info().Str("method", info.FullMethod).Interface("response", resp).Msg("gRPC request succeeded")
+      }
 		}
 
 		return resp, err

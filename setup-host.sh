@@ -95,9 +95,9 @@ END_CHROOT
     echo "Downloading cedana's nvidia interception utilities..."
     mkdir -p /cedana/bin /cedana/lib
 
-    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/gpucontroller
-    chmod +x /cedana/bin/cedana-gpu-controlller
-    install /cedana/bin/cedana-gpu-controlller /usr/local/bin/cedana-gpu-controlller
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controller $CEDANA_URL/k8s/gpu/gpucontroller
+    chmod +x /cedana/bin/cedana-gpu-controller
+    install /cedana/bin/cedana-gpu-controller /usr/local/bin/cedana-gpu-controller
 
     wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/lib/libcedana-gpu.so $CEDANA_URL/k8s/gpu/libcedana
     install /cedana/lib/libcedana-gpu.so /usr/local/lib/libcedana-gpu.so
@@ -108,28 +108,19 @@ END_CHROOT
     mkdir -p /usr/local/cedana/bin
     install /cedana/bin/containerd-shim-runc-v2 /usr/local/cedana/bin/containerd-shim-runc-v2
 
-    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
-    if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
-        echo "Containerd config file not found at $PATH_CONTAINERD_CONFIG"
-        if [ $SEARCH_CONTAINERD_CONFIG -eq 1 ]; then
-            echo "Searching for containerd config file..."
-            PATH_CONTAINERD_CONFIG=$(find / -fullname **/containerd/config.toml | head -n 1)
-            if [ ! -f $PATH_CONTAINERD_CONFIG ]; then
-                echo "Containerd config file not found. Exiting..."
-                exit 1
-            fi
-            echo "Found containerd config file at $PATH_CONTAINERD_CONFIG"
-        else
-            echo "Containerd config file not found. Creating default config file at $PATH_CONTAINERD_CONFIG"
-            if [[ $PATH_CONTAINERD_CONFIG == *"k3s"* ]]; then
-                echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
-                echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
-            else
-                echo "" > $PATH_CONTAINERD_CONFIG
-            fi
-        fi
+    if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
+        PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+        echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
+        echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+          runtime_type = "io.containerd.runc.v2"
+          runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
+END_CAT
     fi
 
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
         echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
         cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'

@@ -159,12 +159,6 @@ jobs:
         with:
           name: build
 
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
-        with:
-          limit-access-to-actor: true
-
       - name: Setup CI
         run: |
           chmod +x cedana
@@ -174,11 +168,29 @@ jobs:
           CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
 
+      - name: Setup debugging session
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          CEDANA_URL: ${{ vars.CEDANA_URL }}
+          CEDANA_REMOTING_ENABLED: true
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+
       - name: Run regression tests
         env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          CEDANA_URL: ${{ vars.CEDANA_URL }}
           CI_BRANCH: ${{ github.ref_name }}
           SIGNOZ_ACCESS_TOKEN: ${{ secrets.SIGNOZ_ACCESS_TOKEN }}
         run: sudo -E make -C scripts/ci regression
+
+      - name: Upload daemon log
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedana-daemon.log
+          path: /var/log/cedana-daemon.log
 
   unit-test:
     name: Unit Tests
@@ -349,6 +361,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           submodules: "recursive"
 

@@ -6,12 +6,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,9 +24,11 @@ import (
 	"github.com/cedana/cedana/pkg/api/runc"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/containerd/console"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
+	runcutils "github.com/opencontainers/runc/libcontainer/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -45,8 +50,13 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) {
-	cmd := exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, bucket string, num_pipes int32) {
+	args := []string{"--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes)}
+	if bucket != "" {
+		args = append(args, "--bucket", bucket)
+	}
+	args = append(args, "serve") // subcommand must be after options
+	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -109,7 +119,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(ctx, tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Bucket, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -344,7 +354,86 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
+func handleSingle(path string, noStdin bool) error {
+	// Open a socket.
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+
+	// We only accept a single connection, since we can only really have
+	// one reader for os.Stdin. Plus this is all a PoC.
+	conn, err := ln.Accept()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Close ln, to allow for other instances to take over.
+	ln.Close()
+
+	// Get the fd of the connection.
+	unixconn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return errors.New("failed to cast to unixconn")
+	}
+
+	socket, err := unixconn.File()
+	if err != nil {
+		return err
+	}
+	defer socket.Close()
+
+	// Get the master file descriptor from runC.
+	master, err := runcutils.RecvFd(socket)
+	if err != nil {
+		return err
+	}
+	c, err := console.ConsoleFromFile(master)
+	if err != nil {
+		return err
+	}
+	if err := console.ClearONLCR(c.Fd()); err != nil {
+		return err
+	}
+
+	// Copy from our stdio to the master fd.
+	var (
+		wg            sync.WaitGroup
+		inErr, outErr error
+	)
+	wg.Add(1)
+	go func() {
+		_, outErr = io.Copy(os.Stdout, c)
+		wg.Done()
+	}()
+	if !noStdin {
+		wg.Add(1)
+		go func() {
+			_, inErr = io.Copy(c, os.Stdin)
+			wg.Done()
+		}()
+	}
+
+	// Only close the master fd once we've stopped copying.
+	wg.Wait()
+	c.Close()
+
+	if outErr != nil {
+		return outErr
+	}
+
+	return inErr
+}
+
+func (s *service) runcRestore(
+	ctx context.Context,
+	imgPath string,
+	criuOpts *container.CriuOpts,
+	opts *container.RuncOpts,
+	jid string,
+) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -371,7 +460,6 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 			return 0, nil, fmt.Errorf("error creating tempdir: %w", err)
 		}
 	}
-	defer os.RemoveAll(tempDir) // since it's a temporary directory
 
 	err := utils.UntarFolder(imgPath, tempDir)
 	if err != nil {
@@ -383,24 +471,34 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
+	checkpointJID := state.JID
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, jid)
+		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, checkpointJID)
 		if err != nil {
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 			return 0, nil, err
 		}
+		path := "/tmp/" + opts.ContainerId + ".socket"
+		go func() {
+			if handleSingle(path, false) != nil {
+				// failed to create socket
+			}
+		}()
+		opts.ConsoleSocket = path
 	}
 
 	if opts.Bundle == "" {
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
 
-	err = container.RuncRestore(tempDir, opts.ContainerId, criuOpts, opts)
+	err = container.RuncRestore(tempDir, opts.ContainerId, state.JID, state.GPU, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(jid) != nil {
-			s.StopGPUController(jid)
-			s.WaitGPUController(jid)
+		if s.GetGPUController(checkpointJID) != nil {
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 		}
 
 		return 0, nil, err
@@ -412,9 +510,9 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 	pid, err := runc.GetPidByContainerId(opts.ContainerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(jid) != nil {
-			s.StopGPUController(jid)
-			s.WaitGPUController(jid)
+		if s.GetGPUController(checkpointJID) != nil {
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 		}
 
 		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
@@ -431,8 +529,8 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 			code := status.ExitStatus()
 			log.Info().Int32("PID", pid).Str("JID", opts.ContainerId).Int("status", code).Msgf("runc container exited")
 
-			if s.GetGPUController(jid) != nil {
-				err = s.StopGPUController(jid)
+			if s.GetGPUController(checkpointJID) != nil {
+				err = s.StopGPUController(checkpointJID)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
 				}
@@ -442,11 +540,11 @@ func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *con
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if s.GetGPUController(jid) != nil {
+		if s.GetGPUController(checkpointJID) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				s.WaitGPUController(jid)
+				s.WaitGPUController(checkpointJID)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(pid), syscall.SIGKILL)
@@ -639,6 +737,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		var err error
 		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, state.JID)
 		if err != nil {
+			s.StopGPUController(state.JID)
+			s.WaitGPUController(state.JID)
 			return 0, nil, err
 		}
 	}
@@ -831,20 +931,25 @@ func (s *service) kataRestore(ctx context.Context, args *task.RestoreArgs) (*int
 	return pid, nil
 }
 
-func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, jid string) error {
+func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, groups []int32, stream bool, sleepingContainerId string) error {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
 		return fmt.Errorf("could not get restore stats from context")
 	}
 
-	err := s.StartGPUController(ctx, uid, gid, groups, jid)
-	if err != nil {
-		log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
-		return err
+	gpuController := s.GetGPUController(sleepingContainerId)
+	if gpuController == nil {
+		err := s.StartGPUController(ctx, uid, gid, groups, sleepingContainerId)
+		if err != nil {
+			log.Warn().Msgf("could not start cedana-gpu-controller: %v", err)
+			return err
+		}
+		gpuController = s.GetGPUController(sleepingContainerId)
+		if gpuController == nil {
+			return fmt.Errorf("could not get gpu controller")
+		}
 	}
-
-	gpuController := s.GetGPUController(jid)
 
 	args := gpu.RestoreRequest{
 		Directory: dir,
@@ -877,7 +982,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 	stats.GPUDuration = elapsed.Milliseconds()
 
 	// HACK: Create empty log file for intercepted process to avoid CRIU errors
-	soLogFileName := fmt.Sprintf("cedana-so-%s.log", jid)
+	soLogFileName := fmt.Sprintf("cedana-so-%s.log", sleepingContainerId)
 	if _, err := os.Stat(filepath.Join(os.TempDir(), soLogFileName)); os.IsNotExist(err) {
 		os.Create(filepath.Join(os.TempDir(), soLogFileName))
 	}

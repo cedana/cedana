@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/natefinch/lumberjack"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
 )
@@ -27,20 +28,41 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 
 func init() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	consoleWriter := zerolog.NewConsoleWriter(
+		func(w *zerolog.ConsoleWriter) {
+			w.Out = os.Stdout
+		},
+	)
+	// "Writer" is just the the anonymous field "io.Writer" in the  struct
+	consoleWriterLeveled := &LevelWriter{Writer: consoleWriter, Level: zerolog.DebugLevel}
 
-	logLevelStr := os.Getenv("CEDANA_LOG_LEVEL")
-	logLevel, err := zerolog.ParseLevel(logLevelStr)
-	if err != nil || logLevelStr == "" { // allow turning off logging
-		logLevel = DEFAULT_LOG_LEVEL
+	fileWriter := &lumberjack.Logger{
+		Filename:   "/var/log/cedana-daemon-debug.log",
+		MaxSize:    1,
+		MaxAge:     30,
+		MaxBackups: 5,
+		LocalTime:  false,
+		Compress:   false,
 	}
+	fileWriterLeveled := &LevelWriter{Writer: fileWriter, Level: zerolog.DebugLevel}
 
-	var output io.Writer = zerolog.ConsoleWriter{
-		Out: os.Stdout,
-	}
+  mlw := zerolog.MultiLevelWriter(consoleWriterLeveled, fileWriterLeveled)
 
-	Logger = zerolog.New(output).
-		Level(logLevel).
+	Logger = zerolog.New(mlw).
+		Level(zerolog.TraceLevel).
 		With().
 		Timestamp().
 		Logger().Hook(LineInfoHook{})
+}
+
+type LevelWriter struct {
+	io.Writer
+	Level zerolog.Level
+}
+
+func (lw *LevelWriter) WriteLevel(l zerolog.Level, p []byte) (n int, err error) {
+	if l >= lw.Level {
+		return lw.Writer.Write(p)
+	}
+	return len(p), nil
 }

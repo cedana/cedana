@@ -65,7 +65,7 @@ func (s *service) generateState(ctx context.Context, pid int32) (*task.ProcessSt
 
 	state.PID = pid
 
-	// Search for JID, if found, use that state with existing fields
+	// Search for process id, if found, use that state with existing fields
 	list, err := s.db.ListJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not list jobs: %v", err)

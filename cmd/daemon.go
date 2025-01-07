@@ -11,10 +11,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"cloud.google.com/go/pubsub"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -49,9 +54,17 @@ var startDaemonCmd = &cobra.Command{
 
 		gpuEnabled, _ := cmd.Flags().GetBool(gpuEnabledFlag)
 		vsockEnabled, _ := cmd.Flags().GetBool(vsockEnabledFlag)
+		remotingEnabled, _ := cmd.Flags().GetBool(remotingEnabledFlag)
 		port, _ := cmd.Flags().GetUint32(portFlag)
 		metricsEnabled, _ := cmd.Flags().GetBool(metricsEnabledFlag)
 		jobServiceEnabled, _ := cmd.Flags().GetBool(jobServiceFlag)
+
+		if remotingEnabled {
+			ctx, err = awsSetup("", ctx, false)
+			if err != nil {
+				return err
+			}
+		}
 
 		cedanaURL := viper.GetString("connection.cedana_url")
 		if cedanaURL == "" {
@@ -100,6 +113,152 @@ func getenv(k, d string) string {
 		return s
 	}
 	return d
+}
+
+type AWSCredentials struct {
+	AWS_ACCESS_KEY_ID     string `json:"AWS_ACCESS_KEY_ID"`
+	AWS_DEFAULT_REGION    string `json:"AWS_DEFAULT_REGION"`
+	AWS_SECRET_ACCESS_KEY string `json:"AWS_SECRET_ACCESS_KEY"`
+}
+
+func awsCredentialsSetup() error {
+	cedana_auth_token, ok := os.LookupEnv("CEDANA_AUTH_TOKEN")
+	if !ok {
+		return fmt.Errorf("CEDANA_AUTH_TOKEN not set")
+	}
+	cedana_url, ok := os.LookupEnv("CEDANA_URL")
+	if !ok {
+		return fmt.Errorf("CEDANA_URL not set")
+	}
+
+	// construct + send request
+	url := fmt.Sprintf("%s/streaming/aws/credentials", cedana_url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cedana_auth_token)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error getting AWS credentials: %d", resp.StatusCode)
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %v", err)
+	}
+
+	// unmarshal response
+	var creds AWSCredentials
+	err = json.Unmarshal([]byte(respBody), &creds)
+	if err != nil {
+		log.Err(err).Msg("Error unmarshaling JSON")
+		return err
+	}
+
+	// set env vars
+	err = os.Setenv("AWS_ACCESS_KEY_ID", creds.AWS_ACCESS_KEY_ID)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_ACCESS_KEY_ID")
+		return err
+	}
+	err = os.Setenv("AWS_DEFAULT_REGION", creds.AWS_DEFAULT_REGION)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_DEFAULT_REGION")
+		return err
+	}
+	err = os.Setenv("AWS_SECRET_ACCESS_KEY", creds.AWS_SECRET_ACCESS_KEY)
+	if err != nil {
+		log.Err(err).Msg("Error setting AWS_SECRET_ACCESS_KEY")
+		return err
+	}
+	return nil
+}
+
+func awsSetup(bucket string, ctx context.Context, clear bool) (context.Context, error) {
+	env_set := os.Getenv("AWS_DEFAULT_REGION") != "" && os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
+	file_set := os.Getenv("AWS_CONFIG_FILE") != "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != ""
+	if !env_set && !file_set {
+		err := awsCredentialsSetup()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to setup AWS credentials")
+			return ctx, fmt.Errorf("Failed to setup AWS credentials")
+		}
+	}
+	if os.Getenv("AWS_DEFAULT_REGION") == "" && os.Getenv("AWS_CONFIG_FILE") == "" {
+		return ctx, fmt.Errorf("Please set environment variable AWS_DEFAULT_REGION, or set AWS_CONFIG_FILE to absolute path of AWS config file (~/.aws/config).")
+	}
+	if !((os.Getenv("AWS_ACCESS_KEY_ID") == "" && os.Getenv("AWS_SECRET_ACCESS_KEY") == "") || os.Getenv("AWS_SHARED_CREDENTIALS_FILE") == "") {
+		return ctx, fmt.Errorf("Please set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set AWS_SHARED_CREDENTIALS_FILE to absolute path of AWS credentials file (~/.aws/credentials).")
+	}
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return ctx, fmt.Errorf("Unable to load AWS configuration")
+	}
+	if cfg.Region == "" {
+		return ctx, fmt.Errorf("AWS region not configured properly, please specify in AWS config file (~/.aws/config) or environment variable AWS_DEFAULT_REGION.")
+	}
+	_, err = cfg.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return ctx, fmt.Errorf("Failed to load AWS credentials, please specify in AWS credentials file (~/.aws/credentials) or environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
+	}
+
+	s3Client := s3.NewFromConfig(cfg)
+	if bucket != "" {
+		_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			return ctx, err
+		}
+	}
+	if clear { // clear bucket on dump
+		var objectsToDelete []types.ObjectIdentifier
+		var page *s3.ListObjectsV2Output
+		paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+		})
+		for paginator.HasMorePages() {
+			page, err = paginator.NextPage(ctx)
+			if err != nil {
+				return ctx, fmt.Errorf("failed to list objects in bucket: %v", err)
+			}
+		}
+		for _, obj := range page.Contents {
+			objectsToDelete = append(objectsToDelete, types.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+		for i := 0; i < len(objectsToDelete); i += 1000 {
+			end := i + 1000
+			if end > len(objectsToDelete) {
+				end = len(objectsToDelete)
+			}
+			_, err = s3Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+				Bucket: aws.String(bucket),
+				Delete: &types.Delete{
+					Objects: objectsToDelete[i:end],
+				},
+			})
+			if err != nil {
+				return ctx, fmt.Errorf("failed to delete objects: %v", err)
+			}
+		}
+		output, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			return ctx, fmt.Errorf("failed to list objects in bucket: %v", err)
+		}
+		if len(output.Contents) != 0 {
+			return ctx, fmt.Errorf("failed to clear bucket: %v objects remain", len(output.Contents))
+		}
+	}
+	return ctx, nil
 }
 
 func gcloudAdcSetup(ctx context.Context) error {
@@ -185,11 +344,10 @@ func pollForAsrMetricsReporting(ctx context.Context, port uint32) {
 				},
 			})
 			// Get the server-assigned message ID
-			id, err := result.Get(ctx)
+			_, err = result.Get(ctx)
 			if err != nil {
 				log.Error().Msgf("Failed to publish message: %v", err)
 			}
-			log.Info().Msgf("Published message with ID: %v\n", id)
 			time.Sleep(ASR_POLL_INTERVAL)
 		}
 	}()
@@ -275,6 +433,7 @@ func init() {
 	daemonCmd.AddCommand(checkDaemonCmd)
 	startDaemonCmd.Flags().BoolP(gpuEnabledFlag, "g", false, "start daemon with GPU support")
 	startDaemonCmd.Flags().Bool(vsockEnabledFlag, false, "start daemon with vsock support")
+	startDaemonCmd.Flags().BoolP(remotingEnabledFlag, "r", false, "start daemon with direct remoting support")
 	startDaemonCmd.Flags().BoolP(metricsEnabledFlag, "m", false, "enable metrics")
 	startDaemonCmd.Flags().Bool(jobServiceFlag, false, "enable job service")
 }

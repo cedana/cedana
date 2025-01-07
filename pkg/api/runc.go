@@ -29,34 +29,35 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 		return nil, err
 	}
 
-	pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
-	}
-	bundle, err := runc.GetBundleByContainerId(args.ContainerID, args.Root)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get bundle by container id: %v", err))
-	}
+	// pid, err := runc.GetPidByContainerId(args.ContainerID, args.Root)
+	// if err != nil {
+	// 	return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get pid by container id: %v", err))
+	// }
+	// bundle, err := runc.GetBundleByContainerId(args.ContainerID, args.Root)
+	// if err != nil {
+	// 	return nil, status.Error(codes.NotFound, fmt.Sprintf("failed to get bundle by container id: %v", err))
+	// }
 
 	// Check if process PID already exists as a managed job
-	queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{pid}})
-	if queryResp != nil && len(queryResp.Processes) > 0 {
-		if utils.PidExists(uint32(pid)) {
-			err = status.Error(codes.AlreadyExists, "PID already running as a managed job")
-			return nil, err
-		}
-	}
+	// queryResp, err := s.JobQuery(ctx, &task.JobQueryArgs{PIDs: []int32{pid}})
+	// if queryResp != nil && len(queryResp.Processes) > 0 {
+	// 	if utils.PidExists(uint32(pid)) {
+	// 		err = status.Error(codes.AlreadyExists, "PID already running as a managed job")
+	// 		return nil, err
+	// 	}
+	// }
+	// exitCode := utils.WaitForPid(pid)
 
-	exitCode := utils.WaitForPid(pid)
+	// state, err = s.generateState(ctx, pid)
 
-	state, err = s.generateState(ctx, pid)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "is the process running?")
-	}
+	// if err != nil {
+	// 	return nil, status.Error(codes.NotFound, "is the process running?")
+	// }
+  state = &task.ProcessState{}
 	state.JID = args.ContainerID
 	state.ContainerID = args.ContainerID
 	state.ContainerRoot = args.Root
-	state.ContainerBundle = bundle
+	// state.ContainerBundle = bundle
 	state.JobState = task.JobState_JOB_RUNNING
 	state.GPU = args.GPU
 
@@ -77,44 +78,44 @@ func (s *service) RuncManage(ctx context.Context, args *task.RuncManageArgs) (*t
 
 	// Wait for server shutdown to gracefully exit, since job is now managed
 	// Also wait for process exit, to update state
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		select {
-		case <-s.serverCtx.Done():
-			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing runc container")
-			err := syscall.Kill(int(state.PID), syscall.SIGKILL)
-			if err != nil {
-				log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill runc container. already dead?")
-			}
-		case <-exitCode:
-			log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("runc container exited")
-		}
-		state, err = s.getState(context.WithoutCancel(ctx), state.JID)
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
-		}
-		state.JobState = task.JobState_JOB_DONE
-		err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to update state after done")
-		}
-		if s.GetGPUController(state.JID) != nil {
-			s.StopGPUController(state.JID)
-		}
-	}()
+	// s.wg.Add(1)
+	// go func() {
+	// 	defer s.wg.Done()
+	// 	select {
+	// 	case <-s.serverCtx.Done():
+	// 		log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("server shutting down, killing runc container")
+	// 		err := syscall.Kill(int(state.PID), syscall.SIGKILL)
+	// 		if err != nil {
+	// 			log.Error().Err(err).Str("JID", state.JID).Int32("PID", state.PID).Msg("failed to kill runc container. already dead?")
+	// 		}
+	// 	case <-exitCode:
+	// 		log.Info().Str("JID", state.JID).Int32("PID", state.PID).Msg("runc container exited")
+	// 	}
+	// 	state, err = s.getState(context.WithoutCancel(ctx), state.JID)
+	// 	if err != nil {
+	// 		log.Warn().Err(err).Msg("failed to get latest state, DB might be inconsistent")
+	// 	}
+	// 	state.JobState = task.JobState_JOB_DONE
+	// 	err := s.updateState(context.WithoutCancel(ctx), state.JID, state)
+	// 	if err != nil {
+	// 		log.Error().Err(err).Msg("failed to update state after done")
+	// 	}
+	// 	if s.GetGPUController(state.JID) != nil {
+	// 		s.StopGPUController(state.JID)
+	// 	}
+	// }()
 
 	// Clean up GPU controller and also handle premature exit
-	if s.GetGPUController(state.JID) != nil {
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			s.WaitGPUController(state.JID)
-
-			// Should kill process if still running since GPU controller might have exited prematurely
-			syscall.Kill(int(state.PID), syscall.SIGKILL)
-		}()
-	}
+	// if s.GetGPUController(state.JID) != nil {
+	// 	s.wg.Add(1)
+	// 	go func() {
+	// 		defer s.wg.Done()
+	// 		s.WaitGPUController(state.JID)
+	//
+	// 		// Should kill process if still running since GPU controller might have exited prematurely
+	// 		syscall.Kill(int(state.PID), syscall.SIGKILL)
+	// 	}()
+	// }
 
 	return &task.RuncManageResp{Message: "success", State: state}, nil
 }
@@ -151,14 +152,18 @@ func (s *service) RuncDump(ctx context.Context, args *task.RuncDumpArgs) (*task.
 		}
 	}
 
+  useGPU := state.GPU
 	state, err = s.generateState(ctx, pid)
 	if err != nil {
 		err = status.Error(codes.Internal, err.Error())
 		return nil, err
 	}
+  state.JID = args.ContainerID
 	state.ContainerID = args.ContainerID
 	state.ContainerRoot = args.Root
 	state.ContainerBundle = bundle
+	state.JobState = task.JobState_JOB_RUNNING
+	state.GPU = useGPU
 
 	isUsingTCP, err := utils.CheckTCPConnections(pid)
 	if err != nil {
@@ -223,7 +228,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
 		TcpEstablished:  args.GetCriuOpts().GetTcpEstablished(),
-		TcpClose:        args.GetCriuOpts().GetTcpClose(),
+		TcpClose:        true,
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
@@ -301,6 +306,9 @@ func (s *service) RuncQuery(ctx context.Context, args *task.RuncQueryArgs) (*tas
 		}
 
 		for _, c := range runcContainers {
+      if c.Bundle == "" {
+        continue
+      }
 			ctr := &task.RuncContainer{
 				ID:            c.ContainerId,
 				ImageName:     c.ImageName,
