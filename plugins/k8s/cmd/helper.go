@@ -33,10 +33,8 @@ var cleanupHostScript string
 //go:embed scripts/bump-restart.sh
 var restartScript string
 
-var startChrootScript = `
-#!/bin/bash
-chroot /host bash /cedana/scripts/run-cedana.sh
-`
+//go:embed scripts/start-chroot.sh
+var startChrootScript string
 
 func init() {
 	HelperCmd.AddCommand(destroyCmd)

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # NOTE: This script assumes it's executed in the container environment
 
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib

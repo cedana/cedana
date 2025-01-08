@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # NOTE: This script assumes it's executed in the container environment
 
 # updates the cedana daemon to the latest version
