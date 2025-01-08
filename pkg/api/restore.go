@@ -349,7 +349,7 @@ func (s *service) runcRestore(
 	imgPath string,
 	criuOpts *container.CriuOpts,
 	opts *container.RuncOpts,
-	jid, sleepingContainerId string,
+	jid string,
 ) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
@@ -388,12 +388,13 @@ func (s *service) runcRestore(
 		return 0, nil, fmt.Errorf("does the img path exist? %w", err)
 	}
 
+  checkpointJID := state.JID
 	if state.GPU {
 		var err error
-		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, "gpu-checkpoint")
+		err = s.gpuRestore(ctx, tempDir, state.UIDs[0], state.GIDs[0], state.Groups, false, checkpointJID)
 		if err != nil {
-			s.StopGPUController(sleepingContainerId)
-			s.WaitGPUController(sleepingContainerId)
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 			return 0, nil, err
 		}
 	}
@@ -402,12 +403,12 @@ func (s *service) runcRestore(
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
 
-	err = container.RuncRestore(tempDir, opts.ContainerId, criuOpts, opts)
+	err = container.RuncRestore(tempDir, opts.ContainerId, state.JID, state.GPU, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(sleepingContainerId) != nil {
-			s.StopGPUController(sleepingContainerId)
-			s.WaitGPUController(sleepingContainerId)
+		if s.GetGPUController(checkpointJID) != nil {
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 		}
 
 		return 0, nil, err
@@ -419,9 +420,9 @@ func (s *service) runcRestore(
 	pid, err := runc.GetPidByContainerId(opts.ContainerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
-		if s.GetGPUController(sleepingContainerId) != nil {
-			s.StopGPUController(sleepingContainerId)
-			s.WaitGPUController(sleepingContainerId)
+		if s.GetGPUController(checkpointJID) != nil {
+			s.StopGPUController(checkpointJID)
+			s.WaitGPUController(checkpointJID)
 		}
 
 		return 0, nil, fmt.Errorf("failed to get pid by container id: %w", err)
@@ -438,8 +439,8 @@ func (s *service) runcRestore(
 			code := status.ExitStatus()
 			log.Info().Int32("PID", pid).Str("JID", opts.ContainerId).Int("status", code).Msgf("runc container exited")
 
-			if s.GetGPUController(sleepingContainerId) != nil {
-				err = s.StopGPUController(sleepingContainerId)
+			if s.GetGPUController(checkpointJID) != nil {
+				err = s.StopGPUController(checkpointJID)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to kill GPU controller after runc container exit")
 				}
@@ -449,11 +450,11 @@ func (s *service) runcRestore(
 		}()
 
 		// Clean up GPU controller and also handle premature exit
-		if s.GetGPUController(sleepingContainerId) != nil {
+		if s.GetGPUController(checkpointJID) != nil {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				s.WaitGPUController(sleepingContainerId)
+				s.WaitGPUController(checkpointJID)
 
 				// Should kill process if still running since GPU controller might have exited prematurely
 				syscall.Kill(int(pid), syscall.SIGKILL)
@@ -646,6 +647,8 @@ func (s *service) restore(ctx context.Context, args *task.RestoreArgs, stream gr
 		var err error
 		err = s.gpuRestore(ctx, dir, state.UIDs[0], state.GIDs[0], state.Groups, args.Stream > 0, state.JID)
 		if err != nil {
+			s.StopGPUController(state.JID)
+			s.WaitGPUController(state.JID)
 			return 0, nil, err
 		}
 	}

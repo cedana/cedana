@@ -223,7 +223,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 	criuOpts := &container.CriuOpts{
 		MntnsCompatMode: false, // XXX: Should instead take value from args
 		TcpEstablished:  args.GetCriuOpts().GetTcpEstablished(),
-		TcpClose:        args.GetCriuOpts().GetTcpClose(),
+		TcpClose:        true,
 		FileLocks:       args.GetCriuOpts().GetFileLocks(),
 	}
 
@@ -246,7 +246,7 @@ func (s *service) RuncRestore(ctx context.Context, args *task.RuncRestoreArgs) (
 		return nil, status.Error(codes.InvalidArgument, "checkpoint path cannot be empty")
 	}
 
-	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, criuOpts, opts, jid, args.CheckpointID)
+	pid, exitCode, err := s.runcRestore(ctx, args.ImagePath, criuOpts, opts, jid)
 	if err != nil {
 		err = status.Error(codes.Internal, fmt.Sprintf("failed to restore runc container: %v", err))
 		return nil, err

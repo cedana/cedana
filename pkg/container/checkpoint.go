@@ -1799,7 +1799,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int32, runcRoot s
 		}
 	}
 
-	err = c.criuSwrk(nil, req, criuOpts, nil)
+	err = c.criuSwrk(nil, req, criuOpts, nil, 0)
 	if err != nil {
 		logCriuErrors(criuOpts.ImagesDirectory, "dump.log")
 		return err
@@ -1807,7 +1807,7 @@ func (c *RuncContainer) RuncCheckpoint(criuOpts *CriuOpts, pid int32, runcRoot s
 	return nil
 }
 
-func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File) error {
+func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *CriuOpts, extraFiles []*os.File, netPid int) error {
 	fds, err := unix.Socketpair(unix.AF_LOCAL, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return err
@@ -1874,7 +1874,7 @@ func (c *RuncContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *C
 		}
 	}()
 
-	if err := c.criuApplyCgroups(criuProcess.Pid, req); err != nil {
+	if err := c.criuApplyCgroups(criuProcess.Pid, netPid, req); err != nil {
 		return err
 	}
 

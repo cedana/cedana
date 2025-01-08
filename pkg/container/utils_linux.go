@@ -1507,7 +1507,7 @@ func (c *RuncContainer) Restore(process *Process, criuOpts *CriuOpts, runcRoot s
 			req.Opts.InheritFd = append(req.Opts.InheritFd, inheritFd)
 		}
 	}
-	err = c.criuSwrk(process, req, criuOpts, extraFiles)
+	err = c.criuSwrk(process, req, criuOpts, extraFiles, netPid)
 	if err != nil {
 		logCriuErrors(logDir, logFile)
 	}

@@ -112,6 +112,12 @@ END_CHROOT
         PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
         echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
         echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+          runtime_type = "io.containerd.runc.v2"
+          runtime_path = '/usr/local/cedana/bin/containerd-shim-runc-v2'
+END_CAT
     fi
 
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}

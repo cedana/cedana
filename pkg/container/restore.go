@@ -16,7 +16,7 @@ import (
 	containerd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	errdefs "github.com/containerd/errdefs"
-	rspec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -144,14 +144,91 @@ func containerdRestore(id string, ref string) error {
 // XXX: The passed in sleepingContainerId is the container id of the sleeping container, that is
 // instead used to restore the container. This is a hack that will no longer be needed once we have
 // our own custom shim C/R.
-func RuncRestore(imgPath string, sleepingContainerId string, criuOpts *CriuOpts, opts *RuncOpts) error {
-	var spec rspec.Spec
-
+func RuncRestore(imgPath, newRestoreContainerId, jid string, gpuEnabled bool, criuOpts *CriuOpts, opts *RuncOpts) error {
+	var spec specs.Spec
 	configPath := opts.Bundle + "/config.json"
 
 	if err := readJSON(configPath, &spec); err != nil {
 		return err
 	}
+
+  if gpuEnabled {
+    var mounts []specs.Mount
+    for _, v := range spec.Mounts {
+      if v.Source != "/dev/shm" || v.Destination != "/dev/shm" {
+        mounts = append(mounts, v)
+      }
+    }
+    spec.Mounts = mounts
+    spec.Mounts = append(spec.Mounts, specs.Mount{
+      Type:        "bind",
+      Source:      "/dev/shm",
+      Destination: "/dev/shm",
+      Options: []string{
+        "rbind",
+        "rprivate",
+        "nosuid",
+        "nodev",
+        "rw",
+      },
+    })
+    spec.Mounts = append(spec.Mounts, specs.Mount{
+      Type:        "bind",
+      Source:      "/usr/local/lib/libcedana-gpu.so",
+      Destination: "/usr/lib/libcedana-gpu.so",
+      Options: []string{
+        "rbind",
+        "rprivate",
+        "nosuid",
+        "nodev",
+        "rw",
+      },
+    })
+    spec.Mounts = append(spec.Mounts, specs.Mount{
+      Type:        "bind",
+      Source:      "/usr/lib/x86_64-linux-gnu/libelf.so.1",
+      Destination: "/usr/lib/x86_64-linux-gnu/libelf.so.1",
+      Options: []string{
+        "rbind",
+        "rprivate",
+        "nosuid",
+        "nodev",
+        "rw",
+      },
+    })
+    spec.Mounts = append(spec.Mounts, specs.Mount{
+      Type:        "bind",
+      Source:      "/usr/lib/x86_64-linux-gnu/libz.so.1",
+      Destination: "/usr/lib/x86_64-linux-gnu/libz.so.1",
+      Options: []string{
+        "rbind",
+        "rprivate",
+        "nosuid",
+        "nodev",
+        "rw",
+      },
+    })
+    spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD=/usr/lib/libcedana-gpu.so")
+    spec.Process.Env = append(spec.Process.Env, "CEDANA_JID="+jid)
+    data, err := json.Marshal(spec)
+    if err != nil {
+      // bad modification, skip writing continue
+      // TODO: log error
+    } else {
+      fs, err := os.Stat(configPath)
+      if err != nil {
+        // TODO: log error and skip writing
+      } else {
+        err = os.WriteFile(configPath, data, fs.Mode())
+        if err != nil {
+          // TODO: log error and skip writing
+          log.Error().Err(err).Msg("failed to write config.json")
+          return err
+        }
+      }
+    }
+  }
+
 
 	// Find where to mount to
 	externalMounts := []string{}
@@ -189,7 +266,7 @@ func RuncRestore(imgPath string, sleepingContainerId string, criuOpts *CriuOpts,
 
 	runcOpts := &RuncOpts{
 		Root:          opts.Root,
-		ContainerId:   sleepingContainerId,
+		ContainerId:   newRestoreContainerId,
 		Bundle:        opts.Bundle,
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",
@@ -197,7 +274,7 @@ func RuncRestore(imgPath string, sleepingContainerId string, criuOpts *CriuOpts,
 		NetPid:        opts.NetPid,
 	}
 
-	_, err := StartContainer(runcOpts, CT_ACT_RESTORE, criuOpts)
+  _, err := StartContainer(runcOpts, CT_ACT_RESTORE, criuOpts)
 	if err != nil {
 		return err
 	}
