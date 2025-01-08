@@ -51,9 +51,11 @@ func Interception(next types.Run) types.Run {
 
 		shmMount := &specs.Mount{}
 
-		// Use existing /dev/shm mount if it exists
+		// Modify existing /dev/shm mount if it exists
+		foundExisting := false
 		for _, m := range spec.Mounts {
 			if m.Destination == "/dev/shm" {
+				foundExisting = true
 				shmMount = &m
 				break
 			}
@@ -63,6 +65,10 @@ func Interception(next types.Run) types.Run {
 		shmMount.Source = "/dev/shm"
 		shmMount.Type = "bind"
 		shmMount.Options = []string{"rbind", "rprivate", "nosuid", "nodev", "rw"}
+
+		if !foundExisting {
+			spec.Mounts = append(spec.Mounts, *shmMount)
+		}
 
 		// Mount the GPU plugin library
 		spec.Mounts = append(spec.Mounts, specs.Mount{
