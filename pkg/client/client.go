@@ -1,4 +1,6 @@
-package cmd
+package client
+
+// A friendly wrapper over the gRPC client to the daemon
 
 import (
 	"context"
@@ -17,12 +19,17 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 )
 
 const (
 	DEFAULT_DUMP_TIMEOUT    = 5 * time.Minute
 	DEFAULT_RESTORE_TIMEOUT = 5 * time.Minute
+	DEFAULT_RUN_TIMEOUT     = 1 * time.Minute
+	DEFAULT_MANAGE_TIMEOUT  = 1 * time.Minute
+	DEFAULT_DB_TIMEOUT      = 20 * time.Second
+	DEFAULT_HEALTH_TIMEOUT  = 1 * time.Minute
 )
 
 type Client struct {
@@ -30,7 +37,7 @@ type Client struct {
 	*grpc.ClientConn
 }
 
-func NewClient(address, protocol string) (*Client, error) {
+func New(address, protocol string) (*Client, error) {
 	var conn *grpc.ClientConn
 	var err error
 	var opts []grpc.DialOption
@@ -132,6 +139,8 @@ func (c *Client) Restore(
 }
 
 func (c *Client) Run(ctx context.Context, args *daemon.RunReq, opts ...grpc.CallOption) (*daemon.RunResp, *profiling.Data, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RUN_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 
 	var trailer metadata.MD
@@ -151,6 +160,8 @@ func (c *Client) Run(ctx context.Context, args *daemon.RunReq, opts ...grpc.Call
 }
 
 func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.CallOption) (*daemon.RunResp, *profiling.Data, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_MANAGE_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 
 	var trailer metadata.MD
@@ -170,24 +181,32 @@ func (c *Client) Manage(ctx context.Context, args *daemon.RunReq, opts ...grpc.C
 }
 
 func (c *Client) Get(ctx context.Context, args *daemon.GetReq, opts ...grpc.CallOption) (*daemon.GetResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Get(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) List(ctx context.Context, args *daemon.ListReq, opts ...grpc.CallOption) (*daemon.ListResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.List(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) Kill(ctx context.Context, args *daemon.KillReq, opts ...grpc.CallOption) (*daemon.KillResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Kill(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) Delete(ctx context.Context, args *daemon.DeleteReq, opts ...grpc.CallOption) (*daemon.DeleteResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.Delete(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
@@ -224,24 +243,32 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 }
 
 func (c *Client) GetCheckpoint(ctx context.Context, args *daemon.GetCheckpointReq, opts ...grpc.CallOption) (*daemon.GetCheckpointResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.GetCheckpoint(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) ListCheckpoints(ctx context.Context, args *daemon.ListCheckpointsReq, opts ...grpc.CallOption) (*daemon.ListCheckpointsResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.ListCheckpoints(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckpointReq, opts ...grpc.CallOption) (*daemon.DeleteCheckpointResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.DeleteCheckpoint(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
 func (c *Client) HealthCheck(ctx context.Context, args *daemon.HealthCheckReq, opts ...grpc.CallOption) (*daemon.HealthCheckResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_HEALTH_TIMEOUT)
+	defer cancel()
 	addDefaultOptions(opts...)
 	resp, err := c.daemonClient.HealthCheck(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
@@ -256,6 +283,24 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...
 ///////////////////
 //    Helpers    //
 ///////////////////
+
+func (c *Client) HealthCheckConnection(ctx context.Context, opts ...grpc.CallOption) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_HEALTH_TIMEOUT)
+	defer cancel()
+	addDefaultOptions(opts...)
+
+	healthClient := grpc_health_v1.NewHealthClient(c)
+	resp, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{}, opts...)
+	if err != nil {
+		return false, err
+	}
+
+	if resp.Status == grpc_health_v1.HealthCheckResponse_SERVING {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
 
 func addDefaultOptions(opts ...grpc.CallOption) {
 	if config.Global.CLI.WaitForReady {

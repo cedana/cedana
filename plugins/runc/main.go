@@ -29,9 +29,6 @@ import (
 var Version string = "dev"
 
 var (
-	RootCmds []*cobra.Command = []*cobra.Command{
-		cmd.RootCmd,
-	}
 	DumpCmd    *cobra.Command = cmd.DumpCmd
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd

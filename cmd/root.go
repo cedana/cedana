@@ -26,8 +26,8 @@ func init() {
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
 
-	// Add root cmds from plugins
-	features.RootCmds.IfAvailable(
+	// Add helper cmds from plugins
+	features.HelperCmds.IfAvailable(
 		func(name string, pluginCmds []*cobra.Command) error {
 			rootCmd.AddCommand(pluginCmds...)
 			return nil

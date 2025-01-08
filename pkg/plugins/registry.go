@@ -57,4 +57,10 @@ var Registry = []Plugin{
 		Libraries: []string{"libcedana-streamer.so"},
 		Binaries:  []string{"cedana-image-streamer"},
 	},
+	{
+		Name:      "k8s",
+		Type:      Supported,
+		Libraries: []string{"libcedana-k8s.so"},
+		Binaries:  []string{}, // TODO: add containerd shim binary
+	},
 }

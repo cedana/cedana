@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
@@ -62,7 +63,7 @@ var manageCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, err := NewClient(config.Global.Address, config.Global.Protocol)
+		client, err := client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}

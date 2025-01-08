@@ -10,7 +10,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: reset-plugins build install plugins plugins-install ## Build and install (with all plugins)
+all: build install plugins plugins-install ## Build and install (with all plugins)
 .PHONY: build plugins
 
 ##########
@@ -36,21 +36,17 @@ start: ## Start the daemon
 
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
-	$(SUDO) pkill -f $(BINARY) -TERM
+	pgrep $(BINARY) | xargs -r $(SUDO) kill -TERM
 
-start-systemd: ## Start the systemd daemon
-	@echo "Starting systemd service..."
-	$(SCRIPTS_DIR)/start-systemd.sh --plugins=runc
+install-systemd: install ## Install the systemd daemon
+	@echo "Installing systemd service..."
+	$(SCRIPTS_DIR)/systemd-install.sh
 
-stop-systemd: ## Stop the systemd daemon
+reset-systemd: ## Reset the systemd daemon
 	@echo "Stopping systemd service..."
-	if [ -f /etc/systemd/system/cedana.service ]; then \
-		$(SCRIPTS_DIR)/stop-systemd.sh ;\
-		$(SUDO) rm -f /etc/systemd/system/cedana.service ;\
-	fi
-	@echo "No systemd service found."
+	$(SCRIPTS_DIR)/systemd-reset.sh ;\
 
-reset: stop-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f /usr/local/bin/$(BINARY)
@@ -165,6 +161,10 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_RUN=docker run --privileged --init --cgroupns=private -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
+
+docker: ## Build the Docker image
+	@echo "Building Docker image..."
+	docker build -t cedana/cedana:latest .
 
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."

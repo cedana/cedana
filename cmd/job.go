@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
@@ -54,7 +55,7 @@ var jobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "Manage jobs",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, err := NewClient(config.Global.Address, config.Global.Protocol)
+		client, err := client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
@@ -65,7 +66,7 @@ var jobCmd = &cobra.Command{
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -83,7 +84,7 @@ var listJobCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "List all managed processes/containers (jobs)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -200,7 +201,7 @@ var killJobCmd = &cobra.Command{
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, jids []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -236,7 +237,7 @@ var deleteJobCmd = &cobra.Command{
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, jids []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -272,7 +273,7 @@ var attachJobCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -299,7 +300,7 @@ var inspectJobCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -342,7 +343,7 @@ var listJobCheckpointCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -402,7 +403,7 @@ var (
 		Short: "Inspect a checkpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalid client in context")
 			}

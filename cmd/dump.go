@@ -12,6 +12,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
@@ -108,7 +109,7 @@ var dumpCmd = &cobra.Command{
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
-		client, err := NewClient(config.Global.Address, config.Global.Protocol)
+		client, err := client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
@@ -126,7 +127,7 @@ var dumpCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}
@@ -192,7 +193,7 @@ var jobDumpCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: RunningJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*Client)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")
 		}

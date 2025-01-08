@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/style"
@@ -77,7 +78,7 @@ var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Health check the daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := NewClient(config.Global.Address, config.Global.Protocol)
+		client, err := client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
