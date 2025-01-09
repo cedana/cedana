@@ -28,7 +28,7 @@ on:
         default: false
       debug_bench:
         type: boolean
-        description: 'Run the benchmark with debugging enabled'
+        description: "Run the benchmark with debugging enabled"
         required: false
         default: false
       post_summary:
@@ -50,10 +50,10 @@ jobs:
     name: Test
     uses: ./.github/workflows/pr.yml
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
-      pull-requests: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
     with:
       debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -63,7 +63,6 @@ jobs:
       skip_shellcheck: true
       skip_helper_image_push: true
     secrets: inherit
-
 
   build-publish-amd64:
     name: Build & Publish (amd64)
@@ -100,7 +99,7 @@ jobs:
           distribution: goreleaser
           args: release --clean --auto-snapshot
         env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
@@ -140,8 +139,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -213,8 +212,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -276,8 +275,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Docker meta
         id: meta
@@ -308,15 +307,15 @@ jobs:
     name: Benchmark
     needs: ["build-publish-amd64"]
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged
     defaults:
       run:
@@ -334,7 +333,7 @@ jobs:
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         env:
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_POOL_PROVIDER }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_BENCHMARK_WORKLOAD_IDENTITY_PROVIDER }}
           SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
@@ -349,7 +348,7 @@ jobs:
         id: download
         with:
           tag: ${{ steps.get-tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
+          fileName: "*amd64.tar.gz"
           extract: true
           token: ${{ github.token }}
           out-file-path: /src
@@ -377,7 +376,7 @@ jobs:
 
       - name: Run
         env:
-          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
+          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
         run: $CMD
@@ -420,7 +419,7 @@ jobs:
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
           destination: cedana/release-${{ steps.get-tag.outputs.TAG }}
-          glob: '**/*.png'
+          glob: "**/*.png"
 
       - name: Generate summary (comparison w/ last patch)
         id: summary-patch
@@ -482,7 +481,7 @@ jobs:
         id: download
         with:
           tag: ${{ steps.tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
+          fileName: "*amd64.tar.gz"
           extract: true
           token: ${{ github.token }}
           out-file-path: current
@@ -492,7 +491,7 @@ jobs:
         id: download-previous
         with:
           tag: ${{ steps.previous-tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
+          fileName: "*amd64.tar.gz"
           extract: true
           token: ${{ github.token }}
           out-file-path: previous
@@ -500,10 +499,10 @@ jobs:
       - name: Generate summary
         id: summary
         env:
-          RELEASE_TITLE: 'cedana'
-          RELEASE_DESCRIPTION: '**${{ steps.tag.outputs.tag }}**'
+          RELEASE_TITLE: "cedana"
+          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
+          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
           TAG: ${{ steps.tag.outputs.tag }}
           BINARY: current/cedana
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
@@ -522,4 +521,3 @@ jobs:
         with:
           payload: |
             ${{ steps.summary.outputs.slack-summary }}
-
