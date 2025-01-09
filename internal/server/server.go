@@ -89,7 +89,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
 		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
 	} else {
-		gpuManager = gpu.NewSimpleManager(ctx, wg, pluginManager)
+		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
 	}
 
 	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)

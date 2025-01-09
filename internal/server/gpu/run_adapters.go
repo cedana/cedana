@@ -47,7 +47,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			server.Lifetime = lifetime
 
 			pid := make(chan uint32, 1)
-			gpuErr := gpus.AttachAsync(ctx, jid, pid)
+			gpuErr := gpus.AttachAsync(ctx, lifetime, jid, pid)
 
 			exited, err := next(ctx, server, resp, req)
 			if err != nil {

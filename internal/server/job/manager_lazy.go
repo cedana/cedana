@@ -398,7 +398,7 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.N
 	multiCallback := &criu.NotifyCallbackMulti{}
 	multiCallback.IncludeMulti(job.GetCRIUCallback())
 	if job.GPUEnabled() {
-		multiCallback.Include(m.gpus.CRIUCallback(jid))
+		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid))
 	}
 	return multiCallback
 }

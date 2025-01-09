@@ -20,9 +20,8 @@ func ValidateRunRequest(next types.Run) types.Run {
 		if req.GetDetails().GetRunc().GetID() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing id")
 		}
-		if req.GetDetails().GetRunc().GetBundle() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing bundle")
-		}
+		// NOTE:Just as the runc binary works, the cwd might just be the bundle, so
+		// bundle arg can be empty.
 
 		return next(ctx, server, resp, req)
 	}

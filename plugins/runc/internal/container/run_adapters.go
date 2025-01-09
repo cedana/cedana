@@ -19,15 +19,18 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 		opts := req.GetDetails().GetRunc()
 		bundle := opts.GetBundle()
 
-		oldDir, err := os.Getwd()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
+		// If empty, assume cwd is the bundle. This is the behavior of runc binary as well.
+		if bundle != "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
+			}
+			err = os.Chdir(bundle)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
+			}
+			defer os.Chdir(cwd)
 		}
-		err = os.Chdir(bundle)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
-		}
-		defer os.Chdir(oldDir)
 
 		spec, err := runc.LoadSpec(runc.SpecConfigFile)
 		if err != nil {

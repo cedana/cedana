@@ -27,7 +27,7 @@ build: $(BINARY_SOURCES) ## Build the binary
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: $(BINARY) ## Install the binary
+install: stop $(BINARY) ## Install the binary
 	@echo "Installing $(BINARY)..."
 	$(SUDO) cp $(OUT_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 
