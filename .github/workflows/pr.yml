@@ -246,7 +246,7 @@ jobs:
       image: cedana/cedana-bench:ubuntu
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged
     defaults:
       run:
