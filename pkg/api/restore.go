@@ -6,12 +6,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,8 +22,10 @@ import (
 	gpu "buf.build/gen/go/cedana/gpu/protocolbuffers/go/cedanagpu"
 	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api/runc"
+  runcutils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/cedana/cedana/pkg/container"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/containerd/console"
 	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl/v2"
@@ -344,6 +349,79 @@ type linkPairs struct {
 	Value string
 }
 
+func handleSingle(path string, noStdin bool) error {
+	// Open a socket.
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+
+	// We only accept a single connection, since we can only really have
+	// one reader for os.Stdin. Plus this is all a PoC.
+	conn, err := ln.Accept()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Close ln, to allow for other instances to take over.
+	ln.Close()
+
+	// Get the fd of the connection.
+	unixconn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return errors.New("failed to cast to unixconn")
+	}
+
+	socket, err := unixconn.File()
+	if err != nil {
+		return err
+	}
+	defer socket.Close()
+
+	// Get the master file descriptor from runC.
+	master, err := runcutils.RecvFd(socket)
+	if err != nil {
+		return err
+	}
+	c, err := console.ConsoleFromFile(master)
+	if err != nil {
+		return err
+	}
+	if err := console.ClearONLCR(c.Fd()); err != nil {
+		return err
+	}
+
+	// Copy from our stdio to the master fd.
+	var (
+		wg            sync.WaitGroup
+		inErr, outErr error
+	)
+	wg.Add(1)
+	go func() {
+		_, outErr = io.Copy(os.Stdout, c)
+		wg.Done()
+	}()
+	if !noStdin {
+		wg.Add(1)
+		go func() {
+			_, inErr = io.Copy(c, os.Stdin)
+			wg.Done()
+		}()
+	}
+
+	// Only close the master fd once we've stopped copying.
+	wg.Wait()
+	c.Close()
+
+	if outErr != nil {
+		return outErr
+	}
+
+	return inErr
+}
+
 func (s *service) runcRestore(
 	ctx context.Context,
 	imgPath string,
@@ -397,6 +475,13 @@ func (s *service) runcRestore(
 			s.WaitGPUController(checkpointJID)
 			return 0, nil, err
 		}
+    if opts.Detach == true {
+      path := "/tmp/"+opts.ContainerId+".socket"
+      if handleSingle(path, false) != nil {
+        // failed to create socket
+      }
+      opts.ConsoleSocket = path
+    }
 	}
 
 	if opts.Bundle == "" {
