@@ -169,10 +169,26 @@ func (c *RuncContainer) checkCriuVersion(minVersion int) error {
 	return compareCriuVersion(c.CriuVersion, minVersion)
 }
 
-func (c *RuncContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
+func (c *RuncContainer) criuApplyCgroups(pid, targetPid int, req *criurpc.CriuReq) error {
 	// need to apply cgroups only on restore
 	if req.GetType() != criurpc.CriuReqType_RESTORE {
 		return nil
+	}
+
+	if targetPid != 0 {
+		targetCgroups, err := cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%d/cgroup", targetPid))
+		if err != nil {
+			return err
+		}
+
+		for controller, path := range targetCgroups {
+			cgroupPath := filepath.Join("/sys/fs/cgroup", controller, path, "cgroup.procs")
+			err := os.WriteFile(cgroupPath, []byte(strconv.Itoa(pid)), 0644)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	// XXX: Do we need to deal with this case? AFAIK criu still requires root.
