@@ -82,12 +82,6 @@ jobs:
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y sudo
-          sudo -E make -C scripts/ci setup-build
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build_publish_amd64 }}
