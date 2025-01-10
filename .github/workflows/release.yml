@@ -98,11 +98,11 @@ jobs:
 
       - name: Find binaries
         run: |
-          find . -type f -name "cedana" -exec cp {} ./ \;
-          find . -type f -name "libcedana-runc.so" -exec cp {} ./ \;
-          find . -type f -name "libcedana-containerd.so" -exec cp {} ./ \;
-          find . -type f -name "libcedana-crio.so" -exec cp {} ./ \;
-          find . -type f -name "libcedana-k8s.so" -exec cp {} ./ \;
+          find dist -type f -name "cedana" -exec cp {} ./ \;
+          find dist -type f -name "libcedana-runc.so" -exec cp {} ./ \;
+          find dist -type f -name "libcedana-containerd.so" -exec cp {} ./ \;
+          find dist -type f -name "libcedana-crio.so" -exec cp {} ./ \;
+          find dist -type f -name "libcedana-k8s.so" -exec cp {} ./ \;
 
       - name: Push cedana to Cloudsmith
         id: push-cedana
@@ -128,7 +128,7 @@ jobs:
           owner: "cedana"
           repo: "cedana"
           file: "libcedana-runc.so"
-          name: "libcedana-runc"
+          name: "libcedana-runc.so"
           version: ${{ github.ref_name }}
           republish: "true"
 
@@ -142,7 +142,7 @@ jobs:
           owner: "cedana"
           repo: "cedana"
           file: "libcedana-containerd.so"
-          name: "libcedana-containerd"
+          name: "libcedana-containerd.so"
           version: ${{ github.ref_name }}
           republish: "true"
 
@@ -156,7 +156,7 @@ jobs:
           owner: "cedana"
           repo: "cedana"
           file: "libcedana-crio.so"
-          name: "libcedana-crio"
+          name: "libcedana-crio.so"
           version: ${{ github.ref_name }}
           republish: "true"
 
@@ -170,7 +170,7 @@ jobs:
           owner: "cedana"
           repo: "cedana"
           file: "libcedana-k8s.so"
-          name: "libcedana-k8s"
+          name: "libcedana-k8s.so"
           version: ${{ github.ref_name }}
           republish: "true"
 
