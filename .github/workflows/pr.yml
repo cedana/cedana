@@ -149,7 +149,7 @@ jobs:
           shellcheck_flags: "--external-sources --severity=warning"
 
   script-tests:
-    name: Test Scripts
+    name: Script Tests
     runs-on: ubuntu-latest
     needs: build
     env:

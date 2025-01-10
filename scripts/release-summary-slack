@@ -80,28 +80,34 @@ if TAG and PREVIOUS_TAG and BINARIES_DIR and PREVIOUS_BINARIES_DIR:
     ]
     for binary in binaries:
         if not os.path.exists(os.path.join(BINARIES_DIR, binary)):
-            continue
+            binary_size_mib = f'{binary} *Unavailable*'
+        else:
+            size = (
+                os.path.getsize(os.path.join(BINARIES_DIR, binary))
+                / 1024
+                / 1024
+            )
+            binary_size_mib = f'{binary} *{size:.2f} MiB*'
         if not os.path.exists(os.path.join(PREVIOUS_BINARIES_DIR, binary)):
-            continue
-        binary_size_mib = (
-            os.path.getsize(os.path.join(BINARIES_DIR, binary)) / 1024 / 1024
-        )
-        previous_binary_size_mib = (
-            os.path.getsize(os.path.join(PREVIOUS_BINARIES_DIR, binary))
-            / 1024
-            / 1024
-        )
+            previous_binary_size_mib = '_Previously Unavailable_'
+        else:
+            previous_size = (
+                os.path.getsize(os.path.join(PREVIOUS_BINARIES_DIR, binary))
+                / 1024
+                / 1024
+            )
+            previous_binary_size_mib = f'_Previously {previous_size:.2f} MiB'
         blocks.append(
             {
                 'type': 'context',
                 'elements': [
                     {
                         'type': 'mrkdwn',
-                        'text': f'{binary} *{binary_size_mib:.2f} MiB*',
+                        'text': binary_size_mib,
                     },
                     {
                         'type': 'mrkdwn',
-                        'text': f'_Previously {previous_binary_size_mib:.2f} MiB_',
+                        'text': previous_binary_size_mib,
                     },
                 ],
             }

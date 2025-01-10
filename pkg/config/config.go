@@ -25,8 +25,11 @@ const (
 	DEFAULT_SOCK_ADDR  = "/run/cedana.sock"
 	DEFAULT_SOCK_PERMS = 0o666
 
-	DEFAULT_PROTOCOL  = "tcp"
+	DEFAULT_PROTOCOL  = "unix"
 	DEFAULT_LOG_LEVEL = "info"
+
+	DEFAULT_COMPRESSION = "tar"
+	DEFAULT_DUMP_DIR    = "/tmp"
 )
 
 // The default global config. This will get overwritten
@@ -37,8 +40,8 @@ var Global Config = Config{
 	Protocol: DEFAULT_PROTOCOL,
 	LogLevel: DEFAULT_LOG_LEVEL,
 	Checkpoints: Checkpoints{
-		Dir:         "/tmp",
-		Compression: "tar",
+		Dir:         DEFAULT_DUMP_DIR,
+		Compression: DEFAULT_COMPRESSION,
 	},
 	DB: DB{
 		Remote: false,
