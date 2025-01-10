@@ -57,5 +57,5 @@ var (
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
-	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{}
+	// TODO: add restore middleware
 )

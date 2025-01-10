@@ -107,7 +107,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 
 		// Spawn a random controller and perform a health check
 		jid := fmt.Sprintf("health-check-%d", time.Now().UnixNano())
-		err := m.controllers.spawnAsync(ctx, ctx, m.wg, binary, jid)
+		err := m.controllers.spawnAsync(ctx, m.wg, binary, jid)
 		if err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
@@ -156,10 +156,10 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 		_, err = controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir()})
 		if err != nil {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
-			return err
+			return fmt.Errorf("failed to dump GPU: %v", err)
 		}
 		log.Info().Str("JID", jid).Msg("GPU dump complete")
-		return err
+		return nil
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
@@ -191,7 +191,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir()})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
-				restoreErr <- err
+				restoreErr <- fmt.Errorf("failed to restore GPU: %v", err)
 				return
 			}
 			log.Info().Str("JID", jid).Msg("GPU restore complete")

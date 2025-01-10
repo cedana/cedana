@@ -65,7 +65,7 @@ func (m *controllers) spawn(
 	jid string,
 	pid ...<-chan uint32,
 ) error {
-	err := m.spawnAsync(ctx, lifetime, wg, binary, jid, pid...)
+	err := m.spawnAsync(lifetime, wg, binary, jid, pid...)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,6 @@ func (m *controllers) spawn(
 
 // Spawns a GPU controller in the background
 func (m *controllers) spawnAsync(
-	ctx context.Context,
 	lifetime context.Context,
 	wg *sync.WaitGroup,
 	binary string,
