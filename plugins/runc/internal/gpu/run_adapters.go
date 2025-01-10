@@ -7,7 +7,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/grpc/codes"
@@ -65,28 +64,6 @@ func Interception(next types.Run) types.Run {
 			Type:        "bind",
 			Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
 		})
-
-		// XXX: Mount required link dependencies. Remove this once libcedana-gpu.so is statically linked (WIP)
-		deps, err := utils.GetLinkDeps(libraryPath)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get link dependencies for %s: %v", libraryPath, err)
-		}
-		for _, dep := range deps {
-			if strings.HasPrefix(dep.Name, "libelf") || strings.HasPrefix(dep.Name, "libz") {
-				spec.Mounts = append(spec.Mounts, specs.Mount{
-					Destination: dep.Path,
-					Source:      dep.Path,
-					Type:        "bind",
-					Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
-				})
-				spec.Mounts = append(spec.Mounts, specs.Mount{
-					Destination: dep.ResolvedPath,
-					Source:      dep.ResolvedPath,
-					Type:        "bind",
-					Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
-				})
-			}
-		}
 
 		// Set the env vars
 		if spec.Process == nil {

@@ -402,16 +402,6 @@ jobs:
   #         sleep 1
   #         supervisorctl restart dockerd
 
-  #     - id: auth
-  #       name: Authenticate to Google Cloud
-  #       uses: google-github-actions/auth@v1
-  #       env:
-  #         WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_BENCHMARK_WORKLOAD_IDENTITY_PROVIDER }}
-  #         SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
-  #       with:
-  #         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-  #         service_account: ${{ env.SERVICE_ACCOUNT }}
-
   #     - name: Get tag
   #       id: get-tag
   #       run: echo ::set-output name=TAG::$(echo $GITHUB_REF | cut -d / -f 3)
@@ -461,16 +451,28 @@ jobs:
   #       with:
   #         name: bench-logs
   #         path: /src/*.log
+  #
+  #     - id: auth
+  #       name: Authenticate to Google Cloud
+  #       uses: google-github-actions/auth@v1
+        # env:
+        #   PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+        #   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+        #   SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+        # with:
+        #   project_id: ${{ env.PROJECT_ID }}
+        #   workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        #   service_account: ${{ env.SERVICE_ACCOUNT }}
 
   #     - name: Push results
   #       env:
-  #         GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
+  #         GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
   #         BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
   #       run: ./bench results push --overwrite
 
   #     - name: Pull last results
   #       env:
-  #         GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
+  #         GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
   #         BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
   #       run: ./bench results pull --runtime cedana:2
 
