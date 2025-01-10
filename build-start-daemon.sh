@@ -25,7 +25,7 @@ CEDANA_REMOTING_ENABLED=${CEDANA_REMOTING_ENABLED:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
-$SUDO_USE -E bash setup_aws_env.sh
+$SUDO_USE -E bash /cedana/setup_aws_env.sh
 
 # Check for --systemctl flag
 for arg in "$@"; do

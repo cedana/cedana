@@ -95,9 +95,9 @@ END_CHROOT
     echo "Downloading cedana's nvidia interception utilities..."
     mkdir -p /cedana/bin /cedana/lib
 
-    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controlller $CEDANA_URL/k8s/gpu/gpucontroller
-    chmod +x /cedana/bin/cedana-gpu-controlller
-    install /cedana/bin/cedana-gpu-controlller /usr/local/bin/cedana-gpu-controlller
+    wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/bin/cedana-gpu-controller $CEDANA_URL/k8s/gpu/gpucontroller
+    chmod +x /cedana/bin/cedana-gpu-controller
+    install /cedana/bin/cedana-gpu-controller /usr/local/bin/cedana-gpu-controller
 
     wget --header="Authorization: Bearer $CEDANA_AUTH_TOKEN" -O /cedana/lib/libcedana-gpu.so $CEDANA_URL/k8s/gpu/libcedana
     install /cedana/lib/libcedana-gpu.so /usr/local/lib/libcedana-gpu.so
