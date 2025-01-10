@@ -66,7 +66,7 @@ jobs:
 
   build-publish-amd64:
     name: Build & Publish (amd64)
-    runs-on: ubicloud-standard-2
+    runs-on: ubicloud-standard-8
     needs: test
     container:
       image: cedana/cedana-test:latest
@@ -176,7 +176,7 @@ jobs:
 
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
-    runs-on: ubicloud-standard-2
+    runs-on: ubicloud-standard-8
     needs: test
 
     permissions:
@@ -249,7 +249,7 @@ jobs:
 
   build-push-image-manifest-arm64:
     name: Build & Push (arm64 image)
-    runs-on: ubicloud-standard-2-arm
+    runs-on: ubicloud-standard-8-arm
     needs: test
 
     permissions:
@@ -322,7 +322,7 @@ jobs:
 
   upload-manifests:
     name: Upload Manifests
-    runs-on: ubicloud-standard-2
+    runs-on: ubicloud-standard-8
     needs: ["build-push-image-manifest-arm64", "build-push-image-manifest-amd64"]
     permissions:
       contents: read
