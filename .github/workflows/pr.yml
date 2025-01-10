@@ -141,7 +141,7 @@ jobs:
           sudo cp ./build-start-daemon.sh /cedana/scripts/build-start-daemon.sh
           sudo /cedana/scripts/setup-host.sh
         env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}"
+          CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU: "${{ secrets.CLOUDSMITH_ENTITLEMENT }}"
 
   regression-test:
     name: Regression Tests
@@ -305,7 +305,7 @@ jobs:
 
   #     - name: Run
   #       env:
-  #         CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
+  #         CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
   #         HF_TOKEN: ${{ secrets.HF_TOKEN }}
   #         CMD: ${{ vars.BENCH_RUN_CMD_PR }}
   #       run: $CMD
