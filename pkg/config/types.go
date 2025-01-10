@@ -52,8 +52,6 @@ type (
 		Remote bool `json:"remote"      mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
 		// Path is the local path to the database file. E.g. /tmp/cedana.db
 		Path string `json:"path" mapstructure:"path"`
-		// Whether to leave dead jobs in DB, even if there were no checkpoints made
-		LeaveDead bool `json:"leave_dead" mapstructure:"leave_dead"`
 	}
 
 	Profiling struct {

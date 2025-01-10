@@ -41,9 +41,8 @@ var Global Config = Config{
 		Compression: "tar",
 	},
 	DB: DB{
-		Remote:    false,
-		Path:      filepath.Join(os.TempDir(), "cedana.db"),
-		LeaveDead: false,
+		Remote: false,
+		Path:   filepath.Join(os.TempDir(), "cedana.db"),
 	},
 	Profiling: Profiling{
 		Enabled: true,

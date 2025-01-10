@@ -37,6 +37,7 @@ start: ## Start the daemon
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
 	pgrep $(BINARY) | xargs -r $(SUDO) kill -TERM
+	sleep 1
 
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
@@ -45,6 +46,7 @@ install-systemd: install ## Install the systemd daemon
 reset-systemd: ## Reset the systemd daemon
 	@echo "Stopping systemd service..."
 	$(SCRIPTS_DIR)/systemd-reset.sh ;\
+	sleep 1
 
 reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."

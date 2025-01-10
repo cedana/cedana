@@ -20,6 +20,7 @@ venv
 
 compose-dev.yaml
 
+dist
 go.work
 go.work.sum
 

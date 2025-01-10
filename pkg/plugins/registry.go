@@ -10,7 +10,7 @@ var Registry = []Plugin{
 	{
 		Name:     "criu",
 		Type:     External,
-		Binaries: []string{"cedana-criu"},
+		Binaries: []string{"criu"},
 	},
 	// TODO: can add hypervisor C/R tools
 
@@ -39,8 +39,8 @@ var Registry = []Plugin{
 
 	// Checkpoint inspection
 	{
-		Name:      "inspector",
-		Type:      Supported,
+		Name: "inspector",
+		// Type:      Supported,
 		Libraries: []string{"libcedana-inspector.so"},
 	},
 

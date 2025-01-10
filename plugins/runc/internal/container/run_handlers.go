@@ -83,6 +83,7 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to apply spec: %v", err)
 	}
+	log.Trace().Interface("spec", spec).Str("runc", id).Msg("updated spec, backing up old spec")
 	defer runc.RestoreSpec(runc.SpecConfigFile)
 
 	os.Remove(RUNC_LOG_FILE)

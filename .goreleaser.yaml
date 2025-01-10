@@ -1,48 +1,96 @@
+version: 2
 before:
   hooks:
     - go mod tidy
     - go generate ./...
 builds:
-  - env:
+  - id: cedana
+    env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    binary: cedana
     ldflags:
       - -X main.Version={{ .Summary }}
+  - id: libcedana-runc
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/runc
+    binary: libcedana-runc.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
+  - id: libcedana-containerd
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/containerd
+    binary: libcedana-containerd.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
+  - id: libcedana-crio
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/crio
+    binary: libcedana-crio.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
+  - id: libcedana-k8s
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/k8s
+    binary: libcedana-k8s.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
+
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
+
 snapshot:
-  name_template: "{{ .Summary }}"
+  version_template: "{{ .Summary }}"
+
 changelog:
-  sort: asc
+  sort: desc
   use: github
-nfpms:
-  -
-    id: default
-    package_name: cedana
-    file_name_template: "{{ .ConventionalFileName }}"
-    vendor: Cedana Corp
-
-    homepage: cedana.ai
-    maintainer: Niranjan Ravichandra <nravic@cedana.ai>
-
-    description: |-
-      Fast, adaptive checkpointing for orchestrated cloud brokerage.
-
-    license: GNU APLv3
-
-    formats:
-      - deb
-      - rpm
-      - archlinux  # Since GoReleaser v1.13.
-
-    suggests:
-      - criu
 
 archives:
   - id: cedana
-    files:
-      - "build-start-daemon.sh"
-      - "cmd/scripts/k8s/*"
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds: [cedana]
+    files: [./scripts/*]
+  - id: libcedana-runc
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds: [libcedana-runc]
+  - id: libcedana-containerd
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds: [libcedana-containerd]
+  - id: libcedana-crio
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds: [libcedana-crio]
+  - id: libcedana-k8s
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds: [libcedana-k8s]
