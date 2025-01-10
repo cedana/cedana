@@ -590,7 +590,7 @@ jobs:
           PREVIOUS_BINARIES_DIR: previous
         run: |
           echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
+          echo ::set-output name=slack-summary::$(scripts/release-summary-slack)
 
       - name: Post summary
         if: ${{ !startsWith(github.event_name, 'workflow') || (inputs.post_summary) }}
