@@ -54,9 +54,10 @@ var (
 		container.LoadSpecFromBundle,
 		container.SetUsChildSubreaper,
 	}
-	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
 	ManageHandler types.Run = container.Manage
+
+	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
@@ -81,6 +82,7 @@ var (
 		filesystem.SetWorkingDirectoryForRestore,
 
 		container.LoadSpecFromBundleForRestore,
+		gpu.RestoreInterceptionIfNeeded,
 		container.CreateContainerForRestore,
 		filesystem.MountRootDirForRestore,
 		filesystem.SetupMountsForRestore,
@@ -98,6 +100,5 @@ var (
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
 		container.UpdateStateOnRestore,
-		container.CleanupOnExitAfterRestore,
 	}
 )

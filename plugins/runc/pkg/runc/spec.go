@@ -48,9 +48,13 @@ func CreateLibContainerRlimit(rlimit specs.POSIXRlimit) (configs.Rlimit, error) 
 // and creates a backup of the existing spec
 func UpdateSpec(cPath string, spec *specs.Spec) error {
 	// Copy existing bundle/config.json to bundle/config.json.bak
-	err := os.Rename(cPath, cPath+".bak")
+	// only if a backup doesn't already exist
+	_, err := os.Stat(cPath + ".bak")
 	if err != nil {
-		return fmt.Errorf("failed to backup spec: %v", err)
+		err := os.Rename(cPath, cPath+".bak")
+		if err != nil {
+			return fmt.Errorf("failed to backup spec: %v", err)
+		}
 	}
 
 	// Write the new spec to bundle/config.json
@@ -66,10 +70,15 @@ func UpdateSpec(cPath string, spec *specs.Spec) error {
 	return nil
 }
 
-// RestoreSpec restores the backup of the spec
+// RestoreSpec restores the backup of the spec, if a backup exists
 func RestoreSpec(cPath string) error {
+	_, err := os.Stat(cPath + ".bak")
+	if err != nil {
+		return errors.New("backup spec does not exist")
+	}
+
 	// Restore the backup of the spec
-	err := os.Rename(cPath+".bak", cPath)
+	err = os.Rename(cPath+".bak", cPath)
 	if err != nil {
 		return fmt.Errorf("failed to restore spec: %v", err)
 	}

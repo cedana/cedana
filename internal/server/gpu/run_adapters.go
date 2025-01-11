@@ -20,10 +20,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-//////////////////////
-//// Run Adapters ////
-//////////////////////
-
 // Adapter that adds GPU support to the request.
 // GPU Dump/Restore is automatically managed by the job manager using
 // CRIU callbacks. Assumes the job is already created (not running).

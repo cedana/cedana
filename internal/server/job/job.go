@@ -46,12 +46,11 @@ func fromProto(j *daemon.Job) *Job {
 	return &Job{
 		JID: j.GetJID(),
 		proto: daemon.Job{
-			JID:        j.GetJID(),
-			Type:       j.GetType(),
-			State:      j.GetState(),
-			Details:    j.GetDetails(),
-			Log:        j.GetLog(),
-			GPUEnabled: j.GetGPUEnabled(),
+			JID:     j.GetJID(),
+			Type:    j.GetType(),
+			State:   j.GetState(),
+			Details: j.GetDetails(),
+			Log:     j.GetLog(),
 		},
 	}
 }
@@ -140,13 +139,17 @@ func (j *Job) IsRemote() bool {
 func (j *Job) GPUEnabled() bool {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.GPUEnabled
+	return j.proto.GetState().GetGPUEnabled()
 }
 
 func (j *Job) SetGPUEnabled(enabled bool) {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.GPUEnabled = enabled
+	if j.proto.State == nil {
+		j.proto.State = &daemon.ProcessState{}
+	}
+
+	j.proto.State.GPUEnabled = enabled
 }
 
 func (j *Job) GetCRIUCallback() *criu.NotifyCallbackMulti {

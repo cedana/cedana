@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -22,6 +23,11 @@ func Interception(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to get spec from context")
 		}
 
+		jid := req.JID
+		if jid == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
+		}
+
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin
 		if gpu = server.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
@@ -33,45 +39,58 @@ func Interception(next types.Run) types.Run {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		// HACK: Remove nvidia prestart hook as we don't support working around it, yet
-		if spec.Hooks != nil {
-			for i, hook := range spec.Hooks.Prestart {
-				if strings.Contains(hook.Path, "nvidia") {
-					spec.Hooks.Prestart = append(spec.Hooks.Prestart[:i], spec.Hooks.Prestart[i+1:]...)
-					break
-				}
-			}
+		err := AddGPUInterceptionToSpec(spec, libraryPath, jid)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}
-
-		// Remove existing /dev/shm mount if it exists
-		for i, m := range spec.Mounts {
-			if m.Destination == "/dev/shm" {
-				spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
-			}
-		}
-
-		spec.Mounts = append(spec.Mounts, specs.Mount{
-			Destination: "/dev/shm",
-			Source:      "/dev/shm",
-			Type:        "bind",
-			Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
-		})
-
-		// Mount the GPU plugin library
-		spec.Mounts = append(spec.Mounts, specs.Mount{
-			Destination: libraryPath,
-			Source:      libraryPath,
-			Type:        "bind",
-			Options:     []string{"rbind", "rpivate", "nosuid", "nodev", "rw"},
-		})
-
-		// Set the env vars
-		if spec.Process == nil {
-			return nil, status.Errorf(codes.FailedPrecondition, "spec does not have a process")
-		}
-		spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
-		spec.Process.Env = append(spec.Process.Env, "CEDANA_JID="+req.JID)
 
 		return next(ctx, server, resp, req)
 	}
+}
+
+///////////////////////////
+//// Helper Functions ////
+///////////////////////////
+
+func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) error {
+	// HACK: Remove nvidia prestart hook as we don't support working around it, yet
+	if spec.Hooks != nil {
+		for i, hook := range spec.Hooks.Prestart {
+			if strings.Contains(hook.Path, "nvidia") {
+				spec.Hooks.Prestart = append(spec.Hooks.Prestart[:i], spec.Hooks.Prestart[i+1:]...)
+				break
+			}
+		}
+	}
+
+	// Remove existing /dev/shm mount if it exists
+	for i, m := range spec.Mounts {
+		if m.Destination == "/dev/shm" {
+			spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
+		}
+	}
+
+	spec.Mounts = append(spec.Mounts, specs.Mount{
+		Destination: "/dev/shm",
+		Source:      "/dev/shm",
+		Type:        "bind",
+		Options:     []string{"rbind", "nosuid", "nodev", "rw"},
+	})
+
+	// Mount the GPU plugin library
+	spec.Mounts = append(spec.Mounts, specs.Mount{
+		Destination: libraryPath,
+		Source:      libraryPath,
+		Type:        "bind",
+		Options:     []string{"rbind", "nosuid", "nodev", "rw"},
+	})
+
+	// Set the env vars
+	if spec.Process == nil {
+		return fmt.Errorf("spec does not have a process")
+	}
+	spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
+	spec.Process.Env = append(spec.Process.Env, "CEDANA_JID="+jid)
+
+	return nil
 }

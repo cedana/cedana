@@ -25,7 +25,6 @@ var (
 	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
 	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
 	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
-	GPUInterception   = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
 
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
@@ -33,6 +32,9 @@ var (
 
 	// Manage
 	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}
+
+	// GPU
+	GPUInterception = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
 
 	// Checkpoints
 	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}

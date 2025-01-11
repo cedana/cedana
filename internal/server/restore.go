@@ -9,6 +9,8 @@ import (
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/internal/server/network"
+
 	// "github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
@@ -27,14 +29,14 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		filesystem.PrepareRestoreDir, // auto-detects compression
+		process.ReloadProcessStateForRestore,
 
 		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		process.ReloadProcessStateForRestore,
 		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
-		// network.DetectNetworkOptionsForRestore,
+		network.DetectNetworkOptionsForRestore,
 
 		criu.CheckOptsForRestore,
 	}
@@ -73,7 +75,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
-		t := req.GetType()
+		t := req.Type
 		switch t {
 		case "process":
 			// Nothing to do
@@ -90,6 +92,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
+
 		return next.With(middleware...)(ctx, server, resp, req)
 	}
 }

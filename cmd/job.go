@@ -177,7 +177,7 @@ var listJobCmd = &cobra.Command{
 				typeStr(job.GetType()),
 				job.GetState().GetPID(),
 				statusStr(job.GetState().GetStatus()),
-				style.BoolStr(job.GetGPUEnabled()),
+				style.BoolStr(job.GetState().GetGPUEnabled()),
 				timeList[i],
 				sizeList[i],
 				job.GetLog(),

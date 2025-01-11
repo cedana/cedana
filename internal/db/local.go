@@ -55,7 +55,7 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 		return err
 	}
 	var gpuEnabled, isRunning int64
-	if job.GPUEnabled {
+	if job.GetState().GetGPUEnabled() {
 		gpuEnabled = 1
 	}
 	if job.GetState().GetIsRunning() {
@@ -343,11 +343,10 @@ func fromDBJobRow(row any) (*daemon.Job, error) {
 	}
 
 	return &daemon.Job{
-		JID:        job.ID,
-		Type:       job.Type,
-		GPUEnabled: job.Gpuenabled > 0,
-		Log:        job.Log,
-		Details:    &details,
+		JID:     job.ID,
+		Type:    job.Type,
+		Log:     job.Log,
+		Details: &details,
 		State: &daemon.ProcessState{
 			PID:        uint32(job.Pid),
 			Cmdline:    job.Cmdline,
@@ -355,6 +354,7 @@ func fromDBJobRow(row any) (*daemon.Job, error) {
 			WorkingDir: job.Workingdir,
 			Status:     job.Status,
 			IsRunning:  job.Isrunning > 0,
+			GPUEnabled: job.Gpuenabled > 0,
 			Host: &daemon.Host{
 				ID:            host.ID,
 				MAC:           host.Mac,
