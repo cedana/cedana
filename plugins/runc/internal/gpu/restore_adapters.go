@@ -6,6 +6,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	runc_gpu "github.com/cedana/cedana/plugins/runc/pkg/gpu"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/grpc/codes"
@@ -47,7 +48,7 @@ func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err := AddGPUInterceptionToSpec(spec, libraryPath, jid)
+		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}
