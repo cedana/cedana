@@ -1,7 +1,6 @@
 package db
 
-// This file contains the getters and setter for the sqlite DB
-// Implementation of the interface can be found in the local.go
+// Interface for the database
 
 import (
 	"context"
