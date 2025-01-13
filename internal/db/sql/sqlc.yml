@@ -1,9 +1,4 @@
 version: "2"
-plugins:
-  - name: golang
-    wasm:
-      url: https://downloads.sqlc.dev/plugin/sqlc-gen-go_1.3.0.wasm
-      sha256: e8206081686f95b461daf91a307e108a761526c6768d6f3eca9781b0726b7ec8
 sql:
   - engine: sqlite
     schema: schema.sql
@@ -11,8 +6,7 @@ sql:
       - job.sql
       - host.sql
       - checkpoint.sql
-    codegen:
-      - plugin: golang
+    gen:
+      go:
         out: .
-        options:
-          package: sql
+        package: sql

@@ -69,7 +69,7 @@ func getOtelCreds() (string, string, error) {
 		return "", "", fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
-	url = url + "/k8s/otelcreds"
+	url = url + "/otel/credentials"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", err

@@ -19,12 +19,12 @@ import (
 //go:embed sql/schema.sql
 var Ddl string
 
-type LocalDB struct {
+type SqliteDB struct {
 	queries *sql.Queries
 	UnimplementedDB
 }
 
-func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
+func NewSqliteDB(ctx context.Context, path string) (*SqliteDB, error) {
 	if path == "" {
 		return nil, fmt.Errorf("please provide a DB path")
 	}
@@ -39,7 +39,7 @@ func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
 		return nil, err
 	}
 
-	return &LocalDB{
+	return &SqliteDB{
 		queries: sql.New(db),
 	}, nil
 }
@@ -48,7 +48,7 @@ func NewLocalDB(ctx context.Context, path string) (*LocalDB, error) {
 /// Job ///
 ///////////
 
-func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
+func (db *SqliteDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	// marshal the Job struct into bytes
 	detailBytes, err := json.Marshal(job.Details)
 	if err != nil {
@@ -63,14 +63,14 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	}
 	if list, _ := db.queries.ListJobsByIDs(ctx, []string{job.JID}); len(list) > 0 {
 		return db.queries.UpdateJob(ctx, sql.UpdateJobParams{
-			ID:         job.JID,
+			Jid:        job.JID,
 			Type:       job.Type,
 			Gpuenabled: gpuEnabled,
 			Log:        job.Log,
 			Details:    detailBytes,
 			Pid:        int64(job.GetState().GetPID()),
 			Cmdline:    job.GetState().GetCmdline(),
-			Starttime:  int64(job.GetState().GetStartTime()),
+			Starttime:  time.Unix(0, int64(job.GetState().GetStartTime())*int64(time.Millisecond)),
 			Workingdir: job.GetState().GetWorkingDir(),
 			Status:     job.GetState().GetStatus(),
 			Isrunning:  isRunning,
@@ -79,14 +79,14 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	}
 
 	return db.queries.CreateJob(ctx, sql.CreateJobParams{
-		ID:         job.JID,
+		Jid:        job.JID,
 		Type:       job.Type,
 		Gpuenabled: gpuEnabled,
 		Log:        job.Log,
 		Details:    detailBytes,
 		Pid:        int64(job.GetState().GetPID()),
 		Cmdline:    job.GetState().GetCmdline(),
-		Starttime:  int64(job.GetState().GetStartTime()),
+		Starttime:  time.Unix(0, int64(job.GetState().GetStartTime())*int64(time.Millisecond)),
 		Workingdir: job.GetState().GetWorkingDir(),
 		Status:     job.GetState().GetStatus(),
 		Isrunning:  isRunning,
@@ -94,7 +94,7 @@ func (db *LocalDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	})
 }
 
-func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
+func (db *SqliteDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
 	if len(jids) > 0 {
 		rows, err := db.queries.ListJobsByIDs(ctx, jids)
 		if err != nil {
@@ -132,7 +132,7 @@ func (db *LocalDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job,
 	}
 }
 
-func (db *LocalDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
+func (db *SqliteDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
 	rows, err := db.queries.ListJobsByHostIDs(ctx, hostIDs)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func (db *LocalDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]
 	return jobs, nil
 }
 
-func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
+func (db *SqliteDB) DeleteJob(ctx context.Context, jid string) error {
 	return db.queries.DeleteJob(ctx, jid)
 }
 
@@ -159,7 +159,7 @@ func (db *LocalDB) DeleteJob(ctx context.Context, jid string) error {
 /// Host ///
 ////////////
 
-func (db *LocalDB) PutHost(ctx context.Context, host *daemon.Host) error {
+func (db *SqliteDB) PutHost(ctx context.Context, host *daemon.Host) error {
 	if host.CPU == nil || host.Memory == nil {
 		return fmt.Errorf("CPU or Memory info missing")
 	}
@@ -197,7 +197,7 @@ func (db *LocalDB) PutHost(ctx context.Context, host *daemon.Host) error {
 	})
 }
 
-func (db *LocalDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
+func (db *SqliteDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
 	hosts := []*daemon.Host{}
 	if len(ids) == 0 {
 		dbHosts, err := db.queries.ListHosts(ctx)
@@ -231,7 +231,7 @@ func (db *LocalDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host
 	}
 }
 
-func (db *LocalDB) DeleteHost(ctx context.Context, id string) error {
+func (db *SqliteDB) DeleteHost(ctx context.Context, id string) error {
 	return db.queries.DeleteHost(ctx, id)
 }
 
@@ -239,7 +239,7 @@ func (db *LocalDB) DeleteHost(ctx context.Context, id string) error {
 /// Checkpoint ///
 //////////////////
 
-func (db *LocalDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
+func (db *SqliteDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
 	if list, _ := db.queries.ListCheckpointsByIDs(ctx, []string{checkpoint.ID}); len(list) > 0 {
 		return db.queries.UpdateCheckpoint(ctx, sql.UpdateCheckpointParams{
 			ID:   checkpoint.ID,
@@ -259,7 +259,7 @@ func (db *LocalDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpo
 	})
 }
 
-func (db *LocalDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
+func (db *SqliteDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
 	var dbCheckpoints []sql.Checkpoint
 	var err error
 
@@ -281,7 +281,7 @@ func (db *LocalDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemo
 	return checkpoints, nil
 }
 
-func (db *LocalDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (db *SqliteDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
 	var dbCheckpoints []sql.Checkpoint
 	var err error
 
@@ -303,7 +303,7 @@ func (db *LocalDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([
 	return checkpoints, nil
 }
 
-func (db *LocalDB) DeleteCheckpoint(ctx context.Context, id string) error {
+func (db *SqliteDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return db.queries.DeleteCheckpoint(ctx, id)
 }
 
@@ -343,14 +343,14 @@ func fromDBJobRow(row any) (*daemon.Job, error) {
 	}
 
 	return &daemon.Job{
-		JID:     job.ID,
+		JID:     job.Jid,
 		Type:    job.Type,
 		Log:     job.Log,
 		Details: &details,
 		State: &daemon.ProcessState{
 			PID:        uint32(job.Pid),
 			Cmdline:    job.Cmdline,
-			StartTime:  uint64(job.Starttime),
+			StartTime:  uint64(job.Starttime.UnixMilli()),
 			WorkingDir: job.Workingdir,
 			Status:     job.Status,
 			IsRunning:  job.Isrunning > 0,

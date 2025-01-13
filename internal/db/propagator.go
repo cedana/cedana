@@ -1,6 +1,6 @@
 package db
 
-// Remote implementation of the DB, that talks to the propagator.
+// Remote implementation of the DB, that uses the propagator service as a backend
 
 import (
 	"bytes"
@@ -8,22 +8,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/db/sql"
 	"github.com/cedana/cedana/pkg/config"
 )
 
-type RemoteDB struct {
+type PropagatorDB struct {
 	baseUrl   string
 	authToken string
 	client    *http.Client
-
-	UnimplementedDB
 }
 
-func NewRemoteDB(ctx context.Context, connection config.Connection) *RemoteDB {
-	return &RemoteDB{
+func NewPropagatorDB(ctx context.Context, connection config.Connection) *PropagatorDB {
+	return &PropagatorDB{
 		baseUrl:   connection.URL,
 		authToken: connection.AuthToken,
 		client:    &http.Client{},
@@ -34,14 +32,10 @@ func NewRemoteDB(ctx context.Context, connection config.Connection) *RemoteDB {
 /// Job ///
 ///////////
 
-func (db *RemoteDB) PutJob(ctx context.Context, job *daemon.Job) error {
-	url := fmt.Sprintf("%s/%s", db.baseUrl, job.JID)
+func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
+	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, job.JID)
 
-	data := map[string]any{
-		"jid":  job.JID,
-		"data": job,
-	}
-	body, err := json.Marshal(data)
+	body, err := json.Marshal(job)
 	if err != nil {
 		return err
 	}
@@ -59,15 +53,19 @@ func (db *RemoteDB) PutJob(ctx context.Context, job *daemon.Job) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to put job: %s", resp.Status)
 	}
 
 	return nil
 }
 
-func (db *RemoteDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s", db.baseUrl)
+func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
+	url := fmt.Sprintf("%s/jobs", db.baseUrl)
+	if len(jids) > 0 {
+		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -86,23 +84,20 @@ func (db *RemoteDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job
 	}
 
 	var jobs []*daemon.Job
-	var jobsRaw []sql.Job
-	if err := json.NewDecoder(resp.Body).Decode(&jobsRaw); err != nil {
+
+	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
 		return nil, err
 	}
-	// for _, jobRaw := range jobsRaw {
-	// 	job := daemon.Job{}
-	// 	if err := json.Unmarshal(jobRaw.State, &job); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	jobs = append(jobs, &job)
-	// }
 
 	return jobs, nil
 }
 
-func (db *RemoteDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s", db.baseUrl)
+func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
+	url := fmt.Sprintf("%s/jobs", db.baseUrl)
+	if len(hostIDs) > 0 {
+		url += fmt.Sprintf("?host_ids=%s", strings.Join(hostIDs, ","))
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -121,23 +116,15 @@ func (db *RemoteDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([
 	}
 
 	var jobs []*daemon.Job
-	var jobsRaw []sql.Job
-	if err := json.NewDecoder(resp.Body).Decode(&jobsRaw); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
 		return nil, err
 	}
-	// for _, jobRaw := range jobsRaw {
-	// 	job := daemon.Job{}
-	// 	if err := json.Unmarshal(jobRaw.State, &job); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	jobs = append(jobs, &job)
-	// }
 
 	return jobs, nil
 }
 
-func (db *RemoteDB) DeleteJob(ctx context.Context, jid string) error {
-	url := fmt.Sprintf("%s/%s", db.baseUrl, jid)
+func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
+	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -161,18 +148,15 @@ func (db *RemoteDB) DeleteJob(ctx context.Context, jid string) error {
 /// Checkpoint ///
 //////////////////
 
-func (db *RemoteDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
-	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
+func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
+	url := fmt.Sprintf("%s/checkpoints/%s", db.baseUrl, checkpoint.ID)
 
-	data := map[string]any{
-		"checkpoint": checkpoint,
-	}
-	body, err := json.Marshal(data)
+	body, err := json.Marshal(checkpoint)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -185,15 +169,19 @@ func (db *RemoteDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkp
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to create checkpoint: %s", resp.Status)
 	}
 
 	return nil
 }
 
-func (db *RemoteDB) ListCheckpoints(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
 	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
+	if len(ids) > 0 {
+		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -219,8 +207,12 @@ func (db *RemoteDB) ListCheckpoints(ctx context.Context, jids ...string) ([]*dae
 	return checkpoints, nil
 }
 
-func (db *RemoteDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
 	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
+	if len(jids) > 0 {
+		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -246,7 +238,7 @@ func (db *RemoteDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) (
 	return checkpoints, nil
 }
 
-func (db *RemoteDB) DeleteCheckpoint(ctx context.Context, id string) error {
+func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	url := fmt.Sprintf("%s/checkpoints/%s", db.baseUrl, id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
@@ -262,6 +254,90 @@ func (db *RemoteDB) DeleteCheckpoint(ctx context.Context, id string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to delete checkpoint: %s", resp.Status)
+	}
+
+	return nil
+}
+
+/////////////
+/// Hosts ///
+/////////////
+
+func (db *PropagatorDB) PutHost(ctx context.Context, host *daemon.Host) error {
+	url := fmt.Sprintf("%s/hosts/%s", db.baseUrl, host.ID)
+
+	body, err := json.Marshal(host)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+
+	resp, err := db.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to put host: %s", resp.Status)
+	}
+
+	return nil
+}
+
+func (db *PropagatorDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
+	url := fmt.Sprintf("%s/hosts", db.baseUrl)
+	if len(ids) > 0 {
+		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+
+	resp, err := db.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to list hosts: %s", resp.Status)
+	}
+
+	var hosts []*daemon.Host
+	if err := json.NewDecoder(resp.Body).Decode(&hosts); err != nil {
+		return nil, err
+	}
+
+	return hosts, nil
+}
+
+func (db *PropagatorDB) DeleteHost(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/hosts/%s", db.baseUrl, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	resp, err := db.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete host: %s", resp.Status)
 	}
 
 	return nil

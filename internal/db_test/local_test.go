@@ -19,7 +19,7 @@ func TestLocalDBPersistent(t *testing.T) {
 	ctx := context.TODO()
 	path := filepath.Join(t.TempDir(), "cedana.db")
 	t.Logf("using DB path: %s", path)
-	db, err := db.NewLocalDB(ctx, path)
+	db, err := db.NewSqliteDB(ctx, path)
 	if err != nil {
 		t.Fatalf("failed to create local db: %v", err)
 	}

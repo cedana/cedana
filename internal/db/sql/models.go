@@ -32,14 +32,14 @@ type Host struct {
 }
 
 type Job struct {
-	ID         string
+	Jid        string
 	Type       string
 	Gpuenabled int64
 	Log        string
 	Details    []byte
 	Pid        int64
 	Cmdline    string
-	Starttime  int64
+	Starttime  time.Time
 	Workingdir string
 	Status     string
 	Isrunning  int64

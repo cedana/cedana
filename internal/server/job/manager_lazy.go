@@ -411,11 +411,12 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 	typ := action.typ
 
 	var err error
+
 	switch typ {
 	case initialize:
 		jobProtos, err := db.ListJobs(ctx)
 		if err != nil {
-			break
+			return err
 		}
 		for _, proto := range jobProtos {
 			job := fromProto(proto)
@@ -423,7 +424,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 
 			checkpoints, err := db.ListCheckpointsByJIDs(ctx, job.JID)
 			if err != nil {
-				break
+				return err
 			}
 			for _, checkpoint := range checkpoints {
 				m.checkpoints.Store(checkpoint.ID, checkpoint)

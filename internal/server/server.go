@@ -68,9 +68,9 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	var database db.DB
 	if config.Global.DB.Remote {
-		database = db.NewRemoteDB(ctx, config.Global.Connection)
+		database = db.NewPropagatorDB(ctx, config.Global.Connection)
 	} else {
-		database, err = db.NewLocalDB(ctx, config.Global.DB.Path)
+		database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
 	}
 	if err != nil {
 		return nil, err
@@ -171,10 +171,12 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	lifetime, cancel := context.WithCancelCause(ctx)
 	s.lifetime = lifetime
 
-	shutdown, _ := metrics.InitOtel(ctx, s.version)
-	defer func() {
-		err = shutdown(ctx)
-	}()
+	if config.Global.Metrics.Otel {
+		shutdown, _ := metrics.InitOtel(ctx, s.version)
+		defer func() {
+			err = shutdown(ctx)
+		}()
+	}
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
