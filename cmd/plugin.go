@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
@@ -39,7 +40,7 @@ var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Manage plugins",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		manager := plugins.NewLocalManager()
+		manager := plugins.NewPropagatorManager(config.Global.Connection)
 
 		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)
 		cmd.SetContext(ctx)
@@ -96,7 +97,6 @@ var pluginListCmd = &cobra.Command{
 			"Status",
 			"Installed version",
 			"Latest version",
-			"Dependencies",
 		})
 
 		tableWriter.SortBy([]table.SortBy{
@@ -110,7 +110,6 @@ var pluginListCmd = &cobra.Command{
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,
-				utils.StrList(p.Dependencies),
 			}
 			tableWriter.AppendRow(row)
 		}

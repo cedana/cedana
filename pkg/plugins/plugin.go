@@ -40,7 +40,6 @@ type Plugin struct {
 	Libraries     []string
 	Binaries      []string
 	Size          int64 // in bytes
-	Dependencies  []string
 }
 
 /////////////////

@@ -15,16 +15,14 @@ import (
 )
 
 type PropagatorDB struct {
-	baseUrl   string
-	authToken string
-	client    *http.Client
+	config.Connection
+	client *http.Client
 }
 
 func NewPropagatorDB(ctx context.Context, connection config.Connection) *PropagatorDB {
 	return &PropagatorDB{
-		baseUrl:   connection.URL,
-		authToken: connection.AuthToken,
-		client:    &http.Client{},
+		connection,
+		&http.Client{},
 	}
 }
 
@@ -33,7 +31,7 @@ func NewPropagatorDB(ctx context.Context, connection config.Connection) *Propaga
 ///////////
 
 func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, job.JID)
+	url := fmt.Sprintf("%s/jobs/%s", db.URL, job.JID)
 
 	body, err := json.Marshal(job)
 	if err != nil {
@@ -45,7 +43,7 @@ func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -61,7 +59,7 @@ func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
 }
 
 func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.baseUrl)
+	url := fmt.Sprintf("%s/jobs", db.URL)
 	if len(jids) > 0 {
 		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
 	}
@@ -71,7 +69,7 @@ func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -93,7 +91,7 @@ func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon
 }
 
 func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.baseUrl)
+	url := fmt.Sprintf("%s/jobs", db.URL)
 	if len(hostIDs) > 0 {
 		url += fmt.Sprintf("?host_ids=%s", strings.Join(hostIDs, ","))
 	}
@@ -103,7 +101,7 @@ func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -124,13 +122,13 @@ func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string
 }
 
 func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.baseUrl, jid)
+	url := fmt.Sprintf("%s/jobs/%s", db.URL, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 	resp, err := db.client.Do(req)
 	if err != nil {
 		return err
@@ -149,7 +147,7 @@ func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
 //////////////////
 
 func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
-	url := fmt.Sprintf("%s/checkpoints/%s", db.baseUrl, checkpoint.ID)
+	url := fmt.Sprintf("%s/checkpoints/%s", db.URL, checkpoint.ID)
 
 	body, err := json.Marshal(checkpoint)
 	if err != nil {
@@ -161,7 +159,7 @@ func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Ch
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -177,7 +175,7 @@ func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Ch
 }
 
 func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
+	url := fmt.Sprintf("%s/checkpoints", db.URL)
 	if len(ids) > 0 {
 		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
 	}
@@ -187,7 +185,7 @@ func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -208,7 +206,7 @@ func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*
 }
 
 func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/checkpoints", db.baseUrl)
+	url := fmt.Sprintf("%s/checkpoints", db.URL)
 	if len(jids) > 0 {
 		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
 	}
@@ -218,7 +216,7 @@ func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...strin
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -239,13 +237,13 @@ func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...strin
 }
 
 func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/checkpoints/%s", db.baseUrl, id)
+	url := fmt.Sprintf("%s/checkpoints/%s", db.URL, id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 	resp, err := db.client.Do(req)
 	if err != nil {
 		return err
@@ -264,7 +262,7 @@ func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
 /////////////
 
 func (db *PropagatorDB) PutHost(ctx context.Context, host *daemon.Host) error {
-	url := fmt.Sprintf("%s/hosts/%s", db.baseUrl, host.ID)
+	url := fmt.Sprintf("%s/hosts/%s", db.URL, host.ID)
 
 	body, err := json.Marshal(host)
 	if err != nil {
@@ -276,7 +274,7 @@ func (db *PropagatorDB) PutHost(ctx context.Context, host *daemon.Host) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -292,7 +290,7 @@ func (db *PropagatorDB) PutHost(ctx context.Context, host *daemon.Host) error {
 }
 
 func (db *PropagatorDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
-	url := fmt.Sprintf("%s/hosts", db.baseUrl)
+	url := fmt.Sprintf("%s/hosts", db.URL)
 	if len(ids) > 0 {
 		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
 	}
@@ -302,7 +300,7 @@ func (db *PropagatorDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 
 	resp, err := db.client.Do(req)
 	if err != nil {
@@ -323,13 +321,13 @@ func (db *PropagatorDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon
 }
 
 func (db *PropagatorDB) DeleteHost(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/hosts/%s", db.baseUrl, id)
+	url := fmt.Sprintf("%s/hosts/%s", db.URL, id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
 	resp, err := db.client.Do(req)
 	if err != nil {
 		return err

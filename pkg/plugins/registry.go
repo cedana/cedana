@@ -21,16 +21,14 @@ var Registry = []Plugin{
 		Libraries: []string{"libcedana-runc.so"},
 	},
 	{
-		Name:         "containerd",
-		Type:         Supported,
-		Libraries:    []string{"libcedana-containerd.so"},
-		Dependencies: []string{"runc"},
+		Name:      "containerd",
+		Type:      Supported,
+		Libraries: []string{"libcedana-containerd.so"},
 	},
 	{
-		Name:         "crio",
-		Type:         Supported,
-		Libraries:    []string{"libcedana-crio.so"},
-		Dependencies: []string{"runc"},
+		Name:      "crio",
+		Type:      Supported,
+		Libraries: []string{"libcedana-crio.so"},
 	},
 	{
 		Name:      "kata",
