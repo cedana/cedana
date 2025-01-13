@@ -868,6 +868,7 @@ func (s *service) gpuRestore(ctx context.Context, dir string, uid, gid int32, gr
 
 	if resp.GpuRestoreStats != nil {
 		stats.GPURestoreStats = &gpu.GPURestoreStats{
+			CopyHostMemTime: resp.GpuRestoreStats.CopyHostMemTime,
 			CopyMemTime:     resp.GpuRestoreStats.CopyMemTime,
 			ReplayCallsTime: resp.GpuRestoreStats.ReplayCallsTime,
 		}
