@@ -35,6 +35,9 @@ cedana dump job job_id -d dump_dir --stream num
 cedana restore job job_id --stream num
 ```
 
+### GPU support
+GPU streaming C/R is a work in progress, and some programs (such as LLM inference) are not yet supported.
+
 ### Direct remoting
 Directly write checkpoint files to and read checkpoint files from AWS S3 bucket without writing them to disk (in-memory streaming). AWS credentials are handled by propagator, so set `CEDANA_URL` and `CEDANA_AUTH_TOKEN` and run:
 ```
