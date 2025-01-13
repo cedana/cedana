@@ -45,8 +45,13 @@ const (
 	KATA_TAR_FILE_RECEIVER_PORT  = 9998
 )
 
-func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pipes int32) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "cedana-image-streamer", "--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes), "serve")
+func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, bucket string, num_pipes int32) {
+	args := []string{"--dir", dumpdir, "--num-pipes", fmt.Sprint(num_pipes)}
+	if bucket != "" {
+		args = append(args, "--bucket", bucket)
+	}
+	args = append(args, "serve") // subcommand must be after options
+	cmd := exec.CommandContext(ctx, "cedana-image-streamer", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -90,7 +95,6 @@ func (s *service) setupStreamerServe(ctx context.Context, dumpdir string, num_pi
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Info().Msg("Started cedana-image-streamer")
-	return cmd
 }
 
 func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args *task.RestoreArgs, stream grpc.BidiStreamingServer[task.AttachArgs, task.AttachResp], isKata bool) (string, *task.ProcessState, []*os.File, []*os.File, error) {
@@ -110,7 +114,7 @@ func (s *service) prepareRestore(ctx context.Context, opts *criu.CriuOpts, args 
 	var tempDir string
 	if args.Stream > 0 {
 		tempDir = args.CheckpointPath
-		s.setupStreamerServe(ctx, tempDir, args.Stream)
+		s.setupStreamerServe(ctx, tempDir, args.Bucket, args.Stream)
 	} else {
 		tempDir = RESTORE_TEMPDIR + "-" + args.JID
 		// check if tmpdir exists
@@ -308,7 +312,9 @@ func (s *service) criuRestore(ctx context.Context, opts *criu.CriuOpts, nfy Noti
 	resp, err := s.CRIU.Restore(opts, &nfy, extraFiles)
 	if err != nil {
 		// cleanup along the way
-		os.RemoveAll(dir)
+		if opts.Stream == nil || !*opts.Stream {
+			os.RemoveAll(dir)
+		}
 		log.Warn().Msgf("error restoring process: %v", err)
 		return nil, err
 	}
@@ -343,7 +349,7 @@ type linkPairs struct {
 	Value string
 }
 
-func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
+func (s *service) runcRestore(ctx context.Context, imgPath string, criuOpts *container.CriuOpts, opts *container.RuncOpts, jid string) (int32, chan int, error) {
 	start := time.Now()
 	stats, ok := ctx.Value(utils.RestoreStatsKey).(*task.RestoreStats)
 	if !ok {
@@ -394,7 +400,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		opts.Bundle = state.ContainerBundle // Use saved bundle if not overridden from args
 	}
 
-	err = container.RuncRestore(tempDir, containerId, criuOpts, opts)
+	err = container.RuncRestore(tempDir, opts.ContainerId, criuOpts, opts)
 	if err != nil {
 		// Kill GPU controller if it was started
 		if s.GetGPUController(jid) != nil {
@@ -408,7 +414,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 	// HACK YA: RACE The container might not exit yet
 	// time.Sleep(1 * time.Second)
 
-	pid, err := runc.GetPidByContainerId(containerId, opts.Root)
+	pid, err := runc.GetPidByContainerId(opts.ContainerId, opts.Root)
 	if err != nil {
 		// Kill GPU controller if it was started
 		if s.GetGPUController(jid) != nil {
@@ -428,7 +434,7 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 			var status syscall.WaitStatus
 			syscall.Wait4(int(pid), &status, 0, nil) // since managed jobs are restored as children of the daemon
 			code := status.ExitStatus()
-			log.Info().Int32("PID", pid).Str("JID", containerId).Int("status", code).Msgf("runc container exited")
+			log.Info().Int32("PID", pid).Str("JID", opts.ContainerId).Int("status", code).Msgf("runc container exited")
 
 			if s.GetGPUController(jid) != nil {
 				err = s.StopGPUController(jid)
@@ -457,10 +463,10 @@ func (s *service) runcRestore(ctx context.Context, imgPath, containerId string, 
 		go func() {
 			defer s.wg.Done()
 			<-s.serverCtx.Done()
-			log.Debug().Int32("PID", pid).Str("JID", containerId).Msgf("killing runc container")
+			log.Debug().Int32("PID", pid).Str("JID", opts.ContainerId).Msgf("killing runc container")
 			syscall.Kill(int(pid), syscall.SIGKILL)
 			if err != nil {
-				log.Warn().Err(err).Int32("PID", pid).Str("JID", containerId).Msgf("could not kill runc container")
+				log.Warn().Err(err).Int32("PID", pid).Str("JID", opts.ContainerId).Msgf("could not kill runc container")
 				return
 			}
 		}()

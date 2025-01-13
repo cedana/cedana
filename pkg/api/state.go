@@ -272,7 +272,7 @@ func deserializeStateFromDir(dir string, stream bool) (*task.ProcessState, error
 			return nil, fmt.Errorf("imgStreamerOpen failed with %v", err)
 		}
 
-		byte_arr := make([]byte, 2048)
+		byte_arr := make([]byte, 16384)
 		n_bytes, err := syscall.Read(r_fd, byte_arr)
 		if err != nil {
 			return nil, fmt.Errorf("Read from r_fd failed with %v", err)
