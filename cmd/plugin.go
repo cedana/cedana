@@ -150,6 +150,7 @@ var pluginInstallCmd = &cobra.Command{
 		}
 
 		installed := 0
+		anyErrors := false
 		install, msgs, errs := manager.Install(names)
 
 		for {
@@ -171,6 +172,7 @@ var pluginInstallCmd = &cobra.Command{
 					errs = nil
 					break
 				}
+				anyErrors = true
 				fmt.Println(err)
 			}
 			if install == nil && msgs == nil && errs == nil {
@@ -178,7 +180,7 @@ var pluginInstallCmd = &cobra.Command{
 			}
 		}
 
-		if installed < len(names) {
+		if anyErrors && installed < len(names) {
 			return fmt.Errorf("Installed %d plugin(s), %d failed", installed, len(names)-installed)
 		} else {
 			fmt.Printf("Installed %d plugin(s)\n", installed)

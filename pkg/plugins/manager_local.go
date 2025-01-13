@@ -90,7 +90,7 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 			p.LatestVersion = "local"
 			if p.Status != Installed {
 				p.Status = Available
-			} else if string(p.Checksum) != string(hash.Sum(nil)) {
+			} else if p.Checksum != string(hash.Sum(nil)) {
 				p.Status = Outdated
 			}
 			if p.Size == 0 {
@@ -143,9 +143,12 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 
 			if plugin.Status == Installed {
-				msgs <- fmt.Sprintf("Updating %s...", name)
+				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				continue
+			} else if plugin.Status == Available {
+				msgs <- fmt.Sprintf("Installing plugin %s...", name)
 			} else {
-				msgs <- fmt.Sprintf("Installing %s...", name)
+				msgs <- fmt.Sprintf("Updating plugin %s...", name)
 			}
 
 			// Copy the plugin files from the source directory to the installation directory
@@ -182,10 +185,10 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				continue
 			}
 
-			if plugin.Status == Installed {
-				msgs <- style.WarningColors.Sprintf("Updated %s", name)
+			if plugin.Status == Available {
+				msgs <- style.PositiveColors.Sprintf("Installed plugin %s", name)
 			} else {
-				msgs <- style.PositiveColors.Sprintf("Installed %s", name)
+				msgs <- style.WarningColors.Sprintf("Updated plugin %s", name)
 			}
 			installed <- 1
 		}

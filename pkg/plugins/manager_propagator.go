@@ -80,6 +80,12 @@ func (m *PropagatorManager) List(status ...Status) ([]Plugin, error) {
 						if list[i].Name == onlineList[j].Name {
 							list[i].LatestVersion = onlineList[j].LatestVersion
 							list[i].Size = onlineList[j].Size
+
+							if list[i].Status != Installed {
+								list[i].Status = Available
+							} else if list[i].Checksum != onlineList[j].Checksum {
+								list[i].Status = Outdated
+							}
 						}
 					}
 				}
@@ -90,7 +96,7 @@ func (m *PropagatorManager) List(status ...Status) ([]Plugin, error) {
 	}
 
 	if err != nil {
-		fmt.Printf("Warn: Showing local list. Failed to connect to propagator registry: %v\n", err)
+		fmt.Printf("Warn: Using local list. Failed to connect to propagator registry: %v\n", err)
 	}
 
 	return list, nil
@@ -101,7 +107,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 	errs := make(chan error)
 	msgs := make(chan string)
 
-	list, err := m.LocalManager.List()
+	list, err := m.List()
 	if err != nil {
 		errs <- fmt.Errorf("Failed to list plugins: %w", err)
 		return installed, msgs, errs
@@ -112,7 +118,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		availableSet[plugin.Name] = &plugin
 	}
 
-	downloaded := make([]string, 0)
+	installList := make([]string, 0, len(names))
 
 	wg := sync.WaitGroup{}
 
@@ -122,6 +128,13 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
+			if availableSet[name].Status == Installed {
+				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				continue
+			}
+
+			installList = append(installList, name)
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -131,7 +144,8 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				for _, binary := range plugin.Binaries {
 					err := m.downloadBinary(binary, BINARY_PERMS)
 					if err != nil {
-						errs <- err
+						msgs <- err.Error()
+						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
 						return
 					}
 				}
@@ -139,41 +153,43 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				for _, library := range plugin.Libraries {
 					err := m.downloadBinary(library, LIBRARY_PERMS)
 					if err != nil {
-						errs <- err
+						msgs <- err.Error()
+						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
 						return
 					}
 				}
 				msgs <- fmt.Sprintf("Downloaded plugin %s", name)
-
-				downloaded = append(downloaded, name)
 			}()
 		}
 
-		// Now call the local manager to install the plugins
 		wg.Wait()
-		i, a, e := m.LocalManager.Install(downloaded)
-		select {
-		case val, ok := <-i:
-			if !ok {
-				i = nil
+
+		// Now call the local manager to install the plugins
+		i, a, e := m.LocalManager.Install(installList)
+		for {
+			select {
+			case val, ok := <-i:
+				if !ok {
+					i = nil
+					break
+				}
+				installed <- val
+			case val, ok := <-a:
+				if !ok {
+					a = nil
+					break
+				}
+				msgs <- val
+			case val, ok := <-e:
+				if !ok {
+					e = nil
+					break
+				}
+				errs <- val
+			}
+			if i == nil && a == nil && e == nil {
 				break
 			}
-			installed <- val
-		case val, ok := <-a:
-			if !ok {
-				a = nil
-				break
-			}
-			msgs <- val
-		case val, ok := <-e:
-			if !ok {
-				e = nil
-				break
-			}
-			errs <- val
-		}
-		if i == nil && a == nil && e == nil {
-			return
 		}
 	}()
 

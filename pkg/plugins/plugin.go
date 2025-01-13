@@ -45,7 +45,7 @@ type Plugin struct {
 	Libraries     []string  `json:"libraries"`
 	Binaries      []string  `json:"binaries"`
 	Size          int64     `json:"size"`     // in bytes
-	Checksum      []byte    `json:"checksum"` // MD5
+	Checksum      string    `json:"checksum"` // MD5
 	PublishedAt   time.Time `json:"published_at"`
 }
 
@@ -140,7 +140,7 @@ func (p *Plugin) SyncInstalled() {
 	}
 	p.Status = Installed
 	p.Size = size
-	p.Checksum = hash.Sum(nil)
+	p.Checksum = string(hash.Sum(nil))
 	p.SyncVersion()
 }
 
