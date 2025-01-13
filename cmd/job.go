@@ -164,7 +164,7 @@ var listJobCmd = &cobra.Command{
 				timeList = append(timeList, "")
 				sizeList = append(sizeList, "")
 			} else {
-				latestTime := fmt.Sprintf("%s ago", time.Since(time.UnixMilli(checkpoint.GetTime())).Truncate(time.Second))
+				latestTime := utils.TimeAgo(time.UnixMilli(checkpoint.GetTime()))
 				latestSize := utils.SizeStr(checkpoint.GetSize())
 				timeList = append(timeList, latestTime)
 				sizeList = append(sizeList, latestSize)

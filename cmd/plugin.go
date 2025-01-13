@@ -68,7 +68,7 @@ var pluginListCmd = &cobra.Command{
 
 		var status []plugins.Status
 		if !all {
-			status = []plugins.Status{plugins.Installed, plugins.Available}
+			status = []plugins.Status{plugins.Installed, plugins.Available, plugins.Outdated}
 		}
 
 		list, err := manager.List(status...)
@@ -97,6 +97,7 @@ var pluginListCmd = &cobra.Command{
 			"Status",
 			"Installed version",
 			"Latest version",
+			"Published",
 		})
 
 		tableWriter.SortBy([]table.SortBy{
@@ -110,6 +111,7 @@ var pluginListCmd = &cobra.Command{
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,
+				utils.TimeAgo(p.PublishedAt),
 			}
 			tableWriter.AppendRow(row)
 		}
@@ -395,9 +397,11 @@ func featureLegend() string {
 func statusStr(s plugins.Status) string {
 	switch s {
 	case plugins.Available:
-		return style.WarningColors.Sprint(s.String())
+		return style.InfoColors.Sprint(s.String())
 	case plugins.Installed:
 		return style.PositiveColors.Sprint(s.String())
+	case plugins.Outdated:
+		return style.WarningColors.Sprint(s.String())
 	case plugins.Unknown:
 		return style.DisabledColors.Sprint(s.String())
 	default:

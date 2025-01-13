@@ -3,10 +3,12 @@ package plugins
 // Implements a local plugin manager that searches for installable plugins from local paths.
 
 import (
+	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
@@ -65,7 +67,9 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		found := 0
 		dir := ""
 		size := int64(0)
+		var plublishedAt time.Time
 		files := append(p.Libraries, p.Binaries...)
+		hash := md5.New()
 		for _, file := range files {
 			for _, path := range strings.Split(searchPath, ":") {
 				var stat os.FileInfo
@@ -75,18 +79,24 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 				dir = path
 				found += 1
 				size += stat.Size()
+				plublishedAt = stat.ModTime()
+				hash, _ = utils.FileMD5Sum(hash, filepath.Join(path, file))
 				break
 			}
 		}
+
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.LatestVersion = "local"
 			if p.Status != Installed {
 				p.Status = Available
+			} else if string(p.Checksum) != string(hash.Sum(nil)) {
+				p.Status = Outdated
 			}
 			if p.Size == 0 {
 				p.Size = size
 			}
+			p.PublishedAt = plublishedAt
 		}
 
 		if _, ok := set[p.Status]; len(set) > 0 && !ok {

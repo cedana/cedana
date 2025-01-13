@@ -3,10 +3,14 @@ package plugins
 // Defines the plugin type
 
 import (
+	"crypto/md5"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 var featureVersion = Feature[string]{"Version", "version"}
@@ -28,18 +32,21 @@ const (
 	Unknown Status = iota
 	Available
 	Installed
+	Outdated
 )
 
 // Represents plugin information
 type Plugin struct {
-	Name          string
-	Type          Type
-	Status        Status
-	Version       string
-	LatestVersion string
-	Libraries     []string
-	Binaries      []string
-	Size          int64 // in bytes
+	Name          string    `json:"name"`
+	Type          Type      `json:"type"`
+	Status        Status    `json:"status"`
+	Version       string    `json:"version"`
+	LatestVersion string    `json:"latest_version"`
+	Libraries     []string  `json:"libraries"`
+	Binaries      []string  `json:"binaries"`
+	Size          int64     `json:"size"`     // in bytes
+	Checksum      []byte    `json:"checksum"` // MD5
+	PublishedAt   time.Time `json:"published_at"`
 }
 
 /////////////////
@@ -104,12 +111,15 @@ func (p *Plugin) SyncInstalled() {
 	var s os.FileInfo
 	found := 0
 	size := int64(0)
+	hash := md5.New()
 	for _, file := range p.Libraries {
-		if s, err = os.Stat(filepath.Join(LibDir, file)); err != nil {
+		path := filepath.Join(LibDir, file)
+		if s, err = os.Stat(path); err != nil {
 			continue
 		}
 		found += 1
 		size += s.Size()
+		hash, _ = utils.FileMD5Sum(hash, path)
 	}
 	if found < len(p.Libraries) {
 		return
@@ -117,17 +127,20 @@ func (p *Plugin) SyncInstalled() {
 
 	found = 0
 	for _, file := range p.Binaries {
-		if s, err = os.Stat(filepath.Join(BinDir, file)); err != nil {
+		path := filepath.Join(BinDir, file)
+		if s, err = os.Stat(path); err != nil {
 			continue
 		}
 		found += 1
 		size += s.Size()
+		hash, _ = utils.FileMD5Sum(hash, path)
 	}
 	if found < len(p.Binaries) {
 		return
 	}
 	p.Status = Installed
 	p.Size = size
+	p.Checksum = hash.Sum(nil)
 	p.SyncVersion()
 }
 
