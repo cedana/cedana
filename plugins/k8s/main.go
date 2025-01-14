@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/k8s/cmd"
+	"github.com/cedana/cedana/plugins/k8s/internal/container"
 	"github.com/spf13/cobra"
 )
 
@@ -18,4 +19,4 @@ var (
 	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
 )
 
-var QueryHandler types.Query = nil
+var QueryHandler types.Query = container.Query

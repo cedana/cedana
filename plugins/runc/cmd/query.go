@@ -49,6 +49,7 @@ var QueryCmd = &cobra.Command{
 
 		if len(result.Containers) == 0 {
 			fmt.Println("No containers found")
+			return nil
 		}
 
 		tableWriter := table.NewWriter()
