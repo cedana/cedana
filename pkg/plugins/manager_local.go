@@ -66,6 +66,11 @@ func (m *LocalManager) List(latest bool, filter ...Status) (list []Plugin, err e
 
 		p.SyncInstalled()
 
+		if !latest {
+			list = append(list, p)
+			continue
+		}
+
 		// search if plugin files available in search path
 		found := 0
 		dir := ""

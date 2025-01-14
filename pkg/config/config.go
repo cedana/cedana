@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	configDirName  = ".cedana"
-	configFileName = "config"
-	configFileType = "json"
-	configDirPerm  = 0o755
-	configFilePerm = 0o644
-	envVarPrefix   = "CEDANA"
+	DIR_NAME   = ".cedana"
+	FILE_NAME  = "config"
+	FILE_TYPE  = "json"
+	DIR_PERM   = 0o755
+	FILE_PERM  = 0o644
+	ENV_PREFIX = "CEDANA"
 
 	// NOTE: `localhost` server inside kubernetes may or may not work
 	// based on firewall and network configuration, it would only work
@@ -84,20 +84,20 @@ func Init(args InitArgs) error {
 	var configDir string
 	if args.ConfigDir == "" {
 		homeDir := user.HomeDir
-		configDir = filepath.Join(homeDir, configDirName)
+		configDir = filepath.Join(homeDir, DIR_NAME)
 	} else {
 		configDir = args.ConfigDir
 	}
 
 	viper.AddConfigPath(configDir)
-	viper.SetConfigPermissions(configFilePerm)
-	viper.SetConfigType(configFileType)
-	viper.SetConfigName(configFileName)
+	viper.SetConfigPermissions(FILE_PERM)
+	viper.SetConfigType(FILE_TYPE)
+	viper.SetConfigName(FILE_NAME)
 
 	// Create config directory if it does not exist
 	_, err = os.Stat(configDir)
 	if os.IsNotExist(err) {
-		err = os.MkdirAll(configDir, configDirPerm)
+		err = os.MkdirAll(configDir, DIR_PERM)
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func Init(args InitArgs) error {
 func setDefaults() {
 	viper.SetTypeByDefaultValue(true)
 	for _, field := range utils.ListLeaves(Config{}) {
-		tag := utils.GetTag(Config{}, field, configFileType)
+		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
 		viper.SetDefault(tag, defaultVal)
 	}
@@ -139,8 +139,8 @@ func bindEnvVars() {
 	viper.AutomaticEnv()
 
 	for _, field := range utils.ListLeaves(Config{}) {
-		tag := utils.GetTag(Config{}, field, configFileType)
-		envVar := envVarPrefix + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))
+		tag := utils.GetTag(Config{}, field, FILE_TYPE)
+		envVar := ENV_PREFIX + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))
 
 		// get env aliases from struct tag
 		aliasesStr := utils.GetTag(Config{}, field, "env_aliases")

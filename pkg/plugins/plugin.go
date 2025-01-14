@@ -117,6 +117,7 @@ func (p *Plugin) SyncInstalled() {
 	var s os.FileInfo
 	found := 0
 	size := int64(0)
+
 	for i, file := range p.Libraries {
 		path := filepath.Join(LibDir, file.Name)
 		if s, err = os.Stat(path); err != nil {
@@ -145,6 +146,7 @@ func (p *Plugin) SyncInstalled() {
 	if found < len(p.Binaries) {
 		return
 	}
+
 	p.Status = Installed
 	p.Size = size
 	p.SyncVersion()
