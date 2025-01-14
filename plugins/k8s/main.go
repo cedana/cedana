@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/k8s/cmd"
 	"github.com/spf13/cobra"
 )
@@ -12,4 +13,9 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
+var (
+	QueryCmd   *cobra.Command   = cmd.QueryCmd
+	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
+)
+
+var QueryHandler types.Query = nil

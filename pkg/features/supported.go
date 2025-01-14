@@ -19,6 +19,7 @@ var (
 	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
 	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
 	ManageCmd  = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}
+	QueryCmd   = plugins.Feature[*cobra.Command]{Symbol: "QueryCmd", Description: "Query command"}
 	HelperCmds = plugins.Feature[[]*cobra.Command]{Symbol: "HelperCmds", Description: "Helper command(s)"}
 
 	// Dump/Restore
@@ -40,6 +41,9 @@ var (
 	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}
 	CheckpointDecode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointDecode", Description: "Checkpoint decode"}
 	CheckpointEncode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointEncode", Description: "Checkpoint encode"}
+
+	// Query
+	QueryHandler = plugins.Feature[types.Query]{Symbol: "QueryHandler", Description: "Query handler"}
 
 	// Health check
 	HealthChecks = plugins.Feature[types.Checks]{Symbol: "HealthChecks", Description: "Health checks"}

@@ -33,6 +33,7 @@ var (
 	RestoreCmd *cobra.Command = cmd.RestoreCmd
 	RunCmd     *cobra.Command = cmd.RunCmd
 	ManageCmd  *cobra.Command = cmd.ManageCmd
+	QueryCmd   *cobra.Command = cmd.QueryCmd
 	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
 )
 
@@ -44,6 +45,8 @@ var HealthChecks types.Checks = types.Checks{
 		container.CheckVersion(),
 	},
 }
+
+var QueryHandler types.Query = container.Query
 
 var (
 	RunHandler    types.Run                   = container.Run

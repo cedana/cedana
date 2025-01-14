@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -44,7 +43,7 @@ func init() {
 	dumpCmd.PersistentFlags().
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "dump file locks")
 	dumpCmd.PersistentFlags().
-		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "resources from external namespaces (comma-separated)")
+		StringSliceP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, nil, "resources from external namespaces (can be multiple)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 
@@ -54,7 +53,7 @@ func init() {
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
-	// Add modifications from supported plugins
+	// Add subcommands from supported plugins
 	///////////////////////////////////////////
 
 	features.DumpCmd.IfAvailable(
@@ -88,7 +87,7 @@ var dumpCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
-		external, _ := cmd.Flags().GetString(flags.ExternalFlag.Full)
+		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 
 		// Create half-baked request
@@ -101,7 +100,7 @@ var dumpCmd = &cobra.Command{
 				TcpEstablished:  proto.Bool(tcpEstablished),
 				TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
 				FileLocks:       proto.Bool(fileLocks),
-				External:        strings.Split(external, ","),
+				External:        external,
 				ShellJob:        proto.Bool(shellJob),
 			},
 		}

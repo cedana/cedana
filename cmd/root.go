@@ -25,6 +25,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
+	rootCmd.AddCommand(queryCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(

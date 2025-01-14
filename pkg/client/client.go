@@ -266,6 +266,14 @@ func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckp
 	return resp, utils.GRPCErrorColored(err)
 }
 
+func (c *Client) Query(ctx context.Context, args *daemon.QueryReq, opts ...grpc.CallOption) (*daemon.QueryResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
+	addDefaultOptions(opts...)
+	resp, err := c.daemonClient.Query(ctx, args, opts...)
+	return resp, utils.GRPCErrorColored(err)
+}
+
 func (c *Client) HealthCheck(ctx context.Context, args *daemon.HealthCheckReq, opts ...grpc.CallOption) (*daemon.HealthCheckResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_HEALTH_TIMEOUT)
 	defer cancel()

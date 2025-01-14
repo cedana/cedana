@@ -7,7 +7,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -39,7 +38,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		BoolP(flags.FileLocksFlag.Full, flags.FileLocksFlag.Short, false, "restore file locks")
 	restoreCmd.PersistentFlags().
-		StringP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, "", "resources from external namespaces (comma-separated)")
+		StringSliceP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, nil, "resources from external namespaces (can be multiple)")
 	restoreCmd.PersistentFlags().
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
 	restoreCmd.PersistentFlags().
@@ -52,7 +51,7 @@ func init() {
 	) // only one of these can be set
 
 	///////////////////////////////////////////
-	// Add modifications from supported plugins
+	// Add subcommands from supported plugins
 	///////////////////////////////////////////
 
 	features.RestoreCmd.IfAvailable(
@@ -85,7 +84,7 @@ var restoreCmd = &cobra.Command{
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
-		external, _ := cmd.Flags().GetString(flags.ExternalFlag.Full)
+		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
@@ -101,7 +100,7 @@ var restoreCmd = &cobra.Command{
 				TcpClose:       proto.Bool(tcpClose),
 				LeaveStopped:   proto.Bool(leaveStopped),
 				FileLocks:      proto.Bool(fileLocks),
-				External:       strings.Split(external, ","),
+				External:       external,
 				ShellJob:       proto.Bool(shellJob),
 			},
 		}

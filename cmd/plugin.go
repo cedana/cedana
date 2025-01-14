@@ -313,6 +313,7 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.QueryCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.HelperCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames, &errs))
@@ -328,6 +329,8 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames, &errs))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.QueryHandler, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.HealthChecks, pluginNames, &errs))
 

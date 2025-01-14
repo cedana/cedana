@@ -45,7 +45,7 @@ func init() {
 	rootCmd.AddCommand(utils.AliasOf(processRunCmd, "exec"))
 
 	///////////////////////////////////////////
-	// Add modifications from supported plugins
+	// Add subcommands from supported plugins
 	///////////////////////////////////////////
 
 	features.RunCmd.IfAvailable(
