@@ -6,11 +6,11 @@ toolchain go1.22.2
 
 require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.35.2-20241120213244-d99a43b0c85e.1
-	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-20241219165343-7b552a043dd4.2
-	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.36.1-20241219165343-7b552a043dd4.1
+	buf.build/gen/go/cedana/gpu/grpc/go v1.5.1-00000000000000-57447335102c.2
+	buf.build/gen/go/cedana/gpu/protocolbuffers/go v1.36.1-00000000000000-57447335102c.1
 	buf.build/gen/go/cedana/img-streamer/protocolbuffers/go v1.34.2-20241004172122-02bf93858080.2
-	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-897e16170a7d.2
-	buf.build/gen/go/cedana/task/protocolbuffers/go v1.36.1-00000000000000-897e16170a7d.1
+	buf.build/gen/go/cedana/task/grpc/go v1.5.1-00000000000000-ce8e33d4f6ee.2
+	buf.build/gen/go/cedana/task/protocolbuffers/go v1.36.1-00000000000000-ce8e33d4f6ee.1
 	cloud.google.com/go/pubsub v1.44.0
 	github.com/aws/aws-sdk-go-v2 v1.30.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.24
