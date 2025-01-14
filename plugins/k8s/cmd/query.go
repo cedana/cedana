@@ -19,8 +19,8 @@ import (
 func init() {
 	QueryCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	QueryCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "namespace")
-	QueryCmd.Flags().StringSliceP(k8s_flags.NameFlag.Full, k8s_flags.NameFlag.Short, nil, "container name (can be multiple)")
-	QueryCmd.Flags().StringSliceP(k8s_flags.SandboxFlag.Full, k8s_flags.SandboxFlag.Short, nil, "sandbox name (can be multiple)")
+	QueryCmd.Flags().StringSliceP(k8s_flags.NameFlag.Full, k8s_flags.NameFlag.Short, nil, "container name(s)")
+	QueryCmd.Flags().StringSliceP(k8s_flags.SandboxFlag.Full, k8s_flags.SandboxFlag.Short, nil, "sandbox name(s)")
 }
 
 var QueryCmd = &cobra.Command{
