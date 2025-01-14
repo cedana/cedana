@@ -2,18 +2,23 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/grpc/credentials"
 )
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
@@ -38,7 +43,13 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	prop := newPropagator()
 	otel.SetTextMapPropagator(prop)
 
-	tracerProvider, err := newTraceProvider(ctx, version)
+	endpoint, headers, err := getOtelCreds()
+	if err != nil {
+		handleErr(err)
+		return
+	}
+
+	tracerProvider, err := newTraceProvider(ctx, version, endpoint, headers)
 	if err != nil {
 		handleErr(err)
 		return
@@ -47,6 +58,41 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	otel.SetTracerProvider(tracerProvider)
 
 	return
+}
+
+func getOtelCreds() (string, string, error) {
+	cedanaURL := viper.GetString("connection.cedana_url")
+	if cedanaURL == "" {
+		return "", "", fmt.Errorf("CEDANA_URL or CEDANA_AUTH_TOKEN unset, cannot fetch otel credentials")
+	}
+
+	url := cedanaURL + "/k8s/otelcreds"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString("connection.cedana_auth_token")))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("failed to fetch otel credentials, status code: %d", resp.StatusCode)
+	}
+
+	var creds struct {
+		Endpoint string `json:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+		Headers  string `json:"OTEL_EXPORTER_OTLP_HEADERS"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&creds); err != nil {
+		return "", "", err
+	}
+
+	return creds.Endpoint, creds.Headers, nil
 }
 
 func InitOtelNoop() {
@@ -61,14 +107,21 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTraceProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
-	otelGrpcPort := viper.GetInt("otel_port")
-	address := fmt.Sprintf("127.0.0.1:%d", otelGrpcPort)
-	traceExporter, err := otlptracegrpc.New(
+func newTraceProvider(ctx context.Context, version, endpoint, headers string) (*trace.TracerProvider, error) {
+	// set headers env var
+	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", headers); err != nil {
+		return nil, err
+	}
+
+	secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
+
+	traceExporter, err := otlptrace.New(
 		ctx,
-		otlptracegrpc.WithEndpoint(address),
-		otlptracegrpc.WithInsecure(),
-	)
+		otlptracegrpc.NewClient(
+			secureOption,
+			otlptracegrpc.WithEndpoint(endpoint),
+		))
+
 	if err != nil {
 		return nil, err
 	}

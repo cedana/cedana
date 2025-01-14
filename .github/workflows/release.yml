@@ -28,7 +28,7 @@ on:
         default: false
       debug_bench:
         type: boolean
-        description: 'Run the benchmark with debugging enabled'
+        description: "Run the benchmark with debugging enabled"
         required: false
         default: false
       post_summary:
@@ -50,10 +50,10 @@ jobs:
     name: Test
     uses: ./.github/workflows/pr.yml
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
-      pull-requests: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
     with:
       debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -62,6 +62,7 @@ jobs:
       skip_bench: true # since benchmark will be run in a separate job below
       skip_shellcheck: true
       skip_helper_image_push: true
+    secrets: inherit
 
   build-publish-amd64:
     name: Build & Publish (amd64)
@@ -98,7 +99,7 @@ jobs:
           distribution: goreleaser
           args: release --clean --auto-snapshot
         env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
@@ -138,8 +139,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -211,8 +212,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -274,8 +275,8 @@ jobs:
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Docker meta
         id: meta
@@ -302,145 +303,145 @@ jobs:
           # we only match docker hub image as both images should be the same
           echo $(docker run -i --rm cedana/cedana-helper:${{ steps.meta.outputs.version }} -c "cedana -v")
 
-  benchmark:
-    name: Benchmark
-    needs: ["build-publish-amd64"]
-    permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
-    runs-on: ubicloud-standard-8
-    container:
-      image: cedana/cedana-bench:ubuntu
-      credentials:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-      options: --privileged
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      # Github actions unfortunately mounts the docker socket, which we don't want
-      - name: Workaround for dind
-        run: |
-          umount /var/run/docker.sock
-          sudo service supervisor start
-          sleep 1
-          supervisorctl restart dockerd
+  # benchmark:
+  #   name: Benchmark
+  #   needs: ["build-publish-amd64"]
+  #   permissions:
+  #     contents: "read"
+  #     packages: "read"
+  #     id-token: "write"
+  #   runs-on: ubicloud-standard-8
+  #   container:
+  #     image: cedana/cedana-bench:ubuntu
+  #     credentials:
+  #       username: ${{ vars.DOCKER_USERNAME }}
+  #       password: ${{ secrets.DOCKER_TOKEN }}
+  #     options: --privileged
+  #   defaults:
+  #     run:
+  #       working-directory: /src
+  #   steps:
+  #     # Github actions unfortunately mounts the docker socket, which we don't want
+  #     - name: Workaround for dind
+  #       run: |
+  #         umount /var/run/docker.sock
+  #         sudo service supervisor start
+  #         sleep 1
+  #         supervisorctl restart dockerd
 
-      - id: auth
-        name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        env:
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_POOL_PROVIDER }}
-          SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
-        with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.SERVICE_ACCOUNT }}
+  #     - id: auth
+  #       name: Authenticate to Google Cloud
+  #       uses: google-github-actions/auth@v1
+  #       env:
+  #         WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_BENCHMARK_WORKLOAD_IDENTITY_PROVIDER }}
+  #         SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
+  #       with:
+  #         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+  #         service_account: ${{ env.SERVICE_ACCOUNT }}
 
-      - name: Get tag
-        id: get-tag
-        run: echo ::set-output name=TAG::$(echo $GITHUB_REF | cut -d / -f 3)
+  #     - name: Get tag
+  #       id: get-tag
+  #       run: echo ::set-output name=TAG::$(echo $GITHUB_REF | cut -d / -f 3)
 
-      - name: Download binary
-        uses: robinraju/release-downloader@v1
-        id: download
-        with:
-          tag: ${{ steps.get-tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
-          extract: true
-          token: ${{ github.token }}
-          out-file-path: /src
+  #     - name: Download binary
+  #       uses: robinraju/release-downloader@v1
+  #       id: download
+  #       with:
+  #         tag: ${{ steps.get-tag.outputs.tag }}
+  #         fileName: "*amd64.tar.gz"
+  #         extract: true
+  #         token: ${{ github.token }}
+  #         out-file-path: /src
 
-      - name: Configure
-        env:
-          PATH_CEDANA: /src
-          TAG: ${{ steps.get-tag.outputs.TAG }}
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
-        run: |
-          BINDIR=`jq -r '.crtools.list."cedana".bindir' bench.json`
-          cp $PATH_CEDANA/cedana crtools/cedana/$BINDIR/
-          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.crtools.list."cedana".tag = "'$TAG'"' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
-          mv temp.json bench.json
+  #     - name: Configure
+  #       env:
+  #         PATH_CEDANA: /src
+  #         TAG: ${{ steps.get-tag.outputs.TAG }}
+  #         COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
+  #       run: |
+  #         BINDIR=`jq -r '.crtools.list."cedana".bindir' bench.json`
+  #         cp $PATH_CEDANA/cedana crtools/cedana/$BINDIR/
+  #         jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
+  #         mv temp.json bench.json
+  #         jq '.crtools.list."cedana".tag = "'$TAG'"' bench.json > temp.json
+  #         mv temp.json bench.json
+  #         jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
+  #         mv temp.json bench.json
 
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-        with:
-          limit-access-to-actor: true
+  #     - name: Setup debugging session
+  #       uses: mxschmitt/action-tmate@v3
+  #       if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
+  #       with:
+  #         limit-access-to-actor: true
 
-      - name: Run
-        env:
-          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
-        run: $CMD
+  #     - name: Run
+  #       env:
+  #         CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+  #         HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  #         CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
+  #       run: $CMD
 
-      - name: Upload logs
-        if: always()
-        id: upload-logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-logs
-          path: /src/*.log
+  #     - name: Upload logs
+  #       if: always()
+  #       id: upload-logs
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: bench-logs
+  #         path: /src/*.log
 
-      - name: Push results
-        env:
-          GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
-          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
-        run: ./bench results push --overwrite
+  #     - name: Push results
+  #       env:
+  #         GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
+  #         BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+  #       run: ./bench results push --overwrite
 
-      - name: Pull last results
-        env:
-          GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
-          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
-        run: ./bench results pull --runtime cedana:2
+  #     - name: Pull last results
+  #       env:
+  #         GCLOUD_PROJECT: ${{ steps.auth.outputs.project_id }}
+  #         BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+  #       run: ./bench results pull --runtime cedana:2
 
-      - name: Plot comparison w/ last patch
-        env:
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
-          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
-        run: |
-          rm -rf results/*.png
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
-          mv temp.json bench.json
-          ./bench plot --runtime cedana:2 --save $FLAGS
+  #     - name: Plot comparison w/ last patch
+  #       env:
+  #         COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_LAST_PATCH }}
+  #         FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+  #       run: |
+  #         rm -rf results/*.png
+  #         jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
+  #         mv temp.json bench.json
+  #         ./bench plot --runtime cedana:2 --save $FLAGS
 
-      - name: Upload plots (comparison w/ last patch)
-        id: upload-plots-patch
-        uses: google-github-actions/upload-cloud-storage@v2
-        with:
-          predefinedAcl: publicRead
-          project_id: ${{ steps.auth.outputs.project_id }}
-          path: /src/results
-          destination: cedana/release-${{ steps.get-tag.outputs.TAG }}
-          glob: '**/*.png'
+  #     - name: Upload plots (comparison w/ last patch)
+  #       id: upload-plots-patch
+  #       uses: google-github-actions/upload-cloud-storage@v2
+  #       with:
+  #         predefinedAcl: publicRead
+  #         project_id: ${{ steps.auth.outputs.project_id }}
+  #         path: /src/results
+  #         destination: cedana/release-${{ steps.get-tag.outputs.TAG }}
+  #         glob: "**/*.png"
 
-      - name: Generate summary (comparison w/ last patch)
-        id: summary-patch
-        env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/cedana/release-${{ steps.get-tag.outputs.TAG }}/results
-          RESULTS_TITLE: "cedana"
-          RESULTS_DESCRIPTION: "**${{ steps.get-tag.outputs.TAG }}** comparison w/ last patch"
-          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.get-tag.outputs.TAG }}
-        run: |
-          utils/results-summary > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
+  #     - name: Generate summary (comparison w/ last patch)
+  #       id: summary-patch
+  #       env:
+  #         RESULTS_BASE_URL: https://storage.googleapis.com/cedana/release-${{ steps.get-tag.outputs.TAG }}/results
+  #         RESULTS_TITLE: "cedana"
+  #         RESULTS_DESCRIPTION: "**${{ steps.get-tag.outputs.TAG }}** comparison w/ last patch"
+  #         RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.get-tag.outputs.TAG }}
+  #       run: |
+  #         utils/results-summary > $GITHUB_STEP_SUMMARY
+  #         echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
-      - name: Post summary (comparison w/ last patch)
-        if: ${{ !startsWith(github.event_name, 'workflow') || (inputs.post_summary) }}
-        id: slack-patch
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            ${{ steps.summary-patch.outputs.slack_summary }}
+  #     - name: Post summary (comparison w/ last patch)
+  #       if: ${{ !startsWith(github.event_name, 'workflow') || (inputs.post_summary) }}
+  #       id: slack-patch
+  #       uses: slackapi/slack-github-action@v1.26.0
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+  #         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+  #       with:
+  #         payload: |
+  #           ${{ steps.summary-patch.outputs.slack_summary }}
 
   post-summary:
     name: Post Summary
@@ -480,7 +481,7 @@ jobs:
         id: download
         with:
           tag: ${{ steps.tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
+          fileName: "*amd64.tar.gz"
           extract: true
           token: ${{ github.token }}
           out-file-path: current
@@ -490,7 +491,7 @@ jobs:
         id: download-previous
         with:
           tag: ${{ steps.previous-tag.outputs.tag }}
-          fileName: '*amd64.tar.gz'
+          fileName: "*amd64.tar.gz"
           extract: true
           token: ${{ github.token }}
           out-file-path: previous
@@ -498,10 +499,10 @@ jobs:
       - name: Generate summary
         id: summary
         env:
-          RELEASE_TITLE: 'cedana'
-          RELEASE_DESCRIPTION: '**${{ steps.tag.outputs.tag }}**'
+          RELEASE_TITLE: "cedana"
+          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: '${{ steps.release-info.outputs.description }}'
+          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
           TAG: ${{ steps.tag.outputs.tag }}
           BINARY: current/cedana
           PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
@@ -520,4 +521,3 @@ jobs:
         with:
           payload: |
             ${{ steps.summary.outputs.slack-summary }}
-

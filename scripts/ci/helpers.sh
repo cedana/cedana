@@ -18,17 +18,14 @@ APT_PACKAGES="wget git make curl libnl-3-dev libnet-dev \
 install_apt_packages() {
     apt-get update
     for pkg in $APT_PACKAGES; do
-        apt-get install -y $pkg || echo "failed to install $pkg"
+        apt-get install -y "$pkg" || echo "failed to install $pkg"
     done
 }
 
-install_code_server() {
-    curl -fsSL https://code-server.dev/install.sh | sh
-}
 
 install_bats_core() {
     git clone https://github.com/bats-core/bats-core.git
-    pushd bats-core
+    pushd bats-core || exit
     ./install.sh /usr/local
     popd && rm -rf bats-core
 }
@@ -47,12 +44,6 @@ install_docker() {
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
-install_sysbox() {
-    wget https://downloads.nestybox.com/sysbox/releases/v0.6.4/sysbox-ce_0.6.4-0.linux_amd64.deb
-    apt-get install -y jq
-    apt-get install -y ./sysbox-ce_0.6.4-0.linux_amd64.deb
-    rm -f sysbox-ce_0.6.4-0.linux_amd64.deb
-}
 
 install_buildah() {
     sudo apt-get update
@@ -113,7 +104,6 @@ setup_ci_build() {
 
 setup_ci() {
     setup_ci_build
-    install_code_server
     install_bats_core
 
     install_docker
@@ -124,8 +114,8 @@ setup_ci() {
 
     wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz && rm -rf /usr/local/go
     tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz && rm go1.22.0.linux-amd64.tar.gz
-    mkdir -p $HOME/.cedana
-    echo '{"client":{"leave_running":false, "task":""}, "connection":{"cedana_url": "https://ci.cedana.ai"}}' > $HOME/.cedana/client_config.json
+    mkdir -p "$HOME"/.cedana
+    echo '{"client":{"leave_running":false, "task":""}, "connection":{"cedana_url": "https://ci.cedana.ai"}}' > "$HOME"/.cedana/client_config.json
 
     # Set GOPATH and update PATH
     echo "export GOPATH=$HOME/go" >> /etc/environment
@@ -134,17 +124,14 @@ setup_ci() {
 
     # Install CRIU
     TAG=latest
-    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_CRIU/cedana/criu/raw/versions/$TAG/criu
+    curl -1sLf -O https://dl.cloudsmith.io/"$CLOUDSMITH_ENTITLEMENT_TOKEN"/cedana/criu/raw/versions/$TAG/criu
     chmod +x criu
     sudo cp criu /usr/local/sbin/
 
     # Install cedana-image-streamer
-    curl -1sLf -O https://dl.cloudsmith.io/$CLOUDSMITH_ENTITLEMENT_TOKEN_STREAMER/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
+    curl -1sLf -O https://dl.cloudsmith.io/"$CLOUDSMITH_ENTITLEMENT_TOKEN"/cedana/cedana-image-streamer/raw/versions/$TAG/cedana-image-streamer
     chmod +x cedana-image-streamer
     sudo cp cedana-image-streamer /usr/bin/
-
-    # Install smoke & bench deps
-    sudo pip3 install -r test/benchmarks/requirements
 }
 
 source_env() {

@@ -30,6 +30,7 @@ func (s *service) JobDump(ctx context.Context, args *task.JobDumpArgs) (*task.Jo
 			PID:      state.PID,
 			Dir:      args.Dir,
 			Stream:   args.Stream,
+			Bucket:   args.Bucket,
 			CriuOpts: args.CriuOpts,
 		})
 		if err != nil {
@@ -79,6 +80,7 @@ func (s *service) JobRestore(
 		restoreResp, err := s.Restore(ctx, &task.RestoreArgs{
 			JID:            args.JID,
 			Stream:         args.Stream,
+			Bucket:         args.Bucket,
 			CriuOpts:       args.CriuOpts,
 			CheckpointPath: args.CheckpointPath,
 		})
@@ -103,14 +105,16 @@ func (s *service) JobRestore(
 			// Use saved root if not overridden from args
 			opts.Root = state.ContainerRoot
 		}
+		if opts.ContainerID == "" {
+			opts.ContainerID = state.ContainerID
+		}
 		if args.CheckpointPath == "" {
 			args.CheckpointPath = state.CheckpointPath
 		}
 		restoreResp, err := s.RuncRestore(ctx, &task.RuncRestoreArgs{
-			ContainerID: state.ContainerID,
-			ImagePath:   args.CheckpointPath,
-			Opts:        opts,
-			CriuOpts:    args.CriuOpts,
+			ImagePath: args.CheckpointPath,
+			Opts:      opts,
+			CriuOpts:  args.CriuOpts,
 		})
 		if err != nil {
 			return nil, err

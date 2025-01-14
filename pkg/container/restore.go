@@ -141,7 +141,10 @@ func containerdRestore(id string, ref string) error {
 	return nil
 }
 
-func RuncRestore(imgPath string, containerId string, criuOpts *CriuOpts, opts *RuncOpts) error {
+// XXX: The passed in sleepingContainerId is the container id of the sleeping container, that is
+// instead used to restore the container. This is a hack that will no longer be needed once we have
+// our own custom shim C/R.
+func RuncRestore(imgPath string, sleepingContainerId string, criuOpts *CriuOpts, opts *RuncOpts) error {
 	var spec rspec.Spec
 
 	configPath := opts.Bundle + "/config.json"
@@ -186,7 +189,7 @@ func RuncRestore(imgPath string, containerId string, criuOpts *CriuOpts, opts *R
 
 	runcOpts := &RuncOpts{
 		Root:          opts.Root,
-		ContainerId:   containerId,
+		ContainerId:   sleepingContainerId,
 		Bundle:        opts.Bundle,
 		ConsoleSocket: opts.ConsoleSocket,
 		PidFile:       "",

@@ -47,4 +47,6 @@ const (
 	vmSnapshotFlag       = "vm-snapshot"
 	vmSocketPathFlag     = "vm-socket-path"
 	skipInFlightFlag     = "skip-in-flight"
+	bucketFlag           = "bucket"
+	remotingEnabledFlag  = "remote"
 )

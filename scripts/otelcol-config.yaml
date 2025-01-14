@@ -75,10 +75,6 @@ service:
       receivers: [prometheus, hostmetrics]
       processors: [batch]
       exporters: [otlp]
-    traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp]
     logs:
       receivers: [otlp, filelog/daemonlogs, filelog/gpulogs]
       processors: [batch]

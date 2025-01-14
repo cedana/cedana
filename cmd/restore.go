@@ -11,9 +11,9 @@ import (
 	"os/exec"
 	"time"
 
+	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/cedana/cedana/pkg/api"
 	"github.com/cedana/cedana/pkg/api/services"
-	task "buf.build/gen/go/cedana/task/protocolbuffers/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -53,16 +53,28 @@ var restoreProcessCmd = &cobra.Command{
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		bucket, _ := cmd.Flags().GetString(bucketFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+      var err error
+			if bucket != "" {
+				ctx, err = awsSetup(bucket, ctx, false)
+				if err != nil {
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 		restoreArgs := task.RestoreArgs{
 			CheckpointID:   "Not implemented",
 			CheckpointPath: path,
 			Stream:         stream,
+			Bucket:         bucket,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
 				TcpClose:       tcpClose,
@@ -102,15 +114,27 @@ var restoreJobCmd = &cobra.Command{
 		consoleSocket, err := cmd.Flags().GetString(consoleSocketFlag)
 		detach, err := cmd.Flags().GetBool(detachFlag)
 		img, err := cmd.Flags().GetString(imgFlag)
+		bucket, err := cmd.Flags().GetString(bucketFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+      var err error
+			if bucket != "" {
+				ctx, err = awsSetup(bucket, ctx, false)
+				if err != nil {
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 		restoreArgs := &task.JobRestoreArgs{
 			JID:            jid,
 			Stream:         stream,
+			Bucket:         bucket,
 			CheckpointPath: img,
 			CriuOpts: &task.CriuOpts{
 				TcpEstablished: tcpEstablished,
@@ -319,21 +343,22 @@ var runcRestoreCmd = &cobra.Command{
 		netPid, err := cmd.Flags().GetInt32(netPidFlag)
 		tcpEstablished, _ := cmd.Flags().GetBool(tcpEstablishedFlag)
 		tcpClose, _ := cmd.Flags().GetBool(tcpCloseFlag)
+		img, _ := cmd.Flags().GetString(imgFlag)
+		id, _ := cmd.Flags().GetString(idFlag)
+		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
+
 		opts := &task.RuncOpts{
 			Root:          getRuncRootPath(root),
 			Bundle:        bundle,
 			ConsoleSocket: consoleSocket,
 			Detach:        detach,
 			NetPid:        netPid,
+			ContainerID:   id,
 		}
 
-		img, _ := cmd.Flags().GetString(imgFlag)
-		id, _ := cmd.Flags().GetString(idFlag)
-		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		restoreArgs := &task.RuncRestoreArgs{
-			ImagePath:   img,
-			ContainerID: id,
-			Opts:        opts,
+			ImagePath: img,
+			Opts:      opts,
 			CriuOpts: &task.CriuOpts{
 				FileLocks:      fileLocks,
 				TcpEstablished: tcpEstablished,
@@ -362,13 +387,15 @@ func init() {
 	restoreCmd.AddCommand(restoreProcessCmd)
 	restoreProcessCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "restore with TCP connections closed")
-	restoreProcessCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
+	restoreProcessCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using cedana-image-streamer")
+	restoreProcessCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream from")
 
 	// Job
 	restoreCmd.AddCommand(restoreJobCmd)
 	restoreJobCmd.Flags().BoolP(tcpEstablishedFlag, "t", false, "restore with TCP connections established")
 	restoreJobCmd.Flags().BoolP(tcpCloseFlag, "", false, "restore with TCP connections closed")
-	restoreJobCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using criu-image-streamer")
+	restoreJobCmd.Flags().Int32P(streamFlag, "s", 0, "restore images using cedana-image-streamer")
+	restoreJobCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream from")
 	restoreJobCmd.Flags().BoolP(attachFlag, "a", false, "attach stdin/stdout/stderr")
 	restoreJobCmd.Flags().StringP(bundleFlag, "b", "", "(runc) bundle path")
 	restoreJobCmd.Flags().StringP(consoleSocketFlag, "c", "", "(runc) console socket path")

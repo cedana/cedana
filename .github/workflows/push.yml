@@ -8,7 +8,7 @@ on:
     inputs:
       debug_test:
         type: boolean
-        description: 'Run tests with debugging enabled'
+        description: "Run tests with debugging enabled"
         required: false
         default: false
 
@@ -21,10 +21,10 @@ jobs:
     name: Test
     uses: ./.github/workflows/pr.yml
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
-      pull-requests: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
     with:
       debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -33,3 +33,4 @@ jobs:
       skip_bench: true
       skip_shellcheck: true
       skip_helper_image_push: true
+    secrets: inherit
