@@ -25,7 +25,7 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/bin/build-start-daemon.sh /host/cedana/scripts/build-start-daemon.sh
 cp /usr/local/bin/setup-host.sh /host/cedana/scripts/setup-host.sh
 cp /usr/local/bin/reset.sh /host/cedana/scripts/reset.sh
-cp /usr/local/bin/setup_aws_env.sh /host/cedana/setup_aws_env.sh
+cp /usr/local/bin/setup_aws_env.sh /host/cedana/scripts/setup_aws_env.sh
 
 
 cp /usr/local/bin/buildah /host/cedana/bin/buildah
