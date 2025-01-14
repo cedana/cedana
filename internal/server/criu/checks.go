@@ -107,11 +107,9 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 			if err == nil {
 				component.Data = "available"
 			} else {
+				component.Data = "unavailable"
 				if len(component.Errors) == 0 {
-					component.Data = "available"
-					component.Warnings = append(component.Warnings, "Not ideal, but no red flags either")
-				} else {
-					component.Data = "unavailable"
+					component.Errors = append(component.Errors, fmt.Sprintf("Failed to run check: %s", strings.TrimSpace(out)))
 				}
 			}
 

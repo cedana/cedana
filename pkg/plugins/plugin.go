@@ -125,8 +125,7 @@ func (p *Plugin) SyncInstalled() {
 		}
 		found += 1
 		size += s.Size()
-		sum, _ := utils.FileMD5Sum(path)
-		p.Libraries[i].Checksum = string(sum)
+		p.Libraries[i].Checksum, _ = utils.FileMD5Sum(path)
 	}
 	if found < len(p.Libraries) {
 		return
@@ -140,8 +139,7 @@ func (p *Plugin) SyncInstalled() {
 		}
 		found += 1
 		size += s.Size()
-		sum, _ := utils.FileMD5Sum(path)
-		p.Binaries[i].Checksum = string(sum)
+		p.Binaries[i].Checksum, _ = utils.FileMD5Sum(path)
 	}
 	if found < len(p.Binaries) {
 		return

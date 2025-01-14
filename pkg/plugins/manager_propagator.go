@@ -34,7 +34,7 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	os.MkdirAll(downloadDir, 0755)
 
 	localManager := NewLocalManager()
-	localManager.searchPath = fmt.Sprintf("%s:%s", localManager.searchPath, downloadDir)
+	localManager.searchPath = fmt.Sprintf("%s:%s", downloadDir, localManager.searchPath)
 
 	// Add the temp download directory to its search path
 
@@ -86,11 +86,13 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 							list[i].Size = onlineList[j].Size
 							list[i].PublishedAt = onlineList[j].PublishedAt
 
-							if list[i].Status == Installed {
+							if list[i].Status == Installed || list[i].Status == Outdated {
 								if list[i].Checksum() != onlineList[j].Checksum() {
 									list[i].Status = Outdated
+								} else {
+									list[i].Status = Installed
 								}
-							} else {
+							} else if list[i].Status == Unknown {
 								list[i].Status = Available
 							}
 						}

@@ -100,11 +100,13 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.LatestVersion = "local"
-			if p.Status == Installed {
+			if p.Status == Installed || p.Status == Outdated {
 				if p.Checksum() != totalSum {
 					p.Status = Outdated
+				} else {
+					p.Status = Installed
 				}
-			} else {
+			} else if p.Status == Unknown {
 				p.Status = Available
 			}
 			if p.Size == 0 {
@@ -129,7 +131,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 		defer close(errs)
 		defer close(msgs)
 
-		list, err := m.List(false)
+		list, err := m.List(true, names...)
 		if err != nil {
 			errs <- fmt.Errorf("Failed to list plugins: %w", err)
 			return

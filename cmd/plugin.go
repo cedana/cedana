@@ -200,7 +200,9 @@ var pluginRemoveCmd = &cobra.Command{
 			}
 			args = []string{}
 			for _, p := range list {
-				args = append(args, p.Name)
+				if p.Status == plugins.Installed {
+					args = append(args, p.Name)
+				}
 			}
 		} else if len(args) == 0 {
 			return fmt.Errorf("specify at least one plugin to remove or use --all")
