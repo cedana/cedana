@@ -58,7 +58,7 @@ for arg in "$@"; do
         CEDANA_JOB_SERVICE=true
         $SUDO_USE -E /cedana/scripts/setup_aws_env.sh
     else
-        $SUDO_USE -E  setup_aws_env.sh
+        $SUDO_USE -E  bash setup_aws_env.sh
     fi
 done
 
