@@ -81,7 +81,7 @@ func ValidPIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, 
 func ValidPlugins(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	manager := plugins.NewLocalManager()
 
-	list, err := manager.List()
+	list, err := manager.List(false)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

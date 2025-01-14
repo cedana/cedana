@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/xeonx/timeago"
+
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
@@ -164,7 +166,7 @@ var listJobCmd = &cobra.Command{
 				timeList = append(timeList, "")
 				sizeList = append(sizeList, "")
 			} else {
-				latestTime := utils.TimeAgo(time.UnixMilli(checkpoint.GetTime()))
+				latestTime := timeago.NoMax(timeago.English).Format(time.UnixMilli(checkpoint.GetTime()))
 				latestSize := utils.SizeStr(checkpoint.GetSize())
 				timeList = append(timeList, latestTime)
 				sizeList = append(sizeList, latestSize)

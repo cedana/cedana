@@ -46,10 +46,14 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	}
 }
 
-func (m *PropagatorManager) List(status ...Status) ([]Plugin, error) {
-	list, err := m.LocalManager.List(status...)
+func (m *PropagatorManager) List(latest bool, status ...Status) ([]Plugin, error) {
+	list, err := m.LocalManager.List(latest, status...)
 	if err != nil {
 		return nil, err
+	}
+
+	if !latest {
+		return list, nil
 	}
 
 	// Now update this information using the propagator service
@@ -80,6 +84,7 @@ func (m *PropagatorManager) List(status ...Status) ([]Plugin, error) {
 						if list[i].Name == onlineList[j].Name {
 							list[i].LatestVersion = onlineList[j].LatestVersion
 							list[i].Size = onlineList[j].Size
+							list[i].PublishedAt = onlineList[j].PublishedAt
 
 							if list[i].Status == Installed {
 								if list[i].Checksum() != onlineList[j].Checksum() {
@@ -109,7 +114,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 	errs := make(chan error)
 	msgs := make(chan string)
 
-	list, err := m.List()
+	list, err := m.List(true)
 	if err != nil {
 		errs <- fmt.Errorf("Failed to list plugins: %w", err)
 		return installed, msgs, errs

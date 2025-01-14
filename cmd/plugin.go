@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
+	"github.com/xeonx/timeago"
 )
 
 func init() {
@@ -23,8 +24,6 @@ func init() {
 	pluginCmd.AddCommand(pluginFeaturesCmd)
 
 	// Subcommand flags
-	pluginListCmd.Flags().
-		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "List all available plugins")
 	pluginRemoveCmd.Flags().
 		BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "Remove all installed plugins")
 	pluginFeaturesCmd.Flags().
@@ -64,24 +63,13 @@ var pluginListCmd = &cobra.Command{
 			return fmt.Errorf("failed to get plugin manager")
 		}
 
-		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
-
-		var status []plugins.Status
-		if !all {
-			status = []plugins.Status{plugins.Installed, plugins.Available, plugins.Outdated}
-		}
-
-		list, err := manager.List(status...)
+		list, err := manager.List(true)
 		if err != nil {
 			return err
 		}
 
 		if len(list) == 0 {
-			if all {
-				fmt.Println("No plugins available")
-			} else {
-				fmt.Println("No plugins installed")
-			}
+			fmt.Println("No plugins to show")
 			return nil
 		}
 		tableWriter := table.NewWriter()
@@ -111,7 +99,7 @@ var pluginListCmd = &cobra.Command{
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,
-				utils.TimeAgo(p.PublishedAt),
+				timeago.NoMax(timeago.English).Format(p.PublishedAt),
 			}
 			tableWriter.AppendRow(row)
 		}
@@ -121,7 +109,7 @@ var pluginListCmd = &cobra.Command{
 		installedCount := 0
 		availableCount := 0
 		for _, p := range list {
-			if p.Status == plugins.Installed {
+			if p.Status == plugins.Installed || p.Status == plugins.Outdated {
 				installedCount++
 			} else if p.Status == plugins.Available {
 				availableCount++
@@ -206,7 +194,7 @@ var pluginRemoveCmd = &cobra.Command{
 
 		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 		if all {
-			list, err := manager.List(plugins.Installed)
+			list, err := manager.List(false, plugins.Installed, plugins.Outdated)
 			if err != nil {
 				return err
 			}
@@ -267,7 +255,7 @@ var pluginFeaturesCmd = &cobra.Command{
 			return fmt.Errorf("failed to get plugin manager")
 		}
 
-		list, err := manager.List()
+		list, err := manager.List(false)
 		if err != nil {
 			return err
 		}

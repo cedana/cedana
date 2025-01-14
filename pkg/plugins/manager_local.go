@@ -51,15 +51,19 @@ func (m *LocalManager) IsInstalled(name string) bool {
 
 // List returns a list of plugins that are available.
 // If statuses are provided, only plugins with those statuses are returned.
-func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
+func (m *LocalManager) List(latest bool, filter ...Status) (list []Plugin, err error) {
 	list = make([]Plugin, 0)
 
 	set := make(map[Status]any)
-	for _, s := range status {
+	for _, s := range filter {
 		set[s] = nil
 	}
 
 	for _, p := range Registry {
+		if p.Type == Unimplemented {
+			continue
+		}
+
 		p.SyncInstalled()
 
 		// search if plugin files available in search path
@@ -121,7 +125,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 		defer close(errs)
 		defer close(msgs)
 
-		list, err := m.List()
+		list, err := m.List(false)
 		if err != nil {
 			errs <- fmt.Errorf("Failed to list plugins: %w", err)
 			return
@@ -209,7 +213,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 		defer close(errs)
 		defer close(msgs)
 
-		list, err := m.List()
+		list, err := m.List(false)
 		if err != nil {
 			errs <- fmt.Errorf("Failed to list plugins: %w", err)
 			return
