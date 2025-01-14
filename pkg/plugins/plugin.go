@@ -146,7 +146,6 @@ func (p *Plugin) SyncInstalled() {
 	if found < len(p.Binaries) {
 		return
 	}
-
 	p.Status = Installed
 	p.Size = size
 	p.SyncVersion()

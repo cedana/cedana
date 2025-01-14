@@ -194,7 +194,7 @@ var pluginRemoveCmd = &cobra.Command{
 
 		all, _ := cmd.Flags().GetBool(flags.AllFlag.Full)
 		if all {
-			list, err := manager.List(false, plugins.Installed, plugins.Outdated)
+			list, err := manager.List(false)
 			if err != nil {
 				return err
 			}

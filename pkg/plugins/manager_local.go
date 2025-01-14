@@ -50,17 +50,20 @@ func (m *LocalManager) IsInstalled(name string) bool {
 }
 
 // List returns a list of plugins that are available.
-// If statuses are provided, only plugins with those statuses are returned.
-func (m *LocalManager) List(latest bool, filter ...Status) (list []Plugin, err error) {
+// If filter is provided, only plugins with the specified names are returned.
+func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err error) {
 	list = make([]Plugin, 0)
 
-	set := make(map[Status]any)
+	set := make(map[string]any)
 	for _, s := range filter {
 		set[s] = nil
 	}
 
 	for _, p := range Registry {
 		if p.Type == Unimplemented {
+			continue
+		}
+		if _, ok := set[p.Name]; len(set) > 0 && !ok {
 			continue
 		}
 
@@ -79,7 +82,7 @@ func (m *LocalManager) List(latest bool, filter ...Status) (list []Plugin, err e
 		files := append(p.Libraries, p.Binaries...)
 		totalSum := ""
 		for _, file := range files {
-			for _, path := range strings.Split(searchPath, ":") {
+			for _, path := range strings.Split(m.searchPath, ":") {
 				var stat os.FileInfo
 				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil {
 					continue
@@ -108,10 +111,6 @@ func (m *LocalManager) List(latest bool, filter ...Status) (list []Plugin, err e
 				p.Size = size
 			}
 			p.PublishedAt = plublishedAt
-		}
-
-		if _, ok := set[p.Status]; len(set) > 0 && !ok {
-			continue
 		}
 
 		list = append(list, p)

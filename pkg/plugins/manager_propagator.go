@@ -46,8 +46,8 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	}
 }
 
-func (m *PropagatorManager) List(latest bool, status ...Status) ([]Plugin, error) {
-	list, err := m.LocalManager.List(latest, status...)
+func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error) {
+	list, err := m.LocalManager.List(latest, filter...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 	errs := make(chan error)
 	msgs := make(chan string)
 
-	list, err := m.List(true)
+	list, err := m.List(true, names...)
 	if err != nil {
 		errs <- fmt.Errorf("Failed to list plugins: %w", err)
 		return installed, msgs, errs
@@ -149,7 +149,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
 				for _, binary := range plugin.Binaries {
-					err := m.downloadBinary(binary.Name, BINARY_PERMS)
+					err := m.downloadBinary(binary.Name, plugin.LatestVersion, BINARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
@@ -158,7 +158,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				}
 
 				for _, library := range plugin.Libraries {
-					err := m.downloadBinary(library.Name, LIBRARY_PERMS)
+					err := m.downloadBinary(library.Name, plugin.LatestVersion, LIBRARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
@@ -207,8 +207,11 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 //// Helper Methods ////
 ////////////////////////
 
-func (m *PropagatorManager) downloadBinary(binary string, perms os.FileMode) error {
-	url := fmt.Sprintf("%s/plugins/%s", m.URL, binary)
+func (m *PropagatorManager) downloadBinary(binary string, version string, perms os.FileMode) error {
+	if version == "" {
+		version = "latest"
+	}
+	url := fmt.Sprintf("%s/download/%s/%s", m.URL, binary, version)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("Failed to build request for %s: %v", binary, err)

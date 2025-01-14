@@ -6,7 +6,7 @@ import "fmt"
 
 type Manager interface {
 	// List all plugins
-	List(latest bool, filter ...Status) ([]Plugin, error)
+	List(latest bool, filter ...string) ([]Plugin, error)
 
 	// Install a list of plugins
 	Install(names []string) (installed chan int, msgs chan string, errs chan error)
