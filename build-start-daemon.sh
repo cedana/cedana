@@ -25,7 +25,6 @@ CEDANA_REMOTING_ENABLED=${CEDANA_REMOTING_ENABLED:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
-$SUDO_USE -E bash setup_aws_env.sh
 
 # Check for --systemctl flag
 for arg in "$@"; do
@@ -57,6 +56,9 @@ for arg in "$@"; do
         echo "k8s enabled, adding flags for running in k8s.."
         CEDANA_METRICS_ENABLED=true
         CEDANA_JOB_SERVICE=true
+        $SUDO_USE -E /cedana/scripts/setup_aws_env.sh
+    else
+        $SUDO_USE -E  setup_aws_env.sh
     fi
 done
 
