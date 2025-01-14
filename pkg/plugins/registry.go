@@ -10,7 +10,7 @@ var Registry = []Plugin{
 	{
 		Name:     "criu",
 		Type:     External,
-		Binaries: []string{"criu"},
+		Binaries: []Binary{{Name: "criu"}},
 	},
 	// TODO: can add hypervisor C/R tools
 
@@ -18,47 +18,46 @@ var Registry = []Plugin{
 	{
 		Name:      "runc",
 		Type:      Supported,
-		Libraries: []string{"libcedana-runc.so"},
+		Libraries: []Binary{{Name: "libcedana-runc.so"}},
 	},
 	{
 		Name:      "containerd",
 		Type:      Supported,
-		Libraries: []string{"libcedana-containerd.so"},
+		Libraries: []Binary{{Name: "libcedana-containerd.so"}},
 	},
 	{
 		Name:      "crio",
 		Type:      Supported,
-		Libraries: []string{"libcedana-crio.so"},
+		Libraries: []Binary{{Name: "libcedana-crio.so"}},
 	},
 	{
 		Name:      "kata",
-		Libraries: []string{"libcedana-kata.so"},
+		Libraries: []Binary{{Name: "libcedana-kata.so"}},
 	},
 
 	// Checkpoint inspection
 	{
 		Name: "inspector",
 		// Type:      Supported,
-		Libraries: []string{"libcedana-inspector.so"},
+		Libraries: []Binary{{Name: "libcedana-inspector.so"}},
 	},
 
 	// Others
 	{
 		Name:      "gpu",
 		Type:      External,
-		Libraries: []string{"libcedana-gpu.so"},
-		Binaries:  []string{"cedana-gpu-controller"},
+		Libraries: []Binary{{Name: "libcedana-gpu.so"}},
+		Binaries:  []Binary{{Name: "cedana-gpu-controller"}},
 	},
 	{
-		Name:      "streamer",
-		Type:      External,
-		Libraries: []string{"libcedana-streamer.so"},
-		Binaries:  []string{"cedana-image-streamer"},
+		Name:     "streamer",
+		Type:     External,
+		Binaries: []Binary{{Name: "cedana-image-streamer"}},
 	},
 	{
 		Name:      "k8s",
 		Type:      Supported,
-		Libraries: []string{"libcedana-k8s.so"},
-		Binaries:  []string{}, // TODO: add containerd shim binary
+		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
+		Binaries:  []Binary{}, // TODO: add containerd shim binary
 	},
 }

@@ -3,7 +3,6 @@ package plugins
 // Defines the plugin type
 
 import (
-	"crypto/md5"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,11 +41,15 @@ type Plugin struct {
 	Status        Status    `json:"status"`
 	Version       string    `json:"version"`
 	LatestVersion string    `json:"latest_version"`
-	Libraries     []string  `json:"libraries"`
-	Binaries      []string  `json:"binaries"`
-	Size          int64     `json:"size"`     // in bytes
-	Checksum      string    `json:"checksum"` // MD5
+	Libraries     []Binary  `json:"libraries"`
+	Binaries      []Binary  `json:"binaries"`
+	Size          int64     `json:"size"` // in bytes
 	PublishedAt   time.Time `json:"published_at"`
+}
+
+type Binary struct {
+	Name     string `json:"name"`
+	Checksum string `json:"checksum"` // MD5
 }
 
 /////////////////
@@ -74,6 +77,8 @@ func (s Status) String() string {
 		return "available"
 	case Installed:
 		return "installed"
+	case Outdated:
+		return "outdated"
 	default:
 		return "unknown"
 	}
@@ -93,7 +98,8 @@ func (p *Plugin) SyncVersion() {
 			break
 		}
 		binary := p.Binaries[0]
-		cmd := exec.Command(binary, "--version")
+		cmd := exec.Command(binary.Name, "--version")
+		cmd.Env = append(os.Environ(), "PATH="+BinDir+":"+os.Getenv("PATH"))
 		if out, err := cmd.Output(); err == nil {
 			version = strings.TrimSpace(string(out))
 		} else {
@@ -111,36 +117,36 @@ func (p *Plugin) SyncInstalled() {
 	var s os.FileInfo
 	found := 0
 	size := int64(0)
-	hash := md5.New()
-	for _, file := range p.Libraries {
-		path := filepath.Join(LibDir, file)
+	for i, file := range p.Libraries {
+		path := filepath.Join(LibDir, file.Name)
 		if s, err = os.Stat(path); err != nil {
 			continue
 		}
 		found += 1
 		size += s.Size()
-		hash, _ = utils.FileMD5Sum(hash, path)
+		sum, _ := utils.FileMD5Sum(path)
+		p.Libraries[i].Checksum = string(sum)
 	}
 	if found < len(p.Libraries) {
 		return
 	}
 
 	found = 0
-	for _, file := range p.Binaries {
-		path := filepath.Join(BinDir, file)
+	for i, file := range p.Binaries {
+		path := filepath.Join(BinDir, file.Name)
 		if s, err = os.Stat(path); err != nil {
 			continue
 		}
 		found += 1
 		size += s.Size()
-		hash, _ = utils.FileMD5Sum(hash, path)
+		sum, _ := utils.FileMD5Sum(path)
+		p.Binaries[i].Checksum = string(sum)
 	}
 	if found < len(p.Binaries) {
 		return
 	}
 	p.Status = Installed
 	p.Size = size
-	p.Checksum = string(hash.Sum(nil))
 	p.SyncVersion()
 }
 
@@ -148,7 +154,7 @@ func (p *Plugin) SyncInstalled() {
 func (p *Plugin) BinaryPaths() []string {
 	paths := make([]string, len(p.Binaries))
 	for i, bin := range p.Binaries {
-		paths[i] = filepath.Join(BinDir, bin)
+		paths[i] = filepath.Join(BinDir, bin.Name)
 	}
 	return paths
 }
@@ -157,7 +163,19 @@ func (p *Plugin) BinaryPaths() []string {
 func (p *Plugin) LibraryPaths() []string {
 	paths := make([]string, len(p.Libraries))
 	for i, lib := range p.Libraries {
-		paths[i] = filepath.Join(LibDir, lib)
+		paths[i] = filepath.Join(LibDir, lib.Name)
 	}
 	return paths
+}
+
+// Checksum returns the concatenated checksum of all libraries and binaries
+func (p *Plugin) Checksum() string {
+	total := ""
+	for _, lib := range p.Libraries {
+		total += lib.Checksum
+	}
+	for _, bin := range p.Binaries {
+		total += bin.Checksum
+	}
+	return total
 }

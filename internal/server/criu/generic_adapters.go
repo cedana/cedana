@@ -32,7 +32,7 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 					return nil, status.Error(codes.FailedPrecondition, "Please install CRIU plugin, or specify path in config or env var.")
 				}
 			} else {
-				criuInstance.SetCriuPath(p.Binaries[0])
+				criuInstance.SetCriuPath(p.Binaries[0].Name)
 			}
 
 			server.CRIU = criuInstance

@@ -81,10 +81,12 @@ func (m *PropagatorManager) List(status ...Status) ([]Plugin, error) {
 							list[i].LatestVersion = onlineList[j].LatestVersion
 							list[i].Size = onlineList[j].Size
 
-							if list[i].Status != Installed {
+							if list[i].Status == Installed {
+								if list[i].Checksum() != onlineList[j].Checksum() {
+									list[i].Status = Outdated
+								}
+							} else {
 								list[i].Status = Available
-							} else if list[i].Checksum != onlineList[j].Checksum {
-								list[i].Status = Outdated
 							}
 						}
 					}
@@ -142,7 +144,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
 				for _, binary := range plugin.Binaries {
-					err := m.downloadBinary(binary, BINARY_PERMS)
+					err := m.downloadBinary(binary.Name, BINARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
@@ -151,7 +153,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				}
 
 				for _, library := range plugin.Libraries {
-					err := m.downloadBinary(library, LIBRARY_PERMS)
+					err := m.downloadBinary(library.Name, LIBRARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)

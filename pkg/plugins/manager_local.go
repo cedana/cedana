@@ -3,7 +3,6 @@ package plugins
 // Implements a local plugin manager that searches for installable plugins from local paths.
 
 import (
-	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,18 +68,19 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		size := int64(0)
 		var plublishedAt time.Time
 		files := append(p.Libraries, p.Binaries...)
-		hash := md5.New()
+		totalSum := ""
 		for _, file := range files {
 			for _, path := range strings.Split(searchPath, ":") {
 				var stat os.FileInfo
-				if stat, err = os.Stat(filepath.Join(path, file)); err != nil {
+				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil {
 					continue
 				}
 				dir = path
 				found += 1
 				size += stat.Size()
 				plublishedAt = stat.ModTime()
-				hash, _ = utils.FileMD5Sum(hash, filepath.Join(path, file))
+				sum, _ := utils.FileMD5Sum(filepath.Join(path, file.Name))
+				totalSum += string(sum)
 				break
 			}
 		}
@@ -88,10 +88,12 @@ func (m *LocalManager) List(status ...Status) (list []Plugin, err error) {
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.LatestVersion = "local"
-			if p.Status != Installed {
+			if p.Status == Installed {
+				if p.Checksum() != totalSum {
+					p.Status = Outdated
+				}
+			} else {
 				p.Status = Available
-			} else if p.Checksum != string(hash.Sum(nil)) {
-				p.Status = Outdated
 			}
 			if p.Size == 0 {
 				p.Size = size
@@ -155,8 +157,8 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			srcDir := m.srcDir[name]
 			var err error
 			for _, file := range plugin.Libraries {
-				src := filepath.Join(srcDir, file)
-				dest := filepath.Join(LibDir, file)
+				src := filepath.Join(srcDir, file.Name)
+				dest := filepath.Join(LibDir, file.Name)
 				if _, e := os.Stat(src); os.IsNotExist(e) {
 					err = fmt.Errorf("No local plugin found")
 					break
@@ -168,8 +170,8 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				}
 			}
 			for _, file := range plugin.Binaries {
-				src := filepath.Join(srcDir, file)
-				dest := filepath.Join(BinDir, file)
+				src := filepath.Join(srcDir, file.Name)
+				dest := filepath.Join(BinDir, file.Name)
 				if _, e := os.Stat(src); os.IsNotExist(e) {
 					err = fmt.Errorf("No local plugin found")
 					break
@@ -238,14 +240,14 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 
 			// Remove the plugin files from the installation directory
 			for _, file := range plugin.Libraries {
-				dest := filepath.Join(LibDir, file)
+				dest := filepath.Join(LibDir, file.Name)
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
 				}
 			}
 			for _, file := range plugin.Binaries {
-				dest := filepath.Join(BinDir, file)
+				dest := filepath.Join(BinDir, file.Name)
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
