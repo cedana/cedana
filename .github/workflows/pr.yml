@@ -163,11 +163,11 @@ jobs:
           name: build
       - name: Run k8s setup host
         run: |
-          chmod +x ./cedana
-          cp ./cedana /usr/local/bin/
-          mkdir -p /cedana/scripts
-          cp -r ./scripts/* /cedana/scripts/
-          /cedana/scripts/k8s-setup-host.sh
+          sudo -E chmod +x ./cedana
+          sudo -E cp ./cedana /usr/local/bin/
+          sudo -E mkdir -p /cedana/scripts
+          sudo -E cp -r ./scripts/* /cedana/scripts/
+          sudo -E /cedana/scripts/k8s-setup-host.sh
 
   unit-test:
     name: Unit Tests
