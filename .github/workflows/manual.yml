@@ -2,27 +2,27 @@ name: Manual
 
 on:
   workflow_dispatch:
-      inputs:
-        bench:
-          type: boolean
-          description: 'Run the benchmark'
-          required: false
-          default: false
-        push_results:
-          type: boolean
-          description: 'Push the results to database'
-          required: false
-          default: false
-        debug_build:
-          type: boolean
-          description: 'Run the build with debugging enabled'
-          required: false
-          default: false
-        debug_bench:
-          type: boolean
-          description: 'Run the benchmark with debugging enabled'
-          required: false
-          default: false
+    inputs:
+      bench:
+        type: boolean
+        description: "Run the benchmark"
+        required: false
+        default: false
+      push_results:
+        type: boolean
+        description: "Push the results to database"
+        required: false
+        default: false
+      debug_build:
+        type: boolean
+        description: "Run the build with debugging enabled"
+        required: false
+        default: false
+      debug_bench:
+        type: boolean
+        description: "Run the benchmark with debugging enabled"
+        required: false
+        default: false
 
 concurrency:
   group: manual-${{ github.ref }}
@@ -40,12 +40,12 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22'
+          go-version: "1.22"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -70,15 +70,15 @@ jobs:
     if: github.event.inputs.bench == 'true'
     needs: build
     permissions:
-      contents: 'read'
-      packages: 'read'
-      id-token: 'write'
+      contents: "read"
+      packages: "read"
+      id-token: "write"
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-bench:ubuntu
       credentials:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged
     defaults:
       run:
@@ -96,7 +96,7 @@ jobs:
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         env:
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_POOL_PROVIDER }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_BENCHMARK_WORKLOAD_IDENTITY_PROVIDER }}
           SERVICE_ACCOUNT: ${{ vars.GCLOUD_BENCHMARK_SERVICE_ACCOUNT }}
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: Run
         env:
-          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN_BENCH }}
+          CLOUDSMITH_CEDANA_BENCH_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           CMD: ${{ vars.BENCH_RUN_CMD_RELEASE }}
         run: $CMD
@@ -171,7 +171,7 @@ jobs:
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
           destination: cedana/bench-${{ github.ref }}
-          glob: '**/*.png'
+          glob: "**/*.png"
 
       - name: Generate summary
         if: always()

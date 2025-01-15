@@ -61,6 +61,7 @@ var dumpProcessCmd = &cobra.Command{
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(skipInFlightFlag)
 		leaveRunning, _ := cmd.Flags().GetBool(leaveRunningFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		bucket, _ := cmd.Flags().GetString(bucketFlag)
 		networkLock, _ := cmd.Flags().GetString(networkLockFlag)
 
 		log.Info().Msgf("cmd/dump networkLock = %s", networkLock)
@@ -69,17 +70,27 @@ var dumpProcessCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info().Msgf("cmd/dump stream = %d", stream)
+
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+			if bucket != "" {
+				ctx, err = awsSetup(bucket, ctx, true)
+				if err != nil {
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 		cpuDumpArgs := task.DumpArgs{
 			PID:    int32(pid),
 			Dir:    dir,
 			Stream: stream,
+			Bucket: bucket,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:    leaveRunning,
 				TcpEstablished:  tcpEstablished,
@@ -214,11 +225,22 @@ var dumpJobCmd = &cobra.Command{
 		fileLocks, _ := cmd.Flags().GetBool(fileLocksFlag)
 		external, _ := cmd.Flags().GetString(externalFlag)
 		stream, _ := cmd.Flags().GetInt32(streamFlag)
+		bucket, _ := cmd.Flags().GetString(bucketFlag)
 		if stream > 0 {
 			if _, err := exec.LookPath("cedana-image-streamer"); err != nil {
 				log.Error().Msgf("Cannot find cedana-image-streamer in PATH")
 				return err
 			}
+			var err error
+			if bucket != "" {
+				ctx, err = awsSetup(bucket, ctx, true)
+				if err != nil {
+					log.Error().Msgf("Error setting up AWS bucket for direct remoting")
+					return err
+				}
+			}
+		} else if bucket != "" {
+			return fmt.Errorf("Dump to AWS S3 bucket only possible with --stream")
 		}
 
 		var externalNamespaces []string
@@ -238,6 +260,7 @@ var dumpJobCmd = &cobra.Command{
 			JID:    id,
 			Dir:    dir,
 			Stream: stream,
+			Bucket: bucket,
 			CriuOpts: &task.CriuOpts{
 				LeaveRunning:    leaveRunning,
 				TcpEstablished:  tcpEstablished,
@@ -517,6 +540,7 @@ func init() {
 	dumpProcessCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
 	dumpProcessCmd.Flags().StringP(networkLockFlag, "", "", "network locking/unlocking method")
 	dumpProcessCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
+	dumpProcessCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream to")
 	dumpProcessCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpProcessCmd.Flags().Bool(skipInFlightFlag, false, "skip in-flight TCP connections")
 
@@ -527,6 +551,7 @@ func init() {
 	dumpJobCmd.Flags().BoolP(tcpCloseFlag, "", false, "tcp close")
 	dumpJobCmd.Flags().StringP(networkLockFlag, "", "", "network locking/unlocking method")
 	dumpJobCmd.Flags().Int32P(streamFlag, "s", 0, "dump images using criu-image-streamer")
+	dumpJobCmd.Flags().StringP(bucketFlag, "", "", "AWS S3 bucket to stream to")
 	dumpJobCmd.Flags().Bool(leaveRunningFlag, false, "leave running")
 	dumpJobCmd.Flags().Bool(fileLocksFlag, false, "dump file locks")
 	dumpJobCmd.Flags().StringP(externalFlag, "e", "", "external namespaces")

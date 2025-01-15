@@ -9,7 +9,7 @@ setup_file() {
 
 setup() {
     # assuming WD is the root of the project
-    start_cedana
+    start_cedana --remote
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
@@ -379,5 +379,20 @@ teardown() {
     checkpoint_task $job_id /tmp --stream 4
     sleep 1 3>-
     run restore_task $job_id --stream 4
+    [[ "$status" -eq 0 ]]
+}
+
+@test "Dump + restore workload with direct remoting" {
+    local task="./workload.sh"
+    local job_id="workload-remoting-1"
+    local bucket="direct-remoting"
+    rm -rf /test
+
+    # execute, checkpoint, and restore with direct remoting
+    exec_task $task $job_id
+    sleep 1 3>-
+    checkpoint_task $job_id /test --stream 4 --bucket $bucket
+    sleep 1 3>-
+    run restore_task $job_id --stream 4 --bucket $bucket
     [[ "$status" -eq 0 ]]
 }

@@ -46,4 +46,6 @@ const (
 	modeFlag             = "mode"
 	skipInFlightFlag     = "skip-in-flight"
 	networkLockFlag      = "network-lock"
+	bucketFlag           = "bucket"
+	remotingEnabledFlag  = "remote"
 )
