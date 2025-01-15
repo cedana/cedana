@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -34,6 +35,9 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			req.Type = job.GetType()
 			resp.State = job.GetState()
+			if req.Name == "" {
+				req.Name = fmt.Sprintf("dump-%s-%s", req.Type, jid)
+			}
 
 			// Use saved job details, but allow overriding from request
 			mergedDetails := proto.Clone(job.GetDetails()).(*daemon.Details)

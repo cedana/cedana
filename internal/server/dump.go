@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -60,7 +61,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		return nil, err
 	}
 
-	if !req.External {
+	if utils.PathExists(resp.Path) {
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
 	}

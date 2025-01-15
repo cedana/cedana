@@ -47,7 +47,6 @@ var DumpCmd = &cobra.Command{
 			Namespace:  namespace,
 			RootfsOnly: rootfsOnly,
 		}}
-		req.External = rootfsOnly
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

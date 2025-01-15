@@ -294,3 +294,8 @@ func CopyFile(src, dest string) error {
 
 	return nil
 }
+
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}

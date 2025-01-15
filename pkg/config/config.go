@@ -13,7 +13,7 @@ import (
 const (
 	DIR_NAME   = ".cedana"
 	FILE_NAME  = "config"
-	FILE_TYPE  = "json"
+	FILE_TYPE  = "yaml"
 	DIR_PERM   = 0o755
 	FILE_PERM  = 0o644
 	ENV_PREFIX = "CEDANA"
@@ -39,7 +39,7 @@ var Global Config = Config{
 	// Use above constants for default address for each protocol.
 	Protocol: DEFAULT_PROTOCOL,
 	LogLevel: DEFAULT_LOG_LEVEL,
-	Checkpoints: Checkpoints{
+	Checkpoint: Checkpoint{
 		Dir:         DEFAULT_DUMP_DIR,
 		Compression: DEFAULT_COMPRESSION,
 	},

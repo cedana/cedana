@@ -2,10 +2,8 @@ package filesystem
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -34,13 +32,9 @@ const (
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
 func PrepareDumpDir(next types.Dump) types.Dump {
 	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
-		if req.External { // if dump is managed by an external plugin, skip
-			return next(ctx, server, resp, req)
-		}
-
 		compression := req.Compression
 		if compression == "" {
-			compression = config.Global.Checkpoints.Compression
+			compression = config.Global.Checkpoint.Compression
 		}
 
 		// Check if compression is valid, because we don't want to fail after the dump
@@ -57,19 +51,21 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		}
 
 		// Create a unique directory within the dump dir, using type, PID, and timestamp
-		imagesDirectory := filepath.Join(dir, fmt.Sprintf("dump-%s-%d",
-			req.GetType(),
-			time.Now().UnixNano()))
+		imagesDirectory := filepath.Join(dir, req.Name)
 
 		// Create the directory
 		if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 		}
+		defer func() {
+			if err != nil {
+				os.RemoveAll(imagesDirectory)
+			}
+		}()
 
 		// Set CRIU server
 		f, err := os.Open(imagesDirectory)
 		if err != nil {
-			os.Remove(imagesDirectory)
 			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
 		}
 		defer f.Close()
@@ -83,8 +79,17 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 
 		exited, err = next(ctx, server, resp, req)
 		if err != nil {
-			os.RemoveAll(imagesDirectory)
 			return nil, err
+		}
+
+		// If nothing was put in the directory, remove it and return early
+		entries, err := os.ReadDir(imagesDirectory)
+		if err != nil {
+			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
+		}
+		if len(entries) == 0 {
+			os.RemoveAll(imagesDirectory)
+			return exited, nil
 		}
 
 		resp.Path = imagesDirectory
@@ -97,14 +102,14 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 
 		log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("creating tarball")
 
-		defer os.RemoveAll(imagesDirectory)
-
 		_, end := profiling.StartTimingCategory(ctx, "compression", utils.Tar)
 		tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
 		end()
 		if err != nil {
 			return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
 		}
+
+		os.RemoveAll(imagesDirectory)
 
 		resp.Path = tarball
 

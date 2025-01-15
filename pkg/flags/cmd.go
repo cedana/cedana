@@ -15,6 +15,7 @@ type Flag struct {
 
 var (
 	DirFlag         = Flag{Full: "dir", Short: "d"}
+	NameFlag        = Flag{Full: "name"}
 	PathFlag        = Flag{Full: "path", Short: "p"}
 	StreamFlag      = Flag{Full: "stream", Short: "s"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}

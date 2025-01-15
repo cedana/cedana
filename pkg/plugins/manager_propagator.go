@@ -34,7 +34,6 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	os.MkdirAll(downloadDir, 0755)
 
 	localManager := NewLocalManager()
-	localManager.searchPath = fmt.Sprintf("%s:%s", downloadDir, localManager.searchPath)
 
 	// Add the temp download directory to its search path
 
@@ -56,11 +55,19 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	// Now update this information using the propagator service
+	// Now fetch the latest versions from the propagator for only plugins
+	// that were not available locally. We don't want to fetch latest
+	// if the user is using locally built plugins.
 
-	names := make([]string, len(list))
-	for i, p := range list {
-		names[i] = p.Name
+	var names []string
+	for _, p := range list {
+		if p.LatestVersion != "local" {
+			names = append(names, p.Name)
+		}
+	}
+
+	if len(names) == 0 { // nothing to fetch
+		return list, nil
 	}
 
 	url := fmt.Sprintf("%s/plugins?names=%s", m.URL, strings.Join(names, ","))
@@ -144,6 +151,11 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 			installList = append(installList, name)
 
+			// If locally built plugins are available, skip downloading
+			if availableSet[name].LatestVersion == "local" {
+				continue
+			}
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -173,7 +185,9 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 		wg.Wait()
 
-		// Now call the local manager to install the plugins
+		// Now call the local manager to install the plugins. Update its search path
+		// so it can find the downloaded plugins.
+		m.LocalManager.searchPath = fmt.Sprintf("%s:%s", m.LocalManager.searchPath, m.downloadDir)
 		i, a, e := m.LocalManager.Install(installList)
 		for {
 			select {

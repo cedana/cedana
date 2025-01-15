@@ -6,6 +6,7 @@ export PATH="./:$PATH" # ensure binaries are available
 export CEDANA_PROTOCOL="unix"
 export CEDANA_LOG_LEVEL=debug
 export CEDANA_PROFILING_ENABLED=false
+export CEDANA_CHECKPOINT_COMPRESSION=none
 
 WAIT_TIMEOUT=100
 

@@ -29,6 +29,8 @@ func init() {
 	// Add common flags
 	dumpCmd.PersistentFlags().
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
+	dumpCmd.PersistentFlags().
+		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "tar", "compression algorithm (tar, gzip, lz4, none)")
@@ -48,8 +50,8 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 
 	// Bind to config
-	viper.BindPFlag("checkpoints.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
-	viper.BindPFlag("checkpoints.compression", dumpCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
+	viper.BindPFlag("checkpoint.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
+	viper.BindPFlag("checkpoint.compression", dumpCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
@@ -80,8 +82,9 @@ var dumpCmd = &cobra.Command{
 	Short: "Dump a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.Global.Checkpoints.Dir
-		compression := config.Global.Checkpoints.Compression
+		dir := config.Global.Checkpoint.Dir
+		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
+		compression := config.Global.Checkpoint.Compression
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
@@ -93,6 +96,7 @@ var dumpCmd = &cobra.Command{
 		// Create half-baked request
 		req := &daemon.DumpReq{
 			Dir:         dir,
+			Name:        name,
 			Compression: compression,
 			Stream:      stream,
 			Criu: &criu.CriuOpts{
