@@ -1,7 +1,8 @@
 name: PR
 
 on:
-  push: # TODO: revert after resolving merge conflicts
+  pull_request:
+    types: [opened, synchronize, reopened, edited, closed]
   workflow_dispatch:
     inputs:
       debug_build:
@@ -148,26 +149,25 @@ jobs:
           check_all_files_with_shebangs: true
           shellcheck_flags: "--external-sources --severity=warning"
 
-  # TODO: revert after plugin registry is up, as it needs to download plugins
-  # script-tests:
-  #   name: Script Tests
-  #   runs-on: ubuntu-latest
-  #   needs: build
-  #   env:
-  #     CEDANA_URL: ${{ vars.CEDANA_URL }}
-  #     CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: build
-  #     - name: Run k8s setup host
-  #       run: |
-  #         sudo chmod +x ./cedana
-  #         sudo cp ./cedana /usr/local/bin/
-  #         sudo mkdir -p /cedana/scripts
-  #         sudo cp ./scripts/* /cedana/scripts/
-  #         sudo /cedana/scripts/k8s-setup-host.sh
+  script-tests:
+    name: Script Tests
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+      - name: Run k8s setup host
+        run: |
+          sudo chmod +x ./cedana
+          sudo cp ./cedana /usr/local/bin/
+          sudo mkdir -p /cedana/scripts
+          sudo cp ./scripts/* /cedana/scripts/
+          sudo /cedana/scripts/k8s-setup-host.sh
 
   unit-test:
     name: Unit Tests
@@ -471,14 +471,14 @@ jobs:
   #         jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
   #         mv temp.json bench.json
   #
-        # env:
-        #   PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
-        #   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
-        #   SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
-        # with:
-        #   project_id: ${{ env.PROJECT_ID }}
-        #   workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        #   service_account: ${{ env.SERVICE_ACCOUNT }}
+  # env:
+  #   PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+  #   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+  #   SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+  # with:
+  #   project_id: ${{ env.PROJECT_ID }}
+  #   workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+  #   service_account: ${{ env.SERVICE_ACCOUNT }}
 
   #     - name: Pull last result
   #       env:
