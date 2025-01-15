@@ -43,3 +43,75 @@ This doc describes the steps that have to be performed to save-migrate-resume a 
     ```
 
     The mandatory argument is the VM name of the VM into which we wish to perform the restore. In this case, it is “test_vm_2”, which is the new VM, running the dummy workload. Since the dmp.tar from the kata dump is present in the same directory as the cedana binary, we directly use “dmp.tar” as the path of the tar file.
+
+## Checkpoint/Restore Kata CLH VMs (experimental)
+
+This doc describes the steps that have to be performed to save-migrate-resume a kata clh vm sandbox. 
+
+1. Install cedana on to a node with CLH
+2. Use the currently installed CLH binary to create a new clh vm w/ a containerized workload
+   ```bash
+   kubectl apply -f - <<EOF
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: busybox-kata-clh
+   spec:
+     runtimeClassName: kata-clh
+     nodeSelector:
+       cedana-kata: "true"
+     containers:
+     - name: busybox
+       image: busybox
+       command: ["sleep", "infinite"]
+   EOF
+   ```
+3. Run a checkpoint
+   ```bash
+   cedana dump kata <sandbox-id> --vm-socket-path /run/vc/vm/<sandbox-id>/clh-api.sock --vm-snapshot --dir file:///tmp/test-ch
+   ```
+   and you must use the /tmp/test-ch directory, make sure it exists.
+3. Replace CLH and Kata shim binaries with the cedana forked CloudHypervisor VM binary and kata shim binary.
+   ```bash
+   cp cloud-hypervisor /opt/kata/bin/cloud-hypervisor
+   cp containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-v2
+   ```
+4. Modify the containerd config.toml to add the new runtime.
+   ```yaml
+   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.cedana]
+          runtime_type = "io.containerd.cedana.v2"
+
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.cedana.options]
+            ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
+   ```
+5. Add the new runtime class
+   ```bash
+    kubectl apply -f - <<EOF
+    apiVersion: node.k8s.io/v1
+    kind: RuntimeClass
+    metadata:
+      name: katadbg
+    handler: katadbg
+    EOF
+   ```
+
+6. We can now restore by simply using this new runtime class, use the previous podspec for checkpoint but replace it with the new runtime class.
+   ```bash
+   kubectl apply -f - <<EOF
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: busybox-kata-clh
+   spec:
+     runtimeClassName: cedana
+     nodeSelector:
+       cedana-kata: "true"
+     containers:
+     - name: busybox
+       image: busybox
+       command: ["sleep", "infinite"]
+   EOF
+   ```
+   and it will use the `/tmp/test-ch` directory for the restore.
