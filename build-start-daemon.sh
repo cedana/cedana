@@ -25,7 +25,14 @@ CEDANA_REMOTING_ENABLED=${CEDANA_REMOTING_ENABLED:-false}
 USE_SYSTEMCTL=0
 NO_BUILD=0
 DAEMON_ARGS=""
-$SUDO_USE -E bash setup_aws_env.sh
+
+if [ -f /cedana/scripts/setup_aws_env.sh ]; then
+  $SUDO_USE -E bash /cedana/scripts/setup_aws_env.sh
+elif [ -f setup_aws_env.sh ]; then
+  $SUDO_USE -E bash setup_aws_env.sh
+else
+  echo "No setup_aws_env.sh found, skipping"
+fi
 
 # Check for --systemctl flag
 for arg in "$@"; do
