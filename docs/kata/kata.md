@@ -92,8 +92,8 @@ This doc describes the steps that have to be performed to save-migrate-resume a 
     apiVersion: node.k8s.io/v1
     kind: RuntimeClass
     metadata:
-      name: katadbg
-    handler: katadbg
+      name: cedana
+    handler: cedana
     EOF
    ```
 
