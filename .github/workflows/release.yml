@@ -455,14 +455,14 @@ jobs:
   #     - id: auth
   #       name: Authenticate to Google Cloud
   #       uses: google-github-actions/auth@v1
-        # env:
-        #   PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
-        #   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
-        #   SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
-        # with:
-        #   project_id: ${{ env.PROJECT_ID }}
-        #   workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        #   service_account: ${{ env.SERVICE_ACCOUNT }}
+  # env:
+  #   PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+  #   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+  #   SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+  # with:
+  #   project_id: ${{ env.PROJECT_ID }}
+  #   workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+  #   service_account: ${{ env.SERVICE_ACCOUNT }}
 
   #     - name: Push results
   #       env:
@@ -592,7 +592,7 @@ jobs:
           PREVIOUS_BINARIES_DIR: previous
         run: |
           echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack-summary::$(scripts/release-summary-slack)
+          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
       - name: Post summary
         if: ${{ !startsWith(github.event_name, 'workflow') || (inputs.post_summary) }}
