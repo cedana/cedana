@@ -39,7 +39,7 @@ fi
 
 # Install all plugins
 if [[ -n $PLUGINS ]]; then
-    "$APP_PATH" plugin install "$PLUGINS"
+    "$APP_PATH" plugin install $PLUGINS
 fi
 
 # install the shim to containerd, as it was downlaoded by the k8s plugin
