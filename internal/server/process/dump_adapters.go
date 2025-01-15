@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -22,7 +21,7 @@ const STATE_FILE = "process_state.json"
 // Sets the PID from the request to the process state
 // if not already set before.
 func SetPIDForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if resp.GetState() == nil {
 			resp.State = &daemon.ProcessState{}
 		}
@@ -35,7 +34,7 @@ func SetPIDForDump(next types.Dump) types.Dump {
 			resp.State.PID = pid
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
@@ -43,7 +42,7 @@ func SetPIDForDump(next types.Dump) types.Dump {
 // Requires at least the PID to be present in the DumpResp.State
 // Also saves the state to a file in the dump directory, post dump.
 func FillProcessStateForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(
@@ -64,15 +63,14 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return exited, err
 		}
 
 		// Post dump, save the state to a file in the dump
-		stateFile := filepath.Join(req.GetCriu().GetImagesDir(), STATE_FILE)
-		if err := utils.SaveJSONToFile(state, stateFile); err != nil {
-			log.Warn().Err(err).Str("file", stateFile).Msg("failed to save process state")
+		if err := utils.SaveJSONToFile(state, STATE_FILE, opts.DumpFs); err != nil {
+			log.Warn().Err(err).Str("file", STATE_FILE).Msg("failed to save process state")
 		}
 
 		return exited, nil
@@ -81,7 +79,7 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
 			if state.SID != state.PID {
@@ -97,7 +95,7 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 
 		req.Criu.ShellJob = proto.Bool(isShellJob)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
@@ -105,11 +103,11 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 // XXX: Currently IO uring C/R is not supported by CRIU, so we return an error.
 // ref: https://criu.org/Google_Summer_of_Code_Ideas#IOUring_support
 func DetectIOUringForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 
 		for _, f := range state.GetOpenFiles() {
@@ -118,13 +116,13 @@ func DetectIOUringForDump(next types.Dump) types.Dump {
 			}
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
 // Close common file descriptors b/w the parent and child process
 func CloseCommonFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
 			return nil, status.Errorf(
@@ -138,7 +136,7 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to close common fds: %v", err)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
@@ -146,11 +144,11 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 // and sets appropriate options for CRIU.
 // Also detects any TTY files and sets options for CRIU.
 func AddExternalFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 
 		files := state.GetOpenFiles()
@@ -182,6 +180,6 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			}
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

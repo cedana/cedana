@@ -17,7 +17,7 @@ import (
 // Creates a new instance of CRIU and passes it to the server opts
 func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ, RESP]] {
 	return func(next types.Handler[REQ, RESP]) types.Handler[REQ, RESP] {
-		return func(ctx context.Context, server types.ServerOpts, resp *RESP, req *REQ) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (chan int, error) {
 			criuInstance := criu.MakeCriu()
 
 			// Check if CRIU plugin is installed, then use that binary
@@ -35,10 +35,10 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 				criuInstance.SetCriuPath(p.Binaries[0].Name)
 			}
 
-			server.CRIU = criuInstance
-			server.CRIUCallback = &criu.NotifyCallbackMulti{}
+			opts.CRIU = criuInstance
+			opts.CRIUCallback = &criu.NotifyCallbackMulti{}
 
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 	}
 }

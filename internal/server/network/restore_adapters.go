@@ -17,7 +17,7 @@ import (
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
@@ -41,6 +41,6 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 		req.Criu.TcpEstablished = proto.Bool(hasTCP)
 		req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

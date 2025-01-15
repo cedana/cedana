@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -21,7 +22,7 @@ import (
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
 func PrepareRestoreDir(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
 		if err != nil {
@@ -67,6 +68,10 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		return next(ctx, server, resp, req)
+		// Setup dump fs that can be used by future adapters to directly read write/extra files
+		// to the dump directory
+		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
+
+		return next(ctx, opts, resp, req)
 	}
 }

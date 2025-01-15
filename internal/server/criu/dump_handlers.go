@@ -24,12 +24,12 @@ const (
 var Dump types.Dump = dump
 
 // Returns a CRIU dump handler for the server
-func dump(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
 
-	version, err := server.CRIU.GetCriuVersion(ctx)
+	version, err := opts.CRIU.GetCriuVersion(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 	}
@@ -50,9 +50,9 @@ func dump(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, r
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
-	ctx, end := profiling.StartTimingCategory(ctx, "criu", server.CRIU.Dump)
+	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Dump)
 
-	_, err = server.CRIU.Dump(ctx, criuOpts, server.CRIUCallback)
+	_, err = opts.CRIU.Dump(ctx, criuOpts, opts.CRIUCallback)
 
 	end()
 

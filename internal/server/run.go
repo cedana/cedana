@@ -33,7 +33,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
-	opts := types.ServerOpts{
+	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
@@ -57,7 +57,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 
 // Adapter that inserts new adapters after itself based on the type of run.
 func pluginRunMiddleware(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Run]{}
 		t := req.GetType()
 		switch t {
@@ -77,7 +77,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 			}
 		}
 
-		return next.With(middleware...)(ctx, server, resp, req)
+		return next.With(middleware...)(ctx, opts, resp, req)
 	}
 }
 
@@ -87,7 +87,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 
 // Handler that returns the type-specific handler for the job
 func pluginRunHandler() types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		t := req.Type
 		var handler types.Run
 		switch t {
@@ -111,6 +111,6 @@ func pluginRunHandler() types.Run {
 			handler = handler.With(gpu.Interception)
 		}
 
-		return handler(ctx, server, resp, req)
+		return handler(ctx, opts, resp, req)
 	}
 }

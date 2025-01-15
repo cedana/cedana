@@ -23,22 +23,22 @@ var (
 )
 
 // Run starts a process with the given options and returns a channel that will receive the exit code of the process
-func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	opts := req.GetDetails().GetProcess()
-	if opts == nil {
+func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	details := req.GetDetails().GetProcess()
+	if details == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing process run options")
 	}
-	if opts.Path == "" {
+	if details.Path == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing path")
 	}
 
-	cmd := exec.CommandContext(server.Lifetime, opts.Path, opts.Args...)
+	cmd := exec.CommandContext(opts.Lifetime, details.Path, details.Args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    uint32(opts.UID),
-			Gid:    uint32(opts.GID),
-			Groups: utils.Uint32Slice(opts.Groups),
+			Uid:    uint32(details.UID),
+			Gid:    uint32(details.GID),
+			Groups: utils.Uint32Slice(details.Groups),
 		},
 		// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 		// XXX: Above is commented out because if we try to restore a managed job,
@@ -46,15 +46,15 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 		// using a dump path (directly w/ restore -p <path>), instead of using job
 		// restore, the restored process dies immediately.
 	}
-	cmd.Env = opts.Env
-	cmd.Dir = opts.WorkingDir
+	cmd.Env = details.Env
+	cmd.Dir = details.WorkingDir
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
 	if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
-		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
+		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		cmd.Stdin = stdIn
 		cmd.Stdout = stdOut
@@ -78,9 +78,9 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	server.WG.Add(1)
+	opts.WG.Add(1)
 	go func() {
-		defer server.WG.Done()
+		defer opts.WG.Done()
 		err := cmd.Wait()
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
@@ -96,20 +96,20 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 }
 
 // Simply sets the PID in response, if the process exists, and returns a valid exited channel
-func manage(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	opts := req.GetDetails().GetProcess()
-	if opts == nil {
+func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	details := req.GetDetails().GetProcess()
+	if details == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing process run options")
 	}
-	if opts.PID == 0 {
+	if details.PID == 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing PID")
 	}
 
-	if !utils.PidExists(opts.PID) {
-		return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", opts.PID)
+	if !utils.PidExists(details.PID) {
+		return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
 	}
 
-	resp.PID = opts.PID
+	resp.PID = details.PID
 
-	return utils.WaitForPid(opts.PID), nil
+	return utils.WaitForPid(details.PID), nil
 }

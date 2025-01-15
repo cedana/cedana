@@ -10,7 +10,7 @@ import (
 )
 
 func LockNetworkBeforeDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		callback := &criu.NotifyCallback{
 			NetworkLockFunc: func(ctx context.Context) error {
 				// Not implemented, yet
@@ -19,8 +19,8 @@ func LockNetworkBeforeDump(next types.Dump) types.Dump {
 				return nil
 			},
 		}
-		server.CRIUCallback.Include(callback)
+		opts.CRIUCallback.Include(callback)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -31,7 +32,7 @@ const (
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
 func PrepareDumpDir(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		compression := req.Compression
 		if compression == "" {
 			compression = config.Global.Checkpoint.Compression
@@ -77,7 +78,11 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
 		req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
 
-		exited, err = next(ctx, server, resp, req)
+		// Setup dump fs that can be used by future adapters to directly read write/extra files
+		// to the dump directory
+		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
+
+		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
 		}

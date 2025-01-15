@@ -14,7 +14,7 @@ import (
 
 // Adapter that fills missing info from the request using config defaults
 func FillMissingDumpDefaults(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.Dir == "" {
 			req.Dir = config.Global.Checkpoint.Dir
 		}
@@ -32,6 +32,6 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Criu.LeaveRunning = proto.Bool(config.Global.CRIU.LeaveRunning)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

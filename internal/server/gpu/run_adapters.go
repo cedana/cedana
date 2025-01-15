@@ -25,8 +25,8 @@ import (
 // CRIU callbacks. Assumes the job is already created (not running).
 func Attach(gpus Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-			if !server.Plugins.IsInstalled("gpu") {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+			if !opts.Plugins.IsInstalled("gpu") {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to use GPU support")
 			}
 
@@ -39,13 +39,13 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			// Create child lifetime context, so we have cancellation ability over restored
 			// process created by the next handler(s).
-			lifetime, cancel := context.WithCancel(server.Lifetime)
-			server.Lifetime = lifetime
+			lifetime, cancel := context.WithCancel(opts.Lifetime)
+			opts.Lifetime = lifetime
 
 			pid := make(chan uint32, 1)
 			gpuErr := gpus.AttachAsync(ctx, lifetime, jid, pid)
 
-			exited, err := next(ctx, server, resp, req)
+			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				cancel()
 				<-gpuErr // wait for GPU attach cleanup
@@ -78,7 +78,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 // Adapter that adds GPU interception to the request based on the job type.
 // Each plugin must implement its own support for GPU interception.
 func Interception(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		if req.JID == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU interception")
 		}
@@ -101,16 +101,16 @@ func Interception(next types.Run) types.Run {
 				return nil, status.Errorf(codes.Unimplemented, err.Error())
 			}
 		}
-		return handler(ctx, server, resp, req)
+		return handler(ctx, opts, resp, req)
 	}
 }
 
 // Adapter that adds GPU interception to a process job.
 func ProcessInterception(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin
-		if gpu = server.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
+		if gpu = opts.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
 			return nil, status.Errorf(
 				codes.FailedPrecondition,
 				"Please install the GPU plugin to use GPU support",
@@ -124,6 +124,6 @@ func ProcessInterception(next types.Run) types.Run {
 
 		req.Details.Process.Env = env
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

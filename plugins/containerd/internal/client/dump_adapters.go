@@ -13,7 +13,7 @@ import (
 )
 
 func SetupForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		ctx = namespaces.WithNamespace(ctx, details.Namespace)
@@ -26,6 +26,6 @@ func SetupForDump(next types.Dump) types.Dump {
 
 		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

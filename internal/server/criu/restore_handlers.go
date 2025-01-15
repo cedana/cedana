@@ -24,7 +24,7 @@ import (
 var Restore types.Restore = restore
 
 // Returns a CRIU restore handler for the server
-func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 	extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 	if !ok {
 		return nil, status.Error(codes.FailedPrecondition, "failed to get extra files from context")
@@ -34,7 +34,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
 
-	version, err := server.CRIU.GetCriuVersion(ctx)
+	version, err := opts.CRIU.GetCriuVersion(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 	}
@@ -58,7 +58,7 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 	if req.Attachable {
 		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 		id := rand.Uint32()                    // Use a random number, since we don't have PID yet
-		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
+		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 	} else {
 		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
@@ -67,12 +67,12 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		}
 	}
 
-	ctx, end := profiling.StartTimingCategory(ctx, "criu", server.CRIU.Restore)
+	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Restore)
 
-	criuResp, err := server.CRIU.Restore(
+	criuResp, err := opts.CRIU.Restore(
 		ctx,
 		criuOpts,
-		server.CRIUCallback,
+		opts.CRIUCallback,
 		stdin,
 		stdout,
 		stderr,
@@ -104,9 +104,9 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 	var exited chan int
 	if criuOpts.GetRstSibling() {
 		exited = make(chan int)
-		server.WG.Add(1)
+		opts.WG.Add(1)
 		go func() {
-			defer server.WG.Done()
+			defer opts.WG.Done()
 			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
 			status, err := p.Wait()
 			if err != nil {
@@ -120,10 +120,10 @@ func restore(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreR
 		}()
 
 		// Also kill the process if it's lifetime expires
-		server.WG.Add(1)
+		opts.WG.Add(1)
 		go func() {
-			defer server.WG.Done()
-			<-server.Lifetime.Done()
+			defer opts.WG.Done()
+			<-opts.Lifetime.Done()
 			syscall.Kill(int(resp.PID), syscall.SIGKILL)
 		}()
 	}

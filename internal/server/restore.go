@@ -47,7 +47,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
-	opts := types.ServerOpts{
+	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
@@ -73,7 +73,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 // Adapter that inserts new adapters based on the type of restore request
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.Type
 		switch t {
@@ -93,6 +93,6 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 			}
 		}
 
-		return next.With(middleware...)(ctx, server, resp, req)
+		return next.With(middleware...)(ctx, opts, resp, req)
 	}
 }

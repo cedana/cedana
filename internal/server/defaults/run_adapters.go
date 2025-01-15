@@ -9,9 +9,9 @@ import (
 
 // Adapter that fills missing info from the request using config defaults
 func FillMissingRunDefaults(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		// Nothing to fill in for now
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -18,7 +18,7 @@ import (
 
 func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -32,7 +32,7 @@ func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[typ
 
 			req.Criu.EmptyNs = &emptyNs
 
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 	}
 }
@@ -45,13 +45,13 @@ func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[typ
 // and expect to be setup correctly.
 func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
 				return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
 			}
 
-			version, err := server.CRIU.GetCriuVersion(ctx)
+			version, err := opts.CRIU.GetCriuVersion(ctx)
 			if err != nil {
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
 			}
@@ -65,14 +65,14 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 					if version < minVersion {
 						log.Warn().
 							Msgf("CRIU version is less than %d, skipping external network namespace handling", minVersion)
-						return next(ctx, server, resp, req)
+						return next(ctx, opts, resp, req)
 					}
 				case configs.NEWPID:
 					minVersion := 31500
 					if version < minVersion {
 						log.Warn().
 							Msgf("CRIU version is less than %d, skipping external pid namespace handling", minVersion)
-						return next(ctx, server, resp, req)
+						return next(ctx, opts, resp, req)
 					}
 				}
 
@@ -81,7 +81,7 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 				nsPath := config.Namespaces.PathOf(t)
 				if nsPath == "" {
 					// Nothing to do
-					return next(ctx, server, resp, req)
+					return next(ctx, opts, resp, req)
 				}
 
 				// CRIU expects the information about an external namespace
@@ -101,7 +101,7 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 				req.Criu.External = append(req.Criu.External, external)
 			}
 
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 	}
 }

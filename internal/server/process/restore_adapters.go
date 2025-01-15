@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -18,7 +17,7 @@ import (
 
 // Reload process state from the dump dir in the restore response
 func ReloadProcessStateForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
@@ -28,10 +27,9 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 			)
 		}
 
-		stateFile := filepath.Join(path, STATE_FILE)
 		state := &daemon.ProcessState{}
 
-		if err := utils.LoadJSONFromFile(stateFile, state); err != nil {
+		if err := utils.LoadJSONFromFile(STATE_FILE, state, opts.DumpFs); err != nil {
 			return nil, status.Errorf(
 				codes.Internal,
 				"failed to load process state from dump: %v",
@@ -41,7 +39,7 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 
 		resp.State = state
 
-		exited, err := next(ctx, server, resp, req)
+		exited, err := next(ctx, opts, resp, req)
 		if err != nil {
 			return exited, err
 		}
@@ -52,7 +50,7 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
 			if state.SID != state.PID {
@@ -68,7 +66,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 
 		req.Criu.ShellJob = proto.Bool(isShellJob)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
@@ -83,11 +81,11 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 // If there were any external (namespace) files during dump, they are also
 // added to be inherited. Note that this would still fail if the files don't exist.
 func InheritFilesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 
 		// Set the inherited fds
@@ -147,6 +145,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 		req.Criu.InheritFd = append(req.Criu.InheritFd, inheritFds...)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

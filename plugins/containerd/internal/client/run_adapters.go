@@ -13,7 +13,7 @@ import (
 )
 
 func SetupForRun(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		ctx = namespaces.WithNamespace(ctx, details.Namespace)
@@ -26,12 +26,12 @@ func SetupForRun(next types.Run) types.Run {
 
 		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
 func CreateContainerForRun(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
@@ -73,6 +73,6 @@ func CreateContainerForRun(next types.Run) types.Run {
 
 		ctx = context.WithValue(ctx, containerd_keys.CONTAINER_CONTEXT_KEY, container)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

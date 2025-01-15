@@ -11,7 +11,7 @@ import (
 
 // Adapter that validates the run request
 func ValidateRunRequest(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		if req.GetType() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "Type is required")
 		}
@@ -19,6 +19,6 @@ func ValidateRunRequest(next types.Run) types.Run {
 			return nil, status.Errorf(codes.InvalidArgument, "Details are required")
 		}
 		// Check if JID already exists
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

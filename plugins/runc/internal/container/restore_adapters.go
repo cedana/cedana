@@ -26,9 +26,9 @@ import (
 
 // LoadSpecFromBundleForRestore loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		opts := req.GetDetails().GetRunc()
-		bundle := opts.GetBundle()
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		details := req.GetDetails().GetRunc()
+		bundle := details.GetBundle()
 
 		// If empty, assume cwd is the bundle. This is the behavior of runc binary as well.
 		if bundle != "" {
@@ -50,12 +50,12 @@ func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
 
 		ctx = context.WithValue(ctx, runc_keys.SPEC_CONTEXT_KEY, spec)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
@@ -128,7 +128,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY, manager)
 		ctx = context.WithValue(ctx, runc_keys.INIT_PROCESS_CONTEXT_KEY, process)
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
 		}
@@ -141,9 +141,9 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return exited, nil
 		}
 
-		server.WG.Add(1)
+		opts.WG.Add(1)
 		go func() {
-			defer server.WG.Done()
+			defer opts.WG.Done()
 			<-exited
 			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
 			container.Destroy()
@@ -156,7 +156,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 // Adds CRIU callback to run the prestart and create runtime hooks
 // before the namespaces are setup during restore
 func RunHooksOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -183,16 +183,16 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 				return nil
 			},
 		}
-		server.CRIUCallback.Include(callback)
+		opts.CRIUCallback.Include(callback)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
 // UpdateStateOnRestore updates the container state after restore
 // Without this, runc won't be able to 'detect' the container
 func UpdateStateOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -249,8 +249,8 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 				return nil
 			},
 		}
-		server.CRIUCallback.Include(callback)
+		opts.CRIUCallback.Include(callback)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

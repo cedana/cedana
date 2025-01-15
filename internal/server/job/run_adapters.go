@@ -25,7 +25,7 @@ const (
 // Allows management of existing processes as well (not started by the daemon).
 func Manage(jobs Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 			if req.JID == "" {
 				req.JID = namegen.GetName(1)
 			}
@@ -55,16 +55,16 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
-			lifetime, cancel := context.WithCancel(server.Lifetime)
-			server.Lifetime = lifetime
+			lifetime, cancel := context.WithCancel(opts.Lifetime)
+			opts.Lifetime = lifetime
 
-			exited, err := next(ctx, server, resp, req)
+			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				jobs.Delete(job.JID)
 				return nil, err
 			}
 
-			err = jobs.Manage(server.Lifetime, job.JID, resp.PID, exited)
+			err = jobs.Manage(opts.Lifetime, job.JID, resp.PID, exited)
 			if err != nil {
 				if req.Action == daemon.RunAction_START_NEW { // we don't want to cancel if manage was called for an existing process
 					cancel()

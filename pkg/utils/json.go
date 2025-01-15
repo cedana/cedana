@@ -5,19 +5,26 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/afero"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func SaveJSONToFile(data any, path string) error {
+func SaveJSONToFile(data any, path string, fs ...afero.Fs) error {
 	// Marshal the struct to JSON
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("error marshalling JSON: %v", err)
 	}
 
-	// Create or open a file to write the JSON data
-	file, err := os.Create(path)
+	var file afero.File
+
+	if len(fs) > 0 {
+		file, err = fs[0].Create(path)
+	} else {
+		file, err = os.Create(path)
+	}
+
 	if err != nil {
 		return fmt.Errorf("error creating file: %v", err)
 	}
@@ -32,9 +39,16 @@ func SaveJSONToFile(data any, path string) error {
 	return nil
 }
 
-func LoadJSONFromFile(path string, data any) error {
+func LoadJSONFromFile(path string, data any, fs ...afero.Fs) error {
+	var err error
+	var file afero.File
+
 	// Open the file to read the JSON data
-	file, err := os.Open(path)
+	if len(fs) > 0 {
+		file, err = fs[0].Open(path)
+	} else {
+		file, err = os.Open(path)
+	}
 	if err != nil {
 		return fmt.Errorf("error opening file: %v", err)
 	}

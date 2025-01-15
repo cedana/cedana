@@ -18,7 +18,7 @@ import (
 // Post-restore, updates the saved job details.
 func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {
@@ -71,13 +71,13 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 
 			// Create child lifetime context, so we have cancellation ability over restored
 			// process created by the next handler(s).
-			lifetime, cancel := context.WithCancel(server.Lifetime)
-			server.Lifetime = lifetime
+			lifetime, cancel := context.WithCancel(opts.Lifetime)
+			opts.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			server.CRIUCallback.IncludeMulti(jobs.CRIUCallback(server.Lifetime, jid))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid))
 
-			exited, err := next(ctx, server, resp, req)
+			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				cancel()
 				return nil, err
@@ -85,7 +85,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 
 			job.SetLog(req.Log)
 
-			err = jobs.Manage(server.Lifetime, jid, resp.PID, exited)
+			err = jobs.Manage(opts.Lifetime, jid, resp.PID, exited)
 			if err != nil {
 				cancel()
 				return nil, status.Errorf(codes.Internal, "failed to manage restored job: %v", err)

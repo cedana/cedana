@@ -47,7 +47,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		dump = dump.With(job.ManageDump(s.jobs))
 	}
 
-	opts := types.ServerOpts{
+	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
@@ -75,7 +75,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
@@ -94,6 +94,6 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
-		return next.With(middleware...)(ctx, server, resp, req)
+		return next.With(middleware...)(ctx, opts, resp, req)
 	}
 }

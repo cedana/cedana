@@ -10,7 +10,7 @@ import (
 )
 
 func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
 		if req.GetDetails().GetRunc() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc details")
 		}
@@ -21,6 +21,6 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc id")
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -15,9 +15,9 @@ import (
 
 // LoadSpecFromBundle loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundle(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		opts := req.GetDetails().GetRunc()
-		bundle := opts.GetBundle()
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		details := req.GetDetails().GetRunc()
+		bundle := details.GetBundle()
 
 		// If empty, assume cwd is the bundle. This is the behavior of runc binary as well.
 		if bundle != "" {
@@ -39,18 +39,18 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 
 		ctx = context.WithValue(ctx, runc_keys.SPEC_CONTEXT_KEY, spec)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
 // SetUsChildSubreaper sets the current process as the child subreaper
 func SetUsChildSubreaper(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, uintptr(1), 0, 0, 0)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to set us as child subreaper: %v", err)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -16,7 +16,7 @@ import (
 // Checks for the runtime's plugin (e.g. runc) and plugs in its dump middleware before calling
 // the next handler. Also ensures settings the required request detauls for the runtime plugin.
 func DumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		details := req.GetDetails()
 		id := details.GetContainerd().GetID()
 		namespace := details.GetContainerd().GetNamespace()
@@ -48,6 +48,6 @@ func DumpMiddleware(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported plugin %s", plugin)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

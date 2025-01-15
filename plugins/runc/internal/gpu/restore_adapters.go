@@ -18,13 +18,13 @@ import (
 // run is not enough. Upon restore, the container is likely being started
 // with it's original spec, which does not have the GPU interception.
 func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(codes.Internal, "state should have been filled by an adapter")
 		}
 		if !state.GPUEnabled {
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
@@ -39,7 +39,7 @@ func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
 
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin
-		if gpu = server.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
+		if gpu = opts.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
 			return nil, status.Errorf(
 				codes.FailedPrecondition,
 				"Please install the GPU plugin to use GPU support",
@@ -53,6 +53,6 @@ func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -24,12 +24,12 @@ import (
 // Assumes client is already setup in context.
 // TODO: Do rootfs dump parallel to CRIU dump, possible using multiple CRIU callbacks and synchronizing them
 func DumpRootfs(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
 		if details.Image == "" {
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
@@ -92,7 +92,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 			rootfsErr <- dumpRootfs(ctx, client, container, details.Image)
 		}()
 
-		exited, err = next(ctx, server, resp, req)
+		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			<-rootfsErr // wait for rootfs dump cleanup
 			return nil, err

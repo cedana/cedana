@@ -10,7 +10,7 @@ import (
 )
 
 func ValidateDumpRequst(next types.Dump) types.Dump {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		if req.GetDetails().GetContainerd() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd details")
 		}
@@ -27,6 +27,6 @@ func ValidateDumpRequst(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "missing image ref for rootfs-only dump")
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

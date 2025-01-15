@@ -23,7 +23,7 @@ var (
 	Manage types.Run = manage
 )
 
-func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 	container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container from context")
@@ -35,7 +35,7 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 	if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
-		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
+		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		io = cio.WithStreams(stdIn, stdOut, stdErr)
 	} else {
@@ -60,9 +60,9 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 
 	// Wait for the container to exit, send exit code
 	exited = make(chan int)
-	server.WG.Add(1)
+	opts.WG.Add(1)
 	go func() {
-		defer server.WG.Done()
+		defer opts.WG.Done()
 
 		statusChan, err := task.Wait(context.WithoutCancel(ctx))
 		if err != nil {
@@ -80,7 +80,7 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 	return exited, nil
 }
 
-func manage(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 	details := req.GetDetails().GetContainerd()
 
 	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)

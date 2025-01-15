@@ -15,7 +15,7 @@ const (
 )
 
 func FillMissingRunDefaults(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -32,6 +32,6 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 			req.Details.Containerd.ID = req.JID
 		}
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

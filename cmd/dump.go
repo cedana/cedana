@@ -33,7 +33,7 @@ func init() {
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
-		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "tar", "compression algorithm (tar, gzip, lz4, none)")
+		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (tar, gzip, lz4, none)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
 	dumpCmd.PersistentFlags().

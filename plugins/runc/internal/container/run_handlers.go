@@ -64,7 +64,7 @@ var (
 )
 
 // run runs a container using CLI directly
-func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 	details := req.GetDetails().GetRunc()
 	root := details.GetRoot()
 	id := details.GetID()
@@ -113,7 +113,7 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 	if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
-		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(server.Lifetime, server.WG, id, exitCode)
+		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		cmd.Stdin = stdIn
 		cmd.Stdout = stdOut
@@ -158,9 +158,9 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	server.WG.Add(1)
+	opts.WG.Add(1)
 	go func() {
-		defer server.WG.Done()
+		defer opts.WG.Done()
 		p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
 		status, err := p.Wait()
 		if err != nil {
@@ -178,10 +178,10 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 	}()
 
 	// Also kill the container if lifetime expires
-	server.WG.Add(1)
+	opts.WG.Add(1)
 	go func() {
-		defer server.WG.Done()
-		<-server.Lifetime.Done()
+		defer opts.WG.Done()
+		<-opts.Lifetime.Done()
 		syscall.Kill(int(resp.PID), syscall.SIGKILL)
 	}()
 
@@ -189,7 +189,7 @@ func run(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req
 }
 
 // manage simply sets the PID in response, if the container exists, and returns a valid exited channel
-func manage(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 	details := req.GetDetails().GetRunc()
 	if details == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing runc options")

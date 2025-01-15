@@ -23,7 +23,7 @@ import (
 // Sets the ManageCgroups field in the criu options to true.
 func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -31,14 +31,14 @@ func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Res
 			req.Criu.ManageCgroups = proto.Bool(true)
 			req.Criu.ManageCgroupsMode = &mode
 
-			return next(ctx, server, resp, req)
+			return next(ctx, opts, resp, req)
 		}
 	}
 }
 
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -83,8 +83,8 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				return nil
 			},
 		}
-		server.CRIUCallback.Include(callback)
+		opts.CRIUCallback.Include(callback)
 
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }

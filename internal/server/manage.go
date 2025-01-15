@@ -35,7 +35,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 
 	manage := pluginManageHandler().With(middleware...) // even the handler depends on the type of job
 
-	opts := types.ServerOpts{
+	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
@@ -60,7 +60,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 
 // Handler that returns the type-specific handler for the job
 func pluginManageHandler() types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		t := req.GetType()
 		var handler types.Run
 		switch t {
@@ -82,6 +82,6 @@ func pluginManageHandler() types.Run {
 		if req.GPUEnabled {
 			log.Warn().Msg("GPU interception must be manually enabled, as it can't be added for already running process/container")
 		}
-		return handler(ctx, server, resp, req)
+		return handler(ctx, opts, resp, req)
 	}
 }

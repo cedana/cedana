@@ -11,7 +11,7 @@ import (
 const DEFAULT_ROOT = "/run/runc"
 
 func FillMissingRunDefaults(next types.Run) types.Run {
-	return func(ctx context.Context, server types.ServerOpts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -24,6 +24,6 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		if req.GetDetails().GetRunc().GetID() == "" {
 			req.Details.Runc.ID = req.JID
 		}
-		return next(ctx, server, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
