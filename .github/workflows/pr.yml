@@ -166,7 +166,7 @@ jobs:
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
           sudo mkdir -p /cedana/scripts
-          sudo cp ./scripts/* /cedana/scripts/
+          sudo cp -r ./scripts/* /cedana/scripts/
           sudo /cedana/scripts/k8s-setup-host.sh
 
   unit-test:
