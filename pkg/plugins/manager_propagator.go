@@ -144,6 +144,11 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
+			if _, ok := availableSet[name]; !ok {
+				errs <- fmt.Errorf("Plugin %s is not available", name)
+				continue
+			}
+
 			if availableSet[name].Status == Installed {
 				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
 				continue
