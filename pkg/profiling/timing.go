@@ -2,6 +2,7 @@ package profiling
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"runtime"
 	"time"
@@ -199,4 +200,21 @@ func LogDuration(start time.Time, f ...any) {
 
 	name := utils.FunctionName(pc)
 	log.Trace().Str("in", name).Msgf("spent %s", duration)
+}
+
+// DurationStr converts the duration to the specified precision.
+func DurationStr(d time.Duration, precision string) string {
+	switch precision {
+	case "s":
+		return fmt.Sprintf("%gs", float64(d.Nanoseconds())/1e9)
+	case "ms":
+		return fmt.Sprintf("%gms", float64(d.Nanoseconds())/1e6)
+	case "us":
+		return fmt.Sprintf("%gus", float64(d.Nanoseconds())/1e3)
+	case "ns":
+		return fmt.Sprintf("%gns", float64(d.Nanoseconds()))
+	}
+
+	// auto
+	return d.String()
 }

@@ -57,6 +57,8 @@ type (
 	Profiling struct {
 		// Enabled sets whether to enable and show profiling information
 		Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
+		Precision string `json:"time_precision" mapstructure:"time_precision" yaml:"time_precision"`
 	}
 
 	Metrics struct {
