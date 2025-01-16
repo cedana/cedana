@@ -9,6 +9,7 @@ mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
+cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
 cp /scripts/* /host/cedana/scripts
 cp /Makefile /host/cedana/Makefile
 
