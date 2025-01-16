@@ -36,6 +36,7 @@ ADD ./go.sum /app
 RUN go mod download && rm -rf go.mod go.sum
 ADD . /app
 RUN make build
+RUN make plugins
 
 FROM ubuntu:22.04
 
@@ -53,6 +54,7 @@ RUN mkdir -p /usr/local/bin /scripts
 ADD ./Makefile /
 ADD ./scripts/ /scripts
 
+COPY --from=builder /app/libcedana*.so /usr/local/lib/
 COPY --from=builder /app/cedana /usr/local/bin/
 COPY --from=builder /app/buildah/cmd/buildah/buildah /usr/local/bin
 COPY --from=builder /app/netavark/bin/netavark /usr/local/bin
