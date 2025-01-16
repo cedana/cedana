@@ -78,6 +78,14 @@ reset-logs: ## Reset logs
 PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
 PLUGIN_BINARIES=$(wildcard $(OUT_DIR)/libcedana-*.so)
 
+plugin: ## Build a plugin (PLUGIN=<plugin>)
+	@echo "Building plugin $$PLUGIN..."
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+
+plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
+	@echo "Installing plugin $$PLUGIN..."
+	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
+
 plugins: $(PLUGIN_SOURCES) ## Build all plugins
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
