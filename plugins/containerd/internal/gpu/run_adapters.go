@@ -33,7 +33,7 @@ func Interception(next types.Run) types.Run {
 
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin
-		if gpu = opts.Plugins.Get("gpu"); gpu.Status != plugins.Installed {
+		if gpu = opts.Plugins.Get("gpu"); !gpu.IsInstalled() {
 			return nil, status.Errorf(
 				codes.FailedPrecondition,
 				"Please install the GPU plugin to use GPU support",

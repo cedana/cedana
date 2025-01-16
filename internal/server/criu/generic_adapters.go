@@ -22,7 +22,7 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 
 			// Check if CRIU plugin is installed, then use that binary
 			var p *plugins.Plugin
-			if p = manager.Get("criu"); p.Status != plugins.Installed {
+			if p = manager.Get("criu"); !p.IsInstalled() {
 				// Set custom path if specified in config, as a fallback
 				if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 					criuInstance.SetCriuPath(custom_path)

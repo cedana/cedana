@@ -42,7 +42,7 @@ func (m *LocalManager) IsInstalled(name string) bool {
 	for _, p := range Registry {
 		if p.Name == name {
 			p.SyncInstalled()
-			return p.Status == Installed
+			return p.IsInstalled()
 		}
 	}
 
@@ -60,7 +60,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 	}
 
 	for _, p := range Registry {
-		if p.Type == Unimplemented {
+		if p.Type == UNIMPLEMENTED {
 			continue
 		}
 		if _, ok := set[p.Name]; len(set) > 0 && !ok {
@@ -100,14 +100,14 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.LatestVersion = "local"
-			if p.Status == Installed || p.Status == Outdated {
+			if p.Status == INSTALLED || p.Status == OUTDATED {
 				if p.Checksum() != totalSum {
-					p.Status = Outdated
+					p.Status = OUTDATED
 				} else {
-					p.Status = Installed
+					p.Status = INSTALLED
 				}
-			} else if p.Status == Unknown {
-				p.Status = Available
+			} else if p.Status == UNKNOWN {
+				p.Status = AVAILABLE
 			}
 			if p.Size == 0 {
 				p.Size = size
@@ -154,10 +154,10 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				continue
 			}
 
-			if plugin.Status == Installed {
+			if plugin.Status == INSTALLED {
 				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
 				continue
-			} else if plugin.Status == Available {
+			} else if plugin.Status == AVAILABLE {
 				msgs <- fmt.Sprintf("Installing plugin %s...", name)
 			} else {
 				msgs <- fmt.Sprintf("Updating plugin %s...", name)
@@ -197,7 +197,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				continue
 			}
 
-			if plugin.Status == Available {
+			if plugin.Status == AVAILABLE {
 				msgs <- style.PositiveColors.Sprintf("Installed plugin %s", name)
 			} else {
 				msgs <- style.WarningColors.Sprintf("Updated plugin %s", name)
@@ -241,7 +241,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 				errs <- fmt.Errorf("Plugin %s is not available", name)
 				continue
 			}
-			if plugin.Status != Installed {
+			if plugin.Status != INSTALLED {
 				errs <- fmt.Errorf("Plugin %s is not installed", name)
 				continue
 			}

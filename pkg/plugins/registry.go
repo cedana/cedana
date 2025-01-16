@@ -9,7 +9,7 @@ var Registry = []Plugin{
 	// C/R tools
 	{
 		Name:     "criu",
-		Type:     External,
+		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "criu"}},
 	},
 	// TODO: can add hypervisor C/R tools
@@ -17,17 +17,17 @@ var Registry = []Plugin{
 	// Container runtimes
 	{
 		Name:      "runc",
-		Type:      Supported,
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-runc.so"}},
 	},
 	{
 		Name:      "containerd",
-		Type:      Supported,
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-containerd.so"}},
 	},
 	{
 		Name:      "crio",
-		Type:      Supported,
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-crio.so"}},
 	},
 	{
@@ -45,18 +45,18 @@ var Registry = []Plugin{
 	// Others
 	{
 		Name:      "gpu",
-		Type:      External,
+		Type:      EXTERNAL,
 		Libraries: []Binary{{Name: "libcedana-gpu.so"}},
 		Binaries:  []Binary{{Name: "cedana-gpu-controller"}},
 	},
 	{
 		Name:     "streamer",
-		Type:     External,
+		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "cedana-image-streamer"}},
 	},
 	{
 		Name:      "k8s",
-		Type:      Supported,
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
 		Binaries:  []Binary{}, // TODO: add containerd shim binary
 	},

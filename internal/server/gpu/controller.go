@@ -103,7 +103,6 @@ func (m *controllers) spawnAsync(
 	}
 
 	controller.Stderr = controller.ErrBuf
-	controller.Stdin = nil
 	controller.Stdout = logging.Writer("gpu-controller", jid, zerolog.TraceLevel)
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGTERM,
