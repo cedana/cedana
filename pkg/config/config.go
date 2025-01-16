@@ -20,7 +20,7 @@ const (
 
 	// NOTE: `localhost` server inside kubernetes may or may not work
 	// based on firewall and network configuration, it would only work
-	// on local system, hence for serving default is 0.0.0.0
+	// on local system, hence for serving on TCP default is 0.0.0.0
 	DEFAULT_TCP_ADDR   = "0.0.0.0:8080"
 	DEFAULT_SOCK_ADDR  = "/run/cedana.sock"
 	DEFAULT_SOCK_PERMS = 0o666
@@ -30,6 +30,9 @@ const (
 
 	DEFAULT_COMPRESSION = "tar"
 	DEFAULT_DUMP_DIR    = "/tmp"
+
+	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
+	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 )
 
 // The default global config. This will get overwritten
@@ -60,14 +63,19 @@ var Global Config = Config{
 	CRIU: CRIU{
 		LeaveRunning: false,
 	},
-	GPU: GPU{
-		PoolSize: 0,
+	Plugins: Plugins{
+		LibDir: DEFAULT_PLUGINS_LIB_DIR,
+		BinDir: DEFAULT_PLUGINS_BIN_DIR,
+		GPU: GPU{
+			PoolSize: 0,
+		},
 	},
 }
 
 func init() {
 	setDefaults()
 	bindEnvVars()
+	viper.UnmarshalExact(&Global)
 }
 
 type InitArgs struct {
@@ -136,8 +144,6 @@ func setDefaults() {
 //
 // Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
 func bindEnvVars() {
-	viper.AutomaticEnv()
-
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		envVar := ENV_PREFIX + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))
@@ -149,4 +155,6 @@ func bindEnvVars() {
 
 		viper.MustBindEnv(aliases...)
 	}
+
+	viper.AutomaticEnv()
 }
