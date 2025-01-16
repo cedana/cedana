@@ -25,7 +25,7 @@ func printProfilingData(data *profiling.Data) {
 	tableWriter.SetOutputMirror(os.Stdout)
 
 	categoryMap := make(map[string]time.Duration)
-  precision := config.Global.Profiling.Precision
+	precision := config.Global.Profiling.Precision
 
 	for _, p := range data.Components {
 		if p.Duration == 0 {
@@ -51,7 +51,7 @@ func printProfilingData(data *profiling.Data) {
 		tableWriter.AppendRow([]interface{}{profiling.DurationStr(duration, precision), category, style.DisabledColors.Sprint(name)})
 	}
 
-	tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})
+	tableWriter.AppendFooter([]interface{}{profiling.DurationStr(total, precision), "", fmt.Sprintf("%s (total)", data.Name)})
 	tableWriter.Render()
 
 	if len(categoryMap) > 1 {
@@ -62,10 +62,10 @@ func printProfilingData(data *profiling.Data) {
 
 		for category, duration := range categoryMap {
 			percentage := (float64(duration) / float64(total)) * 100
-			tableWriter.AppendRow([]interface{}{duration, fmt.Sprintf("%.2f%%", percentage), category})
+			tableWriter.AppendRow([]interface{}{profiling.DurationStr(duration, precision), fmt.Sprintf("%.2f%%", percentage), category})
 		}
 
-		tableWriter.AppendFooter([]interface{}{total, "", fmt.Sprintf("%s (total)", data.Name)})
+		tableWriter.AppendFooter([]interface{}{profiling.DurationStr(total, precision), "", fmt.Sprintf("%s (total)", data.Name)})
 		tableWriter.Render()
 	}
 
