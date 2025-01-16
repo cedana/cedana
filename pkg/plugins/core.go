@@ -33,7 +33,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 	}
 
 	for _, t := range Registry {
-		if t.Type != Supported && t.Type != Experimental {
+		if t.Type != SUPPORTED && t.Type != EXPERIMENTAL {
 			continue
 		}
 

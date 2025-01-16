@@ -29,7 +29,7 @@ func CheckVersion(manager plugins.Manager) types.Check {
 		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); p.Status != plugins.Installed {
+		if p = manager.Get("criu"); !p.IsInstalled() {
 			// Set custom path if specified in config, as a fallback
 			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 				component.Warnings = append(component.Warnings,
@@ -82,7 +82,7 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); p.Status != plugins.Installed {
+		if p = manager.Get("criu"); !p.IsInstalled() {
 			// Set custom path if specified in config, as a fallback
 			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
 				c.SetCriuPath(custom_path)

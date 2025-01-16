@@ -109,9 +109,9 @@ var pluginListCmd = &cobra.Command{
 		installedCount := 0
 		availableCount := 0
 		for _, p := range list {
-			if p.Status == plugins.Installed || p.Status == plugins.Outdated {
+			if p.Status == plugins.INSTALLED || p.Status == plugins.OUTDATED {
 				installedCount++
-			} else if p.Status == plugins.Available {
+			} else if p.Status == plugins.AVAILABLE {
 				availableCount++
 			}
 		}
@@ -200,7 +200,7 @@ var pluginRemoveCmd = &cobra.Command{
 			}
 			args = []string{}
 			for _, p := range list {
-				if p.Status == plugins.Installed {
+				if p.Status == plugins.INSTALLED {
 					args = append(args, p.Name)
 				}
 			}
@@ -297,7 +297,7 @@ var pluginFeaturesCmd = &cobra.Command{
 		var pluginNames []string
 		var externalPlugins []string
 		for _, p := range list {
-			if p.Type == plugins.External {
+			if p.Type == plugins.EXTERNAL {
 				externalPlugins = append(externalPlugins, p.Name)
 				continue
 			}
@@ -391,13 +391,13 @@ func featureLegend() string {
 
 func statusStr(s plugins.Status) string {
 	switch s {
-	case plugins.Available:
+	case plugins.AVAILABLE:
 		return style.InfoColors.Sprint(s.String())
-	case plugins.Installed:
+	case plugins.INSTALLED:
 		return style.PositiveColors.Sprint(s.String())
-	case plugins.Outdated:
+	case plugins.OUTDATED:
 		return style.WarningColors.Sprint(s.String())
-	case plugins.Unknown:
+	case plugins.UNKNOWN:
 		return style.DisabledColors.Sprint(s.String())
 	default:
 		return s.String()

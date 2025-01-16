@@ -43,7 +43,7 @@ func NewSimpleManager(serverWg *sync.WaitGroup, plugins plugins.Manager) *Manage
 func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) error {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
-	if gpuPlugin = m.plugins.Get("gpu"); gpuPlugin.Status != plugins.Installed {
+	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
 		return fmt.Errorf("Please install the GPU plugin to use GPU support")
 	}
 	binary := gpuPlugin.BinaryPaths()[0]
@@ -93,7 +93,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 
 		// Check if GPU plugin is installed
 		var gpuPlugin *plugins.Plugin
-		if gpuPlugin = m.plugins.Get("gpu"); gpuPlugin.Status != plugins.Installed {
+		if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
 			statusComponent.Data = "missing"
 			statusComponent.Errors = append(statusComponent.Errors, "Please install the GPU plugin to use GPU support.")
 			return []*daemon.HealthCheckComponent{statusComponent}

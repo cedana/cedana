@@ -20,18 +20,18 @@ type (
 )
 
 const (
-	Unimplemented Type = iota // Go plugin that is not yet implemented
-	Deprecated                // Go plugin that is no longer maintained
-	Experimental              // Go plugin that is not yet stable
-	External                  // Not a Go plugin
-	Supported                 // Go plugin that is supported by Cedana
+	UNIMPLEMENTED Type = iota // Go plugin that is not yet implemented
+	DEPRECATED                // Go plugin that is no longer maintained
+	EXPERIMENTAL              // Go plugin that is not yet stable
+	EXTERNAL                  // Not a Go plugin
+	SUPPORTED                 // Go plugin that is supported by Cedana
 )
 
 const (
-	Unknown Status = iota
-	Available
-	Installed
-	Outdated
+	UNKNOWN Status = iota
+	AVAILABLE
+	INSTALLED
+	OUTDATED
 )
 
 // Represents plugin information
@@ -58,13 +58,13 @@ type Binary struct {
 
 func (t Type) String() string {
 	switch t {
-	case Supported:
+	case SUPPORTED:
 		return "supported"
-	case Experimental:
+	case EXPERIMENTAL:
 		return "experimental"
-	case Deprecated:
+	case DEPRECATED:
 		return "deprecated"
-	case Unimplemented:
+	case UNIMPLEMENTED:
 		return "unimplemented"
 	default:
 		return "-"
@@ -73,11 +73,11 @@ func (t Type) String() string {
 
 func (s Status) String() string {
 	switch s {
-	case Available:
+	case AVAILABLE:
 		return "available"
-	case Installed:
+	case INSTALLED:
 		return "installed"
-	case Outdated:
+	case OUTDATED:
 		return "outdated"
 	default:
 		return "unknown"
@@ -88,12 +88,12 @@ func (s Status) String() string {
 func (p *Plugin) SyncVersion() {
 	version := "unknown"
 	switch p.Type {
-	case Supported: // can fetch from symbol
+	case SUPPORTED: // can fetch from symbol
 		featureVersion.IfAvailable(func(name string, versionSym string) error {
 			version = strings.TrimSpace(versionSym)
 			return nil
 		}, p.Name)
-	case External: // can fetch by executing first binary with flag
+	case EXTERNAL: // can fetch by executing first binary with flag
 		if len(p.Binaries) < 1 {
 			break
 		}
@@ -144,7 +144,7 @@ func (p *Plugin) SyncInstalled() {
 	if found < len(p.Binaries) {
 		return
 	}
-	p.Status = Installed
+	p.Status = INSTALLED
 	p.Size = size
 	p.SyncVersion()
 }
@@ -177,4 +177,8 @@ func (p *Plugin) Checksum() string {
 		total += bin.Checksum
 	}
 	return total
+}
+
+func (p *Plugin) IsInstalled() bool {
+	return p.Status == INSTALLED || p.Status == OUTDATED
 }
