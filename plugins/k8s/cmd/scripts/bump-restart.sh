@@ -1,8 +1,9 @@
 #!/bin/bash
+# NOTE: This script assumes it's executed in the container environment
 
 set -e
 
-# NOTE: This script assumes it's executed in the container environment
+chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 
 # updates the cedana daemon to the latest version
 # and restarts with the same arguments
@@ -19,6 +20,5 @@ cp /usr/local/bin/buildah /host/cedana/bin/buildah
 cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
-chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh # updates to latest
 chroot /host /bin/bash /cedana/scripts/systemd-install.sh

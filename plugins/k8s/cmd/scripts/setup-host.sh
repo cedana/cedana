@@ -1,8 +1,9 @@
 #!/bin/bash
+# NOTE: This script assumes it's executed in the container environment
 
 set -e
 
-# NOTE: This script assumes it's executed in the container environment
+chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
 
@@ -18,7 +19,6 @@ cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
 # Enter chroot environment on the host
-chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 env \
     CEDANA_URL="$CEDANA_URL" \
     CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" \
