@@ -29,8 +29,8 @@ type (
 		CRIU CRIU `json:"criu" mapstructure:"criu" yaml:"criu"`
 		// CLI settings
 		CLI CLI `json:"cli" mapstructure:"cli" yaml:"cli"`
-		// GPU settings
-		GPU GPU `json:"gpu"        mapstructure:"gpu" yaml:"gpu"`
+		// Plugin settings
+		Plugins Plugins `json:"plugins" mapstructure:"plugins" yaml:"plugins"`
 	}
 
 	Connection struct {
@@ -78,6 +78,15 @@ type (
 		BinaryPath string `json:"binary_path"   mapstructure:"binary_path" yaml:"binary_path"`
 		// LeaveRunning sets whether to leave the process running after checkpoint
 		LeaveRunning bool `json:"leave_running" mapstructure:"leave_running" yaml:"leave_running"`
+	}
+
+	Plugins struct {
+		// BinDir is the directory where plugin binaries are stored
+		BinDir string `json:"bin_dir" mapstructure:"bin_dir" yaml:"bin_dir"`
+		// LibDir is the directory where plugin libraries are stored
+		LibDir string `json:"lib_dir" mapstructure:"lib_dir" yaml:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
+		// GPU is settings for the GPU plugin
+		GPU GPU `json:"gpu"        mapstructure:"gpu" yaml:"gpu"`
 	}
 
 	GPU struct {
