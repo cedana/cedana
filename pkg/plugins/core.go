@@ -12,14 +12,18 @@ import (
 	"path/filepath"
 	"plugin"
 	"sync"
+
+	"github.com/cedana/cedana/pkg/config"
 )
 
 var Load = sync.OnceValue(loadPlugins)
 
-const (
-	LibDir = "/usr/local/lib"
-	BinDir = "/usr/local/bin"
-)
+var LibDir, BinDir string
+
+func init() {
+	LibDir = config.Global.Plugins.LibDir
+	BinDir = config.Global.Plugins.BinDir
+}
 
 // LoadPlugins loads plugins from an installation directory.
 func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
