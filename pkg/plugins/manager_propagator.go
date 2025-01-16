@@ -149,7 +149,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				continue
 			}
 
-			if availableSet[name].Status == Installed {
+			if availableSet[name].Status == INSTALLED {
 				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
 				continue
 			}
