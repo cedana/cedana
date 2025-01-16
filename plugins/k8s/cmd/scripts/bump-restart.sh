@@ -1,10 +1,9 @@
 #!/bin/bash
+# NOTE: This script assumes it's executed in the container environment
 
 set -e
 
 chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
-
-# NOTE: This script assumes it's executed in the container environment
 
 # updates the cedana daemon to the latest version
 # and restarts with the same arguments
