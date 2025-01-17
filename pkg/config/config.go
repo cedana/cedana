@@ -51,7 +51,8 @@ var Global Config = Config{
 		Path:   filepath.Join(os.TempDir(), "cedana.db"),
 	},
 	Profiling: Profiling{
-		Enabled: true,
+		Enabled:       true,
+		Precision: "auto",
 	},
 	Metrics: Metrics{
 		ASR:  false,
