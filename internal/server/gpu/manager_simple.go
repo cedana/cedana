@@ -84,7 +84,7 @@ func (m *ManagerSimple) Detach(jid string) error {
 }
 
 func (m *ManagerSimple) IsAttached(jid string) bool {
-	return m.controllers.get(jid) != nil
+	return m.controllers.Get(jid) != nil
 }
 
 func (m *ManagerSimple) Checks() types.Checks {
@@ -114,7 +114,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 
-		controller := m.controllers.get(jid)
+		controller := m.controllers.Get(jid)
 		components, err := controller.waitForHealthCheck(ctx, m.wg)
 		defer m.controllers.kill(jid)
 		if components == nil && err != nil {
@@ -148,7 +148,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 		waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 		defer cancel()
 
-		controller := m.controllers.get(jid)
+		controller := m.controllers.Get(jid)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the task still running?")
 		}
@@ -183,7 +183,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
 			defer cancel()
 
-			controller := m.controllers.get(jid)
+			controller := m.controllers.Get(jid)
 			if controller == nil {
 				restoreErr <- fmt.Errorf("GPU controller not found, is the task still running?")
 			}
