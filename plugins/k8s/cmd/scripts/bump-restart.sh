@@ -5,7 +5,7 @@ set -e
 
 # NOTE: The scripts are executed before the binaries, ensure they are copied to the host
 # first
-cp /scripts/* /host/cedana/scripts
+cp -r /scripts/host/* /host/cedana/scripts
 chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 
 # updates the cedana daemon to the latest version
