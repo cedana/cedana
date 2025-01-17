@@ -49,7 +49,7 @@ type StreamIOSlave struct {
 
 type StreamIOReader struct {
 	io.Reader
-	io.WriterTo
+	// io.WriterTo
 	bytes <-chan []byte
 
 	buffer []byte
@@ -278,16 +278,16 @@ func (s *StreamIOReader) Read(p []byte) (n int, err error) {
 	return nb, nil
 }
 
-func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
-	for b := range s.bytes {
-		nb, err := w.Write(b)
-		if err != nil {
-			return n, err
-		}
-		n += int64(nb)
-	}
-	return
-}
+// func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
+// 	for b := range s.bytes {
+// 		nb, err := w.Write(b)
+// 		if err != nil {
+// 			return n, err
+// 		}
+// 		n += int64(nb)
+// 	}
+// 	return
+// }
 
 func (s *StreamIOWriter) Write(p []byte) (n int, err error) {
 	s.bytes <- p
