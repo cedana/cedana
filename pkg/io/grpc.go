@@ -18,7 +18,7 @@ import (
 
 const (
 	channelBufLen      = 32
-	readFromBufLen     = 1024
+	readFromBufLen     = 2048
 	streamDoneExitCode = 254
 	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
 )
@@ -51,6 +51,8 @@ type StreamIOReader struct {
 	io.Reader
 	io.WriterTo
 	bytes <-chan []byte
+
+	buffer []byte
 }
 
 type StreamIOWriter struct {
@@ -253,11 +255,27 @@ loop:
 }
 
 func (s *StreamIOReader) Read(p []byte) (n int, err error) {
-	for b := range s.bytes {
-		nb := copy(p, b)
-		return nb, nil
+	var b []byte
+	ok := true
+
+	if len(s.buffer) > 0 { // if bytes in buffer, use it first
+		b = s.buffer
+	} else {
+		b, ok = <-s.bytes
 	}
-	return 0, io.EOF
+	nb := copy(p, b)
+
+	if nb < len(b) {
+		s.buffer = b[nb:] // if bytes left, store in buffer
+	} else {
+		s.buffer = nil
+	}
+
+	if !ok {
+		return nb, io.EOF
+	}
+
+	return nb, nil
 }
 
 func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
