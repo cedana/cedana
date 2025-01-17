@@ -23,7 +23,7 @@ INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 
-build: $(BINARY) $(BINARY_SOURCES)
+build: $(BINARY)
 
 $(BINARY): $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
