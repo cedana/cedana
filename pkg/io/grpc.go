@@ -18,7 +18,7 @@ import (
 
 const (
 	channelBufLen      = 32
-	readFromBufLen     = 4096
+	readFromBufLen     = 512
 	streamDoneExitCode = 254
 	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
 )
@@ -95,6 +95,7 @@ func NewStreamIOMaster(
 				break loop
 			}
 		}
+
 		close(out)
 		close(err)
 		close(exitCode)
@@ -299,10 +300,8 @@ func (s *StreamIOWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, readFromBufLen)
 	for {
 		nr, err := r.Read(buf)
-		if nr > 0 {
-			s.bytes <- buf[:nr]
-			n += int64(nr)
-		}
+		s.bytes <- buf[:nr]
+		n += int64(nr)
 		if err != nil {
 			if err == io.EOF {
 				return n, nil
