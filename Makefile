@@ -19,20 +19,25 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 
 BINARY=cedana
 BINARY_SOURCES=$(wildcard **/*.go)
+INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 
-build: $(BINARY_SOURCES) ## Build the binary
+build: $(BINARY)
+
+$(BINARY): $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: stop $(BINARY) ## Install the binary
-	@echo "Installing $(BINARY)..."
-	$(SUDO) cp $(OUT_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
+install: $(INSTALL_PATH)
 
-start: ## Start the daemon
-	$(SUDO) ./$(BINARY) daemon start
+$(INSTALL_PATH): $(BINARY) ## Install the binary
+	@echo "Installing $(BINARY)..."
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
+
+start: $(INSTALL_PATH) ## Start the daemon
+	$(SUDO) $(BINARY) daemon start
 
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
@@ -41,17 +46,17 @@ stop: ## Stop the daemon
 
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
-	$(SCRIPTS_DIR)/systemd-install.sh
+	$(SUDO) $(SCRIPTS_DIR)/systemd-install.sh
 
 reset-systemd: ## Reset the systemd daemon
 	@echo "Stopping systemd service..."
-	$(SCRIPTS_DIR)/systemd-reset.sh ;\
+	$(SUDO) $(SCRIPTS_DIR)/systemd-reset.sh ;\
 	sleep 1
 
 reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -f $(OUT_DIR)/$(BINARY)
-	$(SUDO) rm -f /usr/local/bin/$(BINARY)
+	$(SUDO) rm -f $(INSTALL_PATH)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
