@@ -18,7 +18,7 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 ##########
 
 BINARY=cedana
-BINARY_SOURCES=$(wildcard **/*.go)
+BINARY_SOURCES=$(shell find . -name '*.go')
 INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
