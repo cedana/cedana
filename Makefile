@@ -23,9 +23,9 @@ INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 
-build: $(BINARY)
+$(BINARY): build
 
-$(BINARY): $(BINARY_SOURCES) ## Build the binary
+build: $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
