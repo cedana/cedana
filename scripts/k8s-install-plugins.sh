@@ -42,36 +42,36 @@ if [[ -n $PLUGINS ]]; then
     "$APP_PATH" plugin install $PLUGINS
 fi
 
-# install the shim to containerd, as it was downlaoded by the k8s plugin
+# install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
 
-PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
-if [ ! -f "$PATH_CONTAINERD_CONFIG" ]; then
-    echo "Containerd config file not found at $PATH_CONTAINERD_CONFIG"
-    if [ "$SEARCH_CONTAINERD_CONFIG" -eq 1 ]; then
-        echo "Searching for containerd config file..."
-        PATH_CONTAINERD_CONFIG=$(find / -fullname -- **/containerd/config.toml | head -n 1)
-        if [ ! -f "$PATH_CONTAINERD_CONFIG" ]; then
-            echo "Containerd config file not found. Exiting..."
-            exit 1
-        fi
-        echo "Found containerd config file at $PATH_CONTAINERD_CONFIG"
-    else
-        echo "Containerd config file not found. Creating default config file at $PATH_CONTAINERD_CONFIG"
-        if [[ $PATH_CONTAINERD_CONFIG == *"k3s"* ]]; then
-            echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
-            echo '{{ template "base" . }}' > "$PATH_CONTAINERD_CONFIG"
-        else
-            echo "" > "$PATH_CONTAINERD_CONFIG"
-        fi
-    fi
-fi
+if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
+    PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
+        echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
+        echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
 
-if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
-    echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-    cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
-
-    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
-      runtime_type = "io.containerd.runc.v2"
-      runtime_path = "/usr/local/bin/cedana-containerd-shim-v2"
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/containerd-shim-cedana-runc-v2"
 END_CAT
+    fi
+# TODO: Figure out how to restart k3s, this will tear down and restart the containers
+# NOT IMPORTANT: Current customers don't use k3s, so this is not a priority
+#    echo "Restarting k3s..."
+#    systemctl restart k3s
+else
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
+        echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/containerd-shim-cedana-runc-v2"
+END_CAT
+    fi
+    # SIGHUP is sent to the containerd process to reload the configuration
+    echo "Sending SIGHUP to containerd..."
+    systemctl restart containerd
 fi
