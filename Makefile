@@ -80,7 +80,7 @@ reset-logs: ## Reset logs
 ##@ Plugins
 ###########
 
-PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
+PLUGIN_SOURCES=$(shell find plugins -name '*.go')
 PLUGIN_BINARIES=$(wildcard $(OUT_DIR)/libcedana-*.so)
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
