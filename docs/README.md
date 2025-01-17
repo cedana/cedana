@@ -43,4 +43,3 @@ For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see 
 
 ## Developer Guides 
 - [Container runtime support](support/runtimes.md) 
-- [CLI commands](cli/commands.md)
