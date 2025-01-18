@@ -9,24 +9,29 @@ For detailed documentation on our managed Kubernetes or the larger cedana system
 ## Getting Started 
 The simplest demonstration of checkpoint/restore can be performed on your machine. 
 
-Start the daemon, either with the `./build-start-daemon.sh` script, or by running `sudo cedana daemon start &`. We have a couple simple scripts used for regression testing in `test/regression` that can be used. Exec one of the workloads with: 
+Start the daemon by running `make start`. Try out a simple scripts in `test/workloads`:
 
 ``` sh
-cedana exec -w $PWD test/regression/workload.sh
+cedana run process test/workloads/date-loop.sh
 ```
 
 You can use `cedana ps` to manage actively running jobs and all checkpoints taken. 
+``` sh
+$ cedana ps
+JOB             TYPE         PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
+angry_hypatia9  process  3489970  sleep   no                     /var/log/cedana-output-angry_hypatia9.log
+```
 
-To checkpoint the workload, pass the jobID from `cedana ps` to `cedana dump`: 
+To checkpoint the workload, pass the job name from `cedana ps` to `cedana dump`:
 
 ``` sh
-cedana dump job cs3gkv7oruu6pi3qul4g -d /tmp
+cedana dump job angry_hypatia9
 ```
 
 To restore: 
 
 ``` sh
-cedana restore job cs3gkv7oruu6pi3qul4g
+cedana restore job angry_hypatia9
 ```
 
 For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see the how-to-guides below. For information on architecture or anything else that can get you started building out code in cedana, see the developer guides section. 
@@ -38,4 +43,3 @@ For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see 
 
 ## Developer Guides 
 - [Container runtime support](support/runtimes.md) 
-- [CLI commands](cli/commands.md)
