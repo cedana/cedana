@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	channelBufLen      = 32
+	channelBufLen      = 32 // pending byte arrays in buffer
 	readFromBufLen     = 512
 	streamDoneExitCode = 254
 	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
@@ -282,10 +282,10 @@ func (s *StreamIOReader) Read(p []byte) (n int, err error) {
 func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
 	for b := range s.bytes {
 		nb, err := w.Write(b)
+		n += int64(nb)
 		if err != nil {
 			return n, err
 		}
-		n += int64(nb)
 	}
 	return
 }
@@ -300,8 +300,13 @@ func (s *StreamIOWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, readFromBufLen)
 	for {
 		nr, err := r.Read(buf)
-		s.bytes <- buf[:nr]
-		n += int64(nr)
+		if nr > 0 {
+			// copy the buffer to the channel, as the buffer will be overwritten
+			chunk := make([]byte, nr)
+			copy(chunk, buf[:nr])
+			s.bytes <- chunk
+			n += int64(nr)
+		}
 		if err != nil {
 			if err == io.EOF {
 				return n, nil
