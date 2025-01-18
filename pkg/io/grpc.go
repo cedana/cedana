@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	channelBufLen      = 32 // pending byte arrays in buffer
+	channelBufLen      = 32 // pending byte arrays in channel
 	readFromBufLen     = 512
 	streamDoneExitCode = 254
 	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
