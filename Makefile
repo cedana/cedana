@@ -11,14 +11,13 @@ ifndef VERBOSE
 endif
 
 all: build install plugins plugins-install ## Build and install (with all plugins)
-.PHONY: build plugins
 
 ##########
 ##@ Cedana
 ##########
 
 BINARY=cedana
-BINARY_SOURCES=$(shell find . -name '*.go')
+BINARY_SOURCES=$(shell find . -name '*.go' -not -path './plugins/*')
 INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
@@ -81,7 +80,8 @@ reset-logs: ## Reset logs
 ###########
 
 PLUGIN_SOURCES=$(shell find plugins -name '*.go')
-PLUGIN_BINARIES=$(wildcard $(OUT_DIR)/libcedana-*.so)
+PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
+PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
@@ -91,7 +91,9 @@ plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
 	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
 
-plugins: $(PLUGIN_SOURCES) ## Build all plugins
+plugins: $(PLUGIN_BINARIES) ## Build all plugins
+
+$(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
@@ -100,7 +102,9 @@ plugins: $(PLUGIN_SOURCES) ## Build all plugins
 		fi ;\
 	done ;\
 
-plugins-install: $(PLUGIN_BINARIES) ## Install all plugins
+plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
+
+$(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
