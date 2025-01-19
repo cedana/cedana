@@ -21,28 +21,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func SetWorkingDirectoryForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		details := req.GetDetails().GetRunc()
-		workingDir := details.GetWorkingDir()
-
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
-		}
-
-		if workingDir != "" && workingDir != cwd {
-			err = os.Chdir(workingDir)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
-			}
-			defer os.Chdir(cwd)
-		}
-
-		return next(ctx, opts, resp, req)
-	}
-}
-
 // CRIU has a few requirements for a root directory:
 // * it must be a mount point
 // * its parent must not be overmounted

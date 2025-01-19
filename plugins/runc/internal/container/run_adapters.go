@@ -2,7 +2,8 @@ package container
 
 import (
 	"context"
-	"os"
+	"path/filepath"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -18,21 +19,16 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 		details := req.GetDetails().GetRunc()
 		bundle := details.GetBundle()
+		workingDir := details.GetWorkingDir()
 
-		// If empty, assume cwd is the bundle. This is the behavior of runc binary as well.
-		if bundle != "" {
-			cwd, err := os.Getwd()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
-			}
-			err = os.Chdir(bundle)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
-			}
-			defer os.Chdir(cwd)
+		if !strings.HasPrefix(bundle, "/") { // if root path is not absolute
+			bundle = filepath.Join(workingDir, bundle)
+      details.Bundle = bundle
 		}
 
-		spec, err := runc.LoadSpec(runc.SpecConfigFile)
+		configFile := filepath.Join(bundle, runc.SpecConfigFile)
+
+		spec, err := runc.LoadSpec(configFile)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load spec: %v", err)
 		}
