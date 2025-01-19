@@ -53,7 +53,6 @@ var (
 	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
-		filesystem.SetWorkingDirectory,
 		container.LoadSpecFromBundle,
 		container.SetUsChildSubreaper,
 	}
@@ -82,7 +81,6 @@ var (
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
-		filesystem.SetWorkingDirectoryForRestore,
 
 		container.LoadSpecFromBundleForRestore,
 		gpu.RestoreInterceptionIfNeeded,
