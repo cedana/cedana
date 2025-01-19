@@ -120,7 +120,6 @@ func NewStreamIOMaster(
 				}
 			}
 		}
-		master.slave.CloseSend()
 	}()
 
 	stdIn = &StreamIOWriter{bytes: in}

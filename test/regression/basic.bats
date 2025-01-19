@@ -37,6 +37,8 @@ load_lib file
     assert_success
 }
 
+# TODO: Port old tests (below)
+
 # Do in single test so parallel runs don't interfere with each other
 # @test "plugin commands (local)" {
 #     run cedana -P "$PORT" plugin list -a

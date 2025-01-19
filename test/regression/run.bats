@@ -61,46 +61,44 @@ load_lib file
     assert_file_contains "$log_file" "hello"
 }
 
-# FIXME: BATS PROBLEM WITH IO FAILS WHEN USING PARALLELISM
+@test "run process with attach" {
+    jid=$(unix_nano)
 
-# @test "run process with attach" {
-#     jid=$(unix_nano)
+    run cedana run process echo hello --jid "$jid" --attach
 
-#     run cedana run process echo hello --jid "$jid" --attach
+    assert_success
+    assert_output --partial "hello"
+}
 
-#     assert_success
-#     assert_output --partial "hello"
-# }
+@test "run process with attach (exit code)" {
+    jid=$(unix_nano)
+    code=42
 
-# @test "run process with attach (exit code)" {
-#     jid=$(unix_nano)
-#     code=42
+    run cedana run process "$WORKLOADS"/exit-code.sh "$code" --jid "$jid" --attach
 
-#     run cedana run process "$WORKLOADS"/exit-code.sh "$code" --jid "$jid" --attach
+    assert_equal $status $code
+}
 
-#     assert_equal $status $code
-# }
+@test "attach (using PID)" {
+    jid=$(unix_nano)
+    code=42
 
-# @test "attach (using PID)" {
-#     jid=$(unix_nano)
-#     code=42
+    cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
 
-#     cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    pid=$(pid_for_jid "$jid")
 
-#     pid=$(pid_for_jid "$jid")
+    run cedana attach "$pid"
 
-#     run cedana attach "$pid"
+    assert_equal $status $code
+}
 
-#     assert_equal $status $code
-# }
+@test "attach job" {
+    jid=$(unix_nano)
+    code=42
 
-# @test "attach job" {
-#     jid=$(unix_nano)
-#     code=42
+    cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
 
-#     cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    run cedana job attach "$jid"
 
-#     run cedana job attach "$jid"
-
-#     assert_equal $status $code
-# }
+    assert_equal $status $code
+}
