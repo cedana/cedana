@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	channelBufLen      = 32
-	readFromBufLen     = 1024
+	channelBufLen      = 32 // pending byte arrays in channel
+	readFromBufLen     = 512
 	streamDoneExitCode = 254
 	maxPendingMasters  = 0 // UNTESTED: DO NOT CHANGE
 )
@@ -51,6 +51,8 @@ type StreamIOReader struct {
 	io.Reader
 	io.WriterTo
 	bytes <-chan []byte
+
+	buffer []byte
 }
 
 type StreamIOWriter struct {
@@ -93,6 +95,7 @@ func NewStreamIOMaster(
 				break loop
 			}
 		}
+
 		close(out)
 		close(err)
 		close(exitCode)
@@ -117,7 +120,6 @@ func NewStreamIOMaster(
 				}
 			}
 		}
-		master.slave.CloseSend()
 	}()
 
 	stdIn = &StreamIOWriter{bytes: in}
@@ -253,20 +255,36 @@ loop:
 }
 
 func (s *StreamIOReader) Read(p []byte) (n int, err error) {
-	for b := range s.bytes {
-		nb := copy(p, b)
-		return nb, nil
+	var b []byte
+	ok := true
+
+	if len(s.buffer) > 0 { // if bytes in buffer, use it first
+		b = s.buffer
+	} else {
+		b, ok = <-s.bytes
 	}
-	return 0, io.EOF
+	nb := copy(p, b)
+
+	if nb < len(b) {
+		s.buffer = b[nb:] // if bytes left, store in buffer
+	} else {
+		s.buffer = nil
+	}
+
+	if !ok {
+		return nb, io.EOF
+	}
+
+	return nb, nil
 }
 
 func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
 	for b := range s.bytes {
 		nb, err := w.Write(b)
+		n += int64(nb)
 		if err != nil {
 			return n, err
 		}
-		n += int64(nb)
 	}
 	return
 }
@@ -282,7 +300,10 @@ func (s *StreamIOWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	for {
 		nr, err := r.Read(buf)
 		if nr > 0 {
-			s.bytes <- buf[:nr]
+			// copy the buffer to the channel, as the buffer will be overwritten
+			chunk := make([]byte, nr)
+			copy(chunk, buf[:nr])
+			s.bytes <- chunk
 			n += int64(nr)
 		}
 		if err != nil {

@@ -56,27 +56,25 @@ load_lib file
     assert_file_contains "$log_file" "hello"
 }
 
-# FIXME: BATS PROBLEM WITH IO FAILS WHEN USING PARALLELISM
+@test "run container with attach" {
+    jid=$(unix_nano)
+    bundle="$(create_cmd_bundle "echo hello")"
 
-# @test "run container with attach" {
-#     jid=$(unix_nano)
-#     bundle="$(create_cmd_bundle "echo hello")"
+    run cedana run runc --bundle "$bundle" --jid "$jid" --attach
 
-#     run cedana run runc --bundle "$bundle" --jid "$jid" --attach
+    assert_success
+    assert_output --partial "hello"
+}
 
-#     assert_success
-#     assert_output --partial "hello"
-# }
+@test "run container with attach (exit code)" {
+    jid=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "exit-code.sh" "$code")"
 
-# @test "run container with attach (exit code)" {
-#     jid=$(unix_nano)
-#     code=42
-#     bundle="$(create_workload_bundle "exit-code.sh" "$code")"
+    run cedana run runc --bundle "$bundle" --jid "$jid" --attach
 
-#     run cedana run runc --bundle "$bundle" --jid "$jid" --attach
-
-#     assert_equal $status $code
-# }
+    assert_equal $status $code
+}
 
 ############
 ### Dump ###
