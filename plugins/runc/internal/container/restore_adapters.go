@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -29,21 +31,16 @@ func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		details := req.GetDetails().GetRunc()
 		bundle := details.GetBundle()
+		workingDir := details.GetWorkingDir()
 
-		// If empty, assume cwd is the bundle. This is the behavior of runc binary as well.
-		if bundle != "" {
-			cwd, err := os.Getwd()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to get current working directory: %v", err)
-			}
-			err = os.Chdir(bundle)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to set working directory: %v", err)
-			}
-			defer os.Chdir(cwd)
+		if !strings.HasPrefix(bundle, "/") {
+			bundle = filepath.Join(workingDir, bundle)
+			details.Bundle = bundle
 		}
 
-		spec, err := runc.LoadSpec(runc.SpecConfigFile)
+		configFile := filepath.Join(bundle, runc.SpecConfigFile)
+
+		spec, err := runc.LoadSpec(configFile)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load spec: %v", err)
 		}
@@ -56,12 +53,17 @@ func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
-		root := req.GetDetails().GetRunc().GetRoot()
-		id := req.GetDetails().GetRunc().GetID()
+		details := req.GetDetails().GetRunc()
+		root := details.GetRoot()
+		id := details.GetID()
+		bundle := details.GetBundle()
 
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get spec from context")
+		}
+		if !strings.HasPrefix(spec.Root.Path, "/") {
+			spec.Root.Path = filepath.Join(bundle, spec.Root.Path)
 		}
 
 		config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{

@@ -68,6 +68,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	details := req.GetDetails().GetRunc()
 	root := details.GetRoot()
 	id := details.GetID()
+	bundle := details.GetBundle()
 	noPivot := details.GetNoPivot()
 	noNewKeyring := details.GetNoNewKeyring()
 
@@ -79,12 +80,13 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	spec.Process.Terminal = false // force pass-through terminal, since we're managing it
 
 	// Apply updated spec to the bundle
-	err = runc.UpdateSpec(runc.SpecConfigFile, spec)
+	configFile := filepath.Join(bundle, runc.SpecConfigFile)
+	err = runc.UpdateSpec(configFile, spec)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to apply spec: %v", err)
 	}
 	log.Trace().Interface("spec", spec).Str("runc", id).Msg("updated spec, backing up old spec")
-	defer runc.RestoreSpec(runc.SpecConfigFile)
+	defer runc.RestoreSpec(configFile)
 
 	os.Remove(RUNC_LOG_FILE)
 
@@ -107,6 +109,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		// using a dump path (directly w/ restore -p <path>), instead of using job
 		// restore, the restored process dies immediately.
 	}
+	cmd.Dir = bundle
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
