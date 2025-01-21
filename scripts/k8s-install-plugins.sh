@@ -13,14 +13,14 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
-PLUGINS="criu runc k8s containerd" # bare minimum plugins required for k8s
+PLUGINS="criu" # bare minimum plugins required for k8s
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
     PLUGINS="$PLUGINS gpu"
-    echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
+    echo "Detected NVIDIA GPU! Ensuring gpu drivers are installed..."
     if [ ! -d /run/driver/nvidia ]; then
-        echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
+        echo "Nvidia Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
         if /sbin/ldconfig -p | grep -q libcuda.so.1; then
             echo "CUDA driver library found!"
         fi
@@ -53,13 +53,9 @@ if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
 
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/containerd-shim-cedana-runc-v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
     fi
-# TODO: Figure out how to restart k3s, this will tear down and restart the containers
-# NOT IMPORTANT: Current customers don't use k3s, so this is not a priority
-#    echo "Restarting k3s..."
-#    systemctl restart k3s
 else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
@@ -68,10 +64,9 @@ else
 
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/containerd-shim-cedana-runc-v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
     fi
-    # SIGHUP is sent to the containerd process to reload the configuration
     echo "Sending SIGHUP to containerd..."
     systemctl restart containerd
 fi
