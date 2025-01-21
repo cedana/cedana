@@ -45,7 +45,7 @@ type (
 	Checkpoint struct {
 		// Dir is the default directory to store checkpoints
 		Dir string `json:"dir"         mapstructure:"dir" yaml:"dir"`
-		// Compression is the default compression algorithm to use for checkpoints
+		// Compression is the default compression algorithm to use for checkpoints (none, tar, gzip, lz4, zlib)
 		Compression string `json:"compression" mapstructure:"compression" yaml:"compression"`
 		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
 		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.

@@ -179,7 +179,11 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 ##########
 
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
-DOCKER_TEST_RUN=docker run --privileged --init --cgroupns=private -it --rm -v $(PWD):/src:ro $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_RUN=docker run --privileged --init --cgroupns=private -it --rm \
+				-v $(PWD):/src:ro \
+				-v /usr/local/bin/criu:/usr/local/bin/criu \
+				-v /usr/local/bin/criu-image-streamer:/usr/local/bin/criu-image-streamer \
+				$(DOCKER_TEST_IMAGE)
 
 docker: ## Build the Docker image
 	@echo "Building Docker image..."
