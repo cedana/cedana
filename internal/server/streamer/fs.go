@@ -68,7 +68,7 @@ func NewStreamingFs(
 		compression = compressions[0]
 	}
 
-	// Create pipes for reading and writing data
+	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
 	for i := range parallelism {
@@ -81,6 +81,7 @@ func NewStreamingFs(
 		shardFds = append(shardFds, fmt.Sprintf("%d", 3+i))
 	}
 
+  // Start IO on the pipes from the dir
 	io := &sync.WaitGroup{}
 	ioErr := make(chan error, 1)
 	for i := range parallelism {
