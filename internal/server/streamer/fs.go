@@ -28,6 +28,7 @@ const (
 	READ_ONLY Mode = iota
 	WRITE_ONLY
 )
+const DEFAULT_PARALLELISM = 2
 
 const (
 	CAPTURE_SOCK        = "streamer-capture.sock"
