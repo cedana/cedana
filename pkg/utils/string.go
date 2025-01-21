@@ -1,5 +1,7 @@
 package utils
 
+import "strings"
+
 // Prints a string list as comma separated string.
 func StrList(strs []string) string {
 	str := ""
@@ -10,4 +12,10 @@ func StrList(strs []string) string {
 		}
 	}
 	return str
+}
+
+func LastLine(s string) string {
+  s = strings.Trim(s, "\n")
+	lines := strings.Split(s, "\n")
+	return strings.Trim(lines[len(lines)-1], "\n")
 }
