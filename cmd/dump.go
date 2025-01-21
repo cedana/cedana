@@ -33,7 +33,7 @@ func init() {
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
-		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (tar, gzip, lz4, none)")
+		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
 		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (0: don't stream, n > 0: n parallelism)")
 	dumpCmd.PersistentFlags().
