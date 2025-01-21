@@ -409,25 +409,3 @@ func imgPaths(dir string, mode Mode, parallelism int32) ([]string, error) {
 		return nil, fmt.Errorf("invalid mode: %d", mode)
 	}
 }
-
-func (fs *Fs) stopListener() error {
-	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG}
-	data, err := proto.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-	size := len(data)
-	sizeBuf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sizeBuf, uint32(size))
-	_, err = fs.conn.Write(sizeBuf)
-	if err != nil {
-		return fmt.Errorf("failed to write size to file request: %w", err)
-	}
-	_, err = fs.conn.Write(data)
-	if err != nil {
-		return fmt.Errorf("failed to write data to file request: %w", err)
-	}
-
-	return nil
-}
