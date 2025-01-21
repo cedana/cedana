@@ -25,10 +25,12 @@ type (
 		Profiling Profiling `json:"profiling" mapstructure:"profiling" yaml:"profiling"`
 		// Metrics settings
 		Metrics Metrics `json:"metrics" mapstructure:"metrics" yaml:"metrics"`
-		// CRIU settings and defaults
-		CRIU CRIU `json:"criu" mapstructure:"criu" yaml:"criu"`
 		// CLI settings
 		CLI CLI `json:"cli" mapstructure:"cli" yaml:"cli"`
+		// CRIU settings and defaults
+		CRIU CRIU `json:"criu" mapstructure:"criu" yaml:"criu"`
+		// GPU is settings for the GPU plugin
+		GPU GPU `json:"gpu"        mapstructure:"gpu" yaml:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" mapstructure:"plugins" yaml:"plugins"`
 	}
@@ -45,6 +47,9 @@ type (
 		Dir string `json:"dir"         mapstructure:"dir" yaml:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" mapstructure:"compression" yaml:"compression"`
+		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
+		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
+		Stream int32 `json:"stream" mapstructure:"stream" yaml:"stream"`
 	}
 
 	DB struct {
@@ -80,17 +85,15 @@ type (
 		LeaveRunning bool `json:"leave_running" mapstructure:"leave_running" yaml:"leave_running"`
 	}
 
+	GPU struct {
+		// Number of warm GPU controllers to keep in pool
+		PoolSize int `json:"pool_size" mapstructure:"pool_size" yaml:"pool_size"`
+	}
+
 	Plugins struct {
 		// BinDir is the directory where plugin binaries are stored
 		BinDir string `json:"bin_dir" mapstructure:"bin_dir" yaml:"bin_dir"`
 		// LibDir is the directory where plugin libraries are stored
 		LibDir string `json:"lib_dir" mapstructure:"lib_dir" yaml:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
-		// GPU is settings for the GPU plugin
-		GPU GPU `json:"gpu"        mapstructure:"gpu" yaml:"gpu"`
-	}
-
-	GPU struct {
-		// Number of warm GPU controllers to keep in pool
-		PoolSize int `json:"pool_size" mapstructure:"pool_size" yaml:"pool_size"`
 	}
 )

@@ -17,7 +17,7 @@ var (
 	DirFlag         = Flag{Full: "dir", Short: "d"}
 	NameFlag        = Flag{Full: "name"}
 	PathFlag        = Flag{Full: "path", Short: "p"}
-	StreamFlag      = Flag{Full: "stream", Short: "s"}
+	StreamFlag      = Flag{Full: "stream"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
 	JidFlag         = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag  = Flag{Full: "gpu-enabled", Short: "g"}
