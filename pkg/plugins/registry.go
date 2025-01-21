@@ -58,6 +58,10 @@ var Registry = []Plugin{
 		Name:      "k8s",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
+	},
+	{
+		Name:      "containerdshim",
+		Type:      SUPPORTED,
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
 	},
 }

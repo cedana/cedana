@@ -13,7 +13,7 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
-PLUGINS="criu" # bare minimum plugins required for k8s
+PLUGINS="criu containerdshim" # bare minimum plugins required for k8s
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
