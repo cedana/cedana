@@ -33,7 +33,7 @@ func init() {
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
-		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (tar, gzip, lz4, none)")
+		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
 		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (0: don't stream, n > 0: n parallelism)")
 	dumpCmd.PersistentFlags().
@@ -88,7 +88,7 @@ var dumpCmd = &cobra.Command{
 		dir := config.Global.Checkpoint.Dir
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression := config.Global.Checkpoint.Compression
-		stream := config.Global.Checkpoint.Stream
+		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)

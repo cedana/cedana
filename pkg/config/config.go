@@ -73,7 +73,7 @@ var Global Config = Config{
 func init() {
 	setDefaults()
 	bindEnvVars()
-	viper.UnmarshalExact(&Global)
+	viper.Unmarshal(&Global)
 }
 
 type InitArgs struct {
@@ -127,12 +127,12 @@ func Init(args InitArgs) error {
 
 // Loads the global defaults into viper
 func setDefaults() {
-	viper.SetTypeByDefaultValue(true)
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
 		viper.SetDefault(tag, defaultVal)
 	}
+	viper.SetTypeByDefaultValue(true)
 }
 
 // Add bindings for env vars so env vars can be used as backup
