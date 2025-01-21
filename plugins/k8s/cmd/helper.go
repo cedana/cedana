@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -95,6 +96,7 @@ func destroyCedana(ctx context.Context) error {
 func startHelper(ctx context.Context, startChroot bool, address string, protocol string) error {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+	var w sync.WaitGroup
 
 	_, err := createClientWithRetry(address, protocol)
 	if err != nil {
@@ -103,6 +105,7 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 
 	// Goroutine to check if the daemon is running
 	go func() {
+		w.Add(1)
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 
@@ -166,6 +169,8 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 			}
 		}
 	}()
+
+	w.Wait()
 
 	return nil
 }
