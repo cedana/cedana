@@ -28,7 +28,7 @@ var SUPPORTED_COMPRESSIONS = map[string]bool{
 	"lz4":  true,
 }
 
-// CreateTarball creates a tarball from the provided sources and writes it to the destination.
+// Tar creates a tarball from the provided sources and writes it to the destination.
 // The desination should be a path without any file extension, as the function will add extension
 // based on the compression format specified.
 // XXX: Works only with files, not directories.
@@ -111,7 +111,7 @@ func Tar(src string, tarball string, compression string) (string, error) {
 	return tarball, nil
 }
 
-// DecompressTarball decompresses the provided tarball to the destination directory.
+// Untar decompresses the provided tarball to the destination directory.
 // The destination directory should already exist.
 // The function automatically detects the compression format from the file extension.
 // XXX: Works only with files, not directories.
@@ -123,23 +123,11 @@ func Untar(tarball string, dest string) error {
 	defer file.Close()
 
 	var reader io.Reader
-	var compression string
 
 	switch filepath.Ext(tarball) {
 	case ".lz4":
-		compression = "lz4"
-	case ".gz":
-		compression = "gzip"
-	case ".tar":
-		compression = "none"
-	default:
-		return fmt.Errorf("Unsupported compression format: %s", compression)
-	}
-
-	switch compression {
-	case "lz4":
 		reader = lz4.NewReader(file)
-	case "gzip":
+	case ".gz":
 		var readCloser io.ReadCloser
 		readCloser, err = gzip.NewReader(file)
 		if err != nil {
@@ -147,8 +135,10 @@ func Untar(tarball string, dest string) error {
 		}
 		defer readCloser.Close()
 		reader = readCloser
-	default:
+	case ".tar":
 		reader = file
+	default:
+		return fmt.Errorf("Unsupported compression format: %s", strings.TrimPrefix(filepath.Ext(tarball), "."))
 	}
 
 	tarReader := tar.NewReader(reader)
@@ -195,6 +185,81 @@ func Untar(tarball string, dest string) error {
 	}
 
 	return nil
+}
+
+// WriteFile writes the contents of the provided reader to the file at the provided path.
+func WriteFile(path string, reader io.ReadCloser, compression string) error {
+	defer reader.Close()
+	switch compression {
+	case "lz4":
+		path += ".lz4"
+	case "gzip", "gz":
+		path += ".gz"
+	case "tar":
+		path += ".tar"
+	case "", "none":
+		// Do nothing
+	default:
+		return fmt.Errorf("Unsupported compression format: %s", compression)
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("Could not create file: %s", err)
+	}
+
+	var writer io.WriteCloser
+	switch compression {
+	case "lz4":
+		writer = lz4.NewWriter(file)
+		defer writer.Close()
+	case "gzip", "gz":
+		writer = gzip.NewWriter(file)
+		defer writer.Close()
+	case "tar":
+		writer = tar.NewWriter(file)
+	case "", "none":
+		writer = file
+	default:
+		os.Remove(path)
+		return fmt.Errorf("Unsupported compression format: %s", compression)
+	}
+
+	_, err = io.Copy(writer, reader)
+	return err
+}
+
+// ReadFile reads the contents of the file at the provided path and writes it to the provided writer.
+// The function automatically detects the compression format from the file extension.
+func ReadFile(path string, writer io.WriteCloser) error {
+	defer writer.Close()
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("Could not open file: %s", err)
+	}
+	defer file.Close()
+
+	var reader io.Reader
+	switch filepath.Ext(path) {
+	case ".lz4":
+		reader = lz4.NewReader(file)
+	case ".gz":
+		readCloser, err := gzip.NewReader(file)
+		if err != nil {
+			return fmt.Errorf("Could not create gzip reader: %s", err)
+		}
+		defer readCloser.Close()
+		reader = readCloser
+	case ".tar":
+		reader = tar.NewReader(file)
+	case "":
+		reader = file
+	default:
+		return fmt.Errorf("Unsupported compression format: %s", strings.TrimPrefix(filepath.Ext(path), "."))
+	}
+
+	_, err = io.Copy(writer, reader)
+	return err
 }
 
 //////////////////////////
