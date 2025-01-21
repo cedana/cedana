@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
@@ -136,6 +137,12 @@ var processRunCmd = &cobra.Command{
 		asRoot, _ := cmd.Flags().GetBool(flags.AsRootFlag.Full)
 
 		path := args[0]
+		if fullPath, err := exec.LookPath(path); err == nil {
+			path = fullPath
+		} else {
+			return err
+		}
+
 		args = args[1:]
 		env := os.Environ()
 		wd, err := os.Getwd()

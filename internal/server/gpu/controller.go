@@ -45,7 +45,7 @@ type controllers struct {
 	sync.Map
 }
 
-func (m *controllers) get(jid string) *controller {
+func (m *controllers) Get(jid string) *controller {
 	c, ok := m.Load(jid)
 	if !ok {
 		return nil
@@ -70,7 +70,7 @@ func (m *controllers) spawn(
 		return err
 	}
 
-	controller := m.get(jid)
+	controller := m.Get(jid)
 
 	log.Debug().Str("jid", jid).Msg("waiting for GPU controller...")
 
@@ -92,6 +92,10 @@ func (m *controllers) spawnAsync(
 	jid string,
 	pid ...<-chan uint32,
 ) error {
+	if m.Get(jid) != nil {
+		return fmt.Errorf("a GPU controller is already attached to %s", jid)
+	}
+
 	port, err := utils.GetFreePort()
 	if err != nil {
 		return fmt.Errorf("failed to get free port: %w", err)
@@ -150,7 +154,7 @@ func (m *controllers) spawnAsync(
 			select {
 			case <-lifetime.Done():
 			case pid := <-pid[0]:
-				syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL)
+				syscall.Kill(int(pid), CONTROLLER_PREMATURE_EXIT_SIGNAL) // inconsequential if process is already dead
 			}
 		}
 	}()
@@ -159,7 +163,7 @@ func (m *controllers) spawnAsync(
 }
 
 func (m *controllers) kill(jid string) error {
-	controller := m.get(jid)
+	controller := m.Get(jid)
 	if controller == nil {
 		return fmt.Errorf("No GPU controller attached for %s", jid)
 	}

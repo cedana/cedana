@@ -11,28 +11,32 @@ ifndef VERBOSE
 endif
 
 all: build install plugins plugins-install ## Build and install (with all plugins)
-.PHONY: build plugins
 
 ##########
 ##@ Cedana
 ##########
 
 BINARY=cedana
-BINARY_SOURCES=$(wildcard **/*.go)
+BINARY_SOURCES=$(shell find . -name '*.go' -not -path './plugins/*')
+INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 
-build: $(BINARY_SOURCES) ## Build the binary
+build: $(BINARY)
+
+$(BINARY): $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: stop $(BINARY) ## Install the binary
-	@echo "Installing $(BINARY)..."
-	$(SUDO) cp $(OUT_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
+install: $(INSTALL_PATH)
 
-start: ## Start the daemon
-	$(SUDO) ./$(BINARY) daemon start
+$(INSTALL_PATH): $(BINARY) ## Install the binary
+	@echo "Installing $(BINARY)..."
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
+
+start: $(INSTALL_PATH) ## Start the daemon
+	$(SUDO) $(BINARY) daemon start
 
 stop: ## Stop the daemon
 	@echo "Stopping cedana..."
@@ -41,17 +45,17 @@ stop: ## Stop the daemon
 
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
-	$(SCRIPTS_DIR)/systemd-install.sh
+	$(SUDO) $(SCRIPTS_DIR)/systemd-install.sh
 
 reset-systemd: ## Reset the systemd daemon
 	@echo "Stopping systemd service..."
-	$(SCRIPTS_DIR)/systemd-reset.sh ;\
+	$(SUDO) $(SCRIPTS_DIR)/systemd-reset.sh ;\
 	sleep 1
 
 reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -f $(OUT_DIR)/$(BINARY)
-	$(SUDO) rm -f /usr/local/bin/$(BINARY)
+	$(SUDO) rm -f $(INSTALL_PATH)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
@@ -75,8 +79,9 @@ reset-logs: ## Reset logs
 ##@ Plugins
 ###########
 
-PLUGIN_SOURCES=$(wildcard plugins/**/*.go)
-PLUGIN_BINARIES=$(wildcard $(OUT_DIR)/libcedana-*.so)
+PLUGIN_SOURCES=$(shell find plugins -name '*.go')
+PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
+PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
@@ -86,7 +91,9 @@ plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
 	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
 
-plugins: $(PLUGIN_SOURCES) ## Build all plugins
+plugins: $(PLUGIN_BINARIES) ## Build all plugins
+
+$(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
@@ -95,7 +102,9 @@ plugins: $(PLUGIN_SOURCES) ## Build all plugins
 		fi ;\
 	done ;\
 
-plugins-install: $(PLUGIN_BINARIES) ## Install all plugins
+plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
+
+$(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \

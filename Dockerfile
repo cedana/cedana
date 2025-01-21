@@ -36,7 +36,7 @@ ADD ./go.sum /app
 RUN go mod download && rm -rf go.mod go.sum
 ADD . /app
 RUN make build
-RUN make plugin PLUGIN=k8s
+RUN make plugins
 
 FROM ubuntu:22.04
 

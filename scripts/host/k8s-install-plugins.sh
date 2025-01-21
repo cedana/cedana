@@ -43,7 +43,6 @@ if [[ -n $PLUGINS ]]; then
 fi
 
 # install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
-
 if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
     PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then

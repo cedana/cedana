@@ -63,9 +63,5 @@ fi
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
-# SIGHUP is sent to the containerd process to reload the configuration
-echo "Sending SIGHUP to containerd..."
-systemctl restart containerd
-
 "$DIR"/systemd-reset.sh
 "$DIR"/systemd-install.sh

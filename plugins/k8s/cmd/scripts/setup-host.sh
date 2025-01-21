@@ -3,15 +3,16 @@
 
 set -e
 
-chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
-
+# NOTE: The scripts are executed before the binaries, ensure they are copied to the host
+# first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
+cp -r /scripts/host/* /host/cedana/scripts
+chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
-cp /scripts/* /host/cedana/scripts
 cp /Makefile /host/cedana/Makefile
 
 cp /usr/local/bin/buildah /host/cedana/bin/buildah
