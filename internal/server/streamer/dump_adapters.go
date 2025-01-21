@@ -2,7 +2,6 @@ package streamer
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -18,10 +18,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
-
-// TODO: Handle compression in the daemon itself to ensure
-// parity with the normal filesystem dump adapter.
-var SUPPORTED_STREAMING_COMPRESSION = "lz4"
 
 // This adapter sets up the cedana-image-streamer for directly streaming
 // files to the dump directory.
@@ -36,15 +32,6 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		// as the process would be killed
 		if _, ok := utils.SUPPORTED_COMPRESSIONS[compression]; !ok {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
-		}
-
-		// Check if compression is valid for streaming, because we don't want to fail after the dump
-		// as the process would be killed
-		// TODO: Remove this once compression for streaming is handled by daemon
-		if compression != SUPPORTED_STREAMING_COMPRESSION {
-			resp.Messages = append(resp.Messages,
-				fmt.Sprintf("'%s' is not supported for streaming C/R. Using %s instead.", compression, SUPPORTED_STREAMING_COMPRESSION),
-			)
 		}
 
 		dir := req.GetDir()
@@ -104,7 +91,16 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		if parallelism == 0 {
 			parallelism = config.Global.Checkpoint.Stream
 		}
-		opts.DumpFs, err = NewStreamingFs(ctx, opts.WG, imgStreamer.BinaryPaths()[0], imagesDirectory, parallelism, WRITE_ONLY)
+		var wait func() error
+		opts.DumpFs, wait, err = NewStreamingFs(
+			ctx,
+			opts.WG,
+			imgStreamer.BinaryPaths()[0],
+			imagesDirectory,
+			parallelism,
+			WRITE_ONLY,
+			compression,
+		)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 		}
@@ -112,6 +108,14 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
+		}
+
+		// Wait for all the streaming to finish
+		_, end := profiling.StartTimingCategory(ctx, "streamer", wait)
+		err = wait()
+		end()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
 		}
 
 		// If nothing was put in the directory, remove it and return early

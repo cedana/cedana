@@ -8,6 +8,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,7 +27,7 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 		var imagesDirectory string
 
 		if !stat.IsDir() {
-			return nil, status.Errorf(codes.InvalidArgument, "path must be a directory container streamed images")
+			return nil, status.Errorf(codes.InvalidArgument, "path must be a directory containing streamed images")
 		}
 
 		imagesDirectory = path
@@ -72,11 +73,32 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 		if parallelism == 0 {
 			parallelism = config.Global.Checkpoint.Stream
 		}
-		opts.DumpFs, err = NewStreamingFs(ctx, opts.WG, imgStreamer.BinaryPaths()[0], imagesDirectory, parallelism, READ_ONLY)
+		var wait func() error
+		opts.DumpFs, wait, err = NewStreamingFs(
+			ctx,
+			opts.WG,
+			imgStreamer.BinaryPaths()[0],
+			imagesDirectory,
+			parallelism,
+			READ_ONLY,
+		)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 		}
 
-		return next(ctx, opts, resp, req)
+		exited, err = next(ctx, opts, resp, req)
+		if err != nil {
+			return nil, err
+		}
+
+		// Wait for all the streaming to finish
+		_, end := profiling.StartTimingCategory(ctx, "streamer", wait)
+		err = wait()
+		end()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
+		}
+
+		return exited, nil
 	}
 }
