@@ -91,7 +91,7 @@ func NewStreamingFs(
 			defer readFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.ReadFile(path, writeFds[i])
+				err := utils.ReadFrom(path, writeFds[i])
 				if err != nil {
 					ioErr <- err
 				}
@@ -100,7 +100,7 @@ func NewStreamingFs(
 			defer writeFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.WriteFile(path, readFds[i], compression)
+				err := utils.WriteTo(readFds[i], path, compression)
 				if err != nil {
 					ioErr <- err
 				}

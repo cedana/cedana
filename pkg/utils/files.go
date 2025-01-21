@@ -3,6 +3,7 @@ package utils
 import (
 	"archive/tar"
 	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ var SUPPORTED_COMPRESSIONS = map[string]bool{
 	"gzip": true,
 	"gz":   true,
 	"lz4":  true,
+	"zlib": true,
 }
 
 // Tar creates a tarball from the provided sources and writes it to the destination.
@@ -40,6 +42,8 @@ func Tar(src string, tarball string, compression string) (string, error) {
 		tarball += ".tar.lz4"
 	case "gzip", "gz":
 		tarball += ".tar.gz"
+	case "zlib":
+		tarball += ".tar.zlib"
 	case "tar":
 		tarball += ".tar"
 	case "", "none":
@@ -62,6 +66,9 @@ func Tar(src string, tarball string, compression string) (string, error) {
 		defer writer.Close()
 	case "gzip", "gz":
 		writer = gzip.NewWriter(file)
+		defer writer.Close()
+	case "zlib":
+		writer = zlib.NewWriter(file)
 		defer writer.Close()
 	case "tar":
 		writer = file
@@ -136,10 +143,16 @@ func Untar(tarball string, dest string) error {
 	case ".lz4":
 		reader = lz4.NewReader(file)
 	case ".gz":
-		var readCloser io.ReadCloser
-		readCloser, err = gzip.NewReader(file)
+		readCloser, err := gzip.NewReader(file)
 		if err != nil {
 			return fmt.Errorf("Could not create gzip reader: %s", err)
+		}
+		defer readCloser.Close()
+		reader = readCloser
+	case ".zlib":
+		readCloser, err := zlib.NewReader(file)
+		if err != nil {
+			return fmt.Errorf("Could not create zlib reader: %s", err)
 		}
 		defer readCloser.Close()
 		reader = readCloser
@@ -195,17 +208,18 @@ func Untar(tarball string, dest string) error {
 	return nil
 }
 
-// WriteFile writes the contents of the provided reader to the file at the provided path.
-func WriteFile(path string, reader io.ReadCloser, compression string) error {
-	defer reader.Close()
+// WriteTo writes the contents from the provided file to the the provided path.
+// Compression format is specified by the compression argument.
+func WriteTo(src *os.File, path string, compression string) error {
+	defer src.Close()
 	switch compression {
 	case "lz4":
 		path += ".lz4"
 	case "gzip", "gz":
 		path += ".gz"
-	case "tar":
-		path += ".tar"
-	case "", "none":
+	case "zlib":
+		path += ".zlib"
+	case "", "none", "tar": // Taring single file makes no sense, so for compatibility, we just write as file
 		// Do nothing
 	default:
 		return fmt.Errorf("Unsupported compression format: %s", compression)
@@ -224,23 +238,24 @@ func WriteFile(path string, reader io.ReadCloser, compression string) error {
 	case "gzip", "gz":
 		writer = gzip.NewWriter(file)
 		defer writer.Close()
-	case "tar":
-		writer = tar.NewWriter(file)
-	case "", "none":
+	case "zlib":
+		writer = zlib.NewWriter(file)
+		defer writer.Close()
+	case "", "none", "tar": // Taring single file makes no sense, so for compatibility, we just write as file
 		writer = file
 	default:
 		os.Remove(path)
 		return fmt.Errorf("Unsupported compression format: %s", compression)
 	}
 
-	_, err = io.Copy(writer, reader)
+	_, err = src.WriteTo(writer)
 	return err
 }
 
-// ReadFile reads the contents of the file at the provided path and writes it to the provided writer.
+// ReadFrom reads the contents of the file at the provided path and writes it to the provided file.
 // The function automatically detects the compression format from the file extension.
-func ReadFile(path string, writer io.WriteCloser) error {
-	defer writer.Close()
+func ReadFrom(path string, target *os.File) error {
+	defer target.Close()
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("Could not open file: %s", err)
@@ -258,15 +273,20 @@ func ReadFile(path string, writer io.WriteCloser) error {
 		}
 		defer readCloser.Close()
 		reader = readCloser
-	case ".tar":
-		reader = tar.NewReader(file)
-	case "":
+	case ".zlib":
+		readCloser, err := zlib.NewReader(file)
+		if err != nil {
+			return fmt.Errorf("Could not create zlib reader: %s", err)
+		}
+		defer readCloser.Close()
+		reader = readCloser
+	case "": // Taring single file makes no sense, so for compatibility, we just write as file
 		reader = file
 	default:
 		return fmt.Errorf("Unsupported compression format: %s", strings.TrimPrefix(filepath.Ext(path), "."))
 	}
 
-	_, err = io.Copy(writer, reader)
+	_, err = target.ReadFrom(reader)
 	return err
 }
 
