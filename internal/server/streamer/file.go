@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
 )
 
 // Implementation of the afero.File interface that uses streaming as the backend
@@ -14,7 +11,6 @@ type File struct {
 	name string
 	rFd  int // read file descriptor
 	wFd  int // write file descriptor
-	afero.File
 }
 
 func (f *File) Name() string {
@@ -22,10 +18,7 @@ func (f *File) Name() string {
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-  log.Warn().Msg("Read called")
-	n, err = syscall.Read(f.rFd, p)
-  log.Warn().Msgf("Read called: %d", n)
-  return
+	return syscall.Read(f.rFd, p)
 }
 
 func (f *File) Write(p []byte) (n int, err error) {

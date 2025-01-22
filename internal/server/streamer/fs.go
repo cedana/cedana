@@ -33,9 +33,10 @@ const (
 	SERVE_SOCK          = "streamer-serve.sock"
 	INIT_PROGRESS_MSG   = "socket-init"
 	STOP_LISTENER_MSG   = "stop-listener"
+	IMG_FILE_PATTERN    = "img-*"
 	IMG_FILE_FORMATTER  = "img-%d"
 	CONNECTION_TIMEOUT  = 5 * time.Second
-	DEFAULT_PARALLELISM = 2
+	DEFAULT_PARALLELISM = 4
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -81,18 +82,21 @@ func NewStreamingFs(
 		shardFds = append(shardFds, fmt.Sprintf("%d", 3+i))
 	}
 
-  // Start IO on the pipes from the dir
+	// Start IO on the pipes from the dir
 	io := &sync.WaitGroup{}
 	ioErr := make(chan error, 1)
+	paths, err := imgPaths(dir, mode, parallelism)
+	if err != nil {
+		return nil, nil, err
+	}
 	for i := range parallelism {
-		path := filepath.Join(dir, fmt.Sprintf(IMG_FILE_FORMATTER, i))
 		io.Add(1)
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.ReadFrom(path, writeFds[i])
+				err := utils.ReadFrom(paths[i], writeFds[i])
 				if err != nil {
 					ioErr <- err
 				}
@@ -101,7 +105,7 @@ func NewStreamingFs(
 			defer writeFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.WriteTo(readFds[i], path, compression)
+				err := utils.WriteTo(readFds[i], paths[i], compression)
 				if err != nil {
 					ioErr <- err
 				}
@@ -185,7 +189,7 @@ func NewStreamingFs(
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	case <-time.After(CONNECTION_TIMEOUT):
-		return nil, nil, fmt.Errorf("connection timed out after %s", CONNECTION_TIMEOUT)
+		return nil, nil, fmt.Errorf("timed out waiting for streamer to start")
 	case <-ready:
 	}
 
@@ -272,6 +276,7 @@ func (fs *Fs) Chtimes(name string, atime, mtime time.Time) error {
 // Helper Methods //
 ////////////////////
 
+// Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFds(name string) (int, int, error) {
 	fds := make([]int, 2)
 	err := syscall.Pipe(fds)
@@ -319,6 +324,7 @@ func (fs *Fs) openFds(name string) (int, int, error) {
 	return rFd, wFd, nil
 }
 
+// Tells the streamer to stop listening for new connections
 func (fs *Fs) stopListener() error {
 	// Send file request to streamer
 	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG}
@@ -339,4 +345,28 @@ func (fs *Fs) stopListener() error {
 	}
 
 	return nil
+}
+
+// Returns a list of image paths found in the image directory.
+// Returns an error if the number of images found is not equal to the parallelism.
+func imgPaths(dir string, mode Mode, parallelism int32) ([]string, error) {
+	switch mode {
+	case READ_ONLY:
+		matches, err := filepath.Glob(filepath.Join(dir, IMG_FILE_PATTERN))
+		if err != nil {
+			return nil, err
+		}
+		if len(matches) != int(parallelism) {
+			return nil, fmt.Errorf("expected %d images, got %d. please specify correct parallelism", parallelism, len(matches))
+		}
+		return matches, nil
+	case WRITE_ONLY:
+		paths := make([]string, parallelism)
+		for i := range parallelism {
+			paths[i] = filepath.Join(dir, fmt.Sprintf(IMG_FILE_FORMATTER, i))
+		}
+		return paths, nil
+	default:
+		return nil, fmt.Errorf("invalid mode: %d", mode)
+	}
 }
