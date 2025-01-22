@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -25,15 +26,28 @@ func IsPathInPrefixList(path string, prefix []string) bool {
 
 // lifted from libcontainer
 func CriuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs string) {
-	mountDest := strings.TrimPrefix(m.Destination, rootfs)
-	if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
-		mountDest = dest[len(rootfs):]
+	mt := m
+	for true {
+		m := mt
+		mountDest := strings.TrimPrefix(m.Destination, rootfs)
+		if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
+			mountDest = dest[len(rootfs):]
+		}
+		extMnt := &criu_proto.ExtMountMap{
+			Key: proto.String(mountDest),
+			Val: proto.String(mountDest),
+		}
+		opts.ExtMnt = append(opts.ExtMnt, extMnt)
+		s, err := os.Readlink(m.Source)
+		if err != nil {
+			break
+		}
+		source, err := filepath.Abs(s)
+		if err != nil {
+			break
+		}
+		mt = &configs.Mount{Source: source, Destination: source}
 	}
-	extMnt := &criu_proto.ExtMountMap{
-		Key: proto.String(mountDest),
-		Val: proto.String(mountDest),
-	}
-	opts.ExtMnt = append(opts.ExtMnt, extMnt)
 }
 
 // lifted from libcontainer
