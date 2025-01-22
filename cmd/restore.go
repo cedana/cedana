@@ -29,7 +29,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
-		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the restore (0: don't stream, n > 0: n parallelism)")
+		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the restore (using <n> parallel streams)")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
@@ -83,7 +83,7 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
-    stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
+		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)

@@ -35,7 +35,7 @@ func init() {
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
-		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (0: don't stream, n > 0: n parallelism)")
+		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (using <n> parallel streams)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LeaveRunningFlag.Full, flags.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().

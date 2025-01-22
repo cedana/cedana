@@ -248,6 +248,9 @@ func WriteTo(src *os.File, path string, compression string) error {
 // The function automatically detects the compression format from the file extension.
 func ReadFrom(path string, target *os.File) error {
 	defer target.Close()
+
+	ext := filepath.Ext(path)
+
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("Could not open file: %s", err)
@@ -255,7 +258,7 @@ func ReadFrom(path string, target *os.File) error {
 	defer file.Close()
 
 	var reader io.Reader
-	switch filepath.Ext(path) {
+	switch ext {
 	case ".lz4":
 		reader = lz4.NewReader(file)
 	case ".gz":
