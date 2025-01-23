@@ -210,7 +210,7 @@ jobs:
 
   regression-test:
     name: Regression Tests
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-4
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -218,6 +218,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init
     needs: [build]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -248,7 +251,7 @@ jobs:
 
   regression-test-runc:
     name: Regression Tests (runc)
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-4
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -256,6 +259,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init
     needs: [build, build-plugins]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -292,7 +298,7 @@ jobs:
 
   regression-test-containerd:
     name: Regression Tests (containerd)
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-4
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -300,6 +306,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init
     needs: [build, build-plugins]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -336,7 +345,7 @@ jobs:
 
   regression-test-crio:
     name: Regression Tests (crio)
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-4
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -344,6 +353,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init
     needs: [build, build-plugins]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -378,9 +390,9 @@ jobs:
       - name: Run regression tests
         run: make test-regression-plugin PLUGIN=crio
 
-  regression-test-gpu:
-    name: Regression Tests (gpu)
-    runs-on: ubicloud-standard-8
+  regression-test-streamer:
+    name: Regression Tests (streamer)
+    runs-on: ubicloud-standard-4
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -388,6 +400,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init
     needs: [build, build-plugins]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -409,6 +424,59 @@ jobs:
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install latest streamer plugin
+        run: sudo -E ./cedana plugin install streamer
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        run: make test-regression-plugin PLUGIN=streamer
+
+  regression-test-gpu:
+    name: Regression Tests (gpu)
+    runs-on: ubicloud-gpu
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init
+    needs: [build, build-plugins]
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install latest gpu plugin
+        run: sudo -E ./cedana plugin install gpu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

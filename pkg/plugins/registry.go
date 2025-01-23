@@ -52,7 +52,7 @@ var Registry = []Plugin{
 	{
 		Name:     "streamer",
 		Type:     EXTERNAL,
-		Binaries: []Binary{{Name: "cedana-image-streamer"}},
+		Binaries: []Binary{{Name: "criu-image-streamer"}},
 	},
 	{
 		Name:      "k8s",

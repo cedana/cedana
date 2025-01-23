@@ -35,7 +35,7 @@ func init() {
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (tar, gzip, lz4, none)")
 	dumpCmd.PersistentFlags().
-		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
+		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (0: don't stream, n > 0: n parallelism)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LeaveRunningFlag.Full, flags.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().
@@ -54,6 +54,7 @@ func init() {
 	// Bind to config
 	viper.BindPFlag("checkpoint.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
 	viper.BindPFlag("checkpoint.compression", dumpCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
+	viper.BindPFlag("checkpoint.stream", dumpCmd.PersistentFlags().Lookup(flags.StreamFlag.Full))
 	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
 
 	///////////////////////////////////////////
@@ -87,8 +88,8 @@ var dumpCmd = &cobra.Command{
 		dir := config.Global.Checkpoint.Dir
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression := config.Global.Checkpoint.Compression
-		leaveRunning := config.Global.CRIU.LeaveRunning
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
+		leaveRunning := config.Global.CRIU.LeaveRunning
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
@@ -101,7 +102,7 @@ var dumpCmd = &cobra.Command{
 			Dir:         dir,
 			Name:        name,
 			Compression: compression,
-			Stream:      stream,
+			Stream:      int32(stream),
 			Criu: &criu.CriuOpts{
 				LeaveRunning:    proto.Bool(leaveRunning),
 				TcpEstablished:  proto.Bool(tcpEstablished),

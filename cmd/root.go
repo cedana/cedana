@@ -48,7 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
 
-		// Bind to config
+	// Bind to config
 	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
 	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
 	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
