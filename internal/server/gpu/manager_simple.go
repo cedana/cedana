@@ -133,7 +133,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, stream int32) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
@@ -161,7 +161,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-    err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+		err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 				restoreErr <- fmt.Errorf("GPU controller not found, is the task still running?")
 			}
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir()})
+			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", err)
@@ -193,7 +193,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
 			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
-		return nil
+		return <-restoreErr
 	}
 
 	// Wait for GPU restore to finish before resuming the process

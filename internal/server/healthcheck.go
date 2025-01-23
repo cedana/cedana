@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/criu"
+	"github.com/cedana/cedana/internal/server/streamer"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
@@ -38,9 +39,14 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 func (s *Server) pluginChecklist() types.Checklist {
 	checklist := []types.Checks{}
 
-	// Add a GPU helth check if plugin is installed
+	// Add a GPU health check if plugin is installed
 	if s.plugins.IsInstalled("gpu") {
 		checklist = append(checklist, s.gpus.Checks())
+	}
+
+	// Add a streamer health check if plugin is installed
+	if s.plugins.IsInstalled("streamer") {
+		checklist = append(checklist, streamer.Checks(s.plugins))
 	}
 
 	// Add health checks from other plugins

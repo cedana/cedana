@@ -28,7 +28,7 @@ type Manager interface {
 	Checks() types.Checks
 
 	// CRIUCallback returns the CRIU notify callback for GPU C/R.
-	CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback
+	CRIUCallback(lifetime context.Context, jid string, stream int32) *criu.NotifyCallback
 }
 
 /////////////////
@@ -57,7 +57,7 @@ func (ManagerMissing) Detach(jid string) error {
 	return fmt.Errorf("GPU manager missing")
 }
 
-func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string, stream int32) *criu.NotifyCallback {
 	return nil
 }
 
