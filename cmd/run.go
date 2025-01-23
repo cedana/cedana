@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
@@ -150,14 +151,13 @@ var processRunCmd = &cobra.Command{
 			return fmt.Errorf("Error getting working directory: %v", err)
 		}
 
-		var uid, gid int
-		var groups []int
-		if !asRoot {
-			uid = os.Getuid()
-			gid = os.Getgid()
-			groups, err = os.Getgroups()
+		var user *syscall.Credential
+		if asRoot {
+			user = utils.GetRootCredentials()
+		} else {
+			user, err = utils.GetCredentials()
 			if err != nil {
-				return fmt.Errorf("Error getting groups: %v", err)
+				return fmt.Errorf("Error getting user credentials: %v", err)
 			}
 		}
 
@@ -168,9 +168,9 @@ var processRunCmd = &cobra.Command{
 				Args:       args,
 				Env:        env,
 				WorkingDir: wd,
-				UID:        int32(uid),
-				GID:        int32(gid),
-				Groups:     utils.Int32Slice(groups),
+				UID:        user.Uid,
+				GID:        user.Gid,
+				Groups:     user.Groups,
 			},
 		}
 

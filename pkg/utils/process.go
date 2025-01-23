@@ -160,7 +160,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 				Raddr:  Raddr,
 				Status: conn.Status,
 				PID:    uint32(conn.Pid),
-				UIDs:   conn.Uids,
+				UIDs:   Int32ToUint32Slice(conn.Uids),
 			})
 		}
 	}

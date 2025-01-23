@@ -63,9 +63,10 @@ func (m *controllers) spawn(
 	wg *sync.WaitGroup,
 	binary string,
 	jid string,
+	user *syscall.Credential,
 	pid ...<-chan uint32,
 ) error {
-	err := m.spawnAsync(lifetime, wg, binary, jid, pid...)
+	err := m.spawnAsync(lifetime, wg, binary, jid, user, pid...)
 	if err != nil {
 		return err
 	}
@@ -90,6 +91,7 @@ func (m *controllers) spawnAsync(
 	wg *sync.WaitGroup,
 	binary string,
 	jid string,
+	user *syscall.Credential,
 	pid ...<-chan uint32,
 ) error {
 	if m.Get(jid) != nil {
@@ -109,7 +111,8 @@ func (m *controllers) spawnAsync(
 	controller.Stderr = controller.ErrBuf
 	controller.Stdout = logging.Writer("gpu-controller", jid, zerolog.TraceLevel)
 	controller.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGTERM,
+		Pdeathsig:  syscall.SIGTERM,
+		Credential: user,
 	}
 	controller.Cancel = func() error { return controller.Cmd.Process.Signal(syscall.SIGTERM) } // NO SIGKILL!!!
 
