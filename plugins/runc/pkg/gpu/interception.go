@@ -20,16 +20,9 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) 
 		}
 	}
 
-	// Remove existing /dev/shm mount if it exists
-	for i, m := range spec.Mounts {
-		if m.Destination == "/dev/shm" {
-			spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
-		}
-	}
-
 	spec.Mounts = append(spec.Mounts, specs.Mount{
-		Destination: "/dev/shm",
-		Source:      "/dev/shm",
+		Destination: "/dev/shm/cedana-gpu." + jid,
+		Source:      "/dev/shm/cedana-gpu." + jid,
 		Type:        "bind",
 		Options:     []string{"rbind", "nosuid", "nodev", "rw"},
 	})

@@ -11,6 +11,7 @@ import (
 
 type NotifyCallback struct {
 	InitializeFunc          InitializeFunc
+	InitializeRestoreFunc   NotifyFuncOpts
 	PreDumpFunc             NotifyFuncOpts
 	PostDumpFunc            NotifyFuncOpts
 	PreRestoreFunc          NotifyFuncOpts
@@ -42,6 +43,19 @@ func (n NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
 		err := n.InitializeFunc(ctx, criuPid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+	if n.InitializeRestoreFunc != nil {
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.InitializeRestoreFunc(ctx, opts)
 		if err != nil {
 			return err
 		}

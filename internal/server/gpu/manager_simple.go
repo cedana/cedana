@@ -160,8 +160,8 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
-	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		err = m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
