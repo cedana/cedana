@@ -116,7 +116,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 
 		controller := m.controllers.Get(jid)
 		components, err := controller.waitForHealthCheck(ctx, m.wg)
-		defer m.controllers.failed to detach GPU controller on restorekill(jid)
+		defer m.controllers.kill(jid)
 		if components == nil && err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller health check: %v", err))
@@ -167,7 +167,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		log.Warn().Str("JID", jid).Msg("GPU restore started")
+		log.Warn().Str("JID", jid).Msg("GPU prerestore started")
 		err := criu.CheckOptsGPU(opts)
 		if err != nil {
 			return err
