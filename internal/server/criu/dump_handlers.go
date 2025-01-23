@@ -17,7 +17,7 @@ import (
 
 const (
 	CRIU_LOG_VERBOSITY_LEVEL = 3
-	CRIU_LOG_FILE            = "criu.log"
+	CRIU_DUMP_LOG_FILE       = "criu-dump.log"
 	GHOST_FILE_MAX_SIZE      = 10000000 // 10MB
 )
 
@@ -37,7 +37,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
-	criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
@@ -59,7 +59,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	// Capture internal logs from CRIU
 	utils.LogFromFile(
 		log.With().Int("CRIU", version).Logger().WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+		filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE),
 		zerolog.TraceLevel,
 	)
 

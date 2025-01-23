@@ -51,7 +51,7 @@ var Global Config = Config{
 		Path:   filepath.Join(os.TempDir(), "cedana.db"),
 	},
 	Profiling: Profiling{
-		Enabled:       true,
+		Enabled:   true,
 		Precision: "auto",
 	},
 	Metrics: Metrics{
@@ -67,9 +67,6 @@ var Global Config = Config{
 	Plugins: Plugins{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
-		GPU: GPU{
-			PoolSize: 0,
-		},
 	},
 }
 

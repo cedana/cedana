@@ -21,7 +21,7 @@ import (
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
-func PrepareRestoreDir(next types.Restore) types.Restore {
+func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		path := req.GetPath()
 		stat, err := os.Stat(path)
@@ -65,10 +65,10 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
-		req.GetCriu().ImagesDirFd = proto.Int32(int32(dir.Fd()))
+		req.Criu.ImagesDir = proto.String(imagesDirectory)
+		req.Criu.ImagesDirFd = proto.Int32(int32(dir.Fd()))
 
-		// Setup dump fs that can be used by future adapters to directly read write/extra files
+		// Setup dump fs that can be used by future adapters to directly read files
 		// to the dump directory
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
 
