@@ -161,7 +161,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err = m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+    err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
