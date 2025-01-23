@@ -130,12 +130,44 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 // a simpler way of joining the existing namespace if set
 func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		details := req.GetDetails().GetRunc()
+		extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		if !ok {
+			return nil, status.Error(codes.FailedPrecondition, "failed to get extra files from context")
+		}
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
 		}
 
 		config := container.Config()
+
+		criuOpts := req.GetCriu()
+		if criuOpts == nil {
+			criuOpts = &criu_proto.CriuOpts{}
+		}
+
+		// Here we join the external network namespace of a pause/sandbox/infra container/process
+		if details.SandboxPid != "" {
+			nsPath := fmt.Sprintf("/proc/%s/ns/net", details.SandboxPid)
+			// CRIU wants the information about an existing network namespace
+			// like this: --inherit-fd fd[<fd>]:<key>
+			// The <key> needs to be the same as during checkpointing.
+			// We are always using 'extRootNetNS' as the key in this.
+			netns, err := os.Open(nsPath)
+			if err != nil {
+				return nil, status.Errorf(codes.NotFound, "Requested network namespace %v does not exist", nsPath)
+			}
+			defer netns.Close()
+			inheritFd := new(criu_proto.InheritFd)
+			inheritFd.Key = proto.String("extRootNetNS")
+			// The offset of four is necessary because 0, 1, 2 and 3 is already
+			// used by stdin, stdout, stderr, 'criu swrk' socket.
+			inheritFd.Fd = proto.Int32(int32(4 + len(extraFiles)))
+			criuOpts.InheritFd = append(criuOpts.InheritFd, inheritFd)
+			// All open FDs need to be transferred to CRIU via extraFiles
+			extraFiles = append(extraFiles, netns)
+		}
 
 		for _, ns := range config.Namespaces {
 			switch ns.Type {
@@ -155,10 +187,7 @@ func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
 				}
 				// CRIU will issue a warning for NEWUSER:
 				// criu/namespaces.c: 'join-ns with user-namespace is not fully tested and dangerous'
-				criuOpts := req.GetCriu()
-				if criuOpts == nil {
-					criuOpts = &criu_proto.CriuOpts{}
-				}
+
 				criuOpts.JoinNs = append(criuOpts.JoinNs, &criu_proto.JoinNamespace{
 					Ns:     proto.String(configs.NsName(ns.Type)),
 					NsFile: proto.String(nsPath),

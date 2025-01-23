@@ -3,6 +3,9 @@ package cgroup
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -39,6 +42,7 @@ func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Res
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		details := req.GetDetails().GetRunc()
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -78,6 +82,21 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 						Path: proto.String(p),
 					}
 					req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
+				}
+
+				if details.SandboxPid != "" {
+					targetCgroups, err := cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%s/cgroup", details.SandboxPid))
+					if err != nil {
+						return fmt.Errorf("Unable to parse cgroup file for target sandbox pid: %s", details.SandboxPid)
+					}
+
+					for controller, path := range targetCgroups {
+						cgroupPath := filepath.Join("/sys/fs/cgroup", controller, path, "cgroup.procs")
+						err := os.WriteFile(cgroupPath, []byte(strconv.Itoa(int(criuPid))), 0644)
+						if err != nil {
+							return fmt.Errorf("Unable to write to cgroup file %s", cgroupPath)
+						}
+					}
 				}
 
 				return nil
