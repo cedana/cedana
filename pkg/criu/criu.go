@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -219,6 +220,7 @@ func (c *Criu) doSwrkWithResp(
 		case "post-dump":
 			err = nfy.PostDump(ctx, opts)
 		case "pre-restore":
+			log.Warn().Msg("pre-restore called")
 			err = nfy.PreRestore(ctx, opts)
 		case "post-restore":
 			err = nfy.PostRestore(ctx, notify.GetPid())
