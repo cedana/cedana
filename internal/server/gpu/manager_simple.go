@@ -166,7 +166,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
-	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		log.Warn().Str("JID", jid).Msg("GPU prerestore started")
 		err := criu.CheckOptsGPU(opts)
 		if err != nil {
