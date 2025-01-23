@@ -48,6 +48,8 @@ func init() {
 		StringSliceP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, nil, "resources from external namespaces (can be multiple)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to files in the dump")
 
 	// Bind to config
 	viper.BindPFlag("checkpoint.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
@@ -92,6 +94,7 @@ var dumpCmd = &cobra.Command{
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
+		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
@@ -106,6 +109,7 @@ var dumpCmd = &cobra.Command{
 				FileLocks:       proto.Bool(fileLocks),
 				External:        external,
 				ShellJob:        proto.Bool(shellJob),
+				LinkRemap:       proto.Bool(linkRemap),
 			},
 		}
 
