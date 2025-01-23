@@ -13,7 +13,6 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/server/criu"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
@@ -140,11 +139,6 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
 	// CRIU freezes the process.
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := criu.CheckOptsGPU(opts)
-		if err != nil {
-			return err
-		}
-
 		waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 		defer cancel()
 
@@ -153,7 +147,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 			return fmt.Errorf("GPU controller not found, is the task still running?")
 		}
 
-		_, err = controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir()})
+		_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), LeaveRunning: opts.GetLeaveRunning()})
 		if err != nil {
 			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 			return fmt.Errorf("failed to dump GPU: %v", err)
@@ -167,12 +161,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := criu.CheckOptsGPU(opts)
-		if err != nil {
-			return err
-		}
-
-		err = m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+		err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
