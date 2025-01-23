@@ -444,7 +444,7 @@ jobs:
     name: Regression Tests (gpu)
     runs-on: ubicloud-gpu
     container:
-      image: cedana/cedana-test:latest
+      image: cedana/cedana-test:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}

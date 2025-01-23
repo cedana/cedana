@@ -9,8 +9,8 @@ import (
 // Implementation of the afero.File interface that uses streaming as the backend
 type File struct {
 	name string
-	rFd  int // read file descriptor
-	wFd  int // write file descriptor
+	mode Mode
+	fd   int
 }
 
 func (f *File) Name() string {
@@ -18,28 +18,35 @@ func (f *File) Name() string {
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-	return syscall.Read(f.rFd, p)
+	if f.mode != READ_ONLY {
+		return 0, fmt.Errorf("file is not open for reading")
+	}
+	return syscall.Read(f.fd, p)
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
-	return syscall.Write(f.wFd, p)
+	if f.mode != WRITE_ONLY {
+		return 0, fmt.Errorf("file is not open for writing")
+	}
+	return syscall.Write(f.fd, p)
 }
 
 func (f *File) Truncate(size int64) error {
-	return syscall.Ftruncate(f.wFd, size)
+	if f.mode != WRITE_ONLY {
+		return fmt.Errorf("file is not open for writing")
+	}
+	return syscall.Ftruncate(f.fd, size)
 }
 
 func (f *File) WriteString(s string) (ret int, err error) {
-	return syscall.Write(f.wFd, []byte(s))
+	if f.mode != WRITE_ONLY {
+		return 0, fmt.Errorf("file is not open for writing")
+	}
+	return syscall.Write(f.fd, []byte(s))
 }
 
 func (f *File) Close() (err error) {
-	err = syscall.Close(f.rFd)
-	if err != nil {
-		return
-	}
-	err = syscall.Close(f.wFd)
-	return
+	return syscall.Close(f.fd)
 }
 
 func (f *File) ReadAt(p []byte, off int64) (n int, err error) {

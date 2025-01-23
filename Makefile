@@ -4,7 +4,6 @@ GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
-export CEDANA_PLUGINS_LOCAL_SEARCH_PATH=$(PWD)
 
 ifndef VERBOSE
 .SILENT:
@@ -137,22 +136,29 @@ test-unit: ## Run unit tests (with benchmarks)
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
 test-regression: ## Run all regression tests (PARALLELISM=<n>)
-	@echo "Running all regression tests..."
-	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
-		make plugins-install > /dev/null ;\
+		echo "Running all regression tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) -r test/regression ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
 	else \
-		$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM) $(GPU) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
+		fi ;\
 	fi
 
 test-regression-cedana: ## Run regression tests for cedana
-	@echo "Running regression tests for cedana..."
-	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
+		echo "Running regression tests for cedana..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
@@ -162,10 +168,10 @@ test-regression-cedana: ## Run regression tests for cedana
 	fi
 
 test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
-	@echo "Running regression tests for plugin $$PLUGIN..."
-	@echo "Parallelism: $(PARALLELISM)"
 	if [ -f /.dockerenv ]; then \
-		$(SUDO) $(BINARY) plugin install $$PLUGIN > /dev/null ;\
+		echo "Running regression tests for plugin $$PLUGIN..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
 		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
@@ -174,20 +180,37 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 		$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
 	fi
 
+test-enter: ## Enter the test environment
+	$(DOCKER_TEST_RUN) /bin/bash
+
+test-enter-cuda: ## Enter the test environment (CUDA)
+	$(DOCKER_TEST_RUN_CUDA) /bin/bash
+
 ##########
 ##@ Docker
 ##########
 
-DOCKER_TEST_IMAGE=cedana/cedana-test:latest
-DOCKER_TEST_RUN=docker run --privileged --init --cgroupns=private -it --rm \
-				-v $(PWD):/src:ro \
-				-v /usr/local/bin/criu:/usr/local/bin/criu \
-				-v /usr/local/bin/criu-image-streamer:/usr/local/bin/criu-image-streamer \
-				$(DOCKER_TEST_IMAGE)
+# The docker container used as the test environment will have access to the locally installed plugin libraries
+# and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
+# the default).
 
-docker: ## Build the Docker image
-	@echo "Building Docker image..."
-	docker build -t cedana/cedana:latest .
+PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+DOCKER_TEST_IMAGE=cedana/cedana-test:latest
+DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
+DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm \
+				-v $(PWD):/src:ro \
+				$(PLUGIN_LIB_MOUNTS) \
+				$(PLUGIN_BIN_MOUNTS) \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN)
+DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_RUN_CUDA=docker run $(DOCKER_TEST_RUN_OPTS) \
+					 --runtime nvidia \
+					 $(PLUGIN_LIB_MOUNTS_GPU) \
+					 $(PLUGIN_BIN_MOUNTS_GPU) \
+					 $(DOCKER_TEST_IMAGE_CUDA)
 
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."
@@ -195,9 +218,19 @@ docker-test: ## Build the test Docker image
 	docker build -t $(DOCKER_TEST_IMAGE) . ;\
 	cd -
 
+docker-test-cuda: ## Build the test Docker image (CUDA)
+	@echo "Building test CUDA Docker image..."
+	cd test ;\
+	docker build -t $(DOCKER_TEST_IMAGE_CUDA) . ;\
+	cd -
+
 docker-test-push: ## Push the test Docker image
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
+
+docker-test-push-cuda: ## Push the test Docker image (CUDA)
+	@echo "Pushing test CUDA Docker image..."
+	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
 ###########
 ##@ Utility
