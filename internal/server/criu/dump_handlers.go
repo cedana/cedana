@@ -43,6 +43,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
+	criuOpts.LinkRemap = proto.Bool(true)
 
 	// TODO: Add support for pre-dump
 	// TODO: Add support for lazy migration
