@@ -13,107 +13,356 @@ load_lib file
 ### Dump ###
 ############
 
-# @test "stream dump process" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
+@test "stream dump process" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
 
-#     run cedana dump process $pid --stream 1
-#     assert_success
+    run cedana dump process $pid --stream 1
+    assert_success
 
-#     dump_file=$(echo "$output" | awk '{print $NF}')
-#     assert_exists "$dump_file"
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
 
-#     run kill $pid
-# }
+    run kill $pid
+}
 
-# @test "stream dump process (custom name)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+@test "stream dump process (custom name)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 1
-#     assert_success
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 1
+    assert_success
 
-#     assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0"
 
-#     run kill $pid
-# }
+    run kill $pid
+}
 
-# @test "stream dump process (parallelism)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+@test "stream dump process (0 parallelism = no streaming)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 4
-#     assert_success
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 0
+    assert_success
 
-#     assert_exists "/tmp/$name"
-#     assert_exists "/tmp/$name/img-0"
-#     assert_exists "/tmp/$name/img-1"
-#     assert_exists "/tmp/$name/img-2"
-#     assert_exists "/tmp/$name/img-3"
+    assert_exists "/tmp/$name"
+    assert_not_exists "/tmp/$name/img-0"
 
-#     run kill $pid
-# }
+    run kill $pid
+}
 
-# @test "dump process (tar compression)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+@test "stream dump process (4 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression tar
-#     assert_success
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 4
+    assert_success
 
-#     assert_exists "/tmp/$name"
-#     assert_exists "/tmp/$name/img-0.tar"
-#     assert_exists "/tmp/$name/img-1.tar"
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0"
+    assert_exists "/tmp/$name/img-1"
+    assert_exists "/tmp/$name/img-2"
+    assert_exists "/tmp/$name/img-3"
 
-#     run kill $pid
-# }
+    run kill $pid
+}
 
-# @test "dump process (gzip compression)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+@test "stream dump process (8 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression gzip
-#     assert_success
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 8
+    assert_success
 
-#     assert_exists "/tmp/$name"
-#     assert_exists "/tmp/$name/img-0.gz"
-#     assert_exists "/tmp/$name/img-1.gz"
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0"
+    assert_exists "/tmp/$name/img-1"
+    assert_exists "/tmp/$name/img-2"
+    assert_exists "/tmp/$name/img-3"
+    assert_exists "/tmp/$name/img-4"
+    assert_exists "/tmp/$name/img-5"
+    assert_exists "/tmp/$name/img-6"
+    assert_exists "/tmp/$name/img-7"
 
-#     run kill $pid
-# }
+    run kill $pid
+}
 
-# @test "dump process (lz4 compression)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+@test "stream dump process (tar compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression lz4
-#     assert_success
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression tar
+    assert_success
 
-#     assert_exists "/tmp/$name"
-#     assert_exists "/tmp/$name/img-0.lz4"
-#     assert_exists "/tmp/$name/img-1.lz4"
+    # tar does no compression, but since the option is valid for non-stream dump,
+    # it just creates uncompressed files
 
-#     run kill $pid
-# }
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0"
+    assert_exists "/tmp/$name/img-1"
 
-# @test "dump process (invalid compression)" {
-#     "$WORKLOADS"/date-loop.sh &
-#     pid=$!
-#     name=$(unix_nano)
+    run kill $pid
+}
 
-#     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression jibberish
-#     assert_failure
+@test "stream dump process (gzip compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
 
-#     assert_not_exists "/tmp/$name"
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression gzip
+    assert_success
 
-#     run kill $pid
-# }
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0.gz"
+    assert_exists "/tmp/$name/img-1.gz"
 
-# ###############
-# ### Restore ###
-# ###############
+    run kill $pid
+}
+
+@test "stream dump process (lz4 compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression lz4
+    assert_success
+
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0.lz4"
+    assert_exists "/tmp/$name/img-1.lz4"
+
+    run kill $pid
+}
+
+@test "stream dump process (zlib compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression zlib
+    assert_success
+
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0.zlib"
+    assert_exists "/tmp/$name/img-1.zlib"
+
+    run kill $pid
+}
+
+@test "stream dump process (invalid compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression jibberish
+    assert_failure
+
+    assert_not_exists "/tmp/$name"
+
+    run kill $pid
+}
+
+###############
+### Restore ###
+###############
+
+@test "stream restore process" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana dump process $pid --stream 1
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+
+    run cedana restore process --path "$dump_file" --stream 1
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (custom name)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 1
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+
+    run cedana restore process --path "$dump_file" --stream 1
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (0 parallelism = no streaming)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 0
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_not_exists "$dump_file/img-0"
+
+    run cedana restore process --path "$dump_file" --stream 0
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (4 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 4
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+    assert_exists "$dump_file/img-2"
+    assert_exists "$dump_file/img-3"
+
+    run cedana restore process --path "$dump_file" --stream 4
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (8 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 8
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+    assert_exists "$dump_file/img-2"
+    assert_exists "$dump_file/img-3"
+    assert_exists "$dump_file/img-4"
+    assert_exists "$dump_file/img-5"
+    assert_exists "$dump_file/img-6"
+    assert_exists "$dump_file/img-7"
+
+    run cedana restore process --path "$dump_file" --stream 8
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (mismatched parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+
+    run cedana restore process --path "$dump_file" --stream 3
+    assert_failure
+
+    run kill $pid
+}
+
+@test "stream restore process (tar compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression tar
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+
+    run cedana restore process --path "$dump_file" --stream 2
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (gzip compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression gzip
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+
+    run cedana restore process --path "$dump_file" --stream 2
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (lz4 compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression lz4
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.lz4"
+    assert_exists "$dump_file/img-1.lz4"
+
+    run cedana restore process --path "$dump_file" --stream 2
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream restore process (zlib compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression zlib
+    assert_success
+
+    dump_file="/tmp/$name"
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.zlib"
+    assert_exists "$dump_file/img-1.zlib"
+
+    run cedana restore process --path "$dump_file" --stream 2
+    assert_success
+
+    run kill $pid
+}
