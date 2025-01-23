@@ -43,19 +43,18 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			opts.Lifetime = lifetime
 
 			pid := make(chan uint32, 1)
-			gpuErr := gpus.AttachAsync(ctx, lifetime, jid, pid)
+			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
+			err := gpus.Attach(ctx, lifetime, jid, pid)
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
+			}
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				cancel()
-				<-gpuErr // wait for GPU attach cleanup
 				return nil, err
 			}
-
-			// Since we are waiting on the AttachSync, can add a component for it
-			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.AttachAsync)
-			err = <-gpuErr
-			end()
 
 			if err != nil {
 				cancel()

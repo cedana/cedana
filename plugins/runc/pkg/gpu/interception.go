@@ -28,8 +28,8 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) 
 	}
 
 	spec.Mounts = append(spec.Mounts, specs.Mount{
-		Destination: "/dev/shm",
-		Source:      "/dev/shm",
+		Destination: "/dev/shm/cedana-gpu." + jid,
+		Source:      "/dev/shm/cedana-gpu." + jid,
 		Type:        "bind",
 		Options:     []string{"rbind", "nosuid", "nodev", "rw"},
 	})
