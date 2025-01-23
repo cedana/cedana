@@ -167,7 +167,6 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		log.Warn().Str("JID", jid).Msg("GPU prerestore started")
 		err := criu.CheckOptsGPU(opts)
 		if err != nil {
 			return err
