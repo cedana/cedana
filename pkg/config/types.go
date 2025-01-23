@@ -25,10 +25,12 @@ type (
 		Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
 		// Metrics settings
 		Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
-		// CRIU settings and defaults
-		CRIU CRIU `json:"criu" key:"criu" yaml:"criu" mapstructure:"criu"`
 		// Client settings
 		Client Client `json:"client" key:"client" yaml:"client" mapstructure:"client"`
+		// CRIU settings and defaults
+		CRIU CRIU `json:"criu" key:"criu" yaml:"criu" mapstructure:"criu"`
+		// GPU is settings for the GPU plugin
+		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 	}
@@ -45,6 +47,9 @@ type (
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
+		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
+		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
+		Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
 	}
 
 	DB struct {
@@ -80,19 +85,17 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 	}
 
-	Plugins struct {
-		// BinDir is the directory where plugin binaries are stored
-		BinDir string `json:"bin_dir" key:"bin_dir" yaml:"bin_dir" mapstructure:"bin_dir"`
-		// LibDir is the directory where plugin libraries are stored
-		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
-		// GPU is settings for the GPU plugin
-		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
-	}
-
 	GPU struct {
 		// Number of warm GPU controllers to keep in pool
 		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
 		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+	}
+
+	Plugins struct {
+		// BinDir is the directory where plugin binaries are stored
+		BinDir string `json:"bin_dir" key:"bin_dir" yaml:"bin_dir" mapstructure:"bin_dir"`
+		// LibDir is the directory where plugin libraries are stored
+		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 	}
 )

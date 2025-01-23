@@ -48,7 +48,7 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
 		}
 
-		// Create a unique directory within the dump dir, using type, PID, and timestamp
+		// Create a new directory within the dump dir, where dump will happen
 		imagesDirectory := filepath.Join(dir, req.Name)
 
 		// Create the directory
@@ -65,7 +65,6 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
 		}
 
-		// Set CRIU server
 		f, err := os.Open(imagesDirectory)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
@@ -76,8 +75,8 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
-		req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
+		req.Criu.ImagesDir = proto.String(imagesDirectory)
+		req.Criu.ImagesDirFd = proto.Int32(int32(f.Fd()))
 
 		// Setup dump fs that can be used by future adapters to directly read write/extra files
 		// to the dump directory

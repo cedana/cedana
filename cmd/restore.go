@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,7 +29,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
-		BoolP(flags.StreamFlag.Full, flags.StreamFlag.Short, false, "stream the dump using cedana-image-streamer")
+		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the restore (0: don't stream, n > 0: n parallelism)")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
@@ -51,6 +52,9 @@ func init() {
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
 	) // only one of these can be set
+
+	// Bind to config
+	viper.BindPFlag("checkpoint.stream", restoreCmd.PersistentFlags().Lookup(flags.StreamFlag.Full))
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins

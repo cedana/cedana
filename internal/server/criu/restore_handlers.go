@@ -21,14 +21,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
+
 var Restore types.Restore = restore
 
 // Returns a CRIU restore handler for the server
 func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-	extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-	if !ok {
-		return nil, status.Error(codes.FailedPrecondition, "failed to get extra files from context")
-	}
+	extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
@@ -42,7 +41,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
-	criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.NotifyScripts = proto.Bool(true)
@@ -83,7 +82,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	// Capture internal logs from CRIU
 	utils.LogFromFile(
 		log.With().Int("CRIU", version).Logger().WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+		filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE),
 		zerolog.TraceLevel,
 	)
 
