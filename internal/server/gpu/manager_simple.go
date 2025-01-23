@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
@@ -16,6 +17,7 @@ import (
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -39,7 +41,7 @@ func NewSimpleManager(serverWg *sync.WaitGroup, plugins plugins.Manager) *Manage
 	}
 }
 
-func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) error {
+func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) error {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -51,7 +53,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 		return err
 	}
 
-	err := m.controllers.spawn(ctx, lifetime, m.wg, binary, jid, pid)
+	err := m.controllers.spawn(ctx, lifetime, m.wg, binary, jid, user, pid)
 	if err != nil {
 		return err
 	}
@@ -61,7 +63,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 	return nil
 }
 
-func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) <-chan error {
+func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) <-chan error {
 	err := make(chan error)
 
 	m.wg.Add(1)
@@ -71,7 +73,7 @@ func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Contex
 		select {
 		case <-ctx.Done():
 			err <- ctx.Err()
-		case err <- m.Attach(ctx, lifetime, jid, pid):
+		case err <- m.Attach(ctx, lifetime, jid, user, pid):
 		}
 	}()
 
@@ -104,9 +106,16 @@ func (m *ManagerSimple) Checks() types.Checks {
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 
+		user, err := utils.GetCredentials()
+		if err != nil {
+			statusComponent.Data = "failed"
+			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed to get user credentials: %v", err))
+			return []*daemon.HealthCheckComponent{statusComponent}
+		}
+
 		// Spawn a random controller and perform a health check
 		jid := fmt.Sprintf("health-check-%d", time.Now().UnixNano())
-		err := m.controllers.spawnAsync(ctx, m.wg, binary, jid)
+		err = m.controllers.spawnAsync(ctx, m.wg, binary, jid, user)
 		if err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
@@ -133,7 +142,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. This ensures that the GPU is dumped before
@@ -161,7 +170,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string) *criu
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-    err := m.Attach(ctx, lifetime, jid, pidChan) // Re-attach a GPU to the job
+		err := m.Attach(ctx, lifetime, jid, user, pidChan) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
