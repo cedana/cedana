@@ -9,6 +9,7 @@ package gpu
 
 import (
 	"context"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/features"
@@ -42,20 +43,26 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			lifetime, cancel := context.WithCancel(opts.Lifetime)
 			opts.Lifetime = lifetime
 
+			details := req.GetDetails().GetProcess()
+			user := &syscall.Credential{
+				Uid:    details.GetUID(),
+				Gid:    details.GetGID(),
+				Groups: details.GetGroups(),
+			}
+
 			pid := make(chan uint32, 1)
-			gpuErr := gpus.AttachAsync(ctx, lifetime, jid, pid)
+			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
+			err := gpus.Attach(ctx, lifetime, jid, user, pid)
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
+			}
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				cancel()
-				<-gpuErr // wait for GPU attach cleanup
 				return nil, err
 			}
-
-			// Since we are waiting on the AttachSync, can add a component for it
-			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.AttachAsync)
-			err = <-gpuErr
-			end()
 
 			if err != nil {
 				cancel()

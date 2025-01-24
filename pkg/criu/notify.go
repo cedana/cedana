@@ -9,6 +9,7 @@ import (
 // Notify interface
 type Notify interface {
 	Initialize(ctx context.Context, criuPid int32) error
+	InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error
 	PreDump(ctx context.Context, opts *criu.CriuOpts) error
 	PostDump(ctx context.Context, opts *criu.CriuOpts) error
 	PreRestore(ctx context.Context, opts *criu.CriuOpts) error
@@ -28,6 +29,11 @@ type NoNotify struct{}
 
 // Initialize NoNotify
 func (c NoNotify) Initialize(ctx context.Context, criuPid int) error {
+	return nil
+}
+
+// InitializeRestore NoNotify
+func (c NoNotify) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	return nil
 }
 

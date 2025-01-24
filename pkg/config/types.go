@@ -92,5 +92,7 @@ type (
 	GPU struct {
 		// Number of warm GPU controllers to keep in pool
 		PoolSize int `json:"pool_size" mapstructure:"pool_size" yaml:"pool_size"`
+		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
+    LogDir string `json:"log_dir" mapstructure:"log_dir" yaml:"log_dir"`
 	}
 )

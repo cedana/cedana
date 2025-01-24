@@ -146,14 +146,6 @@ func CheckOpts(ctx context.Context, criuInstance *criu.Criu, opts *criu_proto.Cr
 	return nil
 }
 
-// Certain CRIU options are not compatible with GPU support.
-func CheckOptsGPU(opts *criu_proto.CriuOpts) error {
-	if opts.GetLeaveRunning() {
-		return fmt.Errorf("Leave running is not compatible with GPU support, yet")
-	}
-	return nil
-}
-
 //////////////////////////
 //// Helper functions ////
 //////////////////////////

@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -14,6 +16,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
@@ -30,7 +33,9 @@ const (
 	// about the GPU controller's failure.
 	CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1
 
-	MIN_SHM_SIZE = 8 << 30 // 8 GiB
+	CONTROLLER_LOG_FILE_FORMATTER = "cedana-gpu-controller-%s.log"
+	CONTROLLER_LOG_FILE_MODE      = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	CONTROLLER_LOG_FILE_PERMS     = 0o644
 )
 
 type controller struct {
@@ -63,9 +68,10 @@ func (m *controllers) spawn(
 	wg *sync.WaitGroup,
 	binary string,
 	jid string,
+	user *syscall.Credential,
 	pid ...<-chan uint32,
 ) error {
-	err := m.spawnAsync(lifetime, wg, binary, jid, pid...)
+	err := m.spawnAsync(lifetime, wg, binary, jid, user, pid...)
 	if err != nil {
 		return err
 	}
@@ -90,6 +96,7 @@ func (m *controllers) spawnAsync(
 	wg *sync.WaitGroup,
 	binary string,
 	jid string,
+	user *syscall.Credential,
 	pid ...<-chan uint32,
 ) error {
 	if m.Get(jid) != nil {
@@ -107,9 +114,23 @@ func (m *controllers) spawnAsync(
 	}
 
 	controller.Stderr = controller.ErrBuf
-	controller.Stdout = logging.Writer("gpu-controller", jid, zerolog.TraceLevel)
+
+	if dir := config.Global.Plugins.GPU.LogDir; dir != "" {
+		file, err := os.OpenFile(
+			filepath.Join(dir, fmt.Sprintf(CONTROLLER_LOG_FILE_FORMATTER, jid)),
+			CONTROLLER_LOG_FILE_MODE,
+			CONTROLLER_LOG_FILE_PERMS,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to open log file for GPU controller: %w", err)
+		}
+		controller.Stdout = file
+	} else {
+		controller.Stdout = logging.Writer("gpu-controller", jid, zerolog.TraceLevel)
+	}
 	controller.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGTERM,
+		Pdeathsig:  syscall.SIGTERM,
+		Credential: user,
 	}
 	controller.Cancel = func() error { return controller.Cmd.Process.Signal(syscall.SIGTERM) } // NO SIGKILL!!!
 

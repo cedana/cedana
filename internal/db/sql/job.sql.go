@@ -12,8 +12,8 @@ import (
 )
 
 const createJob = `-- name: CreateJob :exec
-INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID, UIDs, GIDs, Groups)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateJobParams struct {
@@ -29,6 +29,9 @@ type CreateJobParams struct {
 	Status     string
 	Isrunning  int64
 	Hostid     string
+	Uids       string
+	Gids       string
+	Groups     string
 }
 
 func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) error {
@@ -45,6 +48,9 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) error {
 		arg.Status,
 		arg.Isrunning,
 		arg.Hostid,
+		arg.Uids,
+		arg.Gids,
+		arg.Groups,
 	)
 	return err
 }
@@ -59,7 +65,7 @@ func (q *Queries) DeleteJob(ctx context.Context, jid string) error {
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
+SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, jobs.uids, jobs.gids, jobs."groups", hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
 `
@@ -91,6 +97,9 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 			&i.Job.Status,
 			&i.Job.Isrunning,
 			&i.Job.Hostid,
+			&i.Job.Uids,
+			&i.Job.Gids,
+			&i.Job.Groups,
 			&i.Host.ID,
 			&i.Host.Mac,
 			&i.Host.Hostname,
@@ -118,7 +127,7 @@ func (q *Queries) ListJobs(ctx context.Context) ([]ListJobsRow, error) {
 }
 
 const listJobsByHostIDs = `-- name: ListJobsByHostIDs :many
-SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
+SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, jobs.uids, jobs.gids, jobs."groups", hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
 WHERE jobs.HostID IN (/*SLICE:host_ids*/?)
@@ -161,6 +170,9 @@ func (q *Queries) ListJobsByHostIDs(ctx context.Context, hostIds []string) ([]Li
 			&i.Job.Status,
 			&i.Job.Isrunning,
 			&i.Job.Hostid,
+			&i.Job.Uids,
+			&i.Job.Gids,
+			&i.Job.Groups,
 			&i.Host.ID,
 			&i.Host.Mac,
 			&i.Host.Hostname,
@@ -188,7 +200,7 @@ func (q *Queries) ListJobsByHostIDs(ctx context.Context, hostIds []string) ([]Li
 }
 
 const listJobsByIDs = `-- name: ListJobsByIDs :many
-SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
+SELECT jobs.jid, jobs.type, jobs.gpuenabled, jobs.log, jobs.details, jobs.pid, jobs.cmdline, jobs.starttime, jobs.workingdir, jobs.status, jobs.isrunning, jobs.hostid, jobs.uids, jobs.gids, jobs."groups", hosts.id, hosts.mac, hosts.hostname, hosts.os, hosts.platform, hosts.kernelversion, hosts.kernelarch, hosts.cpuphysicalid, hosts.cpuvendorid, hosts.cpufamily, hosts.cpucount, hosts.memtotal
 FROM jobs
 JOIN hosts ON hosts.ID = jobs.HostID
 WHERE jobs.JID IN (/*SLICE:ids*/?)
@@ -231,6 +243,9 @@ func (q *Queries) ListJobsByIDs(ctx context.Context, ids []string) ([]ListJobsBy
 			&i.Job.Status,
 			&i.Job.Isrunning,
 			&i.Job.Hostid,
+			&i.Job.Uids,
+			&i.Job.Gids,
+			&i.Job.Groups,
 			&i.Host.ID,
 			&i.Host.Mac,
 			&i.Host.Hostname,
@@ -269,7 +284,10 @@ UPDATE jobs SET
     WorkingDir = ?,
     Status = ?,
     IsRunning = ?,
-    HostID = ?
+    HostID = ?,
+    UIDs = ?,
+    GIDs = ?,
+    Groups = ?
 WHERE JID = ?
 `
 
@@ -285,6 +303,9 @@ type UpdateJobParams struct {
 	Status     string
 	Isrunning  int64
 	Hostid     string
+	Uids       string
+	Gids       string
+	Groups     string
 	Jid        string
 }
 
@@ -301,6 +322,9 @@ func (q *Queries) UpdateJob(ctx context.Context, arg UpdateJobParams) error {
 		arg.Status,
 		arg.Isrunning,
 		arg.Hostid,
+		arg.Uids,
+		arg.Gids,
+		arg.Groups,
 		arg.Jid,
 	)
 	return err

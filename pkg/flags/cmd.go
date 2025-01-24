@@ -40,6 +40,7 @@ var (
 	TcpCloseFlag        = Flag{Full: "tcp-close"}
 	TcpSkipInFlightFlag = Flag{Full: "skip-in-flight"}
 	ShellJobFlag        = Flag{Full: "shell-job"}
+	LinkRemapFlag       = Flag{Full: "link-remap"}
 
 	// Parent flags
 	AddressFlag    = Flag{Full: "address"}

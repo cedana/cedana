@@ -37,8 +37,12 @@ func PrepareRestoreDir(next types.Restore) types.Restore {
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
-			if err := os.Mkdir(imagesDirectory, RESTORE_DIR_PERMS); err != nil {
+			if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
+			}
+			err = os.Chmod(imagesDirectory, DUMP_DIR_PERMS) // XXX: Because for some reason mkdir is not applying perms
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
 			}
 			defer os.RemoveAll(imagesDirectory)
 

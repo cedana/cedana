@@ -3,6 +3,7 @@ package gpu
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
@@ -12,11 +13,11 @@ type Manager interface {
 	// Attach attaches a GPU controller to a process with the given JID, and PID.
 	// Takse in a channel for the PID, allowing this to be called before the process is started,
 	// so that the PID can be passed in later.
-	Attach(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) error
+	Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) error
 
 	// AttachAsync calls Attach in background.
 	// Returns a channel that will receive an error if the attach fails.
-	AttachAsync(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) <-chan error
+	AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) <-chan error
 
 	// IsAttached returns true if GPU is attached to for the given JID.
 	IsAttached(jid string) bool
@@ -28,7 +29,7 @@ type Manager interface {
 	Checks() types.Checks
 
 	// CRIUCallback returns the CRIU notify callback for GPU C/R.
-	CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback
+	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential) *criu.NotifyCallback
 }
 
 /////////////////
@@ -38,11 +39,11 @@ type Manager interface {
 // Embed this into unimplmented implmentations
 type ManagerMissing struct{}
 
-func (ManagerMissing) Attach(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) error {
+func (ManagerMissing) Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) error {
 	return fmt.Errorf("GPU manager missing")
 }
 
-func (ManagerMissing) AttachAsync(ctx context.Context, lifetime context.Context, jid string, pid <-chan uint32) <-chan error {
+func (ManagerMissing) AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) <-chan error {
 	err := make(chan error)
 	err <- fmt.Errorf("GPU manager missing")
 	close(err)
@@ -57,7 +58,7 @@ func (ManagerMissing) Detach(jid string) error {
 	return fmt.Errorf("GPU manager missing")
 }
 
-func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential) *criu.NotifyCallback {
 	return nil
 }
 

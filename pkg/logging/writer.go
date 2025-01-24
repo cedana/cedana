@@ -23,8 +23,8 @@ func Writer(context string, id string, level zerolog.Level) *LogWriter {
 	return &LogWriter{
 		context: context,
 		id:      id,
-		logger:  log.Logger.Level(log.Logger.GetLevel()), // set minimum level to parent logger
 		level:   level,
+		logger:  log.Logger.With().Str("context", context).Str("id", id).Logger(),
 	}
 }
 
@@ -34,8 +34,9 @@ func (w *LogWriter) Write(p []byte) (n int, err error) {
 		if len(line) == 0 {
 			continue
 		}
-		w.logger.WithLevel(w.level).Str("context", w.context).Str("id", w.id).Msg(string(line))
+		w.logger.WithLevel(w.level).Msg(string(line))
 	}
+
 	return len(p), nil
 }
 

@@ -18,10 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	DUMP_DIR_PERMS    = 0o755
-	RESTORE_DIR_PERMS = 0o755
-)
+const DUMP_DIR_PERMS = 0o777
 
 // This adapter ensures the specified dump dir exists and is writable.
 // Creates a unique directory within this directory for the dump.
@@ -63,6 +60,10 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 				os.RemoveAll(imagesDirectory)
 			}
 		}()
+		err = os.Chmod(imagesDirectory, DUMP_DIR_PERMS) // XXX: Because for some reason mkdir is not applying perms
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
+		}
 
 		// Set CRIU server
 		f, err := os.Open(imagesDirectory)

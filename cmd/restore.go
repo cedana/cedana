@@ -79,7 +79,7 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
-		stream, _ := cmd.Flags().GetBool(flags.StreamFlag.Full)
+		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
