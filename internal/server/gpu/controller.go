@@ -115,7 +115,7 @@ func (m *controllers) spawnAsync(
 
 	controller.Stderr = controller.ErrBuf
 
-	if dir := config.Global.Plugins.GPU.LogDir; dir != "" {
+	if dir := config.Global.GPU.LogDir; dir != "" {
 		file, err := os.OpenFile(
 			filepath.Join(dir, fmt.Sprintf(CONTROLLER_LOG_FILE_FORMATTER, jid)),
 			CONTROLLER_LOG_FILE_MODE,
