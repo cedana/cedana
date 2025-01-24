@@ -242,6 +242,23 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 	return nil
 }
 
+// Just like attach but returns the streams instead of attaching to stdin/stdout/stderr
+func (c *Client) AttachIO(ctx context.Context, args *daemon.AttachReq, opts ...grpc.CallOption) (io.Writer, io.Reader, io.Reader, chan int, chan error, error) {
+	addDefaultOptions(opts...)
+	stream, err := c.daemonClient.Attach(ctx, opts...)
+	if err != nil {
+		return nil, nil, nil, nil, nil, utils.GRPCErrorColored(err)
+	}
+	// Send the first request
+	if err := stream.Send(args); err != nil {
+		return nil, nil, nil, nil, nil, utils.GRPCErrorColored(err)
+	}
+
+	stdIn, stdOut, stdErr, exitCode, errors := cedana_io.NewStreamIOMaster(stream)
+
+	return stdIn, stdOut, stdErr, exitCode, errors, nil
+}
+
 func (c *Client) GetCheckpoint(ctx context.Context, args *daemon.GetCheckpointReq, opts ...grpc.CallOption) (*daemon.GetCheckpointResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
 	defer cancel()

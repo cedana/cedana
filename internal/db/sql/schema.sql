@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     Status            TEXT NOT NULL,
     IsRunning         INTEGER NOT NULL,
     HostID            TEXT NOT NULL CHECK(HostID != ''),
+    UIDs              TEXT NOT NULL, -- Comma separated list of UIDs
+    GIDs              TEXT NOT NULL, -- Comma separated list of GIDs
+    Groups            TEXT NOT NULL, -- Comma separated list of groups
     FOREIGN KEY(HostID) REFERENCES hosts(ID) ON DELETE CASCADE
 );
 
