@@ -53,6 +53,10 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 				os.RemoveAll(imagesDirectory)
 			}
 		}()
+		err = os.Chmod(imagesDirectory, filesystem.DUMP_DIR_PERMS) // XXX: Because for some reason mkdir is not applying perms
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
+		}
 
 		f, err := os.Open(imagesDirectory)
 		if err != nil {
