@@ -44,4 +44,7 @@ type Job struct {
 	Status     string
 	Isrunning  int64
 	Hostid     string
+	Uids       string
+	Gids       string
+	Groups     string
 }

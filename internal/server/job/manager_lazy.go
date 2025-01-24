@@ -394,7 +394,7 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.N
 		user := &syscall.Credential{
 			Uid:    state.GetUIDs()[0],
 			Gid:    state.GetGIDs()[0],
-			Groups: state.GetGIDs(),
+			Groups: state.GetGroups(),
 		}
 		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid, user))
 	}
