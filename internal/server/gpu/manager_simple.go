@@ -171,7 +171,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir()})
+			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
