@@ -3,17 +3,28 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"io"
+	"runtime"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	gocriu "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
+	containerdTypes "github.com/containerd/containerd/api/types"
+	"github.com/containerd/containerd/archive"
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
+	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/identity"
+	is "github.com/opencontainers/image-spec/specs-go"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,6 +36,7 @@ import (
 // TODO: Do rootfs dump parallel to CRIU dump, possible using multiple CRIU callbacks and synchronizing them
 func DumpRootfs(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
@@ -109,6 +121,99 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 		return exited, nil
 	}
+}
+
+func writeContent(ctx context.Context, mediaType, ref string, r io.Reader, client *containerd.Client) (*containerdTypes.Descriptor, error) {
+	cs := client.ContentStore()
+	writer, err := cs.Writer(ctx, content.WithRef(ref), content.WithDescriptor(v1.Descriptor{MediaType: mediaType}))
+	if err != nil {
+		return nil, err
+	}
+	defer writer.Close()
+	size, err := io.Copy(writer, r)
+	if err != nil {
+		return nil, err
+	}
+	if err := writer.Commit(ctx, 0, ""); err != nil {
+		return nil, err
+	}
+	return &containerdTypes.Descriptor{
+		MediaType:   mediaType,
+		Digest:      writer.Digest().String(),
+		Size:        size,
+		Annotations: make(map[string]string),
+	}, nil
+}
+
+func CreateImage(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		dumpDir := req.GetDir()
+
+		callback := &criu.NotifyCallback{
+			PostDumpFunc: func(ctx context.Context, opts *gocriu.CriuOpts) error {
+				client, err := containerd.New("/run/containerd/containerd.sock")
+				if err != nil {
+					return err
+				}
+				defer client.Close()
+				containerdCtx := namespaces.WithNamespace(context.Background(), "k8s.io")
+
+				ctr, err := client.ContainerService().Get(containerdCtx, req.Details.Runc.ID)
+				if err != nil {
+					return err
+				}
+
+				index := v1.Index{
+					Versioned: is.Versioned{
+						SchemaVersion: 2,
+					},
+					Annotations: make(map[string]string),
+				}
+
+				tar := archive.Diff(ctx, "", dumpDir)
+				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, dumpDir, tar, client)
+				// close tar first after write
+				if err := tar.Close(); err != nil {
+					return err
+				}
+				if err != nil {
+					return err
+				}
+
+				descriptors := []*containerdTypes.Descriptor{
+					cp,
+				}
+
+				for _, d := range descriptors {
+					index.Manifests = append(index.Manifests, v1.Descriptor{
+						MediaType: d.MediaType,
+						Size:      d.Size,
+						Digest:    digest.Digest(d.Digest),
+						Platform: &v1.Platform{
+							OS:           runtime.GOOS,
+							Architecture: runtime.GOARCH,
+						},
+						Annotations: d.Annotations,
+					})
+				}
+
+				if ctr.Image != "" {
+					index.Annotations["image.name"] = ctr.Image
+				}
+
+				return nil
+			},
+		}
+		opts.CRIUCallback.Include(callback)
+
+		exited, err = next(ctx, opts, resp, req)
+		if err != nil {
+			return nil, err
+		}
+
+		return exited, nil
+	}
+
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string) error {

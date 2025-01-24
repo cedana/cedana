@@ -53,6 +53,7 @@ var (
 		validation.ValidateDumpRequst,
 		client.SetupForDump,
 		filesystem.DumpRootfs,
+		filesystem.CreateImage,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
