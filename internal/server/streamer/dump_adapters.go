@@ -9,10 +9,10 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,7 +30,7 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 
 		// Check if compression is valid, because we don't want to fail after the dump
 		// as the process would be killed
-		if _, ok := utils.SUPPORTED_COMPRESSIONS[compression]; !ok {
+		if _, ok := io.SUPPORTED_COMPRESSIONS[compression]; !ok {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 

@@ -2,8 +2,6 @@ package utils
 
 import (
 	"archive/tar"
-	"compress/gzip"
-	"compress/zlib"
 	"context"
 	"fmt"
 	"io"
@@ -12,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pierrec/lz4"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 )
 
 const (
@@ -22,62 +20,34 @@ const (
 	GIBIBYTE
 )
 
-var SUPPORTED_COMPRESSIONS = map[string]bool{
-	"":     true,
-	"none": true,
-	"tar":  true,
-	"gzip": true,
-	"gz":   true,
-	"lz4":  true,
-	"zlib": true,
-}
-
 // Tar creates a tarball from the provided sources and writes it to the destination.
 // The desination should be a path without any file extension, as the function will add extension
 // based on the compression format specified.
 // XXX: Works only with files, not directories.
 func Tar(src string, tarball string, compression string) (string, error) {
-	switch compression {
-	case "lz4":
-		tarball += ".tar.lz4"
-	case "gzip", "gz":
-		tarball += ".tar.gz"
-	case "zlib":
-		tarball += ".tar.zlib"
-	case "tar":
-		tarball += ".tar"
-	case "", "none":
-		tarball += ".tar"
-	default:
-		return "", fmt.Errorf("Unsupported compression format: %s", compression)
+	ext, err := cedana_io.ExtForCompression(compression)
+	if err != nil {
+		return "", err
 	}
+
+	tarball += ".tar" + ext
 
 	file, err := os.Create(tarball)
 	if err != nil {
 		return "", fmt.Errorf("Could not create tarball file: %s", err)
 	}
 	defer file.Close()
+	defer func() {
+		if err != nil {
+			os.Remove(tarball)
+		}
+	}()
 
-	var writer io.WriteCloser
-
-	switch compression {
-	case "lz4":
-		writer = lz4.NewWriter(file)
-		defer writer.Close()
-	case "gzip", "gz":
-		writer = gzip.NewWriter(file)
-		defer writer.Close()
-	case "zlib":
-		writer = zlib.NewWriter(file)
-		defer writer.Close()
-	case "tar":
-		writer = file
-	case "", "none":
-		writer = file
-	default:
-		os.Remove(tarball)
-		return "", fmt.Errorf("Unsupported compression format: %s", compression)
+	writer, err := cedana_io.NewCompressionWriter(file, compression)
+	if err != nil {
+		return "", err
 	}
+	defer writer.Close()
 
 	tarWriter := tar.NewWriter(writer)
 	defer tarWriter.Close()
@@ -123,7 +93,7 @@ func Tar(src string, tarball string, compression string) (string, error) {
 // Untar decompresses the provided tarball to the destination directory.
 // The destination directory should already exist.
 // The function automatically detects the compression format from the file extension.
-// XXX: Works only with files, not directories.
+// FIXME: Works only with files, not directories in the tarball.
 func Untar(tarball string, dest string) error {
 	file, err := os.Open(tarball)
 	if err != nil {
@@ -137,30 +107,16 @@ func Untar(tarball string, dest string) error {
 	}
 	perm := stat.Mode().Perm()
 
-	var reader io.Reader
-
-	switch filepath.Ext(tarball) {
-	case ".lz4":
-		reader = lz4.NewReader(file)
-	case ".gz":
-		readCloser, err := gzip.NewReader(file)
-		if err != nil {
-			return fmt.Errorf("Could not create gzip reader: %s", err)
-		}
-		defer readCloser.Close()
-		reader = readCloser
-	case ".zlib":
-		readCloser, err := zlib.NewReader(file)
-		if err != nil {
-			return fmt.Errorf("Could not create zlib reader: %s", err)
-		}
-		defer readCloser.Close()
-		reader = readCloser
-	case ".tar":
-		reader = file
-	default:
-		return fmt.Errorf("Unsupported compression format: %s", strings.TrimPrefix(filepath.Ext(tarball), "."))
+	compression, err := cedana_io.CompressionFromExt(tarball)
+	if err != nil {
+		return err
 	}
+
+	reader, err := cedana_io.NewCompressionReader(file, compression)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
 
 	tarReader := tar.NewReader(reader)
 
@@ -208,86 +164,54 @@ func Untar(tarball string, dest string) error {
 	return nil
 }
 
-// WriteTo writes the contents from the provided file to the the provided path.
+// WriteTo writes the contents from the provided src to the the provided target file.
 // Compression format is specified by the compression argument.
-func WriteTo(src *os.File, path string, compression string) error {
+func WriteTo(src *os.File, target string, compression string) error {
 	defer src.Close()
-	switch compression {
-	case "lz4":
-		path += ".lz4"
-	case "gzip", "gz":
-		path += ".gz"
-	case "zlib":
-		path += ".zlib"
-	case "", "none", "tar": // Taring single file makes no sense, so for compatibility, we just write as file
-		// Do nothing
-	default:
-		return fmt.Errorf("Unsupported compression format: %s", compression)
+
+	ext, err := cedana_io.ExtForCompression(compression)
+	if err != nil {
+		return err
 	}
 
-	file, err := os.Create(path)
+	target += ext
+
+	file, err := os.Create(target)
 	if err != nil {
 		return fmt.Errorf("Could not create file: %s", err)
 	}
 
-	var writer io.WriteCloser
-	switch compression {
-	case "lz4":
-		writer = lz4.NewWriter(file)
-		defer writer.Close()
-	case "gzip", "gz":
-		writer = gzip.NewWriter(file)
-		defer writer.Close()
-	case "zlib":
-		writer = zlib.NewWriter(file)
-		defer writer.Close()
-	case "", "none", "tar": // Taring single file makes no sense, so for compatibility, we just write as file
-		writer = file
-	default:
-		os.Remove(path)
-		return fmt.Errorf("Unsupported compression format: %s", compression)
+	writer, err := cedana_io.NewCompressionWriter(file, compression)
+	if err != nil {
+		return err
 	}
+	defer writer.Close()
 
 	_, err = src.WriteTo(writer)
 	return err
 }
 
-// ReadFrom reads the contents of the file at the provided path and writes it to the provided file.
+// ReadFrom reads the contents of the src file and writes it to the provided target.
 // The function automatically detects the compression format from the file extension.
-func ReadFrom(path string, target *os.File) error {
+func ReadFrom(src string, target *os.File) error {
 	defer target.Close()
 
-	ext := filepath.Ext(path)
-
-	file, err := os.Open(path)
+	file, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("Could not open file: %s", err)
 	}
 	defer file.Close()
 
-	var reader io.Reader
-	switch ext {
-	case ".lz4":
-		reader = lz4.NewReader(file)
-	case ".gz":
-		readCloser, err := gzip.NewReader(file)
-		if err != nil {
-			return fmt.Errorf("Could not create gzip reader: %s", err)
-		}
-		defer readCloser.Close()
-		reader = readCloser
-	case ".zlib":
-		readCloser, err := zlib.NewReader(file)
-		if err != nil {
-			return fmt.Errorf("Could not create zlib reader: %s", err)
-		}
-		defer readCloser.Close()
-		reader = readCloser
-	case "": // Taring single file makes no sense, so for compatibility, we just write as file
-		reader = file
-	default:
-		return fmt.Errorf("Unsupported compression format: %s", strings.TrimPrefix(filepath.Ext(path), "."))
+	compression, err := cedana_io.CompressionFromExt(src)
+	if err != nil {
+		return err
 	}
+
+	reader, err := cedana_io.NewCompressionReader(file, compression)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
 
 	_, err = target.ReadFrom(reader)
 	return err
