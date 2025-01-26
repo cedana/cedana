@@ -14,24 +14,28 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/style"
 )
 
 const (
-	BINARY_PERMS  = 0o755
-	LIBRARY_PERMS = 0o644
+	BINARY_PERMS       = 0o755
+	LIBRARY_PERMS      = 0o644
+	DOWNLOAD_DIR_PERMS = 0o755
 )
 
 type PropagatorManager struct {
 	config.Connection
 	client *http.Client
 
-	downloadDir string
+	compatibility string // used to fetch plugins compatible with this version
+	downloadDir   string
 	*LocalManager
 }
 
-func NewPropagatorManager(connection config.Connection) *PropagatorManager {
+func NewPropagatorManager(connection config.Connection, compatibility string) *PropagatorManager {
 	downloadDir := filepath.Join(os.TempDir(), "cedana", "downloads")
-	os.MkdirAll(downloadDir, 0755)
+	os.RemoveAll(downloadDir) // cleanup existing downloads
+	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
 
 	localManager := NewLocalManager()
 
@@ -40,6 +44,7 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	return &PropagatorManager{
 		connection,
 		&http.Client{},
+		compatibility,
 		downloadDir,
 		localManager,
 	}
@@ -70,7 +75,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	url := fmt.Sprintf("%s/plugins?names=%s", m.URL, strings.Join(names, ","))
+	url := fmt.Sprintf("%s/plugins?names=%s&compatibility=%s", m.URL, strings.Join(names, ","), m.compatibility)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.AuthToken))
@@ -80,7 +85,14 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		if err == nil {
 			defer resp.Body.Close()
 
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				if resp.StatusCode == http.StatusPartialContent {
+					fmt.Println(style.WarningColors.Sprint(
+						"Some plugins have no compatible versions available in the registry or locally.\n",
+						"You may need to update Cedana. If this is a local build, you may ignore this warning.\n",
+					))
+				}
+
 				onlineList := make([]Plugin, len(list))
 				if err := json.NewDecoder(resp.Body).Decode(&onlineList); err != nil {
 					return nil, err
@@ -112,7 +124,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	}
 
 	if err != nil {
-		fmt.Printf("Warn: Using local list. Failed to connect to propagator registry: %v\n", err)
+		fmt.Println(style.WarningColors.Sprintf("Using local list. Failed to connect to propagator registry: %v", err))
 	}
 
 	return list, nil

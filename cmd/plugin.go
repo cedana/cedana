@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
-	"github.com/xeonx/timeago"
 )
 
 func init() {
@@ -39,7 +38,7 @@ var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Manage plugins",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		manager := plugins.NewPropagatorManager(config.Global.Connection)
+		manager := plugins.NewPropagatorManager(config.Global.Connection, rootCmd.Version)
 
 		ctx := context.WithValue(cmd.Context(), keys.PLUGIN_MANAGER_CONTEXT_KEY, manager)
 		cmd.SetContext(ctx)
@@ -99,7 +98,7 @@ var pluginListCmd = &cobra.Command{
 				statusStr(p.Status),
 				p.Version,
 				p.LatestVersion,
-				timeago.NoMax(timeago.English).Format(p.PublishedAt),
+				utils.TimeAgo(p.PublishedAt),
 			}
 			tableWriter.AppendRow(row)
 		}

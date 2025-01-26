@@ -67,6 +67,7 @@ func (feature Feature[T]) IfAvailable(
 // Also returns an error if the symbol is present but incompatible.
 func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 	loadedPlugins := Load()
+
 	available := false
 
 	pluginSet := map[string]struct{}{}
