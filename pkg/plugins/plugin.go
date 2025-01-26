@@ -106,6 +106,22 @@ func (p *Plugin) SyncVersion() {
 			version = "error"
 		}
 	}
+
+	// Get first line
+	if i := strings.Index(version, "\n"); i > 0 {
+		version = version[:i]
+	}
+
+	// Get last word
+	if i := strings.LastIndex(version, " "); i > 0 {
+		version = version[i+1:]
+	}
+
+	// Add 'v' prefix if missing
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+
 	p.Version = version
 }
 

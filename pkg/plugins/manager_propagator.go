@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/style"
 )
 
 const (
@@ -84,7 +85,14 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		if err == nil {
 			defer resp.Body.Close()
 
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				if resp.StatusCode == http.StatusPartialContent {
+					fmt.Println(style.WarningColors.Sprint(
+						"Some plugins have no compatible versions available in the registry or locally.\n",
+						"You may need to update Cedana. If this is a local build, you may ignore this warning.\n",
+					))
+				}
+
 				onlineList := make([]Plugin, len(list))
 				if err := json.NewDecoder(resp.Body).Decode(&onlineList); err != nil {
 					return nil, err
@@ -116,7 +124,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	}
 
 	if err != nil {
-		fmt.Printf("Warn: Using local list. Failed to connect to propagator registry: %v\n", err)
+		fmt.Println(style.WarningColors.Sprintf("Using local list. Failed to connect to propagator registry: %v", err))
 	}
 
 	return list, nil
