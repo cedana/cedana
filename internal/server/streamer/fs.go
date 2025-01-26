@@ -74,7 +74,7 @@ func NewStreamingFs(
 	var readFds, writeFds []*os.File
 	var shardFds []string
 	for i := range parallelism {
-		r, w, err := os.Pipe()
+    r, w, err := os.Pipe() // TODO: Increase pipe capacity
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create pipe: %w", err)
 		}
