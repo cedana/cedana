@@ -17,21 +17,24 @@ import (
 )
 
 const (
-	BINARY_PERMS  = 0o755
-	LIBRARY_PERMS = 0o644
+	BINARY_PERMS       = 0o755
+	LIBRARY_PERMS      = 0o644
+	DOWNLOAD_DIR_PERMS = 0o755
 )
 
 type PropagatorManager struct {
 	config.Connection
 	client *http.Client
 
-	downloadDir string
+	compatibility string // used to fetch plugins compatible with this version
+	downloadDir   string
 	*LocalManager
 }
 
-func NewPropagatorManager(connection config.Connection) *PropagatorManager {
+func NewPropagatorManager(connection config.Connection, compatibility string) *PropagatorManager {
 	downloadDir := filepath.Join(os.TempDir(), "cedana", "downloads")
-	os.MkdirAll(downloadDir, 0755)
+	os.RemoveAll(downloadDir) // cleanup existing downloads
+	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
 
 	localManager := NewLocalManager()
 
@@ -40,6 +43,7 @@ func NewPropagatorManager(connection config.Connection) *PropagatorManager {
 	return &PropagatorManager{
 		connection,
 		&http.Client{},
+		compatibility,
 		downloadDir,
 		localManager,
 	}
@@ -70,7 +74,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	url := fmt.Sprintf("%s/plugins?names=%s", m.URL, strings.Join(names, ","))
+	url := fmt.Sprintf("%s/plugins?names=%s&compatibility=%s", m.URL, strings.Join(names, ","), m.compatibility)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.AuthToken))
