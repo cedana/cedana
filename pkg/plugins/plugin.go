@@ -103,7 +103,7 @@ func (p *Plugin) SyncVersion() {
 		if out, err := cmd.Output(); err == nil {
 			version = strings.TrimSpace(string(out))
 		} else {
-			version = "error"
+			version = "unknown"
 		}
 	}
 
