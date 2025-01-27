@@ -39,6 +39,8 @@ for arg in "$@"; do
     fi
 done
 
+echo "DAEMON_ARGS: $DAEMON_ARGS"
+
 if test -f "$SERVICE_FILE"; then
     echo "Restarting $APP_NAME..."
 fi

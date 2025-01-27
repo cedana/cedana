@@ -64,4 +64,4 @@ fi
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
 "$DIR"/systemd-reset.sh
-"$DIR"/systemd-install.sh
+"$DIR"/systemd-install.sh --args="--protocol tcp --address 0.0.0.0:8080"

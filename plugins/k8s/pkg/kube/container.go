@@ -58,7 +58,13 @@ type Container struct {
 	SandboxUID       string
 }
 
-func ListContainers(root, namespace string) ([]*Container, error) {
+type KubeClient interface {
+	ListContainers(root, namespace string) ([]*Container, error)
+}
+
+type DefaultKubeClient struct{}
+
+func (c *DefaultKubeClient) ListContainers(root, namespace string) ([]*Container, error) {
 	var containers []*Container
 
 	entries, err := os.ReadDir(root)
@@ -111,6 +117,8 @@ func ListContainers(root, namespace string) ([]*Container, error) {
 			Bundle:      bundle,
 			Annotations: spec.Annotations,
 		}
+
+		log.Info().Msgf("container %v", container)
 
 		if spec.Annotations[CONTAINER_TYPE] == CONTAINER_TYPE_CONTAINER || spec.Annotations[CRIO_CONTAINER_TYPE] == CONTAINER_TYPE_CONTAINER {
 			container.Name = spec.Annotations[containerNameAnnotation]

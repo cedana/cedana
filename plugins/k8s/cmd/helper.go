@@ -216,7 +216,7 @@ func createClientWithRetry(address, protocol string) (*client.Client, error) {
 	return c, nil
 }
 
-func isDaemonRunning(ctx context.Context, protocol, address string) (bool, error) {
+func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
 		return false, err

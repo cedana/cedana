@@ -7,6 +7,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/plugins/k8s/pkg/kube"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -28,10 +29,15 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 
 	resp := &daemon.QueryResp{K8S: &k8s.QueryResp{}}
 
-	containers, err := kube.ListContainers(query.Root, query.Namespace)
+	kubeClient := &kube.DefaultKubeClient{}
+
+	containers, err := kubeClient.ListContainers(query.Root, query.Namespace)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
+
+	log.Info().Msgf("list containers %v", containers)
+	log.Info().Msgf("query request %v", query)
 
 	containerNameSet := make(map[string]bool)
 	sandboxNameSet := make(map[string]bool)
