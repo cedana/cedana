@@ -54,6 +54,10 @@ var Global Config = Config{
 		Enabled:   true,
 		Precision: "auto",
 	},
+	Connection: Connection{
+		URL:       "",
+		AuthToken: "",
+	},
 	Metrics: Metrics{
 		ASR:  false,
 		Otel: false,

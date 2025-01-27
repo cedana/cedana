@@ -21,8 +21,9 @@ type LocalManager struct {
 }
 
 func NewLocalManager() *LocalManager {
+	wd, _ := os.Getwd()
 	return &LocalManager{
-		searchPath,
+		searchPath + ":" + wd, // add current working directory to search path
 		make(map[string]string),
 	}
 }

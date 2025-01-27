@@ -104,8 +104,9 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 	}
 
 	// Goroutine to check if the daemon is running
+	w.Add(1)
 	go func() {
-		w.Add(1)
+		defer w.Done()
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 
@@ -120,7 +121,7 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 				if !isRunning {
 					fmt.Printf("Daemon is not running. Restarting...\n")
 
-					err := startDaemon(ctx, startChroot)
+					err := startDaemon(ctx, startChroot, address, protocol)
 					if err != nil {
 						fmt.Printf("Error restarting Cedana: %v\n", err)
 						continue
@@ -144,6 +145,7 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 
 	// scrape daemon logs for kubectl logs output
 	go func() {
+		defer w.Done()
 		file, err := os.Open("/host/var/log/cedana-daemon.log")
 		if err != nil {
 			fmt.Println("Failed to open cedana-daemon.log")
@@ -175,14 +177,14 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 	return nil
 }
 
-func startDaemon(ctx context.Context, startChroot bool) error {
+func startDaemon(ctx context.Context, startChroot bool, address string, protocol string) error {
 	if startChroot {
 		err := runScript(ctx, startChrootScript, true)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := runCommand(ctx, "cedana", "daemon", "start")
+		err := runCommand(ctx, "cedana", "daemon", "start", "--address", address, "--protocol", protocol)
 		if err != nil {
 			return err
 		}

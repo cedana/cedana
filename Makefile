@@ -45,11 +45,11 @@ stop: ## Stop the daemon
 
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/systemd-install.sh
+	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
 
 reset-systemd: ## Reset the systemd daemon
 	@echo "Stopping systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/systemd-reset.sh ;\
+	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
 	sleep 1
 
 reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
