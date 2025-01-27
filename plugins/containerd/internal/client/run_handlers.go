@@ -45,8 +45,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		}
 		io = cio.WithStreams(nil, logFile, logFile)
 	}
-
-	task, err := container.NewTask(ctx, cio.NewCreator(io))
+	_ = io
+	task, err := container.NewTask(ctx, cio.NewCreator())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
 	}
