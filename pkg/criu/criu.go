@@ -177,6 +177,12 @@ func (c *Criu) doSwrkWithResp(
 		if err != nil {
 			return nil, fmt.Errorf("initialize failed: %w", err)
 		}
+		if reqType == criu.CriuReqType_RESTORE {
+			err := nfy.InitializeRestore(ctx, opts)
+			if err != nil {
+				return nil, fmt.Errorf("initialize-restore failed: %w", err)
+			}
+		}
 	}
 
 	for {

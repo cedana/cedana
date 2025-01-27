@@ -1,6 +1,6 @@
 -- name: CreateJob :exec
-INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO jobs (JID, Type, GPUEnabled, Log, Details, PID, Cmdline, StartTime, WorkingDir, Status, IsRunning, HostID, UIDs, GIDs, Groups)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateJob :exec
 UPDATE jobs SET
@@ -14,7 +14,10 @@ UPDATE jobs SET
     WorkingDir = ?,
     Status = ?,
     IsRunning = ?,
-    HostID = ?
+    HostID = ?,
+    UIDs = ?,
+    GIDs = ?,
+    Groups = ?
 WHERE JID = ?;
 
 -- name: ListJobs :many

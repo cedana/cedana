@@ -96,7 +96,7 @@ if TAG and PREVIOUS_TAG and BINARIES_DIR and PREVIOUS_BINARIES_DIR:
                 / 1024
                 / 1024
             )
-            previous_binary_size_mib = f'_Previously {previous_size:.2f} MiB'
+            previous_binary_size_mib = f'_Previously {previous_size:.2f} MiB_'
         blocks.append(
             {
                 'type': 'context',

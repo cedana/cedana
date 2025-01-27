@@ -6,12 +6,14 @@ import (
 	"context"
 	dbsql "database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "embed"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
+	"github.com/cedana/cedana/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 	json "google.golang.org/protobuf/encoding/protojson"
 )
@@ -75,6 +77,9 @@ func (db *SqliteDB) PutJob(ctx context.Context, job *daemon.Job) error {
 			Status:     job.GetState().GetStatus(),
 			Isrunning:  isRunning,
 			Hostid:     job.GetState().GetHost().GetID(),
+			Uids:       strings.Join(utils.Uint32ToStringSlice(job.GetState().GetUIDs()), ","),
+			Gids:       strings.Join(utils.Uint32ToStringSlice(job.GetState().GetGIDs()), ","),
+			Groups:     strings.Join(utils.Uint32ToStringSlice(job.GetState().GetGroups()), ","),
 		})
 	}
 
@@ -91,6 +96,9 @@ func (db *SqliteDB) PutJob(ctx context.Context, job *daemon.Job) error {
 		Status:     job.GetState().GetStatus(),
 		Isrunning:  isRunning,
 		Hostid:     job.GetState().GetHost().GetID(),
+		Uids:       strings.Join(utils.Uint32ToStringSlice(job.GetState().GetUIDs()), ","),
+		Gids:       strings.Join(utils.Uint32ToStringSlice(job.GetState().GetGIDs()), ","),
+		Groups:     strings.Join(utils.Uint32ToStringSlice(job.GetState().GetGroups()), ","),
 	})
 }
 
@@ -373,6 +381,9 @@ func fromDBJobRow(row any) (*daemon.Job, error) {
 					Total: uint64(host.Memtotal),
 				},
 			},
+			UIDs:   utils.StringToUint32Slice(strings.Split(job.Uids, ",")),
+			GIDs:   utils.StringToUint32Slice(strings.Split(job.Gids, ",")),
+			Groups: utils.StringToUint32Slice(strings.Split(job.Groups, ",")),
 		},
 	}, nil
 }

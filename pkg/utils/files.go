@@ -122,6 +122,12 @@ func Untar(tarball string, dest string) error {
 	}
 	defer file.Close()
 
+  stat, err := file.Stat()
+  if err != nil {
+    return fmt.Errorf("Could not get file stats: %s", err)
+  }
+  perm := stat.Mode().Perm()
+
 	var reader io.Reader
 	var compression string
 
@@ -176,7 +182,7 @@ func Untar(tarball string, dest string) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			// Create directory
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := os.MkdirAll(target, perm); err != nil {
 				return err
 			}
 		case tar.TypeReg:

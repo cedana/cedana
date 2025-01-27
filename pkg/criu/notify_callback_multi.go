@@ -40,6 +40,16 @@ func (n NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) erro
 	return nil
 }
 
+func (n NotifyCallbackMulti) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].InitializeRestore(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (n NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
 		err := n.callbacks[i].PreDump(ctx, opts)
