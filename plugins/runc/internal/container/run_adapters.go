@@ -23,7 +23,7 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 
 		if !strings.HasPrefix(bundle, "/") { // if root path is not absolute
 			bundle = filepath.Join(workingDir, bundle)
-      details.Bundle = bundle
+			details.Bundle = bundle
 		}
 
 		configFile := filepath.Join(bundle, runc.SpecConfigFile)

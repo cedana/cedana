@@ -8,24 +8,20 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	runc_gpu "github.com/cedana/cedana/plugins/runc/pkg/gpu"
-	"github.com/containerd/containerd"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // Adapter that adds Cedana GPU interception to the container.
 // Modifies the spec ephemeraly.
 func Interception(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		spec, ok := ctx.Value(containerd_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get container from context")
 		}
-		spec, err := container.Spec(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get spec from container: %v", err)
-		}
-
 		jid := req.JID
 		if jid == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
@@ -42,7 +38,7 @@ func Interception(next types.Run) types.Run {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err = runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
+		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}

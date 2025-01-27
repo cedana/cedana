@@ -8,8 +8,11 @@ import (
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func SetupForRun(next types.Run) types.Run {
@@ -49,29 +52,30 @@ func CreateContainerForRun(next types.Run) types.Run {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
 			}
 
-			container, err = client.NewContainer(
-				ctx,
-				details.ID,
-				containerd.WithImage(image),
-			)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
-			}
+			var opts []oci.SpecOpts
+			opts = append(opts, oci.WithDefaultSpec(), oci.WithDefaultUnixDevices)
+			opts = append(opts, oci.WithImageConfig(image))
+			var spec specs.Spec
+			var cOpts []containerd.NewContainerOpts
+			cOpts = append(cOpts, containerd.WithImage(image))
+			cOpts = append(cOpts, containerd.WithSpec(&spec, opts...))
+
 			defer func() {
 				if err != nil {
 					container.Delete(ctx)
 				}
 			}()
+			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
+			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
+			ctx = context.WithValue(ctx, containerd_keys.CONTAINER_OPTS_CONTEXT_KEY, cOpts)
 
 		case daemon.RunAction_MANAGE_EXISTING:
-
 			container, err = client.LoadContainer(ctx, details.ID)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
 			}
+			ctx = context.WithValue(ctx, containerd_keys.MANAGE_CONTAINER_CONTEXT_KEY, container)
 		}
-
-		ctx = context.WithValue(ctx, containerd_keys.CONTAINER_CONTEXT_KEY, container)
 
 		return next(ctx, opts, resp, req)
 	}
