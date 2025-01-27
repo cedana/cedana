@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/rs/zerolog/log"
 )
 
 // Kube default sandbox annotation keys
@@ -64,6 +65,8 @@ func ListContainers(root, namespace string) ([]*Container, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list root directory: %v", err)
 	}
+
+	log.Info().Msgf("ListContainers root %s namespace %s", root, namespace)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {

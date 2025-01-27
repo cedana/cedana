@@ -49,7 +49,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 			p, err := plugin.Open(path)
 			if err != nil {
-				fmt.Printf("Error loading plugin: %s\n", t.Name)
+				fmt.Printf("Error loading plugin: %s, plugin path: %s, error: %v\n", t.Name, path, err)
 				continue
 			}
 

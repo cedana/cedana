@@ -53,6 +53,7 @@ var startDaemonCmd = &cobra.Command{
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
+		log.Info().Msgf("address %s protocol %s", config.Global.Address, config.Global.Protocol)
 		server, err := server.NewServer(cmd.Context(), &server.ServeOpts{
 			Address:  config.Global.Address,
 			Protocol: config.Global.Protocol,
