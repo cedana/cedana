@@ -14,7 +14,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 const extDescriptorsFilename = "descriptors.json"
@@ -93,11 +92,9 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				continue
 			}
 
-			extMnt := &criu_proto.ExtMountMap{
-				Key: proto.String(path),
-				Val: proto.String("/dev/null"),
-			}
-			req.Criu.ExtMnt = append(req.Criu.ExtMnt, extMnt)
+			external := fmt.Sprintf("mnt[%s]:%s", path, "/dev/null")
+
+			req.Criu.External = append(req.Criu.External, external)
 		}
 
 		return next(ctx, opts, resp, req)

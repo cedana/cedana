@@ -2,14 +2,13 @@ package device
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/plugins/runc/internal/filesystem"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -27,11 +26,10 @@ func AddDevicesForRestore(next types.Restore) types.Restore {
 		}
 
 		config := container.Config()
-		rootfs := config.Rootfs
 
 		for _, node := range config.Devices {
-			m := &configs.Mount{Destination: node.Path, Source: node.Path}
-			filesystem.CriuAddExternalMount(req.Criu, m, rootfs)
+			external := fmt.Sprintf("dev[%s]:%s", node.Path, node.Path)
+			req.Criu.External = append(req.Criu.External, external)
 		}
 
 		return next(ctx, opts, resp, req)
