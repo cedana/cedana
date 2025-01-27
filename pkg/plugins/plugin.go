@@ -101,11 +101,30 @@ func (p *Plugin) SyncVersion() {
 		cmd := exec.Command(binary.Name, "--version")
 		cmd.Env = append(os.Environ(), "PATH="+BinDir+":"+os.Getenv("PATH"))
 		if out, err := cmd.Output(); err == nil {
-			version = strings.TrimSpace(string(out))
-		} else {
-			version = "error"
+			if v := strings.TrimSpace(string(out)); v != "" {
+				version = v
+			}
 		}
 	}
+
+	if version != "unknown" {
+		// Get first line
+		if i := strings.Index(version, "\n"); i > 0 {
+			version = version[:i]
+		}
+
+		// Get last word
+		if i := strings.LastIndex(version, " "); i > 0 {
+			version = version[i+1:]
+		}
+
+		// Add 'v' prefix if missing
+		if !strings.HasPrefix(version, "v") {
+			version = "v" + version
+		}
+
+	}
+
 	p.Version = version
 }
 
