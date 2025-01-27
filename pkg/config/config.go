@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 const (
 	DIR_NAME   = ".cedana"
 	FILE_NAME  = "config"
-	FILE_TYPE  = "yaml"
+	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
 	FILE_PERM  = 0o644
 	ENV_PREFIX = "CEDANA"
@@ -119,17 +120,34 @@ func Init(args InitArgs) error {
 	gid, _ := strconv.Atoi(user.Gid)
 	os.Chown(configDir, uid, gid)
 
-	viper.ReadInConfig()
-
-	if args.Config != "" {
-		// we don't save config to file if it's passed as a string, as it's temporary
-		reader := strings.NewReader(args.Config)
-		err = viper.MergeConfig(reader)
-	} else {
-		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore error
+	err = viper.ReadInConfig()
+	if err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+		}
 	}
 
-	return viper.Unmarshal(&Global)
+	if args.Config != "" {
+		reader := strings.NewReader(args.Config)
+		err = viper.MergeConfig(reader)
+		if err != nil {
+			return fmt.Errorf("Provided config string is invalid: %w", err)
+		}
+	} else {
+		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
+				return fmt.Errorf("Failed to write config file: %w", err)
+			}
+		}
+	}
+
+	err = viper.UnmarshalExact(&Global)
+	if err != nil {
+		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+	}
+
+	return nil
 }
 
 // Loads the global defaults into viper

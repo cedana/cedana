@@ -133,6 +133,11 @@ func (m *controllers) spawnAsync(
 		Credential: user,
 	}
 	controller.Cancel = func() error { return controller.Cmd.Process.Signal(syscall.SIGTERM) } // NO SIGKILL!!!
+	controller.Env = append(
+		os.Environ(),
+		"CEDANA_URL="+config.Global.Connection.URL,
+		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
+	)
 
 	err = controller.Start()
 	if err != nil {

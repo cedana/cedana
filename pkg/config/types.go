@@ -9,90 +9,90 @@ type (
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
-		Address string `json:"address" mapstructure:"address" yaml:"address"`
+		Address string `json:"address" key:"address" yaml:"address" mapstructure:"address"`
 		// Protocol to use for incoming/outgoing connections (TCP, UNIX, VSOCK)
-		Protocol string `json:"protocol" mapstructure:"protocol" yaml:"protocol"`
+		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
 		// LogLevel is the default log level used by the server
-		LogLevel string `json:"log_level" mapstructure:"log_level" yaml:"log_level"`
+		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 
 		// Connection settings
-		Connection Connection `json:"connection" mapstructure:"connection" yaml:"connection"`
+		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
 		// Checkpoint and storage settings
-		Checkpoint Checkpoint `json:"checkpoint" mapstructure:"checkpoint" yaml:"checkpoint"`
+		Checkpoint Checkpoint `json:"checkpoint" key:"checkpoint" yaml:"checkpoint" mapstructure:"checkpoint"`
 		// Database details
-		DB DB `json:"db"         mapstructure:"db" yaml:"db"`
+		DB DB `json:"db" key:"db" yaml:"db" mapstructure:"db"`
 		// Profiling settings
-		Profiling Profiling `json:"profiling" mapstructure:"profiling" yaml:"profiling"`
+		Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
 		// Metrics settings
-		Metrics Metrics `json:"metrics" mapstructure:"metrics" yaml:"metrics"`
+		Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 		// CRIU settings and defaults
-		CRIU CRIU `json:"criu" mapstructure:"criu" yaml:"criu"`
+		CRIU CRIU `json:"criu" key:"criu" yaml:"criu" mapstructure:"criu"`
 		// CLI settings
-		CLI CLI `json:"cli" mapstructure:"cli" yaml:"cli"`
+		CLI CLI `json:"cli" key:"cli" yaml:"cli" mapstructure:"cli"`
 		// Plugin settings
-		Plugins Plugins `json:"plugins" mapstructure:"plugins" yaml:"plugins"`
+		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 	}
 
 	Connection struct {
 		// URL is your unique Cedana endpoint URL
-		URL string `json:"url"    mapstructure:"url" yaml:"url" env_aliases:"CEDANA_URL"`
+		URL string `json:"url" key:"url" yaml:"url" mapstructure:"url" env_aliases:"CEDANA_URL"`
 		// AuthToken is your authentication token for the Cedana endpoint
-		AuthToken string `json:"auth_token" mapstructure:"auth_token" yaml:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
+		AuthToken string `json:"auth_token" key:"auth_token" yaml:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
 	}
 
 	Checkpoint struct {
 		// Dir is the default directory to store checkpoints
-		Dir string `json:"dir"         mapstructure:"dir" yaml:"dir"`
+		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
-		Compression string `json:"compression" mapstructure:"compression" yaml:"compression"`
+		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 	}
 
 	DB struct {
 		// Remote sets whether to use a remote database
-		Remote bool `json:"remote"      mapstructure:"remote"  yaml:"remote" env_aliases:"CEDANA_REMOTE"`
+		Remote bool `json:"remote" key:"remote"  yaml:"remote" mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
 		// Path is the local path to the database file. E.g. /tmp/cedana.db
-		Path string `json:"path" mapstructure:"path" yaml:"path"`
+		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
 	}
 
 	Profiling struct {
 		// Enabled sets whether to enable and show profiling information
-		Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
-		Precision string `json:"precision" mapstructure:"precision" yaml:"precision"`
+		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 	}
 
 	Metrics struct {
 		// ASR sets whether to enable ASR metrics
-		ASR bool `json:"asr"  mapstructure:"asr" yaml:"asr"`
+		ASR bool `json:"asr" key:"asr" yaml:"asr" mapstructure:"asr"`
 		// Otel sets whether to enable OpenTelemetry metrics
-		Otel bool `json:"otel" mapstructure:"otel" yaml:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
+		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 	}
 
 	CLI struct {
 		// Wait for ready sets CLI commands to block if the daemon is not up yet
-		WaitForReady bool `json:"wait_for_ready" mapstructure:"wait_for_ready" yaml:"wait_for_ready"`
+		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready"`
 	}
 
 	CRIU struct {
 		// BinaryPath is a custom path to the CRIU binary
-		BinaryPath string `json:"binary_path"   mapstructure:"binary_path" yaml:"binary_path"`
+		BinaryPath string `json:"binary_path" key:"binary_path" yaml:"binary_path" mapstructure:"binary_path"`
 		// LeaveRunning sets whether to leave the process running after checkpoint
-		LeaveRunning bool `json:"leave_running" mapstructure:"leave_running" yaml:"leave_running"`
+		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 	}
 
 	Plugins struct {
 		// BinDir is the directory where plugin binaries are stored
-		BinDir string `json:"bin_dir" mapstructure:"bin_dir" yaml:"bin_dir"`
+		BinDir string `json:"bin_dir" key:"bin_dir" yaml:"bin_dir" mapstructure:"bin_dir"`
 		// LibDir is the directory where plugin libraries are stored
-		LibDir string `json:"lib_dir" mapstructure:"lib_dir" yaml:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
+		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// GPU is settings for the GPU plugin
-		GPU GPU `json:"gpu"        mapstructure:"gpu" yaml:"gpu"`
+		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 	}
 
 	GPU struct {
 		// Number of warm GPU controllers to keep in pool
-		PoolSize int `json:"pool_size" mapstructure:"pool_size" yaml:"pool_size"`
+		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
 		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
-    LogDir string `json:"log_dir" mapstructure:"log_dir" yaml:"log_dir"`
+		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 	}
 )
