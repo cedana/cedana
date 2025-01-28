@@ -144,7 +144,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		req.Criu.InheritFd = append(req.Criu.InheritFd, inheritFds...)
+		req.Criu.InheritFd = inheritFds
 
 		return next(ctx, opts, resp, req)
 	}
