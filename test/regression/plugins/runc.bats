@@ -650,7 +650,7 @@ load_lib file
     run runc delete "$id"
 }
 
-@test "restore container (external binds mount)" {
+@test "restore container (external bind mounts)" {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -678,7 +678,7 @@ load_lib file
     run runc delete "$id"
 }
 
-@test "restore container (external binds mount and namespaces)" {
+@test "restore container (external bind mounts and namespaces)" {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
