@@ -91,6 +91,8 @@ add_bind_mount() {
 
     # add a new item to the mounts array, with the provided source and destination
     jq ".mounts += [{\"source\":\"$src\",\"destination\":\"$dest\",\"type\":\"bind\",\"options\":[\"rbind\",\"rw\"]}]" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    mv "$bundle/config.json.tmp" "$bundle/config.json"
 }
 
 setup_rootfs
