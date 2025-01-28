@@ -84,4 +84,15 @@ share_namespace() {
     jq ".linux.namespaces += [{\"type\":\"$type\",\"path\":\"$path\"}]" "$bundle/config.json.tmp" > "$bundle/config.json"
 }
 
+add_bind_mount() {
+    local bundle="$1"
+    local src="$2"
+    local dest="$3"
+
+    # add a new item to the mounts array, with the provided source and destination
+    jq ".mounts += [{\"source\":\"$src\",\"destination\":\"$dest\",\"type\":\"bind\",\"options\":[\"rbind\",\"rw\"]}]" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    mv "$bundle/config.json.tmp" "$bundle/config.json"
+}
+
 setup_rootfs

@@ -316,6 +316,61 @@ load_lib file
     run runc delete "$id"
 }
 
+@test "dump container (external binds mount)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir"
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir2"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+@test "dump container (external binds mount and namespaces)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir"
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir2"
+    share_namespace "$bundle" "network" "/proc/1/ns/net"
+    share_namespace "$bundle" "pid" "/proc/1/ns/pid"
+    share_namespace "$bundle" "ipc" "/proc/1/ns/ipc"
+    share_namespace "$bundle" "uts" "/proc/1/ns/uts"
+    share_namespace "$bundle" "cgroup" "/proc/1/ns/cgroup"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
 ###############
 ### Restore ###
 ###############
@@ -570,6 +625,66 @@ load_lib file
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
+    share_namespace "$bundle" "network" "/proc/1/ns/net"
+    share_namespace "$bundle" "pid" "/proc/1/ns/pid"
+    share_namespace "$bundle" "ipc" "/proc/1/ns/ipc"
+    share_namespace "$bundle" "uts" "/proc/1/ns/uts"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore job "$jid"
+    assert_success
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+@test "restore container (external bind mounts)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir"
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir2"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore job "$jid"
+    assert_success
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+@test "restore container (external bind mounts and namespaces)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir"
+    add_bind_mount "$bundle" "$(mktemp -d)" "/random/path/to/dir2"
     share_namespace "$bundle" "network" "/proc/1/ns/net"
     share_namespace "$bundle" "pid" "/proc/1/ns/pid"
     share_namespace "$bundle" "ipc" "/proc/1/ns/ipc"

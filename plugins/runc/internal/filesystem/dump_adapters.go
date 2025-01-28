@@ -35,10 +35,11 @@ func AddMountsForDump(next types.Dump) types.Dump {
 		rootfs := config.Rootfs
 
 		hasCgroupns := config.Namespaces.Contains(configs.NEWCGROUP)
-		for _, m := range container.Config().Mounts {
+		for _, m := range config.Mounts {
 			switch m.Device {
 			case "bind":
-				CriuAddExternalMount(req.Criu, m, rootfs)
+				dest := SecureJoin(rootfs, m.Destination)
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, dest))
 			case "cgroup":
 				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
 					// real mount(s)
@@ -54,7 +55,8 @@ func AddMountsForDump(next types.Dump) types.Dump {
 					)
 				}
 				for _, b := range binds {
-					CriuAddExternalMount(req.Criu, b, rootfs)
+					dest := SecureJoin(rootfs, b.Destination)
+					req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, dest))
 				}
 			}
 		}
@@ -92,9 +94,7 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				continue
 			}
 
-			external := fmt.Sprintf("mnt[%s]:%s", path, "/dev/null")
-
-			req.Criu.External = append(req.Criu.External, external)
+			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", path, "/dev/null"))
 		}
 
 		return next(ctx, opts, resp, req)
