@@ -16,6 +16,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -224,12 +225,27 @@ func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error
 		return false, err
 	}
 	defer client.Close()
-	_, err = client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: true}, grpc.WaitForReady(true))
+	// Wait for the daemon to be ready, and do health check
+	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
 	if err != nil {
-		return false, err
-	} else {
-		return true, nil
+		return false, fmt.Errorf("cedana health check failed: %w", err)
 	}
+	errorsFound := false
+	for _, result := range resp.Results {
+		for _, component := range result.Components {
+			for _, errs := range component.Errors {
+				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check error: %v", errs)
+				errorsFound = true
+			}
+			for _, warning := range component.Warnings {
+				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check warning: %v", warning)
+			}
+		}
+	}
+	if errorsFound {
+		return false, fmt.Errorf("cedana health check failed")
+	}
+	return true, nil
 }
 
 func runCommand(ctx context.Context, command string, args ...string) error {
