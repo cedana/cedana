@@ -16,10 +16,19 @@ import (
 )
 
 const (
-	CRIU_LOG_VERBOSITY_LEVEL = 3
-	CRIU_LOG_FILE            = "criu.log"
-	GHOST_FILE_MAX_SIZE      = 10000000 // 10MB
+	CRIU_LOG_FILE       = "criu.log"
+	GHOST_FILE_MAX_SIZE = 10000000 // 10MB
 )
+
+var CRIU_LOG_VERBOSITY_LEVEL int32 = 1 // errors only
+
+func init() {
+	if log.Logger.GetLevel() <= zerolog.TraceLevel {
+		CRIU_LOG_VERBOSITY_LEVEL = 3 // debug statements
+	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
+		CRIU_LOG_VERBOSITY_LEVEL = 2 // warning statements
+	}
+}
 
 var Dump types.Dump = dump
 
