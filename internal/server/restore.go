@@ -10,10 +10,10 @@ import (
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
-
-	// "github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
+	"github.com/cedana/cedana/internal/server/streamer"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -25,10 +25,15 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
+	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
+	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
+		dumpDirAdapter = streamer.PrepareDumpDirForRestore
+	}
+
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
-		filesystem.PrepareRestoreDir, // auto-detects compression
+		dumpDirAdapter, // auto-detects compression
 		process.ReloadProcessStateForRestore,
 
 		pluginRestoreMiddleware, // middleware from plugins

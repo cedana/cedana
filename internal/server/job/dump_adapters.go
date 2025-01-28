@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -36,7 +37,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			req.Type = job.GetType()
 			resp.State = job.GetState()
 			if req.Name == "" {
-				req.Name = fmt.Sprintf("dump-%s-%s", req.Type, jid)
+				req.Name = fmt.Sprintf("dump-%s-%s-%d", req.Type, jid, time.Now().Unix())
 			}
 
 			// Use saved job details, but allow overriding from request
@@ -45,7 +46,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			req.Details = mergedDetails
 
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, req.Stream))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {

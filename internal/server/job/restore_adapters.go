@@ -75,7 +75,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			opts.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, req.Stream))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {

@@ -84,7 +84,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	pluginManager := plugins.NewLocalManager()
 
 	var gpuManager gpu.Manager
-	gpuPoolSize := config.Global.Plugins.GPU.PoolSize
+	gpuPoolSize := config.Global.GPU.PoolSize
 	if gpuPoolSize > 0 {
 		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
 		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
