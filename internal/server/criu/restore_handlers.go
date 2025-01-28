@@ -47,7 +47,6 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.LinkRemap = proto.Bool(true)
 
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)

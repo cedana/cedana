@@ -45,6 +45,8 @@ func init() {
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
