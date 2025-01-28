@@ -24,7 +24,23 @@ var (
 )
 
 func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
-	container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+	details := req.GetDetails().GetContainerd()
+	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "failed to get containerd client")
+	}
+	cOpts, ok := ctx.Value(containerd_keys.CONTAINER_OPTS_CONTEXT_KEY).([]containerd.NewContainerOpts)
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "failed to get container opts")
+	}
+	container, err := client.NewContainer(
+		ctx,
+		details.ID,
+		cOpts...,
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
+	}
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container from context")
 	}
@@ -82,7 +98,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 	details := req.GetDetails().GetContainerd()
-
 	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 	if !ok {
 		return nil, status.Errorf(codes.FailedPrecondition, "failed to get containerd client from context")
