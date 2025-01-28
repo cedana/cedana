@@ -1,11 +1,9 @@
 package filesystem
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -23,14 +21,13 @@ func IsPathInPrefixList(path string, prefix []string) bool {
 	return false
 }
 
-// lifted from libcontainer
-func CriuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs string) {
-	mountDest := strings.TrimPrefix(m.Destination, rootfs)
-	if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
-		mountDest = dest[len(rootfs):]
+// Ensures the path is within the rootfs and returns the path relative to the rootfs
+func SecureJoin(rootfs, path string) string {
+	path = strings.TrimPrefix(path, rootfs)
+	if path, err := securejoin.SecureJoin(rootfs, path); err == nil {
+		return path[len(rootfs):]
 	}
-	external := fmt.Sprintf("mnt[%s]:%s", mountDest, mountDest)
-	opts.External = append(opts.External, external)
+	return path
 }
 
 // lifted from libcontainer
