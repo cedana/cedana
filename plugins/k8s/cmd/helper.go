@@ -14,8 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -222,7 +224,12 @@ func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error
 		return false, err
 	}
 	defer client.Close()
-	return client.HealthCheckConnection(ctx)
+	_, err = client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: true}, grpc.WaitForReady(true))
+	if err != nil {
+		return false, err
+	} else {
+		return true, nil
+	}
 }
 
 func runCommand(ctx context.Context, command string, args ...string) error {

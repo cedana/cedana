@@ -20,6 +20,9 @@ cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
 CEDANA_REMOTE=${CEDANA_REMOTE:-"true"}
+CEDANA_WAIT_FOR_READY=${CEDANA_WAIT_FOR_READY:-"true"}
+CEDANA_ADDRESS=${CEDANA_ADDRESS:-"0.0.0.0:8080"}
+CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-"tcp"}
 
 # Enter chroot environment on the host
 env \
@@ -30,4 +33,7 @@ env \
     CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
     CONTAINERD_CONFIG_PATH="$CONTAINERD_CONFIG_PATH" \
     CEDANA_REMOTE="$CEDANA_REMOTE" \
+    CEDANA_WAIT_FOR_READY="$CEDANA_WAIT_FOR_READY" \
+    CEDANA_ADDRESS="$CEDANA_ADDRESS" \
+    CEDANA_PROTOCOL="$CEDANA_PROTOCOL" \
     chroot /host /bin/bash /cedana/scripts/k8s-setup-host.sh

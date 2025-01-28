@@ -9,9 +9,9 @@ type (
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
-		Address string `json:"address" key:"address" yaml:"address" mapstructure:"address"`
+		Address string `json:"address" key:"address" yaml:"address" mapstructure:"address" env_aliases:"CEDANA_ADDRESS"`
 		// Protocol to use for incoming/outgoing connections (TCP, UNIX, VSOCK)
-		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
+		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol" env_aliases:"CEDANA_PROTOCOL"`
 		// LogLevel is the default log level used by the server
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 
@@ -70,7 +70,7 @@ type (
 
 	CLI struct {
 		// Wait for ready sets CLI commands to block if the daemon is not up yet
-		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready"`
+		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready" env_aliases:"CEDANA_WAIT_FOR_READY"`
 	}
 
 	CRIU struct {
