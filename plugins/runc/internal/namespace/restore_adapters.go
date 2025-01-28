@@ -107,19 +107,21 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "external namespace file %s does not exist: %v", nsPath, err)
 				}
+				defer nsFd.Close()
 				extraFiles = append(extraFiles, nsFd)
 
 				criuOpts := req.GetCriu()
 				if criuOpts == nil {
 					criuOpts = &criu_proto.CriuOpts{}
 				}
+
 				criuOpts.InheritFd = append(criuOpts.InheritFd, &criu_proto.InheritFd{
 					Key: proto.String(CriuNsToKey(t)),
 					Fd:  proto.Int32(int32(2 + len(extraFiles))),
 				})
-			}
 
-			ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
+				ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
+			}
 
 			return next(ctx, opts, resp, req)
 		}
