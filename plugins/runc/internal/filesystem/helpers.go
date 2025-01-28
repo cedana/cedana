@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"golang.org/x/sys/unix"
-	"google.golang.org/protobuf/proto"
 )
 
 // IsPathInPrefixList is a small function for CRIU restore to make sure
@@ -29,11 +29,8 @@ func CriuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs st
 	if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
 		mountDest = dest[len(rootfs):]
 	}
-	extMnt := &criu_proto.ExtMountMap{
-		Key: proto.String(mountDest),
-		Val: proto.String(mountDest),
-	}
-	opts.ExtMnt = append(opts.ExtMnt, extMnt)
+	external := fmt.Sprintf("mnt[%s]:%s", mountDest, mountDest)
+	opts.External = append(opts.External, external)
 }
 
 // lifted from libcontainer

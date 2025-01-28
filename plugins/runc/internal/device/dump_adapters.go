@@ -2,14 +2,13 @@ package device
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/plugins/runc/internal/filesystem"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -28,11 +27,10 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 		}
 
 		config := container.Config()
-		rootfs := config.Rootfs
 
 		for _, d := range config.Devices {
-			m := &configs.Mount{Destination: d.Path, Source: d.Path}
-			filesystem.CriuAddExternalMount(req.Criu, m, rootfs)
+			external := fmt.Sprintf("dev[%x/%x]:%s", d.Minor, d.Major, d.Path) // XXX: Not sure if %d should be %x (hexadecimal)
+			req.Criu.External = append(req.Criu.External, external)
 		}
 
 		return next(ctx, opts, resp, req)
