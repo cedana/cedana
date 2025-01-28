@@ -90,6 +90,7 @@ var restoreCmd = &cobra.Command{
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
@@ -104,6 +105,7 @@ var restoreCmd = &cobra.Command{
 				FileLocks:      proto.Bool(fileLocks),
 				External:       external,
 				ShellJob:       proto.Bool(shellJob),
+				LinkRemap:      proto.Bool(linkRemap),
 			},
 		}
 
