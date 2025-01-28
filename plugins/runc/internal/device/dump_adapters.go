@@ -29,7 +29,7 @@ func AddDevicesForDump(next types.Dump) types.Dump {
 		config := container.Config()
 
 		for _, d := range config.Devices {
-			external := fmt.Sprintf("dev[%d/%d]:%s", d.Minor, d.Major, d.Path) // XXX: Not sure if %d should be %x (hexadecimal)
+			external := fmt.Sprintf("dev[%x/%x]:%s", d.Minor, d.Major, d.Path) // XXX: Not sure if %d should be %x (hexadecimal)
 			req.Criu.External = append(req.Criu.External, external)
 		}
 
