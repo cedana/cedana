@@ -45,6 +45,8 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		return fmt.Errorf("could not get process: %v", err)
 	}
 
+	state.IsRunning = true
+
 	cmdline, err := p.CmdlineWithContext(ctx)
 	if err != nil {
 		errs = append(errs, err)

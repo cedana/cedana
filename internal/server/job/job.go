@@ -189,13 +189,10 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 		return
 	}
 
-	// Try to fill as much as possible, let it error
-	utils.FillProcessState(context.TODO(), state.PID, state)
-
 	state.Status = "halted"
 	state.IsRunning = false
 
-	// Get latest status and isRunning
+	// Get latest process info
 
 	p, err := process.NewProcess(int32(state.PID))
 	if err != nil {
@@ -217,13 +214,8 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 		return
 	}
 
-	status, err := p.Status()
-	if err != nil {
-		return
-	}
-
-	state.Status = status[0]
-	state.IsRunning = true
+	// Try to fill rest as much as possible, let it error
+	utils.FillProcessState(context.TODO(), state.PID, state)
 
 	return
 }
