@@ -544,7 +544,7 @@ jobs:
 
   helper-image-push:
     name: Push Helper Test Image
-    runs-on: ubicloud-standard-2
+    runs-on: ubicloud-standard-4
     needs: [build]
     if: ${{ !inputs.skip_helper_image_push }}
     steps:
