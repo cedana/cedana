@@ -70,6 +70,7 @@ func NewManagerLazy(
 		wg:      &sync.WaitGroup{},
 		plugins: plugins,
 		gpus:    gpuManager,
+		db:      db,
 	}
 
 	err := manager.syncWithDB(lifetime, action{initialize, ""}, db)
