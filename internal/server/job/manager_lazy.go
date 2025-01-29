@@ -183,7 +183,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		jidSet[jid] = nil
 	}
 
-	err := m.syncWithDB(context.Background(), action{initialize, ""})
+	err := m.syncWithDB(context.TODO(), action{initialize, ""})
 	if err != nil {
 		m.pending <- action{initialize, ""}
 	}
@@ -212,7 +212,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		hostIDSet[hostID] = nil
 	}
 
-	err := m.syncWithDB(context.Background(), action{initialize, ""})
+	err := m.syncWithDB(context.TODO(), action{initialize, ""})
 	if err != nil {
 		m.pending <- action{initialize, ""}
 	}
@@ -454,13 +454,9 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
-		m.jobs.Range(func(key any, val any) bool {
-			jid := key.(string)
-			if _, ok := jobProtoSet[jid]; !ok {
-				m.jobs.Delete(jid)
-			}
-			return true
-		})
+		// TODO: Can also remove stale jobs from memory. But need to be careful
+		// about race conditions. For now, we just keep them in memory until daemon
+		// is restarted.
 
 	case putJob:
 		jid := action.id
