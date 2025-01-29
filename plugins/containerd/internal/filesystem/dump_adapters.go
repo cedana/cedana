@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -148,6 +149,7 @@ func writeContent(ctx context.Context, mediaType, ref string, r io.Reader, clien
 func CreateImage(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		dumpDir := req.GetDir()
+		fullDumpDir := filepath.Join(dumpDir, req.Name)
 
 		callback := &criu.NotifyCallback{
 			PostDumpFunc: func(ctx context.Context, opts *gocriu.CriuOpts) error {
@@ -170,12 +172,12 @@ func CreateImage(next types.Dump) types.Dump {
 					Annotations: make(map[string]string),
 				}
 
-				tar := archive.Diff(ctx, "", dumpDir)
+				tar := archive.Diff(ctx, "", fullDumpDir)
 				defer tar.Close()
 
-				log.Debug().Str("container", ctr.ID).Msgf("creating image from dump %s, image media type %s", dumpDir, images.MediaTypeContainerd1Checkpoint)
+				log.Debug().Str("container", ctr.ID).Msgf("creating image from dump %s, image media type %s", fullDumpDir, images.MediaTypeContainerd1Checkpoint)
 
-				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, dumpDir, tar, client)
+				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, fullDumpDir, tar, client)
 				// close tar first after write
 				if err := tar.Close(); err != nil {
 					return err
