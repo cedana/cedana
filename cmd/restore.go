@@ -45,6 +45,8 @@ func init() {
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
@@ -88,6 +90,7 @@ var restoreCmd = &cobra.Command{
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
@@ -102,6 +105,7 @@ var restoreCmd = &cobra.Command{
 				FileLocks:      proto.Bool(fileLocks),
 				External:       external,
 				ShellJob:       proto.Bool(shellJob),
+				LinkRemap:      proto.Bool(linkRemap),
 			},
 		}
 

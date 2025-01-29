@@ -70,4 +70,29 @@ create_cmd_bundle() {
     echo "$bundle"
 }
 
+# modifies a bundle to instead use an external namespace
+share_namespace() {
+    local bundle="$1"
+    local type="$2"
+    local path="$3"
+
+    # remove item from namespaces array whose type is the type provided
+    jq "del(.linux.namespaces[] | select(.type == \"$type\"))" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    # add a new item to the namespaces array, with the same type as the one removed and a path to
+    # the provided path
+    jq ".linux.namespaces += [{\"type\":\"$type\",\"path\":\"$path\"}]" "$bundle/config.json.tmp" > "$bundle/config.json"
+}
+
+add_bind_mount() {
+    local bundle="$1"
+    local src="$2"
+    local dest="$3"
+
+    # add a new item to the mounts array, with the provided source and destination
+    jq ".mounts += [{\"source\":\"$src\",\"destination\":\"$dest\",\"type\":\"bind\",\"options\":[\"rbind\",\"rw\"]}]" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    mv "$bundle/config.json.tmp" "$bundle/config.json"
+}
+
 setup_rootfs

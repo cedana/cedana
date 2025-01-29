@@ -27,8 +27,8 @@ type (
 		Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 		// CRIU settings and defaults
 		CRIU CRIU `json:"criu" key:"criu" yaml:"criu" mapstructure:"criu"`
-		// CLI settings
-		CLI CLI `json:"cli" key:"cli" yaml:"cli" mapstructure:"cli"`
+		// Client settings
+		Client Client `json:"client" key:"client" yaml:"client" mapstructure:"client"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 	}
@@ -68,9 +68,9 @@ type (
 		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 	}
 
-	CLI struct {
-		// Wait for ready sets CLI commands to block if the daemon is not up yet
-		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready"`
+	Client struct {
+		// Wait for ready ensures client requests block if the daemon is not up yet
+		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready" env_aliases:"CEDANA_WAIT_FOR_READY"`
 	}
 
 	CRIU struct {

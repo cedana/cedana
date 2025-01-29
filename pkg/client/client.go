@@ -328,7 +328,7 @@ func (c *Client) HealthCheckConnection(ctx context.Context, opts ...grpc.CallOpt
 }
 
 func addDefaultOptions(opts ...grpc.CallOption) {
-	if config.Global.CLI.WaitForReady {
+	if config.Global.Client.WaitForReady {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 }

@@ -63,7 +63,7 @@ var Global Config = Config{
 		ASR:  false,
 		Otel: false,
 	},
-	CLI: CLI{
+	Client: Client{
 		WaitForReady: false,
 	},
 	CRIU: CRIU{

@@ -4,12 +4,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"golang.org/x/sys/unix"
-	"google.golang.org/protobuf/proto"
 )
 
 // IsPathInPrefixList is a small function for CRIU restore to make sure
@@ -23,17 +21,13 @@ func IsPathInPrefixList(path string, prefix []string) bool {
 	return false
 }
 
-// lifted from libcontainer
-func CriuAddExternalMount(opts *criu_proto.CriuOpts, m *configs.Mount, rootfs string) {
-	mountDest := strings.TrimPrefix(m.Destination, rootfs)
-	if dest, err := securejoin.SecureJoin(rootfs, mountDest); err == nil {
-		mountDest = dest[len(rootfs):]
+// Ensures the path is within the rootfs and returns the path relative to the rootfs
+func SecureJoin(rootfs, path string) string {
+	path = strings.TrimPrefix(path, rootfs)
+	if path, err := securejoin.SecureJoin(rootfs, path); err == nil {
+		return path[len(rootfs):]
 	}
-	extMnt := &criu_proto.ExtMountMap{
-		Key: proto.String(mountDest),
-		Val: proto.String(mountDest),
-	}
-	opts.ExtMnt = append(opts.ExtMnt, extMnt)
+	return path
 }
 
 // lifted from libcontainer
