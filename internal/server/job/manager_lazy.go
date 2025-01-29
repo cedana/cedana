@@ -435,9 +435,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		if err != nil {
 			return err
 		}
-		jobProtoSet := make(map[string]*daemon.Job)
 		for _, proto := range jobProtos {
-			jobProtoSet[proto.GetJID()] = proto
 			if m.Exists(proto.GetJID()) {
 				continue
 			}
