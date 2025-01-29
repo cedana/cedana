@@ -182,6 +182,11 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		jidSet[jid] = nil
 	}
 
+	err := m.syncWithDB(context.Background(), action{initialize, ""}, m.db)
+	if err != nil {
+		m.pending <- action{initialize, ""}
+	}
+
 	m.jobs.Range(func(key any, val any) bool {
 		jid := key.(string)
 		job := val.(*Job)
@@ -204,6 +209,11 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 	hostIDSet := make(map[string]any)
 	for _, hostID := range hostIDs {
 		hostIDSet[hostID] = nil
+	}
+
+	err := m.syncWithDB(context.Background(), action{initialize, ""}, m.db)
+	if err != nil {
+		m.pending <- action{initialize, ""}
 	}
 
 	m.jobs.Range(func(key any, val any) bool {
@@ -424,7 +434,13 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 		if err != nil {
 			return err
 		}
+		jobProtoSet := make(map[string]*daemon.Job)
 		for _, proto := range jobProtos {
+			jobProtoSet[proto.GetJID()] = proto
+			if m.Exists(proto.GetJID()) {
+				continue
+			}
+
 			job := fromProto(proto)
 			m.jobs.Store(job.JID, job)
 
@@ -436,6 +452,15 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 				m.checkpoints.Store(checkpoint.ID, checkpoint)
 			}
 		}
+
+		m.jobs.Range(func(key any, val any) bool {
+			jid := key.(string)
+			if _, ok := jobProtoSet[jid]; !ok {
+				m.jobs.Delete(jid)
+			}
+			return true
+		})
+
 	case putJob:
 		jid := action.id
 		job := m.Get(jid)
