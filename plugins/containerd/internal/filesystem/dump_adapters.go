@@ -18,8 +18,10 @@ import (
 	containerdTypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/rootfs"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
 	"github.com/opencontainers/go-digest"
@@ -190,6 +192,24 @@ func CreateImage(next types.Dump) types.Dump {
 
 				descriptors := []*containerdTypes.Descriptor{
 					cp,
+				}
+
+				if ctr.SnapshotKey != "" {
+					opts := []diff.Opt{
+						diff.WithReference(fmt.Sprintf("checkpoint-rw-%s", ctr.SnapshotKey)),
+					}
+
+					rw, err := rootfs.CreateDiff(ctx, ctr.SnapshotKey, client.SnapshotService(ctr.Snapshotter), client.DiffService(), opts...)
+					if err != nil {
+						return err
+					}
+
+					rw.Platform = &v1.Platform{
+						OS:           runtime.GOOS,
+						Architecture: runtime.GOARCH,
+					}
+
+					index.Manifests = append(index.Manifests, rw)
 				}
 
 				for _, d := range descriptors {
