@@ -281,7 +281,7 @@ func CreateImage(next types.Dump) types.Dump {
 				}
 
 				im := images.Image{
-					Name:   ctr.Runtime.Name,
+					Name:   req.Details.Containerd.Image,
 					Target: desc,
 					Labels: map[string]string{
 						"cedana.ai/checkpoint": "true",
