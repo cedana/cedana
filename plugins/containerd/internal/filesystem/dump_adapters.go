@@ -31,6 +31,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var MediaTypeCedanaDump = "application/vnd.containerd.container.cedana.checkpoint.cedana.tar"
+
 // Adds a post-dump CRIU callback to dump the container's rootfs
 // Using post-dump ensures that the container is in a frozen state
 // Assumes client is already setup in context.
@@ -177,7 +179,7 @@ func CreateImage(next types.Dump) types.Dump {
 
 				log.Debug().Str("container", ctr.ID).Msgf("creating image from dump %s, image media type %s", fullDumpDir, images.MediaTypeContainerd1Checkpoint)
 
-				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, fullDumpDir, tar, client)
+				cp, err := writeContent(containerdCtx, MediaTypeCedanaDump, fullDumpDir, tar, client)
 				// close tar first after write
 				if err := tar.Close(); err != nil {
 					return err
@@ -203,9 +205,8 @@ func CreateImage(next types.Dump) types.Dump {
 					})
 				}
 
-				if ctr.Image != "" {
-					index.Annotations["image.name"] = ctr.Image
-				}
+				index.Annotations["image.name"] = req.Details.Containerd.Image
+
 				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, ctr.Image)
 
 				return nil
