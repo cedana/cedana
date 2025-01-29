@@ -73,7 +73,7 @@ func NewManagerLazy(
 		db:      db,
 	}
 
-	err := manager.syncWithDB(lifetime, action{initialize, ""}, db)
+	err := manager.syncWithDB(lifetime, action{initialize, ""})
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func NewManagerLazy(
 						break
 					}
 					ctx := context.WithoutCancel(lifetime)
-					err := manager.syncWithDB(ctx, action, db)
+					err := manager.syncWithDB(ctx, action)
 					if err != nil {
 						errs = append(errs, err)
 						failedActions = append(failedActions, action)
@@ -111,7 +111,7 @@ func NewManagerLazy(
 				}
 				return
 			case action := <-manager.pending:
-				err := manager.syncWithDB(lifetime, action, db)
+				err := manager.syncWithDB(lifetime, action)
 				if err != nil {
 					manager.pending <- action
 					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("DB sync failed, retrying...")
@@ -183,7 +183,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		jidSet[jid] = nil
 	}
 
-	err := m.syncWithDB(context.Background(), action{initialize, ""}, m.db)
+	err := m.syncWithDB(context.Background(), action{initialize, ""})
 	if err != nil {
 		m.pending <- action{initialize, ""}
 	}
@@ -212,7 +212,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		hostIDSet[hostID] = nil
 	}
 
-	err := m.syncWithDB(context.Background(), action{initialize, ""}, m.db)
+	err := m.syncWithDB(context.Background(), action{initialize, ""})
 	if err != nil {
 		m.pending <- action{initialize, ""}
 	}
@@ -424,14 +424,14 @@ func (i actionType) String() string {
 	return [...]string{"init", "putJob", "putCheckpoint", "shutdown"}[i]
 }
 
-func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) error {
+func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 	typ := action.typ
 
 	var err error
 
 	switch typ {
 	case initialize:
-		jobProtos, err := db.ListJobs(ctx)
+		jobProtos, err := m.db.ListJobs(ctx)
 		if err != nil {
 			return err
 		}
@@ -445,7 +445,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 			job := fromProto(proto)
 			m.jobs.Store(job.JID, job)
 
-			checkpoints, err := db.ListCheckpointsByJIDs(ctx, job.JID)
+			checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, job.JID)
 			if err != nil {
 				return err
 			}
@@ -466,17 +466,17 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action, db db.DB) e
 		jid := action.id
 		job := m.Get(jid)
 		if job == nil {
-			err = db.DeleteJob(ctx, jid)
+			err = m.db.DeleteJob(ctx, jid)
 		} else {
-			err = db.PutJob(ctx, job.GetProto())
+			err = m.db.PutJob(ctx, job.GetProto())
 		}
 	case putCheckpoint:
 		id := action.id
 		checkpoint, ok := m.checkpoints.Load(id)
 		if !ok {
-			err = db.DeleteCheckpoint(ctx, id)
+			err = m.db.DeleteCheckpoint(ctx, id)
 		} else {
-			err = db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
+			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
 		}
 	}
 	return err
