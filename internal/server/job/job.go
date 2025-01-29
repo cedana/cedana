@@ -185,6 +185,7 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 	hostId, _ := host.HostID()
 	if state.GetHost().GetID() != hostId {
 		state.Status = "remote"
+		state.IsRunning = false
 		return
 	}
 
