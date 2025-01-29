@@ -1,7 +1,9 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -150,6 +152,40 @@ func writeContent(ctx context.Context, mediaType, ref string, r io.Reader, clien
 	}, nil
 }
 
+func writeIndex(ctx context.Context, client *containerd.Client, id string, index *v1.Index) (d v1.Descriptor, err error) {
+	labels := map[string]string{}
+	for i, m := range index.Manifests {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(index); err != nil {
+		return v1.Descriptor{}, err
+	}
+	return writeIndexContent(ctx, client.ContentStore(), v1.MediaTypeImageIndex, id, buf, content.WithLabels(labels))
+}
+func writeIndexContent(ctx context.Context, store content.Ingester, mediaType, ref string, r io.Reader, opts ...content.Opt) (d v1.Descriptor, err error) {
+	writer, err := store.Writer(ctx, content.WithRef(ref))
+	if err != nil {
+		return d, err
+	}
+	defer writer.Close()
+	size, err := io.Copy(writer, r)
+	if err != nil {
+		return d, err
+	}
+
+	if err := writer.Commit(ctx, size, "", opts...); err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return d, err
+		}
+	}
+	return v1.Descriptor{
+		MediaType: mediaType,
+		Digest:    writer.Digest(),
+		Size:      size,
+	}, nil
+}
+
 func CreateImage(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		dumpDir := req.GetDir()
@@ -194,6 +230,21 @@ func CreateImage(next types.Dump) types.Dump {
 					cp,
 				}
 
+				for _, d := range descriptors {
+					index.Manifests = append(index.Manifests, v1.Descriptor{
+						MediaType: d.MediaType,
+						Size:      d.Size,
+						Digest:    digest.Digest(d.Digest),
+						Platform: &v1.Platform{
+							OS:           runtime.GOOS,
+							Architecture: runtime.GOARCH,
+						},
+						Annotations: d.Annotations,
+					})
+				}
+
+				index.Annotations["image.name"] = req.Details.Containerd.Image
+
 				if ctr.SnapshotKey != "" {
 					opts := []diff.Opt{
 						diff.WithReference(fmt.Sprintf("checkpoint-rw-%s", ctr.SnapshotKey)),
@@ -212,22 +263,34 @@ func CreateImage(next types.Dump) types.Dump {
 					index.Manifests = append(index.Manifests, rw)
 				}
 
-				for _, d := range descriptors {
-					index.Manifests = append(index.Manifests, v1.Descriptor{
-						MediaType: d.MediaType,
-						Size:      d.Size,
-						Digest:    digest.Digest(d.Digest),
-						Platform: &v1.Platform{
-							OS:           runtime.GOOS,
-							Architecture: runtime.GOARCH,
-						},
-						Annotations: d.Annotations,
-					})
+				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, ctr.Image)
+
+				labels := map[string]string{}
+				for i, m := range index.Manifests {
+					labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
 				}
 
-				index.Annotations["image.name"] = req.Details.Containerd.Image
+				buf := bytes.NewBuffer(nil)
+				if err := json.NewEncoder(buf).Encode(index); err != nil {
+					return err
+				}
 
-				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, ctr.Image)
+				desc, err := writeIndex(ctx, client, req.Details.Runc.ID, &index)
+				if err != nil {
+					return err
+				}
+
+				im := images.Image{
+					Name:   ctr.Runtime.Name,
+					Target: desc,
+					Labels: map[string]string{
+						"cedana.ai/checkpoint": "true",
+					},
+				}
+
+				if im, err = client.ImageService().Create(ctx, im); err != nil {
+					return err
+				}
 
 				return nil
 			},
