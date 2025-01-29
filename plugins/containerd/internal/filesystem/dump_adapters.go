@@ -171,6 +171,10 @@ func CreateImage(next types.Dump) types.Dump {
 				}
 
 				tar := archive.Diff(ctx, "", dumpDir)
+				defer tar.Close()
+
+				log.Debug().Str("container", ctr.ID).Msgf("creating image from dump %s, image media type %s", dumpDir, images.MediaTypeContainerd1Checkpoint)
+
 				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, dumpDir, tar, client)
 				// close tar first after write
 				if err := tar.Close(); err != nil {
@@ -200,6 +204,7 @@ func CreateImage(next types.Dump) types.Dump {
 				if ctr.Image != "" {
 					index.Annotations["image.name"] = ctr.Image
 				}
+				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, ctr.Image)
 
 				return nil
 			},
