@@ -8,13 +8,22 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/plugins/k8s/pkg/kube"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Implements the query handler for k8s
 
-func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error) {
+type QueryHandler interface {
+	Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
+}
+
+type DefaultQueryHandler struct {
+	afero.Fs
+}
+
+func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error) {
 	query := req.K8S
 
 	if query == nil {
@@ -31,7 +40,8 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 
 	kubeClient := &kube.DefaultKubeClient{}
 
-	containers, err := kubeClient.ListContainers(query.Root, query.Namespace)
+	fs := afero.NewOsFs()
+	containers, err := kubeClient.ListContainers(fs, query.Root, query.Namespace)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
@@ -50,10 +60,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 
 	containerSet := make(map[*kube.Container]bool)
 	for _, container := range containers {
-		if containerNameSet[container.Name] {
-			containerSet[container] = true
-		}
-		if sandboxNameSet[container.SandboxName] {
+		if containerNameSet[container.Name] && sandboxNameSet[container.SandboxName] {
 			containerSet[container] = true
 		}
 	}
