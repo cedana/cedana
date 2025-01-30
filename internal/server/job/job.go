@@ -12,7 +12,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/protobuf/proto"
@@ -203,16 +202,12 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 	// Now check if this exact process is running on this
 	// machine. Because, you could simply have another process
 	// running right now with this saved job PID.
-	// This is especially important since the job DB is shared
-	// across multiple machines.
-	// XXX: Cmdline is not a fool-proof check but it's something.
 
-	cmdline, err := p.Cmdline()
+	createTime, err := p.CreateTime()
 	if err != nil {
 		return
 	}
-	if cmdline != state.Cmdline {
-		log.Warn().Str("cmdline", cmdline).Str("state.Cmdline", state.Cmdline).Msg("cmdline != state.Cmdline")
+	if state.StartTime != uint64(createTime) {
 		return
 	}
 
