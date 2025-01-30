@@ -217,7 +217,7 @@ func CreateImage(next types.Dump) types.Dump {
 
 				log.Debug().Str("container", ctr.ID).Msgf("creating image from dump %s, image media type %s", fullDumpDir, images.MediaTypeContainerd1Checkpoint)
 
-				cp, err := writeContent(containerdCtx, MediaTypeCedanaDump, fullDumpDir, tar, client)
+				cp, err := writeContent(containerdCtx, images.MediaTypeContainerd1Checkpoint, fullDumpDir, tar, client)
 				// close tar first after write
 				if err := tar.Close(); err != nil {
 					return err
@@ -243,7 +243,14 @@ func CreateImage(next types.Dump) types.Dump {
 					})
 				}
 
-				index.Annotations["image.name"] = req.Details.Containerd.Image
+				if ctr.Image != "" {
+					ir, err := client.ImageService().Get(ctx, ctr.Image)
+					if err != nil {
+						return err
+					}
+					index.Manifests = append(index.Manifests, ir.Target)
+					index.Annotations["image.name"] = ctr.Image
+				}
 
 				if ctr.SnapshotKey != "" {
 					opts := []diff.Opt{
@@ -263,7 +270,7 @@ func CreateImage(next types.Dump) types.Dump {
 					index.Manifests = append(index.Manifests, rw)
 				}
 
-				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, ctr.Image)
+				log.Debug().Str("container", ctr.ID).Msgf("created image %s, image name %s", cp.Digest, index.Annotations["image.name"])
 
 				labels := map[string]string{}
 				for i, m := range index.Manifests {
