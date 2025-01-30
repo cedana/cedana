@@ -153,7 +153,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
-	job.(*Job).SetState(job.(*Job).LatestState())
+	job.(*Job).SetState(job.(*Job).latestState())
 	if !job.(*Job).GPUEnabled() {
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
 	}
@@ -195,7 +195,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.LatestState())
+		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(jid))
 		}
@@ -226,7 +226,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.LatestState())
+		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.JID))
 		}
