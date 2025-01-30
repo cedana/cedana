@@ -441,8 +441,8 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			if err != nil {
 				return err
 			}
-			if !m.Exists(proto.GetJID()) {
-				m.jobs.Store(proto.GetJID(), job)
+			if !m.Exists(job.JID) {
+				m.jobs.Store(job.JID, job)
 			}
 
 			for _, checkpoint := range checkpoints {
