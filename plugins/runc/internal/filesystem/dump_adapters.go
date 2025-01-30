@@ -14,7 +14,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 const extDescriptorsFilename = "descriptors.json"
@@ -36,10 +35,11 @@ func AddMountsForDump(next types.Dump) types.Dump {
 		rootfs := config.Rootfs
 
 		hasCgroupns := config.Namespaces.Contains(configs.NEWCGROUP)
-		for _, m := range container.Config().Mounts {
+		for _, m := range config.Mounts {
 			switch m.Device {
 			case "bind":
-				CriuAddExternalMount(req.Criu, m, rootfs)
+				dest := SecureJoin(rootfs, m.Destination)
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, dest))
 			case "cgroup":
 				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
 					// real mount(s)
@@ -55,7 +55,8 @@ func AddMountsForDump(next types.Dump) types.Dump {
 					)
 				}
 				for _, b := range binds {
-					CriuAddExternalMount(req.Criu, b, rootfs)
+					dest := SecureJoin(rootfs, b.Destination)
+					req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, dest))
 				}
 			}
 		}
@@ -93,11 +94,7 @@ func AddMaskedPathsForDump(next types.Dump) types.Dump {
 				continue
 			}
 
-			extMnt := &criu_proto.ExtMountMap{
-				Key: proto.String(path),
-				Val: proto.String("/dev/null"),
-			}
-			req.Criu.ExtMnt = append(req.Criu.ExtMnt, extMnt)
+			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", path, "/dev/null"))
 		}
 
 		return next(ctx, opts, resp, req)

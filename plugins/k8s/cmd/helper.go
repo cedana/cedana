@@ -14,8 +14,11 @@ import (
 	"syscall"
 	"time"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -216,13 +219,33 @@ func createClientWithRetry(address, protocol string) (*client.Client, error) {
 	return c, nil
 }
 
-func isDaemonRunning(ctx context.Context, protocol, address string) (bool, error) {
+func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
 		return false, err
 	}
 	defer client.Close()
-	return client.HealthCheckConnection(ctx)
+	// Wait for the daemon to be ready, and do health check
+	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
+	if err != nil {
+		return false, fmt.Errorf("cedana health check failed: %w", err)
+	}
+	errorsFound := false
+	for _, result := range resp.Results {
+		for _, component := range result.Components {
+			for _, errs := range component.Errors {
+				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check error: %v", errs)
+				errorsFound = true
+			}
+			for _, warning := range component.Warnings {
+				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check warning: %v", warning)
+			}
+		}
+	}
+	if errorsFound {
+		return false, fmt.Errorf("cedana health check failed")
+	}
+	return true, nil
 }
 
 func runCommand(ctx context.Context, command string, args ...string) error {

@@ -38,29 +38,26 @@ func (c *Criu) SetCriuPath(path string) {
 
 // Prepare sets up everything for the RPC communication to CRIU
 func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, extraFiles ...*os.File) error {
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_SEQPACKET, 0)
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_SEQPACKET|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return err
 	}
 
-	id := time.Now().UnixNano()
-
-	cln := os.NewFile(uintptr(fds[0]), fmt.Sprintf("criu-xprt-cln-%d", id))
+	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
 	clnNet, err := net.FileConn(cln)
 	cln.Close()
 	if err != nil {
 		return err
 	}
-	srv := os.NewFile(uintptr(fds[1]), fmt.Sprintf("criu-xprt-srv-%d", id))
+	srv := os.NewFile(uintptr(fds[1]), "criu-xprt-srv")
 	defer srv.Close()
 
-	args := []string{"swrk", strconv.Itoa(fds[1])}
-	// #nosec G204
+	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	cmd.ExtraFiles = extraFiles
+	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:    true,
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
@@ -68,7 +65,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 
 	err = cmd.Start()
 	if err != nil {
-		cln.Close()
+		clnNet.Close()
 		return err
 	}
 
@@ -98,7 +95,16 @@ func (c *Criu) Cleanup() error {
 
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
 	cln := c.swrkSk
-	_, err = cln.Write(reqB)
+
+	// Try write a couple of times
+	for i := 0; i < 5; i++ {
+		var wrote int
+		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
+		if err == nil && wrote == len(reqB) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
 		return nil, 0, nil, 0, err
 	}
@@ -157,20 +163,18 @@ func (c *Criu) doSwrkWithResp(
 		req.Features = features
 	}
 
-	if c.swrkCmd == nil {
-		err := c.Prepare(ctx, stdin, stdout, stderr, extraFiles...)
-		if err != nil {
-			return nil, err
-		}
-
-		defer func() {
-			// append any cleanup errors to the returned error
-			err := c.Cleanup()
-			if err != nil {
-				retErr = errors.Join(retErr, err)
-			}
-		}()
+	err := c.Prepare(ctx, stdin, stdout, stderr, extraFiles...)
+	if err != nil {
+		return nil, err
 	}
+
+	defer func() {
+		// append any cleanup errors to the returned error
+		err := c.Cleanup()
+		if err != nil {
+			retErr = errors.Join(retErr, err)
+		}
+	}()
 
 	if nfy != nil {
 		err := nfy.Initialize(ctx, int32(c.swrkCmd.Process.Pid))

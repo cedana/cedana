@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -163,7 +164,8 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 		for _, m := range config.Mounts {
 			switch m.Device {
 			case "bind":
-				CriuAddExternalMount(req.Criu, m, config.Rootfs)
+				dest := SecureJoin(config.Rootfs, m.Destination)
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, m.Source))
 			case "cgroup":
 				if cgroups.IsCgroup2UnifiedMode() || hasCgroupns {
 					continue
@@ -174,7 +176,8 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 					return nil, status.Errorf(codes.Internal, "failed to get cgroup mounts: %v", err)
 				}
 				for _, b := range binds {
-					CriuAddExternalMount(req.Criu, b, config.Rootfs)
+					dest := SecureJoin(config.Rootfs, b.Destination)
+					req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", dest, b.Source))
 				}
 			}
 		}
@@ -197,8 +200,7 @@ func AddMaskedPathsForRestore(next types.Restore) types.Restore {
 		config := container.Config()
 
 		if len(config.MaskPaths) > 0 {
-			m := &configs.Mount{Destination: "/dev/null", Source: "/dev/null"}
-			CriuAddExternalMount(req.Criu, m, config.Rootfs)
+			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", "/dev/null", "/dev/null"))
 		}
 
 		return next(ctx, opts, resp, req)
