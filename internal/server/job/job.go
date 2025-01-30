@@ -67,7 +67,7 @@ func (j *Job) GetProto() *daemon.Job {
 	defer j.Unlock()
 
 	// Get all latest info
-	j.proto.State = j.latestState()
+	j.proto.State = j.LatestState()
 	j.proto.Log = j.latestLog()
 
 	return &j.proto
@@ -83,13 +83,21 @@ func (j *Job) GetState() *daemon.ProcessState {
 	j.Lock()
 	defer j.Unlock()
 
-	return j.latestState()
+	return j.LatestState()
 }
 
 func (j *Job) SetState(state *daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
 	j.proto.State = state
+}
+
+func (j *Job) FillState(ctx context.Context, pid uint32) {
+	j.Lock()
+	defer j.Unlock()
+
+	j.proto.State.PID = pid
+	j.proto.State = j.LatestState()
 }
 
 func (j *Job) GetDetails() *daemon.Details {
@@ -121,13 +129,13 @@ func (j *Job) SetLog(log string) {
 func (j *Job) IsRunning() bool {
 	j.Lock()
 	defer j.Unlock()
-	return j.latestState().GetIsRunning()
+	return j.LatestState().GetIsRunning()
 }
 
 func (j *Job) IsRemote() bool {
 	j.Lock()
 	defer j.Unlock()
-	return j.latestState().GetStatus() == "remote"
+	return j.LatestState().GetStatus() == "remote"
 }
 
 func (j *Job) GPUEnabled() bool {
@@ -168,7 +176,7 @@ func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
 // Functions below don't use locks, so they could be called with locks held.
 
 // WARN: Writes, so call with write lock.
-func (j *Job) latestState() (state *daemon.ProcessState) {
+func (j *Job) LatestState() (state *daemon.ProcessState) {
 	if j.proto.State == nil {
 		return nil
 	}
@@ -205,7 +213,7 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 		return
 	}
 	if cmdline != state.Cmdline {
-    log.Warn().Str("cmdline", cmdline).Str("state.Cmdline", state.Cmdline).Msg("cmdline != state.Cmdline")
+		log.Warn().Str("cmdline", cmdline).Str("state.Cmdline", state.Cmdline).Msg("cmdline != state.Cmdline")
 		return
 	}
 

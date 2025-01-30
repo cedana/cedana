@@ -153,7 +153,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
-	job.(*Job).SetState(job.(*Job).latestState())
+	job.(*Job).SetState(job.(*Job).LatestState())
 	if !job.(*Job).GPUEnabled() {
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
 	}
@@ -195,7 +195,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.latestState())
+		job.SetState(job.LatestState())
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(jid))
 		}
@@ -226,7 +226,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.latestState())
+		job.SetState(job.LatestState())
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.JID))
 		}
@@ -257,8 +257,8 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 	}
 
 	// Try to update the process state with the latest information,
-	// Only possible if process is still running, otherwise ignore errors.
-	job.SetState(job.latestState())
+	// Only possible if process is still running.
+	job.FillState(lifetime, pid)
 
 	m.pending <- action{putJob, jid}
 
