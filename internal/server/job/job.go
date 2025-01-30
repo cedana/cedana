@@ -12,6 +12,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/protobuf/proto"
@@ -211,6 +212,7 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 		return
 	}
 	if cmdline != state.Cmdline {
+    log.Warn().Str("cmdline", cmdline).Str("state.Cmdline", state.Cmdline).Msg("cmdline != state.Cmdline")
 		return
 	}
 
