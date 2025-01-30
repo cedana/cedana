@@ -92,13 +92,6 @@ func (j *Job) SetState(state *daemon.ProcessState) {
 	j.proto.State = state
 }
 
-func (j *Job) FillState(ctx context.Context, pid uint32) error {
-	j.Lock()
-	defer j.Unlock()
-
-	return utils.FillProcessState(ctx, pid, j.proto.State)
-}
-
 func (j *Job) GetDetails() *daemon.Details {
 	j.RLock()
 	defer j.RUnlock()

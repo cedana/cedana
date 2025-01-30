@@ -258,10 +258,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 	// Try to update the process state with the latest information,
 	// Only possible if process is still running, otherwise ignore errors.
-	err := job.FillState(lifetime, pid)
-	if err != nil {
-		log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("ignoring: failed to fill process state after manage")
-	}
+	job.SetState(job.latestState())
 
 	m.pending <- action{putJob, jid}
 
