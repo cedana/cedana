@@ -436,17 +436,15 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			return err
 		}
 		for _, proto := range jobProtos {
-			if m.Exists(proto.GetJID()) {
-				continue
-			}
-
 			job := fromProto(proto)
-			m.jobs.Store(job.JID, job)
-
 			checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, job.JID)
 			if err != nil {
 				return err
 			}
+			if !m.Exists(proto.GetJID()) {
+				m.jobs.Store(proto.GetJID(), job)
+			}
+
 			for _, checkpoint := range checkpoints {
 				m.checkpoints.Store(checkpoint.ID, checkpoint)
 			}
