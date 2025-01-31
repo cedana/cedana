@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 var (
@@ -29,10 +31,20 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get containerd client")
 	}
-	cOpts, ok := ctx.Value(containerd_keys.CONTAINER_OPTS_CONTEXT_KEY).([]containerd.NewContainerOpts)
+	spec, ok := ctx.Value(containerd_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container opts")
 	}
+	image, err := client.GetImage(ctx, details.Image)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
+	}
+
+	var cOpts []containerd.NewContainerOpts
+	cOpts = append(cOpts, containerd.WithImage(image))
+	cOpts = append(cOpts, containerd.WithSpec(spec))
+	cOpts = append(cOpts, containerd.WithSnapshotter("overlayfs"))
+
 	container, err := client.NewContainer(
 		ctx,
 		details.ID,
@@ -41,9 +53,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
 	}
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "failed to get container from context")
-	}
+	defer func() {
+		if err != nil {
+			container.Delete(ctx)
+		}
+	}()
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)

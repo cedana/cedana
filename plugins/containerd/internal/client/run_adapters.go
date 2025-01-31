@@ -47,7 +47,6 @@ func CreateContainerOptsForRun(next types.Run) types.Run {
 
 		switch req.Action {
 		case daemon.RunAction_START_NEW:
-
 			image, err := client.GetImage(ctx, details.Image)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
@@ -60,18 +59,8 @@ func CreateContainerOptsForRun(next types.Run) types.Run {
 				oci.WithImageConfig(image),
 			)
 
-			var cOpts []containerd.NewContainerOpts
-			cOpts = append(cOpts, containerd.WithSnapshotter("overlayfs"))
-			cOpts = append(cOpts, containerd.WithImage(image))
-			cOpts = append(cOpts, containerd.WithSpec(spec))
-
-			defer func() {
-				if err != nil {
-					container.Delete(ctx)
-				}
-			}()
 			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
-			ctx = context.WithValue(ctx, containerd_keys.CONTAINER_OPTS_CONTEXT_KEY, cOpts)
+			// ctx = context.WithValue(ctx, containerd_keys.CONTAINER_OPTS_CONTEXT_KEY, cOpts)
 
 		case daemon.RunAction_MANAGE_EXISTING:
 			container, err = client.LoadContainer(ctx, details.ID)
