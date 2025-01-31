@@ -16,7 +16,7 @@ func DumpPod(next types.Dump) types.Dump {
 		podSpec := details.GetPod().GetPodSpec()
 		dumpDir := req.GetDir()
 
-		podSpecDir := filepath.Join(dumpDir, "pod-spec.json")
+		podSpecDir := filepath.Join(dumpDir, req.Name, "pod-spec.json")
 
 		log.Debug().Msgf("Dumping pod spec to %s", podSpecDir)
 		os.WriteFile(podSpecDir, []byte(podSpec), 0644)
