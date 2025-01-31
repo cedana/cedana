@@ -132,7 +132,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 }
 
 type VMSnapshot interface {
-	Snapshot(destinationURL, vmSocketPath string) error
+	Snapshot(destinationURL, vmSocketPath, vmID string) error
 	Restore(snapshotPath, vmSocketPath string) error
 	Pause(vmSocketPath string) error
 	Resume(vmSocketPath string) error
@@ -145,11 +145,23 @@ type SnapshotRequest struct {
 type CloudHypervisorVM struct {
 }
 
-func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error {
+const sbsPath = "/run/vc/sbs/"
+const persistJson = "persist.json"
+
+func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) error {
 	data := SnapshotRequest{DestinationURL: destinationURL}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	persistData, err := os.ReadFile(filepath.Join(sbsPath, vmID, persistJson))
+	if err != nil {
+		return fmt.Errorf("failed to read persist.json: %w", err)
+	}
+
+	if err := os.WriteFile(destinationURL, persistData, 0o777); err != nil {
+		return fmt.Errorf("failed to write persist.json to destination: %w", err)
 	}
 
 	client := &http.Client{
