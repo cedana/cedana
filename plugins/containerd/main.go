@@ -52,7 +52,7 @@ var (
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequst,
 		client.SetupForDump,
-		filesystem.CreateImage,
+		filesystem.DumpRootfs,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}

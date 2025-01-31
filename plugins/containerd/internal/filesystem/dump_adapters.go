@@ -144,6 +144,7 @@ func writeContent(ctx context.Context, mediaType, ref string, r io.Reader, clien
 	if err := writer.Commit(ctx, 0, ""); err != nil {
 		return nil, err
 	}
+	log.Debug().Str("digest", writer.Digest().String()).Msgf("wrote content for ref %s", ref)
 	return &containerdTypes.Descriptor{
 		MediaType:   mediaType,
 		Digest:      writer.Digest().String(),
@@ -179,6 +180,7 @@ func writeIndexContent(ctx context.Context, store content.Ingester, mediaType, r
 			return d, err
 		}
 	}
+	log.Debug().Str("digest", writer.Digest().String()).Msgf("wrote content for ref %s", ref)
 	return v1.Descriptor{
 		MediaType: mediaType,
 		Digest:    writer.Digest(),
@@ -248,6 +250,7 @@ func CreateImage(next types.Dump) types.Dump {
 					if err != nil {
 						return err
 					}
+					log.Debug().Str("container", ir.Name).Msgf("original image digests %s", ir.Target.Digest.String())
 					index.Manifests = append(index.Manifests, ir.Target)
 					index.Annotations["image.name"] = ctr.Image
 				}
@@ -266,6 +269,8 @@ func CreateImage(next types.Dump) types.Dump {
 						OS:           runtime.GOOS,
 						Architecture: runtime.GOARCH,
 					}
+
+					log.Debug().Str("digest", rw.Digest.String()).Msgf("created rw digest from image %s", index.Annotations["image.name"])
 
 					index.Manifests = append(index.Manifests, rw)
 				}
@@ -286,6 +291,8 @@ func CreateImage(next types.Dump) types.Dump {
 				if err != nil {
 					return err
 				}
+
+				index.Annotations["image.name"] = req.Details.Containerd.Image
 
 				im := images.Image{
 					Name:   req.Details.Containerd.Image,
