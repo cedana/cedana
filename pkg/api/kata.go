@@ -66,7 +66,7 @@ func (s *service) HostKataDump(ctx context.Context, args *task.HostDumpKataArgs)
 			}
 		}()
 
-		err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath)
+		err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath, vm)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Checkpoint task failed during snapshot: %v", err)
 		}
@@ -345,7 +345,7 @@ func (s *service) KataRestore(ctx context.Context, args *task.RestoreArgs) (*tas
 }
 
 type VMSnapshot interface {
-	Snapshot(destinationURL, vmSocketPath string) error
+	Snapshot(destinationURL, vmSocketPath, vmID string) error
 	Restore(snapshotPath, vmSocketPath string, netConfigs []*task.RestoredNetConfig) error
 	Pause(vmSocketPath string) error
 	Resume(vmSocketPath string) error
@@ -359,11 +359,27 @@ type CloudHypervisorVM struct {
 	fdStore sync.Map
 }
 
-func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath string) error {
+const (
+	sbsPath     = "/run/vc/sbs"
+	persistJson = "persist.json"
+)
+
+func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) error {
 	data := SnapshotRequest{DestinationURL: destinationURL}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	persistData, err := os.ReadFile(filepath.Join(sbsPath, vmID, persistJson))
+	if err != nil {
+		return fmt.Errorf("failed to read persist.json: %w", err)
+	}
+
+	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
+
+	if err := os.WriteFile(filepath.Join(normalizedDestinationUrl, persistJson), persistData, 0o777); err != nil {
+		return fmt.Errorf("failed to write persist.json to destination: %w", err)
 	}
 
 	client := &http.Client{
