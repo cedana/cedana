@@ -183,7 +183,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		code := status.ExitCode()
 		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
 
-		cmd.Wait()
+		cmd.Wait() // IO should be complete by now
 		container.Destroy()
 
 		exitCode <- code
