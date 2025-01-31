@@ -160,7 +160,9 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 		return fmt.Errorf("failed to read persist.json: %w", err)
 	}
 
-	if err := os.WriteFile(destinationURL, persistData, 0o777); err != nil {
+	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
+
+	if err := os.WriteFile(normalizedDestinationUrl, persistData, 0o777); err != nil {
 		return fmt.Errorf("failed to write persist.json to destination: %w", err)
 	}
 
