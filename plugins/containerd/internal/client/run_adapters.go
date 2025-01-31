@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"google.golang.org/grpc/codes"
@@ -33,7 +34,7 @@ func SetupForRun(next types.Run) types.Run {
 	}
 }
 
-func CreateContainerForRun(next types.Run) types.Run {
+func CreateContainerOptsForRun(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
@@ -52,21 +53,23 @@ func CreateContainerForRun(next types.Run) types.Run {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
 			}
 
-			var opts []oci.SpecOpts
-			opts = append(opts, oci.WithDefaultSpec(), oci.WithDefaultUnixDevices)
-			opts = append(opts, oci.WithImageConfig(image))
-			var spec specs.Spec
+			spec, err := oci.GenerateSpec(ctx, client,
+				&containers.Container{},
+				oci.WithDefaultSpec(),
+				oci.WithDefaultUnixDevices,
+				oci.WithImageConfig(image),
+			)
+
 			var cOpts []containerd.NewContainerOpts
+			cOpts = append(cOpts, containerd.WithSnapshotter("overlayfs"))
 			cOpts = append(cOpts, containerd.WithImage(image))
-			cOpts = append(cOpts, containerd.WithSpec(&spec, opts...))
-			cOpts = append(cOpts, containerd.WithNewSnapshot(details.ID, image))
+			cOpts = append(cOpts, containerd.WithSpec(spec))
 
 			defer func() {
 				if err != nil {
 					container.Delete(ctx)
 				}
 			}()
-			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
 			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
 			ctx = context.WithValue(ctx, containerd_keys.CONTAINER_OPTS_CONTEXT_KEY, cOpts)
 
