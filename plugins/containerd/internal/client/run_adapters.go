@@ -59,6 +59,7 @@ func CreateContainerForRun(next types.Run) types.Run {
 			var cOpts []containerd.NewContainerOpts
 			cOpts = append(cOpts, containerd.WithImage(image))
 			cOpts = append(cOpts, containerd.WithSpec(&spec, opts...))
+			cOpts = append(cOpts, containerd.WithNewSnapshot(details.ID, image))
 
 			defer func() {
 				if err != nil {
