@@ -162,7 +162,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
 
-	if err := os.WriteFile(normalizedDestinationUrl, persistData, 0o777); err != nil {
+	if err := os.WriteFile(filepath.Join(normalizedDestinationUrl, persistJson), persistData, 0o777); err != nil {
 		return fmt.Errorf("failed to write persist.json to destination: %w", err)
 	}
 
