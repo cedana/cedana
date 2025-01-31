@@ -3,11 +3,13 @@ package utils
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pierrec/lz4"
 )
@@ -122,11 +124,11 @@ func Untar(tarball string, dest string) error {
 	}
 	defer file.Close()
 
-  stat, err := file.Stat()
-  if err != nil {
-    return fmt.Errorf("Could not get file stats: %s", err)
-  }
-  perm := stat.Mode().Perm()
+	stat, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("Could not get file stats: %s", err)
+	}
+	perm := stat.Mode().Perm()
 
 	var reader io.Reader
 	var compression string
@@ -304,4 +306,22 @@ func CopyFile(src, dest string) error {
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func WaitForFile(ctx context.Context, path string, timeout chan int) (string, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+			if PathExists(path) {
+				return path, nil
+			}
+		case <-timeout:
+			return "", fmt.Errorf("timed out waiting for %s", path)
+		}
+	}
 }

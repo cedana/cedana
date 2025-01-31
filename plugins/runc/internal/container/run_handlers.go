@@ -33,9 +33,9 @@ import (
 const (
 	RUNC_BINARY    = "runc"
 	RUNC_LOG_FILE  = "runc.log"
-	RUNC_LOG_DEBUG = true
+	RUNC_LOG_DEBUG = false
 
-	waitForRunErrTimeout = 500 * time.Millisecond
+	waitForRunErrTimeout = 2 * time.Second
 )
 
 type RuncState struct {
@@ -88,17 +88,21 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	log.Trace().Interface("spec", spec).Str("runc", id).Msg("updated spec, backing up old spec")
 	defer runc.RestoreSpec(configFile)
 
-	os.Remove(RUNC_LOG_FILE)
+	logFile := filepath.Join(bundle, RUNC_LOG_FILE)
+	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+	os.Remove(logFile)
+	os.Remove(pidFile)
 
 	cmd := exec.CommandContext(ctx,
 		RUNC_BINARY,
 		fmt.Sprintf("--root=%s", root),
-		fmt.Sprintf("--log=%s", RUNC_LOG_FILE),
+		fmt.Sprintf("--log=%s", logFile),
 		fmt.Sprintf("--log-format=%s", "json"),
 		fmt.Sprintf("--debug=%t", RUNC_LOG_DEBUG),
 		"run", "--detach",
 		fmt.Sprintf("--no-pivot=%t", noPivot),
 		fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
+		fmt.Sprintf("--pid-file=%s", pidFile),
 		id,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -132,21 +136,28 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 
 	err = cmd.Start()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to start container: %v", err)
+	}
+	defer func() {
+		if err != nil {
+			// Don't use cmd.Wait() as it will indefinitely wait for IO to complete
+			cmd.Process.Wait()
+		}
+	}()
 
-	time.Sleep(waitForRunErrTimeout)
+	// Wait for PID file to be created, until the process exists
+	utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
 
 	// Capture logs from runc
 	lastMsg := utils.LogFromFile(
 		log.With().
 			Str("spec", spec.Version).
 			Logger().WithContext(ctx),
-		filepath.Join(RUNC_LOG_FILE),
+		logFile,
 		zerolog.TraceLevel,
 		RuncLogMsgToString,
 	)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to start container: %v: %s", err, lastMsg)
-	}
 
 	container, err := libcontainer.Load(root, id)
 	if err != nil {
@@ -172,7 +183,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		code := status.ExitCode()
 		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
 
-		cmd.Wait()
+		cmd.Wait() // IO should be complete by now
 		container.Destroy()
 
 		exitCode <- code
