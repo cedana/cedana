@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 )
 
 func DumpPod(next types.Dump) types.Dump {
@@ -17,6 +18,7 @@ func DumpPod(next types.Dump) types.Dump {
 
 		podSpecDir := filepath.Join(dumpDir, "pod-spec.json")
 
+		log.Debug().Msgf("Dumping pod spec to %s", podSpecDir)
 		os.WriteFile(podSpecDir, []byte(podSpec), 0644)
 
 		exited, err = next(ctx, opts, resp, req)
