@@ -140,7 +140,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		return nil, status.Errorf(codes.Internal, "failed to start container: %v", err)
 	}
 
-	// Wait for PID file to be created
+	// Wait for PID file to be created, until the process exists
 	utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
 
 	// Capture logs from runc
