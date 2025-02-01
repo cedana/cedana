@@ -364,34 +364,32 @@ const (
 	persistJson = "persist.json"
 )
 
-func copyFiltered(src string, dest string) error {
-	err := os.MkdirAll(dest, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
-	}
+// copyFiltered copies only directories and persist.json files while preserving the directory structure.
+func copyFiltered(src string, destRoot string, baseSrc string) error {
+	err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return fmt.Errorf("failed to read source directory: %w", err)
-	}
+		// Get relative path to maintain the hierarchy
+		relPath, err := filepath.Rel(baseSrc, path)
+		if err != nil {
+			return err
+		}
 
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		destPath := filepath.Join(dest, entry.Name())
+		destPath := filepath.Join(destRoot, relPath)
 
 		if entry.IsDir() {
-			err = copyFiltered(srcPath, destPath)
-			if err != nil {
-				return err
-			}
+			// Always create directories in the destination
+			return os.MkdirAll(destPath, os.ModePerm)
 		} else if entry.Name() == "persist.json" {
-			err = copyFile(srcPath, destPath)
-			if err != nil {
-				return err
-			}
+			// Only copy "persist.json" files
+			return copyFile(path, destPath)
 		}
-	}
-	return nil
+		return nil
+	})
+
+	return err
 }
 
 // copyFile copies a file from src to dest
@@ -413,6 +411,7 @@ func copyFile(src string, dest string) error {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
+	// Preserve file permissions
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
 		return fmt.Errorf("failed to get source file info: %w", err)
@@ -430,7 +429,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 	sbsVMPath := filepath.Join(sbsPath, vmID)
 
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
-	if err := copyFiltered(sbsVMPath, normalizedDestinationUrl); err != nil {
+	if err := copyFiltered(sbsVMPath, normalizedDestinationUrl, sbsVMPath); err != nil {
 		return err
 	}
 
