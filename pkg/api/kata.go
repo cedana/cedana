@@ -426,6 +426,8 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
+	sbsVMPath := filepath.Join(sbsPath, vmID)
+
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
 
 	sandboxPath := filepath.Join(normalizedDestinationUrl, vmID)
@@ -433,7 +435,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	if err := copyFiltered(sandboxPath, normalizedDestinationUrl, sandboxPath); err != nil {
+	if err := copyFiltered(sbsVMPath, sandboxPath, sbsVMPath); err != nil {
 		return err
 	}
 
