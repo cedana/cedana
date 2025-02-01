@@ -430,7 +430,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
 
-	sandboxPath := filepath.Join(normalizedDestinationUrl, vmID)
+	sandboxPath := filepath.Join(normalizedDestinationUrl, "persist")
 	if err := os.Mkdir(sandboxPath, 0755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
