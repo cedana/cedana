@@ -364,6 +364,61 @@ const (
 	persistJson = "persist.json"
 )
 
+func copyDir(src string, dest string) error {
+	err := os.MkdirAll(dest, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		destPath := filepath.Join(dest, entry.Name())
+
+		if entry.IsDir() {
+			err = copyDir(srcPath, destPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = copyFile(srcPath, destPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func copyFile(src string, dest string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get source file info: %w", err)
+	}
+	return os.Chmod(dest, srcInfo.Mode())
+}
+
 func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) error {
 	data := SnapshotRequest{DestinationURL: destinationURL}
 	jsonData, err := json.Marshal(data)
@@ -371,15 +426,11 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
-	persistData, err := os.ReadFile(filepath.Join(sbsPath, vmID, persistJson))
-	if err != nil {
-		return fmt.Errorf("failed to read persist.json: %w", err)
-	}
+	sbsVMPath := filepath.Join(sbsPath, vmID)
 
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
-
-	if err := os.WriteFile(filepath.Join(normalizedDestinationUrl, persistJson), persistData, 0o777); err != nil {
-		return fmt.Errorf("failed to write persist.json to destination: %w", err)
+	if err := copyDir(sbsVMPath, normalizedDestinationUrl); err != nil {
+		return err
 	}
 
 	client := &http.Client{
