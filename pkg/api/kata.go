@@ -364,7 +364,7 @@ const (
 	persistJson = "persist.json"
 )
 
-func copyDir(src string, dest string) error {
+func copyFiltered(src string, dest string) error {
 	err := os.MkdirAll(dest, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
@@ -380,11 +380,11 @@ func copyDir(src string, dest string) error {
 		destPath := filepath.Join(dest, entry.Name())
 
 		if entry.IsDir() {
-			err = copyDir(srcPath, destPath)
+			err = copyFiltered(srcPath, destPath)
 			if err != nil {
 				return err
 			}
-		} else {
+		} else if entry.Name() == "persist.json" {
 			err = copyFile(srcPath, destPath)
 			if err != nil {
 				return err
@@ -394,6 +394,7 @@ func copyDir(src string, dest string) error {
 	return nil
 }
 
+// copyFile copies a file from src to dest
 func copyFile(src string, dest string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -429,7 +430,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 	sbsVMPath := filepath.Join(sbsPath, vmID)
 
 	normalizedDestinationUrl := strings.TrimPrefix(destinationURL, "file://")
-	if err := copyDir(sbsVMPath, normalizedDestinationUrl); err != nil {
+	if err := copyFiltered(sbsVMPath, normalizedDestinationUrl); err != nil {
 		return err
 	}
 
