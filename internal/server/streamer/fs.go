@@ -24,6 +24,7 @@ import (
 
 type Mode int
 
+// Image streamer can only be in one of these modes, never both
 const (
 	READ_ONLY Mode = iota
 	WRITE_ONLY
@@ -45,7 +46,7 @@ const (
 type Fs struct {
 	mode Mode
 	conn *net.UnixConn
-	afero.Fs
+	dir  string
 }
 
 // For READ_ONLY mode, compression is automatically determined.
@@ -74,7 +75,7 @@ func NewStreamingFs(
 	var readFds, writeFds []*os.File
 	var shardFds []string
 	for i := range parallelism {
-    r, w, err := os.Pipe() // TODO: Increase pipe capacity
+		r, w, err := os.Pipe() // TODO: Increase pipe capacity
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create pipe: %w", err)
 		}
@@ -97,7 +98,7 @@ func NewStreamingFs(
 			defer readFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.ReadFrom(paths[i], writeFds[i])
+				_, err := utils.ReadFrom(paths[i], writeFds[i])
 				if err != nil {
 					ioErr <- err
 				}
@@ -106,7 +107,7 @@ func NewStreamingFs(
 			defer writeFds[i].Close()
 			go func() {
 				defer io.Done()
-				err := utils.WriteTo(readFds[i], paths[i], compression)
+				_, err := utils.WriteTo(readFds[i], paths[i], compression)
 				if err != nil {
 					ioErr <- err
 				}
@@ -163,8 +164,7 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
 	}
 
-	// embed OS FS, so methods we don't override are still available as normal FS operations in the dir
-	fs = &Fs{mode, nil, afero.NewBasePathFs(afero.NewOsFs(), dir)}
+	fs = &Fs{mode, nil, dir}
 
 	// Clean up on exit
 	wg.Add(1)
@@ -275,8 +275,16 @@ func (fs *Fs) Chown(name string, uid, gid int) error {
 	return fmt.Errorf("not implemented for streaming")
 }
 
+func (fs *Fs) Chmod(name string, mode os.FileMode) error {
+	return fmt.Errorf("not implemented for streaming")
+}
+
 func (fs *Fs) Chtimes(name string, atime, mtime time.Time) error {
 	return fmt.Errorf("not implemented for streaming")
+}
+
+func (fs *Fs) Name() string {
+	return fs.dir
 }
 
 ////////////////////

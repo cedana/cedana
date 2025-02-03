@@ -10,7 +10,7 @@ import (
 type File struct {
 	name string
 	mode Mode
-	fd   int
+	pipe int
 }
 
 func (f *File) Name() string {
@@ -21,32 +21,32 @@ func (f *File) Read(p []byte) (n int, err error) {
 	if f.mode != READ_ONLY {
 		return 0, fmt.Errorf("file is not open for reading")
 	}
-	return syscall.Read(f.fd, p)
+	return syscall.Read(f.pipe, p)
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
 	if f.mode != WRITE_ONLY {
 		return 0, fmt.Errorf("file is not open for writing")
 	}
-	return syscall.Write(f.fd, p)
+	return syscall.Write(f.pipe, p)
 }
 
 func (f *File) Truncate(size int64) error {
 	if f.mode != WRITE_ONLY {
 		return fmt.Errorf("file is not open for writing")
 	}
-	return syscall.Ftruncate(f.fd, size)
+	return syscall.Ftruncate(f.pipe, size)
 }
 
 func (f *File) WriteString(s string) (ret int, err error) {
 	if f.mode != WRITE_ONLY {
 		return 0, fmt.Errorf("file is not open for writing")
 	}
-	return syscall.Write(f.fd, []byte(s))
+	return syscall.Write(f.pipe, []byte(s))
 }
 
 func (f *File) Close() (err error) {
-	return syscall.Close(f.fd)
+	return syscall.Close(f.pipe)
 }
 
 func (f *File) ReadAt(p []byte, off int64) (n int, err error) {

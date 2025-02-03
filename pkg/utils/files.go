@@ -166,55 +166,53 @@ func Untar(tarball string, dest string) error {
 
 // WriteTo writes the contents from the provided src to the the provided target file.
 // Compression format is specified by the compression argument.
-func WriteTo(src *os.File, target string, compression string) error {
+func WriteTo(src *os.File, target string, compression string) (int64, error) {
 	defer src.Close()
 
 	ext, err := cedana_io.ExtForCompression(compression)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	target += ext
 
 	file, err := os.Create(target)
 	if err != nil {
-		return fmt.Errorf("Could not create file: %s", err)
+		return 0, fmt.Errorf("Could not create file: %s", err)
 	}
 
 	writer, err := cedana_io.NewCompressionWriter(file, compression)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer writer.Close()
 
-	_, err = src.WriteTo(writer)
-	return err
+	return src.WriteTo(writer)
 }
 
 // ReadFrom reads the contents of the src file and writes it to the provided target.
 // The function automatically detects the compression format from the file extension.
-func ReadFrom(src string, target *os.File) error {
+func ReadFrom(src string, target *os.File) (int64, error) {
 	defer target.Close()
 
 	file, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("Could not open file: %s", err)
+		return 0, fmt.Errorf("Could not open file: %s", err)
 	}
 	defer file.Close()
 
 	compression, err := cedana_io.CompressionFromExt(src)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	reader, err := cedana_io.NewCompressionReader(file, compression)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer reader.Close()
 
-	_, err = target.ReadFrom(reader)
-	return err
+	return target.ReadFrom(reader)
 }
 
 //////////////////////////

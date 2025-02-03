@@ -17,7 +17,7 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --stream 1
+    run cedana dump process $pid --stream 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -32,7 +32,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 1
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 1 --compression none
     assert_success
 
     assert_exists "/tmp/$name"
@@ -46,7 +46,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 0
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 0 --compression none
     assert_success
 
     assert_exists "/tmp/$name"
@@ -60,7 +60,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 4
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 4 --compression none
     assert_success
 
     assert_exists "/tmp/$name"
@@ -77,7 +77,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 8
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 8 --compression none
     assert_success
 
     assert_exists "/tmp/$name"
@@ -177,7 +177,7 @@ load_lib file
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --stream 1
+    run cedana dump process $pid --stream 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -195,7 +195,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 1
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 1 --compression none
     assert_success
 
     dump_file="/tmp/$name"
@@ -213,7 +213,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 0
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 0 --compression none
     assert_success
 
     dump_file="/tmp/$name"
@@ -231,7 +231,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 4
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 4 --compression none
     assert_success
 
     dump_file="/tmp/$name"
@@ -252,7 +252,7 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 8
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 8 --compression none
     assert_success
 
     dump_file="/tmp/$name"
