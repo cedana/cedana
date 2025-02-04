@@ -4,7 +4,7 @@ FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.23.0
-ARG CEDANA_SAMPLES_VERSION=0.0.1
+ARG CEDANA_SAMPLES_VERSION=0.0.2
 
 # install packages
 RUN <<EOT

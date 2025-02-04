@@ -448,7 +448,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --gpus all
+      options: --privileged --init --ipc=host --gpus all
     needs: [build, build-plugins]
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
