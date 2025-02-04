@@ -284,6 +284,9 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install runc
+
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
@@ -331,6 +334,9 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install containerd
+
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
@@ -377,6 +383,9 @@ jobs:
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install crio
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
