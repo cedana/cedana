@@ -17,7 +17,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ###########
 
 @test "run GPU process (non-GPU binary)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -34,7 +34,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 }
 
 @test "run GPU process (GPU binary)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -47,7 +47,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 }
 
 @test "run GPU process (non-existent binary)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -64,7 +64,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 }
 
 @test "exec GPU process (run process alias)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -81,7 +81,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ############
 
 @test "dump GPU process (vector add)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -106,7 +106,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 }
 
 @test "dump GPU process (mem throughput saxpy)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -135,7 +135,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ###############
 
 @test "restore GPU process (vector add)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
@@ -165,7 +165,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 }
 
 @test "restore GPU process (mem throughput saxpy)" {
-    if ! env_exists "NVIDIA_VISIBLE_DEVICES"; then
+    if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
 
