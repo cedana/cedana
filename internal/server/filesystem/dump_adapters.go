@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const DUMP_DIR_PERMS = 0o777
+const DUMP_DIR_PERMS = 0o755
 
 // This adapter ensures the specified dump dir exists and is writable.
 // Creates a unique directory within this directory for the dump.

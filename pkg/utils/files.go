@@ -335,3 +335,12 @@ func WaitForFile(ctx context.Context, path string, timeout chan int) (string, er
 		}
 	}
 }
+
+func ChownAll(path string, uid, gid int) error {
+	return filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("filepath.Walk() failed: %s", err)
+		}
+		return os.Chown(path, uid, gid)
+	})
+}

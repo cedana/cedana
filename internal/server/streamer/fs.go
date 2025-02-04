@@ -19,6 +19,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -37,8 +38,10 @@ const (
 	STOP_LISTENER_MSG   = "stop-listener"
 	IMG_FILE_PATTERN    = "img-*"
 	IMG_FILE_FORMATTER  = "img-%d"
-	CONNECTION_TIMEOUT  = 5 * time.Second
+	CONNECTION_TIMEOUT  = 30 * time.Second
 	DEFAULT_PARALLELISM = 4
+	MAX_PARALLELISM     = 32
+	PIPE_SIZE           = 4 * utils.MEBIBYTE
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -75,7 +78,8 @@ func NewStreamingFs(
 	var readFds, writeFds []*os.File
 	var shardFds []string
 	for i := range parallelism {
-		r, w, err := os.Pipe() // TODO: Increase pipe capacity
+		r, w, err := os.Pipe()
+		unix.FcntlInt(r.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create pipe: %w", err)
 		}

@@ -73,15 +73,18 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 		if parallelism == 0 {
 			parallelism = config.Global.Checkpoint.Stream
 		}
-		var wait func() error
-		opts.DumpFs, wait, err = NewStreamingFs(
-			ctx,
+
+		streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+		var waitForIO func() error
+		opts.DumpFs, waitForIO, err = NewStreamingFs(
+			streamerCtx,
 			opts.WG,
 			imgStreamer.BinaryPaths()[0],
 			imagesDirectory,
 			parallelism,
 			READ_ONLY,
 		)
+		end()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 		}
@@ -92,8 +95,8 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 		}
 
 		// Wait for all the streaming to finish
-		_, end := profiling.StartTimingCategory(ctx, "streamer", wait)
-		err = wait()
+		_, end = profiling.StartTimingCategory(ctx, "streamer", "streamer.WaitForIO")
+		err = waitForIO()
 		end()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)

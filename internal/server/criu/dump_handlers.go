@@ -53,6 +53,17 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
 
+	// Change ownership of the dump directory
+	uids := resp.GetState().GetUIDs()
+	gids := resp.GetState().GetGIDs()
+	if len(uids) == 0 || len(gids) == 0 {
+		return nil, status.Error(codes.Internal, "missing UIDs/GIDs in process state")
+	}
+	err = utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
+	}
+
 	// TODO: Add support for pre-dump
 	// TODO: Add support for lazy migration
 
