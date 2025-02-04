@@ -3,6 +3,9 @@
 FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
+ARG GO_VERSION=1.23.0
+ARG CEDANA_SAMPLES_VERSION=0.0.1
+
 # install packages
 RUN <<EOT
 set -eux
@@ -34,15 +37,32 @@ EOT
 # install go
 RUN <<EOT
 set -eux
-wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz && rm -rf /usr/local/go
-tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz && rm go1.23.0.linux-amd64.tar.gz
+wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && rm -rf /usr/local/go
+tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.linux-amd64.tar.gz
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
+
+# Install backup CRIU
+RUN <<EOT
+wget https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_4.0-3_amd64.deb
+dpkg -i criu_4.0-3_amd64.deb
+rm criu_4.0-3_amd64.deb
+EOT
+
+# clone cedana-samples for test workloads
+RUN <<EOT
+set -eux
+curl -L -o cedana-samples.zip https://github.com/cedana/cedana-samples/archive/refs/tags/v${CEDANA_SAMPLES_VERSION}.zip
+unzip cedana-samples.zip
+mv cedana-samples-${CEDANA_SAMPLES_VERSION} cedana-samples
+rm cedana-samples.zip
+EOT
 
 VOLUME ["/src"]
 WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

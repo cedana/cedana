@@ -129,13 +129,13 @@ reset-plugins: ## Reset & uninstall plugins
 PARALLELISM?=8
 BATS_CMD=bats --jobs $(PARALLELISM)
 
-test: test-unit test-regression ## Run all tests
+test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run all regression tests (PARALLELISM=<n>)
+test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running all regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -164,6 +164,7 @@ test-regression-cedana: ## Run regression tests for cedana
 		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) test/regression ;\
 	else \
+		echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 		$(DOCKER_TEST_RUN) make test-regression-cedana PARALLELISM=$(PARALLELISM) ;\
 	fi
 
@@ -177,7 +178,13 @@ test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
 		echo "Using a persistent instance of daemon across tests..." ;\
 		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
 	else \
-		$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
+		if [ "$(PLUGIN)" = "gpu" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_RUN_CUDA) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
+		fi ;\
 	fi
 
 test-enter: ## Enter the test environment
@@ -206,8 +213,8 @@ DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm 
 				$(PLUGIN_BIN_MOUNTS) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
-DOCKER_TEST_RUN_CUDA=docker run $(DOCKER_TEST_RUN_OPTS) \
-					 --runtime nvidia \
+DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
+					 $(DOCKER_TEST_RUN_OPTS) \
 					 $(PLUGIN_LIB_MOUNTS_GPU) \
 					 $(PLUGIN_BIN_MOUNTS_GPU) \
 					 $(DOCKER_TEST_IMAGE_CUDA)
