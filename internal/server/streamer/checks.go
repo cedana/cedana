@@ -93,11 +93,16 @@ func CheckKernelSettings() types.Check {
 			softLimitComponent.Errors = append(softLimitComponent.Errors, "Failed to read /proc/sys/fs/pipe-user-pages-soft")
 		} else {
 			softLimit = bytes.TrimSpace(softLimit)
-			if string(softLimit) == fmt.Sprintf("%d", OPTIMAL_SOFT_LIMIT) {
-				softLimitComponent.Data = "unlimited"
+			softLimitBytes, err := strconv.ParseInt(string(softLimit), 10, 64)
+			if err != nil {
+				softLimitComponent.Errors = append(softLimitComponent.Errors, "Failed to parse /proc/sys/fs/pipe-user-pages-soft")
 			} else {
-				softLimitComponent.Warnings = append(softLimitComponent.Warnings, fmt.Sprintf("For optimal performance, `echo %d > /proc/sys/fs/pipe-user-pages-soft`", OPTIMAL_SOFT_LIMIT))
-				softLimitComponent.Data = string(softLimit)
+				if softLimitBytes == OPTIMAL_SOFT_LIMIT {
+					softLimitComponent.Data = "unlimited"
+				} else {
+					softLimitComponent.Warnings = append(softLimitComponent.Warnings, fmt.Sprintf("For optimal performance, `echo %d > /proc/sys/fs/pipe-user-pages-soft`", OPTIMAL_SOFT_LIMIT))
+					softLimitComponent.Data = utils.SizeStr(softLimitBytes)
+				}
 			}
 		}
 
@@ -106,11 +111,16 @@ func CheckKernelSettings() types.Check {
 			hardLimitComponent.Errors = append(hardLimitComponent.Errors, "Failed to read /proc/sys/fs/pipe-user-pages-hard")
 		} else {
 			hardLimit = bytes.TrimSpace(hardLimit)
-			if string(hardLimit) == fmt.Sprintf("%d", OPTIMAL_HARD_LIMIT) {
-				hardLimitComponent.Data = "unlimited"
+			hardLimitBytes, err := strconv.ParseInt(string(hardLimit), 10, 64)
+			if err != nil {
+				hardLimitComponent.Errors = append(hardLimitComponent.Errors, "Failed to parse /proc/sys/fs/pipe-user-pages-hard")
 			} else {
-				hardLimitComponent.Warnings = append(hardLimitComponent.Warnings, fmt.Sprintf("For optimal performance, `echo %d > /proc/sys/fs/pipe-user-pages-hard`", OPTIMAL_HARD_LIMIT))
-				hardLimitComponent.Data = string(hardLimit)
+				if hardLimitBytes == OPTIMAL_HARD_LIMIT {
+					hardLimitComponent.Data = "unlimited"
+				} else {
+					hardLimitComponent.Warnings = append(hardLimitComponent.Warnings, fmt.Sprintf("For optimal performance, `echo %d > /proc/sys/fs/pipe-user-pages-hard`", OPTIMAL_HARD_LIMIT))
+					hardLimitComponent.Data = utils.SizeStr(hardLimitBytes)
+				}
 			}
 		}
 
@@ -118,7 +128,7 @@ func CheckKernelSettings() types.Check {
 		if err != nil {
 			maxSizeComponent.Errors = append(maxSizeComponent.Errors, "Failed to read /proc/sys/fs/pipe-max-size")
 		} else {
-      maxSize = bytes.TrimSpace(maxSize)
+			maxSize = bytes.TrimSpace(maxSize)
 			maxSizeBytes, err := strconv.ParseInt(string(maxSize), 10, 64)
 			if err != nil {
 				maxSizeComponent.Errors = append(maxSizeComponent.Errors, "Failed to parse /proc/sys/fs/pipe-max-size")
