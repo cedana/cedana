@@ -55,7 +55,7 @@ type Fs struct {
 // For READ_ONLY mode, compression is automatically determined.
 // For WRITE_ONLY mode, compression may be specified.
 // Returns a wait function that *must* be called to tell the streamer to shutdown,
-// and wait for it to finish streaming and exit gracefully. This function returns
+// and wait for it to finish streaming and exit gracefully. The wait function returns
 // any IO errors that occurred during the streaming process.
 func NewStreamingFs(
 	ctx context.Context,
@@ -103,6 +103,7 @@ func NewStreamingFs(
 			go func() {
 				defer io.Done()
 				_, err := utils.ReadFrom(paths[i], writeFds[i])
+        writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
 				}
@@ -112,6 +113,7 @@ func NewStreamingFs(
 			go func() {
 				defer io.Done()
 				_, err := utils.WriteTo(readFds[i], paths[i], compression)
+        readFds[i].Close()
 				if err != nil {
 					ioErr <- err
 				}
