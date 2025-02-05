@@ -12,8 +12,6 @@ import (
 	"github.com/containerd/containerd/oci"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func SetupForRun(next types.Run) types.Run {
