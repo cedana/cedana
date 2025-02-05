@@ -41,9 +41,10 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 
 	var cOpts []containerd.NewContainerOpts
-	cOpts = append(cOpts, containerd.WithImage(image))
-	cOpts = append(cOpts, containerd.WithSpec(spec))
+	// cOpts = append(cOpts, containerd.WithImage(image))
 	cOpts = append(cOpts, containerd.WithSnapshotter("overlayfs"))
+	cOpts = append(cOpts, containerd.WithNewSnapshot(details.ID, image))
+	cOpts = append(cOpts, containerd.WithSpec(spec))
 
 	container, err := client.NewContainer(
 		ctx,
