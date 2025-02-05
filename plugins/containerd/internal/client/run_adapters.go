@@ -57,7 +57,7 @@ func CreateContainerOptsForRun(next types.Run) types.Run {
 				oci.WithImageConfig(image),
 			)
 
-			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, &spec)
+			ctx = context.WithValue(ctx, containerd_keys.SPEC_CONTEXT_KEY, spec)
 			// ctx = context.WithValue(ctx, containerd_keys.CONTAINER_OPTS_CONTEXT_KEY, cOpts)
 
 		case daemon.RunAction_MANAGE_EXISTING:

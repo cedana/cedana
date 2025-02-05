@@ -33,7 +33,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 	spec, ok := ctx.Value(containerd_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "failed to get container opts")
+		return nil, status.Errorf(codes.Internal, "failed to get container specs")
 	}
 	image, err := client.GetImage(ctx, details.Image)
 	if err != nil {
