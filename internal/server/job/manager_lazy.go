@@ -393,7 +393,7 @@ func (m *ManagerLazy) DeleteCheckpoint(id string) {
 	m.pending <- action{putCheckpoint, id}
 }
 
-func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.NotifyCallbackMulti {
+func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string, stream int32) *criu.NotifyCallbackMulti {
 	job := m.Get(jid)
 	if job == nil {
 		return nil
@@ -407,7 +407,7 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string) *criu.N
 			Gid:    state.GetGIDs()[0],
 			Groups: state.GetGroups(),
 		}
-		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid, user))
+		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid, user, stream))
 	}
 	return multiCallback
 }

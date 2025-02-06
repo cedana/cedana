@@ -8,6 +8,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -18,7 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const DUMP_DIR_PERMS = 0o777
+const DUMP_DIR_PERMS = 0o755
 
 // This adapter ensures the specified dump dir exists and is writable.
 // Creates a unique directory within this directory for the dump.
@@ -37,7 +38,7 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 
 		// Check if compression is valid, because we don't want to fail after the dump
 		// as the process would be killed
-		if _, ok := utils.SUPPORTED_COMPRESSIONS[compression]; !ok {
+		if _, ok := io.SUPPORTED_COMPRESSIONS[compression]; !ok {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
@@ -48,7 +49,7 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
 		}
 
-		// Create a unique directory within the dump dir, using type, PID, and timestamp
+		// Create a new directory within the dump dir, where dump will happen
 		imagesDirectory := filepath.Join(dir, req.Name)
 
 		// Create the directory
@@ -65,7 +66,6 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
 		}
 
-		// Set CRIU server
 		f, err := os.Open(imagesDirectory)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
@@ -76,8 +76,8 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		req.GetCriu().ImagesDir = proto.String(imagesDirectory)
-		req.GetCriu().ImagesDirFd = proto.Int32(int32(f.Fd()))
+		req.Criu.ImagesDir = proto.String(imagesDirectory)
+		req.Criu.ImagesDirFd = proto.Int32(int32(f.Fd()))
 
 		// Setup dump fs that can be used by future adapters to directly read write/extra files
 		// to the dump directory

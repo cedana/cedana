@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM ubuntu:24.04
+FROM nvidia/cuda:12.6.3-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.23.0
