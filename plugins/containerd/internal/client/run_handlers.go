@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/rand/v2"
 	"os"
-	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
