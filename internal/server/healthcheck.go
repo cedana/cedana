@@ -63,7 +63,7 @@ func (s *Server) pluginChecklist() types.Checklist {
 // Assumes plugin is installed
 func checkPluginVersion(plugins plugins.Manager, plugin string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
-		component := &daemon.HealthCheckComponent{Name: "plugin version"}
+		component := &daemon.HealthCheckComponent{Name: "version"}
 
 		p := plugins.Get(plugin)
 		component.Data = p.Version

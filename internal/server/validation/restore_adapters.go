@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/streamer"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,9 +17,6 @@ func ValidateRestoreRequest(next types.Restore) types.Restore {
 		}
 		if req.GetType() == "" {
 			return nil, status.Error(codes.InvalidArgument, "missing type")
-		}
-		if req.GetStream() < 0 || req.GetStream() > streamer.MAX_PARALLELISM {
-			return nil, status.Errorf(codes.InvalidArgument, "stream parallelism must be between 0 and %d", streamer.MAX_PARALLELISM)
 		}
 
 		return next(ctx, opts, resp, req)

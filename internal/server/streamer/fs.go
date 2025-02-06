@@ -40,7 +40,6 @@ const (
 	IMG_FILE_FORMATTER  = "img-%d"
 	CONNECTION_TIMEOUT  = 30 * time.Second
 	DEFAULT_PARALLELISM = 4
-	MAX_PARALLELISM     = 32
 	PIPE_SIZE           = 4 * utils.MEBIBYTE
 )
 
@@ -103,7 +102,7 @@ func NewStreamingFs(
 			go func() {
 				defer io.Done()
 				_, err := utils.ReadFrom(paths[i], writeFds[i])
-        writeFds[i].Close()
+				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
 				}
@@ -113,7 +112,7 @@ func NewStreamingFs(
 			go func() {
 				defer io.Done()
 				_, err := utils.WriteTo(readFds[i], paths[i], compression)
-        readFds[i].Close()
+				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
 				}

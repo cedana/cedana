@@ -23,7 +23,7 @@ const (
 // Tar creates a tarball from the provided sources and writes it to the destination.
 // The desination should be a path without any file extension, as the function will add extension
 // based on the compression format specified.
-// XXX: Works only with files, not directories.
+// FIXME: Works only with files, not directories in the tarball.
 func Tar(src string, tarball string, compression string) (string, error) {
 	ext, err := cedana_io.ExtForCompression(compression)
 	if err != nil {
@@ -166,6 +166,9 @@ func Untar(tarball string, dest string) error {
 
 // WriteTo writes the contents from the provided src to the the provided target file.
 // Compression format is specified by the compression argument.
+// If the src is a pipe:
+// 1. No compression: Uses the splice() system call to move the data avoiding kernel-user space copy.
+// 2. With compression: WIP
 func WriteTo(src *os.File, target string, compression string) (int64, error) {
 	defer src.Close()
 
@@ -178,7 +181,18 @@ func WriteTo(src *os.File, target string, compression string) (int64, error) {
 
 	file, err := os.Create(target)
 	if err != nil {
-		return 0, fmt.Errorf("Could not create file: %s", err)
+		return 0, err
+	}
+	defer file.Close()
+
+	if ext == "" {
+		isPipe, err := cedana_io.IsPipe(src.Fd())
+		if err != nil {
+			return 0, err
+		}
+		if isPipe {
+			return cedana_io.Splice(src.Fd(), file.Fd())
+		}
 	}
 
 	writer, err := cedana_io.NewCompressionWriter(file, compression)
@@ -192,18 +206,31 @@ func WriteTo(src *os.File, target string, compression string) (int64, error) {
 
 // ReadFrom reads the contents of the src file and writes it to the provided target.
 // The function automatically detects the compression format from the file extension.
+// If the target is a pipe:
+// 1. No compression: Uses the splice() system call to move the data avoiding kernel-user space copy.
+// 2. With compression: WIP
 func ReadFrom(src string, target *os.File) (int64, error) {
 	defer target.Close()
 
 	file, err := os.Open(src)
 	if err != nil {
-		return 0, fmt.Errorf("Could not open file: %s", err)
+		return 0, err
 	}
 	defer file.Close()
 
 	compression, err := cedana_io.CompressionFromExt(src)
 	if err != nil {
 		return 0, err
+	}
+
+	if compression == "none" {
+		isPipe, err := cedana_io.IsPipe(target.Fd())
+		if err != nil {
+			return 0, err
+		}
+		if isPipe {
+			return cedana_io.Splice(file.Fd(), target.Fd())
+		}
 	}
 
 	reader, err := cedana_io.NewCompressionReader(file, compression)
