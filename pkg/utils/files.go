@@ -167,7 +167,7 @@ func Untar(tarball string, dest string) error {
 // WriteTo writes the contents from the provided src to the the provided target file.
 // Compression format is specified by the compression argument.
 // If the src is a pipe:
-// 1. No compression: Uses the splice() system call to move the data avoiding kernel-user space copy.
+// 1. No compression: WIP
 // 2. With compression: WIP
 func WriteTo(src *os.File, target string, compression string) (int64, error) {
 	defer src.Close()
@@ -184,16 +184,6 @@ func WriteTo(src *os.File, target string, compression string) (int64, error) {
 		return 0, err
 	}
 	defer file.Close()
-
-	if ext == "" {
-		isPipe, err := cedana_io.IsPipe(src.Fd())
-		if err != nil {
-			return 0, err
-		}
-		if isPipe {
-			return cedana_io.Splice(src.Fd(), file.Fd())
-		}
-	}
 
 	writer, err := cedana_io.NewCompressionWriter(file, compression)
 	if err != nil {
