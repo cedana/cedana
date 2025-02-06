@@ -41,7 +41,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 
 	var cOpts []containerd.NewContainerOpts
-	// cOpts = append(cOpts, containerd.WithImage(image))
+	// note: the options and their order is important DO NOT change
 	cOpts = append(cOpts, containerd.WithSnapshotter("overlayfs"))
 	cOpts = append(cOpts, containerd.WithNewSnapshot(details.ID, image))
 	cOpts = append(cOpts, containerd.WithSpec(spec))
@@ -54,11 +54,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
 	}
-	defer func() {
-		if err != nil {
-			container.Delete(ctx)
-		}
-	}()
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
@@ -77,7 +72,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		io = cio.WithStreams(nil, logFile, logFile)
 	}
 
-	task, err := container.NewTask(ctx, cio.NewCreator(io))
+	task, err := container.NewTask(ctx, cio.NewCreator(io, cio.WithTerminal))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
 	}

@@ -35,7 +35,6 @@ func Interception(next types.Run) types.Run {
 				"Please install the GPU plugin to use GPU support",
 			)
 		}
-
 		libraryPath := gpu.LibraryPaths()[0]
 
 		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
