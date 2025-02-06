@@ -54,7 +54,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 			}
 			extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 			if !ok {
-				return nil, status.Error(codes.FailedPrecondition, "failed to get extra files from context")
+				extraFiles = []*os.File{}
 			}
 
 			config := container.Config()

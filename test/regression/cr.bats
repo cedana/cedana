@@ -78,6 +78,19 @@ load_lib file
     run kill $pid
 }
 
+@test "dump process (zlib compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression zlib
+    assert_success
+
+    assert_exists "/tmp/$name.tar.zlib"
+
+    run kill $pid
+}
+
 @test "dump process (invalid compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -171,7 +184,7 @@ load_lib file
     run kill $pid
 }
 
-@test "restore process (compression tar)" {
+@test "restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -191,7 +204,7 @@ load_lib file
     run kill $pid
 }
 
-@test "restore process (compression gzip)" {
+@test "restore process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -211,7 +224,7 @@ load_lib file
     run kill $pid
 }
 
-@test "restore process (compression lz4)" {
+@test "restore process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -231,7 +244,27 @@ load_lib file
     run kill $pid
 }
 
-@test "restore process (invalid compression)" {
+@test "restore process (zlib compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression zlib
+    assert_success
+
+    assert_exists "/tmp/$name.tar.zlib"
+
+    run cedana restore process --path "/tmp/$name.tar.zlib"
+    assert_success
+
+    run ps --pid $pid
+    assert_success
+    assert_output --partial "$pid"
+
+    run kill $pid
+}
+
+@test "restore process (compression invalid)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)

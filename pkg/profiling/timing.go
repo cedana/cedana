@@ -49,9 +49,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
 	}
 
-	component := &Data{}
-	data.Components = append(data.Components, component)
-	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, data)
 
 	return
 }
@@ -59,7 +57,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 // StartTimingComponent starts a timer and returns a function that should be called to end the timer.
 // Unlike StartTiming, this adds the data as a new component of the current data in ctx.
 // Returns childCtx, which should be used by the children of the new component.
-// If not data found in passed ctx, just returns noops, as like parent is not being profiled.
+// If no data found in passed ctx, just returns noops, as the parent is not being profiled.
 func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
@@ -130,7 +128,7 @@ func AddTimingComponent(ctx context.Context, duration time.Duration, f ...any) (
 // Instead of directly inserting a component like StartTimingComponent, this adds the data as a child component
 // to an empty component (category component) whose name is matching the category provided.
 // Returns childCtx, which should be used by the children of the new component.
-// If not data found in passed ctx, just returns noops, as like parent is not being profiled.
+// If no data found in passed ctx, just returns noops, as the parent is not being profiled.
 func StartTimingCategory(ctx context.Context, category string, f ...any) (childCtx context.Context, end func()) {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
