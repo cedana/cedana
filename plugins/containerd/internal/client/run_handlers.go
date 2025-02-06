@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -88,6 +89,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to start task: %v", err)
 	}
+	time.Sleep(10)
 
 	resp.PID = uint32(task.Pid())
 
@@ -100,17 +102,15 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer close(exitCode)
 		defer close(exited)
 		// TODO: note this function might return, before the task actually exits
-		statusChan, err := task.Wait(context.WithoutCancel(ctx))
+		statusChan, err := task.Wait(ctx)
 		if err != nil {
 			log.Debug().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
-			return
 		}
 		// this might hang
 		status := <-statusChan
 		code := status.ExitCode()
 		log.Debug().Uint32("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
 		exitCode <- int(code)
-		task.Kill(ctx, syscall.SIGTERM)
 		container.Delete(ctx, containerd.WithSnapshotCleanup)
 	}()
 
