@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand/v2"
 	"os"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -54,6 +55,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
 	}
+	defer func() {
+		if err != nil {
+			container.Delete(ctx, containerd.WithSnapshotCleanup)
+		}
+	}()
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
@@ -72,12 +78,13 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		io = cio.WithStreams(nil, logFile, logFile)
 	}
 
+	// Start the container
 	task, err := container.NewTask(ctx, cio.NewCreator(io))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
 	}
 
-	err = task.Start(ctx)
+	err = task.Start(opts.Lifetime)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to start task: %v", err)
 	}
@@ -88,18 +95,23 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	exited = make(chan int)
 	opts.WG.Add(1)
 	go func() {
+		ctx := context.WithoutCancel(ctx)
 		defer opts.WG.Done()
+		defer close(exitCode)
+		defer close(exited)
+		// TODO: note this function might return, before the task actually exits
 		statusChan, err := task.Wait(context.WithoutCancel(ctx))
 		if err != nil {
-			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
+			log.Debug().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
+			return
 		}
+		// this might hang
 		status := <-statusChan
 		code := status.ExitCode()
 		log.Debug().Uint32("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
 		exitCode <- int(code)
+		task.Kill(ctx, syscall.SIGTERM)
 		container.Delete(ctx, containerd.WithSnapshotCleanup)
-		close(exitCode)
-		close(exited)
 	}()
 
 	return exited, nil
