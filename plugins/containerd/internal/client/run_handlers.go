@@ -72,7 +72,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		io = cio.WithStreams(nil, logFile, logFile)
 	}
 
-	task, err := container.NewTask(ctx, cio.NewCreator(io, cio.WithTerminal))
+	task, err := container.NewTask(ctx, cio.NewCreator(io))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
 	}
@@ -89,7 +89,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	opts.WG.Add(1)
 	go func() {
 		defer opts.WG.Done()
-
 		statusChan, err := task.Wait(context.WithoutCancel(ctx))
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
