@@ -88,8 +88,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to start task: %v", err)
 	}
-	time.Sleep(10)
-
 	resp.PID = uint32(task.Pid())
 
 	// Wait for the container to exit, send exit code
@@ -100,14 +98,21 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer opts.WG.Done()
 		defer close(exitCode)
 		defer close(exited)
-		// TODO: note this function might return, before the task actually exits
-		statusChan, err := task.Wait(ctx)
-		if err != nil {
-			log.Debug().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
+		var code uint32
+		for {
+			statusChan, err := task.Wait(ctx)
+			if err != nil {
+				log.Debug().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
+			}
+			// this might hang
+			status := <-statusChan
+			if status.Error() != nil {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			code = status.ExitCode()
+			break
 		}
-		// this might hang
-		status := <-statusChan
-		code := status.ExitCode()
 		log.Debug().Uint32("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
 		exitCode <- int(code)
 		container.Delete(ctx, containerd.WithSnapshotCleanup)
