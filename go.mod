@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.23.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3a3f8e393b2b.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.3-00000000000000-3a3f8e393b2b.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-dd2690bda549.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.5-00000000000000-dd2690bda549.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.3-20250123222419-fd1f5023e83d.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-4d54deb59aa0.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.3-00000000000000-4d54deb59aa0.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.3-20250123205248-8e8bdecabee9.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-f46ba184b027.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-00000000000000-f46ba184b027.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-00000000000000-3c701f70eaaf.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -36,7 +36,7 @@ require (
 	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/grpc v1.68.1
-	google.golang.org/protobuf v1.36.3
+	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v3 v3.0.1
 )
 
