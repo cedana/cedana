@@ -13,6 +13,7 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
+# NOTE: Assuming Go plugins like k8s, runc, containerd, etc are already built with the image
 PLUGINS="criu" # bare minimum plugins required for k8s
 
 # if gpu driver present then add gpu plugin
