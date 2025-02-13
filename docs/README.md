@@ -1,45 +1,73 @@
-# Documentation 
-> [!NOTE]
-> This documentation is a work in progress.
+# Documentation
 
-The cedana documentation repo hosts documentation related to running the `cedana` daemon on your machine, system architecture and the various features/components the daemon itself provides. 
+Here, you will find information related to running the Cedana daemon on your machine, system architecture and the various features of daemon and CLI.
 
-For detailed documentation on our managed Kubernetes or the larger cedana system, please see [here](https://docs.cedana.ai). 
+The daemon is designed to manage the lifecycle of processes/containers, including checkpoint/restore, in the larger Cedana system. Although, it can be installed and used independently as a C/R tool with its convenient defaults and a friendly command-line interface.
 
-## Getting Started 
-The simplest demonstration of checkpoint/restore can be performed on your machine. 
+For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
-Start the daemon by running `make start`. Try out a simple scripts in `test/workloads`:
+## Quick start
 
-``` sh
-cedana run process test/workloads/date-loop.sh
+The simplest demonstration of checkpoint/restore can be performed on your machine.
+
+Start the daemon (requires root privileges):
+
+```sh
+sudo cedana daemon start
 ```
 
-You can use `cedana ps` to manage actively running jobs and all checkpoints taken. 
-``` sh
-$ cedana ps
-JOB             TYPE         PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
-angry_hypatia9  process  3489970  sleep   no                     /var/log/cedana-output-angry_hypatia9.log
+Run a new managed process:
+
+```sh
+cedana run process --attach test/workloads/date-loop.sh
 ```
 
-To checkpoint the workload, pass the job name from `cedana ps` to `cedana dump`:
+Any process/container you spawn using `cedana run` creates a managed job. To view all managed jobs:
 
-``` sh
-cedana dump job angry_hypatia9
+```sh
+cedana ps
 ```
 
-To restore: 
-
-``` sh
-cedana restore job angry_hypatia9
+```sh
+JOB               TYPE       PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
+personal_hopper9  process  32646  sleep   no                     [Attachable]
 ```
 
-For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see the how-to-guides below. For information on architecture or anything else that can get you started building out code in cedana, see the developer guides section. 
+To checkpoint the job:
 
-## How-to-guides 
-- [Checkpoint/Restore kata containers](kata/kata.md)
-- [Checkpoint/Restore GPU runc containers](runc/gpu.md)
-- [Checkpoint/Restore with cedana-image-streamer](cedana-image-streamer/cedana-image-streamer.md)
+```sh
+cedana dump job personal_hopper9
+```
 
-## Developer Guides 
-- [Container runtime support](support/runtimes.md) 
+If you view the jobs again, you will see that it was checkpointed:
+
+```sh
+JOB               TYPE       PID  STATUS  GPU  CHECKPOINT     SIZE     LOG
+personal_hopper9  process  32646  halted  no   2 seconds ago  644 KiB
+```
+
+To restore:
+
+```sh
+cedana restore job --attach personal_hopper9
+```
+
+For all available CLI options, see [CLI reference](cli/cedana.md).
+
+For more advanced usage, see the guides below. For information on architecture or to get started with contributing, see the developer guides section.
+
+## Guides
+
+- [CLI reference](cli/cedana.md)
+- [API reference](api.md)
+- [Checkpoint/restore with GPUs](gpu/cr.md)
+- [Checkpoint/restore kata](kata/kata.md)
+- [Checkpoint/restore runc](runc/cr.md)
+- [Checkpoint/restore containerd](runc/cr.md)
+- [Checkpoint/restore streamer](streamer/cr.md)
+
+## Developer guides
+
+- [System architecture](dev/architecture.md)
+- [Feature matrix](dev/features.md)
+- [Writing plugins](dev/plugins.md)

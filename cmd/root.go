@@ -26,6 +26,7 @@ func init() {
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(jobCmd)
 	rootCmd.AddCommand(queryCmd)
+	rootCmd.AddCommand(docGenCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(
@@ -56,7 +57,7 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:   "cedana",
-	Short: "Dump/restore container/process",
+	Short: "Root command for Cedana",
 	Long: `
  ________  _______   ________  ________  ________   ________
 |\   ____\|\  ___ \ |\   ___ \|\   __  \|\   ___  \|\   __  \
