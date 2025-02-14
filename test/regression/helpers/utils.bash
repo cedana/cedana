@@ -52,3 +52,7 @@ env_exists() {
     local var=$1
     [ -n "${!var}" ]
 }
+
+cmd_exists() {
+    command -v "$1" >/dev/null 2>&1
+}

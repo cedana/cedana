@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	CRIU_LOG_FILE       = "criu.log"
+	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
 	GHOST_FILE_MAX_SIZE = 10000000 // 10MB
 )
 
@@ -46,12 +46,23 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
-	criuOpts.LogFile = proto.String(CRIU_LOG_FILE)
+	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
+
+	// Change ownership of the dump directory
+	uids := resp.GetState().GetUIDs()
+	gids := resp.GetState().GetGIDs()
+	if len(uids) == 0 || len(gids) == 0 {
+		return nil, status.Error(codes.Internal, "missing UIDs/GIDs in process state")
+	}
+	err = utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
+	}
 
 	// TODO: Add support for pre-dump
 	// TODO: Add support for lazy migration
@@ -68,7 +79,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	// Capture internal logs from CRIU
 	utils.LogFromFile(
 		log.With().Int("CRIU", version).Logger().WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_LOG_FILE),
+		filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE),
 		zerolog.TraceLevel,
 	)
 

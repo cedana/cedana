@@ -10,7 +10,9 @@ import (
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
+	"github.com/cedana/cedana/internal/server/streamer"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -23,10 +25,15 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
+	dumpDirAdapter := filesystem.PrepareDumpDir
+	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
+		dumpDirAdapter = streamer.PrepareDumpDir
+	}
+
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		filesystem.PrepareDumpDir,
+		dumpDirAdapter,
 
 		pluginDumpMiddleware, // middleware from plugins
 
