@@ -98,22 +98,19 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer opts.WG.Done()
 		defer close(exitCode)
 		defer close(exited)
-		var code uint32
+		var code int
 		for {
-			statusChan, err := task.Wait(ctx)
+			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+			status, err := p.Wait()
 			if err != nil {
-				log.Debug().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
-			}
-			// this might hang
-			status := <-statusChan
-			if status.Error() != nil {
-				time.Sleep(2 * time.Second)
+				time.Sleep(time.Second * 1)
+				log.Debug().Err(err).Msg("containerd container pid wait error")
 				continue
 			}
 			code = status.ExitCode()
 			break
 		}
-		log.Debug().Uint32("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
+		log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
 		exitCode <- int(code)
 		container.Delete(ctx, containerd.WithSnapshotCleanup)
 	}()
