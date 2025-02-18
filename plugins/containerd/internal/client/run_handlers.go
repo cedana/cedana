@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/rand/v2"
 	"os"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -55,11 +54,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
 	}
-	defer func() {
-		if err != nil {
-			container.Delete(ctx, containerd.WithSnapshotCleanup)
-		}
-	}()
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
@@ -83,7 +77,10 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
 	}
-
+	waitch, err := task.Wait(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to setup task watch: %v", err)
+	}
 	err = task.Start(opts.Lifetime)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to start task: %v", err)
@@ -98,21 +95,16 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer opts.WG.Done()
 		defer close(exitCode)
 		defer close(exited)
-		var code int
-		for {
-			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-			status, err := p.Wait()
-			if err != nil {
-				time.Sleep(time.Second * 1)
-				log.Debug().Err(err).Msg("containerd container pid wait error")
-				continue
-			}
-			code = status.ExitCode()
-			break
+		cx := <-waitch
+		if cx.Error() != nil {
+			log.Debug().Err(err).Msg("containerd container pid waiting")
 		}
-		log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
-		exitCode <- int(code)
-		container.Delete(ctx, containerd.WithSnapshotCleanup)
+		log.Debug().Int("code", int(cx.ExitCode())).Uint8("PID", uint8(resp.PID)).Msg("container exited")
+		exitCode <- int(cx.ExitCode())
+		err := container.Delete(ctx, containerd.WithSnapshotCleanup)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to delete containerd container")
+		}
 	}()
 
 	return exited, nil
