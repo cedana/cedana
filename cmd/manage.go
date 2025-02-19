@@ -97,7 +97,7 @@ var manageCmd = &cobra.Command{
 ////////////////////
 
 var processManageCmd = &cobra.Command{
-	Use:   "process <path> [args...]",
+	Use:   "process <PID> [args...]",
 	Short: "Managed existing process (job)",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

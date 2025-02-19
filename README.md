@@ -19,31 +19,9 @@ Some problems Cedana can help solve include:
 - GPU checkpoint/restore
 - And more!
 
-## Build
-
-To build:
-
-```sh
-make build
-```
-
-To install:
-
-```sh
-make install
-```
-
-To build and install (with all plugins):
-
-```sh
-make all
-```
-
-Try `make help` to see all available targets.
-
 ## Documentation
 
-To get started using cedana locally, check out the [docs](docs).
+To get started using Cedana locally, check out the [docs](docs).
 
 ## Contributing
 

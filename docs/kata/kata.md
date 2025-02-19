@@ -1,6 +1,6 @@
 ## Checkpoint/Restore kata containers
 > [!WARNING]
-> This feature is still experimental.
+> This doc is outdated. The Kata plugin is still WIP.
 
 This doc describes the steps that have to be performed to save-migrate-resume a kata-container workload. It includes building a CRIU compatible kernel and rootfs, and a busy-box image which includes the cedana wrapper. These steps are also exactly what are performed by an end-to-end test for kata container workloads which are checkpointed and restored using cedana. 
 
