@@ -1,4 +1,4 @@
-# Documentation
+# Cedana
 
 Here, you will find information related to running the Cedana daemon on your machine, system architecture and the various features of daemon and CLI.
 
