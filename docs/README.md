@@ -76,4 +76,4 @@ cedana restore job --attach personal_hopper9
 
 For all available CLI options, see [CLI reference](cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](api.md).
 
-For specific usage, see the guides below. For information on architecture or to get started with contributing, see the developer guides section.
+For specific usage, check out the [guides](#guides). For information on architecture or to get started with contributing, check out the [developer guides](#developer-guides).
