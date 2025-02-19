@@ -7,36 +7,40 @@ The daemon is designed to manage the lifecycle of processes/containers, includin
 For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
 ## Get started
-- [Quick start](#quick-start)
-- [Installation](installation.md)
-- [Authentication](authentication.md)
-- [Configuration](configuration.md)
-- [Health checks](health.md)
-- [Plugins](plugins.md)
-- [Feature matrix](features.md)
+
+* [Quick start](./#quick-start)
+* [Installation](get-started/installation.md)
+* [Authentication](get-started/authentication.md)
+* [Configuration](get-started/configuration.md)
+* [Health checks](get-started/health.md)
+* [Plugins](get-started/plugins.md)
+* [Feature matrix](get-started/features.md)
 
 ## Guides
-- [Managed process/container](managed.md)
-- [Checkpoint/restore basics](cr.md)
-- [Checkpoint/restore with GPUs](gpu/cr.md)
-- [Checkpoint/restore runc](runc/cr.md)
-- [Checkpoint/restore containerd](runc/cr.md)
-- [Checkpoint/restore kata](kata/kata.md)
-- [Checkpoint/restore streamer](streamer/cr.md)
+
+* [Managed process/container](guides/managed.md)
+* [Checkpoint/restore basics](guides/cr.md)
+* [Checkpoint/restore with GPUs](guides/gpu/cr.md)
+* [Checkpoint/restore runc](guides/runc/cr.md)
+* [Checkpoint/restore containerd](guides/runc/cr.md)
+* [Checkpoint/restore kata](guides/kata/kata.md)
+* [Checkpoint/restore streamer](guides/streamer/cr.md)
 
 ## Developer guides
-- [Architecture](dev/architecture.md)
-- [Profiling](dev/profiling.md)
-- [Testing](dev/testing.md)
-- [Writing plugins](dev/writing_plugins.md)
+
+* [Architecture](developer-guides/architecture.md)
+* [Profiling](developer-guides/profiling.md)
+* [Testing](developer-guides/testing.md)
+* [Writing plugins](developer-guides/writing_plugins.md)
 
 ## References
-- [CLI reference](cli/cedana.md)
-- [API reference](api.md)
+
+* [CLI reference](references/cli/cedana.md)
+* [API reference](references/api/api.md)
 
 ## Quick start
 
-First, ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](installation.md).
+First, ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](get-started/installation.md).
 
 Run a new managed process:
 
@@ -74,6 +78,6 @@ Restore the job:
 cedana restore job --attach personal_hopper9
 ```
 
-For all available CLI options, see [CLI reference](cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](api.md).
+For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api/api.md).
 
-For specific usage, check out the [guides](#guides). For information on architecture or to get started with contributing, check out the [developer guides](#developer-guides).
+For specific usage, check out the [guides](./#guides). For information on architecture or to get started with contributing, check out the [developer guides](./#developer-guides).

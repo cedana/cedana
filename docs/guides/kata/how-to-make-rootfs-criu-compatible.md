@@ -1,3 +1,5 @@
+# how-to-make-rootfs-criu-compatible
+
 Cedana has a fork of the [kata-containers](https://github.com/cedana/kata-containers) repository. Certain files have been changed for enabling the creation of an Ubuntu RootFS. The changes are configurational in nature, and can be found in [this](https://github.com/cedana/kata-containers/commit/946b2637c1491d47dfec0e772f73c496e78490a1) commit. Docker should be installed on the host machine.
 
 ```bash
@@ -12,28 +14,28 @@ cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
 sudo git clone https://github.com/checkpoint-restore/criu.git
 ```
 
-Additionally, we also need to move the [CRIU builder + daemon launcher script](../../scripts/kata-utils/build_start_daemon.sh) for the guest into the rootfs. The location in the rootfs is `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/bin`
+Additionally, we also need to move the [CRIU builder + daemon launcher script](../../../scripts/kata-utils/build_start_daemon.sh) for the guest into the rootfs. The location in the rootfs is `kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/bin`
 
 ```bash
 cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
 sudo cp ~/cedana/scripts/kata-utils/build_start_daemon.sh bin/
 ```
 
-We also need to move the `cedana` binary in the rootfs, so that the guest can access it. 
+We also need to move the `cedana` binary in the rootfs, so that the guest can access it.
 
 ```bash
 cd ~/kata-containers/tools/osbuilder/rootfs-builder/rootfs-ubuntu/
 sudo cp ~/cedana/cedana .
 ```
 
-Now that we have a rootfs, we need to create an image out of it. This step is simple. 
+Now that we have a rootfs, we need to create an image out of it. This step is simple.
 
 ```bash
 cd ~/kata-containers/tools/osbuilder/image-builder
 sudo USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs-ubuntu/
 ```
 
-The final argument is the location of the rootfs directory created in the previous step. This creates an image file called “kata-containers.img”. We need to copy the img into the appropriate place as per the config file 
+The final argument is the location of the rootfs directory created in the previous step. This creates an image file called “kata-containers.img”. We need to copy the img into the appropriate place as per the config file
 
 ```bash
 cd ~/kata-containers/tools/osbuilder/image-builder

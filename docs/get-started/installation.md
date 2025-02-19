@@ -1,8 +1,8 @@
-## Installation
+# Installation
 
 For now, you can either install the daemon from source, or use the released binaries.
 
-### Prerequisites
+## Prerequisites
 
 Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed. For Ubuntu, you can install them with:
 
@@ -10,7 +10,7 @@ Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's d
 apt-get install -y python3-protobuf libnet1 libnftables1 libnl-3-200 libprotobuf-c1 iptables
 ```
 
-### Build from source
+## Build from source
 
 To build:
 
@@ -32,7 +32,7 @@ make all
 
 Try `make help` to see all available targets.
 
-### Download from releases
+## Download from releases
 
 Download the latest release from the [releases](https://github.com/cedana/cedana/releases).
 
@@ -43,7 +43,7 @@ mv cedana /usr/local/bin/cedana
 rm cedana.tar.gz
 ```
 
-### Install CRIU
+## Install CRIU
 
 A modified version of CRIU is shipped as a plugin for Cedana, so you don't need to install it separately. You can simply do:
 
@@ -51,13 +51,13 @@ A modified version of CRIU is shipped as a plugin for Cedana, so you don't need 
 sudo cedana plugin install criu
 ```
 
-This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](streamer/cr.md).
+This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer/cr.md).
 
 Note that, to install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
 
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).
 
-### Start the daemon
+## Start the daemon
 
 You can directly start the daemon with:
 
@@ -65,7 +65,7 @@ You can directly start the daemon with:
 make start
 ```
 
-The daemon requires root privileges for checkpoint/restore operations. 
+The daemon requires root privileges for checkpoint/restore operations.
 
 If you're a systemd user, you may also install it as a service:
 
@@ -75,6 +75,6 @@ make install-systemd
 
 Try `make help` to see all available targets.
 
-### Health check the daemon
+## Health check the daemon
 
 The daemon can be health checked to ensure it fully supports the system and is ready to accept requests. See [health checks](health.md) for more information.
