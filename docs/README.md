@@ -68,8 +68,9 @@ For specific usage, see the guides below. For information on architecture or to 
 - [Checkpoint/restore streamer](streamer/cr.md)
 
 ## Developer guides
-- [System architecture](dev/architecture.md)
+- [Architecture](dev/architecture.md)
 - [Writing plugins](dev/writing_plugins.md)
+- [Profiling](dev/profiling.md)
 
 ## References
 - [CLI reference](cli/cedana.md)

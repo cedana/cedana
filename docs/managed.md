@@ -1,8 +1,9 @@
 ## Managed process/container
-
 The Cedana daemon is designed to manage the entire lifecycle of a process/container, including checkpoint/restore, in the larger Cedana system.
 
 Managed processes/containers are those that are spawned using `cedana run` ([CLI reference](cli/cedana_run.md)). This command creates a managed job, which can be checkpointed and restored using `cedana dump job` and `cedana restore job` subcommands.
+
+<img src="https://private-user-images.githubusercontent.com/14963382/400291101-50a6b274-a4c3-4c88-bd5e-4ae70baad55e.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Mzk5OTUyMjAsIm5iZiI6MTczOTk5NDkyMCwicGF0aCI6Ii8xNDk2MzM4Mi80MDAyOTExMDEtNTBhNmIyNzQtYTRjMy00Yzg4LWJkNWUtNGFlNzBiYWFkNTVlLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAyMTklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMjE5VDE5NTUyMFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTQ5MzhkMWFiNTMwMGNjMjU4Zjg1NTlkYzExMzcwNzg5NTQ4MWFkNGNkYzdlNjI4OTY0MjZiM2QyOTM4NzkwMjAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.BN6BPhfowJxtRuUmOa5-gfOVGvya4Z5TPfyEiZKR-U8" alt="image"/>
 
 By default, jobs are stored in a local DB (in `/tmp`). You may set the `db.path` in [configuration](configuration.md) to change the path to persist it across restarts.
 If you're authenticated, you may set the `db.remote` to `true` in [configuration](configuration.md) to use a remote DB at your specified Cedana endpoint instead.
