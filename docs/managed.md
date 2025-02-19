@@ -15,7 +15,7 @@ To run a new managed job:
 cedana run <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](../features.md) for all plugins that support running managed jobs.
+Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](features.md) for all plugins that support running managed jobs.
 
 For example, to run a new managed process:
 
@@ -33,7 +33,7 @@ It's also possible to start managing an existing process/container:
 cedana manage <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](../features.md) for all plugins that support managing existing jobs.
+Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](features.md) for all plugins that support managing existing jobs.
 
 For example, to manage an existing process:
 
