@@ -1,8 +1,8 @@
 # Cedana
 
-Here, you will find information related to running the Cedana daemon on your machine, system architecture and the various features of daemon and CLI.
+Here, you will find information on running the Cedana daemon on your machine, system architecture, and the various features of both the daemon and CLI.
 
-The daemon is designed to manage the lifecycle of processes/containers, including checkpoint/restore, in the larger Cedana system. Although, it can be installed and used independently as a C/R tool with its convenient defaults and a friendly command-line interface.
+The daemon is designed to manage the lifecycle of processes/containers, including checkpoint/restore, in the larger Cedana system. However, it can be installed and used independently as a C/R tool with its convenient defaults and a friendly command-line interface.
 
 For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
@@ -36,7 +36,7 @@ For detailed documentation on our managed Kubernetes or the larger Cedana system
 
 ## Quick start
 
-First ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](installation.md).
+First, ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](installation.md).
 
 Run a new managed process:
 
