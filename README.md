@@ -21,7 +21,7 @@ Some problems Cedana can help solve include:
 
 ## Documentation
 
-To get started using Cedana locally, check out the [docs](docs).
+To get started using Cedana locally, check out the [docs](docs/README.md).
 
 ## Contributing
 
