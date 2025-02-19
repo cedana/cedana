@@ -50,6 +50,14 @@ For all available CLI options, see [CLI reference](cli/cedana.md). Directly inte
 
 For specific usage, see the guides below. For information on architecture or to get started with contributing, see the developer guides section.
 
+## Setup
+- [Installation](installation.md)
+- [Authentication](authentication.md)
+- [Configuration](configuration.md)
+- [Health checks](health.md)
+- [Plugins](plugins.md)
+- [Feature matrix](features.md)
+
 ## Guides
 - [Managed process/container](managed.md)
 - [Checkpoint/restore basics](cr.md)
