@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra/doc"
 )
 
-const DOCS_DIR_CLI = "docs/cli"
+const DOCS_DIR_CLI = "docs/references/cli"
 
 var docGenCmd = &cobra.Command{
 	Use:    "docs-gen",
