@@ -17,7 +17,7 @@ For example, to checkpoint a process:
 cedana dump process <PID> --dir /tmp
 ```
 
-A `--dir` flag can be used to specify the _parent_ directory where the checkpoint will be stored. If not provided, the checkpoint will be stored in the default checkpoint directory as specified in the [configuration](../configuration.md), or in `/tmp` if not set. You may also specify a `--name` flag to give a custom name to the checkpoint file.
+A `--dir` flag can be used to specify the _parent_ directory where the checkpoint will be stored. If not provided, the checkpoint will be stored in the default checkpoint directory as specified in the [configuration](configuration.md), or in `/tmp` if not set. You may also specify a `--name` flag to give a custom name to the checkpoint file.
 
 See [CLI reference](cli/cedana_dump_process.md) for all available options for process checkpoint.
 

@@ -1,7 +1,7 @@
 ## Checkpoint/restore runc
 
 ### Prerequisites
-1. Create an account with Cedana, to get access to the runc plugin. See [authentication](https://docs.cedana.ai/setup/authentication).
+1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../configuration.md).
 3. Install the runc plugin with `sudo cedana plugin install runc`.
 4. Ensure the daemon is running, see [installation](../installation.md).
@@ -54,4 +54,4 @@ Just like for processes, as explained in [checkpoint/restore with GPUs](../gpu/c
   cedana restore job --attach <job_id>
   ```
 
-For all available CLI options, see [CLI reference](cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](api.md).
+For all available CLI options, see [CLI reference](../cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../api.md).

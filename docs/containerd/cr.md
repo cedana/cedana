@@ -1,7 +1,7 @@
 ## Checkpoint/restore containerd
 
 ### Prerequisites
-1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](https://docs.cedana.ai/setup/authentication).
+1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../configuration.md).
 3. Install the containerd plugin with `sudo cedana plugin install containerd`.
 4. Ensure the daemon is running, see [installation](../installation.md).
@@ -56,4 +56,4 @@ For checkpoint _only_ the rootfs, set the `--rootfs-only` flag. For example:
 cedana dump containerd <container_id> --dir <dump-dir> --image <new-image-name> --rootfs-only
 ```
 
-For all available CLI options, see [CLI reference](cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](api.md).
+For all available CLI options, see [CLI reference](../cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../api.md).
