@@ -46,7 +46,7 @@ streamer    1 MiB   available                       v0.0.6          9 days ago
 
 Notice the `LATEST VERSION` column shows `local` for locally built plugins.
 
-Instead of depending on current directory, you can also specify the paths to search for local plugins by setting the `CEDANA_PLUGINS_LOCAL_SEARCH_PATH` (paths are colon-separated just like the `PATH` env var). This is a convenience for developers who are working on multiple plugins at once.
+Instead of depending on current directory, you can also specify the paths to search for locally built plugins by setting the `CEDANA_PLUGINS_LOCAL_SEARCH_PATH` (paths are colon-separated just like the `PATH` env var). This is a convenience for developers who are working on multiple plugins at once.
 
 ### Install a plugin
 
@@ -55,8 +55,6 @@ Once a plugin appears in the list, you can install it with:
 ```sh
 sudo cedana plugin install <plugin1> <plugin2> ...
 ```
-
-This requires root privileges to install the plugin.
 
 ### Uninstall a plugin
 

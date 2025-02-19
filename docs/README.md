@@ -56,6 +56,7 @@ For specific usage, see the guides below. For information on architecture or to 
 - [Configuration](configuration.md)
 - [Health checks](health.md)
 - [Plugins](plugins.md)
+- [Feature matrix](features.md)
 
 ## Guides
 - [Managed process/container](managed.md)
@@ -68,7 +69,6 @@ For specific usage, see the guides below. For information on architecture or to 
 
 ## Developer guides
 - [System architecture](dev/architecture.md)
-- [Feature matrix](dev/features.md)
 - [Writing plugins](dev/writing_plugins.md)
 
 ## References
