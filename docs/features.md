@@ -35,6 +35,6 @@ Not showing external plugins: criu, gpu, streamer
 
 When developing a new plugin, or adding a feature to a plugin, it's helpful to see if there are any compatibility errors. Use `cedana features --errors` to see any incompatibility errors.
 
-Check out the guide on [writing plugins](writing_plugins.md) for more information.
+Check out the guide on [writing plugins](dev/writing_plugins.md) for more information.
 
-Check out the [CLI reference](../cli/cedana_plugin.md) for all plugin-related subcommands.
+Check out the [CLI reference](cli/cedana_plugin.md) for all plugin-related subcommands.
