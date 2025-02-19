@@ -2,6 +2,8 @@
 
 Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
 
+You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+
 <a name="Config"></a>
 ### [Config](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L10-L36>)
 
