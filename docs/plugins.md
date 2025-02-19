@@ -1,6 +1,6 @@
 ## Plugins
 
-Plugins extend the support of checkpoint/restore to various container runtimes. Plugins can either be installed from the online registry or built locally.
+Plugins extend the support of checkpoint/restore to various container runtimes, GPUs, etc. Plugins can either be installed from the online registry or built locally.
 
 ### Online registry
 
