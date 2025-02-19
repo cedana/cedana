@@ -53,7 +53,7 @@ sudo cedana plugin install criu
 
 This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](streamer/cr.md).
 
-Note that, to install a plugin from the online registry, you need to be [authenticated](https://docs.cedana.ai/setup/authentication). See [plugins](plugins.md) for more information.
+Note that, to install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
 
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).
 
