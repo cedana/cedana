@@ -70,6 +70,7 @@ For specific usage, see the guides below. For information on architecture or to 
 ## Developer guides
 - [Architecture](dev/architecture.md)
 - [Profiling](dev/profiling.md)
+- [Testing](dev/testing.md)
 - [Writing plugins](dev/writing_plugins.md)
 
 ## References
