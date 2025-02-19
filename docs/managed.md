@@ -114,4 +114,4 @@ Once the daemon has started managing a job, it can be checkpointed and restored 
 
 ### Checkpoint/restore with GPUs
 
-GPU C/R support is only available for managed jobs. Check out the [checkpoint/restore with GPUs](../gpu/cr.md) guide for more information.
+GPU C/R support is only available for managed jobs. Check out the [checkpoint/restore with GPUs](gpu/cr.md) guide for more information.

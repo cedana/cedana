@@ -76,7 +76,7 @@ cedana restore process --path /tmp/xyz.tar.gz
 
 Supported values for `--compression` are `none`, `tar`, `gzip`, `lz4`, `zlib`.
 
-You may also specify the default compression algorithm in the [configuration](../configuration.md).
+You may also specify the default compression algorithm in the [configuration](configuration.md).
 
 ### Advanced
 - [Checkpoint/restore with GPUs](gpu/cr.md)
