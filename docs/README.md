@@ -6,7 +6,7 @@ The daemon is designed to manage the lifecycle of processes/containers, includin
 
 For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
-## Setup
+## Get started
 - [Quick start](#quick-start)
 - [Installation](installation.md)
 - [Authentication](authentication.md)
