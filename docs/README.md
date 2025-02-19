@@ -69,8 +69,8 @@ For specific usage, see the guides below. For information on architecture or to 
 
 ## Developer guides
 - [Architecture](dev/architecture.md)
-- [Writing plugins](dev/writing_plugins.md)
 - [Profiling](dev/profiling.md)
+- [Writing plugins](dev/writing_plugins.md)
 
 ## References
 - [CLI reference](cli/cedana.md)

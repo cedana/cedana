@@ -2,7 +2,7 @@
 
 The profiling system tries to be contextual and _invisible_. Profiling data is sent as [gRPC Metadata](https://grpc.io/docs/guides/metadata/). To enable, set `Profiling.Enabled=true` in [configuration](../configuration.md).
 
-Since each adapter to a request (see [plugin system](#plugin-system)) is a well-defined single-responsibility function, it makes sense to profile each of them. When enabled, the daemon will profile each adapter, and send back flattened data as a gRPC trailer. For readability's sake, this profiling is completely invisible and handled by the adapter logic in `pkg/types/adapter.go` (also see `pkg/types/timer.go`). This flattened data is parsed by the `cmd` package and displayed as shown below. An example out of `cedana dump containerd ...` when profiling is enabled:
+Since each adapter to a request (see [architecture](architecture.md)) is a well-defined single-responsibility function, it makes sense to profile each of them. When enabled, the daemon will profile each adapter, and send back flattened data as a gRPC trailer. For readability's sake, this profiling is completely invisible and handled by the adapter logic in `pkg/types/adapter.go` (also see `pkg/types/timer.go`). This flattened data is parsed by the `cmd` package and displayed as shown below. An example out of `cedana dump containerd ...` when profiling is enabled:
 
 ![image](https://github.com/user-attachments/assets/977a5423-e4d3-423e-89af-653c72bfce03)
 
@@ -12,5 +12,5 @@ In many cases, we may need to add more context to this data, or add more compone
 
 These helpers use the passed `context` to store profiling data. If the `context` already has parent profiling data, the data is added as a component to the parent.
 
-Behind the scenes, if OTel is enabled ([config](../configuration.md) `Metrics.Otel=true`), this data is also captured in OTel spans.
+Behind the scenes, if OTel is enabled ([configuration](../configuration.md) `Metrics.Otel=true`), this data is also captured in OTel spans.
 
