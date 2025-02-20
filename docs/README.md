@@ -1,45 +1,83 @@
-# Documentation 
-> [!NOTE]
-> This documentation is a work in progress.
+# Cedana Daemon
 
-The cedana documentation repo hosts documentation related to running the `cedana` daemon on your machine, system architecture and the various features/components the daemon itself provides. 
+Here, you will find information on running the Cedana daemon on your machine, system architecture, and the various features of both the daemon and CLI.
 
-For detailed documentation on our managed Kubernetes or the larger cedana system, please see [here](https://docs.cedana.ai). 
+The daemon is designed to manage the lifecycle of processes/containers, including checkpoint/restore, in the larger Cedana system. However, it can be installed and used independently as a C/R tool with its convenient defaults and a friendly command-line interface.
 
-## Getting Started 
-The simplest demonstration of checkpoint/restore can be performed on your machine. 
+For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
-Start the daemon by running `make start`. Try out a simple scripts in `test/workloads`:
+## Get started
 
-``` sh
-cedana run process test/workloads/date-loop.sh
+* [Quick start](./#quick-start)
+* [Installation](get-started/installation.md)
+* [Authentication](get-started/authentication.md)
+* [Configuration](get-started/configuration.md)
+* [Health checks](get-started/health.md)
+* [Plugins](get-started/plugins.md)
+* [Feature matrix](get-started/features.md)
+
+## Guides
+
+* [Managed process/container](guides/managed.md)
+* [Checkpoint/restore basics](guides/cr.md)
+* [Checkpoint/restore with GPUs](guides/gpu/cr.md)
+* [Checkpoint/restore runc](guides/runc/cr.md)
+* [Checkpoint/restore containerd](guides/runc/cr.md)
+* [Checkpoint/restore kata](guides/kata/kata.md)
+* [Checkpoint/restore streamer](guides/streamer/cr.md)
+
+## Developer guides
+
+* [Architecture](developer-guides/architecture.md)
+* [Profiling](developer-guides/profiling.md)
+* [Testing](developer-guides/testing.md)
+* [Writing plugins](developer-guides/writing_plugins.md)
+
+## References
+
+* [CLI reference](references/cli/cedana.md)
+* [API reference](references/api/api.md)
+
+## Quick start
+
+First, ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](get-started/installation.md).
+
+Run a new managed process:
+
+```sh
+cedana run process --attach test/workloads/date-loop.sh
 ```
 
-You can use `cedana ps` to manage actively running jobs and all checkpoints taken. 
-``` sh
-$ cedana ps
-JOB             TYPE         PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
-angry_hypatia9  process  3489970  sleep   no                     /var/log/cedana-output-angry_hypatia9.log
+Any process/container you spawn using `cedana run` creates a managed job. To view all managed jobs:
+
+```sh
+cedana ps
 ```
 
-To checkpoint the workload, pass the job name from `cedana ps` to `cedana dump`:
-
-``` sh
-cedana dump job angry_hypatia9
+```
+JOB               TYPE       PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
+personal_hopper9  process  32646  sleep   no                     [Attachable]
 ```
 
-To restore: 
+Checkpoint the job:
 
-``` sh
-cedana restore job angry_hypatia9
+```sh
+cedana dump job personal_hopper9
 ```
 
-For more advanced capabilities (like runc, kata or gpu checkpoint/restore), see the how-to-guides below. For information on architecture or anything else that can get you started building out code in cedana, see the developer guides section. 
+If you view the jobs again, you will see that it was checkpointed:
 
-## How-to-guides 
-- [Checkpoint/Restore kata containers](kata/kata.md)
-- [Checkpoint/Restore GPU runc containers](runc/gpu.md)
-- [Checkpoint/Restore with cedana-image-streamer](cedana-image-streamer/cedana-image-streamer.md)
+```sh
+JOB               TYPE       PID  STATUS  GPU  CHECKPOINT     SIZE     LOG
+personal_hopper9  process  32646  halted  no   2 seconds ago  644 KiB
+```
 
-## Developer Guides 
-- [Container runtime support](support/runtimes.md) 
+Restore the job:
+
+```sh
+cedana restore job --attach personal_hopper9
+```
+
+For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api/api.md).
+
+For specific usage, check out the [guides](./#guides). For information on architecture or to get started with contributing, check out the [developer guides](./#developer-guides).

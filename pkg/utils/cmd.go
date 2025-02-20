@@ -30,6 +30,9 @@ func AliasOf(src *cobra.Command, name ...string) *cobra.Command {
 		cmd.RunE = AliasCommandRunE(src)
 	}
 
+	cmd.Short = src.Short + fmt.Sprintf(" (alias of `%s`)", FullUse(src))
+	cmd.Long = src.Long + fmt.Sprintf(" (alias of `%s`)", FullUse(src))
+
 	return &cmd
 }
 
