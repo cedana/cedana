@@ -181,6 +181,7 @@ func NewStreamingFs(
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
 		log.Trace().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+    ready <- false
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(dir, "*.sock"))
