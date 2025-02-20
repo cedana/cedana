@@ -15,21 +15,17 @@
 
 * [Managed process/container](guides/managed.md)
 * [Checkpoint/restore basics](guides/cr.md)
-* [GPU](guides/gpu/README.md)
-  * [Checkpoint/restore with GPUs](guides/gpu/cr.md)
-* [RUNC](guides/runc/README.md)
-  * [Checkpoint/restore runc](guides/runc/cr.md)
-* [CONTAINERD](guides/containerd/README.md)
-  * [Checkpoint/restore containerd](guides/containerd/cr.md)
-* [KATA](guides/kata/README.md)
+* [Checkpoint/restore with GPUs](guides/gpu/cr.md)
+* [Checkpoint/restore runc](guides/runc/cr.md)
+* [Checkpoint/restore containerd](guides/containerd/cr.md)
+* [Checkpoint/restore streamer](guides/streamer/cr.md)
+* [Checkpoint/restore kata](guides/kata/README.md)
   * [how-to-create-custom-busybox-image](guides/kata/how-to-create-custom-busybox-image.md)
   * [how-to-install-criu-in-guest](guides/kata/how-to-install-criu-in-guest.md)
   * [how-to-install-on-aws](guides/kata/how-to-install-on-aws.md)
   * [how-to-make-kernel-criu-compatible](guides/kata/how-to-make-kernel-criu-compatible.md)
   * [how-to-make-rootfs-criu-compatible](guides/kata/how-to-make-rootfs-criu-compatible.md)
   * [Checkpoint/Restore kata containers](guides/kata/kata.md)
-* [STREAMER](guides/streamer/README.md)
-  * [Checkpoint/restore streamer](guides/streamer/cr.md)
 
 ## Developer guides
 
