@@ -289,6 +289,13 @@ type ReceiveMigrationData struct {
 type RestoreConfig struct {
 	Prefault  *bool  `json:"prefault,omitempty"`
 	SourceUrl string `json:"source_url"`
+  NetFDs    []RestoredNetConfig `json:"net_fds,omitempty"`
+}
+
+type RestoredNetConfig struct {
+	ID     string  `json:"id"`
+	NumFDs int64   `json:"num_fds"`
+	Fds    []int64 `json:"fds,omitempty"`
 }
 
 // RngConfig defines model for RngConfig.
