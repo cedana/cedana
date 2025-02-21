@@ -36,7 +36,7 @@ For detailed documentation on our managed Kubernetes or the larger Cedana system
 ## References
 
 * [CLI reference](references/cli/cedana.md)
-* [API reference](references/api/api.md)
+* [API reference](references/api.md)
 
 ## Quick start
 
@@ -78,6 +78,6 @@ Restore the job:
 cedana restore job --attach personal_hopper9
 ```
 
-For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api/api.md).
+For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api.md).
 
 For specific usage, check out the [guides](./#guides). For information on architecture or to get started with contributing, check out the [developer guides](./#developer-guides).

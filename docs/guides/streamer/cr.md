@@ -43,4 +43,4 @@ All compression algorithms supported for basic checkpoint/restore are supported.
 
 To enable streaming by default, set the `Checkpoint.Stream` field in the [configuration](../../get-started/configuration.md) to the desired number of parallel streams. Zero means no streaming.
 
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api/api.md).
+For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
