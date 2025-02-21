@@ -2,6 +2,9 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/cedana/cedana) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/cedana/cedana/release.yml?branch=main)
 
+![symbol-blue](https://github.com/user-attachments/assets/cd685b86-39b1-42e4-ac7b-e8b4d0b06bd7)
+
+
 Welcome to Cedana! This repository is the home of the Cedana daemon and the low-level orchestration of our save/migrate/resume (SMR) functionality, and is the entry-point into the larger cedana ecosystem.
 
 We build on top of and leverage [CRIU](https://github.com/checkpoint-restore/criu) to provide userspace checkpoint/restore of processes and the many different abstraction levels that lie above. We also provide the ability to checkpoint/restore rootfs in both containerd and CRIO interfaces for full container checkpoint/restores.
