@@ -6,7 +6,7 @@ You may also override the configuration using environment variables. The environ
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 
-Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. <kbd>Metrics.ASR</kbd> can be set with <kbd>CEDANA\_METRICS\_ASR</kbd>. The <kbd>env\_aliases</kbd> tag below specifies alternative (alias) environment variable names (comma-separated).
+Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
 
 ```go
 type Config struct {
