@@ -1,6 +1,8 @@
 # Checkpoint/restore streamer
 
-The Cedana daemon supports checkpoint/restore via low-overhead streaming. It's powered by the [streamer plugin](https://github.com/cedana/cedana-image-streamer), which is a fork of CRIU's [image streamer](https://github.com/checkpoint-restore/criu-image-streamer).
+The Cedana daemon supports checkpoint/restore via low-overhead streaming. It's powered by the [streamer plugin](https://github.com/cedana/cedana-image-streamer), which is a fork of CRIU's [image streamer](https://github.com/checkpoint-restore/criu-image-streamer).&#x20;
+
+Real benefit of streaming is realized when checkpointing and restoring to/from a remote location. See [#remoting](cr.md#remoting "mention").
 
 ## Prerequisites
 
@@ -18,7 +20,7 @@ The `cedana dump` subcommand supports a `--stream <n>` flag, where `n` is the nu
 cedana dump process <pid> --stream 4
 ```
 
-This will directly stream the checkpoint to a directory, using 4 parallel streams. You will notice that the checkpoint directory will contain 4 separate image files:
+This will directly stream the checkpoint to a directory, using 4 parallel streams. You will notice that the checkpoint directory contains 4 separate image files:
 
 ```
 -rw-r--r-- 1 root root 145K Feb 19 15:13 img-0
@@ -41,6 +43,14 @@ Note that, here you _must_ pass in 4 as the number of parallel streams, as the c
 
 All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
 
+## Remoting
+
+The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/).
+
+To checkpoint/restore to/from a remote directory, you can use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
+
+## Enable by default
+
 To enable streaming by default, set the `Checkpoint.Stream` field in the [configuration](../../get-started/configuration.md) to the desired number of parallel streams. Zero means no streaming.
 
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api/api.md).
+For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).

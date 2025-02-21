@@ -8,7 +8,12 @@ Since each adapter to a request (see [architecture](architecture.md)) is a well-
 
 Above, you can see complete flow of the request before it reaches CRIU's dump function, including _which_ plugin (2nd column) the adapter belongs to. For `containerd`, you can see that the request is largely handled by the low-level runtime `runc`'s plugin. The second table above shows a compressed view of the same data, with only the total time spent in each plugin/category. Note that, above there are some components that are executed concurrently, e.g. `rootfs`, so the time you see in the (flattened) data above is only the time spent _waiting_ for `rootfs` to finish.
 
-In many cases, we may need to add more context to this data, or add more components to it. Helpers defined in `pkg/profiling/timing.go` can be used. A good example is adding a new component to the `compression` category as seen above: https://github.com/cedana/cedana/blob/3e97d8f5241b53aa40307635771724f0ac8b4b54/internal/server/filesystem/dump\_adapters.go#L90-L92
+In many cases, we may need to add more context to this data, or add more components to it. Helpers defined in `pkg/profiling/timing.go` can be used. A good example is adding a new component to the `compression` category in `internal/server/filesystem/dump_adapters.go` as seen above:
+```
+		_, end := profiling.StartTimingCategory(ctx, "compression", utils.Tar)
+		tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
+		end()
+```
 
 These helpers use the passed `context` to store profiling data. If the `context` already has parent profiling data, the data is added as a component to the parent.
 

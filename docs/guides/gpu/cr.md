@@ -31,4 +31,4 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api/api.md).
+For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).

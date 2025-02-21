@@ -1,4 +1,20 @@
+---
+layout:
+  title:
+    visible: false
+  description:
+    visible: false
+  tableOfContents:
+    visible: true
+  outline:
+    visible: true
+  pagination:
+    visible: true
+---
+
 # Cedana Daemon
+
+<figure><img src=".gitbook/assets/image (1).png" alt=""><figcaption></figcaption></figure>
 
 Here, you will find information on running the Cedana daemon on your machine, system architecture, and the various features of both the daemon and CLI.
 
@@ -6,7 +22,7 @@ The daemon is designed to manage the lifecycle of processes/containers, includin
 
 For detailed documentation on our managed Kubernetes or the larger Cedana system, please see [here](https://docs.cedana.ai).
 
-## Get started
+### Get started
 
 * [Quick start](./#quick-start)
 * [Installation](get-started/installation.md)
@@ -16,7 +32,7 @@ For detailed documentation on our managed Kubernetes or the larger Cedana system
 * [Plugins](get-started/plugins.md)
 * [Feature matrix](get-started/features.md)
 
-## Guides
+### Guides
 
 * [Managed process/container](guides/managed.md)
 * [Checkpoint/restore basics](guides/cr.md)
@@ -26,19 +42,19 @@ For detailed documentation on our managed Kubernetes or the larger Cedana system
 * [Checkpoint/restore kata](guides/kata/kata.md)
 * [Checkpoint/restore streamer](guides/streamer/cr.md)
 
-## Developer guides
+### Developer guides
 
 * [Architecture](developer-guides/architecture.md)
 * [Profiling](developer-guides/profiling.md)
 * [Testing](developer-guides/testing.md)
 * [Writing plugins](developer-guides/writing_plugins.md)
 
-## References
+### References
 
 * [CLI reference](references/cli/cedana.md)
-* [API reference](references/api/api.md)
+* [API reference](references/api.md)
 
-## Quick start
+### Quick start
 
 First, ensure that you have Cedana installed on your machine, and the daemon is running. For installation instructions, see [installation](get-started/installation.md).
 
@@ -78,6 +94,6 @@ Restore the job:
 cedana restore job --attach personal_hopper9
 ```
 
-For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api/api.md).
+For all available CLI options, see [CLI reference](references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](references/api.md).
 
 For specific usage, check out the [guides](./#guides). For information on architecture or to get started with contributing, check out the [developer guides](./#developer-guides).

@@ -94,5 +94,5 @@
   * [cedana run containerd](references/cli/cedana_run_containerd.md)
   * [cedana run process](references/cli/cedana_run_process.md)
   * [cedana run runc](references/cli/cedana_run_runc.md)
-* [API](references/api/README.md)
-  * [API reference](references/api/api.md)
+* [API](references/api.md)
+* [GitHub](https://github.com/cedana/cedana)

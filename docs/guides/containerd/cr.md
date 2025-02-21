@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
+1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
 3. Install the containerd plugin with `sudo cedana plugin install containerd`.
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
@@ -72,4 +72,4 @@ For checkpoint _only_ the rootfs, set the `--rootfs-only` flag. For example:
 cedana dump containerd <container_id> --dir <dump-dir> --image <new-image-name> --rootfs-only
 ```
 
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api/api.md).
+For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
