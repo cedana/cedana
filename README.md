@@ -21,8 +21,8 @@ Some problems Cedana can help solve include:
 
 ## Documentation
 
-To get started using Cedana locally, check out the [docs](docs/README.md).
+To get started using Cedana locally, check out the [documentation](https://docs.cedana.ai/daemon).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and developer guides in the [documentation](https://docs.cedana.ai/daemon).
