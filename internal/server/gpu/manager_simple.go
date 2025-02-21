@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	FREEZE_TIMEOUT  = 20 * time.Second
 	DUMP_TIMEOUT    = 5 * time.Minute
 	RESTORE_TIMEOUT = 5 * time.Minute
 	HEALTH_TIMEOUT  = 30 * time.Second
@@ -146,11 +145,9 @@ func (m *ManagerSimple) Checks() types.Checks {
 func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
-	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
-	// do the GPU dump in parallel to CRIU dump.
-	dumpErr := make(chan error, 1)
+	// Add pre-dump hook for GPU dump
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
+		waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 		defer cancel()
 
 		controller := m.controllers.Get(jid)
@@ -158,32 +155,13 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			return fmt.Errorf("GPU controller not found, is the task still running?")
 		}
 
-		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
+		_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
 		if err != nil {
-			log.Error().Err(err).Str("JID", jid).Msg("failed to freeze GPU")
-			return fmt.Errorf("failed to freeze GPU: %v", err)
+			log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
+			return fmt.Errorf("failed to dump GPU: %v", err)
 		}
-
-		// Begin GPU dump in parallel to CRIU dump
-
-		go func() {
-			defer close(dumpErr)
-			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
-			defer cancel()
-
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
-			if err != nil {
-				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
-				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
-			}
-			log.Info().Str("JID", jid).Msg("GPU dump complete")
-		}()
+		log.Info().Str("JID", jid).Msg("GPU dump complete")
 		return nil
-	}
-
-	// Wait for GPU dump to finish before finalizing the dump
-	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		return <-dumpErr
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
