@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
+1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
 3. Install the containerd plugin with `sudo cedana plugin install containerd`.
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
