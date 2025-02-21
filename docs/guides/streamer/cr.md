@@ -2,7 +2,7 @@
 
 The Cedana daemon supports checkpoint/restore via low-overhead streaming. It's powered by the [streamer plugin](https://github.com/cedana/cedana-image-streamer), which is a fork of CRIU's [image streamer](https://github.com/checkpoint-restore/criu-image-streamer).&#x20;
 
-Real benefit of streaming is realized when checkpointing and restoring to/from a remote location. To achieve this check [#remoting](cr.md#remoting "mention").
+Real benefit of streaming is realized when checkpointing and restoring to/from a remote location. See [#remoting](cr.md#remoting "mention").
 
 ## Prerequisites
 
