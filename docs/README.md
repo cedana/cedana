@@ -14,7 +14,7 @@ layout:
 
 # Cedana Daemon
 
-<figure><img src=".gitbook/assets/image.png" alt=""><figcaption></figcaption></figure>
+<figure><img src=".gitbook/assets/image (1).png" alt=""><figcaption></figcaption></figure>
 
 Here, you will find information on running the Cedana daemon on your machine, system architecture, and the various features of both the daemon and CLI.
 
