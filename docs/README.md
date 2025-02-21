@@ -1,3 +1,22 @@
+---
+cover: .gitbook/assets/image.png
+coverY: -60
+layout:
+  cover:
+    visible: true
+    size: hero
+  title:
+    visible: true
+  description:
+    visible: true
+  tableOfContents:
+    visible: true
+  outline:
+    visible: true
+  pagination:
+    visible: true
+---
+
 # Cedana Daemon
 
 Here, you will find information on running the Cedana daemon on your machine, system architecture, and the various features of both the daemon and CLI.
