@@ -21,6 +21,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpResp, error) {
+
+	middleware := types.Middleware[types.DumpVM]{
+		validation.ValidateDumpVMRequest,
+		filesystem.PrepareDumpVMDir,
+
+		pluginDumpVMMiddleware, // middleware from plugins
+	}
+
+	return resp, nil
+}
+
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
@@ -79,6 +91,31 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 //////////////////////////
 //// Helper Adapters /////
 //////////////////////////
+
+// Adapter that inserts new adapters after itself based on the type of dump.
+func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+		middleware := types.Middleware[types.DumpVM]{}
+		t := req.GetType()
+		switch t {
+		case "clh":
+			// nothing to do, we only support clh
+		default:
+			// Insert plugin-specific middleware
+			err = features.DumpVMMiddleware.IfAvailable(func(
+				name string,
+				pluginMiddleware types.Middleware[types.DumpVM],
+			) error {
+				middleware = append(middleware, pluginMiddleware...)
+				return nil
+			}, t)
+			if err != nil {
+				return nil, status.Error(codes.Unimplemented, err.Error())
+			}
+		}
+		return next.With(middleware...)(ctx, opts, resp, req)
+	}
+}
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {

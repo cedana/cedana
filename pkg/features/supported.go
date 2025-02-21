@@ -24,6 +24,7 @@ var (
 
 	// Dump/Restore
 	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
+	DumpVMMiddleware  = plugins.Feature[types.Middleware[types.DumpVM]]{Symbol: "DumpVMMiddleware", Description: "Dump VM middleware"}
 	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
 	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
 

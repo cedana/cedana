@@ -31,6 +31,7 @@ func init() {
 }
 
 var Dump types.Dump = dump
+var DumpVM types.DumpVM = dumpVM
 
 // Returns a CRIU dump handler for the server
 func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
@@ -90,4 +91,30 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
 
 	return utils.WaitForPid(resp.State.PID), nil
+}
+
+// Returns a CRIU dump handler for the server
+func dumpVM(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+
+	err := s.vmSnapshotter.Pause(req.VMSocketPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
+	}
+
+	var resumeErr error
+	defer func() {
+		if err := s.vmSnapshotter.Resume(args.VMSocketPath); err != nil {
+			resumeErr = status.Errorf(codes.Internal, "Checkpoint task failed during resume: %v", err)
+		}
+	}()
+
+	err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath, vm)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Checkpoint task failed during snapshot: %v", err)
+	}
+
+	if resumeErr != nil {
+		return nil, resumeErr
+	}
+	return &daemon.DumpVMResp{TarDumpDir: args.Dir}, nil
 }
