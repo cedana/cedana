@@ -2,8 +2,7 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/cedana/cedana) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/cedana/cedana/release.yml?branch=main)
 
-![symbol-blue](https://github.com/user-attachments/assets/cd685b86-39b1-42e4-ac7b-e8b4d0b06bd7)
-
+![output-onlinepngtools](https://github.com/user-attachments/assets/8f7930c0-8cef-451f-bb96-a30625dc690b)
 
 Welcome to Cedana! This repository is the home of the Cedana daemon and the low-level orchestration of our save/migrate/resume (SMR) functionality, and is the entry-point into the larger cedana ecosystem.
 
