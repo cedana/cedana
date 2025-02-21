@@ -1,13 +1,12 @@
-## Configuration
+# Configuration
 
 Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
 
 You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
-<a name="Config"></a>
-### [Config](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L10-L36>)
+## [Config](../../pkg/config/types.go#L10-L36)
 
-Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. \`Metrics.ASR\` can be set with \`CEDANA\_METRICS\_ASR\`. The \`env\_aliases\` tag below specifies alternative \(alias\) environment variable names \(comma\-separated\).
+Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. <kbd>Metrics.ASR</kbd> can be set with <kbd>CEDANA\_METRICS\_ASR</kbd>. The <kbd>env\_aliases</kbd> tag below specifies alternative (alias) environment variable names (comma-separated).
 
 ```go
 type Config struct {
@@ -39,10 +38,7 @@ type Config struct {
 }
 ```
 
-<a name="CRIU"></a>
-### [CRIU](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L81-L86>)
-
-
+## [CRIU](../../pkg/config/types.go#L81-L86)
 
 ```go
 type CRIU struct {
@@ -53,10 +49,7 @@ type CRIU struct {
 }
 ```
 
-<a name="Checkpoint"></a>
-### [Checkpoint](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L45-L53>)
-
-
+## [Checkpoint](../../pkg/config/types.go#L45-L53)
 
 ```go
 type Checkpoint struct {
@@ -70,10 +63,7 @@ type Checkpoint struct {
 }
 ```
 
-<a name="Client"></a>
-### [Client](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L76-L79>)
-
-
+## [Client](../../pkg/config/types.go#L76-L79)
 
 ```go
 type Client struct {
@@ -82,10 +72,7 @@ type Client struct {
 }
 ```
 
-<a name="Connection"></a>
-### [Connection](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L38-L43>)
-
-
+## [Connection](../../pkg/config/types.go#L38-L43)
 
 ```go
 type Connection struct {
@@ -96,10 +83,7 @@ type Connection struct {
 }
 ```
 
-<a name="DB"></a>
-### [DB](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L55-L60>)
-
-
+## [DB](../../pkg/config/types.go#L55-L60)
 
 ```go
 type DB struct {
@@ -110,10 +94,7 @@ type DB struct {
 }
 ```
 
-<a name="GPU"></a>
-### [GPU](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L88-L93>)
-
-
+## [GPU](../../pkg/config/types.go#L88-L93)
 
 ```go
 type GPU struct {
@@ -124,10 +105,7 @@ type GPU struct {
 }
 ```
 
-<a name="Metrics"></a>
-### [Metrics](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L69-L74>)
-
-
+## [Metrics](../../pkg/config/types.go#L69-L74)
 
 ```go
 type Metrics struct {
@@ -138,10 +116,7 @@ type Metrics struct {
 }
 ```
 
-<a name="Plugins"></a>
-### [Plugins](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L95-L100>)
-
-
+## [Plugins](../../pkg/config/types.go#L95-L100)
 
 ```go
 type Plugins struct {
@@ -152,8 +127,7 @@ type Plugins struct {
 }
 ```
 
-<a name="Profiling"></a>
-### [Profiling](<https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L62-L67>)
+## [Profiling](../../pkg/config/types.go#L62-L67)
 
 ```go
 type Profiling struct {
