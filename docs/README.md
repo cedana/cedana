@@ -3,7 +3,7 @@ layout:
   title:
     visible: false
   description:
-    visible: true
+    visible: false
   tableOfContents:
     visible: true
   outline:
