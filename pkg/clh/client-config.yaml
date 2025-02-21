@@ -1,0 +1,5 @@
+package: clhclient
+output: clhclient.gen.go
+generate:
+  models: true
+  client: true
