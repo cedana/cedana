@@ -38,7 +38,7 @@ For example, to restore a process:
 cedana restore process --path <path-to-dump>
 ```
 
-Notice that for restore the flag is called `--path` instead of `--dir` (as in dump), this is because path can be a compressed file, while directory is used for storing multiple files.
+Notice that for restore the flag is called `--path` instead of `--dir` (as in dump), this is because it can be a path to a compressed file, or to a directory if not compressed.
 
 See [CLI reference](../references/cli/cedana_restore_process.md) for all available options for process restore.
 
