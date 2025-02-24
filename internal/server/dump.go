@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/streamer"
 	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/internal/server/vm"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
@@ -21,13 +22,34 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpResp, error) {
+func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpVMResp, error) {
 
 	middleware := types.Middleware[types.DumpVM]{
 		validation.ValidateDumpVMRequest,
 		filesystem.PrepareDumpVMDir,
 
 		pluginDumpVMMiddleware, // middleware from plugins
+
+	}
+
+	dump := vm.Dump.With(middleware...)
+
+	opts := types.Opts{
+		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
+		WG:       s.wg,
+	}
+	resp := &daemon.DumpVMResp{}
+
+	vm := vm.New[daemon.DumpVMReq, daemon.DumpVMResp](s.plugins)
+
+	_, err := vm(dump)(ctx, opts, resp, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if utils.PathExists(resp.TarDumpDir) {
+		log.Info().Str("path", resp.TarDumpDir).Str("type", req.Type).Msg("dump successful")
 	}
 
 	return resp, nil
@@ -98,7 +120,7 @@ func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
 		middleware := types.Middleware[types.DumpVM]{}
 		t := req.GetType()
 		switch t {
-		case "clh":
+		case "cloud-hypervisor":
 			// nothing to do, we only support clh
 		default:
 			// Insert plugin-specific middleware

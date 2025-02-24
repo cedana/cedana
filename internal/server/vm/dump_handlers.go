@@ -1,11 +1,12 @@
-package criu
+package vm
 
 import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	clhclient "github.com/cedana/cedana/pkg/clh"
+	"github.com/cedana/cedana/pkg/clh"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -29,23 +30,38 @@ func init() {
 
 var Dump types.DumpVM = dump
 
-// Returns a CRIU dump handler for the server
-func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+type VMSnapshotter interface {
+	Snapshot(destinationURL, vmSocketPath, vmID string) error
+	Restore(snapshotPath, vmSocketPath string, netConfigs []*daemon.RestoredNetConfig) error
+	Pause(vmSocketPath string) error
+	Resume(vmSocketPath string) error
+	GetPID(vmSocketPath string) (uint32, error)
+}
 
-	clhClient := clhclient.NewClient()
-	err := s.vmSnapshotter.Pause(req.VMSocketPath)
+// Returns a VM dump handler for the server
+func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+	var snapshotter VMSnapshotter
+
+	switch req.Type {
+	case "cloud-hypervisor":
+		snapshotter = &clh.CloudHypervisorVM{}
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "Unknown VM type: %s", req.Type)
+	}
+
+	err = snapshotter.Pause(req.VMSocketPath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 	}
 
 	var resumeErr error
 	defer func() {
-		if err := s.vmSnapshotter.Resume(args.VMSocketPath); err != nil {
+		if err := snapshotter.Resume(req.VMSocketPath); err != nil {
 			resumeErr = status.Errorf(codes.Internal, "Checkpoint task failed during resume: %v", err)
 		}
 	}()
 
-	err = s.vmSnapshotter.Snapshot(args.Dir, args.VMSocketPath, vm)
+	err = snapshotter.Snapshot(req.Dir, req.VMSocketPath, req.VmName)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Checkpoint task failed during snapshot: %v", err)
 	}
@@ -53,5 +69,11 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *da
 	if resumeErr != nil {
 		return nil, resumeErr
 	}
-	return &daemon.DumpVMResp{TarDumpDir: args.Dir}, nil
+
+	pid, err := snapshotter.GetPID(req.VMSocketPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to get PID: %v", err)
+	}
+
+	return utils.WaitForPid(pid), nil
 }
