@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/spf13/afero"
 )
 
 // Kube default sandbox annotation keys
@@ -57,10 +59,16 @@ type Container struct {
 	SandboxUID       string
 }
 
-func ListContainers(root, namespace string) ([]*Container, error) {
+type KubeClient interface {
+	ListContainers(fs afero.Fs, root, namespace string) ([]*Container, error)
+}
+
+type DefaultKubeClient struct{}
+
+func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) ([]*Container, error) {
 	var containers []*Container
 
-	entries, err := os.ReadDir(root)
+	entries, err := afero.ReadDir(fs, root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list root directory: %v", err)
 	}
@@ -75,9 +83,19 @@ func ListContainers(root, namespace string) ([]*Container, error) {
 		var state *libcontainer.State
 		var bundle string
 
-		ctr, err := libcontainer.Load(root, id)
+		stateDir, err := securejoin.SecureJoin(root, id)
 		if err != nil {
 			return nil, err
+		}
+
+		_, err = os.Stat(filepath.Join(stateDir, "state.json"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat state.json: %v", err)
+		}
+
+		ctr, err := libcontainer.Load(root, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load container %s on root %s statedir %s: %v", id, root, stateDir, err)
 		}
 		state, err = ctr.State()
 		if err != nil {
