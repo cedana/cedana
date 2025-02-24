@@ -134,14 +134,11 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) 
 			container.SandboxName = spec.Annotations[sandboxNameAnnotation]
 			container.SandboxUID = spec.Annotations[SANDBOX_UID]
 			container.SandboxNamespace = getFirstNonEmptyAnnotation(spec.Annotations, SANDBOX_NAMESPACE, CRIO_SANDBOX_NAMESPACE)
-
-			sandboxNamespace := getFirstNonEmptyAnnotation(spec.Annotations, SANDBOX_NAMESPACE, CRIO_SANDBOX_NAMESPACE)
-			if sandboxNamespace == namespace || namespace == "" && container.Image != "" {
+			if (namespace == "" || container.SandboxNamespace == namespace) && container.Image != "" {
 				containers = append(containers, &container)
 			}
 		}
 	}
-
 	return containers, nil
 }
 

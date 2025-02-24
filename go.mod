@@ -11,7 +11,6 @@ require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.4-00000000000000-6e472a8624d0.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
-	github.com/containerd/containerd/api v1.7.19
 	github.com/containerd/errdefs v0.3.0
 	github.com/containerd/platforms v0.2.1
 	github.com/cyphar/filepath-securejoin v0.3.5
@@ -49,6 +48,7 @@ require (
 	github.com/Microsoft/hcsshim v0.11.7 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
+	github.com/containerd/containerd/api v1.7.19 // indirect
 	github.com/containerd/continuity v0.4.2 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect

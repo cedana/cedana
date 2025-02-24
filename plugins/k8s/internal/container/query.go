@@ -44,6 +44,7 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
 
+	skipNameMatch := len(query.ContainerNames) == 0 && 0 == len(query.SandboxNames)
 	containerNameSet := make(map[string]bool)
 	sandboxNameSet := make(map[string]bool)
 	for _, name := range query.ContainerNames {
@@ -52,28 +53,22 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 	for _, name := range query.SandboxNames {
 		sandboxNameSet[name] = true
 	}
-
-	containerSet := make(map[*kube.Container]bool)
 	for _, container := range containers {
-		if containerNameSet[container.Name] && sandboxNameSet[container.SandboxName] {
-			containerSet[container] = true
+		if skipNameMatch || (containerNameSet[container.Name] && sandboxNameSet[container.SandboxName]) {
+			resp.K8S.Containers = append(resp.K8S.Containers, &k8s.Container{
+				SandboxID:        container.SandboxID,
+				SandboxName:      container.SandboxName,
+				SandboxNamespace: container.SandboxNamespace,
+				SandboxUID:       container.SandboxUID,
+				Image:            container.Image,
+
+				Runc: &runc.Runc{
+					ID:     container.ID,
+					Bundle: container.Bundle,
+					Root:   container.Bundle,
+				},
+			})
 		}
-	}
-
-	for container := range containerSet {
-		resp.K8S.Containers = append(resp.K8S.Containers, &k8s.Container{
-			SandboxID:        container.SandboxID,
-			SandboxName:      container.SandboxName,
-			SandboxNamespace: container.SandboxNamespace,
-			SandboxUID:       container.SandboxUID,
-			Image:            container.Image,
-
-			Runc: &runc.Runc{
-				ID:     container.ID,
-				Bundle: container.Bundle,
-				Root:   container.Bundle,
-			},
-		})
 	}
 
 	return resp, nil
