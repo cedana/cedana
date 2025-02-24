@@ -65,7 +65,7 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 				Runc: &runc.Runc{
 					ID:     container.ID,
 					Bundle: container.Bundle,
-					Root:   container.Bundle,
+					Root:   query.Root,
 				},
 			})
 		}
