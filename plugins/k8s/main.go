@@ -4,8 +4,6 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/k8s/cmd"
 	"github.com/cedana/cedana/plugins/k8s/internal/container"
-	"github.com/cedana/cedana/plugins/k8s/internal/pod"
-	"github.com/cedana/cedana/plugins/k8s/internal/runtime"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
