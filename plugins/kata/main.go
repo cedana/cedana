@@ -5,7 +5,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/plugins/runc/cmd"
+	"github.com/cedana/cedana/plugins/kata/cmd"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 )
@@ -18,12 +18,8 @@ import (
 var Version string = "dev"
 
 var (
-	DumpCmd    *cobra.Command = cmd.DumpCmd
-	RestoreCmd *cobra.Command = cmd.RestoreCmd
-	RunCmd     *cobra.Command = cmd.RunCmd
-	ManageCmd  *cobra.Command = cmd.ManageCmd
-	QueryCmd   *cobra.Command = cmd.QueryCmd
-	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
+	DumpCmd  *cobra.Command = cmd.DumpCmd
+	CmdTheme text.Colors    = style.LowLevelRuntimeColors
 )
 
 var KillSignal = syscall.SIGKILL
@@ -33,7 +29,7 @@ var HealthChecks types.Checks = types.Checks{
 }
 
 var (
-	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{}
+	DumpMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{}
 
-	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{}
+	RestoreMiddleware types.Middleware[types.RestoreVM] = types.Middleware[types.RestoreVM]{}
 )
