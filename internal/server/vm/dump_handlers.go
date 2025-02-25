@@ -49,19 +49,19 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *da
 		return nil, status.Errorf(codes.InvalidArgument, "Unknown VM type: %s", req.Type)
 	}
 
-	err = snapshotter.Pause(req.VMSocketPath)
+	err = snapshotter.Pause(req.Details.Kata.VmSocket)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Checkpoint task failed: %v", err)
 	}
 
 	var resumeErr error
 	defer func() {
-		if err := snapshotter.Resume(req.VMSocketPath); err != nil {
+		if err := snapshotter.Resume(req.Details.Kata.VmSocket); err != nil {
 			resumeErr = status.Errorf(codes.Internal, "Checkpoint task failed during resume: %v", err)
 		}
 	}()
 
-	err = snapshotter.Snapshot(req.Dir, req.VMSocketPath, req.VmName)
+	err = snapshotter.Snapshot(req.Dir, req.Details.Kata.VmSocket, req.Details.Kata.VmID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Checkpoint task failed during snapshot: %v", err)
 	}
@@ -70,7 +70,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *da
 		return nil, resumeErr
 	}
 
-	pid, err := snapshotter.GetPID(req.VMSocketPath)
+	pid, err := snapshotter.GetPID(req.Details.Kata.VmSocket)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to get PID: %v", err)
 	}

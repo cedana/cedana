@@ -27,7 +27,7 @@ var DumpCmd = &cobra.Command{
 	Short: "Dump a kata vm or container (w/o rootfs)",
 	Long:  "Dump a kata vm or container (w/o rootfs). Provide a vm type for vm snapshots. For container c/r, cedana agent will need to be deployed w/ the running sandbox VM.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpVMReq)
 		if !ok {
 			return fmt.Errorf("invalid dump request in context")
 		}
@@ -36,6 +36,7 @@ var DumpCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetUint32(kata_flags.PortFlag.Full)
 		vmType, _ := cmd.Flags().GetString(kata_flags.VmTypeFlag.Full)
 		vmSocket, _ := cmd.Flags().GetString(kata_flags.VmSocketFlag.Full)
+		vmID, _ := cmd.Flags().GetString(kata_flags.VmIDFlag.Full)
 
 		req.Type = "kata"
 		req.Details = &daemon.Details{Kata: &kata.Kata{
@@ -43,6 +44,7 @@ var DumpCmd = &cobra.Command{
 			Port:     port,
 			VmType:   vmType,
 			VmSocket: vmSocket,
+			VmID:     vmID,
 		}}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
