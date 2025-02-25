@@ -38,7 +38,6 @@ var DumpCmd = &cobra.Command{
 		vmSocket, _ := cmd.Flags().GetString(kata_flags.VmSocketFlag.Full)
 		vmID, _ := cmd.Flags().GetString(kata_flags.VmIDFlag.Full)
 
-		req.Type = "kata"
 		req.Details = &daemon.Details{Kata: &kata.Kata{
 			Dir:      dir,
 			Port:     port,
