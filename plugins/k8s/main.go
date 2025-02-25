@@ -4,6 +4,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/k8s/cmd"
 	"github.com/cedana/cedana/plugins/k8s/internal/container"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -15,8 +16,9 @@ import (
 var Version string = "dev"
 
 var (
-	QueryCmd   *cobra.Command   = cmd.QueryCmd
-	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
+	QueryCmd     *cobra.Command   = cmd.QueryCmd
+	HelperCmds   []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
+	queryHandler                  = &container.DefaultQueryHandler{Fs: afero.NewOsFs()}
 )
 
-var QueryHandler types.Query = container.Query
+var QueryHandler types.Query = queryHandler.Query
