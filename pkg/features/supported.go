@@ -16,6 +16,7 @@ var (
 	// Commands
 	CmdTheme   = plugins.Feature[text.Colors]{Symbol: "CmdTheme", Description: "Theme for commands"}
 	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
+	DumpVMCmd  = plugins.Feature[*cobra.Command]{Symbol: "DumpVMCmd", Description: "Dump VM command"}
 	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
 	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
 	ManageCmd  = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}

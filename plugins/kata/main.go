@@ -18,8 +18,8 @@ import (
 var Version string = "dev"
 
 var (
-	DumpCmd  *cobra.Command = cmd.DumpCmd
-	CmdTheme text.Colors    = style.LowLevelRuntimeColors
+	DumpVMCmd *cobra.Command = cmd.DumpCmd
+	CmdTheme  text.Colors    = style.LowLevelRuntimeColors
 )
 
 var KillSignal = syscall.SIGKILL
