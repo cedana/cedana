@@ -32,6 +32,7 @@ var Registry = []Plugin{
 	},
 	{
 		Name:      "kata",
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-kata.so"}},
 	},
 
