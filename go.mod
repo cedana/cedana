@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250130173815-fe9d1dcace33.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.1-20250130173815-fe9d1dcace33.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.5-20250130173815-d4c42f53f1d7.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-6ddfd344178d.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.4-00000000000000-6ddfd344178d.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.4-00000000000000-6e472a8624d0.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-35fd1f55ecef.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-00000000000000-35fd1f55ecef.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-00000000000000-802125d1e129.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
