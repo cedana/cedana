@@ -90,6 +90,8 @@ type (
 		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
 		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+		// TraceMem toggles the incremental checkpointing optimization for CUDA memory
+		TraceMem bool `json:"trace_mem" key:"trace_mem" yaml:"trace_mem" mapstructure:"trace_mem"`
 	}
 
 	Plugins struct {
