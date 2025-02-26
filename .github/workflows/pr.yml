@@ -278,7 +278,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
@@ -327,7 +327,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -380,7 +380,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -433,7 +433,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -492,7 +492,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
