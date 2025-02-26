@@ -156,6 +156,7 @@ func PrepareDumpVMDir(next types.DumpVM) types.DumpVM {
 
 		if req.Type == "cloud-hypervisor" {
 			dir = fmt.Sprint("file://", dir)
+			req.Dir = dir
 		}
 
 		exited, err = next(ctx, opts, resp, req)
