@@ -41,8 +41,6 @@ require (
 )
 
 require (
-	buf.build/gen/go/cedana/cedana-image-streamer/grpc/go v1.5.1-20250226205333-d9d8d96ca331.2 // indirect
-	buf.build/gen/go/cedana/criu/grpc/go v1.5.1-20250226205333-4b6f9efc37ef.2 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
