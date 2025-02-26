@@ -30,7 +30,7 @@ on:
       ref:
         type: string
         description: "The branch, tag, or SHA to run on"
-        required: true
+        required: false
         default: ""
       debug_build:
         type: boolean
