@@ -484,13 +484,19 @@ jobs:
         with:
           name: plugins
 
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
       - name: Make executable
         run: |
           chmod +x ./cedana
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install latest streamer plugin
+      - name: Install streamer plugin # automatically installs the downloaded binary if available instead
         run: sudo -E ./cedana plugin install streamer
 
       - name: Mark git dir as safe
@@ -537,7 +543,7 @@ jobs:
         with:
           name: plugins
 
-      - name: Download GPU plugin # if provided from a caller workflow
+      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -549,7 +555,7 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install latest gpu plugin # installs the downloaded binary if available instead
+      - name: Install GPU plugin # automatically installs the downloaded binary if available instead
         run: sudo -E ./cedana plugin install gpu
 
       - name: Mark git dir as safe
