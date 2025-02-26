@@ -100,7 +100,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
-          ref: inputs.ref
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -134,7 +134,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
-          ref: inputs.ref
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -162,6 +162,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1
         with:
@@ -183,6 +189,12 @@ jobs:
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - uses: actions/download-artifact@v4
         with:
           name: cedana
@@ -208,6 +220,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -252,6 +266,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -294,6 +310,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -345,6 +363,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -396,6 +416,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -447,6 +469,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -498,6 +522,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -660,8 +686,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
-          submodules: "recursive"
+          fetch-tags: true
 
       - name: Set up commit hash and branch name
         run: |
