@@ -62,6 +62,21 @@ on:
         description: "Skip helper image push or not"
         required: false
         default: false
+      run_cpu_tests:
+        type: boolean
+        description: "Run CPU tests"
+        required: false
+        default: true
+      run_gpu_tests:
+        type: boolean
+        description: "Run GPU tests"
+        required: false
+        default: true
+      run_streamer_tests:
+        type: boolean
+        description: "Run streamer tests"
+        required: false
+        default: true
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -97,7 +112,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: cedana
           path: ./cedana
 
   build-plugins:
@@ -160,7 +175,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
+
       - name: Run k8s setup host
         run: |
           sudo -E chmod +x ./cedana
@@ -172,6 +188,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-2
+    if: inputs.run_cpu_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -187,7 +204,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -211,6 +228,7 @@ jobs:
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-4
+    if: inputs.run_cpu_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -230,7 +248,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Make executable
         run: |
@@ -252,6 +270,7 @@ jobs:
   regression-test-runc:
     name: Regression Tests (runc)
     runs-on: ubicloud-standard-4
+    if: inputs.run_cpu_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -271,7 +290,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -302,6 +321,7 @@ jobs:
   regression-test-containerd:
     name: Regression Tests (containerd)
     runs-on: ubicloud-standard-4
+    if: inputs.run_cpu_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -321,7 +341,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -352,6 +372,7 @@ jobs:
   regression-test-crio:
     name: Regression Tests (crio)
     runs-on: ubicloud-standard-4
+    if: inputs.run_cpu_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -371,7 +392,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -402,6 +423,7 @@ jobs:
   regression-test-streamer:
     name: Regression Tests (streamer)
     runs-on: ubicloud-standard-4
+    if: inputs.run_streamer_tests
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -421,7 +443,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -452,6 +474,7 @@ jobs:
   regression-test-gpu:
     name: Regression Tests (gpu)
     runs-on: ubicloud-gpu
+    if: inputs.run_gpu_tests
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -471,7 +494,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -531,7 +554,7 @@ jobs:
   #       id: download-artifacts
   #       uses: actions/download-artifact@v4
   #       with:
-  #         name: build
+  #         name: cedana
 
   #     - name: Configure
   #       env:
