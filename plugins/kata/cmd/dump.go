@@ -47,6 +47,10 @@ var DumpCmd = &cobra.Command{
 			VmID:     vmID,
 		}}
 
+		if dir != "" {
+			req.Dir = dir
+		}
+
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
