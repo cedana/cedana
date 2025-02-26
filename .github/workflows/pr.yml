@@ -25,6 +25,21 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      run_cpu_tests:
+        type: boolean
+        description: "Run CPU tests"
+        required: false
+        default: true
+      run_gpu_tests:
+        type: boolean
+        description: "Run GPU tests"
+        required: false
+        default: true
+      run_streamer_tests:
+        type: boolean
+        description: "Run streamer tests"
+        required: false
+        default: true
   workflow_call: # to reuse this workflow in other workflows
     inputs:
       debug_build:
@@ -47,21 +62,6 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
-      skip_bench:
-        type: boolean
-        description: "Skip benchmark or not"
-        required: false
-        default: false
-      skip_shellcheck:
-        type: boolean
-        description: "Skip shellcheck or not"
-        required: false
-        default: false
-      skip_helper_image_push:
-        type: boolean
-        description: "Skip helper image push or not"
-        required: false
-        default: false
       run_cpu_tests:
         type: boolean
         description: "Run CPU tests"
@@ -77,6 +77,21 @@ on:
         description: "Run streamer tests"
         required: false
         default: true
+      skip_bench:
+        type: boolean
+        description: "Skip benchmark or not"
+        required: false
+        default: false
+      skip_shellcheck:
+        type: boolean
+        description: "Skip shellcheck or not"
+        required: false
+        default: false
+      skip_helper_image_push:
+        type: boolean
+        description: "Skip helper image push or not"
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -149,7 +164,7 @@ jobs:
 
   shellcheck:
     name: Shell Check
-    if: ${{ !inputs.skip_shellcheck }}
+    if: ${{ !inputs.skip_shellcheck && inputs.run_cpu_tests }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -167,6 +182,7 @@ jobs:
   script-tests:
     name: Script Tests
     runs-on: ubuntu-latest
+    if: inputs.run_cpu_tests
     needs: build
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
