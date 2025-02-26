@@ -25,21 +25,6 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
-      run_cpu_tests:
-        type: boolean
-        description: "Run CPU tests"
-        required: false
-        default: true
-      run_gpu_tests:
-        type: boolean
-        description: "Run GPU tests"
-        required: false
-        default: true
-      run_streamer_tests:
-        type: boolean
-        description: "Run streamer tests"
-        required: false
-        default: true
   workflow_call: # to reuse this workflow in other workflows
     inputs:
       debug_build:
@@ -62,21 +47,6 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
-      run_cpu_tests:
-        type: boolean
-        description: "Run CPU tests"
-        required: false
-        default: true
-      run_gpu_tests:
-        type: boolean
-        description: "Run GPU tests"
-        required: false
-        default: true
-      run_streamer_tests:
-        type: boolean
-        description: "Run streamer tests"
-        required: false
-        default: true
       skip_bench:
         type: boolean
         description: "Skip benchmark or not"
@@ -90,6 +60,21 @@ on:
       skip_helper_image_push:
         type: boolean
         description: "Skip helper image push or not"
+        required: false
+        default: false
+      skip_cpu_tests:
+        type: boolean
+        description: "Skip CPU tests"
+        required: false
+        default: false
+      skip_gpu_tests:
+        type: boolean
+        description: "Skip GPU tests"
+        required: false
+        default: false
+      skip_streamer_tests:
+        type: boolean
+        description: "Skip streamer tests"
         required: false
         default: false
 
@@ -164,7 +149,7 @@ jobs:
 
   shellcheck:
     name: Shell Check
-    if: ${{ !inputs.skip_shellcheck && inputs.run_cpu_tests }}
+    if: ${{ !inputs.skip_shellcheck && !inputs.skip_cpu_tests }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +167,7 @@ jobs:
   script-tests:
     name: Script Tests
     runs-on: ubuntu-latest
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     needs: build
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -204,7 +189,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-2
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -244,7 +229,7 @@ jobs:
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-4
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -286,7 +271,7 @@ jobs:
   regression-test-runc:
     name: Regression Tests (runc)
     runs-on: ubicloud-standard-4
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -337,7 +322,7 @@ jobs:
   regression-test-containerd:
     name: Regression Tests (containerd)
     runs-on: ubicloud-standard-4
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -388,7 +373,7 @@ jobs:
   regression-test-crio:
     name: Regression Tests (crio)
     runs-on: ubicloud-standard-4
-    if: inputs.run_cpu_tests
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -439,7 +424,7 @@ jobs:
   regression-test-streamer:
     name: Regression Tests (streamer)
     runs-on: ubicloud-standard-4
-    if: inputs.run_streamer_tests
+    if: ${{ !inputs.skip_streamer_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -490,7 +475,7 @@ jobs:
   regression-test-gpu:
     name: Regression Tests (gpu)
     runs-on: ubicloud-gpu
-    if: inputs.run_gpu_tests
+    if: ${{ !inputs.skip_gpu_tests }}
     container:
       image: cedana/cedana-test:cuda
       credentials:
