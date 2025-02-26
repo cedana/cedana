@@ -322,6 +322,16 @@ func CopyFile(src, dest string) error {
 	}
 	defer destFile.Close()
 
+	// Set the file permissions to the source file's permissions
+	if srcFileInfo, err := os.Stat(src); err == nil {
+		err = destFile.Chmod(srcFileInfo.Mode())
+		if err != nil {
+			return fmt.Errorf("Could not set destination file permissions: %s", err)
+		}
+	} else {
+		return fmt.Errorf("Could not get source file info: %s", err)
+	}
+
 	_, err = io.Copy(destFile, srcFile)
 	if err != nil {
 		return fmt.Errorf("Could not copy file contents: %s", err)
