@@ -38,10 +38,6 @@ var DumpCmd = &cobra.Command{
 		vmSocket, _ := cmd.Flags().GetString(kata_flags.VmSocketFlag.Full)
 		vmID, _ := cmd.Flags().GetString(kata_flags.VmIDFlag.Full)
 
-		if dir != "" {
-			req.Dir = fmt.Sprint("file://", dir)
-		}
-
 		req.Type = vmType
 		req.Details = &daemon.Details{Kata: &kata.Kata{
 			Dir:      dir,
