@@ -155,8 +155,7 @@ func PrepareDumpVMDir(next types.DumpVM) types.DumpVM {
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), dir)
 
 		if req.Type == "cloud-hypervisor" {
-			dir = fmt.Sprint("file://", dir)
-			req.Dir = dir
+			req.Dir = fmt.Sprint("file://", dir)
 		}
 
 		exited, err = next(ctx, opts, resp, req)
