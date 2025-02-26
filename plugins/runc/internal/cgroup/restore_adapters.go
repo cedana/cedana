@@ -2,7 +2,12 @@ package cgroup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -14,6 +19,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 
 	// WARN: DO NOT REMOVE THIS IMPORT. Has side effects.
 	// See -> 'github.com/opencontainers/runc/libcontainer/cgroups/cgroups.go'
@@ -36,6 +43,33 @@ func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Res
 	}
 }
 
+func GetNetworkPid(bundlePath string) (int, error) {
+	var spec specs.Spec
+	var pid int
+	configPath := filepath.Join(bundlePath, "config.json")
+	if _, err := os.Stat(configPath); err == nil {
+		configFile, err := os.ReadFile(configPath)
+		if err != nil {
+			return 0, err
+		}
+		if err := json.Unmarshal(configFile, &spec); err != nil {
+			return 0, err
+		}
+		for _, ns := range spec.Linux.Namespaces {
+			if ns.Type == "network" {
+				path := ns.Path
+				splitPath := strings.Split(path, "/")
+				pid, err = strconv.Atoi(splitPath[2])
+				if err != nil {
+					return 0, err
+				}
+				break
+			}
+		}
+	}
+	return pid, nil
+}
+
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
@@ -53,9 +87,32 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 		}
 
 		config := container.Config()
+		var netpid int = 0
+		var err error
+		if req.Details.Runc != nil {
+			netpid, err = GetNetworkPid(req.Details.Runc.Bundle)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) error {
+				if netpid != 0 {
+					targetCgroups, err := cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%d/cgroup", netpid))
+					if err != nil {
+						return err
+					}
+
+					for controller, path := range targetCgroups {
+						cgroupPath := filepath.Join("/sys/fs/cgroup", controller, path, "cgroup.procs")
+						err := os.WriteFile(cgroupPath, []byte(strconv.Itoa(int(criuPid))), 0644)
+						if err != nil {
+							return err
+						}
+					}
+					return nil
+				}
 				err := manager.Apply(int(criuPid))
 				if err != nil {
 					return fmt.Errorf("failed to apply cgroups: %v", err)

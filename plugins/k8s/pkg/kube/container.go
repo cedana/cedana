@@ -108,6 +108,9 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) 
 				break
 			}
 		}
+		if bundle == "" {
+			return nil, fmt.Errorf("failed to get bundle from state config: %v", state.Config.Labels)
+		}
 
 		spec, err = runc.LoadSpec(filepath.Join(bundle, "config.json"))
 		if err != nil {

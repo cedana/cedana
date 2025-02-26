@@ -184,6 +184,10 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 				}
 				return nil
 			},
+			OrphanPtsMasterFunc: func(ctx context.Context, fd int32) error {
+				// TODO socket connect
+				return nil
+			},
 		}
 		opts.CRIUCallback.Include(callback)
 
