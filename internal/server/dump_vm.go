@@ -6,8 +6,8 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/internal/server/validation"
-	"github.com/cedana/cedana/internal/server/vm"
 	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -25,7 +25,7 @@ func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.Dum
 
 	}
 
-	dump := vm.Dump.With(middleware...)
+	dump := pluginDumpVMHandler().With(middleware...)
 
 	opts := types.Opts{
 		Lifetime: s.lifetime,
@@ -34,9 +34,7 @@ func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.Dum
 	}
 	resp := &daemon.DumpVMResp{}
 
-	vm := vm.New[daemon.DumpVMReq, daemon.DumpVMResp](s.plugins)
-
-	_, err := vm(dump)(ctx, opts, resp, req)
+	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +52,6 @@ func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
 		middleware := types.Middleware[types.DumpVM]{}
 		t := req.GetType()
 		switch t {
-		case "cloud-hypervisor":
-			// nothing to do, we only support clh
 		default:
 			// Insert plugin-specific middleware
 			err = features.DumpVMMiddleware.IfAvailable(func(
@@ -70,5 +66,30 @@ func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
 			}
 		}
 		return next.With(middleware...)(ctx, opts, resp, req)
+	}
+}
+
+// Handler that returns the type-specific handler for the job
+func pluginDumpVMHandler() types.DumpVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+		t := req.Type
+		var handler types.DumpVM
+		switch t {
+		default:
+			// Use plugin-specific handler
+			err = features.DumpVMHandler.IfAvailable(func(name string, pluginHandler types.DumpVM) error {
+				handler = pluginHandler
+				return nil
+			}, t)
+			if err != nil {
+				return nil, status.Error(codes.Unimplemented, err.Error())
+			}
+			var end func()
+			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+			defer end()
+
+		}
+
+		return handler(ctx, opts, resp, req)
 	}
 }
