@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
+	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -66,6 +69,11 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			spec.Root.Path = filepath.Join(bundle, spec.Root.Path)
 		}
 
+		notifySocket := runc.NewNotifySocket(root, os.Getenv("NOTIFY_SOCKET"), id)
+		if notifySocket != nil {
+			notifySocket.SetupSpec(spec)
+		}
+
 		config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 			CgroupName:      id,
 			Spec:            spec,
@@ -85,6 +93,16 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 				container.Destroy()
 			}
 		}()
+
+		if notifySocket != nil {
+			if err := notifySocket.SetupSocketDirectory(); err != nil {
+				return nil, err
+			}
+		}
+		listenFDs := []*os.File{}
+		if os.Getenv("LISTEN_FDS") != "" {
+			listenFDs = activation.Files(false)
+		}
 
 		// XXX: Create new cgroup manager, as the container's cgroup manager is not accessible (internal)
 		manager, err := manager.New(config.Cgroups)
@@ -125,10 +143,33 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		}
 		process.Init = true
 		process.SubCgroupPaths = make(map[string]string)
+		if len(listenFDs) > 0 {
+			process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(listenFDs)), "LISTEN_PID=1")
+			process.ExtraFiles = append(process.ExtraFiles, listenFDs...)
+		}
+		rootuid, err := config.HostRootUID()
+		if err != nil {
+			return nil, err
+		}
+		rootgid, err := config.HostRootGID()
+		if err != nil {
+			return nil, err
+		}
+		// Setting up IO is a two stage process. We need to modify process to deal
+		// with detaching containers, and then we get a tty after the container has
+		// started.
+		handler := runc.NewSignalHandler(notifySocket)
+		tty, err := runc.SetupIO(process, rootuid, rootgid, spec.Process.Terminal, details.Detach, details.ConsoleSocketPath)
+		if err != nil {
+			return nil, err
+		}
+		// defer tty.Close()
 
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CONTEXT_KEY, container)
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY, manager)
 		ctx = context.WithValue(ctx, runc_keys.INIT_PROCESS_CONTEXT_KEY, process)
+		ctx = context.WithValue(ctx, runc_keys.SIGNAL_HANDLER_CONTEXT_KEY, handler)
+		ctx = context.WithValue(ctx, runc_keys.TTY_CONTEXT_KEY, tty)
 
 		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
@@ -163,9 +204,12 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
+		process, ok := ctx.Value(runc_keys.INIT_PROCESS_CONTEXT_KEY).(*libcontainer.Process)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get process from context")
+		}
 
 		config := container.Config()
-
 		callback := &criu.NotifyCallback{
 			SetupNamespacesFunc: func(ctx context.Context, pid int32) error {
 				if config.Hooks != nil {
@@ -185,7 +229,13 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 				return nil
 			},
 			OrphanPtsMasterFunc: func(ctx context.Context, fd int32) error {
-				// TODO socket connect
+				master := os.NewFile(uintptr(fd), "orphan-pts-master")
+				defer master.Close()
+
+				// While we can access console.master, using the API is a good idea.
+				if err := SendFile(process.ConsoleSocket, master); err != nil {
+					return err
+				}
 				return nil
 			},
 		}
@@ -195,14 +245,48 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 	}
 }
 
+const MaxNameLen = 4096
+
+// SendFile sends a file over the given AF_UNIX socket. file.Name() is also
+// included so that if the other end uses RecvFile, the file will have the same
+// name information.
+func SendFile(socket *os.File, file *os.File) error {
+	name := file.Name()
+	if len(name) >= MaxNameLen {
+		return fmt.Errorf("sendfd: filename too long: %s", name)
+	}
+	err := SendRawFd(socket, name, file.Fd())
+	runtime.KeepAlive(file)
+	return err
+}
+
+// SendRawFd sends a specific file descriptor over the given AF_UNIX socket.
+func SendRawFd(socket *os.File, msg string, fd uintptr) error {
+	oob := unix.UnixRights(int(fd))
+	return unix.Sendmsg(int(socket.Fd()), []byte(msg), oob, nil, 0)
+}
+
 // UpdateStateOnRestore updates the container state after restore
 // Without this, runc won't be able to 'detect' the container
 func UpdateStateOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
+		process, ok := ctx.Value(runc_keys.INIT_PROCESS_CONTEXT_KEY).(*libcontainer.Process)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get process from context")
+		}
+		tty, ok := ctx.Value(runc_keys.TTY_CONTEXT_KEY).(*runc.Tty)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get tty from context")
+		}
+		handler, ok := ctx.Value(runc_keys.SIGNAL_HANDLER_CONTEXT_KEY).(*runc.SignalHandler)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get signal handler from context")
+		}
+		runc := req.GetDetails().GetRunc()
 
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
@@ -251,7 +335,12 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 				if err != nil {
 					return fmt.Errorf("failed to save container state: %v", err)
 				}
-
+				go func() {
+					tty.WaitConsole()
+					tty.ClosePostStart()
+					status, _ := handler.Forward(process, tty, runc.Detach)
+					exited <- status
+				}()
 				return nil
 			},
 		}

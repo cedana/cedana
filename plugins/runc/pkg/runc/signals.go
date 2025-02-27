@@ -5,7 +5,6 @@ import (
 	"os/signal"
 
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/rs/zerolog/log"
 
@@ -18,19 +17,13 @@ const signalBufferSize = 2048
 // while still forwarding all other signals to the process.
 // If notifySocket is present, use it to read systemd notifications from the container and
 // forward them to notifySocketHost.
-func NewSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalHandler {
-	if enableSubreaper {
-		// set us as the subreaper before registering the signal handler for the container
-		if err := system.SetSubreaper(1); err != nil {
-			log.Warn().Err(err).Msg("set subreaper failed")
-		}
-	}
+func NewSignalHandler(notifySocket *notifySocket) *SignalHandler {
 	// ensure that we have a large buffer size so that we do not miss any signals
 	// in case we are not processing them fast enough.
 	s := make(chan os.Signal, signalBufferSize)
 	// handle all signals for the process.
 	signal.Notify(s)
-	return &signalHandler{
+	return &SignalHandler{
 		signals:      s,
 		notifySocket: notifySocket,
 	}
@@ -43,14 +36,14 @@ type exit struct {
 	status int
 }
 
-type signalHandler struct {
+type SignalHandler struct {
 	signals      chan os.Signal
 	notifySocket *notifySocket
 }
 
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
-func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach bool) (int, error) {
+func (h *SignalHandler) Forward(process *libcontainer.Process, tty *Tty, detach bool) (int, error) {
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.
 	if detach && h.notifySocket == nil {
@@ -113,7 +106,7 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 
 // reap runs wait4 in a loop until we have finished processing any existing exits
 // then returns all exits to the main event loop for further processing.
-func (h *signalHandler) reap() (exits []exit, err error) {
+func (h *SignalHandler) reap() (exits []exit, err error) {
 	var (
 		ws  unix.WaitStatus
 		rus unix.Rusage

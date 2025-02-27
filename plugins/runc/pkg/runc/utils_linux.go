@@ -73,12 +73,12 @@ func NewProcess(p specs.Process) (*libcontainer.Process, error) {
 }
 
 // setupIO modifies the given process config according to the options.
-func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
+func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*Tty, error) {
 	if createTTY {
 		process.Stdin = nil
 		process.Stdout = nil
 		process.Stderr = nil
-		t := &tty{}
+		t := &Tty{}
 		if !detach {
 			if err := t.initHostConsole(); err != nil {
 				return nil, err
@@ -117,7 +117,7 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// and the container's process inherits runc's stdio.
 	if detach {
 		inheritStdio(process)
-		return &tty{}, nil
+		return &Tty{}, nil
 	}
 	return SetupProcessPipes(process, rootuid, rootgid, os.Stdin, os.Stdout, os.Stderr)
 }
