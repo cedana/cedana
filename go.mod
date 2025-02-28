@@ -83,7 +83,7 @@ require (
 require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/cilium/ebpf v0.16.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

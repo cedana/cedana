@@ -80,6 +80,15 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			RootlessEUID:    os.Geteuid() != 0,
 			RootlessCgroups: false,
 		})
+		labels := config.Labels
+		config.Labels = []string{}
+		for _, label := range labels {
+			if !strings.HasPrefix(label, "bundle=") {
+				config.Labels = append(config.Labels, label)
+			}
+		}
+		config.Labels = append(config.Labels, "bundle="+details.Bundle)
+
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create libcontainer config: %v", err)
 		}
@@ -184,15 +193,18 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return exited, nil
 		}
 
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			<-exited
-			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
-			container.Destroy()
-		}()
+		if !strings.HasPrefix(details.Root, "/run/containerd/runc/k8s.io") {
+			opts.WG.Add(1)
+			go func() {
+				defer opts.WG.Done()
+				<-exited
+				log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
+				container.Destroy()
+			}()
+			return exited, nil
+		}
 
-		return exited, nil
+		return nil, nil
 	}
 }
 
@@ -229,6 +241,7 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 				return nil
 			},
 			OrphanPtsMasterFunc: func(ctx context.Context, fd int32) error {
+				log.Debug().Msg("orphan pts master setup console socket")
 				master := os.NewFile(uintptr(fd), "orphan-pts-master")
 				defer master.Close()
 
@@ -274,20 +287,6 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
-		process, ok := ctx.Value(runc_keys.INIT_PROCESS_CONTEXT_KEY).(*libcontainer.Process)
-		if !ok {
-			return nil, status.Errorf(codes.FailedPrecondition, "failed to get process from context")
-		}
-		tty, ok := ctx.Value(runc_keys.TTY_CONTEXT_KEY).(*runc.Tty)
-		if !ok {
-			return nil, status.Errorf(codes.FailedPrecondition, "failed to get tty from context")
-		}
-		handler, ok := ctx.Value(runc_keys.SIGNAL_HANDLER_CONTEXT_KEY).(*runc.SignalHandler)
-		if !ok {
-			return nil, status.Errorf(codes.FailedPrecondition, "failed to get signal handler from context")
-		}
-		runc := req.GetDetails().GetRunc()
-
 		root := req.GetDetails().GetRunc().GetRoot()
 		id := req.GetDetails().GetRunc().GetID()
 
@@ -335,12 +334,6 @@ func UpdateStateOnRestore(next types.Restore) types.Restore {
 				if err != nil {
 					return fmt.Errorf("failed to save container state: %v", err)
 				}
-				go func() {
-					tty.WaitConsole()
-					tty.ClosePostStart()
-					status, _ := handler.Forward(process, tty, runc.Detach)
-					exited <- status
-				}()
 				return nil
 			},
 		}

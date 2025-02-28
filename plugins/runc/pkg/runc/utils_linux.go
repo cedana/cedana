@@ -80,6 +80,7 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 		process.Stderr = nil
 		t := &Tty{}
 		if !detach {
+			log.Debug().Msg("runc with tty")
 			if err := t.initHostConsole(); err != nil {
 				return nil, err
 			}
@@ -94,6 +95,7 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 				t.consoleC <- t.recvtty(parent)
 			}()
 		} else {
+			log.Debug().Msg("runc detached with tty")
 			// the caller of runc will handle receiving the console master
 			conn, err := net.Dial("unix", sockpath)
 			if err != nil {
@@ -116,6 +118,7 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// when runc will detach the caller provides the stdio to runc via runc's 0,1,2
 	// and the container's process inherits runc's stdio.
 	if detach {
+		log.Debug().Msg("runc detached without tty")
 		inheritStdio(process)
 		return &Tty{}, nil
 	}
