@@ -3,8 +3,9 @@ package main
 import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/cloud-hypervisor/cmd"
-
 	"github.com/cedana/cedana/plugins/cloud-hypervisor/internal/handlers"
+
+	"github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/filesystem"
 	"github.com/spf13/cobra"
 )
 
@@ -22,5 +23,7 @@ var (
 
 var (
 	DumpVMHandler    types.DumpVM                   = handlers.Dump
-	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{}
+	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{
+		filesystem.PrepareDumpDir,
+	}
 )

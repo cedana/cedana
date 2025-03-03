@@ -2,7 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -153,10 +152,6 @@ func PrepareDumpVMDir(next types.DumpVM) types.DumpVM {
 		// Setup dump fs that can be used by future adapters to directly read write/extra files
 		// to the dump directory
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), dir)
-
-		if req.Type == "cloud-hypervisor" {
-			req.Dir = fmt.Sprint("file://", dir)
-		}
 
 		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
