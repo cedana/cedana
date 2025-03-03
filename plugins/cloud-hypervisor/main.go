@@ -21,5 +21,6 @@ var (
 )
 
 var (
-	DumpVMHandler types.DumpVM = handlers.Dump
+	DumpVMHandler    types.DumpVM                   = handlers.Dump
+	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{}
 )
