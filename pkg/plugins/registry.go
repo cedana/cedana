@@ -15,9 +15,8 @@ var Registry = []Plugin{
 	{
 		Name:      "cloud-hypervisor",
 		Type:      SUPPORTED,
-		Libraries: []Binary{{Name: "cloud-hypervisor.so"}},
+		Libraries: []Binary{{Name: "libcedana-cloud-hypervisor.so"}},
 	},
-	// TODO: can add hypervisor C/R tools
 
 	// Container runtimes
 	{
