@@ -12,6 +12,11 @@ var Registry = []Plugin{
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "criu"}},
 	},
+	{
+		Name:      "cloud-hypervisor",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "cloud-hypervisor.so"}},
+	},
 	// TODO: can add hypervisor C/R tools
 
 	// Container runtimes
