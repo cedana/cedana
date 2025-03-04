@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/clh"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+	clh "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

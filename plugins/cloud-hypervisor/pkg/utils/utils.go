@@ -1,4 +1,4 @@
-package clh
+package utils
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 )
 
 // copyFiltered copies only directories and persist.json files while preserving the directory structure.
-func copyFiltered(src string, destRoot string, baseSrc string) error {
+func CopyFiltered(src string, destRoot string, baseSrc string) error {
 	err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err

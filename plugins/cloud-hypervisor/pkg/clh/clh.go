@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	utils "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/utils"
+
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 )
 
@@ -50,7 +52,7 @@ func (u *CloudHypervisorVM) Snapshot(destinationURL, vmSocketPath, vmID string) 
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	if err := copyFiltered(sbsVMPath, sandboxPath, sbsVMPath); err != nil {
+	if err := utils.CopyFiltered(sbsVMPath, sandboxPath, sbsVMPath); err != nil {
 		return err
 	}
 
