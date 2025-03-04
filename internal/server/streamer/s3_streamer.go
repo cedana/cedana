@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -25,12 +24,8 @@ import (
 
 // S3Config holds configuration for S3 storage
 type S3Config struct {
-	Endpoint       string
-	Region         string
 	BucketName     string
 	KeyPrefix      string
-	AccessKey      string
-	SecretKey      string
 	ForcePathStyle bool
 }
 
@@ -79,9 +74,6 @@ func NewS3StreamingFs(
 
 		// need a separate s3client for each parallel op
 		s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-			if S3Config.Endpoint != "" {
-				o.BaseEndpoint = aws.String(S3Config.Endpoint)
-			}
 			if S3Config.ForcePathStyle {
 				o.UsePathStyle = true
 			}
