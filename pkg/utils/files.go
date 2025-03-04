@@ -11,6 +11,9 @@ import (
 	"time"
 
 	cedana_io "github.com/cedana/cedana/pkg/io"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 const (
@@ -194,6 +197,46 @@ func WriteTo(src *os.File, target string, compression string) (int64, error) {
 	return src.WriteTo(writer)
 }
 
+// WriteToS3 writes the contents from the provided src to the specified S3 bucket and key.
+// Compression format is specified by the compression argument.
+func WriteToS3(
+	ctx context.Context,
+	s3Client *s3.Client,
+	source *os.File,
+	bucket, key, compression string) (int64, error) {
+	defer source.Close()
+
+	pr, pw := io.Pipe()
+	go func() {
+		defer pw.Close()
+		writer, err := cedana_io.NewCompressionWriter(pw, compression)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		defer writer.Close()
+
+		_, err = io.Copy(writer, source)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+
+	}()
+
+	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   pr,
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	return 0, nil
+}
+
 // ReadFrom reads the contents of the src file and writes it to the provided target.
 // The function automatically detects the compression format from the file extension.
 // If the target is a pipe:
@@ -230,6 +273,42 @@ func ReadFrom(src string, target *os.File) (int64, error) {
 	defer reader.Close()
 
 	return target.ReadFrom(reader)
+}
+
+func ReadFromS3(
+	ctx context.Context,
+	s3Client *s3.Client,
+	bucket, key string,
+	target *os.File,
+	compression string) (int64, error) {
+	defer target.Close()
+
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to get object from S3: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Decompress the stream based on compression format
+	reader, err := cedana_io.NewCompressionReader(resp.Body, compression)
+	if err != nil {
+		return 0, err
+	}
+	defer reader.Close()
+
+	isPipe, err := cedana_io.IsPipe(target.Fd())
+	if err != nil {
+		return 0, err
+	}
+
+	if compression == "none" && isPipe {
+		return io.Copy(target, reader)
+	} else {
+		return io.Copy(target, reader)
+	}
 }
 
 //////////////////////////

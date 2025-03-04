@@ -4,18 +4,18 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/utils"
@@ -42,21 +42,14 @@ func NewS3StreamingFs(
 	tempDir string,
 	parallelism int32,
 	mode Mode,
-	s3Config S3Config,
 	compression string,
+	S3Config S3Config,
 ) (*Fs, func() error, error) {
-	var opts []func(*config.LoadOptions) error
-	opts = append(opts, config.WithRegion(s3Config.Region))
 
-	if s3Config.AccessKey != "" && s3Config.SecretKey != "" {
-		opts = append(opts, config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(s3Config.AccessKey, s3Config.SecretKey, ""),
-		))
-	}
-
-	awsCfg, err := config.LoadDefaultConfig(ctx, opts...)
+	// Load AWS config
+	awsCfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load AWS config: %w", err)
+		log.Error().Err(err).Msg("failed to load AWS config")
 	}
 
 	var readFds, writeFds []*os.File
@@ -75,7 +68,7 @@ func NewS3StreamingFs(
 		writeFds = append(writeFds, w)
 		shardFds = append(shardFds, fmt.Sprintf("%d", 3+i))
 
-		s3Key := fmt.Sprintf("%s/img-%d", s3Config.KeyPrefix, i)
+		s3Key := fmt.Sprintf("%s/img-%d", S3Config.KeyPrefix, i)
 		if compression != "none" && compression != "" {
 			ext, err := cedana_io.ExtForCompression(compression)
 			if err != nil {
@@ -86,10 +79,10 @@ func NewS3StreamingFs(
 
 		// need a separate s3client for each parallel op
 		s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-			if s3Config.Endpoint != "" {
-				o.BaseEndpoint = aws.String(s3Config.Endpoint)
+			if S3Config.Endpoint != "" {
+				o.BaseEndpoint = aws.String(S3Config.Endpoint)
 			}
-			if s3Config.ForcePathStyle {
+			if S3Config.ForcePathStyle {
 				o.UsePathStyle = true
 			}
 		})
@@ -104,7 +97,7 @@ func NewS3StreamingFs(
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming from S3")
 
-				_, err := ReadFromS3(ctx, s3Client, s3Config.BucketName, key, pipeWriter, compression)
+				_, err := utils.ReadFromS3(ctx, s3Client, S3Config.BucketName, key, pipeWriter, compression)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to stream from S3")
 					ioErr <- err
@@ -116,58 +109,24 @@ func NewS3StreamingFs(
 		case WRITE_ONLY:
 			// For WRITE_ONLY: readFds → writeFds(streamer) → S3
 			io.Add(1)
-			go func(pipeReader *os.File, key string, shardIdx int) {
+			go func(pipeReader *os.File, key string, shardIdx int32) {
 				defer io.Done()
 				defer pipeReader.Close()
 
-				log.Debug().Int("shard", shardIdx).Str("key", key).Msg("streaming to S3")
+				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming to S3")
 
-				// Create a temporary file to hold the data for S3
-				tmpFile, err := os.CreateTemp(tempDir, fmt.Sprintf("s3-upload-%d-*", shardIdx))
-				if err != nil {
-					log.Error().Err(err).Msg("failed to create temp file")
-					ioErr <- err
-					return
-				}
-				tmpPath := tmpFile.Name()
-				tmpFile.Close() // Close it first, WriteTo will open it
-				defer os.Remove(tmpPath)
-
-				// Use your utility function to write from pipe to file with compression
-				_, err = utils.WriteTo(pipeReader, tmpPath, compression)
-				if err != nil {
-					log.Error().Err(err).Str("key", key).Msg("failed to prepare file for S3")
-					ioErr <- err
-					return
-				}
-
-				// Now upload the file to S3
-				file, err := os.Open(tmpPath)
-				if err != nil {
-					log.Error().Err(err).Str("path", tmpPath).Msg("failed to open temp file")
-					ioErr <- err
-					return
-				}
-				defer file.Close()
-
-				_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-					Bucket: aws.String(s3Config.BucketName),
-					Key:    aws.String(key),
-					Body:   file,
-				})
-
+				_, err := utils.WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to upload to S3")
 					ioErr <- err
 					return
 				}
 
-				log.Debug().Int("shard", shardIdx).Str("key", key).Msg("finished streaming to S3")
+				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("finished streaming to S3")
 			}(readFds[i], s3Key, i)
 		}
 	}
 
-	// Start the streamer binary
 	args := []string{"--images-dir", tempDir}
 	var extraFiles []*os.File
 
@@ -178,6 +137,8 @@ func NewS3StreamingFs(
 	case WRITE_ONLY:
 		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "capture")
 		extraFiles = writeFds
+	default:
+		return nil, nil, fmt.Errorf("invalid mode: %v", mode)
 	}
 
 	cmd := exec.CommandContext(ctx, streamerBinary, args...)
@@ -185,13 +146,12 @@ func NewS3StreamingFs(
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGTERM,
 	}
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) } // AVOID SIGKILL
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stderr pipe: %w", err)
 	}
 
-	// Set up socket communication
 	ready := make(chan bool, 1)
 	exited := make(chan bool, 1)
 	defer close(ready)
@@ -240,7 +200,6 @@ func NewS3StreamingFs(
 		}
 	}()
 
-	// Wait for the streamer to be ready
 	select {
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
@@ -262,103 +221,18 @@ func NewS3StreamingFs(
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w", err)
 	}
 	fs.conn = conn.(*net.UnixConn)
+	log.Debug().Msg("streamer connected")
 
-	// Create wait function
+	signal.Ignored(syscall.SIGPIPE) // Avoid program termination due to broken pipe
+
 	wait := func() error {
-		// Stop the listener and close connection
 		fs.stopListener()
 		fs.conn.Close()
-
-		// Wait for all IO to finish
-		ioWg.Wait()
+		io.Wait()
+		signal.Reset(syscall.SIGPIPE)
 		close(ioErr)
-
-		// Return any errors
-		for err := range ioErr {
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
+		return <-ioErr
 	}
 
 	return fs, wait, nil
-}
-
-func ReadFromS3(
-	ctx context.Context,
-	s3Client *s3.Client,
-	bucket, key string,
-	target *os.File,
-	compression string) (int64, error) {
-	defer target.Close()
-
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to get object from S3: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Decompress the stream based on compression format
-	reader, err := cedana_io.NewCompressionReader(resp.Body, compression)
-	if err != nil {
-		return 0, err
-	}
-	defer reader.Close()
-
-	isPipe, err := cedana_io.IsPipe(target.Fd())
-	if err != nil {
-		return 0, err
-	}
-
-	if compression == "none" && isPipe {
-		return io.Copy(target, reader)
-	} else {
-		return io.Copy(target, reader)
-	}
-}
-
-func WriteToS3(
-	ctx context.Context,
-	s3Client *s3.Client,
-	source *os.File,
-	bucket, key, compression string) (int64, error) {
-	defer source.Close()
-
-	pr, pw := io.Pipe()
-	go func() {
-		defer pw.Close()
-		writer, err := cedana_io.NewCompressionWriter(pw, compression)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to create compression writer")
-			pw.CloseWithError(err)
-			return
-		}
-		defer writer.Close()
-
-		written, err := io.Copy(writer, source)
-		if err != nil {
-			pw.CloseWithError(err)
-			log.Error().Err(err).Msg("failed to compress data")
-			return
-		}
-
-		log.Debug().Int64("bytes", written).Msg("compressed data")
-	}()
-
-	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   pr,
-	})
-
-	if err != nil {
-		return 0, fmt.Errorf("failed to upload to S3: %w", err)
-	}
-
-	return 0, nil
 }

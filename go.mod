@@ -9,6 +9,7 @@ require (
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250226205333-5d0820253730.2
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-20250226205333-5d0820253730.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-20250226205333-4b6f9efc37ef.1
+	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -45,7 +46,6 @@ require (
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.11.7 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.61 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
