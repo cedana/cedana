@@ -22,13 +22,14 @@ type (
 		Plugins      plugins.Manager
 		Lifetime     context.Context
 		DumpFs       afero.Fs
+		FdStore      *sync.Map
 	}
 
 	Dump      = Handler[daemon.DumpReq, daemon.DumpResp]
 	Restore   = Handler[daemon.RestoreReq, daemon.RestoreResp]
 	Run       = Handler[daemon.RunReq, daemon.RunResp]
 	DumpVM    = Handler[daemon.DumpVMReq, daemon.DumpVMResp]
-	RestoreVM = Handler[daemon.DumpVMReq, daemon.DumpVMResp]
+	RestoreVM = Handler[daemon.RestoreVMReq, daemon.RestoreVMResp]
 	// RunVM     = Handler[daemon.RunVMReq, daemon.RunVMResp]
 
 	Handler[REQ, RESP any] func(context.Context, Opts, *RESP, *REQ) (exited chan int, err error)

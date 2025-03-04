@@ -23,6 +23,7 @@ var (
 
 var (
 	DumpVMHandler    types.DumpVM                   = handlers.Dump
+	RestoreVMHandler types.RestoreVM                = handlers.Restore
 	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{
 		filesystem.PrepareDumpDir,
 	}

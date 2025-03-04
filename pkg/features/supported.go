@@ -24,11 +24,13 @@ var (
 	HelperCmds = plugins.Feature[[]*cobra.Command]{Symbol: "HelperCmds", Description: "Helper command(s)"}
 
 	// Dump/Restore
-	DumpMiddleware    = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
-	DumpVMMiddleware  = plugins.Feature[types.Middleware[types.DumpVM]]{Symbol: "DumpVMMiddleware", Description: "Dump VM middleware"}
-	RestoreMiddleware = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
-	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
-	DumpVMHandler     = plugins.Feature[types.DumpVM]{Symbol: "DumpVMHandler", Description: "DumpVM handler"}
+	DumpMiddleware      = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
+	DumpVMMiddleware    = plugins.Feature[types.Middleware[types.DumpVM]]{Symbol: "DumpVMMiddleware", Description: "Dump VM middleware"}
+	RestoreVMMiddleware = plugins.Feature[types.Middleware[types.RestoreVM]]{Symbol: "RestoreVMMiddleware", Description: "Restore VM middleware"}
+	RestoreMiddleware   = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
+	KillSignal          = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
+	DumpVMHandler       = plugins.Feature[types.DumpVM]{Symbol: "DumpVMHandler", Description: "DumpVM handler"}
+	RestoreVMHandler    = plugins.Feature[types.RestoreVM]{Symbol: "RestoreVMHandler", Description: "RestoreVM handler"}
 
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}

@@ -29,5 +29,6 @@ var HealthChecks types.Checks = types.Checks{
 }
 
 var (
-	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{}
+	DumpVMMiddleware    types.Middleware[types.DumpVM]    = types.Middleware[types.DumpVM]{}
+	RestoreVMMiddleware types.Middleware[types.RestoreVM] = types.Middleware[types.RestoreVM]{}
 )

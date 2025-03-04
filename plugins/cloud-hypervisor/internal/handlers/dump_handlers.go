@@ -25,12 +25,7 @@ type VMSnapshotter interface {
 func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
 	var snapshotter VMSnapshotter
 
-	switch req.Type {
-	case "cloud-hypervisor":
-		snapshotter = &clh.CloudHypervisorVM{}
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "Unknown VM type: %s", req.Type)
-	}
+	snapshotter = &clh.CloudHypervisorVM{}
 
 	err = snapshotter.Pause(req.Details.Kata.VmSocket)
 	if err != nil {
