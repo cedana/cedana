@@ -223,8 +223,12 @@ func NewS3StreamingFs(
 		io.Wait()
 		signal.Reset(syscall.SIGPIPE)
 		close(ioErr)
-		return <-ioErr
+		select {
+		case err := <-ioErr:
+			return err
+		default:
+			return nil
+		}
 	}
-
 	return fs, wait, nil
 }
