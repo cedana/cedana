@@ -10,7 +10,7 @@ To checkpoint:
 cedana dump <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](../get-started/features.md) for all plugins that support checkpointing.
+Where `<type>` can be `process`, `containerd`, `runc`,  `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support checkpointing.
 
 For example, to checkpoint a process:
 
@@ -30,7 +30,7 @@ To restore:
 cedana restore <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](../get-started/features.md) for all plugins that support restoring.
+Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support restoring.
 
 For example, to restore a process:
 
