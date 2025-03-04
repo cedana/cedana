@@ -193,16 +193,14 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return exited, nil
 		}
 
-		if !strings.HasPrefix(details.Root, "/run/containerd/runc/k8s.io") {
-			opts.WG.Add(1)
-			go func() {
-				defer opts.WG.Done()
-				<-exited
-				log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
-				container.Destroy()
-			}()
-			return exited, nil
-		}
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			<-exited
+			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
+			container.Destroy()
+		}()
+		return exited, nil
 
 		return nil, nil
 	}

@@ -176,6 +176,31 @@ func (m *ManagerLazy) Delete(jid string) {
 	}
 }
 
+func (m *ManagerLazy) DeletePID(pid uint32, signal syscall.Signal) error {
+	jid := ""
+	m.jobs.Range(func(key any, val any) bool {
+		job := val.(*Job)
+		tempJid := key.(string)
+		if pid == job.proto.State.PID { // found
+			if job.IsRemote() { // but remote
+				// TODO: should return an error through a channel
+				return true
+			}
+			jid = tempJid
+			return false
+		}
+		return true
+	})
+	if jid == "" {
+		return fmt.Errorf("pid not managed by cedana")
+	}
+	err := m.Kill(jid, signal)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *ManagerLazy) List(jids ...string) []*Job {
 	var jobs []*Job
 

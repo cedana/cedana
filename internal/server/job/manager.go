@@ -28,6 +28,9 @@ type Manager interface {
 	// Delete deletes a job with the given JID.
 	Delete(jid string)
 
+	// Delete deletes a job with the given PID.
+	DeletePID(pid uint32, signal syscall.Signal) error
+
 	// Get returns a job with the given JID.
 	List(jids ...string) []*Job
 
