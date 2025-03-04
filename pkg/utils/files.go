@@ -13,6 +13,7 @@ import (
 	cedana_io "github.com/cedana/cedana/pkg/io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -198,7 +199,7 @@ func WriteTo(src *os.File, target string, compression string) (int64, error) {
 }
 
 // WriteToS3 writes the contents from the provided src to the specified S3 bucket and key.
-// Compression format is specified by the compression argument.
+// Uses Transfer Manager for streaming uploads, avoiding Content-Length requirement.
 func WriteToS3(
 	ctx context.Context,
 	s3Client *s3.Client,
@@ -207,6 +208,8 @@ func WriteToS3(
 	defer source.Close()
 
 	pr, pw := io.Pipe()
+
+	var written int64
 	go func() {
 		defer pw.Close()
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
@@ -215,26 +218,31 @@ func WriteToS3(
 			return
 		}
 		defer writer.Close()
-
-		_, err = io.Copy(writer, source)
+		n, err := io.Copy(writer, source)
 		if err != nil {
 			pw.CloseWithError(err)
 			return
 		}
-
+		written = n
 	}()
 
-	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+	// Create the upload manager with Transfer Manager
+	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
+		u.PartSize = 5 * 1024 * 1024 // 5MB part size
+		u.Concurrency = 3            // number of concurrent uploads
+		u.LeavePartsOnError = false  // Clean up parts if upload fails
+	})
+
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
 	})
-
 	if err != nil {
 		return 0, fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
-	return 0, nil
+	return written, nil
 }
 
 // ReadFrom reads the contents of the src file and writes it to the provided target.
