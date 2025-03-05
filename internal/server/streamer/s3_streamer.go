@@ -2,7 +2,6 @@ package streamer
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -241,8 +240,6 @@ func NewS3StreamingFs(
 	return fs, wait, nil
 }
 
-// WriteToS3 writes the contents from the provided src to the specified S3 bucket and key.
-// Uses Transfer Manager for streaming uploads, avoiding Content-Length requirement.
 func WriteToS3(
 	ctx context.Context,
 	s3Client *s3.Client,
@@ -252,48 +249,72 @@ func WriteToS3(
 	pr, pw := io.Pipe()
 	defer pr.Close()
 
-	// Compression in separate goroutine
 	go func() {
 		defer pw.Close()
 		writer, _ := cedana_io.NewCompressionWriter(pw, compression)
 		defer writer.Close()
 
-		if _, err := io.Copy(writer, source); err != nil {
-			pw.CloseWithError(fmt.Errorf("compression copy: %w", err))
+		buf := make([]byte, 32*1024) // 32KB chunks
+		for {
+			n, err := source.Read(buf)
+			if n > 0 {
+				if _, werr := writer.Write(buf[:n]); werr != nil {
+					pw.CloseWithError(werr)
+					return
+				}
+			}
+			if err != nil {
+				if err != io.EOF {
+					pw.CloseWithError(err)
+				}
+				return
+			}
 		}
 	}()
 
-	headerBuf := bytes.NewBuffer(make([]byte, 0, 5*1024*1024))
-	tee := io.TeeReader(pr, headerBuf)
-
-	hybridReader := io.MultiReader(
-		bytes.NewReader(headerBuf.Bytes()), // Buffered start
-		tee,                                // Live pipe data
+	bufferedReader := manager.NewBufferedReadSeeker(
+		&nopSeeker{pr},
+		make([]byte, 5*1024*1024),
 	)
 
-	// Configure upload with aggressive timeouts
+	// 3. Configure uploader
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize = 5 * 1024 * 1024 // 5MB parts
-		u.Concurrency = 1
+		u.PartSize = 5 * 1024 * 1024 // Match buffer size
+		u.Concurrency = 1            // Required for pipe streaming
 	})
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	// 4. Upload with timeout control
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   hybridReader,
+		Body:   bufferedReader,
 	})
 
 	if err != nil {
 		return 0, fmt.Errorf("upload failed: %w", err)
 	}
 
+	// 5. Verify size
 	head, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
+	if err != nil {
+		return 0, fmt.Errorf("size verification failed: %w", err)
+	}
 
 	return *head.ContentLength, nil
+}
+
+// nopSeeker wraps a Reader to satisfy ReadSeeker interface
+type nopSeeker struct {
+	io.Reader
+}
+
+func (ns *nopSeeker) Seek(offset int64, whence int) (int64, error) {
+	// Return dummy values to satisfy interface
+	return 0, nil
 }
