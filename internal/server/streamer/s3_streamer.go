@@ -277,13 +277,11 @@ func WriteToS3(
 		make([]byte, 5*1024*1024),
 	)
 
-	// 3. Configure uploader
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024 // Match buffer size
 		u.Concurrency = 1            // Required for pipe streaming
 	})
 
-	// 4. Upload with timeout control
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
@@ -297,7 +295,6 @@ func WriteToS3(
 		return 0, fmt.Errorf("upload failed: %w", err)
 	}
 
-	// 5. Verify size
 	head, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -315,6 +312,5 @@ type nopSeeker struct {
 }
 
 func (ns *nopSeeker) Seek(offset int64, whence int) (int64, error) {
-	// Return dummy values to satisfy interface
 	return 0, nil
 }

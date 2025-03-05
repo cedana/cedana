@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	FREEZE_TIMEOUT  = 20 * time.Second
+	FREEZE_TIMEOUT  = 5 * time.Minute
 	DUMP_TIMEOUT    = 5 * time.Minute
 	RESTORE_TIMEOUT = 5 * time.Minute
 	HEALTH_TIMEOUT  = 30 * time.Second
