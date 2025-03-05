@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -14,9 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
@@ -107,7 +111,7 @@ func NewS3StreamingFs(
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming to S3")
 
-				_, err := utils.WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				_, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to upload to S3")
 					ioErr <- err
@@ -231,4 +235,55 @@ func NewS3StreamingFs(
 		}
 	}
 	return fs, wait, nil
+}
+
+// WriteToS3 writes the contents from the provided src to the specified S3 bucket and key.
+// Uses Transfer Manager for streaming uploads, avoiding Content-Length requirement.
+func WriteToS3(
+	ctx context.Context,
+	s3Client *s3.Client,
+	source *os.File,
+	bucket, key, compression string) (int64, error) {
+	defer source.Close()
+
+	pr, pw := io.Pipe()
+
+	_, end := profiling.StartTimingComponent(ctx, "WriteToS3Pipe")
+	var written int64
+	go func() {
+		defer pw.Close()
+		defer end()
+		writer, err := cedana_io.NewCompressionWriter(pw, compression)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		defer writer.Close()
+		n, err := io.Copy(writer, source)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		written = n
+	}()
+
+	_, end = profiling.StartTimingComponent(ctx, "UploadToS3FromPipe")
+	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
+		u.PartSize = 5 * 1024 * 1024 // 5MB part size
+		u.Concurrency = 3            // number of concurrent uploads
+		u.LeavePartsOnError = false  // Clean up parts if upload fails
+	})
+
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   pr,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	end()
+
+	return written, nil
 }
