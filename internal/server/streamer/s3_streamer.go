@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -248,38 +250,114 @@ func WriteToS3(
 	bucket, key, compression string) (int64, error) {
 	defer source.Close()
 
-	pr, pw, err := os.Pipe()
+	pr, pw := io.Pipe()
+	defer pr.Close()
 
-	compressionWriteStart := time.Now()
-	var written int64
+	var wg sync.WaitGroup
+	errChan := make(chan error, 2)
+	var totalBytes int64
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer pw.Close()
+
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
 		if err != nil {
+			errChan <- fmt.Errorf("compression error: %w", err)
 			return
 		}
 		defer writer.Close()
+
 		n, err := io.Copy(writer, source)
+		totalBytes = n
 		if err != nil {
-			return
+			errChan <- fmt.Errorf("compression copy: %w", err)
 		}
-		written = n
-		elapsed := time.Since(compressionWriteStart)
-		log.Debug().Int64("bytes", written).Str("compression", compression).Msgf("compressed data in %s", elapsed)
 	}()
 
-	uploaderStart := time.Now()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   pr,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to upload to S3: %w", err)
+		uploadID, err := s3Client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		})
+		if err != nil {
+			errChan <- fmt.Errorf("create multipart upload: %w", err)
+			return
+		}
+
+		// 3. Stream parts directly from pipe
+		var parts []types.CompletedPart
+		partNumber := 1
+		partBuffer := make([]byte, 5*1024*1024) // 5MB parts
+
+		for {
+			select {
+			case <-ctx.Done():
+				s3Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+					Bucket:   aws.String(bucket),
+					Key:      aws.String(key),
+					UploadId: uploadID.UploadId,
+				})
+				errChan <- ctx.Err()
+				return
+			default:
+				n, err := io.ReadFull(pr, partBuffer)
+				if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+					errChan <- fmt.Errorf("read pipe: %w", err)
+					return
+				}
+
+				if n == 0 {
+					break
+				}
+
+				// 4. Upload each part as we read it
+				resp, err := s3Client.UploadPart(ctx, &s3.UploadPartInput{
+					Bucket:     aws.String(bucket),
+					Key:        aws.String(key),
+					UploadId:   uploadID.UploadId,
+					PartNumber: aws.Int32(int32(partNumber)),
+					Body:       bytes.NewReader(partBuffer[:n]),
+				})
+				if err != nil {
+					errChan <- fmt.Errorf("upload part %d: %w", partNumber, err)
+					return
+				}
+
+				parts = append(parts, types.CompletedPart{
+					PartNumber: aws.Int32(int32(partNumber)),
+					ETag:       resp.ETag,
+				})
+				partNumber++
+			}
+		}
+
+		// 5. Complete the upload
+		_, err = s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+			Bucket:   aws.String(bucket),
+			Key:      aws.String(key),
+			UploadId: uploadID.UploadId,
+			MultipartUpload: &types.CompletedMultipartUpload{
+				Parts: parts,
+			},
+		})
+		if err != nil {
+			errChan <- fmt.Errorf("complete upload: %w", err)
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	if err := <-errChan; err != nil {
+		return 0, err
 	}
 
-	elapsed := time.Since(uploaderStart)
-	log.Debug().Int64("bytes", written).Str("compression", compression).Msgf("uploaded data in %s", elapsed)
-	return written, nil
+	return totalBytes, nil
 }
