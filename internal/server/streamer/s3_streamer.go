@@ -250,10 +250,6 @@ func WriteToS3(
 	defer source.Close()
 
 	pr, pw, err := os.Pipe()
-	unix.FcntlInt(pr.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
-	if err != nil {
-		return 0, fmt.Errorf("failed to create pipe: %w", err)
-	}
 
 	compressionWriteStart := time.Now()
 	var written int64
