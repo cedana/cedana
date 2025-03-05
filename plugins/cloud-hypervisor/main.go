@@ -27,5 +27,7 @@ var (
 	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{
 		filesystem.PrepareDumpDir,
 	}
-	RestoreVMMiddleware types.Middleware[types.RestoreVM] = types.Middleware[types.RestoreVM]{}
+	RestoreVMMiddleware types.Middleware[types.RestoreVM] = types.Middleware[types.RestoreVM]{
+		filesystem.PrepareDumpDirForRestore,
+	}
 )
