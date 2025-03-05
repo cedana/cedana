@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -256,13 +257,24 @@ func WriteToS3(
 		defer pw.Close()
 		writer, _ := cedana_io.NewCompressionWriter(pw, compression)
 		defer writer.Close()
-		io.Copy(writer, source)
+
+		if _, err := io.Copy(writer, source); err != nil {
+			pw.CloseWithError(fmt.Errorf("compression copy: %w", err))
+		}
 	}()
+
+	headerBuf := bytes.NewBuffer(make([]byte, 0, 5*1024*1024))
+	tee := io.TeeReader(pr, headerBuf)
+
+	hybridReader := io.MultiReader(
+		bytes.NewReader(headerBuf.Bytes()), // Buffered start
+		tee,                                // Live pipe data
+	)
 
 	// Configure upload with aggressive timeouts
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024 // 5MB parts
-		u.Concurrency = 2
+		u.Concurrency = 1
 	})
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -271,7 +283,7 @@ func WriteToS3(
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   pr,
+		Body:   hybridReader,
 	})
 
 	if err != nil {
