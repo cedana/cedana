@@ -17,7 +17,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -270,13 +269,8 @@ func WriteToS3(
 	}()
 
 	uploaderStart := time.Now()
-	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize = 5 * 1024 * 1024 // 5MB part size
-		u.Concurrency = 3            // number of concurrent uploads
-		u.LeavePartsOnError = false  // Clean up parts if upload fails
-	})
 
-	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
