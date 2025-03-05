@@ -20,6 +20,9 @@ func init() {
 
 	DumpCmd.Flags().StringP(kata_flags.VmSocketFlag.Full, kata_flags.VmSocketFlag.Short, "", "socket path for full vm snapshot")
 	DumpCmd.MarkFlagRequired(kata_flags.VmSocketFlag.Full)
+
+	DumpCmd.Flags().StringP(kata_flags.VmIDFlag.Full, kata_flags.VmIDFlag.Short, "", "vm id for full vm snapshot")
+	DumpCmd.MarkFlagRequired(kata_flags.VmIDFlag.Full)
 }
 
 var DumpCmd = &cobra.Command{
