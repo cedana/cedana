@@ -249,7 +249,11 @@ func WriteToS3(
 	bucket, key, compression string) (int64, error) {
 	defer source.Close()
 
-	pr, pw := io.Pipe()
+	pr, pw, err := os.Pipe()
+	unix.FcntlInt(pr.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
+	if err != nil {
+		return 0, fmt.Errorf("failed to create pipe: %w", err)
+	}
 
 	compressionWriteStart := time.Now()
 	var written int64
@@ -257,13 +261,11 @@ func WriteToS3(
 		defer pw.Close()
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
 		if err != nil {
-			pw.CloseWithError(err)
 			return
 		}
 		defer writer.Close()
 		n, err := io.Copy(writer, source)
 		if err != nil {
-			pw.CloseWithError(err)
 			return
 		}
 		written = n
@@ -278,7 +280,7 @@ func WriteToS3(
 		u.LeavePartsOnError = false  // Clean up parts if upload fails
 	})
 
-	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
