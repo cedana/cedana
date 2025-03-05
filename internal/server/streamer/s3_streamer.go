@@ -57,6 +57,8 @@ func NewS3StreamingFs(
 	ioErr := make(chan error, parallelism)
 
 	for i := range parallelism {
+		// set up a profiling ctx for each parallelism
+		s3ctx, end := profiling.StartTimingComponent(ctx, "streamerWrite")
 		r, w, err := os.Pipe()
 		unix.FcntlInt(r.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
 		if err != nil {
@@ -111,7 +113,7 @@ func NewS3StreamingFs(
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming to S3")
 
-				_, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				_, err := WriteToS3(s3ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to upload to S3")
 					ioErr <- err
@@ -119,6 +121,7 @@ func NewS3StreamingFs(
 				}
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("finished streaming to S3")
+				end()
 			}(readFds[i], s3Key, i)
 		}
 	}
@@ -248,11 +251,11 @@ func WriteToS3(
 
 	pr, pw := io.Pipe()
 
-	_, end := profiling.StartTimingComponent(ctx, "WriteToS3Pipe")
+	_, end := profiling.StartTimingComponent(ctx, "WriteToS3")
+	defer end()
 	var written int64
 	go func() {
 		defer pw.Close()
-		defer end()
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
 		if err != nil {
 			pw.CloseWithError(err)
@@ -267,7 +270,6 @@ func WriteToS3(
 		written = n
 	}()
 
-	_, end = profiling.StartTimingComponent(ctx, "UploadToS3FromPipe")
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024 // 5MB part size
 		u.Concurrency = 3            // number of concurrent uploads
@@ -282,8 +284,6 @@ func WriteToS3(
 	if err != nil {
 		return 0, fmt.Errorf("failed to upload to S3: %w", err)
 	}
-
-	end()
 
 	return written, nil
 }
