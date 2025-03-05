@@ -85,7 +85,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		for _, file := range files {
 			for _, path := range strings.Split(m.searchPath, ":") {
 				var stat os.FileInfo
-				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil {
+				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil || stat.IsDir() {
 					continue
 				}
 				dir = path
@@ -170,7 +170,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Libraries {
 				src := filepath.Join(srcDir, file.Name)
 				dest := filepath.Join(LibDir, file.Name)
-				if _, e := os.Stat(src); os.IsNotExist(e) {
+				if s, e := os.Stat(src); e != nil || os.IsNotExist(e) || s.IsDir() {
 					err = fmt.Errorf("No local plugin found")
 					break
 				}
@@ -183,7 +183,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			for _, file := range plugin.Binaries {
 				src := filepath.Join(srcDir, file.Name)
 				dest := filepath.Join(BinDir, file.Name)
-				if _, e := os.Stat(src); os.IsNotExist(e) {
+				if s, e := os.Stat(src); e != nil || os.IsNotExist(e) || s.IsDir() {
 					err = fmt.Errorf("No local plugin found")
 					break
 				}
