@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/job"
@@ -51,6 +52,14 @@ func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListRes
 }
 
 func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillResp, error) {
+	if len(req.JIDs) == 0 && req.PID != 0 {
+		err := s.jobs.DeletePID(req.PID, syscall.Signal(req.Signal))
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
 	jobs := s.jobs.List(req.GetJIDs()...)
 
 	if len(jobs) == 0 {
