@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/filesystem"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -17,7 +16,6 @@ import (
 func (s *Server) RestoreVM(ctx context.Context, req *daemon.RestoreVMReq) (*daemon.RestoreVMResp, error) {
 
 	middleware := types.Middleware[types.RestoreVM]{
-		filesystem.PrepareDumpDirForRestoreVM,
 
 		pluginRestoreVMMiddleware, // middleware from plugins
 
