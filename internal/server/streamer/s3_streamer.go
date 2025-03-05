@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -246,118 +247,43 @@ func NewS3StreamingFs(
 func WriteToS3(
 	ctx context.Context,
 	s3Client *s3.Client,
-	source *os.File,
+	source io.Reader,
 	bucket, key, compression string) (int64, error) {
-	defer source.Close()
 
 	pr, pw := io.Pipe()
 	defer pr.Close()
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, 2)
-	var totalBytes int64
-
-	wg.Add(1)
+	// Compression in separate goroutine
 	go func() {
-		defer wg.Done()
 		defer pw.Close()
-
-		writer, err := cedana_io.NewCompressionWriter(pw, compression)
-		if err != nil {
-			errChan <- fmt.Errorf("compression error: %w", err)
-			return
-		}
+		writer, _ := cedana_io.NewCompressionWriter(pw, compression)
 		defer writer.Close()
-
-		n, err := io.Copy(writer, source)
-		totalBytes = n
-		if err != nil {
-			errChan <- fmt.Errorf("compression copy: %w", err)
-		}
+		io.Copy(writer, source)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	// Configure upload with aggressive timeouts
+	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
+		u.PartSize = 5 * 1024 * 1024 // 5MB parts
+		u.Concurrency = 2
+	})
 
-		uploadID, err := s3Client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
-		})
-		if err != nil {
-			errChan <- fmt.Errorf("create multipart upload: %w", err)
-			return
-		}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 
-		// 3. Stream parts directly from pipe
-		var parts []types.CompletedPart
-		partNumber := 1
-		partBuffer := make([]byte, 5*1024*1024) // 5MB parts
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   pr,
+	})
 
-		for {
-			select {
-			case <-ctx.Done():
-				s3Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
-					Bucket:   aws.String(bucket),
-					Key:      aws.String(key),
-					UploadId: uploadID.UploadId,
-				})
-				errChan <- ctx.Err()
-				return
-			default:
-				n, err := io.ReadFull(pr, partBuffer)
-				if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-					errChan <- fmt.Errorf("read pipe: %w", err)
-					return
-				}
-
-				if n == 0 {
-					break
-				}
-
-				// 4. Upload each part as we read it
-				resp, err := s3Client.UploadPart(ctx, &s3.UploadPartInput{
-					Bucket:     aws.String(bucket),
-					Key:        aws.String(key),
-					UploadId:   uploadID.UploadId,
-					PartNumber: aws.Int32(int32(partNumber)),
-					Body:       bytes.NewReader(partBuffer[:n]),
-				})
-				if err != nil {
-					errChan <- fmt.Errorf("upload part %d: %w", partNumber, err)
-					return
-				}
-
-				parts = append(parts, types.CompletedPart{
-					PartNumber: aws.Int32(int32(partNumber)),
-					ETag:       resp.ETag,
-				})
-				partNumber++
-			}
-		}
-
-		// 5. Complete the upload
-		_, err = s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
-			Bucket:   aws.String(bucket),
-			Key:      aws.String(key),
-			UploadId: uploadID.UploadId,
-			MultipartUpload: &types.CompletedMultipartUpload{
-				Parts: parts,
-			},
-		})
-		if err != nil {
-			errChan <- fmt.Errorf("complete upload: %w", err)
-		}
-	}()
-
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	if err := <-errChan; err != nil {
-		return 0, err
+	if err != nil {
+		return 0, fmt.Errorf("upload failed: %w", err)
 	}
 
-	return totalBytes, nil
+	head, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+
+	return *head.ContentLength, nil
 }
