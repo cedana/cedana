@@ -11,6 +11,7 @@ import (
 	"time"
 
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -209,9 +210,11 @@ func WriteToS3(
 
 	pr, pw := io.Pipe()
 
+	_, end := profiling.StartTimingComponent(ctx, "WriteToS3Pipe")
 	var written int64
 	go func() {
 		defer pw.Close()
+		defer end()
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
 		if err != nil {
 			pw.CloseWithError(err)
@@ -226,7 +229,7 @@ func WriteToS3(
 		written = n
 	}()
 
-	// Create the upload manager with Transfer Manager
+	_, end = profiling.StartTimingComponent(ctx, "UploadToS3FromPipe")
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024 // 5MB part size
 		u.Concurrency = 3            // number of concurrent uploads
@@ -241,6 +244,8 @@ func WriteToS3(
 	if err != nil {
 		return 0, fmt.Errorf("failed to upload to S3: %w", err)
 	}
+
+	end()
 
 	return written, nil
 }
