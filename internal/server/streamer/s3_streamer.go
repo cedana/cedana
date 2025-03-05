@@ -251,8 +251,7 @@ func WriteToS3(
 
 	pr, pw := io.Pipe()
 
-	_, end := profiling.StartTimingComponent(ctx, "WriteToS3")
-	defer end()
+	compressionWriteStart := time.Now()
 	var written int64
 	go func() {
 		defer pw.Close()
@@ -268,8 +267,11 @@ func WriteToS3(
 			return
 		}
 		written = n
+		elapsed := time.Since(compressionWriteStart)
+		log.Debug().Int64("bytes", written).Str("compression", compression).Msgf("compressed data in %s", elapsed)
 	}()
 
+	uploaderStart := time.Now()
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024 // 5MB part size
 		u.Concurrency = 3            // number of concurrent uploads
@@ -285,5 +287,7 @@ func WriteToS3(
 		return 0, fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
+	elapsed := time.Since(uploaderStart)
+	log.Debug().Int64("bytes", written).Str("compression", compression).Msgf("uploaded data in %s", elapsed)
 	return written, nil
 }
