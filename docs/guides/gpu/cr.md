@@ -8,7 +8,7 @@
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
 
-## Usage [Cedana GPU plugin]
+## Usage (GPU plugin)
 
 **NOTE**: Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` (see [managed process/container](../managed.md)).
 
@@ -31,7 +31,7 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
-## Usage [CRIU CUDA plugin]
+## Usage (CRIU CUDA plugin)
 
 You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint/restore basics](../cr.md).
 
