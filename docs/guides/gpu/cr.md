@@ -9,7 +9,7 @@
   - **Option 1: GPU Plugin**
 
     The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
-    - _Minimum NVIDIA driver version: 452.39 (API 11.8)_
+    - _Minimum NVIDIA driver version: 452 (API 11.8)_
     - _Maximum NVIDIA driver version: 550 (API 12.4). Newer drivers are unstable and may not work._
     - _Minimum CRIU version: 3.0_
 
@@ -17,8 +17,8 @@
     sudo cedana plugin install gpu
     ```
   - **Option 2: CRIU CUDA Plugin**
-    - _Minimum NVIDIA driver version: 570.65 (API 12.8)_
-    - _Minimum CRIU version: 4.0_
+    - _Minimum NVIDIA driver version: 570 (API 12.8)_
+    - _Minimum CRIU version: 4.0. Or, simply [install CRIU plugin](../../get-started/installation.md#install-criu)._
 
     ```sh
     sudo cedana plugin install criu/cuda
