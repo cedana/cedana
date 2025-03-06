@@ -4,7 +4,8 @@
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
-3. Install a GPU plugin with `sudo cedana plugin install gpu`. 
+3. Install a GPU plugin:
+
   - **Option 1: GPU Plugin**
 
     The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
