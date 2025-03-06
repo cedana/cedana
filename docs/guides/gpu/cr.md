@@ -4,7 +4,16 @@
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
-3. Install the GPU plugin with `sudo cedana plugin install gpu`. The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, you may instead install CRIU's CUDA plugin with `sudo cedana plugin install criu/cuda`.
+3. Install a GPU plugin with `sudo cedana plugin install gpu`. 
+  - Option 1: GPU Plugin
+    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
+    ```sh
+    sudo cedana plugin install gpu
+    ```
+  - Option 2: CRIU CUDA Plugin
+    ```sh
+    sudo cedana plugin install criu/cuda
+    ```
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
 
