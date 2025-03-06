@@ -108,9 +108,14 @@ func (m *controllers) spawnAsync(
 		return fmt.Errorf("failed to get free port: %w", err)
 	}
 
+	observability := ""
+	if config.Global.GPU.Observability {
+		observability = "--observability"
+	}
+
 	controller := &controller{
 		ErrBuf: &bytes.Buffer{},
-		Cmd:    exec.CommandContext(lifetime, binary, jid, "--port", strconv.Itoa(port)),
+		Cmd:    exec.CommandContext(lifetime, binary, jid, "--port", strconv.Itoa(port), observability),
 	}
 
 	controller.Stderr = controller.ErrBuf
