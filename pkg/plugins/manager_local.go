@@ -171,6 +171,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				src := filepath.Join(srcDir, file.Name)
 				var dest string
 				if file.InstallDir != "" {
+					os.MkdirAll(file.InstallDir, os.ModePerm)
 					dest = filepath.Join(file.InstallDir, file.Name)
 				} else {
 					dest = filepath.Join(LibDir, file.Name)
@@ -189,6 +190,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 				src := filepath.Join(srcDir, file.Name)
 				var dest string
 				if file.InstallDir != "" {
+					os.MkdirAll(file.InstallDir, os.ModePerm)
 					dest = filepath.Join(file.InstallDir, file.Name)
 				} else {
 					dest = filepath.Join(BinDir, file.Name)
