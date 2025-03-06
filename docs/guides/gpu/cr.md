@@ -1,5 +1,7 @@
 # Checkpoint/restore with GPUs
 
+Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
+
 ## Prerequisites
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
