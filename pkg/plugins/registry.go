@@ -12,6 +12,12 @@ var Registry = []Plugin{
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "criu"}},
 	},
+	{
+		Name:      "criu/cuda",
+		Type:      EXTERNAL,
+		Binaries:  []Binary{{Name: "cuda-checkpoint"}},
+		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},
+	},
 	// TODO: can add hypervisor C/R tools
 
 	// Container runtimes
