@@ -92,6 +92,27 @@ func New(address, protocol string) (*Client, error) {
 ///// Methods /////
 ///////////////////
 
+func (c *Client) DumpVM(ctx context.Context, args *daemon.DumpVMReq, opts ...grpc.CallOption) (*daemon.DumpVMResp, *profiling.Data, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
+	defer cancel()
+	addDefaultOptions(opts...)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
+	resp, err := c.daemonClient.DumpVM(ctx, args, opts...)
+	if err != nil {
+		return resp, nil, utils.GRPCErrorColored(err)
+	}
+
+	data, err := profiling.FromTrailer(trailer)
+	if err != nil {
+		return resp, nil, err
+	}
+
+	return resp, data, nil
+}
+
 func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
 	defer cancel()

@@ -5,6 +5,9 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
+# Debug flags
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
+
 ifndef VERBOSE
 .SILENT:
 endif
@@ -28,13 +31,22 @@ $(BINARY): $(BINARY_SOURCES) ## Build the binary
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
+debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
+	@echo "Building $(BINARY) with debug symbols..."
+	$(GOCMD) mod tidy
+	$(GOBUILD) -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+
 install: $(INSTALL_PATH)
 
-$(INSTALL_PATH): $(BINARY) ## Install the binary
+install-debug: debug
+	@echo "Installing debug $(BINARY)..."
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
+
+$(INSTALL_PATH): $(BINARY)
 	@echo "Installing $(BINARY)..."
 	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
 
-start: $(INSTALL_PATH) ## Start the daemon
+start: $(INSTALL_PATH)
 	$(SUDO) $(BINARY) daemon start
 
 stop: ## Stop the daemon
@@ -86,11 +98,28 @@ plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
+plugin-debug:
+	@echo "Building plugin $$PLUGIN with debug symbols..."
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+
 plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
 	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
 
+plugin-debug-install: plugin-debug ## Install a debug plugin (PLUGIN=<plugin>)
+	@echo "Installing debug plugin $$PLUGIN..."
+	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
+
 plugins: $(PLUGIN_BINARIES) ## Build all plugins
+
+plugins-debug: ## Build all plugins with debug symbols
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			echo "Building plugin $$name with debug symbols..."; \
+			$(GOBUILD) -C $$path -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+		fi ;\
+	done ;\
 
 $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
@@ -102,6 +131,15 @@ $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 	done ;\
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
+
+plugins-debug-install: plugins-debug ## Install all debug plugins
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			echo "Installing debug plugin $$name..."; \
+			$(SUDO) cp $(OUT_DIR)/libcedana-$$name.so /usr/local/lib ;\
+		fi ;\
+	done ;\
 
 $(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	for path in $(wildcard plugins/*); do \
@@ -121,6 +159,9 @@ reset-plugins: ## Reset & uninstall plugins
 			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
+
+# All-in-one debug target
+all-debug: debug install-debug plugins-debug plugins-debug-install ## Build and install with debug symbols (all components)
 
 ###########
 ##@ Testing

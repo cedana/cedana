@@ -12,7 +12,11 @@ var Registry = []Plugin{
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "criu"}},
 	},
-	// TODO: can add hypervisor C/R tools
+	{
+		Name:      "cloud-hypervisor",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-cloud-hypervisor.so"}},
+	},
 
 	// Container runtimes
 	{
@@ -32,6 +36,7 @@ var Registry = []Plugin{
 	},
 	{
 		Name:      "kata",
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-kata.so"}},
 	},
 

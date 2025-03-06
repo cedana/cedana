@@ -124,3 +124,65 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		return exited, nil
 	}
 }
+
+// This adapter ensures the specified dump dir exists and is writable.
+// Creates a unique directory within this directory for the dump.
+// Updates the CRIU server to use this newly created directory.
+// Compresses the dump directory post-dump, based on a compression format:
+//   - "none" does not compress the dump directory
+//   - "tar" creates a tarball of the dump directory
+//   - "gzip" creates a gzipped tarball of the dump directory
+//   - "lz4" creates an lz4-compressed tarball of the dump directory
+func PrepareDumpVMDir(next types.DumpVM) types.DumpVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+		dir := req.GetDir()
+		compression := config.Global.Checkpoint.Compression
+
+		// Check if the provided dir exists
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
+		}
+
+		f, err := os.Open(dir)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
+		}
+		defer f.Close()
+
+		// Setup dump fs that can be used by future adapters to directly read write/extra files
+		// to the dump directory
+		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), dir)
+
+		exited, err = next(ctx, opts, resp, req)
+		if err != nil {
+			return nil, err
+		}
+
+		// If nothing was put in the directory, remove it and return early
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
+		}
+		if len(entries) == 0 {
+			os.RemoveAll(dir)
+			return exited, nil
+		}
+
+		// Create the compressed tarball
+		log.Debug().Str("path", dir).Str("compression", compression).Msg("creating tarball")
+
+		_, end := profiling.StartTimingCategory(ctx, "compression", utils.Tar)
+		tarball, err := utils.Tar(dir, dir, compression)
+		end()
+		if err != nil {
+			return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
+		}
+		os.RemoveAll(dir)
+
+		resp.TarDumpDir = tarball
+
+		log.Debug().Str("path", tarball).Str("compression", compression).Msg("created tarball")
+
+		return exited, nil
+	}
+}
