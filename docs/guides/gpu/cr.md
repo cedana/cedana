@@ -22,7 +22,9 @@
     sudo cedana plugin install criu/cuda
     ```
     - _Minimum NVIDIA driver version: 570 (API 12.8)_
-    - _Minimum CRIU version: 4.0. Or, simply [install CRIU plugin](../../get-started/installation.md#install-criu)._
+    - _Minimum CRIU version: 4.0_
+
+    Also, check out [installing CRIU](../../get-started/installation.md#install-criu).
 
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
