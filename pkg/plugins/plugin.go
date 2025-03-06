@@ -126,7 +126,7 @@ func (p *Plugin) SyncVersion() {
 	}
 
 	// If still unknown, get version from parent plugin
-	if version == "unknown" {
+	if version == "unknown" && strings.Contains(p.Name, "/") {
 		parentName := strings.Split(p.Name, "/")[0]
 		var parent *Plugin
 		for _, plugin := range Registry {
