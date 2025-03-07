@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
+	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -49,11 +51,20 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		var err error
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		server, err := server.NewServer(cmd.Context(), &server.ServeOpts{
+		// Initialize metrics reporting if ASR flag is enabled
+		if viper.GetBool("metrics.asr") {
+			cedanaURL := viper.GetString("connection.url")
+			if err := metrics.PollAndPublishMetrics(ctx, cedanaURL); err != nil {
+				return fmt.Errorf("failed to initialize metrics reporting: %w", err)
+			}
+		}
+
+		server, err := server.NewServer(ctx, &server.ServeOpts{
 			Address:  config.Global.Address,
 			Protocol: config.Global.Protocol,
 			Metrics:  config.Global.Metrics,
@@ -64,7 +75,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		err = server.Launch(cmd.Context())
+		err = server.Launch(ctx)
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err
