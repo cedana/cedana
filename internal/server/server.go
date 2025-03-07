@@ -23,6 +23,7 @@ import (
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type Server struct {
@@ -119,6 +120,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
+	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
 
