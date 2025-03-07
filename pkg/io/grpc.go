@@ -232,6 +232,8 @@ wait:
 			return ctx.Err()
 		case <-master.Context().Done():
 			return master.Context().Err()
+		case <-s.exitCode:
+			return nil
 		case s.master <- master:
 			break wait
 		}
@@ -245,6 +247,8 @@ loop:
 			break
 		}
 		select {
+		case <-s.exitCode:
+			return nil
 		case <-master.Context().Done():
 			break loop
 		case s.in <- req.GetStdin():
