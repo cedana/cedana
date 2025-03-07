@@ -67,6 +67,7 @@ require (
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
