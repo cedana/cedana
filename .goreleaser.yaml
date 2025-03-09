@@ -76,6 +76,10 @@ snapshot:
 changelog:
   sort: desc
   use: github
+  filters:
+    exclude:
+      - "^GITBOOK-"
+
 
 archives:
   - id: cedana
