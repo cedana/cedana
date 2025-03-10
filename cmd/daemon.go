@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
-	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
