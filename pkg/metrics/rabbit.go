@@ -165,8 +165,13 @@ func PollAndPublishMetrics(ctx context.Context, serviceURL string) error {
 		return err
 	}
 
-	ctxWithCancel, cancel := context.WithCancel(ctx)
-	defer cancel()
+	bgCtx := context.Background()
+	metricsCtx, cancel := context.WithCancel(bgCtx)
+
+	go func() {
+		<-ctx.Done()
+		cancel()
+	}()
 
 	// Start publishing metrics
 	go func() {
@@ -175,12 +180,12 @@ func PollAndPublishMetrics(ctx context.Context, serviceURL string) error {
 
 		for {
 			select {
-			case <-ctxWithCancel.Done():
+			case <-metricsCtx.Done():
 				ms.Close()
 				return
 			default:
 				metrics := generateDummyMetrics(macAddr, hostname)
-				if err := ms.publishMetrics(ctx, metrics); err != nil {
+				if err := ms.publishMetrics(bgCtx, metrics); err != nil {
 					log.Error().Err(err).Msg("failed to publish metrics")
 				}
 				time.Sleep(METRICS_POLL_INTERVAL)
