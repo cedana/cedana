@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
@@ -55,14 +54,6 @@ var startDaemonCmd = &cobra.Command{
 		defer cancel()
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
-
-		// Initialize metrics reporting if ASR flag is enabled
-		if viper.GetBool("metrics.asr") {
-			cedanaURL := viper.GetString("connection.url")
-			if err := metrics.PollAndPublishMetrics(ctx, cedanaURL); err != nil {
-				return fmt.Errorf("failed to initialize metrics reporting: %w", err)
-			}
-		}
 
 		server, err := server.NewServer(ctx, &server.ServeOpts{
 			Address:  config.Global.Address,
