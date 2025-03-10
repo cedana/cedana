@@ -180,6 +180,19 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 		}()
 	}
 
+	// Initialize ASR metrics reporting if enabled
+	if config.Global.Metrics.ASR {
+		cedanaURL := config.Global.Connection.URL
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			if err := metrics.PollAndPublishMetrics(lifetime, cedanaURL); err != nil {
+				log.Error().Err(err).Msg("failed to initialize ASR metrics reporting")
+				cancel(fmt.Errorf("ASR metrics reporting failed: %w", err))
+			}
+		}()
+	}
+
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
 		if err != nil {
