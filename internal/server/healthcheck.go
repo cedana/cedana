@@ -39,6 +39,17 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 func (s *Server) pluginChecklist() types.Checklist {
 	checklist := []types.Checks{}
 
+	// Add a criu/cuda health check if plugin is installed
+	if s.plugins.IsInstalled("criu/cuda") {
+		checklist = append(checklist, types.Checks{
+			Name: "criu/cuda",
+			List: []types.Check{
+				criu.CheckCriuForCuda(s.plugins),
+				criu.CheckCudaDriverVersion(),
+			},
+		})
+	}
+
 	// Add a GPU health check if plugin is installed
 	if s.plugins.IsInstalled("gpu") {
 		checklist = append(checklist, s.gpus.Checks())

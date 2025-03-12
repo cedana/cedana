@@ -27,6 +27,11 @@ on:
         default: false
   workflow_call: # to reuse this workflow in other workflows
     inputs:
+      ref:
+        type: string
+        description: "The branch, tag, or SHA to run on"
+        required: false
+        default: ""
       debug_build:
         type: boolean
         description: "Run build with debugging enabled"
@@ -62,6 +67,21 @@ on:
         description: "Skip helper image push or not"
         required: false
         default: false
+      skip_cpu_tests:
+        type: boolean
+        description: "Skip CPU tests"
+        required: false
+        default: false
+      skip_gpu_tests:
+        type: boolean
+        description: "Skip GPU tests"
+        required: false
+        default: false
+      skip_streamer_tests:
+        type: boolean
+        description: "Skip streamer tests"
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -79,6 +99,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -97,7 +119,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: cedana
           path: ./cedana
 
   build-plugins:
@@ -111,6 +133,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -134,10 +158,16 @@ jobs:
 
   shellcheck:
     name: Shell Check
-    if: ${{ !inputs.skip_shellcheck }}
+    if: ${{ !inputs.skip_shellcheck && !inputs.skip_cpu_tests }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1
         with:
@@ -152,15 +182,23 @@ jobs:
   script-tests:
     name: Script Tests
     runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_cpu_tests }}
     needs: build
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
+
       - name: Run k8s setup host
         run: |
           sudo -E chmod +x ./cedana
@@ -172,6 +210,7 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubicloud-standard-2
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -181,13 +220,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -211,6 +252,7 @@ jobs:
   regression-test:
     name: Regression Tests
     runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -224,17 +266,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Mark git dir as safe
@@ -252,6 +296,7 @@ jobs:
   regression-test-runc:
     name: Regression Tests (runc)
     runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -265,13 +310,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -280,7 +327,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -302,6 +349,7 @@ jobs:
   regression-test-containerd:
     name: Regression Tests (containerd)
     runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -315,13 +363,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -330,7 +380,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -352,6 +402,7 @@ jobs:
   regression-test-crio:
     name: Regression Tests (crio)
     runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -365,13 +416,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
@@ -380,7 +433,7 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
@@ -402,6 +455,7 @@ jobs:
   regression-test-streamer:
     name: Regression Tests (streamer)
     runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_streamer_tests }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -415,26 +469,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
           name: plugins
 
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install latest streamer plugin
+      - name: Install streamer plugin # automatically installs the downloaded binary if available instead
         run: sudo -E ./cedana plugin install streamer
 
       - name: Mark git dir as safe
@@ -452,6 +514,7 @@ jobs:
   regression-test-gpu:
     name: Regression Tests (gpu)
     runs-on: ubicloud-gpu
+    if: ${{ !inputs.skip_gpu_tests }}
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -465,26 +528,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: build
+          name: cedana
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
           name: plugins
 
+      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu
+
       - name: Make executable
         run: |
-          chmod +x ./cedana
+          chmod +x ./cedana*
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install latest gpu plugin
+      - name: Install GPU plugin # automatically installs the downloaded binary if available instead
         run: sudo -E ./cedana plugin install gpu
 
       - name: Mark git dir as safe
@@ -531,7 +602,7 @@ jobs:
   #       id: download-artifacts
   #       uses: actions/download-artifact@v4
   #       with:
-  #         name: build
+  #         name: cedana
 
   #     - name: Configure
   #       env:
@@ -627,8 +698,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
-          submodules: "recursive"
+          fetch-tags: true
 
       - name: Set up commit hash and branch name
         run: |

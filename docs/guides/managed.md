@@ -103,6 +103,8 @@ JOB             TYPE      PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
 used_gould8     process  5336  halted  yes                    /var/log/cedana-output-used_gould8.log
 ```
 
+You can also pass a custom log path. See [CLI reference](../references/cli/cedana_run.md) for `cedana run` subcommand.
+
 If the job has attachable I/O, it will appear as such:
 
 ```

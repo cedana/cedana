@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.22.7
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250130173815-fe9d1dcace33.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.1-20250130173815-fe9d1dcace33.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.5-20250130173815-d4c42f53f1d7.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-35fd1f55ecef.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-00000000000000-35fd1f55ecef.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-00000000000000-802125d1e129.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3a3f8e393b2b.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.3-00000000000000-3a3f8e393b2b.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.3-20250123222419-fd1f5023e83d.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-4d54deb59aa0.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.3-00000000000000-4d54deb59aa0.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.3-20250123205248-8e8bdecabee9.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -23,6 +23,7 @@ require (
 	github.com/opencontainers/runc v1.2.3
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/opencontainers/selinux v1.11.1
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
 	github.com/rs/zerolog v1.33.0
 	github.com/shirou/gopsutil/v4 v4.24.11
