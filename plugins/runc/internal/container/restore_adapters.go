@@ -69,6 +69,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			spec.Root.Path = filepath.Join(bundle, spec.Root.Path)
 		}
 
+		// TODO SA: get env will not provide the env to the daemon provide env as option
 		notifySocket := runc.NewNotifySocket(root, os.Getenv("NOTIFY_SOCKET"), id)
 		if notifySocket != nil {
 			notifySocket.SetupSpec(spec)
@@ -108,6 +109,8 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 				return nil, err
 			}
 		}
+
+		// TODO SA: get env will not provide the env to the daemon provide env as option
 		listenFDs := []*os.File{}
 		if os.Getenv("LISTEN_FDS") != "" {
 			listenFDs = activation.Files(false)
@@ -193,18 +196,18 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return exited, nil
 		}
 
-		if !strings.HasPrefix(details.Root, "/run/containerd/runc/k8s.io") {
-			opts.WG.Add(1)
-			go func() {
-				defer opts.WG.Done()
-				<-exited
-				log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
-				container.Destroy()
-			}()
-			return exited, nil
-		}
-
-		return nil, nil
+		// TODO SA: handle unmanaged workloads separately
+		// if !strings.HasPrefix(details.Root, "/run/containerd/runc/k8s.io") {
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			<-exited
+			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
+			container.Destroy()
+		}()
+		return exited, nil
+		// }
+		// return nil, nil
 	}
 }
 
