@@ -7,7 +7,7 @@ setup_containerd() {
 pull_image() {
   # pull image to containerd images library locally
   image="$1"
-  ctr images pull "$image"
+  run ctr images pull $image
 }
 
 setup_containerd
