@@ -22,7 +22,7 @@ load_lib file
     jid=$(unix_nano)
 	ns="default"
 	address="/run/containerd/containerd.sock"
-	image="docker.io/library/busybox:lastest"
+	image="docker.io/library/busybox:latest"
 	
     run cedana run containerd --namespace "$ns" --image "$image" "$jid" -a --address "$address"
     assert_failure
@@ -39,7 +39,7 @@ load_lib file
     jid=$(unix_nano)
 	ns="default"
 	address="/run/containerd/containerd.sock"
-	image="docker.io/library/busybox:lastest"
+	image="docker.io/library/busybox:latest"
 
     run ctr images pull "$image"
 	assert_success
@@ -63,7 +63,7 @@ load_lib file
     jid=$(unix_nano)
 	ns="default"
 	address="/run/containerd/containerd.sock"
-	image="docker.io/library/busybox:lastest"
+	image="docker.io/library/busybox:latest"
 
     run ctr images pull "$image"
 	assert_success
