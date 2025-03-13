@@ -18,6 +18,7 @@ load_lib file
 # TODO SA: fix issues with containerd cleanup
 
 @test "try run container with attach without pull" {
+    setup_containerd
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
 	address="/run/containerd/containerd.sock"
@@ -30,9 +31,11 @@ load_lib file
 
     assert_success
     refute_output --partial "$jid"
+    cleanup_containerd
 }
 
 @test "run container with attach" {
+    setup_containerd
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
 	address="/run/containerd/containerd.sock"
@@ -48,6 +51,7 @@ load_lib file
 
     assert_success
     assert_output --partial "$jid"
+    cleanup_containerd
 }
 
 ############
@@ -55,6 +59,7 @@ load_lib file
 ############
 
 @test "dump containerd container" {
+    setup_containerd
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
 	address="/run/containerd/containerd.sock"
@@ -76,4 +81,5 @@ load_lib file
 
     run ctr task kill "$id"
     run ctr container rm "$id"
+    cleanup_containerd
 }
