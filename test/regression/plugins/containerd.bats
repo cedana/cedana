@@ -20,7 +20,7 @@ load_lib file
 @test "try run container with attach without pull" {
     setup_containerd
     jid=$(unix_nano)
-	ns="/run/containerd/runc/docker"
+	ns="default"
 	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 	
@@ -37,7 +37,7 @@ load_lib file
 @test "run container with attach" {
     setup_containerd
     jid=$(unix_nano)
-	ns="/run/containerd/runc/docker"
+	ns="default"
 	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 
@@ -61,7 +61,7 @@ load_lib file
 @test "dump containerd container" {
     setup_containerd
     jid=$(unix_nano)
-	ns="/run/containerd/runc/docker"
+	ns="default"
 	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 
