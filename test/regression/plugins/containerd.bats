@@ -20,7 +20,7 @@ load_lib file
 @test "try run container with attach without pull" {
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
-	address="/var/containerd/containerd.sock"
+	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 	
     run cedana run containerd --namespace "$ns" --image "$image" "$jid" -a --address "$address"
@@ -57,7 +57,7 @@ load_lib file
 @test "dump containerd container" {
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
-	address="/run/containerd/runc/docker"
+	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 
     run ctr images pull "$image"
