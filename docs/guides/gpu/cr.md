@@ -6,27 +6,29 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
-3. Install a GPU plugin:
+3. Install a GPU plugin.
 
-  - **Option 1: GPU Plugin**
+*   **Option 1: GPU Plugin**
 
     ```sh
     sudo cedana plugin install gpu
     ```
-    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
-    - _Minimum NVIDIA driver version: 452 (API 11.8)_
-    - _Maximum NVIDIA driver version: 550 (API 12.4). Newer drivers are unstable and may not work._
-    - _Minimum CRIU version: 3.0_
 
-  - **Option 2: CRIU CUDA Plugin**
+    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
+
+    * _Minimum NVIDIA driver version: 452 (API 11.8)_
+    * _Maximum NVIDIA driver version: 550 (API 12.4). Newer drivers are unstable and may not work._
+    * _Minimum CRIU version: 3.0_
+*   **Option 2: CRIU CUDA Plugin**
 
     ```sh
     sudo cedana plugin install criu/cuda
     ```
-    - _Minimum NVIDIA driver version: 570 (API 12.8)_
-    - _Minimum CRIU version: 4.0_
 
-    Also, check out [installing CRIU](../../get-started/installation.md#install-criu).
+    * _Minimum NVIDIA driver version: 570 (API 12.8)_
+    * _Minimum CRIU version: 4.0_
+
+    Check out [Cedana vs. CRIU CUDA  for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/examples/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
 
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).

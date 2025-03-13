@@ -23,6 +23,7 @@ import (
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type Server struct {
@@ -119,6 +120,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
+	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
 
@@ -175,6 +177,19 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 		shutdown, _ := metrics.InitOtel(ctx, s.version)
 		defer func() {
 			err = shutdown(ctx)
+		}()
+	}
+
+	// Initialize ASR metrics reporting if enabled
+	if config.Global.Metrics.ASR {
+		cedanaURL := config.Global.Connection.URL
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			if err := metrics.PollAndPublishMetrics(lifetime, cedanaURL); err != nil {
+				log.Error().Err(err).Msg("failed to initialize ASR metrics reporting")
+				cancel(fmt.Errorf("ASR metrics reporting failed: %w", err))
+			}
 		}()
 	}
 
