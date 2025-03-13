@@ -45,7 +45,7 @@ func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Res
 
 func GetNetworkPid(bundlePath string) (int, error) {
 	var spec specs.Spec
-	var pid int
+	var pid int = 0
 	configPath := filepath.Join(bundlePath, "config.json")
 	if _, err := os.Stat(configPath); err == nil {
 		configFile, err := os.ReadFile(configPath)
@@ -56,7 +56,7 @@ func GetNetworkPid(bundlePath string) (int, error) {
 			return 0, err
 		}
 		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" {
+			if ns.Type == "network" && strings.Count(ns.Path, "/") > 1 {
 				path := ns.Path
 				splitPath := strings.Split(path, "/")
 				pid, err = strconv.Atoi(splitPath[2])
