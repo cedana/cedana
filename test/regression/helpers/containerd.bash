@@ -1,13 +1,9 @@
 
 setup_containerd() {
-    echo "containerd $(containerd --version)"
-    echo "ctr $(ctr --version)"
-}
-
-pull_image() {
-  # pull image to containerd images library locally
-  image="$1"
-  run ctr images pull $image
+    echo "$(ctr --help)"
+    echo "ensure containerd service is enabled"
+    systemctl enable --now containerd
+    echo "$(systemctl status containerd)"
 }
 
 setup_containerd

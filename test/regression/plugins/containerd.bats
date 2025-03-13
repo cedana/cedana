@@ -35,10 +35,10 @@ load_lib file
 @test "run container with attach" {
     jid=$(unix_nano)
 	ns="/run/containerd/runc/docker"
-	address="/run/containerd/runc/docker"
+	address="/run/containerd/containerd.sock"
 	image="docker.io/library/busybox:lastest"
 
-	pull_image "$image"
+    run ctr images pull "$image"
 	assert_success
 
     run cedana run containerd --image "$image" --namespace "$ns" "$jid" -a --address "$address"
@@ -60,7 +60,7 @@ load_lib file
 	address="/run/containerd/runc/docker"
 	image="docker.io/library/busybox:lastest"
 
-	pull_image "$image"
+    run ctr images pull "$image"
 	assert_success
 
     run cedana run containerd --image "$image" --namespace "$ns" "$jid" "$address"
