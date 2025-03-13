@@ -2,8 +2,11 @@
 setup_containerd() {
     echo "$(ctr --help)"
     echo "ensure containerd service is enabled"
-    systemctl enable --now containerd
-    echo "$(systemctl status containerd)"
+    run containerd &
+    echo "$(ps aux | grep containerd)"
 }
 
-setup_containerd
+cleanup_containerd() {
+    run pkill containerd
+    echo "$(ps aux | grep containerd)"
+}
