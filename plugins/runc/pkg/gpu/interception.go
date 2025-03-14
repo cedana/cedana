@@ -19,12 +19,19 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) 
 			}
 		}
 	}
-
+	// skip any default /dev/shm binding in k8s
+	var mounts []specs.Mount
+	for _, v := range spec.Mounts {
+		if v.Source != "/dev/shm" && v.Destination != "/dev/shm" {
+			mounts = append(mounts, v)
+		}
+	}
+	spec.Mounts = mounts
 	spec.Mounts = append(spec.Mounts, specs.Mount{
 		Destination: "/dev/shm/cedana-gpu." + jid,
 		Source:      "/dev/shm/cedana-gpu." + jid,
 		Type:        "bind",
-		Options:     []string{"rbind", "nosuid", "nodev", "rw"},
+		Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
 	})
 
 	// Mount the GPU plugin library
