@@ -42,7 +42,7 @@ var (
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		client.SetupForRun,
-		client.CreateContainerForRun,
+		client.CreateContainerOptsForRun,
 	}
 	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
