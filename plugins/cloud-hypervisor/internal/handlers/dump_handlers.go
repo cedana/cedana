@@ -7,23 +7,16 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	clh "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh"
+	"github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/vm"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 var Dump types.DumpVM = dump
 
-type VMSnapshotter interface {
-	Snapshot(destinationURL, vmSocketPath, vmID string) error
-	Restore(snapshotPath, vmSocketPath string, netConfigs []*daemon.RestoredNetConfig) error
-	Pause(vmSocketPath string) error
-	Resume(vmSocketPath string) error
-	GetPID(vmSocketPath string) (uint32, error)
-}
-
 // Returns a VM dump handler for the server
 func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
-	var snapshotter VMSnapshotter
+	var snapshotter vm.Snapshotter
 
 	snapshotter = &clh.CloudHypervisorVM{}
 
