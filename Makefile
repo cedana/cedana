@@ -38,10 +38,6 @@ debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizat
 
 install: $(INSTALL_PATH)
 
-install-debug: debug
-	@echo "Installing debug $(BINARY)..."
-	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
-
 $(INSTALL_PATH): $(BINARY)
 	@echo "Installing $(BINARY)..."
 	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
@@ -106,10 +102,6 @@ plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
 	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
 
-plugin-debug-install: plugin-debug ## Install a debug plugin (PLUGIN=<plugin>)
-	@echo "Installing debug plugin $$PLUGIN..."
-	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
-
 plugins: $(PLUGIN_BINARIES) ## Build all plugins
 
 plugins-debug: ## Build all plugins with debug symbols
@@ -132,15 +124,6 @@ $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
 
-plugins-debug-install: plugins-debug ## Install all debug plugins
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Installing debug plugin $$name..."; \
-			$(SUDO) cp $(OUT_DIR)/libcedana-$$name.so /usr/local/lib ;\
-		fi ;\
-	done ;\
-
 $(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
@@ -161,7 +144,7 @@ reset-plugins: ## Reset & uninstall plugins
 	done ;\
 
 # All-in-one debug target
-all-debug: debug install-debug plugins-debug plugins-debug-install ## Build and install with debug symbols (all components)
+all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
 
 ###########
 ##@ Testing
