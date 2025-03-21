@@ -316,6 +316,7 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.HelperCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.DumpVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
