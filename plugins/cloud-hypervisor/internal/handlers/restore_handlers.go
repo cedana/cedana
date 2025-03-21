@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	clh "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh"
+	"github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/vm"
 )
 
 var Restore types.RestoreVM = restore
@@ -20,7 +21,7 @@ var Restore types.RestoreVM = restore
 func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
 	var netFds []int
 	var netFdsInt64 []int64
-	var snapshotter VMSnapshotter
+	var snapshotter vm.Snapshotter
 
 	snapshot := req.GetVMSnapshotPath()
 	socketPath := req.GetVMSocketPath()
