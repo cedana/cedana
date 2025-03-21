@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -24,17 +25,36 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, r
 	snapshot := req.GetVMSnapshotPath()
 	socketPath := req.GetVMSocketPath()
 	restoredNetConfig := req.GetRestoredNetConfig()
+	requestIDs := req.GetRequestIDs()
 
 	snapshotter = &clh.CloudHypervisorVM{}
 
+	if len(requestIDs) > 1 {
+		return nil, status.Errorf(codes.Internal, "Restore vm task failed: more than one request ID provided, we do not support this yet")
+	}
+
+	requestID := requestIDs[0]
+	var id string
+
 	opts.FdStore.Range(func(key, value any) bool {
-		requestID := key.(string) // Adjust the type to match the actual key type
-		netFds = value.([]int)    // Adjust the type to match the actual value type
+		id = key.(string) // Adjust the type to match the actual key type
+
+		if requestID != id {
+			return true
+		}
+
+		netFds = value.([]int) // Adjust the type to match the actual value type
 
 		log.Logger.Info().Msgf("Request ID: %v, FDs: %v\n", requestID, netFds)
 
-		return true
+		return false
 	})
+
+	if id == "" {
+		return nil, status.Errorf(codes.Internal, "Restore task failed: request ID not found in FD store")
+	}
+
+	opts.FdStore.Delete(id)
 
 	netFdsInt64 = make([]int64, len(netFds))
 	for i, fd := range netFds {
@@ -56,6 +76,12 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, r
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to get PID: %v", err)
 	}
+
+	defer func() {
+		for _, fd := range netFds {
+			unix.Close(fd)
+		}
+	}()
 
 	return utils.WaitForPid(pid), nil
 }
