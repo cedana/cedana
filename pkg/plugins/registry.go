@@ -17,6 +17,12 @@ var Registry = []Plugin{
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-cloud-hypervisor.so"}},
 	},
+	{
+		Name:      "criu/cuda",
+		Type:      EXTERNAL,
+		Binaries:  []Binary{{Name: "cuda-checkpoint"}},
+		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},
+	},
 
 	// Container runtimes
 	{
