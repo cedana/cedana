@@ -74,19 +74,44 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 			parallelism = config.Global.Checkpoint.Stream
 		}
 
-		streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
 		var waitForIO func() error
-		opts.DumpFs, waitForIO, err = NewStreamingFs(
-			streamerCtx,
-			opts.WG,
-			imgStreamer.BinaryPaths()[0],
-			imagesDirectory,
-			parallelism,
-			READ_ONLY,
-		)
-		end()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
+		var end func()
+		if !config.Global.DB.Remote {
+			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+			opts.DumpFs, waitForIO, err = NewStreamingFs(
+				streamerCtx,
+				opts.WG,
+				imgStreamer.BinaryPaths()[0],
+				imagesDirectory,
+				parallelism,
+				READ_ONLY,
+			)
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
+			}
+		} else {
+			s3Config := S3Config{
+				BucketName:     "cedana-store-tf",
+				KeyPrefix:      "test123",
+				ForcePathStyle: true,
+			}
+			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewS3StreamingFs)
+			opts.DumpFs, waitForIO, err = NewS3StreamingFs(
+				streamerCtx,
+				opts.WG,
+				imgStreamer.BinaryPaths()[0],
+				imagesDirectory,
+				parallelism,
+				WRITE_ONLY,
+				"", // compression string as input, inferred during readFromS3
+				s3Config,
+			)
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
+			}
+
 		}
 
 		exited, err = next(ctx, opts, resp, req)

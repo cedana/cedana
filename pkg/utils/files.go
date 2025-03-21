@@ -11,9 +11,6 @@ import (
 	"time"
 
 	cedana_io "github.com/cedana/cedana/pkg/io"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 const (
@@ -233,42 +230,6 @@ func ReadFrom(src string, target *os.File) (int64, error) {
 	defer reader.Close()
 
 	return target.ReadFrom(reader)
-}
-
-func ReadFromS3(
-	ctx context.Context,
-	s3Client *s3.Client,
-	bucket, key string,
-	target *os.File,
-	compression string) (int64, error) {
-	defer target.Close()
-
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to get object from S3: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Decompress the stream based on compression format
-	reader, err := cedana_io.NewCompressionReader(resp.Body, compression)
-	if err != nil {
-		return 0, err
-	}
-	defer reader.Close()
-
-	isPipe, err := cedana_io.IsPipe(target.Fd())
-	if err != nil {
-		return 0, err
-	}
-
-	if compression == "none" && isPipe {
-		return io.Copy(target, reader)
-	} else {
-		return io.Copy(target, reader)
-	}
 }
 
 //////////////////////////

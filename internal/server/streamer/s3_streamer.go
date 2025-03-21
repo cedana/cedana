@@ -21,7 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 )
@@ -95,7 +94,13 @@ func NewS3StreamingFs(
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming from S3")
 
-				_, err := utils.ReadFromS3(ctx, s3Client, S3Config.BucketName, key, pipeWriter, compression)
+				_, err := ReadFromS3(
+					ctx,
+					s3Client,
+					pipeWriter,
+					S3Config.BucketName,
+					key)
+
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to stream from S3")
 					ioErr <- err
@@ -304,6 +309,46 @@ func WriteToS3(
 	}
 
 	return *head.ContentLength, nil
+}
+
+func ReadFromS3(
+	ctx context.Context,
+	s3Client *s3.Client,
+	dest io.Writer,
+	bucket, key string,
+) (int64, error) {
+	// Download the object from S3
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to download object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	compression, err := cedana_io.CompressionFromExt(key)
+	if err != nil {
+		return 0, fmt.Errorf("failed to infer compression type: %w", err)
+	}
+
+	var reader io.Reader = resp.Body
+	if compression != "" {
+		decompressor, err := cedana_io.NewCompressionReader(resp.Body, compression)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create decompression reader: %w", err)
+		}
+		defer decompressor.Close()
+		reader = decompressor
+	}
+
+	// Copy the data to the destination writer
+	written, err := io.Copy(dest, reader)
+	if err != nil {
+		return 0, fmt.Errorf("failed to write data to destination: %w", err)
+	}
+
+	return written, nil
 }
 
 // nopSeeker wraps a Reader to satisfy ReadSeeker interface
