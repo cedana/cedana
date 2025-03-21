@@ -257,20 +257,30 @@ func WriteToS3(
 	go func() {
 		defer pw.Close()
 		writer, _ := cedana_io.NewCompressionWriter(pw, compression)
-		defer writer.Close()
-
+		var totalBytesWritten int64
+		defer func() {
+			log.Debug().Int64("bytes", totalBytesWritten).Msg("finished writing to S3")
+			if cerr := writer.Close(); cerr != nil {
+				log.Error().Err(cerr).Msg("failed to close compression writer")
+			}
+		}()
 		buf := make([]byte, 32*1024) // 32KB chunks
+
 		for {
 			n, err := source.Read(buf)
 			if n > 0 {
-				if _, werr := writer.Write(buf[:n]); werr != nil {
+				written, werr := writer.Write(buf[:n])
+				totalBytesWritten += int64(written)
+				if werr != nil {
 					pw.CloseWithError(werr)
+					log.Error().Err(werr).Msg("failed to write to compression writer")
 					return
 				}
 			}
 			if err != nil {
 				if err != io.EOF {
 					pw.CloseWithError(err)
+					log.Error().Err(err).Msg("failed to read from source")
 				}
 				return
 			}
