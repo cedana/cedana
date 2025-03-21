@@ -10,11 +10,8 @@ import (
 )
 
 // Adapter that just checks all required fields are present in the request
-func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
-		if req.GetDir() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "no dump dir specified")
-		}
+func ValidateDumpVMRequest(next types.DumpVM) types.DumpVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
 		if req.GetDetails() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing details")
 		}
