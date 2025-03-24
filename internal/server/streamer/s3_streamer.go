@@ -255,6 +255,7 @@ func WriteToS3(
 	defer pr.Close()
 
 	go func() {
+		defer pw.Close()
 		writer, _ := cedana_io.NewCompressionWriter(pw, compression)
 
 		var totalBytesWritten int64
@@ -264,7 +265,6 @@ func WriteToS3(
 				log.Error().Err(cerr).Msg("failed to close compression writer")
 			}
 
-			pw.Close()
 		}()
 
 		buf := make([]byte, 32*1024) // 32KB chunks
