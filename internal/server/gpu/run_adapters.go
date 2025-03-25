@@ -50,9 +50,11 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				Groups: details.GetGroups(),
 			}
 
+			env := req.GetEnv()
+
 			pid := make(chan uint32, 1)
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			err := gpus.Attach(ctx, lifetime, jid, user, pid)
+			err := gpus.Attach(ctx, lifetime, jid, user, pid, env)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)

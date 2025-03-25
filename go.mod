@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250305192932-94abd066f9cf.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.5-20250305192932-94abd066f9cf.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.3-20250123222419-fd1f5023e83d.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250305192932-88c9b39f9b46.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-20250305192932-88c9b39f9b46.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-20250305192932-57cea92f4628.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-e32c6354c6e7.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-e32c6354c6e7.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-00000000000000-7dbad6a4be6f.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -38,7 +38,7 @@ require (
 	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/grpc v1.68.1
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 
