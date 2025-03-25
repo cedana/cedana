@@ -67,7 +67,7 @@ var Registry = []Plugin{
 		Binaries:  []Binary{}, // TODO: add containerd shim binary
 	},
 	{
-		Name:      "shim",
+		Name:      "k8s-containerd-shim",
 		Type:      EXTERNAL,
 		Libraries: []Binary{},
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
