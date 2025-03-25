@@ -46,6 +46,25 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     assert_exists "$log_file"
 }
 
+@test "run GPU process (GPU binary) with modified env" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    log_file="/var/log/cedana-output-$jid.log"
+
+    expected_size=$((4*1024*1024*1024))
+    export CEDANA_GPU_HOST_GPU_MEMORY_SIZE="$expected_size"
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
+    assert_success
+    assert_exists "$log_file"
+
+    check_shm_size "$jid" "$expected_size"
+}
+
+
 @test "run GPU process (non-existent binary)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
