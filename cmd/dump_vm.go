@@ -19,12 +19,9 @@ func init() {
 	dumpVMCmd.PersistentFlags().
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpVMCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
-	dumpVMCmd.PersistentFlags().
-		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 
 	// Bind to config
 	viper.BindPFlag("checkpoint.dir", dumpVMCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
-	viper.BindPFlag("checkpoint.compression", dumpVMCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
