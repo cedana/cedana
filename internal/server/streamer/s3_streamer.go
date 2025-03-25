@@ -252,44 +252,34 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 5*1024*1024))
+	// Buffer to hold compressed data (seekable)
+	buf := bytes.NewBuffer(make([]byte, 0, 5*1024*1024)) // 5MB initial cap
+
 	compressor, err := cedana_io.NewCompressionWriter(buf, compression)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to init compressor: %w", err)
 	}
 
-	// Stream into buffer while uploading
-	uploadDone := make(chan error, 1)
-	go func() {
-		_, err := io.Copy(compressor, source)
-		if err != nil {
-			uploadDone <- err
-			return
-		}
-		uploadDone <- compressor.Close()
-	}()
+	bytesWritten, err := io.Copy(compressor, source)
+	if err != nil {
+		return 0, fmt.Errorf("failed to compress data: %w", err)
+	}
 
-	// Start upload once buffer has enough data
+	if err := compressor.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close compressor: %w", err)
+	}
+
 	uploader := manager.NewUploader(s3Client)
 	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   buf,
+		Body:   bytes.NewReader(buf.Bytes()), // Seekable!
 	})
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("upload failed: %w", err)
 	}
 
-	// Check for compression errors
-	select {
-	case err := <-uploadDone:
-		if err != nil {
-			return 0, fmt.Errorf("compression failed: %w", err)
-		}
-	default:
-	}
-
-	return int64(buf.Len()), nil
+	return bytesWritten, nil
 }
 
 func ReadFromS3(
