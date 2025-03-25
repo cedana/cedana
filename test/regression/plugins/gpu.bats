@@ -55,7 +55,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     log_file="/var/log/cedana-output-$jid.log"
 
     expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_HOST_GPU_MEMORY_SIZE="$expected_size"
+    export CEDANA_GPU_SHM_SIZE="$expected_size"
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
     assert_success
