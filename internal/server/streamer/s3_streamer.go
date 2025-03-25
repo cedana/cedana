@@ -252,87 +252,33 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
-	pr, pw := io.Pipe()
-	defer pr.Close()
+	// 1. Buffer ALL compressed data first (required for seekability)
+	var buf bytes.Buffer
+	compressor, err := cedana_io.NewCompressionWriter(&buf, compression)
+	if err != nil {
+		return 0, fmt.Errorf("compression init failed: %w", err)
+	}
 
-	compressErr := make(chan error, 1)
-	var bytesWritten int64
+	// 2. Stream into buffer (blocking)
+	bytesWritten, err := io.Copy(compressor, source)
+	if err != nil {
+		return 0, fmt.Errorf("compression failed: %w", err)
+	}
+	if err := compressor.Close(); err != nil {
+		return 0, fmt.Errorf("compressor close failed: %w", err)
+	}
 
-	// Goroutine 1: Compress data into the pipe (streaming)
-	go func() {
-		defer pw.Close()
-		compressor, err := cedana_io.NewCompressionWriter(pw, compression)
-		if err != nil {
-			compressErr <- fmt.Errorf("compression init failed: %w", err)
-			return
-		}
-		defer compressor.Close()
-
-		// Stream source → compressor → pipe
-		written, err := io.Copy(compressor, source)
-		bytesWritten = written
-		if err != nil {
-			compressErr <- fmt.Errorf("compression failed: %w", err)
-			return
-		}
-		compressErr <- nil
-	}()
-
-	// Goroutine 2: Upload from a seekable buffer
-	uploadDone := make(chan error, 1)
-	go func() {
-		// Wrap the pipe in a buffered ReadSeeker (simulates seeking)
-		seeker := newBufferedReadSeeker(pr, 5*1024*1024) // 5MB buffer
-		_, err := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
-			Body:   seeker,
-		})
-		uploadDone <- err
-	}()
-
-	select {
-	case err := <-compressErr:
-		if err != nil {
-			return 0, fmt.Errorf("compression error: %w", err)
-		}
-	case err := <-uploadDone:
-		if err != nil {
-			return 0, fmt.Errorf("upload error: %w", err)
-		}
+	// 3. Upload seekable buffer (instant)
+	_, err = manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader(buf.Bytes()),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("upload failed: %w", err)
 	}
 
 	return bytesWritten, nil
-}
-
-type bufferedReadSeeker struct {
-	r      io.Reader
-	buf    *bytes.Buffer
-	offset int64
-}
-
-func newBufferedReadSeeker(r io.Reader, bufSize int) io.ReadSeeker {
-	return &bufferedReadSeeker{
-		r:   r,
-		buf: bytes.NewBuffer(make([]byte, 0, bufSize)),
-	}
-}
-
-func (b *bufferedReadSeeker) Read(p []byte) (n int, err error) {
-	n, err = b.r.Read(p)
-	if n > 0 {
-		b.buf.Write(p[:n]) // Keep a rolling buffer
-		b.offset += int64(n)
-	}
-	return
-}
-
-func (b *bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	// Allow S3 to "seek" within the buffered window
-	if whence == io.SeekStart && offset >= b.offset-int64(b.buf.Len()) {
-		return offset, nil // Pretend it worked
-	}
-	return b.offset, nil
 }
 
 func ReadFromS3(
