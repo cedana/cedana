@@ -46,7 +46,7 @@ func NewS3StreamingFs(
 ) (*Fs, func() error, error) {
 
 	// Load AWS config
-	awsCfg, err := config.LoadDefaultConfig(ctx)
+	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithLogger(aws.NewConfig().Logger))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load AWS config")
 	}
@@ -252,14 +252,12 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
-	// 1. Buffer ALL compressed data first (required for seekability)
 	var buf bytes.Buffer
 	compressor, err := cedana_io.NewCompressionWriter(&buf, compression)
 	if err != nil {
 		return 0, fmt.Errorf("compression init failed: %w", err)
 	}
 
-	// 2. Stream into buffer (blocking)
 	bytesWritten, err := io.Copy(compressor, source)
 	if err != nil {
 		return 0, fmt.Errorf("compression failed: %w", err)
@@ -268,7 +266,6 @@ func WriteToS3(
 		return 0, fmt.Errorf("compressor close failed: %w", err)
 	}
 
-	// 3. Upload seekable buffer (instant)
 	_, err = manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
