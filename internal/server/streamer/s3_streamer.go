@@ -245,96 +245,52 @@ func NewS3StreamingFs(
 	return fs, wait, nil
 }
 
-func WriteToS3(
-	ctx context.Context,
-	s3Client *s3.Client,
-	source io.Reader,
-	bucket, key, compression string) (int64, error) {
+func WriteToS3(ctx context.Context, s3Client *s3.Client, source io.Reader, bucket, key, compression string) (int64, error) {
 	pr, pw := io.Pipe()
-
 	errCh := make(chan error, 1)
-	var totalBytesWritten int64
+	var bytesWritten int64
 
+	// Goroutine: Read → Compress → Pipe
 	go func() {
 		defer close(errCh)
 		defer pw.Close()
 
 		writer, err := cedana_io.NewCompressionWriter(pw, compression)
 		if err != nil {
-			errCh <- fmt.Errorf("compression writer creation failed: %w", err)
+			errCh <- err
 			return
 		}
+		defer writer.Close()
 
-		buf := make([]byte, 32*1024) // 32KB chunks
-		for {
-			n, err := source.Read(buf)
-			if n > 0 {
-				written, werr := writer.Write(buf[:n])
-				totalBytesWritten += int64(written)
-				if werr != nil {
-					errCh <- fmt.Errorf("write to compression writer failed: %w", werr)
-					return
-				}
-			}
-			if err != nil {
-				if err != io.EOF {
-					errCh <- fmt.Errorf("read from source failed: %w", err)
-					return
-				}
-				break
-			}
-		}
-
-		if cerr := writer.Close(); cerr != nil {
-			errCh <- fmt.Errorf("failed to close compression writer: %w", cerr)
+		bytesWritten, err = io.Copy(writer, source) // Handles chunking automatically
+		if err != nil {
+			errCh <- err
 			return
 		}
 	}()
 
-	bufferedReader := manager.NewBufferedReadSeeker(
-		&nopSeeker{pr},
-		make([]byte, 5*1024*1024),
-	)
-
-	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize = 5 * 1024 * 1024 // Match buffer size
-		u.Concurrency = 1            // Required for pipe streaming
-	})
-
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
-	defer cancel()
-
-	uploadDone := make(chan struct{})
-	var uploadErr error
-	go func() {
-		_, uploadErr = uploader.Upload(ctx, &s3.PutObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
-			Body:   bufferedReader,
-		})
-		close(uploadDone)
-	}()
-
-	select {
-	case err := <-errCh:
-		pr.Close()   // Force close the reader to abort upload
-		<-uploadDone // Wait for upload to finish
-		return 0, fmt.Errorf("compression/pipe error: %w", err)
-	case <-uploadDone:
-		if uploadErr != nil {
-			pr.Close()
-			return 0, fmt.Errorf("upload failed: %w", uploadErr)
-		}
-	}
-
-	head, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+	// Upload from pipe
+	uploader := manager.NewUploader(s3Client)
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
+		Body:   pr,
 	})
-	if err != nil {
-		return 0, fmt.Errorf("size verification failed: %w", err)
+
+	// Check for errors
+	select {
+	case pipeErr := <-errCh:
+		if err != nil {
+			return 0, fmt.Errorf("upload failed (%v), and pipe failed (%v)", err, pipeErr)
+		}
+		return 0, fmt.Errorf("pipe failed: %w", pipeErr)
+	default:
+		if err != nil {
+			return 0, fmt.Errorf("upload failed: %w", err)
+		}
 	}
-	return *head.ContentLength, nil
+
+	return bytesWritten, nil
 }
 
 func ReadFromS3(
