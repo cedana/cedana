@@ -143,7 +143,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env []string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -191,7 +191,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := m.Attach(ctx, lifetime, jid, user, pidChan, []string{}) // Re-attach a GPU to the job
+		err := m.Attach(ctx, lifetime, jid, user, pidChan, env) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}

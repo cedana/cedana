@@ -126,12 +126,12 @@ func ProcessInterception(next types.Run) types.Run {
 			)
 		}
 
-		env := req.GetDetails().GetProcess().GetEnv()
+		env := req.GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
 		env = append(env, "CEDANA_JID="+req.JID)
 
-		req.Details.Process.Env = env
+		req.Env = env
 
 		return next(ctx, opts, resp, req)
 	}
