@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -245,52 +246,50 @@ func NewS3StreamingFs(
 	return fs, wait, nil
 }
 
-func WriteToS3(ctx context.Context, s3Client *s3.Client, source io.Reader, bucket, key, compression string) (int64, error) {
-	pr, pw := io.Pipe()
-	errCh := make(chan error, 1)
-	var bytesWritten int64
-
-	// Goroutine: Read → Compress → Pipe
-	go func() {
-		defer close(errCh)
-		defer pw.Close()
-
-		writer, err := cedana_io.NewCompressionWriter(pw, compression)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		defer writer.Close()
-
-		bytesWritten, err = io.Copy(writer, source) // Handles chunking automatically
-		if err != nil {
-			errCh <- err
-			return
-		}
-	}()
-
-	// Upload from pipe
-	uploader := manager.NewUploader(s3Client)
-	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   pr,
-	})
-
-	// Check for errors
-	select {
-	case pipeErr := <-errCh:
-		if err != nil {
-			return 0, fmt.Errorf("upload failed (%v), and pipe failed (%v)", err, pipeErr)
-		}
-		return 0, fmt.Errorf("pipe failed: %w", pipeErr)
-	default:
-		if err != nil {
-			return 0, fmt.Errorf("upload failed: %w", err)
-		}
+func WriteToS3(
+	ctx context.Context,
+	s3Client *s3.Client,
+	source io.Reader,
+	bucket, key, compression string,
+) (int64, error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 5*1024*1024))
+	compressor, err := cedana_io.NewCompressionWriter(buf, compression)
+	if err != nil {
+		return 0, err
 	}
 
-	return bytesWritten, nil
+	// Stream into buffer while uploading
+	uploadDone := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(compressor, source)
+		if err != nil {
+			uploadDone <- err
+			return
+		}
+		uploadDone <- compressor.Close()
+	}()
+
+	// Start upload once buffer has enough data
+	uploader := manager.NewUploader(s3Client)
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   buf,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	// Check for compression errors
+	select {
+	case err := <-uploadDone:
+		if err != nil {
+			return 0, fmt.Errorf("compression failed: %w", err)
+		}
+	default:
+	}
+
+	return int64(buf.Len()), nil
 }
 
 func ReadFromS3(
