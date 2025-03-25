@@ -88,10 +88,6 @@ var dumpCmd = &cobra.Command{
 		dir := config.Global.Checkpoint.Dir
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression := config.Global.Checkpoint.Compression
-		compressionFlag, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
-		if compressionFlag != "" {
-			compression = compressionFlag
-		}
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		leaveRunning := config.Global.CRIU.LeaveRunning
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)

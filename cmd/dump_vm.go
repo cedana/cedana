@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -35,15 +34,17 @@ func init() {
 		func(name string, pluginCmd *cobra.Command) error {
 			dumpVMCmd.AddCommand(pluginCmd)
 
+      // TODO: Uncomment below once jobDumpVMCmd is defined
+
 			// Apply all the flags from the plugin command to job subcommand (as optional flags),
 			// since the job subcommand can be used to dump any managed entity (even from plugins, like runc),
 			// thus it could have specific CLI overrides from plugins.
 
-			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
-				newFlag := *f
-				jobDumpCmd.Flags().AddFlag(&newFlag)
-				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
-			})
+			// (*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
+			// 	newFlag := *f
+			// 	jobDumpVMCmd.Flags().AddFlag(&newFlag)
+			// 	newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
+			// })
 			return nil
 		},
 	)

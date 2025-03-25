@@ -17,8 +17,8 @@ import (
 var Version string = "dev"
 
 var (
-	DumpCmd *cobra.Command = cmd.DumpCmd
-	// RestoreCmd *cobra.Command = cmd.RestoreCmd
+	DumpVMCmd *cobra.Command = cmd.DumpCmd
+	// RestoreVMCmd *cobra.Command = cmd.RestoreCmd
 )
 
 var (
