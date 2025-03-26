@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=cr
+# bats file_tags=base,cr
 
 load helpers/utils
 load helpers/daemon
