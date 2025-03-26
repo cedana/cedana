@@ -183,6 +183,44 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
+
+@test "restore GPU process with smaller shm (vector add)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+
+    expected_size=$((4*1024*1024*1024))
+    export CEDANA_GPU_SHM_SIZE="$expected_size"
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    assert_success
+
+    check_shm_size "$jid" "$expected_size"
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    sleep 1
+
+    run cedana restore job "$jid"
+    assert_success
+
+    check_shm_size "$jid" "$expected_size"
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana job kill "$jid"
+}
+
 @test "restore GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
