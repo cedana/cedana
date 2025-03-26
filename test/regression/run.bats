@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=run
 
 load helpers/utils
 load helpers/daemon
@@ -77,6 +78,7 @@ teardown_file() {
     assert_file_contains "$log_file" "hello"
 }
 
+# bats test_tags=attach
 @test "run process with attach" {
     jid=$(unix_nano)
 
@@ -95,6 +97,7 @@ teardown_file() {
     assert_equal $status $code
 }
 
+# bats test_tags=attach
 @test "attach (using PID)" {
     jid=$(unix_nano)
     code=42
@@ -108,6 +111,7 @@ teardown_file() {
     assert_equal $status $code
 }
 
+# bats test_tags=attach
 @test "attach job" {
     jid=$(unix_nano)
     code=42
