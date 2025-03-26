@@ -291,7 +291,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-cedana
+        run: make test-regression TAGS=!gpu,base
 
   regression-test-runc:
     name: Regression Tests (runc)
@@ -344,7 +344,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-plugin PLUGIN=runc
+        run: make test-regression TAGS=!gpu,runc
 
   regression-test-containerd:
     name: Regression Tests (containerd)
@@ -397,7 +397,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-plugin PLUGIN=containerd
+        run: make test-regression TAGS=!gpu,containerd
 
   regression-test-crio:
     name: Regression Tests (crio)
@@ -450,7 +450,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-plugin PLUGIN=crio
+        run: make test-regression TAGS=!gpu,crio
 
   regression-test-streamer:
     name: Regression Tests (streamer)
@@ -509,7 +509,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-plugin PLUGIN=streamer
+        run: make test-regression TAGS=!gpu,streamer
 
   regression-test-gpu:
     name: Regression Tests (gpu)
@@ -569,7 +569,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression-plugin PLUGIN=gpu
+        run: make test-regression TAGS=gpu
 
   # benchmark:
   #   name: Benchmark
