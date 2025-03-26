@@ -69,9 +69,10 @@ func (m *controllers) spawn(
 	binary string,
 	jid string,
 	user *syscall.Credential,
+	env []string,
 	pid ...<-chan uint32,
 ) error {
-	err := m.spawnAsync(lifetime, wg, binary, jid, user, pid...)
+	err := m.spawnAsync(lifetime, wg, binary, jid, user, env, pid...)
 	if err != nil {
 		return err
 	}
@@ -97,6 +98,7 @@ func (m *controllers) spawnAsync(
 	binary string,
 	jid string,
 	user *syscall.Credential,
+	env []string,
 	pid ...<-chan uint32,
 ) error {
 	if m.Get(jid) != nil {
@@ -143,6 +145,10 @@ func (m *controllers) spawnAsync(
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 	)
+
+	// Add user, runtime-specific environment variables.
+	// Could potentially override os.Environ() variables, which is intended.
+	controller.Env = append(controller.Env, env...)
 
 	err = controller.Start()
 	if err != nil {
