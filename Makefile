@@ -38,11 +38,11 @@ debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizat
 
 install: $(INSTALL_PATH)
 
-$(INSTALL_PATH): $(BINARY)
+$(INSTALL_PATH): $(BINARY) ## Install the binary
 	@echo "Installing $(BINARY)..."
 	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
 
-start: $(INSTALL_PATH)
+start: $(INSTALL_PATH) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
 stop: ## Stop the daemon
