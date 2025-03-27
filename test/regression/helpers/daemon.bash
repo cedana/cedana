@@ -71,7 +71,7 @@ start_daemon_at() {
 wait_for_start() {
     local sock=$1
     local i=0
-    while ! cedana --address "$sock" ps &> /dev/null; do
+    while ! cedana --address "$sock" ps &>/dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -90,7 +90,7 @@ stop_daemon_at() {
 wait_for_stop() {
     local sock=$1
     local i=0
-    while cedana --address "$sock" ps &> /dev/null; do
+    while cedana --address "$sock" ps &>/dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -112,3 +112,24 @@ pid_for_jid() {
     echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
 }
 
+check_shm_size() {
+    local jid=$1
+    local expected_size=$2
+    local shm_file="/dev/shm/cedana-gpu.$jid"
+
+    if [[ ! -f "$shm_file" ]]; then
+        echo "Error: $shm_file not found."
+        return 1
+    fi
+
+    local actual_size
+    actual_size=$(stat --format="%s" "$shm_file")
+
+    if [[ "$actual_size" -ne "$expected_size" ]]; then
+        echo "Size mismatch: expected $expected_size, but got $actual_size"
+        return 1
+    fi
+
+    echo "Size check passed for $shm_file"
+    return 0
+}

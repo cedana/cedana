@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -111,6 +112,10 @@ var restoreCmd = &cobra.Command{
 				ShellJob:       proto.Bool(shellJob),
 				LinkRemap:      proto.Bool(linkRemap),
 			},
+		}
+
+		if req.Env == nil {
+			req.Env = os.Environ()
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
