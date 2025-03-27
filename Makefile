@@ -36,7 +36,7 @@ debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizat
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: $(INSTALL_PATH)
+install: $(INSTALL_PATH) ## Install the binary
 
 $(INSTALL_PATH): $(BINARY) ## Install the binary
 	@echo "Installing $(BINARY)..."
