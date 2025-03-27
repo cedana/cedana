@@ -66,5 +66,5 @@ else
 END_CAT
     fi
     echo "Sending SIGHUP to containerd..."
-    systemctl restart containerd
+    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi
