@@ -34,6 +34,9 @@ type Server struct {
 	gpus    gpu.Manager
 	plugins plugins.Manager
 	db      db.DB
+	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
+	// to the appropriate clh vm api
+	fdStore sync.Map
 
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	lifetime context.Context // context alive for the duration of the server
