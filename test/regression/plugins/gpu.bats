@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=gpu
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -99,6 +100,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ### Dump ###
 ############
 
+# bats test_tags=dump
 @test "dump GPU process (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -124,6 +126,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
+# bats test_tags=dump
 @test "dump GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -153,6 +156,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ### Restore ###
 ###############
 
+# bats test_tags=restore
 @test "restore GPU process (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -183,7 +187,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
-
+# bats test_tags=restore
 @test "restore GPU process with smaller shm (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -221,6 +225,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore
 @test "restore GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"

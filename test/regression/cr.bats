@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=base,cr
 
 load helpers/utils
 load helpers/daemon
@@ -13,6 +14,7 @@ load_lib file
 ### Dump ###
 ############
 
+# bats test_tags=dump
 @test "dump process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -26,6 +28,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (custom name)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -39,6 +42,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -52,6 +56,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -65,6 +70,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -78,6 +84,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -107,6 +114,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (new job)" {
     jid=$(unix_nano)
 
@@ -122,6 +130,7 @@ load_lib file
     run cedana job kill "$jid"
 }
 
+# bats test_tags=dump,manage
 @test "dump process (manage existing job)" {
     jid=$(unix_nano)
 
@@ -140,6 +149,7 @@ load_lib file
     run cedana job kill "$jid"
 }
 
+# bats test_tags=dump
 @test "dump non-existent process" {
     id=$(unix_nano)
     mkdir -p /tmp/dump-"$id"
@@ -154,6 +164,7 @@ load_lib file
     rm -rf /tmp/dump-"$id"
 }
 
+# bats test_tags=dump
 @test "dump non-existent job" {
     run cedana dump job 999999999
 
@@ -164,6 +175,7 @@ load_lib file
 ### Restore ###
 ###############
 
+# bats test_tags=restore
 @test "restore process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -184,6 +196,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -204,6 +217,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -224,6 +238,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -244,6 +259,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -264,6 +280,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (compression invalid)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -280,6 +297,7 @@ load_lib file
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "restore process (new job)" {
     jid=$(unix_nano)
 
@@ -302,6 +320,7 @@ load_lib file
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore,manage
 @test "restore process (manage existing job)" {
     jid=$(unix_nano)
     log="/tmp/restore-$jid.log"
@@ -328,6 +347,7 @@ load_lib file
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore
 @test "restore non-existent process" {
     run cedana restore process --path /tmp/non-existent
 
@@ -337,7 +357,7 @@ load_lib file
     assert_failure
 }
 
-
+# bats test_tags=restore
 @test "restore non-existent job" {
     run cedana restore job 999999999
 
