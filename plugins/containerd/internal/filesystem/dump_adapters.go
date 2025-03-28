@@ -25,6 +25,7 @@ import (
 // TODO: Do rootfs dump parallel to CRIU dump, possible using multiple CRIU callbacks and synchronizing them
 func DumpRootfs(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		dumpName := req.Name
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
@@ -89,7 +90,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		rootfsErr := make(chan error, 1)
 
 		go func() {
-			rootfsErr <- dumpRootfs(ctx, client, container, details.Image)
+			rootfsErr <- dumpRootfs(ctx, client, container, details.Image, dumpName)
 		}()
 
 		exited, err = next(ctx, opts, resp, req)
@@ -111,7 +112,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 	}
 }
 
-func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string) error {
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string, dumpName ...string) error {
 	id := container.ID()
 
 	info, err := container.Info(ctx)
@@ -147,6 +148,11 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 	diffLayerDesc, diffID, err := createDiff(ctx, id, contentStore, snapshotter, differ)
 	if err != nil {
 		return fmt.Errorf("failed to export layer: %w", err)
+	}
+
+	// TODO SA: improve how we handle this
+	if len(dumpName) > 0 {
+		baseImgConfig.Config.Env = append(baseImgConfig.Config.Env, "CEDANA_RUNC_RESTORE="+"/tmp/"+dumpName[0]+".tar")
 	}
 
 	imageConfig, err := generateCommitImageConfig(ctx, container, baseImgConfig, diffID)
