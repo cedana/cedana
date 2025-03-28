@@ -66,6 +66,32 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+  - id: libcedana-cloud-hypervisor
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/cloud-hypervisor
+    binary: libcedana-cloud-hypervisor.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
+  - id: libcedana-kata
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./plugins/kata
+    binary: libcedana-kata.so
+    buildmode: plugin
+    no_main_check: true
+    ldflags:
+      - -X main.Version={{ .Summary }}
 
 checksum:
   name_template: "checksums.txt"

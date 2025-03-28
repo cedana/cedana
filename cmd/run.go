@@ -162,11 +162,11 @@ var processRunCmd = &cobra.Command{
 		}
 
 		req.Type = "process"
+		req.Env = env
 		req.Details = &daemon.Details{
 			Process: &daemon.Process{
 				Path:       path,
 				Args:       args,
-				Env:        env,
 				WorkingDir: wd,
 				UID:        user.Uid,
 				GID:        user.Gid,
