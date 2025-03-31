@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -19,9 +18,6 @@ func init() {
 	dumpVMCmd.PersistentFlags().
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpVMCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
-
-	// Bind to config
-	viper.BindPFlag("checkpoint.dir", dumpVMCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -31,7 +27,7 @@ func init() {
 		func(name string, pluginCmd *cobra.Command) error {
 			dumpVMCmd.AddCommand(pluginCmd)
 
-      // TODO: Uncomment below once jobDumpVMCmd is defined
+			// TODO: Uncomment below once jobDumpVMCmd is defined
 
 			// Apply all the flags from the plugin command to job subcommand (as optional flags),
 			// since the job subcommand can be used to dump any managed entity (even from plugins, like runc),
@@ -52,7 +48,7 @@ var dumpVMCmd = &cobra.Command{
 	Short: "Dump a VM",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.Global.Checkpoint.Dir
+		dir, _ := cmd.Flags().GetString(flags.DirFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpVMReq{Dir: dir}

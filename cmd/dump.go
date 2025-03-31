@@ -18,7 +18,6 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -51,12 +50,6 @@ func init() {
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to files in the dump")
 
-	// Bind to config
-	viper.BindPFlag("checkpoint.dir", dumpCmd.PersistentFlags().Lookup(flags.DirFlag.Full))
-	viper.BindPFlag("checkpoint.compression", dumpCmd.PersistentFlags().Lookup(flags.CompressionFlag.Full))
-	viper.BindPFlag("checkpoint.stream", dumpCmd.PersistentFlags().Lookup(flags.StreamFlag.Full))
-	viper.BindPFlag("criu.leave_running", dumpCmd.PersistentFlags().Lookup(flags.LeaveRunningFlag.Full))
-
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
 	///////////////////////////////////////////
@@ -85,11 +78,11 @@ var dumpCmd = &cobra.Command{
 	Short: "Dump a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.Global.Checkpoint.Dir
+		dir, _ := cmd.Flags().GetString(flags.DirFlag.Full)
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
-		compression := config.Global.Checkpoint.Compression
+		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
-		leaveRunning := config.Global.CRIU.LeaveRunning
+    leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)

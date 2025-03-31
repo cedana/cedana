@@ -18,7 +18,6 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -53,9 +52,6 @@ func init() {
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
 	) // only one of these can be set
-
-	// Bind to config
-	viper.BindPFlag("checkpoint.stream", restoreCmd.PersistentFlags().Lookup(flags.StreamFlag.Full))
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
