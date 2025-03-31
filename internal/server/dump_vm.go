@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -17,6 +18,7 @@ import (
 func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpVMResp, error) {
 
 	middleware := types.Middleware[types.DumpVM]{
+    defaults.FillMissingDumpVMDefaults,
 		validation.ValidateDumpVMRequest,
 
 		pluginDumpVMMiddleware, // middleware from plugins
