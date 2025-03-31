@@ -146,6 +146,7 @@ func NewStreamingFs(
 	}
 
 	ready := make(chan bool, 1)
+  exited := make(chan bool, 1)
 	defer close(ready)
 
 	// Mark ready when we read init progress message on stderr
@@ -175,6 +176,7 @@ func NewStreamingFs(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+    defer close(exited)
 
 		err := cmd.Wait()
 		if err != nil {
@@ -197,6 +199,7 @@ func NewStreamingFs(
 	case <-time.After(CONNECTION_TIMEOUT):
 		return nil, nil, fmt.Errorf("timed out waiting for streamer to start")
 	case <-ready:
+  case <-exited:
 	}
 
 	// Connect to the streamer

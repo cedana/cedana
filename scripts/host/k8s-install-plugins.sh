@@ -13,7 +13,8 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
-PLUGINS="criu runc k8s containerd" # bare minimum plugins required for k8s
+# NOTE: Assuming Go plugins like k8s, runc, containerd, etc are already built with the image
+PLUGINS="criu k8s-containerd-shim" # bare minimum plugins required for k8s
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
@@ -42,3 +43,28 @@ if [[ -n $PLUGINS ]]; then
     "$APP_PATH" plugin install $PLUGINS
 fi
 
+# install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
+if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
+    PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
+        echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
+        echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+END_CAT
+    fi
+else
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
+        echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+END_CAT
+    fi
+    echo "Sending SIGHUP to containerd..."
+    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
+fi

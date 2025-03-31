@@ -67,6 +67,10 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
+			if req.Env == nil {
+				req.Env = []string{}
+			}
+
 			req.Criu.RstSibling = proto.Bool(true) // Since managed, we restore as child
 
 			// Create child lifetime context, so we have cancellation ability over restored
@@ -75,7 +79,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			opts.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, req.Stream))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, req.Stream, req.Env))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {

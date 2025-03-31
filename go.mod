@@ -1,14 +1,14 @@
 module github.com/cedana/cedana
 
-go 1.23.0
+go 1.22.7
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-dd2690bda549.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.5-00000000000000-dd2690bda549.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-3a3f8e393b2b.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-d2a0aa14bbdc.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.3-20250123222419-fd1f5023e83d.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-f46ba184b027.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-00000000000000-f46ba184b027.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-00000000000000-3c701f70eaaf.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250327172915-ca129c9f19f2.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250327172915-ca129c9f19f2.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0
@@ -23,12 +23,14 @@ require (
 	github.com/opencontainers/runc v1.2.3
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/opencontainers/selinux v1.11.1
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
 	github.com/rs/zerolog v1.33.0
 	github.com/shirou/gopsutil/v4 v4.24.11
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
+	github.com/stretchr/testify v1.10.0
 	github.com/xeonx/timeago v1.0.0-rc5
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0
 	go.opentelemetry.io/otel/sdk v1.33.0
@@ -36,7 +38,7 @@ require (
 	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/grpc v1.68.1
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -53,6 +55,8 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.5 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -66,6 +70,8 @@ require (
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
@@ -78,7 +84,7 @@ require (
 require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/cilium/ebpf v0.16.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

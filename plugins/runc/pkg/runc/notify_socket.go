@@ -78,7 +78,7 @@ func (s *notifySocket) bindSocket() error {
 	return nil
 }
 
-func (s *notifySocket) setupSocketDirectory() error {
+func (s *notifySocket) SetupSocketDirectory() error {
 	return os.Mkdir(path.Dir(s.socketPath), 0o755)
 }
 

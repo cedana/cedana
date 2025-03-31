@@ -48,8 +48,9 @@ type Plugin struct {
 }
 
 type Binary struct {
-	Name     string `json:"name"`
-	Checksum string `json:"checksum"` // MD5
+	Name       string `json:"name"`
+	Checksum   string `json:"checksum"`     // MD5
+	InstallDir string `json:"install_path"` // Fixed path where the binary must be installed
 }
 
 /////////////////
@@ -122,7 +123,22 @@ func (p *Plugin) SyncVersion() {
 		if !strings.HasPrefix(version, "v") {
 			version = "v" + version
 		}
+	}
 
+	// If still unknown, get version from parent plugin
+	if version == "unknown" && strings.Contains(p.Name, "/") {
+		parentName := strings.Split(p.Name, "/")[0]
+		var parent *Plugin
+		for _, plugin := range Registry {
+			if plugin.Name == parentName {
+				parent = &plugin
+				break
+			}
+		}
+		if parent != nil {
+			parent.SyncVersion()
+			version = parent.Version
+		}
 	}
 
 	p.Version = version
@@ -138,7 +154,12 @@ func (p *Plugin) SyncInstalled() {
 	size := int64(0)
 
 	for i, file := range p.Libraries {
-		path := filepath.Join(LibDir, file.Name)
+		var path string
+		if file.InstallDir == "" {
+			path = filepath.Join(LibDir, file.Name)
+		} else {
+			path = filepath.Join(file.InstallDir, file.Name)
+		}
 		if s, err = os.Stat(path); err != nil {
 			continue
 		}
@@ -152,7 +173,12 @@ func (p *Plugin) SyncInstalled() {
 
 	found = 0
 	for i, file := range p.Binaries {
-		path := filepath.Join(BinDir, file.Name)
+		var path string
+		if file.InstallDir == "" {
+			path = filepath.Join(BinDir, file.Name)
+		} else {
+			path = filepath.Join(file.InstallDir, file.Name)
+		}
 		if s, err = os.Stat(path); err != nil {
 			continue
 		}
@@ -172,7 +198,11 @@ func (p *Plugin) SyncInstalled() {
 func (p *Plugin) BinaryPaths() []string {
 	paths := make([]string, len(p.Binaries))
 	for i, bin := range p.Binaries {
-		paths[i] = filepath.Join(BinDir, bin.Name)
+		if bin.InstallDir != "" {
+			paths[i] = filepath.Join(bin.InstallDir, bin.Name)
+		} else {
+			paths[i] = filepath.Join(BinDir, bin.Name)
+		}
 	}
 	return paths
 }
@@ -181,7 +211,11 @@ func (p *Plugin) BinaryPaths() []string {
 func (p *Plugin) LibraryPaths() []string {
 	paths := make([]string, len(p.Libraries))
 	for i, lib := range p.Libraries {
-		paths[i] = filepath.Join(LibDir, lib.Name)
+		if lib.InstallDir != "" {
+			paths[i] = filepath.Join(lib.InstallDir, lib.Name)
+		} else {
+			paths[i] = filepath.Join(LibDir, lib.Name)
+		}
 	}
 	return paths
 }

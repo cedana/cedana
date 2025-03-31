@@ -43,7 +43,7 @@ func NewSimpleManager(serverWg *sync.WaitGroup, plugins plugins.Manager) *Manage
 	}
 }
 
-func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) error {
+func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) error {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -55,7 +55,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 		return err
 	}
 
-	err := m.controllers.spawn(ctx, lifetime, m.wg, binary, jid, user, pid)
+	err := m.controllers.spawn(ctx, lifetime, m.wg, binary, jid, user, env, pid)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, lifetime context.Context, ji
 	return nil
 }
 
-func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32) <-chan error {
+func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) <-chan error {
 	err := make(chan error)
 
 	m.wg.Add(1)
@@ -75,7 +75,7 @@ func (m *ManagerSimple) AttachAsync(ctx context.Context, lifetime context.Contex
 		select {
 		case <-ctx.Done():
 			err <- ctx.Err()
-		case err <- m.Attach(ctx, lifetime, jid, user, pid):
+		case err <- m.Attach(ctx, lifetime, jid, user, pid, env):
 		}
 	}()
 
@@ -117,7 +117,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 
 		// Spawn a random controller and perform a health check
 		jid := fmt.Sprintf("health-check-%d", time.Now().UnixNano())
-		err = m.controllers.spawnAsync(ctx, m.wg, binary, jid, user)
+		err = m.controllers.spawnAsync(ctx, m.wg, binary, jid, user, []string{})
 		if err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
@@ -144,7 +144,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env []string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -172,7 +172,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, UseNvCOMP: config.Global.GPU.NvCOMP})
+			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning(), UseNvCOMP: config.Global.GPU.NvCOMP})
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
@@ -192,7 +192,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := m.Attach(ctx, lifetime, jid, user, pidChan) // Re-attach a GPU to the job
+		err := m.Attach(ctx, lifetime, jid, user, pidChan, env) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}

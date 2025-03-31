@@ -46,7 +46,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		// using a dump path (directly w/ restore -p <path>), instead of using job
 		// restore, the restored process dies immediately.
 	}
-	cmd.Env = details.Env
+	cmd.Env = req.Env
 	cmd.Dir = details.WorkingDir
 
 	// Attach IO if requested, otherwise log to file

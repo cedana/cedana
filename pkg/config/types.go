@@ -92,6 +92,8 @@ type (
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// NvCOMP toggles on-GPU compression for GPU dumps
 		NvCOMP bool `json:"nvcomp" key:"nvcomp" yaml:"nvcomp" mapstructure:"nvcomp"`
+		// Track metrics associated with observability
+		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 	}
 
 	Plugins struct {

@@ -143,7 +143,9 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 	availableSet := make(map[string]*Plugin)
 	for _, plugin := range list {
-		availableSet[plugin.Name] = &plugin
+		if plugin.Status != UNKNOWN {
+			availableSet[plugin.Name] = &plugin
+		}
 	}
 
 	installList := make([]string, 0, len(names))
