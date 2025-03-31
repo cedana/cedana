@@ -25,10 +25,11 @@ install_requirements() {
 
     echo "Installing requirements from $req_file for GPU tests"
     # runs inside container, so we can break system packages
-    pip install --break-system-packages -r "$req_file"
+    pip install --break-system-packages -r "$req_file" &>/dev/null
 }
 
 download_hf_models() {
+    check_huggingface_token
     for model in "${INFERENCE_MODELS[@]}"; do
         echo "Downloading $model"
         python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model $model
