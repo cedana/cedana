@@ -56,7 +56,7 @@ run_inference_test() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 10
+    sleep 5
 
     run cedana restore job "$jid"
     assert_success
