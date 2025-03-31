@@ -39,6 +39,21 @@ load_lib file
     run kill $pid
 }
 
+@test "dump process (custom dir)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    mkdir -p /tmp/"$name"
+
+    run cedana dump process $pid --name "$name" --dir /tmp/"$name" --compression none
+    assert_success
+
+    assert_exists "/tmp/$name/$name"
+
+    run kill $pid
+}
+
 @test "dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
