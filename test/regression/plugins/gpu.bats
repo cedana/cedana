@@ -4,6 +4,7 @@
 
 load ../helpers/utils
 load ../helpers/daemon
+load ../helpers/gpu
 
 load_lib support
 load_lib assert
@@ -250,3 +251,8 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 
     run cedana job kill "$jid"
 }
+
+@test "c/r transformers inference workload - stablelm-2-1_6b" {
+    run_inference_test "stablelm-2-1_6b"
+}
+
