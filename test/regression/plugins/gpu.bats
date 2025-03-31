@@ -262,3 +262,6 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run_inference_test "stabilityai/stablelm-2-1_6b"
 }
 
+@test "c/r transformers inference workload - microsoft/phi-4" {
+    run_inference_test "microsoft/phi-4"
+}
