@@ -252,7 +252,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
-@test "c/r transformers inference workload - stablelm-2-1_6b" {
-    run_inference_test "stablelm-2-1_6b"
+@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
+    run_inference_test "stabilityai/stablelm-2-1_6b"
 }
 
