@@ -44,6 +44,8 @@ load_lib file
     pid=$!
     name=$(unix_nano)
 
+    mkdir -p /tmp/"$name"
+
     run cedana dump process $pid --name "$name" --dir /tmp/"$name" --compression none
     assert_success
 
