@@ -23,13 +23,14 @@ install_requirements() {
         exit 1
     fi
 
-    pip install -r "$req_file"
+    # runs inside container, so we can break system packages
+    pip install --break-system-packages -r "$req_file"
 }
 
 download_hf_models() {
     for model in "${INFERENCE_MODELS[@]}"; do
         echo "Downloading $model"
-        python gpu_smr/pytorch/llm/download_hf_model.py --model $model
+        python3 gpu_smr/pytorch/llm/download_hf_model.py --model $model
     done
 }
 
@@ -42,7 +43,7 @@ run_inference_test() {
     jid=$(unix_nano)
     sleep_duration=$((RANDOM % 11 + 10))
 
-    run cedana run process -g --jid "$jid" -- python gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
+    run cedana run process -g --jid "$jid" -- python3 gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
     assert_success
 
     sleep "$sleep_duration"
