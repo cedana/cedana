@@ -14,10 +14,7 @@ check_huggingface_token() {
 }
 
 install_requirements() {
-    if [ -z "$TORCH_VERSION" ]; then
-        echo "TORCH_VERSION unset"
-        exit 1
-    fi
+    TORCH_VERSION="${TORCH_VERSION:-torch2_4}"
 
     local req_file="/cedana-samples/requirements-${TORCH_VERSION}.txt"
 
