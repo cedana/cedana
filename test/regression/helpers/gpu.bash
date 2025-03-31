@@ -13,6 +13,22 @@ check_huggingface_token() {
     fi
 }
 
+install_requirements() {
+    if [ -z "$TORCH_VERSION" ]; then
+        echo "TORCH_VERSION unset"
+        exit 1
+    fi
+
+    local req_file="/cedana-samples/requirements-${TORCH_VERSION}.txt"
+
+    if [ ! -f "$req_file" ]; then
+        echo "Requirements file not found: $req_file"
+        exit 1
+    fi
+
+    pip install -r "$req_file"
+}
+
 download_hf_models() {
     for model in "${INFERENCE_MODELS[@]}"; do
         echo "Downloading $model"
@@ -52,4 +68,5 @@ run_inference_test() {
     run cedana job kill "$jid"
 }
 
+install_requirements "$1"
 download_hf_models
