@@ -17,6 +17,12 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 ### Run ###
 ###########
 
+# One-time setup of downloading weights & pip installing
+setup_file() {
+    install_requirements $1
+    download_hf_models
+}
+
 @test "run GPU process (non-GPU binary)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"

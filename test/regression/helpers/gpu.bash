@@ -67,6 +67,3 @@ run_inference_test() {
 
     run cedana job kill "$jid"
 }
-
-install_requirements "$1"
-download_hf_models
