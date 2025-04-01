@@ -4,6 +4,7 @@
 
 load ../helpers/utils
 load ../helpers/daemon
+load ../helpers/gpu
 
 load_lib support
 load_lib assert
@@ -11,6 +12,25 @@ load_lib file
 
 # So that we don't run out of shm space
 export BATS_NO_PARALLELIZE_WITHIN_FILE=true
+
+# One-time setup of downloading weights & pip installing
+setup_file() {
+    setup_file_daemon
+    install_requirements
+    download_hf_models
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
 
 ###########
 ### Run ###
@@ -250,3 +270,14 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 
     run cedana job kill "$jid"
 }
+
+#####################
+### Inference C/R ###
+#####################
+
+# Requires an HF token!
+
+@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
+    run_inference_test "stabilityai/stablelm-2-1_6b"
+}
+

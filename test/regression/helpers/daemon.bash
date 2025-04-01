@@ -26,19 +26,19 @@ WAIT_TIMEOUT=100
 # Everytime a daemon is started, it has a unique database file
 # and log file associated with it.
 
-setup_file() {
+setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
         start_daemon_at "$SOCK"
         export CEDANA_ADDRESS="$SOCK"
     fi
 }
-teardown_file() {
+teardown_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     fi
 }
-setup() {
+setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
         start_daemon_at "$SOCK"
@@ -49,7 +49,7 @@ setup() {
         export TAIL_PID=$!
     fi
 }
-teardown() {
+teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     else

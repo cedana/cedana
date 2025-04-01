@@ -235,7 +235,7 @@ DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm 
 				-v $(PWD):/src:ro \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN)
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
 DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
 					 $(DOCKER_TEST_RUN_OPTS) \
@@ -252,7 +252,7 @@ docker-test: ## Build the test Docker image
 docker-test-cuda: ## Build the test Docker image (CUDA)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE_CUDA) . ;\
+	docker build -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image
