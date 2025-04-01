@@ -11,6 +11,22 @@ load_lib file
 
 export CEDANA_PROFILING_ENABLED=true
 
+setup_file() {
+    setup_file_daemon
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
+
 @test "run process (profiling)" {
     jid=$(unix_nano)
 

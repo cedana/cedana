@@ -13,15 +13,28 @@ load_lib file
 # So that we don't run out of shm space
 export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 
-###########
-### Run ###
-###########
-
 # One-time setup of downloading weights & pip installing
 setup_file() {
+    setup_file_daemon
     install_requirements $1
     download_hf_models
 }
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
+
+###########
+### Run ###
+###########
 
 @test "run GPU process (non-GPU binary)" {
     if ! cmd_exists nvidia-smi; then
