@@ -16,7 +16,7 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 # One-time setup of downloading weights & pip installing
 setup_file() {
     setup_file_daemon
-    install_requirements $1
+    install_requirements
     download_hf_models
 }
 
