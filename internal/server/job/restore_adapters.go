@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -50,6 +51,10 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
 				defer logFile.Close()
+				err = os.Chown(req.Log, int(req.UID), int(req.GID))
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
+				}
 				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
@@ -79,7 +84,11 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			opts.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, req.Stream, req.Env))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, &syscall.Credential{
+				Uid:    req.UID,
+				Gid:    req.GID,
+				Groups: req.Groups,
+			}, req.Stream, req.Env...))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {

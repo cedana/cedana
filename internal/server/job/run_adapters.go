@@ -44,6 +44,10 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
 				defer logFile.Close()
+        err = os.Chown(req.Log, int(req.UID), int(req.GID))
+        if err != nil {
+          return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
+        }
 				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
