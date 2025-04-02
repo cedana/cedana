@@ -43,11 +43,10 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			lifetime, cancel := context.WithCancel(opts.Lifetime)
 			opts.Lifetime = lifetime
 
-			details := req.GetDetails().GetProcess()
 			user := &syscall.Credential{
-				Uid:    details.GetUID(),
-				Gid:    details.GetGID(),
-				Groups: details.GetGroups(),
+				Uid:    req.UID,
+				Gid:    req.GID,
+				Groups: req.Groups,
 			}
 
 			env := req.GetEnv()

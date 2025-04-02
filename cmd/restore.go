@@ -16,6 +16,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -93,6 +94,12 @@ var restoreCmd = &cobra.Command{
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 
+		env := os.Environ()
+		user, err := utils.GetCredentials()
+		if err != nil {
+			return fmt.Errorf("Error getting user credentials: %v", err)
+		}
+
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:       path,
@@ -108,10 +115,10 @@ var restoreCmd = &cobra.Command{
 				ShellJob:       proto.Bool(shellJob),
 				LinkRemap:      proto.Bool(linkRemap),
 			},
-		}
-
-		if req.Env == nil {
-			req.Env = os.Environ()
+			Env:    env,
+			UID:    user.Uid,
+			GID:    user.Gid,
+			Groups: user.Groups,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
