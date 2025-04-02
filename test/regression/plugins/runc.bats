@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=runc
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -72,6 +73,7 @@ teardown_file() {
     assert_file_contains "$log_file" "hello"
 }
 
+# bats test_tags=attach
 @test "run container with attach" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -82,6 +84,7 @@ teardown_file() {
     assert_output --partial "hello"
 }
 
+# bats test_tags=attach
 @test "run container with attach (exit code)" {
     jid=$(unix_nano)
     code=42
@@ -96,6 +99,7 @@ teardown_file() {
 ### Dump ###
 ############
 
+# bats test_tags=dump
 @test "dump container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -114,6 +118,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (detached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -130,6 +135,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
+# bats test_tags=dump
 @test "dump container (new job)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -146,6 +152,7 @@ teardown_file() {
     run cedana kill "$jid"
 }
 
+# bats test_tags=dump
 @test "dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -162,6 +169,7 @@ teardown_file() {
     run cedana kill "$jid"
 }
 
+# bats test_tags=dump
 @test "dump container (manage existing job)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -184,6 +192,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external NET namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -208,6 +217,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external PID namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -232,6 +242,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external IPC namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -256,6 +267,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external UTS namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -280,6 +292,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external CGROUP namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -304,6 +317,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external ALL namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -332,6 +346,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external binds mount)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -357,6 +372,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=dump
 @test "dump container (external binds mount and namespaces)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -391,6 +407,7 @@ teardown_file() {
 ### Restore ###
 ###############
 
+# bats test_tags=restore
 @test "restore container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -415,6 +432,7 @@ teardown_file() {
 # FIXME: Below test fails because when using detach, TTY is inherited
 # and CRIU does not know how to restore that.
 
+# bats test_tags=restore
 # @test "restore container (detached)" {
 #     id=$(unix_nano)
 #     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -436,6 +454,7 @@ teardown_file() {
 #     run runc delete "$id"
 # }
 
+# bats test_tags=restore
 @test "restore container (new job)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -455,6 +474,7 @@ teardown_file() {
     run cedana kill "$jid"
 }
 
+# bats test_tags=restore
 @test "restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -474,6 +494,7 @@ teardown_file() {
     run cedana kill "$jid"
 }
 
+# bats test_tags=restore
 @test "restore container (manage existing job)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -499,6 +520,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external NET namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -526,6 +548,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external PID namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -553,6 +576,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external IPC namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -580,6 +604,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external UTS namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -607,6 +632,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external CGROUP namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -636,6 +662,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external ALL namespace)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -666,6 +693,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external bind mounts)" {
     id=$(unix_nano)
     jid=$(unix_nano)
@@ -694,6 +722,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (external bind mounts and namespaces)" {
     id=$(unix_nano)
     jid=$(unix_nano)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=base,profiling
 
 load helpers/utils
 load helpers/daemon
@@ -45,5 +46,68 @@ teardown_file() {
     refute_output --partial "total"
 }
 
-# @test "restore process (profiling)" {
-# }
+# bats test_tags=dump
+@test "dump process (profiling)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana dump process $pid
+
+    assert_success
+    assert_output --partial "total"
+
+    run kill $pid
+}
+
+# bats test_tags=dump
+@test "dump process (profiling output off)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana dump process $pid --profiling=false
+
+    assert_success
+    refute_output --partial "total"
+
+    run kill $pid
+}
+
+# bats test_tags=restore
+@test "restore process (profiling)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana dump process $pid
+
+    assert_success
+    assert_output --partial "total"
+
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+
+    run cedana restore process --path "$dump_file"
+
+    assert_success
+    assert_output --partial "total"
+
+    run kill $pid
+}
+
+# bats test_tags=restore
+@test "restore process (profiling output off)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+
+    run cedana dump process $pid --profiling=false
+
+    assert_success
+    refute_output --partial "total"
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+
+    run cedana restore process --path "$dump_file" --profiling=false
+
+    assert_success
+    refute_output --partial "total"
+
+    run kill $pid
+}

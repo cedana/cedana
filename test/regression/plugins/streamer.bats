@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
+# bats file_tags=streamer
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -29,6 +30,7 @@ teardown_file() {
 ### Dump ###
 ############
 
+# bats test_tags=dump
 @test "stream dump process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -43,6 +45,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (custom name)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -57,6 +60,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (0 parallelism = no streaming)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -71,6 +75,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (4 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -88,6 +93,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (8 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -109,6 +115,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -127,6 +134,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -142,6 +150,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -157,6 +166,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -172,6 +182,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "stream dump process (invalid compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -189,6 +200,7 @@ teardown_file() {
 ### Restore ###
 ###############
 
+# bats test_tags=restore
 @test "stream restore process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -206,6 +218,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (custom name)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -224,6 +237,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (0 parallelism = no streaming)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -242,6 +256,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (4 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -263,6 +278,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (8 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -288,6 +304,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (mismatched parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -307,6 +324,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -326,6 +344,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -345,6 +364,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -364,6 +384,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=restore
 @test "stream restore process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
