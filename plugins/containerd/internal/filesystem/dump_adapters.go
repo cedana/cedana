@@ -57,7 +57,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", details.ID, err)
 		}
 		defer func() {
-			err := task.Resume(context.Background())
+			err := task.Resume(context.WithoutCancel(ctx))
 			if err != nil {
 				log.Error().Str("container", details.ID).Msg("failed to resume container")
 			}
