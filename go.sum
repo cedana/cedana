@@ -4,10 +4,10 @@ buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2731879e40.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1 h1:Iew3zeXgWB14lkY/Gf6t8N1u64R2wMuRWbAvrsrAUZU=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1/go.mod h1:aBOGTWtzs/KK01BRrLRKUwkytDF2R6w9RGsFJY3zL/w=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ea22853a44c0.2 h1:uJEf7bgU2224RRgCLfCjJH+ogBqV3scXP5yp/JXtO9g=
-buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ea22853a44c0.2/go.mod h1:hI3nClGk8m5Y88XyN8+fEhFBl2CD2iXyWnR0XE4dNZU=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-ea22853a44c0.1 h1:AlXrHZ0Y1FFexmX7ShMKj3kkF1OTzuPCiVstMhnta1M=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-ea22853a44c0.1/go.mod h1:Y1ZUdcX+yPvoebrRvpQk3LwG+xIi6eRUPdxZ2fwjups=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-5b1620739030.2 h1:BdIbZVlfXig+vOnU7+xSR4fA0Aptnt94w2h9dfcBo2o=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-5b1620739030.2/go.mod h1:kqb37+m4eEzLz3N0Wn0uXpbPxt8IuKgDCmRRx7jiNuQ=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-5b1620739030.1 h1:Q0a4oFImE9E8aUT9OTKOECNHmZTcOrbrp1Ha8zt6eQw=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-5b1620739030.1/go.mod h1:c7kzaq2Kcw+cse2umDpJEAgOxUz6bvgEKL2T5QlZbHM=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1 h1:eL0ITmSd0zlx6w3voi/nSbJMiN+G/LIVUUmknKO3R3g=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1/go.mod h1:TitVRewrbL1dt6BJSEMDRXbk5mOuJ1FZA4Iv7W0ERbY=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
@@ -188,6 +188,8 @@ github.com/opencontainers/runtime-spec v1.2.0 h1:z97+pHb3uELt/yiAWD691HNHQIF07bE
 github.com/opencontainers/runtime-spec v1.2.0/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
 github.com/opencontainers/selinux v1.11.1 h1:nHFvthhM0qY8/m+vfhJylliSshm8G1jJ2jDMcgULaH8=
 github.com/opencontainers/selinux v1.11.1/go.mod h1:E5dMC3VPuVvVHDYmi78qvhJp8+M586T4DlDRYpFkyec=
+github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=
+github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/pelletier/go-toml/v2 v2.2.2 h1:aYUidT7k73Pcl9nb2gScu7NSrKCSHIDE89b3+6Wq+LM=
 github.com/pelletier/go-toml/v2 v2.2.2/go.mod h1:1t835xjRzz80PqgE6HHgN2JOsmgYu/h4qDAS4n929Rs=
 github.com/pierrec/lz4 v2.6.1+incompatible h1:9UY3+iC23yxF0UfGaYrGplQ+79Rg+h/q9FV9ix19jjM=

@@ -76,7 +76,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 			_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
 			defer end()
-			err = dumpRootfs(ctx, client, container, details.Image)
+			err = dumpRootfs(ctx, client, container, details.Image, details.GetUsername(), details.GetPassword())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
 			}
@@ -89,7 +89,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		rootfsErr := make(chan error, 1)
 
 		go func() {
-			rootfsErr <- dumpRootfs(ctx, client, container, details.Image)
+			rootfsErr <- dumpRootfs(ctx, client, container, details.Image, details.GetUsername(), details.GetPassword())
 		}()
 
 		exited, err = next(ctx, opts, resp, req)
@@ -111,7 +111,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 	}
 }
 
-func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string) error {
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, password string) error {
 	id := container.ID()
 
 	info, err := container.Info(ctx)
@@ -178,6 +178,17 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 		if _, err := client.ImageService().Create(ctx, img); err != nil {
 			return fmt.Errorf("failed to create new image %s: %w", ref, err)
 		}
+	}
+
+	// push image
+	if username != "" && password != "" {
+		log.Info().Msg("not pushing image `ref` to docker; username & password not provided")
+	} else {
+		go func() {
+			if err := pushImage(context.WithoutCancel(ctx), client, ref, username, password); err != nil {
+				log.Error().Msgf("failed to push image: %v", err)
+			}
+		}()
 	}
 
 	return nil

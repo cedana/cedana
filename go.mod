@@ -6,8 +6,8 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250327172915-8b2731879e40.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2731879e40.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ea22853a44c0.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-ea22853a44c0.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-5b1620739030.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-5b1620739030.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
@@ -70,6 +70,7 @@ require (
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
+	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
