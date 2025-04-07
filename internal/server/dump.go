@@ -2,11 +2,6 @@ package server
 
 import (
 	"context"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/criu"
@@ -76,10 +71,6 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	if utils.PathExists(resp.Path) {
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
-		// v2_propagator_url := strings.Replace(os.Getenv("CEDANA_URL"), "/v1", "/v2")
-
-		// state := resp.GetState()
-		// path := resp.GetPath()
 	}
 
 	return resp, nil
