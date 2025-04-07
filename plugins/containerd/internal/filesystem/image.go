@@ -15,9 +15,16 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
+	// "github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/remotes/docker/config"
+
+	// "github.com/containerd/containerd/remotes/docker/config"
+
+	// "github.com/containerd/containerd/remotes/docker/config"
 	"github.com/containerd/containerd/rootfs"
 	"github.com/containerd/containerd/snapshots"
 	"github.com/containerd/errdefs"
@@ -32,6 +39,30 @@ const (
 	EMPTY_GZ_LAYER = digest.Digest("sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1")
 	EMPTY_DIGEST   = digest.Digest("")
 )
+
+var PushTracker = docker.NewInMemoryTracker()
+
+func pushImage(ctx context.Context, client *containerd.Client, ref, username, secret string) error {
+	img, err := client.ImageService().Get(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("unable to resolve image to manifest: %w", err)
+	}
+	options := docker.ResolverOptions{
+		Tracker: PushTracker,
+	}
+	hostOptions := config.HostOptions{}
+	hostOptions.Credentials = func(host string) (string, string, error) {
+		return username, secret, nil
+	}
+	options.Hosts = config.ConfigureHosts(ctx, hostOptions)
+
+	desc := img.Target
+	ropts := []containerd.RemoteOpt{
+		containerd.WithResolver(docker.NewResolver(options)),
+	}
+
+	return client.Push(ctx, ref, desc, ropts...)
+}
 
 // ReadImage reads the image configuration from the containerd image
 // and returns the OCI-compatible image configuration and descriptor
