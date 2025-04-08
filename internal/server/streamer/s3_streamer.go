@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -114,28 +117,39 @@ func NewS3StreamingFs(
 				defer io.Done()
 				defer pipeReader.Close()
 
+				gid := goroutineID()
 				start := time.Now()
-				log.Debug().Int32("shard", shardIdx).Str("key", key).
+
+				log.Debug().
+					Int32("shard", shardIdx).
+					Int64("goroutine", gid).
+					Str("key", key).
 					Time("start", start).
-					Msg("starting streaming to S3")
+					Msg("streaming to S3: start")
 
 				written, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
-				endTime := time.Now()
 
+				end := time.Now()
 				if err != nil {
-					log.Error().Err(err).Str("key", key).Int32("shard", shardIdx).
-						Time("end", endTime).
-						Dur("duration", endTime.Sub(start)).
-						Msg("failed to upload to S3")
+					log.Error().Err(err).
+						Int32("shard", shardIdx).
+						Int64("goroutine", gid).
+						Str("key", key).
+						Time("end", end).
+						Dur("duration", end.Sub(start)).
+						Msg("streaming to S3: failed")
 					ioErr <- err
 					return
 				}
 
-				log.Debug().Int32("shard", shardIdx).Str("key", key).
+				log.Debug().
+					Int32("shard", shardIdx).
+					Int64("goroutine", gid).
+					Str("key", key).
 					Int64("bytesWritten", written).
-					Time("end", endTime).
-					Dur("duration", endTime.Sub(start)).
-					Msg("finished streaming to S3")
+					Time("end", end).
+					Dur("duration", end.Sub(start)).
+					Msg("streaming to S3: complete")
 
 			}(writeFds[i], s3Key, i)
 		}
@@ -261,62 +275,80 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
+	gid := goroutineID()
 	start := time.Now()
-	log.Debug().Str("key", key).Time("start", start).Msg("starting WriteToS3")
+	log.Debug().
+		Str("key", key).
+		Int64("goroutine", gid).
+		Time("start", start).
+		Msg("WriteToS3: start")
 
 	pr, pw := io.Pipe()
+
 	compressor, err := cedana_io.NewCompressionWriter(pw, compression)
 	if err != nil {
 		return 0, fmt.Errorf("compression init failed: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	var writeErr error
-	var bytesWritten int64
+	var (
+		wg            sync.WaitGroup
+		bytesWritten  int64
+		compressErr   error
+		compressStart = time.Now()
+	)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer pw.Close()
 
-		copyStart := time.Now()
-		log.Debug().Str("key", key).Time("start", copyStart).Msg("starting io.Copy to compressor")
-		bytesWritten, writeErr = io.Copy(compressor, source)
-		copyEnd := time.Now()
-		log.Debug().Str("key", key).
-			Int64("bytesWritten", bytesWritten).
-			Dur("duration", copyEnd.Sub(copyStart)).
-			Msg("finished io.Copy to compressor")
-
-		if cerr := compressor.Close(); cerr != nil && writeErr == nil {
-			writeErr = fmt.Errorf("compressor close failed: %w", cerr)
+		log.Debug().Str("key", key).Int64("goroutine", goroutineID()).Msg("WriteToS3: starting io.Copy")
+		bytesWritten, compressErr = io.Copy(compressor, source)
+		if cerr := compressor.Close(); cerr != nil && compressErr == nil {
+			compressErr = fmt.Errorf("compressor close failed: %w", cerr)
 		}
+		log.Debug().Str("key", key).
+			Int64("goroutine", goroutineID()).
+			Int64("bytesWritten", bytesWritten).
+			Dur("compression_duration", time.Since(compressStart)).
+			Msg("WriteToS3: compression done")
+	}()
+
+	// Context cancel watcher
+	go func() {
+		<-ctx.Done()
+		log.Warn().Str("key", key).
+			Int64("goroutine", goroutineID()).
+			Msg("WriteToS3: context canceled")
 	}()
 
 	uploadStart := time.Now()
-	log.Debug().Str("key", key).Time("start", uploadStart).Msg("starting S3 upload")
+	log.Debug().Str("key", key).Int64("goroutine", gid).Msg("WriteToS3: starting upload")
 
 	_, uploadErr := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
 	})
-	uploadEnd := time.Now()
-	log.Debug().Str("key", key).Dur("duration", uploadEnd.Sub(uploadStart)).Msg("completed S3 upload")
+	log.Debug().Str("key", key).
+		Int64("goroutine", gid).
+		Dur("upload_duration", time.Since(uploadStart)).
+		Msg("WriteToS3: upload finished")
 
 	wg.Wait()
-	end := time.Now()
 
-	if writeErr != nil {
-		return 0, writeErr
+	totalDuration := time.Since(start)
+	log.Debug().Str("key", key).
+		Int64("goroutine", gid).
+		Dur("total_duration", totalDuration).
+		Msg("WriteToS3: complete")
+
+	if compressErr != nil {
+		return 0, fmt.Errorf("compression failed: %w", compressErr)
 	}
 	if uploadErr != nil {
 		return 0, fmt.Errorf("upload failed: %w", uploadErr)
 	}
-
-	log.Debug().Str("key", key).
-		Dur("total_duration", end.Sub(start)).
-		Msg("WriteToS3 complete")
 
 	return bytesWritten, nil
 }
@@ -359,4 +391,12 @@ func ReadFromS3(
 	}
 
 	return written, nil
+}
+
+func goroutineID() int64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	idField := bytes.Fields(buf[:n])[1]
+	id, _ := strconv.ParseInt(string(idField), 10, 64)
+	return id
 }
