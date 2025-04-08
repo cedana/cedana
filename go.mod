@@ -10,7 +10,6 @@ require (
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-20250226205333-5d0820253730.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-20250226205333-4b6f9efc37ef.1
 	github.com/aws/aws-sdk-go-v2 v1.36.3
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.65
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0

@@ -20,7 +20,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
@@ -328,11 +327,12 @@ func WriteToS3(
 	uploadCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, uploadErr := manager.NewUploader(s3Client).Upload(uploadCtx, &s3.PutObjectInput{
+	_, uploadErr := s3Client.PutObject(uploadCtx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
 	})
+
 	log.Debug().Str("key", key).
 		Int64("goroutine", gid).
 		Dur("upload_duration", time.Since(uploadStart)).
