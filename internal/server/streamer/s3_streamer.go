@@ -20,6 +20,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
@@ -276,6 +277,7 @@ func WriteToS3(
 ) (int64, error) {
 	gid := goroutineID()
 	start := time.Now()
+
 	log.Debug().
 		Str("key", key).
 		Int64("goroutine", gid).
@@ -290,10 +292,9 @@ func WriteToS3(
 	}
 
 	var (
-		wg            sync.WaitGroup
-		bytesWritten  int64
-		compressErr   error
-		compressStart = time.Now()
+		wg           sync.WaitGroup
+		bytesWritten int64
+		compressErr  error
 	)
 
 	wg.Add(1)
@@ -301,19 +302,23 @@ func WriteToS3(
 		defer wg.Done()
 		defer pw.Close()
 
-		log.Debug().Str("key", key).Int64("goroutine", goroutineID()).Msg("WriteToS3: starting io.Copy")
+		compressionStart := time.Now()
+		log.Debug().Str("key", key).Int64("goroutine", goroutineID()).Msg("WriteToS3: starting compression")
+
 		bytesWritten, compressErr = io.Copy(compressor, source)
 		if cerr := compressor.Close(); cerr != nil && compressErr == nil {
 			compressErr = fmt.Errorf("compressor close failed: %w", cerr)
 		}
-		log.Debug().Str("key", key).
+
+		log.Debug().
+			Str("key", key).
 			Int64("goroutine", goroutineID()).
 			Int64("bytesWritten", bytesWritten).
-			Dur("compression_duration", time.Since(compressStart)).
+			Dur("compression_duration", time.Since(compressionStart)).
 			Msg("WriteToS3: compression done")
 	}()
 
-	// Context cancel watcher
+	// Context watcher for debugging
 	go func() {
 		<-ctx.Done()
 		log.Warn().Str("key", key).
@@ -321,29 +326,32 @@ func WriteToS3(
 			Msg("WriteToS3: context canceled")
 	}()
 
-	uploadStart := time.Now()
-	log.Debug().Str("key", key).Int64("goroutine", gid).Msg("WriteToS3: starting upload")
-
-	uploadCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	_, uploadErr := s3Client.PutObject(uploadCtx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   pr,
+	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
+		u.PartSize = 5 * 1024 * 1024 // 5MB is S3 minimum for multipart
+		u.Concurrency = 1            // Required to preserve stream ordering
+		u.LeavePartsOnError = true   // For diagnosing failures
 	})
 
+	uploadStart := time.Now()
+	log.Debug().Str("key", key).Int64("goroutine", gid).Msg("WriteToS3: starting S3 upload")
+
+	_, uploadErr := uploader.Upload(&s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   pr, // stream reader
+	})
 	log.Debug().Str("key", key).
 		Int64("goroutine", gid).
 		Dur("upload_duration", time.Since(uploadStart)).
 		Msg("WriteToS3: upload finished")
 
 	wg.Wait()
+	end := time.Now()
 
-	totalDuration := time.Since(start)
-	log.Debug().Str("key", key).
+	log.Debug().
+		Str("key", key).
 		Int64("goroutine", gid).
-		Dur("total_duration", totalDuration).
+		Dur("total_duration", end.Sub(start)).
 		Msg("WriteToS3: complete")
 
 	if compressErr != nil {
