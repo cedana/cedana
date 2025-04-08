@@ -2,7 +2,6 @@ package streamer
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
