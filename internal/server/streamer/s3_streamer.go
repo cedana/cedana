@@ -114,17 +114,30 @@ func NewS3StreamingFs(
 				defer io.Done()
 				defer pipeReader.Close()
 
-				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming to S3")
+				start := time.Now()
+				log.Debug().Int32("shard", shardIdx).Str("key", key).
+					Time("start", start).
+					Msg("starting streaming to S3")
 
-				_, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				written, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				endTime := time.Now()
+
 				if err != nil {
-					log.Error().Err(err).Str("key", key).Msg("failed to upload to S3")
+					log.Error().Err(err).Str("key", key).Int32("shard", shardIdx).
+						Time("end", endTime).
+						Dur("duration", endTime.Sub(start)).
+						Msg("failed to upload to S3")
 					ioErr <- err
 					return
 				}
 
-				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("finished streaming to S3")
-			}(readFds[i], s3Key, i)
+				log.Debug().Int32("shard", shardIdx).Str("key", key).
+					Int64("bytesWritten", written).
+					Time("end", endTime).
+					Dur("duration", endTime.Sub(start)).
+					Msg("finished streaming to S3")
+
+			}(writeFds[i], s3Key, i)
 		}
 	}
 
@@ -248,8 +261,10 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
-	pr, pw := io.Pipe()
+	start := time.Now()
+	log.Debug().Str("key", key).Time("start", start).Msg("starting WriteToS3")
 
+	pr, pw := io.Pipe()
 	compressor, err := cedana_io.NewCompressionWriter(pw, compression)
 	if err != nil {
 		return 0, fmt.Errorf("compression init failed: %w", err)
@@ -264,33 +279,35 @@ func WriteToS3(
 		defer wg.Done()
 		defer pw.Close()
 
-		log.Debug().Str("key", key).Msg("starting io.Copy to compressor")
+		copyStart := time.Now()
+		log.Debug().Str("key", key).Time("start", copyStart).Msg("starting io.Copy to compressor")
 		bytesWritten, writeErr = io.Copy(compressor, source)
-		log.Debug().Str("key", key).Int64("bytesWritten", bytesWritten).Err(writeErr).Msg("finished io.Copy to compressor")
+		copyEnd := time.Now()
+		log.Debug().Str("key", key).
+			Int64("bytesWritten", bytesWritten).
+			Dur("duration", copyEnd.Sub(copyStart)).
+			Msg("finished io.Copy to compressor")
 
 		if cerr := compressor.Close(); cerr != nil && writeErr == nil {
 			writeErr = fmt.Errorf("compressor close failed: %w", cerr)
 		}
 	}()
 
-	go func() {
-		select {
-		case <-ctx.Done():
-			log.Warn().Str("key", key).Msg("context canceled before upload finished")
-		}
-	}()
+	uploadStart := time.Now()
+	log.Debug().Str("key", key).Time("start", uploadStart).Msg("starting S3 upload")
 
-	log.Debug().Str("key", key).Msg("starting S3 upload")
 	_, uploadErr := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
 	})
-	log.Debug().Str("key", key).Err(uploadErr).Msg("completed S3 upload")
+	uploadEnd := time.Now()
+	log.Debug().Str("key", key).Dur("duration", uploadEnd.Sub(uploadStart)).Msg("completed S3 upload")
 
-	pr.Close()
+	pr.Close() // ensure reader side is closed
 
 	wg.Wait()
+	end := time.Now()
 
 	if writeErr != nil {
 		return 0, writeErr
@@ -298,6 +315,11 @@ func WriteToS3(
 	if uploadErr != nil {
 		return 0, fmt.Errorf("upload failed: %w", uploadErr)
 	}
+
+	log.Debug().Str("key", key).
+		Dur("total_duration", end.Sub(start)).
+		Msg("WriteToS3 complete")
+
 	return bytesWritten, nil
 }
 
