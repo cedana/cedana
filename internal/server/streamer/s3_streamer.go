@@ -304,8 +304,6 @@ func WriteToS3(
 	uploadEnd := time.Now()
 	log.Debug().Str("key", key).Dur("duration", uploadEnd.Sub(uploadStart)).Msg("completed S3 upload")
 
-	pr.Close() // ensure reader side is closed
-
 	wg.Wait()
 	end := time.Now()
 
