@@ -264,22 +264,30 @@ func WriteToS3(
 		defer wg.Done()
 		defer pw.Close()
 
+		log.Debug().Str("key", key).Msg("starting io.Copy to compressor")
 		bytesWritten, writeErr = io.Copy(compressor, source)
+		log.Debug().Str("key", key).Int64("bytesWritten", bytesWritten).Err(writeErr).Msg("finished io.Copy to compressor")
+
 		if cerr := compressor.Close(); cerr != nil && writeErr == nil {
 			writeErr = fmt.Errorf("compressor close failed: %w", cerr)
 		}
 	}()
 
 	go func() {
-		<-ctx.Done()
-		log.Warn().Msg("context canceled inside WriteToS3")
+		select {
+		case <-ctx.Done():
+			log.Warn().Str("key", key).Msg("context canceled before upload finished")
+		}
 	}()
 
+	log.Debug().Str("key", key).Msg("starting S3 upload")
 	_, uploadErr := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   pr,
 	})
+	log.Debug().Str("key", key).Err(uploadErr).Msg("completed S3 upload")
+
 	pr.Close()
 
 	wg.Wait()
