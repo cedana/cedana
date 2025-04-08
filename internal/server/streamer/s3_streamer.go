@@ -252,29 +252,43 @@ func WriteToS3(
 	source io.Reader,
 	bucket, key, compression string,
 ) (int64, error) {
-	var buf bytes.Buffer
-	compressor, err := cedana_io.NewCompressionWriter(&buf, compression)
+	pr, pw := io.Pipe()
+
+	compressor, err := cedana_io.NewCompressionWriter(pw, compression)
 	if err != nil {
 		return 0, fmt.Errorf("compression init failed: %w", err)
 	}
 
-	bytesWritten, err := io.Copy(compressor, source)
-	if err != nil {
-		return 0, fmt.Errorf("compression failed: %w", err)
-	}
-	if err := compressor.Close(); err != nil {
-		return 0, fmt.Errorf("compressor close failed: %w", err)
-	}
+	var wg sync.WaitGroup
+	var writeErr error
+	var bytesWritten int64
 
-	_, err = manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer pw.Close()
+
+		bytesWritten, writeErr = io.Copy(compressor, source)
+		if cerr := compressor.Close(); cerr != nil && writeErr == nil {
+			writeErr = fmt.Errorf("compressor close failed: %w", cerr)
+		}
+	}()
+
+	_, uploadErr := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   bytes.NewReader(buf.Bytes()),
+		Body:   pr,
 	})
-	if err != nil {
-		return 0, fmt.Errorf("upload failed: %w", err)
-	}
+	pr.Close()
 
+	wg.Wait()
+
+	if writeErr != nil {
+		return 0, writeErr
+	}
+	if uploadErr != nil {
+		return 0, fmt.Errorf("upload failed: %w", uploadErr)
+	}
 	return bytesWritten, nil
 }
 
