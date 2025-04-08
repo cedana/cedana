@@ -335,11 +335,12 @@ func WriteToS3(
 	uploadStart := time.Now()
 	log.Debug().Str("key", key).Int64("goroutine", gid).Msg("WriteToS3: starting S3 upload")
 
-	_, uploadErr := uploader.Upload(&s3.PutObjectInput{
+	_, uploadErr := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   pr, // stream reader
+		Body:   pr,
 	})
+
 	log.Debug().Str("key", key).
 		Int64("goroutine", gid).
 		Dur("upload_duration", time.Since(uploadStart)).
