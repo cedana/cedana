@@ -20,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_io "github.com/cedana/cedana/pkg/io"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 )
@@ -57,7 +56,6 @@ func NewS3StreamingFs(
 
 	for i := range parallelism {
 		// set up a profiling ctx for each parallelism
-		s3ctx, end := profiling.StartTimingComponent(ctx, "streamerWrite")
 		r, w, err := os.Pipe()
 		unix.FcntlInt(r.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
 		if err != nil {
@@ -118,7 +116,7 @@ func NewS3StreamingFs(
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming to S3")
 
-				_, err := WriteToS3(s3ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				_, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Msg("failed to upload to S3")
 					ioErr <- err
@@ -126,7 +124,6 @@ func NewS3StreamingFs(
 				}
 
 				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("finished streaming to S3")
-				end()
 			}(readFds[i], s3Key, i)
 		}
 	}
@@ -271,6 +268,11 @@ func WriteToS3(
 		if cerr := compressor.Close(); cerr != nil && writeErr == nil {
 			writeErr = fmt.Errorf("compressor close failed: %w", cerr)
 		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		log.Warn().Msg("context canceled inside WriteToS3")
 	}()
 
 	_, uploadErr := manager.NewUploader(s3Client).Upload(ctx, &s3.PutObjectInput{
