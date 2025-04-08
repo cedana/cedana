@@ -150,7 +150,7 @@ func NewS3StreamingFs(
 					Dur("duration", end.Sub(start)).
 					Msg("streaming to S3: complete")
 
-			}(writeFds[i], s3Key, i)
+			}(readFds[i], s3Key, i)
 		}
 	}
 
