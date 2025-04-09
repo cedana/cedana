@@ -194,6 +194,8 @@ func PrepareS3Dump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
+		req.Criu.ImagesDir = proto.String(imagesDirectory)
+		req.Criu.ImagesDirFd = proto.Int32(int32(f.Fd()))
 		req.Criu.Stream = proto.Bool(true)
 
 		// Streamer also requires Cedana's CRIU version until the Stream proto option
