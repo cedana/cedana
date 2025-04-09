@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -222,9 +223,15 @@ func PrepareS3Dump(next types.Dump) types.Dump {
 		var waitForIO func() error
 		var end func()
 
+		// Building S3 Config
+		keyPrefix := req.Details.GetJID()
+		if keyPrefix == "" {
+			keyPrefix = req.Name // guaranteed for managed jobs
+		}
+
 		s3Config := S3Config{
-			BucketName:     "cedana-store-tf",
-			KeyPrefix:      "test123",
+			BucketName:     "cedana-store-tf", // FIXME
+			KeyPrefix:      keyPrefix,
 			ForcePathStyle: true,
 		}
 
@@ -258,7 +265,9 @@ func PrepareS3Dump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
 		}
 
-		log.Debug().Str("path", s3Config.BucketName).Str("compression", compression).Msg("stream dump completed")
+		resp.Path = strings.Join([]string{"s3:/", s3Config.BucketName, s3Config.KeyPrefix}, "/")
+
+		log.Debug().Str("path", resp.Path).Str("compression", compression).Msg("stream dump completed")
 
 		return exited, nil
 	}
