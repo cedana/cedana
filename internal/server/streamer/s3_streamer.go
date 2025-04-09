@@ -46,7 +46,6 @@ func NewS3StreamingFs(
 	S3Config S3Config,
 ) (*Fs, func() error, error) {
 
-	// Load AWS config
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithLogger(aws.NewConfig().Logger))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load AWS config")
@@ -87,7 +86,7 @@ func NewS3StreamingFs(
 
 		switch mode {
 		case READ_ONLY:
-			// For READ_ONLY: S3 → writeFds → readFds(your code)
+			// For READ_ONLY: S3 → writeFds → readFds
 			io.Add(1)
 			go func(pipeWriter *os.File, key string, shardIdx int32) {
 				defer io.Done()
@@ -332,7 +331,6 @@ func WriteToS3(
 			Msg("WriteToS3: compression done")
 	}()
 
-	// Context watcher for debugging
 	go func() {
 		<-ctx.Done()
 		log.Warn().Str("key", key).
@@ -387,36 +385,44 @@ func ReadFromS3(
 	dest io.Writer,
 	bucket, key string,
 ) (int64, error) {
-	// Download the object from S3
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+	gid := goroutineID()
+	start := time.Now()
+
+	log.Debug().
+		Int64("goroutine", gid).
+		Str("key", key).
+		Time("start", start).
+		Msg("ReadFromS3: start")
+
+	getResp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to download object: %w", err)
+		return 0, fmt.Errorf("GetObject failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer getResp.Body.Close()
 
-	compression, err := cedana_io.CompressionFromExt(key)
+	// Optional: decompress if needed
+	reader, err := cedana_io.NewCompressionReader(getResp.Body, key)
 	if err != nil {
-		return 0, fmt.Errorf("failed to infer compression type: %w", err)
+		return 0, fmt.Errorf("decompression failed: %w", err)
 	}
+	defer reader.Close()
 
-	var reader io.Reader = resp.Body
-	if compression != "" {
-		decompressor, err := cedana_io.NewCompressionReader(resp.Body, compression)
-		if err != nil {
-			return 0, fmt.Errorf("failed to create decompression reader: %w", err)
-		}
-		defer decompressor.Close()
-		reader = decompressor
-	}
-
-	// Copy the data to the destination writer
 	written, err := io.Copy(dest, reader)
+	end := time.Now()
+
 	if err != nil {
-		return 0, fmt.Errorf("failed to write data to destination: %w", err)
+		return written, fmt.Errorf("copy failed: %w", err)
 	}
+
+	log.Debug().
+		Int64("goroutine", gid).
+		Str("key", key).
+		Int64("bytesWritten", written).
+		Dur("duration", end.Sub(start)).
+		Msg("ReadFromS3: complete")
 
 	return written, nil
 }

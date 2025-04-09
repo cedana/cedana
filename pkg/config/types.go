@@ -21,6 +21,8 @@ type (
 		Checkpoint Checkpoint `json:"checkpoint" key:"checkpoint" yaml:"checkpoint" mapstructure:"checkpoint"`
 		// Database details
 		DB DB `json:"db" key:"db" yaml:"db" mapstructure:"db"`
+		// S3 settings
+		S3 S3 `json:"s3" key:"s3" yaml:"s3" mapstructure:"s3"`
 		// Profiling settings
 		Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
 		// Metrics settings
@@ -50,6 +52,11 @@ type (
 		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
 		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
 		Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+	}
+
+	S3 struct {
+		// Currently only support cedana-managed S3 buckets. This toggles streaming + s3
+		Managed bool `json:"managed" key:"managed" yaml:"managed" mapstructure:"managed"`
 	}
 
 	DB struct {

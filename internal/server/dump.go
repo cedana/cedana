@@ -27,7 +27,11 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	dumpDirAdapter := filesystem.PrepareDumpDir
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDir
+		if config.Global.S3.Managed {
+			dumpDirAdapter = streamer.PrepareS3Dump
+		} else {
+			dumpDirAdapter = streamer.PrepareDumpDir
+		}
 	}
 
 	middleware := types.Middleware[types.Dump]{
