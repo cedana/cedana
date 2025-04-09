@@ -3,6 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/criu"
@@ -19,11 +23,38 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	cedanagosdk "github.com/cedana/cedana-go-sdk"
 )
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
+	if checkpointId, found := strings.CutPrefix(req.Path, "cedana://"); found {
+		// fetch from checkpointId
+		client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
+		downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
+		}
+		// TODO (SA): handle checksum validation to ensure if the file is already present we don't redownload it
+		checkpointFilePath := "/tmp/cedana-checkpoint-" + checkpointId + ".tar"
+		r, err := http.Get(*downloadUrl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download cedana checkpoint: %v", err)
+		}
+		defer r.Body.Close()
+		file, err := os.Create(checkpointFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create checkpoint file on disk: %v", err)
+		}
+		_, err = io.Copy(file, r.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write cedana checkpoint to disk: %v", err)
+		}
+		defer file.Close()
+		req.Path = checkpointFilePath
+	}
 
 	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
