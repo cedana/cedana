@@ -222,6 +222,12 @@ func NewS3StreamingFs(
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
 		log.Trace().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		if mode == WRITE_ONLY {
+			log.Debug().Msg("closing all write pipes after CRIU exited")
+			for _, w := range writeFds {
+				_ = w.Close()
+			}
+		}
 
 		// Clean up socket files
 		matches, err := filepath.Glob(filepath.Join(tempDir, "*.sock"))
