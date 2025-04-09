@@ -87,26 +87,58 @@ func NewS3StreamingFs(
 		switch mode {
 		case READ_ONLY:
 			// For READ_ONLY: S3 → writeFds → readFds
+			log.Trace().
+				Int32("shard", i).
+				Int("read_fd", int(readFds[i].Fd())).
+				Int("write_fd", int(writeFds[i].Fd())).
+				Str("key", s3Key).
+				Msg("setting up S3 stream to CRIU")
+
 			io.Add(1)
 			go func(pipeWriter *os.File, key string, shardIdx int32) {
 				defer io.Done()
 				defer pipeWriter.Close()
 
-				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("streaming from S3")
+				gid := goroutineID()
+				start := time.Now()
 
-				_, err := ReadFromS3(
+				log.Debug().
+					Int32("shard", shardIdx).
+					Int64("goroutine", gid).
+					Str("key", key).
+					Time("start", start).
+					Msg("streaming from S3: start")
+
+				written, err := ReadFromS3(
 					ctx,
 					s3Client,
 					pipeWriter,
 					S3Config.BucketName,
-					key)
+					key,
+				)
 
+				end := time.Now()
 				if err != nil {
-					log.Error().Err(err).Str("key", key).Msg("failed to stream from S3")
+					log.Error().Err(err).
+						Int32("shard", shardIdx).
+						Int64("goroutine", gid).
+						Str("key", key).
+						Time("end", end).
+						Dur("duration", end.Sub(start)).
+						Msg("streaming from S3: failed")
 					ioErr <- err
 					return
 				}
-				log.Debug().Int32("shard", shardIdx).Str("key", key).Msg("finished streaming from S3")
+
+				log.Debug().
+					Int32("shard", shardIdx).
+					Int64("goroutine", gid).
+					Str("key", key).
+					Int64("bytesWritten", written).
+					Time("end", end).
+					Dur("duration", end.Sub(start)).
+					Msg("streaming from S3: complete")
+
 			}(writeFds[i], s3Key, i)
 
 		case WRITE_ONLY:

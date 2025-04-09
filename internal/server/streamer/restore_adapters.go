@@ -180,7 +180,7 @@ func PrepareS3Restore(next types.Restore) types.Restore {
 			imgStreamer.BinaryPaths()[0],
 			imagesDirectory,
 			parallelism,
-			WRITE_ONLY,
+			READ_ONLY,
 			"", // compression string as input, inferred during readFromS3
 			s3Config,
 		)
