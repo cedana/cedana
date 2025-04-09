@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/criu"
@@ -19,6 +21,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	cedanagosdk "github.com/cedana/cedana-go-sdk"
 )
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
@@ -71,6 +75,31 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	if utils.PathExists(resp.Path) {
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
+
+		client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
+		uuid, err := client.V2().Checkpoints().Post(ctx, nil)
+		if err != nil {
+			// we can't write checkpoint to remote
+			return resp, nil
+		}
+		go func() {
+			// write information about process and checkpoint meta first before starting upload
+			gpu := "none"
+			platform := "none"
+			if resp.State.GPUEnabled {
+				gpu = "nvidia"
+			}
+			if resp.State.Host.Platform != "" {
+				platform = resp.State.Host.Platform
+			}
+			res, err := client.V2().Checkpoints().Info().ById(*uuid).Put(context.WithoutCancel(ctx), nil)
+
+			// get upload url to upload the dumped artifacts to
+			url, err := client.V2().Checkpoints().Upload().ById(*uuid).Patch(context.WithoutCancel(ctx), nil)
+			if err != nil {
+				return
+			}
+		}()
 	}
 
 	return resp, nil
