@@ -10,8 +10,8 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250327172915-8b2731879e40.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2731879e40.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-ea22853a44c0.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-ea22853a44c0.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-c88794a7a777.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-c88794a7a777.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1
 	github.com/cedana/cedana-go-sdk v0.5.0
 	github.com/containerd/console v1.0.4

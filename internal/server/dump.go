@@ -84,6 +84,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 			// we can't write checkpoint to remote
 			return resp, nil
 		}
+		resp.Id = uuid
 		go func() {
 			// write information about process and checkpoint meta first before starting upload
 			gpu := "none"
