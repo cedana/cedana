@@ -398,13 +398,17 @@ func ReadFromS3(
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
+
 	if err != nil {
 		return 0, fmt.Errorf("GetObject failed: %w", err)
 	}
+
 	defer getResp.Body.Close()
 
-	// Optional: decompress if needed
-	reader, err := cedana_io.NewCompressionReader(getResp.Body, key)
+	ext := filepath.Ext(key)
+	compression := strings.TrimPrefix(ext, ".")
+
+	reader, err := cedana_io.NewCompressionReader(getResp.Body, compression)
 	if err != nil {
 		return 0, fmt.Errorf("decompression failed: %w", err)
 	}
