@@ -303,7 +303,10 @@ func WriteToS3(
 		defer pw.Close()
 
 		compressionStart := time.Now()
-		log.Debug().Str("key", key).Int64("goroutine", goroutineID()).Msg("WriteToS3: starting compression")
+		log.Debug().Str("key", key).
+			Int64("goroutine", goroutineID()).
+			Int64("timestamp", time.Now().Unix()).
+			Msg("WriteToS3: starting compression")
 
 		bytesWritten, compressErr = io.Copy(compressor, source)
 		if cerr := compressor.Close(); cerr != nil && compressErr == nil {
@@ -314,6 +317,7 @@ func WriteToS3(
 			Str("key", key).
 			Int64("goroutine", goroutineID()).
 			Int64("bytesWritten", bytesWritten).
+			Int64("timestamp", time.Now().Unix()).
 			Dur("compression_duration", time.Since(compressionStart)).
 			Msg("WriteToS3: compression done")
 	}()
@@ -343,6 +347,7 @@ func WriteToS3(
 
 	log.Debug().Str("key", key).
 		Int64("goroutine", gid).
+		Int64("timestamp", time.Now().Unix()).
 		Dur("upload_duration", time.Since(uploadStart)).
 		Msg("WriteToS3: upload finished")
 
@@ -352,6 +357,7 @@ func WriteToS3(
 	log.Debug().
 		Str("key", key).
 		Int64("goroutine", gid).
+		Int64("timestamp", time.Now().Unix()).
 		Dur("total_duration", end.Sub(start)).
 		Msg("WriteToS3: complete")
 
