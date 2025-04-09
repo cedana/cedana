@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana-go-sdk/models"
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
@@ -92,11 +94,33 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 			if resp.State.Host.Platform != "" {
 				platform = resp.State.Host.Platform
 			}
-			res, err := client.V2().Checkpoints().Info().ById(*uuid).Put(context.WithoutCancel(ctx), nil)
-
+			body := models.CheckpointInfo{}
+			body.SetGpu(&gpu)
+			body.SetPlatform(&platform)
+			_, err := client.V2().Checkpoints().Info().ById(*uuid).Put(context.WithoutCancel(ctx), &body, nil)
+			if err != nil {
+				return
+			}
 			// get upload url to upload the dumped artifacts to
 			url, err := client.V2().Checkpoints().Upload().ById(*uuid).Patch(context.WithoutCancel(ctx), nil)
 			if err != nil {
+				return
+			}
+			// start uploading the file to url
+			fs, err := os.Open(resp.Path)
+			if err != nil {
+				return
+			}
+			// TODO (SA): handle the multipart upload properly, make it resumable so that we can retry in case of transient network errors
+			req, err := http.NewRequest("PUT", *url, fs)
+			if err != nil {
+				return
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return
+			}
+			if resp.StatusCode == 200 {
 				return
 			}
 		}()
