@@ -112,10 +112,14 @@ func NewS3StreamingFs(
 
 		case WRITE_ONLY:
 			// For WRITE_ONLY: readFds → writeFds(streamer) → S3
+			log.Debug().Int32("shard", i).Int("write_fd", int(writeFds[i].Fd())).Msg("passing write end to CRIU")
+
 			io.Add(1)
 			go func(pipeReader *os.File, key string, shardIdx int32) {
 				defer io.Done()
 				defer pipeReader.Close()
+
+				source := &loggingReader{r: pipeReader, key: key, shard: shardIdx}
 
 				gid := goroutineID()
 				start := time.Now()
@@ -127,7 +131,7 @@ func NewS3StreamingFs(
 					Time("start", start).
 					Msg("streaming to S3: start")
 
-				written, err := WriteToS3(ctx, s3Client, pipeReader, S3Config.BucketName, key, compression)
+				written, err := WriteToS3(ctx, s3Client, source, S3Config.BucketName, key, compression)
 
 				end := time.Now()
 				if err != nil {
@@ -417,4 +421,27 @@ func goroutineID() int64 {
 	idField := bytes.Fields(buf[:n])[1]
 	id, _ := strconv.ParseInt(string(idField), 10, 64)
 	return id
+}
+
+type loggingReader struct {
+	r     io.Reader
+	key   string
+	shard int32
+}
+
+func (lr *loggingReader) Read(p []byte) (int, error) {
+	log.Debug().
+		Str("key", lr.key).
+		Int32("shard", lr.shard).
+		Msg("waiting to read from pipe...")
+
+	n, err := lr.r.Read(p)
+
+	log.Debug().
+		Str("key", lr.key).
+		Int32("shard", lr.shard).
+		Int("n", n).
+		Msg("read from pipe")
+
+	return n, err
 }
