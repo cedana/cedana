@@ -80,25 +80,12 @@ aws_setup() {
 
 }
 
-aws_teardown() {
-    if aws_exists && aws_configured; then
-        local bucket=$1
-        if [ -n "$bucket" ]; then
-            aws s3 rm "s3://$bucket" --recursive
-        else
-            echo "No bucket specified"
-        fi
-    else
-        echo "AWS CLI not configured or not installed"
-    fi
-}
-
 assert_exists_s3() {
     if aws_exists && aws_configured; then
         local key=$1
         if [ -n "$key" ]; then
-            if ! aws s3 ls "s3://$CEDANA_S3_BUCKETNAME/$key" >/dev/null 2>&1; then
-                echo "Key $key does not exist"
+            if ! aws s3api head-object --bucket "$CEDANA_S3_BUCKETNAME" --key "$key" >/dev/null 2>&1; then
+                echo "Object s3://$CEDANA_S3_BUCKETNAME/$key does not exist"
                 return 1
             fi
         else
@@ -108,5 +95,18 @@ assert_exists_s3() {
     else
         echo "AWS CLI not configured or not installed"
         return 1
+    fi
+}
+
+aws_cleanup() {
+    if aws_exists && aws_configured; then
+        local key_prefix=$1
+        if [ -n "$key_prefix" ]; then
+            aws s3 rm "s3://$CEDANA_S3_BUCKET_NAME/$key_prefix" --recursive
+        else
+            echo "No key prefix specified"
+        fi
+    else
+        echo "AWS CLI not configured or not installed"
     fi
 }
