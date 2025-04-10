@@ -345,7 +345,7 @@ func WriteToS3(
 	})
 
 	uploadStart := time.Now()
-	log.Debug().Str("key", key).Int64("goroutine", gid).Msg("WriteToS3: starting S3 upload")
+	log.Debug().Str("key", key).Str("bucket", bucket).Int64("goroutine", gid).Msg("WriteToS3: starting S3 upload")
 
 	_, uploadErr := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
