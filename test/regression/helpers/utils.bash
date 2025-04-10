@@ -66,6 +66,20 @@ aws_configured() {
     aws_exists && env_exists AWS_ACCESS_KEY_ID && env_exists AWS_SECRET_ACCESS_KEY && env_exists AWS_REGION
 }
 
+aws_setup() {
+    if aws_exists && aws_configured; then
+        local bucket=$1
+        if [ -n "$bucket" ]; then
+            aws s3api create-bucket --bucket "$bucket" --region "$AWS_REGION"
+        else
+            echo "No bucket specified"
+        fi
+    else
+        echo "AWS CLI not configured or not installed"
+    fi
+
+}
+
 aws_teardown() {
     if aws_exists && aws_configured; then
         local bucket=$1
