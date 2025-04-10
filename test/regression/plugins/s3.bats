@@ -43,7 +43,7 @@ teardown_file() {
     run cedana dump process $pid --name "$name" --dir /tmp --stream 1 --compression none
     assert_success
 
-    assert_exists_s3 "/tmp/$name/img-0"
+    assert_exists_s3 "$name/img-0"
 
     run kill $pid
 
