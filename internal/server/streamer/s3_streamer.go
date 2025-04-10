@@ -374,7 +374,6 @@ func WriteToS3(
 func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket, key string) (int64, error) {
 	gid := goroutineID()
 	start := time.Now()
-
 	log.Trace().Int64("goroutine", gid).Str("key", key).Time("start", start).Msg("ReadFromS3: start")
 
 	getResp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
@@ -395,20 +394,30 @@ func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket
 	if err != nil {
 		return 0, fmt.Errorf("decompression init failed: %w", err)
 	}
-	defer func() {
-		if cerr := reader.Close(); cerr != nil {
-			log.Warn().Int64("goroutine", gid).Str("key", key).Err(cerr).
-				Msg("ReadFromS3: compression reader close failed")
+
+	pr, pw := io.Pipe()
+
+	var decompressErr error
+	go func() {
+		defer pw.Close()
+		defer reader.Close()
+
+		_, decompressErr = io.Copy(pw, reader)
+		if decompressErr != nil {
+			log.Error().Int64("goroutine", gid).Str("key", key).Err(decompressErr).
+				Msg("ReadFromS3: decompression failed")
 		}
 	}()
 
-	written, err := io.Copy(dest, reader)
+	// Stream decompressed data into dest
+	written, err := io.Copy(dest, pr)
 	end := time.Now()
 
 	if err != nil {
-		log.Error().Int64("goroutine", gid).Str("key", key).Int64("bytesRead", written).Dur("duration", end.Sub(start)).Err(err).
-			Msg("ReadFromS3: copy failed")
-		return written, fmt.Errorf("copy failed: %w", err)
+		return written, fmt.Errorf("pipe → dest copy failed: %w", err)
+	}
+	if decompressErr != nil {
+		return written, fmt.Errorf("decompression failed: %w", decompressErr)
 	}
 
 	log.Debug().Int64("goroutine", gid).Str("key", key).Int64("bytesRead", written).Dur("duration", end.Sub(start)).
