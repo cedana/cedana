@@ -9,6 +9,22 @@ load_lib support
 load_lib assert
 load_lib file
 
+setup_file() {
+    setup_file_daemon
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
+
 ############
 ### Dump ###
 ############
@@ -35,6 +51,21 @@ load_lib file
     assert_success
 
     assert_exists "/tmp/$name"
+
+    run kill $pid
+}
+
+@test "dump process (custom dir)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    mkdir -p /tmp/"$name"
+
+    run cedana dump process $pid --name "$name" --dir /tmp/"$name" --compression none
+    assert_success
+
+    assert_exists "/tmp/$name/$name"
 
     run kill $pid
 }

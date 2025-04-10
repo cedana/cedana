@@ -36,9 +36,9 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 		Credential: &syscall.Credential{
-			Uid:    details.UID,
-			Gid:    details.GID,
-			Groups: details.Groups,
+			Uid:    req.UID,
+			Gid:    req.GID,
+			Groups: req.Groups,
 		},
 		// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 		// XXX: Above is commented out because if we try to restore a managed job,
@@ -46,7 +46,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		// using a dump path (directly w/ restore -p <path>), instead of using job
 		// restore, the restored process dies immediately.
 	}
-	cmd.Env = details.Env
+	cmd.Env = req.Env
 	cmd.Dir = details.WorkingDir
 
 	// Attach IO if requested, otherwise log to file

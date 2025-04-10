@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.22.7
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250226205333-dc400d2cae97.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.5-20250226205333-dc400d2cae97.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.5-20250226205333-d9d8d96ca331.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250327172915-8b2731879e40.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2731879e40.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250226205333-5d0820253730.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.5-20250226205333-5d0820253730.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.5-20250226205333-4b6f9efc37ef.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-ea22853a44c0.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.71
 	github.com/containerd/console v1.0.4
@@ -25,6 +25,7 @@ require (
 	github.com/opencontainers/runc v1.2.3
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/opencontainers/selinux v1.11.1
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
 	github.com/rs/zerolog v1.33.0
 	github.com/shirou/gopsutil/v4 v4.24.11
@@ -39,7 +40,7 @@ require (
 	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/grpc v1.68.1
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -102,7 +103,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.1
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/cilium/ebpf v0.16.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

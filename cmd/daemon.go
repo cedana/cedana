@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -49,11 +50,12 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("daemon must be run as root")
 		}
 
-		var err error
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		server, err := server.NewServer(cmd.Context(), &server.ServeOpts{
+		server, err := server.NewServer(ctx, &server.ServeOpts{
 			Address:  config.Global.Address,
 			Protocol: config.Global.Protocol,
 			Metrics:  config.Global.Metrics,
@@ -64,7 +66,7 @@ var startDaemonCmd = &cobra.Command{
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		err = server.Launch(cmd.Context())
+		err = server.Launch(ctx)
 		if err != nil {
 			log.Error().Err(err).Msgf("stopping daemon")
 			return err

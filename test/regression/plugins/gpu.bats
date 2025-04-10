@@ -4,6 +4,7 @@
 
 load ../helpers/utils
 load ../helpers/daemon
+load ../helpers/gpu
 
 load_lib support
 load_lib assert
@@ -11,6 +12,25 @@ load_lib file
 
 # So that we don't run out of shm space
 export BATS_NO_PARALLELIZE_WITHIN_FILE=true
+
+# One-time setup of downloading weights & pip installing
+setup_file() {
+    setup_file_daemon
+    install_requirements
+    download_hf_models
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
 
 ###########
 ### Run ###
@@ -45,6 +65,25 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     assert_success
     assert_exists "$log_file"
 }
+
+@test "run GPU process (GPU binary) with modified env" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    log_file="/var/log/cedana-output-$jid.log"
+
+    expected_size=$((4*1024*1024*1024))
+    export CEDANA_GPU_SHM_SIZE="$expected_size"
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
+    assert_success
+    assert_exists "$log_file"
+
+    check_shm_size "$jid" "$expected_size"
+}
+
 
 @test "run GPU process (non-existent binary)" {
     if ! cmd_exists nvidia-smi; then
@@ -164,6 +203,44 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
     run cedana job kill "$jid"
 }
 
+
+@test "restore GPU process with smaller shm (vector add)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+
+    expected_size=$((4*1024*1024*1024))
+    export CEDANA_GPU_SHM_SIZE="$expected_size"
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    assert_success
+
+    check_shm_size "$jid" "$expected_size"
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    sleep 1
+
+    run cedana restore job "$jid"
+    assert_success
+
+    check_shm_size "$jid" "$expected_size"
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana job kill "$jid"
+}
+
 @test "restore GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -193,3 +270,14 @@ export BATS_NO_PARALLELIZE_WITHIN_FILE=true
 
     run cedana job kill "$jid"
 }
+
+#####################
+### Inference C/R ###
+#####################
+
+# Requires an HF token!
+
+@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
+    run_inference_test "stabilityai/stablelm-2-1_6b"
+}
+

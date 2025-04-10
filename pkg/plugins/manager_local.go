@@ -85,7 +85,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		for _, file := range files {
 			for _, path := range strings.Split(m.searchPath, ":") {
 				var stat os.FileInfo
-				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil {
+				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil || stat.IsDir() {
 					continue
 				}
 				dir = path
@@ -169,8 +169,14 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			var err error
 			for _, file := range plugin.Libraries {
 				src := filepath.Join(srcDir, file.Name)
-				dest := filepath.Join(LibDir, file.Name)
-				if _, e := os.Stat(src); os.IsNotExist(e) {
+				var dest string
+				if file.InstallDir != "" {
+					os.MkdirAll(file.InstallDir, os.ModePerm)
+					dest = filepath.Join(file.InstallDir, file.Name)
+				} else {
+					dest = filepath.Join(LibDir, file.Name)
+				}
+				if s, e := os.Stat(src); e != nil || os.IsNotExist(e) || s.IsDir() {
 					err = fmt.Errorf("No local plugin found")
 					break
 				}
@@ -182,8 +188,14 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 			for _, file := range plugin.Binaries {
 				src := filepath.Join(srcDir, file.Name)
-				dest := filepath.Join(BinDir, file.Name)
-				if _, e := os.Stat(src); os.IsNotExist(e) {
+				var dest string
+				if file.InstallDir != "" {
+					os.MkdirAll(file.InstallDir, os.ModePerm)
+					dest = filepath.Join(file.InstallDir, file.Name)
+				} else {
+					dest = filepath.Join(BinDir, file.Name)
+				}
+				if s, e := os.Stat(src); e != nil || os.IsNotExist(e) || s.IsDir() {
 					err = fmt.Errorf("No local plugin found")
 					break
 				}
@@ -251,14 +263,24 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 
 			// Remove the plugin files from the installation directory
 			for _, file := range plugin.Libraries {
-				dest := filepath.Join(LibDir, file.Name)
+				var dest string
+				if file.InstallDir != "" {
+					dest = filepath.Join(file.InstallDir, file.Name)
+				} else {
+					dest = filepath.Join(LibDir, file.Name)
+				}
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
 				}
 			}
 			for _, file := range plugin.Binaries {
-				dest := filepath.Join(BinDir, file.Name)
+				var dest string
+				if file.InstallDir != "" {
+					dest = filepath.Join(file.InstallDir, file.Name)
+				} else {
+					dest = filepath.Join(BinDir, file.Name)
+				}
 				if e := os.Remove(dest); e != nil {
 					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
 					break

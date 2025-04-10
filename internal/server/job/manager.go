@@ -76,7 +76,7 @@ type Manager interface {
 	GPUs() gpu.Manager
 
 	// CRIUCallback returns the saved CRIU notify callback for the job.
-	CRIUCallback(lifetime context.Context, jid string, stream int32) *criu.NotifyCallbackMulti
+	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallbackMulti
 
 	// GetWG returns the waitgroup for the manager.
 	GetWG() *sync.WaitGroup

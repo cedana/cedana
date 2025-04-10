@@ -43,16 +43,17 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			lifetime, cancel := context.WithCancel(opts.Lifetime)
 			opts.Lifetime = lifetime
 
-			details := req.GetDetails().GetProcess()
 			user := &syscall.Credential{
-				Uid:    details.GetUID(),
-				Gid:    details.GetGID(),
-				Groups: details.GetGroups(),
+				Uid:    req.UID,
+				Gid:    req.GID,
+				Groups: req.Groups,
 			}
+
+			env := req.GetEnv()
 
 			pid := make(chan uint32, 1)
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			err := gpus.Attach(ctx, lifetime, jid, user, pid)
+			err := gpus.Attach(ctx, lifetime, jid, user, pid, env)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
@@ -124,12 +125,12 @@ func ProcessInterception(next types.Run) types.Run {
 			)
 		}
 
-		env := req.GetDetails().GetProcess().GetEnv()
+		env := req.GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
 		env = append(env, "CEDANA_JID="+req.JID)
 
-		req.Details.Process.Env = env
+		req.Env = env
 
 		return next(ctx, opts, resp, req)
 	}

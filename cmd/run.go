@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
@@ -65,6 +64,12 @@ var runCmd = &cobra.Command{
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 
+		env := os.Environ()
+		user, err := utils.GetCredentials()
+		if err != nil {
+			return fmt.Errorf("Error getting user credentials: %v", err)
+		}
+
 		// Create half-baked request
 		req := &daemon.RunReq{
 			JID:        jid,
@@ -72,6 +77,10 @@ var runCmd = &cobra.Command{
 			GPUEnabled: gpuEnabled,
 			Attachable: attach || attachable,
 			Action:     daemon.RunAction_START_NEW,
+			Env:        env,
+			UID:        user.Uid,
+			GID:        user.Gid,
+			Groups:     user.Groups,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
@@ -145,20 +154,9 @@ var processRunCmd = &cobra.Command{
 		}
 
 		args = args[1:]
-		env := os.Environ()
 		wd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("Error getting working directory: %v", err)
-		}
-
-		var user *syscall.Credential
-		if asRoot {
-			user = utils.GetRootCredentials()
-		} else {
-			user, err = utils.GetCredentials()
-			if err != nil {
-				return fmt.Errorf("Error getting user credentials: %v", err)
-			}
 		}
 
 		req.Type = "process"
@@ -166,12 +164,15 @@ var processRunCmd = &cobra.Command{
 			Process: &daemon.Process{
 				Path:       path,
 				Args:       args,
-				Env:        env,
 				WorkingDir: wd,
-				UID:        user.Uid,
-				GID:        user.Gid,
-				Groups:     user.Groups,
 			},
+		}
+
+		if asRoot {
+			user := utils.GetRootCredentials()
+			req.UID = user.Uid
+			req.GID = user.Gid
+			req.Groups = user.Groups
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
