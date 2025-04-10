@@ -46,6 +46,7 @@ func NewS3StreamingFs(
 	S3Config S3Config,
 ) (*Fs, func() error, error) {
 
+	// FIXME - should replace w/ one-time URL
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithLogger(aws.NewConfig().Logger))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load AWS config")

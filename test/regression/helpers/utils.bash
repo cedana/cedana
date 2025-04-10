@@ -14,10 +14,11 @@ unix_nano() {
 
 random_free_port() {
     while true; do
-        PORT=$(( ( RANDOM % 64511 ) + 1024 ));
+        PORT=$(((RANDOM % 64511) + 1024))
         if ! ss -lntu | grep -q ":$PORT"; then
-            echo $PORT; break;
-        fi;
+            echo $PORT
+            break
+        fi
     done
 }
 
@@ -55,4 +56,12 @@ env_exists() {
 
 cmd_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+aws_exists() {
+    cmd_exists aws
+}
+
+aws_configured() {
+    aws_exists && env_exists AWS_ACCESS_KEY_ID && env_exists AWS_SECRET_ACCESS_KEY
 }
