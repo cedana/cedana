@@ -84,7 +84,7 @@ assert_exists_s3() {
     if aws_exists && aws_configured; then
         local key=$1
         if [ -n "$key" ]; then
-            if ! aws s3api head-object --bucket "$CEDANA_S3_BUCKETNAME" --key "$key" >/dev/null 2>&1; then
+            if ! aws s3api head-object --bucket "$CEDANA_S3_BUCKET_NAME" --key "$key" >/dev/null 2>&1; then
                 echo "Object s3://$CEDANA_S3_BUCKETNAME/$key does not exist"
                 return 1
             fi
@@ -105,6 +105,20 @@ aws_cleanup() {
             aws s3 rm "s3://$CEDANA_S3_BUCKET_NAME/$key_prefix" --recursive
         else
             echo "No key prefix specified"
+        fi
+    else
+        echo "AWS CLI not configured or not installed"
+    fi
+}
+
+aws_cleanup_bucket() {
+    if aws_exists && aws_configured; then
+        local bucket=$1
+        if [ -n "$bucket" ]; then
+            aws s3 rm "s3://$bucket" --recursive
+            aws s3api delete-bucket --bucket "$bucket" --region "$AWS_REGION"
+        else
+            echo "CEDANA_S3_BUCKET_NAME not set"
         fi
     else
         echo "AWS CLI not configured or not installed"

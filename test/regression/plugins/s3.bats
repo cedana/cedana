@@ -9,7 +9,8 @@ load_lib support
 load_lib assert
 load_lib file
 
-CEDANA_S3_BUCKET_NAME="cedana-test"
+name=$(unix_nano)
+CEDANA_S3_BUCKET_NAME="cedana-test-$name"
 CEDANA_S3_MANAGED="true"
 
 export CEDANA_S3_BUCKET_NAME
@@ -17,6 +18,7 @@ export CEDANA_S3_MANAGED
 
 setup_file() {
     setup_file_daemon
+    aws_setup "$CEDANA_S3_BUCKET_NAME"
 }
 
 setup() {
@@ -29,6 +31,7 @@ teardown() {
 
 teardown_file() {
     teardown_file_daemon
+    aws_cleanup_bucket "$CEDANA_S3_BUCKET_NAME"
 }
 
 ############
@@ -46,6 +49,4 @@ teardown_file() {
     assert_exists_s3 "$name/img-0"
 
     run kill $pid
-
-    aws_cleanup $name
 }
