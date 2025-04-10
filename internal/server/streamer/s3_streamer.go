@@ -375,8 +375,7 @@ func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket
 	gid := goroutineID()
 	start := time.Now()
 
-	log.Trace().Int64("goroutine", gid).Str("key", key).Time("start", start).
-		Msg("ReadFromS3: start")
+	log.Trace().Int64("goroutine", gid).Str("key", key).Time("start", start).Msg("ReadFromS3: start")
 
 	getResp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -389,7 +388,6 @@ func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket
 
 	ext := filepath.Ext(key)
 	compression := strings.TrimPrefix(ext, ".")
-
 	log.Trace().Int64("goroutine", gid).Str("key", key).Str("compression", compression).
 		Msg("ReadFromS3: initializing decompression")
 
@@ -397,7 +395,6 @@ func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket
 	if err != nil {
 		return 0, fmt.Errorf("decompression init failed: %w", err)
 	}
-
 	defer func() {
 		if cerr := reader.Close(); cerr != nil {
 			log.Warn().Int64("goroutine", gid).Str("key", key).Err(cerr).
@@ -416,7 +413,6 @@ func ReadFromS3(ctx context.Context, s3Client *s3.Client, dest io.Writer, bucket
 
 	log.Debug().Int64("goroutine", gid).Str("key", key).Int64("bytesRead", written).Dur("duration", end.Sub(start)).
 		Msg("ReadFromS3: complete")
-
 	return written, nil
 }
 
