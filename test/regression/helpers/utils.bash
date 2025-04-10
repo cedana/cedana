@@ -70,14 +70,18 @@ aws_setup() {
     if aws_exists && aws_configured; then
         local bucket=$1
         if [ -n "$bucket" ]; then
-            aws s3api create-bucket --bucket "$bucket" --region "$AWS_REGION"
+            if ! aws s3api create-bucket --bucket "$bucket" --region "$AWS_REGION"; then
+                echo "Failed to create bucket $bucket"
+                return 1
+            fi
         else
             echo "No bucket specified"
+            return 1
         fi
     else
         echo "AWS CLI not configured or not installed"
+        return 1
     fi
-
 }
 
 assert_exists_s3() {

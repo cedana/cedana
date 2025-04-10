@@ -18,6 +18,7 @@ export CEDANA_S3_MANAGED
 
 setup_file() {
     setup_file_daemon
+    echo "SETUP_FILE CALLED with bucket: $CEDANA_S3_BUCKET_NAME"
     aws_setup "$CEDANA_S3_BUCKET_NAME"
 }
 
