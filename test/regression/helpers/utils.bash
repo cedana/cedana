@@ -96,8 +96,8 @@ aws_teardown() {
 assert_exists_s3() {
     if aws_exists && aws_configured; then
         local key=$1
-        if [ -n "$bucket" ]; then
-            if ! aws s3 ls "s3://$key" >/dev/null 2>&1; then
+        if [ -n "$key" ]; then
+            if ! aws s3 ls "s3://$CEDANA_S3_BUCKETNAME/$key" >/dev/null 2>&1; then
                 echo "Key $key does not exist"
                 return 1
             fi

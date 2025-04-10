@@ -10,12 +10,15 @@ load_lib assert
 load_lib file
 
 name=$(unix_nano)
-export CEDANA_S3_BUCKETNAME="cedana-test-$name"
-export CEDANA_S3_MANAGED="true"
+CEDANA_S3_BUCKETNAME="cedana-test-$name"
+CEDANA_S3_MANAGED="true"
+
+export CEDANA_S3_BUCKETNAME
+export CEDANA_S3_MANAGED
 
 setup_file() {
     setup_file_daemon
-    aws_setup CEDANA_S3_BUCKETNAME
+    aws_setup "$CEDANA_S3_BUCKETNAME"
 }
 
 setup() {
@@ -28,7 +31,7 @@ teardown() {
 
 teardown_file() {
     teardown_file_daemon
-    aws_teardown CEDANA_S3_BUCKETNAME
+    aws_teardown "$CEDANA_S3_BUCKETNAME"
 }
 
 ############
