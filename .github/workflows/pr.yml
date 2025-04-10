@@ -348,7 +348,7 @@ jobs:
 
   regression-test-containerd:
     name: Regression Tests (containerd)
-    runs-on: ubicloud-standard-4
+    runs-on: ubuntu-latest
     if: ${{ !inputs.skip_cpu_tests }}
     container:
       image: cedana/cedana-test:latest
