@@ -13,12 +13,16 @@ var Registry = []Plugin{
 		Binaries: []Binary{{Name: "criu"}},
 	},
 	{
+		Name:      "cloud-hypervisor",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-cloud-hypervisor.so"}},
+	},
+	{
 		Name:      "criu/cuda",
 		Type:      EXTERNAL,
 		Binaries:  []Binary{{Name: "cuda-checkpoint"}},
 		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},
 	},
-	// TODO: can add hypervisor C/R tools
 
 	// Container runtimes
 	{
@@ -38,6 +42,7 @@ var Registry = []Plugin{
 	},
 	{
 		Name:      "kata",
+		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-kata.so"}},
 	},
 
@@ -65,5 +70,11 @@ var Registry = []Plugin{
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
 		Binaries:  []Binary{}, // TODO: add containerd shim binary
+	},
+	{
+		Name:      "k8s-containerd-shim",
+		Type:      EXTERNAL,
+		Libraries: []Binary{},
+		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
 	},
 }

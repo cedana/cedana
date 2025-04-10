@@ -27,6 +27,7 @@ func init() {
 	rootCmd.AddCommand(jobCmd)
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(docGenCmd)
+	rootCmd.AddCommand(dumpVMCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(

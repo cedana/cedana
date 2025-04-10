@@ -10,6 +10,22 @@ load_lib support
 load_lib assert
 load_lib file
 
+setup_file() {
+    setup_file_daemon
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
+
 ###########
 ### Run ###
 ###########

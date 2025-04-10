@@ -13,7 +13,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 )
 
-type tty struct {
+type Tty struct {
 	epoller     *console.Epoller
 	console     *console.EpollConsole
 	hostConsole console.Console
@@ -23,7 +23,7 @@ type tty struct {
 	consoleC    chan error
 }
 
-func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
+func (t *Tty) copyIO(w io.Writer, r io.ReadCloser) {
 	defer t.wg.Done()
 	_, _ = io.Copy(w, r)
 	_ = r.Close()
@@ -31,12 +31,12 @@ func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
 
 // setup pipes for the process so that advanced features like c/r are able to easily checkpoint
 // and restore the process's IO without depending on a host specific path or device
-func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int, stdin io.Reader, stdout, stderr io.Writer) (*tty, error) {
+func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int, stdin io.Reader, stdout, stderr io.Writer) (*Tty, error) {
 	i, err := p.InitializeIO(rootuid, rootgid)
 	if err != nil {
 		return nil, err
 	}
-	t := &tty{
+	t := &Tty{
 		closers: []io.Closer{
 			i.Stdin,
 			i.Stdout,
@@ -71,7 +71,7 @@ func inheritStdio(process *libcontainer.Process) {
 	process.Stderr = os.Stderr
 }
 
-func (t *tty) initHostConsole() error {
+func (t *Tty) initHostConsole() error {
 	// Usually all three (stdin, stdout, and stderr) streams are open to
 	// the terminal, but they might be redirected, so try them all.
 	for _, s := range []*os.File{os.Stderr, os.Stdout, os.Stdin} {
@@ -101,7 +101,7 @@ func (t *tty) initHostConsole() error {
 	return nil
 }
 
-func (t *tty) recvtty(socket *os.File) (Err error) {
+func (t *Tty) recvtty(socket *os.File) (Err error) {
 	f, err := utils.RecvFile(socket)
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func handleInterrupt(c console.Console) {
 	os.Exit(0)
 }
 
-func (t *tty) waitConsole() error {
+func (t *Tty) WaitConsole() error {
 	if t.consoleC != nil {
 		return <-t.consoleC
 	}
@@ -161,7 +161,7 @@ func (t *tty) waitConsole() error {
 
 // ClosePostStart closes any fds that are provided to the container and dup2'd
 // so that we no longer have copy in our process.
-func (t *tty) ClosePostStart() {
+func (t *Tty) ClosePostStart() {
 	for _, c := range t.postStart {
 		_ = c.Close()
 	}
@@ -169,7 +169,7 @@ func (t *tty) ClosePostStart() {
 
 // Close closes all open fds for the tty and/or restores the original
 // stdin state to what it was prior to the container execution
-func (t *tty) Close() {
+func (t *Tty) Close() {
 	// ensure that our side of the fds are always closed
 	for _, c := range t.postStart {
 		_ = c.Close()
@@ -188,7 +188,7 @@ func (t *tty) Close() {
 	}
 }
 
-func (t *tty) resize() error {
+func (t *Tty) resize() error {
 	if t.console == nil || t.hostConsole == nil {
 		return nil
 	}
