@@ -67,16 +67,6 @@ func NewS3StreamingFs(
 		readFds = append(readFds, r)
 		writeFds = append(writeFds, w)
 		shardFds = append(shardFds, fmt.Sprintf("%d", 3+i))
-
-		s3Key := fmt.Sprintf("%s/img-%d", S3Config.KeyPrefix, i)
-		if compression != "none" && compression != "" {
-			ext, err := cedana_io.ExtForCompression(compression)
-			if err != nil {
-				return nil, nil, fmt.Errorf("invalid compression format: %w", err)
-			}
-			s3Key += ext
-		}
-
 		// need a separate s3client for each parallel op
 		s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 			if S3Config.ForcePathStyle {
@@ -84,31 +74,35 @@ func NewS3StreamingFs(
 			}
 		})
 
+		var keys []string
+		if mode == READ_ONLY {
+			keys, err = getKeys(ctx, s3Client, S3Config.BucketName, S3Config.KeyPrefix)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get keys from S3: %w", err)
+			}
+			if len(keys) == 0 {
+				return nil, nil, fmt.Errorf("no keys found in S3 bucket %s with prefix %s", S3Config.BucketName, S3Config.KeyPrefix)
+			}
+
+			// HACK, FIXME
+			if int(i) != len(keys)-1 {
+				return nil, nil, fmt.Errorf("number of shards (%d) does not match number of keys (%d)", len(keys), parallelism)
+			}
+		}
+
 		switch mode {
 		case READ_ONLY:
 			// For READ_ONLY: S3 → writeFds → readFds
-			// take keyPrefix and get all keys from S3
-
-			log.Trace().
-				Int32("shard", i).
-				Int("read_fd", int(readFds[i].Fd())).
-				Int("write_fd", int(writeFds[i].Fd())).
-				Str("key", s3Key).
-				Msg("setting up S3 stream to CRIU")
-
 			io.Add(1)
-			go func(pipeWriter *os.File, key string, shardIdx int32) {
+			go func(pipeWriter *os.File, keys []string, shardIdx int32) {
+				key := keys[shardIdx]
 				defer io.Done()
 				defer pipeWriter.Close()
 
 				gid := goroutineID()
 				start := time.Now()
 
-				log.Debug().
-					Int32("shard", shardIdx).
-					Int64("goroutine", gid).
-					Str("key", key).
-					Time("start", start).
+				log.Debug().Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Time("start", start).
 					Msg("streaming from S3: start")
 
 				written, err := ReadFromS3(
@@ -121,31 +115,28 @@ func NewS3StreamingFs(
 
 				end := time.Now()
 				if err != nil {
-					log.Error().Err(err).
-						Int32("shard", shardIdx).
-						Int64("goroutine", gid).
-						Str("key", key).
-						Time("end", end).
-						Dur("duration", end.Sub(start)).
+					log.Error().Err(err).Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Dur("duration", end.Sub(start)).
 						Msg("streaming from S3: failed")
 					ioErr <- err
 					return
 				}
 
-				log.Debug().
-					Int32("shard", shardIdx).
-					Int64("goroutine", gid).
-					Str("key", key).
-					Int64("bytesWritten", written).
-					Time("end", end).
-					Dur("duration", end.Sub(start)).
-					Msg("streaming from S3: complete")
+				log.Debug().Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Int64("bytesWritten", written).Dur("duration", end.Sub(start)).Msg("streaming from S3: complete")
 
-			}(writeFds[i], s3Key, i)
+			}(writeFds[i], keys, i)
 
+		// For WRITE_ONLY: readFds → writeFds(streamer) → S3
 		case WRITE_ONLY:
-			// For WRITE_ONLY: readFds → writeFds(streamer) → S3
-			log.Debug().Int32("shard", i).Int("write_fd", int(writeFds[i].Fd())).Msg("passing write end to CRIU")
+			log.Trace().Int32("shard", i).Int("write_fd", int(writeFds[i].Fd())).Msg("passing write end to CRIU")
+
+			s3Key := fmt.Sprintf("%s/img-%d", S3Config.KeyPrefix, i)
+			if compression != "none" && compression != "" {
+				ext, err := cedana_io.ExtForCompression(compression)
+				if err != nil {
+					return nil, nil, fmt.Errorf("invalid compression format: %w", err)
+				}
+				s3Key += ext
+			}
 
 			io.Add(1)
 			go func(pipeReader *os.File, key string, shardIdx int32) {
@@ -157,36 +148,18 @@ func NewS3StreamingFs(
 				gid := goroutineID()
 				start := time.Now()
 
-				log.Debug().
-					Int32("shard", shardIdx).
-					Int64("goroutine", gid).
-					Str("key", key).
-					Time("start", start).
-					Msg("streaming to S3: start")
+				log.Trace().Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Time("start", start).Msg("streaming to S3: start")
 
 				written, err := WriteToS3(ctx, s3Client, source, S3Config.BucketName, key, compression)
 
 				end := time.Now()
 				if err != nil {
-					log.Error().Err(err).
-						Int32("shard", shardIdx).
-						Int64("goroutine", gid).
-						Str("key", key).
-						Time("end", end).
-						Dur("duration", end.Sub(start)).
-						Msg("streaming to S3: failed")
+					log.Error().Err(err).Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Dur("duration", end.Sub(start)).Msg("streaming to S3: failed")
 					ioErr <- err
 					return
 				}
 
-				log.Debug().
-					Int32("shard", shardIdx).
-					Int64("goroutine", gid).
-					Str("key", key).
-					Int64("bytesWritten", written).
-					Time("end", end).
-					Dur("duration", end.Sub(start)).
-					Msg("streaming to S3: complete")
+				log.Trace().Int32("shard", shardIdx).Int64("goroutine", gid).Str("key", key).Int64("bytesWritten", written).Dur("duration", end.Sub(start)).Msg("streaming to S3: complete")
 
 			}(readFds[i], s3Key, i)
 		}
@@ -494,4 +467,25 @@ func (lr *loggingReader) Read(p []byte) (int, error) {
 		Msg("read from pipe")
 
 	return n, err
+}
+
+// Gets keys for a jobID. Required for restore side of eq
+func getKeys(ctx context.Context, s3Client *s3.Client, bucket, keyPrefix string) ([]string, error) {
+	var keys []string
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(keyPrefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list keys for prefix '%s' failed: %w", keyPrefix, err)
+		}
+		for _, obj := range page.Contents {
+			keys = append(keys, aws.ToString(obj.Key))
+		}
+	}
+
+	return keys, nil
 }
