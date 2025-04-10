@@ -78,14 +78,17 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
 
+		log.Info().Msg("Creating new client")
 		client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
 		uuid, err := client.V2().Checkpoints().Post(ctx, nil)
 		if err != nil {
-			// we can't write checkpoint to remote
+			log.Warn().Msgf("we can't write checkpoint to remote: %v", err)
 			return resp, nil
 		}
 		resp.Id = uuid
+		log.Info().Msgf("checkpoint id: %v", *uuid)
 		go func() {
+			ctx := context.WithoutCancel(ctx)
 			// write information about process and checkpoint meta first before starting upload
 			gpu := "none"
 			platform := "none"
@@ -98,30 +101,36 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 			body := models.CheckpointInfo{}
 			body.SetGpu(&gpu)
 			body.SetPlatform(&platform)
-			_, err := client.V2().Checkpoints().Info().ById(*uuid).Put(context.WithoutCancel(ctx), &body, nil)
+			_, err := client.V2().Checkpoints().Info().ById(*uuid).Put(ctx, &body, nil)
 			if err != nil {
+				log.Warn().Msgf("put failed: checkpoint info to remote: %v", err)
 				return
 			}
 			// get upload url to upload the dumped artifacts to
-			url, err := client.V2().Checkpoints().Upload().ById(*uuid).Patch(context.WithoutCancel(ctx), nil)
+			url, err := client.V2().Checkpoints().Upload().ById(*uuid).Patch(ctx, nil)
 			if err != nil {
+				log.Warn().Msg("we can't get upload url from remote")
 				return
 			}
 			// start uploading the file to url
 			fs, err := os.Open(resp.Path)
 			if err != nil {
+				log.Warn().Msg("we can't open resp.Path")
 				return
 			}
 			// TODO (SA): handle the multipart upload properly, make it resumable so that we can retry in case of transient network errors
 			req, err := http.NewRequest("PUT", *url, fs)
 			if err != nil {
+				log.Warn().Msg("we can't build a request from checkpoint file")
 				return
 			}
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
+				log.Warn().Msg("we can't get upload url from remote")
 				return
 			}
 			if resp.StatusCode == 200 {
+				log.Info().Msgf("successfully uploaded checkpoint: %v", *uuid)
 				return
 			}
 		}()
