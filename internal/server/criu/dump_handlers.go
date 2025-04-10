@@ -87,6 +87,8 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 	}
 
+	utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
+
 	log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
 
 	return utils.WaitForPid(resp.State.PID), nil

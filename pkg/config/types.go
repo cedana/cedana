@@ -91,7 +91,7 @@ type (
 		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability`
+		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 	}
 
 	Plugins struct {

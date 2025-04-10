@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -15,9 +16,9 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,9 +53,6 @@ func init() {
 		flags.AttachFlag.Full,
 		flags.LogFlag.Full,
 	) // only one of these can be set
-
-	// Bind to config
-	viper.BindPFlag("checkpoint.stream", restoreCmd.PersistentFlags().Lookup(flags.StreamFlag.Full))
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -96,6 +94,12 @@ var restoreCmd = &cobra.Command{
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 
+		env := os.Environ()
+		user, err := utils.GetCredentials()
+		if err != nil {
+			return fmt.Errorf("Error getting user credentials: %v", err)
+		}
+
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:       path,
@@ -111,6 +115,10 @@ var restoreCmd = &cobra.Command{
 				ShellJob:       proto.Bool(shellJob),
 				LinkRemap:      proto.Bool(linkRemap),
 			},
+			Env:    env,
+			UID:    user.Uid,
+			GID:    user.Gid,
+			Groups: user.Groups,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)

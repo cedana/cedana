@@ -174,6 +174,34 @@ jobs:
           version: ${{ github.ref_name }}
           republish: "true"
 
+      - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
+        id: push-libcedana-cloud-hypervisor
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: "cedana"
+          file: "libcedana-cloud-hypervisor.so"
+          name: "libcedana-cloud-hypervisor.so"
+          version: ${{ github.ref_name }}
+          republish: "true"
+
+      - name: Push libcedana-kata.so to Cloudsmith
+        id: push-libcedana-kata
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: "cedana"
+          file: "libcedana-kata.so"
+          name: "libcedana-kata.so"
+          version: ${{ github.ref_name }}
+          republish: "true"
+
   build-push-image-manifest-amd64:
     name: Build & Push (amd64 image)
     runs-on: ubicloud-standard-8

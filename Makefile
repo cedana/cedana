@@ -5,6 +5,9 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
+# Debug flags
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
+
 ifndef VERBOSE
 .SILENT:
 endif
@@ -28,7 +31,12 @@ $(BINARY): $(BINARY_SOURCES) ## Build the binary
 	$(GOCMD) mod tidy
 	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
-install: $(INSTALL_PATH)
+debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
+	@echo "Building $(BINARY) with debug symbols..."
+	$(GOCMD) mod tidy
+	$(GOBUILD) -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+
+install: $(INSTALL_PATH) ## Install the binary
 
 $(INSTALL_PATH): $(BINARY) ## Install the binary
 	@echo "Installing $(BINARY)..."
@@ -86,11 +94,24 @@ plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
+plugin-debug:
+	@echo "Building plugin $$PLUGIN with debug symbols..."
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+
 plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
 	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
 
 plugins: $(PLUGIN_BINARIES) ## Build all plugins
+
+plugins-debug: ## Build all plugins with debug symbols
+	for path in $(wildcard plugins/*); do \
+		if [ -f $$path/*.go ]; then \
+			name=$$(basename $$path); \
+			echo "Building plugin $$name with debug symbols..."; \
+			$(GOBUILD) -C $$path -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+		fi ;\
+	done ;\
 
 $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 	for path in $(wildcard plugins/*); do \
@@ -121,6 +142,9 @@ reset-plugins: ## Reset & uninstall plugins
 			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
+
+# All-in-one debug target
+all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
 
 ###########
 ##@ Testing
@@ -211,7 +235,7 @@ DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm 
 				-v $(PWD):/src:ro \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN)
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
 DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
 					 $(DOCKER_TEST_RUN_OPTS) \
@@ -228,7 +252,7 @@ docker-test: ## Build the test Docker image
 docker-test-cuda: ## Build the test Docker image (CUDA)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE_CUDA) . ;\
+	docker build -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image
