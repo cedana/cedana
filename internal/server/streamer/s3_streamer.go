@@ -87,6 +87,8 @@ func NewS3StreamingFs(
 		switch mode {
 		case READ_ONLY:
 			// For READ_ONLY: S3 → writeFds → readFds
+			// take keyPrefix and get all keys from S3
+
 			log.Trace().
 				Int32("shard", i).
 				Int("read_fd", int(readFds[i].Fd())).
