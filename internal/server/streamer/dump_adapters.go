@@ -231,8 +231,10 @@ func PrepareS3Dump(next types.Dump) types.Dump {
 			keyPrefix = req.Name // guaranteed for managed jobs
 		}
 
+		bucketName := config.Global.S3.BucketName
+
 		s3Config := S3Config{
-			BucketName:     "cedana-store-tf", // FIXME
+			BucketName:     bucketName,
 			KeyPrefix:      keyPrefix,
 			ForcePathStyle: true,
 		}

@@ -57,6 +57,8 @@ type (
 	S3 struct {
 		// Currently only support cedana-managed S3 buckets. This toggles streaming + s3
 		Managed bool `json:"managed" key:"managed" yaml:"managed" mapstructure:"managed"`
+		// BucketName is the name of the S3 bucket to use. This is a hack until managed side is built
+		BucketName string `json:"bucket_name" key:"bucket_name" yaml:"bucket_name" mapstructure:"bucket_name"`
 	}
 
 	DB struct {

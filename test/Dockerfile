@@ -34,6 +34,15 @@ tar -xvf otelcol_0.114.0_linux_amd64.tar.gz
 mv otelcol /usr/local/bin/
 EOT
 
+# install aws cli
+RUN <<EOT
+set -eux
+apt-get install -y unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+EOT
+
 # install go
 RUN <<EOT
 set -eux

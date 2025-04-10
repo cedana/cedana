@@ -63,5 +63,36 @@ aws_exists() {
 }
 
 aws_configured() {
-    aws_exists && env_exists AWS_ACCESS_KEY_ID && env_exists AWS_SECRET_ACCESS_KEY
+    aws_exists && env_exists AWS_ACCESS_KEY_ID && env_exists AWS_SECRET_ACCESS_KEY && env_exists AWS_REGION
+}
+
+aws_teardown() {
+    if aws_exists && aws_configured; then
+        local bucket=$1
+        if [ -n "$bucket" ]; then
+            aws s3 rm "s3://$bucket" --recursive
+        else
+            echo "No bucket specified"
+        fi
+    else
+        echo "AWS CLI not configured or not installed"
+    fi
+}
+
+assert_exists_s3() {
+    if aws_exists && aws_configured; then
+        local key=$1
+        if [ -n "$bucket" ]; then
+            if ! aws s3 ls "s3://$key" >/dev/null 2>&1; then
+                echo "Key $key does not exist"
+                return 1
+            fi
+        else
+            echo "No key specified"
+            return 1
+        fi
+    else
+        echo "AWS CLI not configured or not installed"
+        return 1
+    fi
 }
