@@ -85,7 +85,7 @@ func NewS3StreamingFs(
 			}
 
 			// HACK, FIXME
-			if int(i) != len(keys)-1 {
+			if int(parallelism) != len(keys) {
 				return nil, nil, fmt.Errorf("number of shards (%d) does not match number of keys (%d)", len(keys), parallelism)
 			}
 		}
