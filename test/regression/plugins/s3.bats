@@ -40,7 +40,7 @@ teardown_file() {
 ### Dump ###
 ############
 
-@test "stream dump process (custom name)" {
+@test "stream to s3 dump process (custom name)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -53,7 +53,7 @@ teardown_file() {
     run kill $pid
 }
 
-@test "stream dump process (4 parallelism)" {
+@test "stream to s3 dump process (4 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -69,7 +69,7 @@ teardown_file() {
     run kill $pid
 }
 
-@test "stream dump process (tar compression)" {
+@test "stream to s3 dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
 S    pid=$!
     name=$(unix_nano)
@@ -83,7 +83,7 @@ S    pid=$!
     run kill $pid
 }
 
-@test "stream dump process (gzip compression)" {
+@test "stream to s3 dump process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -97,7 +97,7 @@ S    pid=$!
     run kill $pid
 }
 
-@test "stream dump process (lz4 compression)" {
+@test "stream to s3 dump process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -116,7 +116,7 @@ S    pid=$!
 ### Restore ###
 ###############
 
-@test "stream restore process" {
+@test "stream to s3 restore process" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -127,6 +127,25 @@ S    pid=$!
     assert_exists_s3 "$name/img-0"
 
     run cedana restore process --path "s3://$CEDANA_S3_BUCKET_NAME/$name" --stream 1
+    assert_success
+
+    run kill $pid
+}
+
+@test "stream to s3 restore process (4 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --stream 4 --compression none
+    assert_success
+
+    assert_exists_s3 "$name/img-0"
+    assert_exists_s3 "$name/img-1"
+    assert_exists_s3 "$name/img-2"
+    assert_exists_s3 "$name/img-3"
+
+    run cedana restore process --path "s3://$CEDANA_S3_BUCKET_NAME/$name" --stream 4
     assert_success
 
     run kill $pid
