@@ -27,7 +27,11 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDirForRestore
+		if config.Global.S3.Managed {
+			dumpDirAdapter = streamer.PrepareS3Restore
+		} else {
+			dumpDirAdapter = streamer.PrepareDumpDirForRestore
+		}
 	}
 
 	middleware := types.Middleware[types.Restore]{
