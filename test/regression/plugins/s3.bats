@@ -71,7 +71,7 @@ teardown_file() {
 
 @test "stream dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
-    pid=$!
+S    pid=$!
     name=$(unix_nano)
 
     run cedana dump process $pid --name "$name" --stream 2 --compression tar
@@ -126,7 +126,7 @@ teardown_file() {
 
     assert_exists_s3 "$name/img-0"
 
-    run cedana restore process --path "s3://$name" --stream 1
+    run cedana restore process --path "s3://$CEDANA_S3_BUCKET_NAME/$name" --stream 1
     assert_success
 
     run kill $pid
