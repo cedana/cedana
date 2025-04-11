@@ -352,6 +352,9 @@ func WriteToS3(
 		Key:    aws.String(key),
 		Body:   pr,
 	})
+	if uploadErr != nil {
+		return 0, fmt.Errorf("upload failed: %w", uploadErr)
+	}
 
 	log.Trace().Str("key", key).Int64("goroutine", gid).Dur("upload_duration", time.Since(uploadStart)).
 		Msg("WriteToS3: upload finished")
@@ -364,9 +367,6 @@ func WriteToS3(
 
 	if compressErr != nil {
 		return 0, fmt.Errorf("compression failed: %w", compressErr)
-	}
-	if uploadErr != nil {
-		return 0, fmt.Errorf("upload failed: %w", uploadErr)
 	}
 
 	return bytesWritten, nil
