@@ -18,21 +18,22 @@ export CEDANA_S3_MANAGED
 
 setup_file() {
     setup_file_daemon
-    echo "SETUP_FILE CALLED with bucket: $CEDANA_S3_BUCKET_NAME"
-    aws_setup "$CEDANA_S3_BUCKET_NAME"
 }
 
 setup() {
     setup_daemon
+    echo "SETUP_FILE CALLED with bucket: $CEDANA_S3_BUCKET_NAME"
+    aws_setup "$CEDANA_S3_BUCKET_NAME"
 }
 
 teardown() {
     teardown_daemon
+    echo "TEARDOWN_FILE CALLED with bucket: $CEDANA_S3_BUCKET_NAME"
+    aws_cleanup_bucket "$CEDANA_S3_BUCKET_NAME"
 }
 
 teardown_file() {
     teardown_file_daemon
-    aws_cleanup_bucket "$CEDANA_S3_BUCKET_NAME"
 }
 
 ############
