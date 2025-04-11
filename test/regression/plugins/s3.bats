@@ -45,10 +45,89 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --stream 1 --compression none
+    run cedana dump process $pid --name "$name" --stream 1 --compression none
     assert_success
 
     assert_exists_s3 "$name/img-0"
+
+    run kill $pid
+}
+
+@test "stream dump process (4 parallelism)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid  --name "$name" --stream 4 --compression none
+    assert_success
+
+    assert_exists_s3 "$name/img-0"
+    assert_exists_s3 "$name/img-1"
+    assert_exists_s3 "$name/img-2"
+    assert_exists_s3 "$name/img-3"
+
+    run kill $pid
+}
+
+@test "stream dump process (tar compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --stream 2 --compression tar
+    assert_success
+
+    assert_exists_s3 "$name/img-0"
+    assert_exists_s3 "$name/img-1"
+
+    run kill $pid
+}
+
+@test "stream dump process (gzip compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --stream 2 --compression gzip
+    assert_success
+
+    assert_exists_s3 "$name/img-0.gz"
+    assert_exists_s3 "$name/img-1.gz"
+
+    run kill $pid
+}
+
+@test "stream dump process (lz4 compression)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --stream 2 --compression lz4
+    assert_success
+
+    assert_exists_s3 "$name/img-0.lz4"
+    assert_exists_s3 "$name/img-1.lz4"
+
+    run kill $pid
+}
+
+
+###############
+### Restore ###
+###############
+
+@test "stream restore process" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --stream 1 --compression none
+    assert_success
+
+    assert_exists_s3 "$name/img-0"
+
+    run cedana restore process --path "s3://$name" --stream 1
+    assert_success
 
     run kill $pid
 }
