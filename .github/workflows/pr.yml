@@ -528,7 +528,7 @@ jobs:
           SKIP_GPU: ${{ inputs.skip_gpu_tests }}
         run: |
           if [ "$SKIP_GPU" != "true" ]; then
-            make test-regression TAGS=streamer
+            make test-regression TAGS=streamer PARALLELISM=2 # Low parallelism to avoid OOM on GPU tests
           else
             make test-regression TAGS=streamer,!gpu
           fi
@@ -609,9 +609,9 @@ jobs:
           SKIP_STREAMER: ${{ inputs.skip_streamer_tests }}
         run: |
           if [ "$SKIP_STREAMER" != "true" ]; then
-            make test-regression TAGS=gpu
+            make test-regression TAGS=gpu PARALLELISM=2 # Low parallelism to avoid OOM on GPU tests
           else
-            make test-regression TAGS=gpu,!streamer
+            make test-regression TAGS=gpu,!streamer PARALLELISM=2 # Low parallelism to avoid OOM on GPU tests
           fi
 
   # benchmark:
