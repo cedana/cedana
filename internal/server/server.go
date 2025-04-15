@@ -76,7 +76,7 @@ func NewCedanaRoot(ctx context.Context) (*CedanaRoot, error) {
 		plugins:  pluginManager,
 		host:     host,
 		version:  "dev",
-	}
+	}, nil
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -133,13 +133,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
-		plugins: pluginManager,
-		jobs:    jobManager,
-		gpus:    gpuManager,
-		db:      database,
-		wg:      wg,
-		host:    host,
-		version: opts.Version,
+		jobs: jobManager,
+		gpus: gpuManager,
+		db:   database,
+		CedanaRoot: CedanaRoot{
+			plugins: pluginManager,
+			wg:      wg,
+			host:    host,
+			version: opts.Version,
+		},
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)

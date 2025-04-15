@@ -8,7 +8,6 @@ import (
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
-	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/streamer"
@@ -20,6 +19,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+	return s.CedanaRoot.Restore(ctx, req)
+}
 
 func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
@@ -48,9 +51,9 @@ func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daem
 
 	restore := criu.Restore.With(middleware...)
 
-	if req.GetDetails().GetJID() != "" { // If using job restore
-		restore = restore.With(job.ManageRestore(s.jobs))
-	}
+	// if req.GetDetails().GetJID() != "" { // If using job restore
+	// restore = restore.With(job.ManageRestore(s.jobs))
+	// }
 
 	opts := types.Opts{
 		Lifetime: s.lifetime,

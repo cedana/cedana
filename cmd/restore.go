@@ -11,6 +11,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	cedana_utils "github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -154,20 +155,20 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		cedanaRoot, err := NewCedanaRoot(ctx)
+		cedanaRoot, err := cedana_utils.NewCedanaRoot(cmd.Context())
 		if err != nil {
 			return err
 		}
 
-		resp, err := cedanaRoot.Restore(ctx, req)
+		resp, err := cedanaRoot.Restore(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
 		// resp, profiling, err := client.Restore(cmd.Context(), req)
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
-		}
+		// if config.Global.Profiling.Enabled && profiling != nil {
+		// printProfilingData(profiling)
+		// }
 		// if req.Attachable {
 		// 	return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		// }
