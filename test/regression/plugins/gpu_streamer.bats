@@ -15,10 +15,10 @@ load_lib file
 # One-time setup of downloading weights & pip installing
 setup_file() {
     setup_file_daemon
-    if cmd_exists nvidia-smi; then
-        do_once install_requirements
-        do_once download_hf_models
-    fi
+    # if cmd_exists nvidia-smi; then
+    #     do_once install_requirements
+    #     do_once download_hf_models
+    # fi
 }
 
 setup() {
