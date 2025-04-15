@@ -30,21 +30,25 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
-	jobs    job.Manager
-	gpus    gpu.Manager
-	plugins plugins.Manager
-	db      db.DB
+	jobs job.Manager
+	gpus gpu.Manager
+
+	db db.DB
 	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
 	// to the appropriate clh vm api
 	fdStore sync.Map
 
-	wg       *sync.WaitGroup // for waiting for all background tasks to finish
+	CedanaRoot
+	daemongrpc.UnimplementedDaemonServer
+}
+
+type CedanaRoot struct {
 	lifetime context.Context // context alive for the duration of the server
+	wg       *sync.WaitGroup // for waiting for all background tasks to finish
+	plugins  plugins.Manager
 
 	host    *daemon.Host
 	version string
-
-	daemongrpc.UnimplementedDaemonServer
 }
 
 type ServeOpts struct {
@@ -57,6 +61,22 @@ type ServeOpts struct {
 type MetricOpts struct {
 	ASR  bool
 	OTel bool
+}
+
+func NewCedanaRoot(ctx context.Context) (*CedanaRoot, error) {
+	host, err := utils.GetHost(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host info: %w", err)
+	}
+	pluginManager := plugins.NewLocalManager()
+	var wg = sync.WaitGroup{}
+	return &CedanaRoot{
+		lifetime: ctx,
+		wg:       &wg,
+		plugins:  pluginManager,
+		host:     host,
+		version:  "dev",
+	}
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {

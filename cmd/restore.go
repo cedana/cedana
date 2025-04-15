@@ -154,18 +154,23 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		resp, profiling, err := client.Restore(cmd.Context(), req)
+		cedanaRoot, err := NewCedanaRoot(ctx)
 		if err != nil {
 			return err
 		}
 
+		resp, err := cedanaRoot.Restore(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		// resp, profiling, err := client.Restore(cmd.Context(), req)
 		if config.Global.Profiling.Enabled && profiling != nil {
 			printProfilingData(profiling)
 		}
-
-		if req.Attachable {
-			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-		}
+		// if req.Attachable {
+		// 	return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+		// }
 
 		for _, message := range resp.GetMessages() {
 			fmt.Println(message)
