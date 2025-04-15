@@ -151,7 +151,6 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 ###########
 
 PARALLELISM?=8
-PARALLELISM_GPU?=2
 TAGS?=
 BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM)
 BATS_CMD=bats --jobs $(PARALLELISM)
@@ -182,7 +181,7 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<
 	else \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM_GPU) GPU=$(GPU) TAGS=$(TAGS) ;\
+			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
