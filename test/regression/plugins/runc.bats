@@ -13,6 +13,7 @@ load_lib file
 
 setup_file() {
     setup_file_daemon
+    do_once setup_rootfs
 }
 
 setup() {

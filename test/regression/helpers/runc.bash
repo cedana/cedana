@@ -9,13 +9,7 @@ ROOTFS="/tmp/_rootfs"
 BUNDLE="$WORKLOADS/bundle"
 
 setup_rootfs() {
-    # check if the rootfs is already downloaded
-    if [ -d "$ROOTFS" ]; then
-        return
-    fi
-
     mkdir -p "$ROOTFS"
-
     wget -q -O /tmp/rootfs.tar.gz "$ROOTFS_URL"
     tar -C "$ROOTFS" -xzf /tmp/rootfs.tar.gz
     rm /tmp/rootfs.tar.gz
@@ -25,6 +19,33 @@ create_workload_bundle() {
     local workload="$1"
     local arg="$2"
     local workload_path="$WORKLOADS/$workload"
+
+    if [ ! -f "$ROOTFS"/"$workload" ]; then
+        cp "$workload_path" "$ROOTFS"
+    fi
+
+    bundle=$(mktemp -d)
+
+    cp "$BUNDLE"/config.json "$bundle"
+
+    local config="$bundle"/config.json
+    if [ -n "$arg" ]; then
+        args="[\"/$workload\",\"$arg\"]"
+    else
+        args="[\"/$workload\"]"
+    fi
+
+    # add args as an singleton array of strings
+    jq ".process.args = $args" "$config" > "$config".tmp
+    mv "$config".tmp "$config"
+
+    echo "$bundle"
+}
+
+create_gpu_workload_bundle() {
+    local workload="$1"
+    local arg="$2"
+    local workload_path="/cedana-samples/gpu_smr/$workload"
 
     if [ ! -f "$ROOTFS"/"$workload" ]; then
         cp "$workload_path" "$ROOTFS"
@@ -94,5 +115,3 @@ add_bind_mount() {
 
     mv "$bundle/config.json.tmp" "$bundle/config.json"
 }
-
-setup_rootfs
