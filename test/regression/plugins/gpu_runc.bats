@@ -35,77 +35,79 @@ teardown_file() {
     teardown_file_daemon
 }
 
-###########
-### Run ###
-###########
+# FIXME: Rootfs does not contain libc & friends (required for GPU interception)
 
-@test "run GPU container (non-GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
+# ###########
+# ### Run ###
+# ###########
 
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-    bundle="$(create_cmd_bundle "echo hello")"
+# @test "run GPU container (non-GPU binary)" {
+#     if ! cmd_exists nvidia-smi; then
+#         skip "GPU not available"
+#     fi
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+#     jid=$(unix_nano)
+#     log_file="/var/log/cedana-output-$jid.log"
+#     bundle="$(create_cmd_bundle "echo hello")"
 
-    assert_success
-    assert_exists "$log_file"
-    assert_file_contains "$log_file" "hello"
+#     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
-    run cedana ps
+#     assert_success
+#     assert_exists "$log_file"
+#     assert_file_contains "$log_file" "hello"
 
-    assert_success
-    assert_output --partial "$jid"
-}
+#     run cedana ps
 
-@test "run GPU container (GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
+#     assert_success
+#     assert_output --partial "$jid"
+# }
 
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-    bundle="$(create_samples_workload_bundle "gpu_smr/mem-throughput-saxpy")"
+# @test "run GPU container (GPU binary)" {
+#     if ! cmd_exists nvidia-smi; then
+#         skip "GPU not available"
+#     fi
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+#     jid=$(unix_nano)
+#     log_file="/var/log/cedana-output-$jid.log"
+#     bundle="$(create_samples_workload_bundle "gpu_smr/mem-throughput-saxpy")"
 
-    assert_success
-    assert_exists "$log_file"
+#     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
-    run cedana ps
+#     assert_success
+#     assert_exists "$log_file"
 
-    assert_success
-    assert_output --partial "$jid"
-}
+#     run cedana ps
 
-############
-### Dump ###
-############
+#     assert_success
+#     assert_output --partial "$jid"
+# }
 
-# bats test_tags=dump
-@test "dump GPU container (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
+# ############
+# ### Dump ###
+# ############
 
-    jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle "gpu_smr/vector_add")"
+# # bats test_tags=dump
+# @test "dump GPU container (vector add)" {
+#     if ! cmd_exists nvidia-smi; then
+#         skip "GPU not available"
+#     fi
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+#     jid=$(unix_nano)
+#     bundle="$(create_samples_workload_bundle "gpu_smr/vector_add")"
 
-    run cedana dump job "$jid"
-    assert_success
+#     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+#     assert_success
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
+#     run cedana dump job "$jid"
+#     assert_success
 
-    run cedana job kill "$jid"
-    assert_success
-}
+#     dump_file=$(echo "$output" | awk '{print $NF}')
+#     assert_exists "$dump_file"
 
-###############
-### Restore ###
-###############
+#     run cedana job kill "$jid"
+#     assert_success
+# }
+
+# ###############
+# ### Restore ###
+# ###############
