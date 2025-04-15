@@ -291,7 +291,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,base
+        run: make test-regression TAGS=base
 
   regression-test-runc:
     name: Regression Tests (runc)
@@ -344,7 +344,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,runc
+        run: make test-regression TAGS=!gpu,!streamer,runc
 
   regression-test-containerd:
     name: Regression Tests (containerd)
@@ -397,7 +397,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,containerd
+        run: make test-regression TAGS=!gpu,!streamer,containerd
 
   regression-test-crio:
     name: Regression Tests (crio)
@@ -450,7 +450,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,crio
+        run: make test-regression TAGS=!gpu,!streamer,crio
 
   regression-test-streamer:
     name: Regression Tests (streamer)
@@ -496,8 +496,10 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install streamer plugin # automatically installs the downloaded binary if available instead
-        run: sudo -E ./cedana plugin install streamer
+      - name: Install plugins
+        run: |
+          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -544,6 +546,12 @@ jobs:
         with:
           name: plugins
 
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -556,8 +564,11 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install GPU plugin # automatically installs the downloaded binary if available instead
-        run: sudo -E ./cedana plugin install gpu
+      - name: Install plugins
+        run: |
+          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
+          sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
