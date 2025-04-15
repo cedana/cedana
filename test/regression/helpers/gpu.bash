@@ -32,7 +32,7 @@ download_hf_models() {
     check_huggingface_token
     for model in "${INFERENCE_MODELS[@]}"; do
         echo "Downloading $model"
-        python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model $model &>/dev/null
+        python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model "$model" &>/dev/null
     done
 }
 

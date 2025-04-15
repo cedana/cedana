@@ -2,7 +2,7 @@
 
 # This file assumes its being run from the same directory as the Makefile
 #
-# bats file_tags=gpu
+# bats file_tags=gpu,streamer
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -15,10 +15,10 @@ load_lib file
 # One-time setup of downloading weights & pip installing
 setup_file() {
     setup_file_daemon
-    if cmd_exists nvidia-smi; then
-        do_once install_requirements
-        do_once download_hf_models
-    fi
+    # if cmd_exists nvidia-smi; then
+    #     do_once install_requirements
+    #     do_once download_hf_models
+    # fi
 }
 
 setup() {
@@ -33,94 +33,12 @@ teardown_file() {
     teardown_file_daemon
 }
 
-###########
-### Run ###
-###########
-
-@test "run GPU process (non-GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    run cedana run process -g --jid "$jid" -- echo hello
-    assert_success
-    assert_exists "$log_file"
-
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-}
-
-@test "run GPU process (GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
-    assert_success
-    assert_exists "$log_file"
-}
-
-@test "run GPU process (GPU binary) with modified env" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
-    assert_success
-    assert_exists "$log_file"
-
-    check_shm_size "$jid" "$expected_size"
-}
-
-@test "run GPU process (non-existent binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    run cedana exec -g --jid "$jid" -- non-existent
-    assert_failure
-    assert_file_not_exist "$log_file"
-
-    run cedana ps
-    assert_success
-    refute_output --partial "$jid"
-}
-
-@test "exec GPU process (run process alias)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    run cedana exec -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
-    assert_success
-    assert_exists "$log_file"
-}
-
 ############
 ### Dump ###
 ############
 
 # bats test_tags=dump
-@test "dump GPU process (vector add)" {
+@test "stream dump GPU process (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -134,19 +52,20 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid"
+    run cedana dump job "$jid" --stream 1 --compression none
     assert_success
 
     sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=dump
-@test "dump GPU process (mem throughput saxpy)" {
+@test "stream dump GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -160,13 +79,17 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid"
+    run cedana dump job "$jid" --stream 4 --compression none
     assert_success
 
     sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+    assert_exists "$dump_file/img-2"
+    assert_exists "$dump_file/img-3"
 
     run cedana job kill "$jid"
 }
@@ -176,7 +99,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "restore GPU process (vector add)" {
+@test "stream restore GPU process (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -188,15 +111,16 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid"
+    run cedana dump job "$jid" --stream 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
 
     sleep 1
 
-    run cedana restore job "$jid"
+    run cedana restore job "$jid" --stream 1
     assert_success
 
     run cedana ps
@@ -207,7 +131,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU process with smaller shm (vector add)" {
+@test "stream restore GPU process with smaller shm (vector add)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -224,15 +148,16 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid"
+    run cedana dump job "$jid" --stream 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
 
     sleep 1
 
-    run cedana restore job "$jid"
+    run cedana restore job "$jid" --stream 1
     assert_success
 
     check_shm_size "$jid" "$expected_size"
@@ -245,7 +170,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU process (mem throughput saxpy)" {
+@test "stream restore GPU process (mem throughput saxpy)" {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -257,15 +182,19 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid"
+    run cedana dump job "$jid" --stream 4 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
+    assert_exists "$dump_file/img-2"
+    assert_exists "$dump_file/img-3"
 
     sleep 1
 
-    run cedana restore job "$jid"
+    run cedana restore job "$jid" --stream 4
     assert_success
 
     run cedana ps
@@ -275,12 +204,3 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-#####################
-### Inference C/R ###
-#####################
-
-# bats test_tags=dump,restore
-@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
-    # Requires an HF token!
-    run_inference_test "stabilityai/stablelm-2-1_6b"
-}

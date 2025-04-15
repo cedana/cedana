@@ -151,63 +151,40 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 ###########
 
 PARALLELISM?=8
+TAGS?=
+BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM)
 BATS_CMD=bats --jobs $(PARALLELISM)
 
-test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1])
+test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1])
+test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running all regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
-		$(BATS_CMD) -r test/regression ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/regression ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/regression ;\
+		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
+		if [ "$(TAGS)" = "" ]; then \
+			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
+		else \
+			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
+		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM) $(GPU) ;\
+			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) ;\
-		fi ;\
-	fi
-
-test-regression-cedana: ## Run regression tests for cedana
-	if [ -f /.dockerenv ]; then \
-		echo "Running regression tests for cedana..." ;\
-		echo "Parallelism: $(PARALLELISM)" ;\
-		$(SUDO) $(BINARY) plugin install criu ;\
-		echo "Using unique instance of daemon per test..." ;\
-		$(BATS_CMD) test/regression ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) test/regression ;\
-	else \
-		echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-		$(DOCKER_TEST_RUN) make test-regression-cedana PARALLELISM=$(PARALLELISM) ;\
-	fi
-
-test-regression-plugin: ## Run regression tests for a plugin (PLUGIN=<plugin>)
-	if [ -f /.dockerenv ]; then \
-		echo "Running regression tests for plugin $$PLUGIN..." ;\
-		echo "Parallelism: $(PARALLELISM)" ;\
-		$(SUDO) $(BINARY) plugin install criu ;\
-		echo "Using unique instance of daemon per test..." ;\
-		$(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
-		PERSIST_DAEMON=1 $(BATS_CMD) test/regression/plugins/$$PLUGIN.bats ;\
-	else \
-		if [ "$(PLUGIN)" = "gpu" ]; then \
-			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_RUN_CUDA) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
-		else \
-			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_RUN) make test-regression-plugin PLUGIN=$$PLUGIN PARALLELISM=$(PARALLELISM) ;\
+			$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
 		fi ;\
 	fi
 

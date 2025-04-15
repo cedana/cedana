@@ -1,8 +1,9 @@
 ## Testing
 
-Tests are configured to run inside a Docker container, ridding the need for tedious setup scripts. This allows for testing locally, during development, without affecting the environment. 
+Tests are configured to run inside a Docker container, ridding the need for tedious setup scripts. This allows for testing locally, during development, without affecting the environment.
 
 The test directory looks like this:
+
 ```
 test
 ├── regression
@@ -15,29 +16,45 @@ test
 │   │   ├── containerd.bats
 │   │   ├── crio.bats
 │   │   ├── gpu.bats
+│   │   ├── gpu_runc.bats
+│   │   ├── gpu_streamer.bats
 │   │   ├── streamer.bats
+│   │   ├── streamer_runc.bats
 │   │   └── runc.bats
 │   ├── helpers
 │   │   └── ...
 └── workloads
 ```
+
 Tests are grouped by functionality, and each plugin has its own test file.
 
+### CLI
+
 Running `make help` you'll see the following test commands:
+
 ```sh
 Testing
-  test                      Run all tests (PARALLELISM=<n>, GPU=[0|1])
+  test                      Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
   test-unit                 Run unit tests (with benchmarks)
-  test-regression           Run all regression tests (PARALLELISM=<n>, GPU=[0|1])
-  test-regression-cedana    Run regression tests for cedana
-  test-regression-plugin    Run regression tests for a plugin (PLUGIN=<plugin>)
+  test-regression           Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
   test-enter                Enter the test environment
   test-enter-cuda           Enter the test environment (CUDA)
 ```
 
-When running any of the test commands locally, the tests are automatically run inside a Docker container using `cedana/cedana-test:latest` or `cedana/cedana-test:cuda` if including GPU tests. The CI is also configured to use these Docker images.
+When running any of the test commands locally, the tests are automatically run inside a Docker container using `cedana/cedana-test:latest` or `cedana/cedana-test:cuda` if `GPU=1`. The CI is also configured to use these Docker images.
 
-Each test command above runs the test file  **two times**, in different modes:
+### GPU tests
+
+Use `GPU=1` to run in a CUDA container. If `GPU=0`, any tests that require GPU-support will automatically be skipped. You may want to specify a low `PARALLELISM` value when running GPU tests, as each test requires a significant amount of RAM.
+
+### Filtering tests
+
+Use `TAGS` to filter tests by tags. For example, `make test-regression TAGS=runc` will run all tests tagged with `runc`. `make test-regression TAGS=runc,gpu` will run all tests tagged with `runc` and `gpu`. If `gpu` tag is included, you must set `GPU=1` to run the tests, otherwise they will be skipped.
+
+### Test modes
+
+Each test command above runs the test file **two times**, in different modes:
+
 1. Unique daemon & DB instance for each test.
 2. Single persistent daemon & DB instance across a test file.
 
