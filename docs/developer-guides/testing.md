@@ -45,7 +45,7 @@ When running any of the test commands locally, the tests are automatically run i
 
 ### GPU tests
 
-Use `GPU=1` to run in a CUDA container. If `GPU=0`, any tests that require GPU-support will automatically be skipped.
+Use `GPU=1` to run in a CUDA container. If `GPU=0`, any tests that require GPU-support will automatically be skipped. You may want to specify a low `PARALLELISM` value when running GPU tests, as each test requires a significant amount of RAM.
 
 ### Filtering tests
 

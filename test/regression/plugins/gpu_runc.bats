@@ -20,7 +20,7 @@ setup_file() {
         do_once install_requirements
         do_once download_hf_models
     fi
-    setup_rootfs
+    do_once setup_rootfs
 }
 
 setup() {
@@ -67,7 +67,7 @@ teardown_file() {
 
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
-    bundle="$(create_gpu_workload_bundle "mem-throughput-saxpy")"
+    bundle="$(create_samples_workload_bundle "gpu_smr/mem-throughput-saxpy")"
 
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
@@ -91,7 +91,7 @@ teardown_file() {
     fi
 
     jid=$(unix_nano)
-    bundle="$(create_gpu_workload_bundle "vector_add")"
+    bundle="$(create_samples_workload_bundle "gpu_smr/vector_add")"
 
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success

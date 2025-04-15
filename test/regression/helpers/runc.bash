@@ -42,10 +42,10 @@ create_workload_bundle() {
     echo "$bundle"
 }
 
-create_gpu_workload_bundle() {
+create_samples_workload_bundle() {
     local workload="$1"
     local arg="$2"
-    local workload_path="/cedana-samples/gpu_smr/$workload"
+    local workload_path="/cedana-samples/$workload"
 
     if [ ! -f "$ROOTFS"/"$workload" ]; then
         cp "$workload_path" "$ROOTFS"
