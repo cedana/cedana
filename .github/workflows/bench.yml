@@ -1,7 +1,7 @@
 name: Bench
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       cedana:
         type: boolean
