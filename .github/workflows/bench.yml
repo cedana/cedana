@@ -1,0 +1,413 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      cedana:
+        type: boolean
+        description: "Run Cedana benchmark"
+        required: false
+        default: true
+      native:
+        type: boolean
+        description: "Run native benchmark"
+        required: false
+        default: false
+      debug:
+        type: boolean
+        description: "Run benchmark with debugging enabled"
+        required: false
+        default: false
+      samples:
+        type: number
+        description: "Number of samples to run for each metric"
+        required: false
+        default: 3
+      push_results:
+        type: boolean
+        description: "Push benchmark results to storage"
+        required: false
+        default: false
+      comparison_native:
+        type: boolean
+        description: "Plot comparison with native runtime"
+        required: false
+        default: false
+      comparison_patch:
+        type: boolean
+        description: "Plot comparison with last patch"
+        required: false
+        default: false
+      post_summary_pr:
+        type: boolean
+        description: "Post benchmark summary to PR"
+        required: false
+        default: false
+      post_summary_slack:
+        type: boolean
+        description: "Post benchmark summary to Slack"
+        required: false
+        default: false
+      post_summary_slack_branded:
+        type: boolean
+        description: "Post benchmark summary to Slack (branded)"
+        required: false
+        default: false
+
+jobs:
+  cedana:
+    name: Cedana
+    if: inputs.cedana
+    permissions:
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
+    runs-on: ubicloud-gpu
+    needs: build
+    container:
+      image: cedana/cedana-bench:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - uses: actions/download-artifact@v4
+        id: download-binaries-gpu
+        with:
+          name: gpu
+
+      - uses: actions/download-artifact@v4
+        id: download-binaries-cedana
+        with:
+          name: cedana
+
+      - uses: actions/download-artifact@v4
+        id: download-binaries-plugins
+        with:
+          name: plugins
+
+      - name: Configure
+        env:
+          PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
+          PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
+          PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
+        run: |
+          cp $PATH_BINARIES_GPU/* bin
+          cp $PATH_BINARIES_CEDANA/* bin
+          cp $PATH_BINARIES_PLUGINS/* bin
+          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
+          mv temp.json bench.json
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run
+        env:
+          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CEDANA_URL: ${{ vars.CEDANA_URL }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          echo Using bench config:
+          cat bench.json
+          ./bench run cedana --save -n $SAMPLES
+
+      - name: Upload logs
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-logs
+          path: |
+            /src/*.log
+            /tmp/*.log
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        env:
+          PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Push results
+        env:
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+        run: ./bench results push --overwrite
+
+      - name: Pull last results
+        env:
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+        run: ./bench results pull --runtime native:1 --runtime cedana:2
+
+      - name: Plot comparison w/ native
+        if: inputs.comparison_native
+        env:
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_NATIVE }}
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+        run: |
+          ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
+
+      - name: Upload plots (comparison w/ native)
+        if: inputs.comparison_native
+        id: upload-plots-native
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          predefinedAcl: publicRead
+          project_id: ${{ steps.auth.outputs.project_id }}
+          path: /src/results
+          destination: cedana-gpu/release-${{ github.ref }}-native
+          glob: "**/*.png"
+
+      - name: Generate summary (comparison w/ native)
+        if: inputs.comparison_native
+        id: summary-native
+        env:
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-native/results
+          RESULTS_TITLE: "cedana-gpu"
+          RESULTS_DESCRIPTION: "**${{ github.ref }}** comparison w/ native"
+          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+        run: |
+          utils/results-summary > $GITHUB_STEP_SUMMARY
+          utils/results-summary > summary.md
+          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
+
+      - name: Post summary to Slack (comparison w/ native)
+        if: inputs.post_summary_slack && inputs.comparison_native
+        id: slack-native
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary-native.outputs.slack_summary }}
+
+      - name: Post summary to PR (comparison w/ native)
+        if: (success() || failure()) && inputs.post_summary_pr && inputs.comparison_native
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: /src/summary.md
+          comment_tag: comparison_native
+
+      - name: Plot comparison w/ last patch
+        if: inputs.comparison_patch
+        env:
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+        run: |
+          rm -rf results/*.png
+          ./bench plot --runtime cedana:2 --save $FLAGS --palette $COLOR_PALETTE
+
+      - name: Upload plots (comparison w/ last patch)
+        if: inputs.comparison_patch
+        id: upload-plots-patch
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          predefinedAcl: publicRead
+          project_id: ${{ steps.auth.outputs.project_id }}
+          path: /src/results
+          destination: cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-patch
+          glob: "**/*.png"
+
+      - name: Generate summary (comparison w/ last patch)
+        if: inputs.comparison_patch
+        id: summary-patch
+        env:
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-patch/results
+          RESULTS_TITLE: "cedana-gpu"
+          RESULTS_DESCRIPTION: "**${{ github.ref }}** comparison w/ last patch"
+          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+        run: |
+          utils/results-summary > $GITHUB_STEP_SUMMARY
+          utils/results-summary > summary.md
+          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
+
+      - name: Post summary to PR (comparison w/ last patch)
+        if: (success() || failure()) && inputs.post_summary_pr && inputs.comparison_patch
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: /src/summary.md
+          comment_tag: comparison_patch
+
+      - name: Post summary to Slack (comparison w/ last patch)
+        if: inputs.post_summary_slack && inputs.comparison_patch
+        id: slack-patch
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary-patch.outputs.slack_summary }}
+
+      - name: Plot branded
+        if: inputs.post_summary_slack_branded
+        env:
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
+        run: |
+          rm -rf results/*.png
+          ./bench plot --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
+
+      - name: Upload plots (branded)
+        if: inputs.post_summary_slack_branded
+        id: upload-plots-branded
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          predefinedAcl: publicRead
+          project_id: ${{ steps.auth.outputs.project_id }}
+          path: /src/results
+          destination: cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-branded
+          glob: "**/*.png"
+
+      - name: Generate summary (branded)
+        if: inputs.post_summary_slack_branded
+        id: summary-branded
+        env:
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-branded/results
+          RESULTS_TITLE: "cedana-gpu"
+          RESULTS_DESCRIPTION: "**${{ github.ref }}** performance results"
+          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+        run: |
+          utils/results-summary > $GITHUB_STEP_SUMMARY
+          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
+
+      - name: Post summary (branded)
+        if: inputs.post_summary_slack_branded
+        id: slack-branded
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE_EXT }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary-branded.outputs.slack_summary }}
+
+  native:
+    name: Native
+    if: inputs.native
+    permissions:
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+    runs-on: ubicloud-gpu
+    container:
+      image: cedana/cedana-bench:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run
+        env:
+          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CEDANA_URL: ${{ vars.CEDANA_URL }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          echo Using bench config:
+          cat bench.json
+          ./bench run native --save -n $SAMPLES
+
+      - name: Upload logs
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-native-logs
+          path: |
+            /src/*.log
+            /tmp/*.log
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        env:
+          PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Push results
+        if: inputs.push_results
+        env:
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          BIGQUERY_RESULTS_DATASET: ${{ vars.BIGQUERY_BENCH_RESULTS_DATASET }}
+        run: ./bench results push --overwrite
+
+      - name: Plot
+        if: success() || failure()
+        env:
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+        run: ./bench plot --runtime native --save $FLAGS
+
+      - name: Upload plots
+        if: success() || failure()
+        id: upload-plots
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          predefinedAcl: publicRead
+          project_id: ${{ steps.auth.outputs.project_id }}
+          path: /src/results
+          destination: cedana-gpu/bench-native-${{ github.ref }}
+          glob: "**/*.png"
+
+      - name: Generate summary
+        if: success() || failure() && (inputs.post_summary_pr || inputs.post_summary_slack)
+        env:
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/bench-native-${{ github.ref }}/results
+          RESULTS_DESCRIPTION: "> Manual run (native)"
+        run: |
+          utils/results-summary > summary.md
+          utils/results-summary > $GITHUB_STEP_SUMMARY
+
+      - name: Post summary to PR
+        if: (success() || failure()) && inputs.post_summary_pr
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: /src/summary.md
+          comment_tag: native
+
+      - name: Post summary to Slack
+        if: inputs.post_summary_slack
+        id: slack-native
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary.outputs.slack_summary }}

@@ -6,9 +6,19 @@ on:
       - "*"
   workflow_dispatch:
     inputs:
+      debug_build:
+        type: boolean
+        description: "Run build with debugging enabled"
+        required: false
+        default: false
       debug_test:
         type: boolean
         description: "Run tests with debugging enabled"
+        required: false
+        default: false
+      debug_bench:
+        type: boolean
+        description: "Run benchmark with debugging enabled"
         required: false
         default: false
       debug_build_publish_amd64:
@@ -26,11 +36,6 @@ on:
         description: "Run build & push (arm64 image) with debugging enabled"
         required: false
         default: false
-      debug_bench:
-        type: boolean
-        description: "Run the benchmark with debugging enabled"
-        required: false
-        default: false
       post_summary:
         type: boolean
         description: "Post summary to slack"
@@ -46,23 +51,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
+
   test:
     name: Test
-    uses: ./.github/workflows/pr.yml
-    permissions:
-      contents: "read"
-      packages: "read"
-      id-token: "write"
-      pull-requests: "write"
-    with:
-      debug_build: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      debug_regression_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      debug_unit_test: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      debug_bench: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      skip_bench: true # since benchmark will be run in a separate job below
-      skip_shellcheck: true
-      skip_helper_image_push: true
+    uses: ./.github/workflows/test.yml
+    needs: build
     secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+
+  bench:
+    name: Bench
+    uses: ./.github/workflows/bench.yml
+    needs: build
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
+      samples: 3
+      push_results: true
+      post_summary_pr: true
+      post_summary_slack: true
+      post_summary_slack_branded: true
+      comparison_patch: true
+      comparison_native: true
 
   build-publish-amd64:
     name: Build & Publish (amd64)

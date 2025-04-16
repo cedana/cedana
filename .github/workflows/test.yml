@@ -1,0 +1,426 @@
+name: Test
+
+on:
+  workflow_call:
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
+      cpu:
+        type: boolean
+        description: "Run CPU tests"
+        required: false
+        default: true
+      gpu:
+        type: boolean
+        description: "Run GPU tests"
+        required: false
+        default: true
+      streamer:
+        type: boolean
+        description: "Run streamer tests"
+        required: false
+        default: true
+
+jobs:
+  unit-test:
+    name: Unit Tests
+    runs-on: ubicloud-standard-2
+    if: ${{ !inputs.skip_cpu }}
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana
+          chmod +x ./libcedana-*.so
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run unit tests
+        run: make test-unit
+
+  regression-test:
+    name: Regression Tests
+    runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu }}
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        run: make test-regression TAGS=base
+
+  regression-test-runc:
+    name: Regression Tests (runc)
+    runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu }}
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install runc
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        run: make test-regression TAGS=!gpu,!streamer,runc
+
+  regression-test-containerd:
+    name: Regression Tests (containerd)
+    runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu }}
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install containerd
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        run: make test-regression TAGS=!gpu,!streamer,containerd
+
+  regression-test-crio:
+    name: Regression Tests (crio)
+    runs-on: ubicloud-standard-4
+    if: ${{ !inputs.skip_cpu }}
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugin
+        run: sudo -E ./cedana plugin install crio
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        run: make test-regression TAGS=!gpu,!streamer,crio
+
+  regression-test-streamer:
+    name: Regression Tests (streamer)
+    runs-on: ubicloud-gpu
+    if: ${{ !inputs.skip_streamer }}
+    container:
+      image: cedana/cedana-test:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --ipc=host --gpus all
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
+      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
+        if: ${{ !inputs.skip_gpu }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugins
+        env:
+          SKIP_GPU: ${{ inputs.skip_gpu }}
+        run: |
+          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
+          if [ "$SKIP_GPU" != "true" ]; then
+            sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          fi
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          SKIP_GPU: ${{ inputs.skip_gpu }}
+        run: |
+          if [ "$SKIP_GPU" != "true" ]; then
+            make test-regression TAGS=streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
+          else
+            make test-regression TAGS=streamer,!gpu
+          fi
+
+  regression-test-gpu:
+    name: Regression Tests (gpu)
+    runs-on: ubicloud-gpu
+    if: ${{ !inputs.skip_gpu }}
+    container:
+      image: cedana/cedana-test:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --ipc=host --gpus all
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        if: ${{ !inputs.skip_streamer }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
+      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugins
+        env:
+          SKIP_STREAMER: ${{ inputs.skip_streamer }}
+        run: |
+          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          if [ "$SKIP_STREAMER" != "true" ]; then
+            sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
+          fi
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          SKIP_STREAMER: ${{ inputs.skip_streamer }}
+        run: |
+          if [ "$SKIP_STREAMER" != "true" ]; then
+            make test-regression TAGS=gpu PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
+          else
+            make test-regression TAGS=gpu,!streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
+          fi
+
