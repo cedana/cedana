@@ -2,6 +2,7 @@ name: Build
 
 on:
   workflow_call:
+    inputs:
       ref:
         type: string
         description: "The branch, tag, or SHA to run on"

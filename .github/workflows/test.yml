@@ -2,6 +2,7 @@ name: Test
 
 on:
   workflow_call:
+    inputs:
       debug:
         type: boolean
         description: "Run with debugging enabled"
