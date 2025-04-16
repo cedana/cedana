@@ -64,7 +64,6 @@ jobs:
       id-token: "write"
       pull-requests: "write"
     runs-on: ubicloud-gpu
-    needs: build
     container:
       image: cedana/cedana-bench:cuda
       credentials:
