@@ -25,8 +25,8 @@ on:
         default: true
 
 jobs:
-  unit-test:
-    name: Unit Tests
+  unit:
+    name: Unit
     runs-on: ubicloud-standard-2
     if: ${{ !inputs.skip_cpu }}
     container:
@@ -66,8 +66,8 @@ jobs:
       - name: Run unit tests
         run: make test-unit
 
-  regression-test:
-    name: Regression Tests
+  regression:
+    name: Regression
     runs-on: ubicloud-standard-4
     if: ${{ !inputs.skip_cpu }}
     container:
@@ -109,8 +109,8 @@ jobs:
       - name: Run regression tests
         run: make test-regression TAGS=base
 
-  regression-test-runc:
-    name: Regression Tests (runc)
+  regression-runc:
+    name: Regression (runc)
     runs-on: ubicloud-standard-4
     if: ${{ !inputs.skip_cpu }}
     container:
@@ -161,8 +161,8 @@ jobs:
       - name: Run regression tests
         run: make test-regression TAGS=!gpu,!streamer,runc
 
-  regression-test-containerd:
-    name: Regression Tests (containerd)
+  regression-containerd:
+    name: Regression (containerd)
     runs-on: ubicloud-standard-4
     if: ${{ !inputs.skip_cpu }}
     container:
@@ -213,8 +213,8 @@ jobs:
       - name: Run regression tests
         run: make test-regression TAGS=!gpu,!streamer,containerd
 
-  regression-test-crio:
-    name: Regression Tests (crio)
+  regression-crio:
+    name: Regression (crio)
     runs-on: ubicloud-standard-4
     if: ${{ !inputs.skip_cpu }}
     container:
@@ -265,8 +265,8 @@ jobs:
       - name: Run regression tests
         run: make test-regression TAGS=!gpu,!streamer,crio
 
-  regression-test-streamer:
-    name: Regression Tests (streamer)
+  regression-streamer:
+    name: Regression (streamer)
     runs-on: ubicloud-gpu
     if: ${{ !inputs.skip_streamer }}
     container:
@@ -345,8 +345,8 @@ jobs:
             make test-regression TAGS=streamer,!gpu
           fi
 
-  regression-test-gpu:
-    name: Regression Tests (gpu)
+  regression-gpu:
+    name: Regression (GPU)
     runs-on: ubicloud-gpu
     if: ${{ !inputs.skip_gpu }}
     container:
