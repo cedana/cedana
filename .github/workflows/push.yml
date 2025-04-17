@@ -77,6 +77,8 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      cloudsmith: true
       cloudsmith_repo: cedana-alpha
       dockerhub: true
-      dockerhub_repo: cedana/cedana-helper-test
+      image_name: cedana/cedana-helper-test
+      post_summary: false

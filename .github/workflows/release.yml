@@ -82,7 +82,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      amd64: true
-      amd64_image: true
-      arm64_image: true
+      github: true
+      cloudsmith: true
+      dockerhub: true
       post_summary: true
