@@ -107,12 +107,15 @@ jobs:
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
-          cp bench.json temp.json
-          jq '.runtimes.list."cedana".source = "local"' temp.json > temp.json
-          jq 'del(.runtimes.list."cedana".tag)' temp.json > temp.json
-          jq '.crtools.list."cedana".source = "local"' temp.json > temp.json
-          jq 'del(.crtools.list."cedana".tag)' temp.json > temp.json
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' temp.json > temp.json
+          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq 'del(.crtools.list."cedana".tag)' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
 
       - name: Setup debugging session
