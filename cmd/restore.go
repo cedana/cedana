@@ -11,8 +11,8 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	cedana_utils "github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
@@ -124,14 +124,6 @@ var restoreCmd = &cobra.Command{
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
-		client, err := client.New(config.Global.Address, config.Global.Protocol)
-		if err != nil {
-			return fmt.Errorf("Error creating client: %v", err)
-		}
-
-		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
-		cmd.SetContext(ctx)
-
 		return nil
 	},
 
@@ -142,30 +134,23 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
-		defer client.Close()
-
 		// Assuming request is now ready to be sent to the server
 		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		resp, profiling, err := client.Restore(cmd.Context(), req)
+		cedanaRoot, err := cedana_utils.NewCedanaRoot(cmd.Context())
 		if err != nil {
-			return err
+			return fmt.Errorf("cedana root err: %v", err)
 		}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
+		resp, err := cedanaRoot.Restore(cmd.Context(), req)
+		if err != nil {
+			return fmt.Errorf("cedana restore run err: %v", err)
 		}
 
-		if req.Attachable {
-			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-		}
+		cedanaRoot.Wait()
 
 		for _, message := range resp.GetMessages() {
 			fmt.Println(message)
