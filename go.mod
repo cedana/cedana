@@ -1,13 +1,15 @@
 module github.com/cedana/cedana
 
-go 1.22.7
+go 1.23.0
+
+toolchain go1.23.4
 
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250327172915-8b2731879e40.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250327172915-8b2731879e40.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250402001746-66a9a0fb92a9.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250402001746-66a9a0fb92a9.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-fba1804ac140.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-fba1804ac140.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250402001746-9ecadf784173.1
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
@@ -35,8 +37,8 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0
 	go.opentelemetry.io/otel/sdk v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
-	golang.org/x/net v0.33.0
-	golang.org/x/sys v0.28.0
+	golang.org/x/net v0.39.0
+	golang.org/x/sys v0.32.0
 	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
@@ -126,8 +128,8 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )

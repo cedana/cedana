@@ -7,4 +7,7 @@ var (
 	VmTypeFlag   = flags.Flag{Full: "type"}
 	PortFlag     = flags.Flag{Full: "port", Short: "p"}
 	VmSocketFlag = flags.Flag{Full: "socket"}
+
+	// Run VM flags
+	HypervisorConfigFlag = flags.Flag{Full: "clh-config"}
 )
