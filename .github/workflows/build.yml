@@ -69,6 +69,40 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
 
+  plugins:
+    name: Plugins
+    runs-on: ubicloud-standard-2
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Build
+        run: make plugins
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins
+          path: ./libcedana-*.so
+
       - name: Push libcedana-runc.so to Cloudsmith
         if: inputs.publish_alpha
         id: push-libcedana-runc
@@ -158,38 +192,4 @@ jobs:
           name: "libcedana-kata.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
-
-  plugins:
-    name: Plugins
-    runs-on: ubicloud-standard-2
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Build
-        run: make plugins
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugins
-          path: ./libcedana-*.so
 
