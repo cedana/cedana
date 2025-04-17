@@ -38,6 +38,9 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
+      amd64: true
+      amd64_image: true
+      arm64_image: true
 
   download:
     name: Download
@@ -74,4 +77,6 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      amd64_alpha: true
+      cloudsmith_repo: cedana-alpha
+      dockerhub: true
+      dockerhub_repo: cedana/cedana-helper-test

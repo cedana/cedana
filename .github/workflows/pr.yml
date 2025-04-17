@@ -37,6 +37,10 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
+      amd64: true
+      amd64_image: true
+      arm64_image: false
+      image_name: cedana/cedana-helper-test
 
   download:
     name: Download
@@ -75,7 +79,11 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      amd64_alpha: true
+      cloudsmith: true
+      cloudsmith_repo: cedana-alpha
+      dockerhub: true
+      image_name: cedana/cedana-helper-test
+      post_summary: false
 
   shellcheck:
     name: Shell Check
@@ -84,7 +92,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -110,7 +117,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -125,46 +131,3 @@ jobs:
           sudo -E mkdir -p /cedana/scripts
           sudo -E cp -r ./scripts/host/* /cedana/scripts/
           sudo -E /cedana/scripts/k8s-setup-host.sh
-
-  helper-image-push:
-    name: Push Helper Test Image
-    runs-on: ubicloud-standard-4
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Set up commit hash and branch name
-        run: |
-          echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
-          echo "GIT_BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: cedana/cedana-helper-test
-          tags: |
-            type=raw,value=${{ env.GIT_BRANCH }}-${{ env.GIT_HASH }}
-            type=raw,value=${{ env.GIT_BRANCH }}
-
-      - name: Build and push to cedana-helper-test
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          context: .
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}

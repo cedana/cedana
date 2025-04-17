@@ -8,26 +8,31 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      amd64:
+      github:
         type: boolean
-        description: "Publish for amd64"
+        description: "Publish to GitHub releases"
         required: false
         default: false
-      amd64_alpha:
+      cloudsmith:
         type: boolean
-        description: "Publish for amd64 (alpha build)"
+        description: "Publish to Cloudsmith"
+        required: false
+        default: true
+      cloudsmith_repo:
+        type: string
+        description: "Cloudsmith repository to publish to"
+        required: false
+        default: cedana
+      dockerhub:
+        type: boolean
+        description: "Publish images to Docker Hub"
         required: false
         default: false
-      amd64_docker:
-        type: boolean
-        description: "Publish Docker image for amd64"
+      image_name:
+        type: string
+        description: "Name of the image to publish"
         required: false
-        default: false
-      arm64_docker:
-        type: boolean
-        description: "Publish Docker image for arm64"
-        required: false
-        default: false
+        default: cedana/cedana-helper
       post_summary:
         type: boolean
         description: "Post summary to Slack"
@@ -35,9 +40,9 @@ on:
         default: false
 
 jobs:
-  amd64:
-    name: amd64
-    if: inputs.amd64
+  github:
+    name: GitHub
+    if: inputs.github
     runs-on: ubicloud-standard-8
     container:
       image: cedana/cedana-test:latest
@@ -59,6 +64,18 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      - name: Download Cedana binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-cedana
+        with:
+          name: cedana
+
+      - name: Download Cedana plugins
+        uses: actions/download-artifact@v4
+        id: download-binaries-plugins
+        with:
+          name: plugins
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
@@ -67,118 +84,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find binaries
-        run: |
-          find dist -type f -name "cedana" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-runc.so" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-containerd.so" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-crio.so" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-k8s.so" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-kata.so" -exec cp {} ./ \;
-          find dist -type f -name "libcedana-cloud-hypervisor.so" -exec cp {} ./ \;
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "cedana"
-          name: "cedana"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-runc.so to Cloudsmith
-        id: push-libcedana-runc
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-runc.so"
-          name: "libcedana-runc.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-containerd.so to Cloudsmith
-        id: push-libcedana-containerd
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-containerd.so"
-          name: "libcedana-containerd.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-crio.so to Cloudsmith
-        id: push-libcedana-crio
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-crio.so"
-          name: "libcedana-crio.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-k8s.so to Cloudsmith
-        id: push-libcedana-k8s
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-k8s.so"
-          name: "libcedana-k8s.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
-        id: push-libcedana-cloud-hypervisor
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-cloud-hypervisor.so"
-          name: "libcedana-cloud-hypervisor.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-kata.so to Cloudsmith
-        id: push-libcedana-kata
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana"
-          file: "libcedana-kata.so"
-          name: "libcedana-kata.so"
-          version: ${{ github.ref_name }}
-          republish: "true"
-
-  amd64-alpha:
-    name: amd64 (alpha)
-    if: inputs.amd64_alpha
-    runs-on: ubicloud-standard-2
+  cloudsmith:
+    name: GitHub
+    if: inputs.cloudsmith
+    runs-on: ubicloud-latest
     steps:
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
@@ -192,7 +101,7 @@ jobs:
         with:
           name: plugins
 
-      - name: Push Cedana to Cloudsmith
+      - name: Push cedana to Cloudsmith
         id: push-cedana
         uses: cloudsmith-io/action@master
         with:
@@ -200,7 +109,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: "${{ inputs.cloudsmith_repo }}"
           file: "cedana"
           name: "cedana"
           version: ${{ github.head_ref || github.ref_name }}
@@ -214,7 +123,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-runc.so"
           name: "libcedana-runc.so"
           version: ${{ github.head_ref || github.ref_name }}
@@ -228,7 +137,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-containerd.so"
           name: "libcedana-containerd.so"
           version: ${{ github.head_ref || github.ref_name }}
@@ -242,7 +151,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-crio.so"
           name: "libcedana-crio.so"
           version: ${{ github.head_ref || github.ref_name }}
@@ -256,7 +165,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-k8s.so"
           name: "libcedana-k8s.so"
           version: ${{ github.head_ref || github.ref_name }}
@@ -270,7 +179,7 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-cloud-hypervisor.so"
           name: "libcedana-cloud-hypervisor.so"
           version: ${{ github.head_ref || github.ref_name }}
@@ -284,158 +193,16 @@ jobs:
           command: "push"
           format: "raw"
           owner: "cedana"
-          repo: "cedana-alpha"
+          repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-kata.so"
           name: "libcedana-kata.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
 
-  amd64-docker:
-    name: amd64 (Docker)
+  dockerhub:
+    name: Docker Hub
+    if: inputs.dockerhub
     runs-on: ubicloud-standard-8
-    if: inputs.amd64_docker
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-          fetch-tags: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
-        with:
-          limit-access-to-actor: true
-
-      - name: Build and generate manifest for amd64
-        id: build
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: |
-            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
-            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest amd64
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-amd64
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  arm64-docker:
-    name: arm64 (Docker)
-    runs-on: ubicloud-standard-8-arm
-    if: inputs.arm64_docker
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-          fetch-tags: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
-        with:
-          limit-access-to-actor: true
-
-      - name: Build and generate manifest for arm64
-        id: build
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: |
-            type=image,name=cedana/cedana-helper,push-by-digest=true,name-canonical=true,push=true
-            type=image,name=ghcr.io/cedana/cedana,push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest arm64
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-arm64
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  upload-manifests:
-    name: Upload Manifests
-    runs-on: ubicloud-standard-8
-    needs: ["amd64-docker", "arm64-docker"]
     permissions:
       contents: read
       packages: write
@@ -450,13 +217,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Login to Docker hub
         uses: docker/login-action@v3
         with:
@@ -468,30 +228,29 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/cedana/cedana
-            cedana/cedana-helper
+            ${{ inputs.image_name }}
+          tags: |
+            type=raw,value=${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+            type=raw,value=${{ github.head_ref || github.ref_name }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/cedana/cedana@sha256:%s ' *)
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'cedana/cedana-helper@sha256:%s ' *)
+            $(printf '${{ inputs.image_name }}@sha256:%s ' *)
 
       - name: Inspect image
         run: |
           # check if push was successful
-          docker buildx imagetools inspect cedana/cedana-helper:${{ steps.meta.outputs.version }}
-          docker buildx imagetools inspect ghcr.io/cedana/cedana:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ inputs.image_name }}:${{ steps.meta.outputs.version }}
           # check if commit sha matches with the latest commit sha
           # we only match docker hub image as both images should be the same
-          echo $(docker run -i --rm cedana/cedana-helper:${{ steps.meta.outputs.version }} -c "cedana -v")
+          echo $(docker run -i --rm ${{ inputs.image_name }}:${{ steps.meta.outputs.version }} -c "cedana -v")
 
   post-summary:
     name: Post Summary
     runs-on: ubuntu-latest
-    needs: ["amd64", "amd64-docker", "arm64-docker", "upload-manifests"]
+    needs: ["github", "cloudsmith"]
     if: inputs.post_summary
     permissions:
       contents: read
@@ -570,7 +329,6 @@ jobs:
           echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
       - name: Post summary
-        if: ${{ !startsWith(github.event_name, 'workflow') || (inputs.post_summary) }}
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
