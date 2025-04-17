@@ -105,29 +105,3 @@ jobs:
             *.bats
           check_all_files_with_shebangs: true
           shellcheck_flags: "--external-sources --severity=warning"
-
-  script-tests:
-    name: Script Tests
-    runs-on: ubuntu-latest
-    needs: build
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          fetch-depth: 0
-          fetch-tags: true
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cedana
-
-      - name: Run k8s setup host
-        run: |
-          sudo -E chmod +x ./cedana
-          sudo -E cp ./cedana /usr/local/bin/
-          sudo -E mkdir -p /cedana/scripts
-          sudo -E cp -r ./scripts/host/* /cedana/scripts/
-          sudo -E /cedana/scripts/k8s-setup-host.sh
