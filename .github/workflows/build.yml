@@ -13,11 +13,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      publish_alpha:
-        type: boolean
-        description: "Publish alpha to Cloudsmith"
-        required: false
-        default: false
 
 jobs:
   cedana:
@@ -54,21 +49,6 @@ jobs:
           name: cedana
           path: ./cedana
 
-      - name: Push cedana to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-cedana
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "cedana"
-          name: "cedana"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
   plugins:
     name: Plugins
     runs-on: ubicloud-standard-2
@@ -102,94 +82,3 @@ jobs:
         with:
           name: plugins
           path: ./libcedana-*.so
-
-      - name: Push libcedana-runc.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-runc
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-runc.so"
-          name: "libcedana-runc.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-containerd.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-containerd
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-containerd.so"
-          name: "libcedana-containerd.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-crio.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-crio
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-crio.so"
-          name: "libcedana-crio.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-k8s.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-k8s
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-k8s.so"
-          name: "libcedana-k8s.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-cloud-hypervisor
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-cloud-hypervisor.so"
-          name: "libcedana-cloud-hypervisor.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-
-      - name: Push libcedana-kata.so to Cloudsmith
-        if: inputs.publish_alpha
-        id: push-libcedana-kata
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "cedana-alpha"
-          file: "libcedana-kata.so"
-          name: "libcedana-kata.so"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-

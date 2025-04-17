@@ -20,6 +20,11 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      debug_publish:
+        type: boolean
+        description: "Run publish with debugging enabled"
+        required: false
+        default: false
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -32,15 +37,14 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
-      publish_alpha: true
 
   download:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: 'main'
-      streamer_version: 'main'
+      gpu_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
+      streamer_version: main
 
   test:
     name: Test
@@ -62,6 +66,16 @@ jobs:
       post_summary_pr: true
       post_summary_slack: false
       comparison_patch: true
+      comparison_native: false
+
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: build
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      amd64_alpha: true
 
   shellcheck:
     name: Shell Check

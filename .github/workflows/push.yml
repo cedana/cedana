@@ -21,6 +21,11 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      debug_publish:
+        type: boolean
+        description: "Run publish with debugging enabled"
+        required: false
+        default: false
 
 concurrency:
   group: cedana-push-${{ github.ref }}
@@ -33,7 +38,6 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
-      publish_alpha: true
 
   download:
     name: Download
@@ -62,3 +66,12 @@ jobs:
       push_results: true
       post_summary_pr: false
       post_summary_slack: false
+
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: build
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      amd64_alpha: true
