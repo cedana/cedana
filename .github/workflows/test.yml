@@ -404,7 +404,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_regression_test }}
+        if: inputs.debug
         with:
           limit-access-to-actor: true
 

@@ -43,7 +43,7 @@ jobs:
   github:
     name: GitHub
     if: inputs.github
-    runs-on: ubicloud-standard-8
+    runs-on: ubuntu-latest
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -60,7 +60,7 @@ jobs:
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
-        if: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
+        if: inputs.debug
         with:
           limit-access-to-actor: true
 
@@ -85,9 +85,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cloudsmith:
-    name: GitHub
+    name: Cloudsmith
     if: inputs.cloudsmith
-    runs-on: ubicloud-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
@@ -200,9 +200,9 @@ jobs:
           republish: "true"
 
   dockerhub:
-    name: Docker Hub
+    name: DockerHub
     if: inputs.dockerhub
-    runs-on: ubicloud-standard-8
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
