@@ -250,7 +250,7 @@ jobs:
   post-summary:
     name: Post Summary
     runs-on: ubuntu-latest
-    needs: ["github", "cloudsmith"]
+    needs: ["github", "cloudsmith", "dockerhub"]
     if: inputs.post_summary
     permissions:
       contents: read
