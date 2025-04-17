@@ -7,6 +7,15 @@ import (
 	"path/filepath"
 )
 
+type MemUnit uint64
+
+const (
+	Byte MemUnit = 1
+	KiB          = Byte << 10
+	MiB          = KiB << 10
+	GiB          = MiB << 10
+)
+
 // copyFiltered copies only directories and persist.json files while preserving the directory structure.
 func CopyFiltered(src string, destRoot string, baseSrc string) error {
 	err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
