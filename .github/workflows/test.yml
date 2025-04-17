@@ -316,7 +316,7 @@ jobs:
         run: |
           sudo -E ./cedana plugin install runc containerd crio
           sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
-          if [ "$GPU" == "true" ]; then
+          if [ "$GPU" = "true" ]; then
             sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
           fi
 
@@ -333,7 +333,7 @@ jobs:
         env:
           GPU: ${{ inputs.gpu }}
         run: |
-          if [ "$GPU" == "true" ]; then
+          if [ "$GPU" = "true" ]; then
             make test-regression TAGS=streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
           else
             make test-regression TAGS=streamer,!gpu
@@ -395,7 +395,7 @@ jobs:
         run: |
           sudo -E ./cedana plugin install runc containerd crio
           sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
-          if [ "$STREAMER" == "true" ]; then
+          if [ "$STREAMER" = "true" ]; then
             sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
@@ -412,7 +412,7 @@ jobs:
         env:
           STREAMER: ${{ inputs.streamer }}
         run: |
-          if [ "$STREAMER" == "true" ]; then
+          if [ "$STREAMER" = "true" ]; then
             make test-regression TAGS=gpu PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
           else
             make test-regression TAGS=gpu,!streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
