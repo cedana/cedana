@@ -38,6 +38,7 @@ jobs:
           if [ "$VERSION" = "release" ]; then
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/cedana
           else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/cedana
           fi
 
@@ -56,6 +57,7 @@ jobs:
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-kata.so
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-cloud-hypervisor.so
           else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-runc.so
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-containerd.so
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-crio.so
@@ -64,7 +66,7 @@ jobs:
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-cloud-hypervisor.so
           fi
 
-      - name: Upload artifacts
+      - name: Upload cedana
         uses: actions/upload-artifact@v4
         with:
           name: cedana
@@ -92,6 +94,7 @@ jobs:
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/cedana-gpu-controller
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/libcedana-gpu.so
           else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/cedana-gpu-controller
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/libcedana-gpu.so
           fi
@@ -117,6 +120,7 @@ jobs:
           if [ "$VERSION" = "release" ]; then
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/latest/cedana-image-streamer
           else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/versions/$VERSION/cedana-image-streamer
           fi
 

@@ -17,7 +17,7 @@ on:
         type: boolean
         description: "Publish to Cloudsmith"
         required: false
-        default: true
+        default: false
       cloudsmith_repo:
         type: string
         description: "Cloudsmith repository to publish to"
