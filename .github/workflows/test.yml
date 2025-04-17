@@ -28,7 +28,7 @@ jobs:
   unit:
     name: Unit
     runs-on: ubicloud-standard-2
-    if: ${{ !inputs.skip_cpu }}
+    if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -68,7 +68,7 @@ jobs:
   regression:
     name: Regression
     runs-on: ubicloud-standard-4
-    if: ${{ !inputs.skip_cpu }}
+    if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -110,7 +110,7 @@ jobs:
   regression-runc:
     name: Regression (runc)
     runs-on: ubicloud-standard-4
-    if: ${{ !inputs.skip_cpu }}
+    if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -161,7 +161,7 @@ jobs:
   regression-containerd:
     name: Regression (containerd)
     runs-on: ubicloud-standard-4
-    if: ${{ !inputs.skip_cpu }}
+    if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -212,7 +212,7 @@ jobs:
   regression-crio:
     name: Regression (crio)
     runs-on: ubicloud-standard-4
-    if: ${{ !inputs.skip_cpu }}
+    if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -263,7 +263,7 @@ jobs:
   regression-streamer:
     name: Regression (streamer)
     runs-on: ubicloud-gpu
-    if: ${{ !inputs.skip_streamer }}
+    if: inputs.streamer
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -298,7 +298,7 @@ jobs:
           name: streamer
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        if: ${{ !inputs.skip_gpu }}
+        if: inputs.gpu
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -312,11 +312,11 @@ jobs:
 
       - name: Install plugins
         env:
-          SKIP_GPU: ${{ inputs.skip_gpu }}
+          GPU: ${{ inputs.gpu }}
         run: |
           sudo -E ./cedana plugin install runc containerd crio
           sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
-          if [ "$SKIP_GPU" != "true" ]; then
+          if [ "$GPU" == "true" ]; then
             sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
           fi
 
@@ -331,9 +331,9 @@ jobs:
 
       - name: Run regression tests
         env:
-          SKIP_GPU: ${{ inputs.skip_gpu }}
+          GPU: ${{ inputs.gpu }}
         run: |
-          if [ "$SKIP_GPU" != "true" ]; then
+          if [ "$GPU" == "true" ]; then
             make test-regression TAGS=streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
           else
             make test-regression TAGS=streamer,!gpu
@@ -342,7 +342,7 @@ jobs:
   regression-gpu:
     name: Regression (GPU)
     runs-on: ubicloud-gpu
-    if: ${{ !inputs.skip_gpu }}
+    if: inputs.gpu
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -371,7 +371,7 @@ jobs:
           name: plugins
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        if: ${{ !inputs.skip_streamer }}
+        if: inputs.streamer
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -391,11 +391,11 @@ jobs:
 
       - name: Install plugins
         env:
-          SKIP_STREAMER: ${{ inputs.skip_streamer }}
+          STREAMER: ${{ inputs.streamer }}
         run: |
           sudo -E ./cedana plugin install runc containerd crio
           sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
-          if [ "$SKIP_STREAMER" != "true" ]; then
+          if [ "$STREAMER" == "true" ]; then
             sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
@@ -410,9 +410,9 @@ jobs:
 
       - name: Run regression tests
         env:
-          SKIP_STREAMER: ${{ inputs.skip_streamer }}
+          STREAMER: ${{ inputs.streamer }}
         run: |
-          if [ "$SKIP_STREAMER" != "true" ]; then
+          if [ "$STREAMER" == "true" ]; then
             make test-regression TAGS=gpu PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
           else
             make test-regression TAGS=gpu,!streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
