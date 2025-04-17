@@ -48,7 +48,7 @@ jobs:
     secrets: inherit
     with:
       gpu_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
-      streamer_version: main
+      streamer_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
 
   test:
     name: Test
