@@ -1,0 +1,67 @@
+name: Download
+
+# This workload downloads external dependencies (binaries)  and uploads them as artifacts,
+# that can be used in other workflows.
+
+on:
+  workflow_call:
+    inputs:
+      gpu_version:
+        type: string
+        description: Version for GPU binaries (branch name or "release" for latest release)
+        required: false
+        default: "main"
+      streamer_version:
+        type: string
+        description: Version for streamer binaries (branch name or "release" for latest release)
+        required: false
+        default: "main"
+
+jobs:
+  gpu:
+    name: GPU
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.gpu_version }}
+        run: |
+          mkdir -p gpu
+          cd gpu
+          if [ "$VERSION" = "release" ]; then
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/cedana-gpu-controller
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/libcedana-gpu.so
+          else
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/cedana-gpu-controller
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/libcedana-gpu.so
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu
+          path: ./gpu/*
+
+  streamer:
+    name: Streamer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.streamer_version }}
+        run: |
+          mkdir -p streamer
+          cd streamer
+          if [ "$VERSION" = "release" ]; then
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/latest/cedana-image-streamer
+          else
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/versions/$VERSION/cedana-image-streamer
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamer
+          path: ./streamer/*

@@ -20,16 +20,6 @@ on:
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
-      gpu_version:
-        type: string
-        description: Version for GPU binaries (branch name or "release")
-        required: false
-        default: "main"
-      streamer_version:
-        type: string
-        description: Version for streamer binaries (branch name or "release")
-        required: false
-        default: "main"
 
 concurrency:
   group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
@@ -44,10 +34,18 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
       publish_alpha: true
 
+  download:
+    name: Download
+    uses: ./.github/workflows/download.yml
+    secrets: inherit
+    with:
+      gpu_version: 'main'
+      streamer_version: 'main'
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: [build, download-deps]
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -55,7 +53,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    needs: [build, download-deps]
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
@@ -156,47 +154,3 @@ jobs:
           context: .
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  download-deps:
-    name: Download Dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download binaries (GPU)
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.gpu_version }}
-        run: |
-          mkdir -p gpu
-          cd gpu
-          if [ "$VERSION" = "release" ]; then
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/cedana-gpu-controller
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/versions/latest/libcedana-gpu.so
-          else
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/cedana-gpu-controller
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/versions/$VERSION/libcedana-gpu.so
-          fi
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu
-          path: ./gpu/*
-
-      - name: Download binaries (streamer)
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.streamer_version }}
-        run: |
-          mkdir -p streamer
-          cd streamer
-          if [ "$VERSION" = "release" ]; then
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/versions/latest/cedana-image-streamer
-          else
-            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/versions/$VERSION/cedana-image-streamer
-          fi
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: streamer
-          path: ./streamer/*

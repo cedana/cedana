@@ -35,10 +35,18 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
       publish_alpha: true
 
+  download:
+    name: Download
+    uses: ./.github/workflows/download.yml
+    secrets: inherit
+    with:
+      gpu_version: 'main'
+      streamer_version: 'main'
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: build
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -46,7 +54,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    needs: build
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
