@@ -33,6 +33,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
+      publish_alpha: true
 
   test:
     name: Test

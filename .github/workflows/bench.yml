@@ -74,17 +74,20 @@ jobs:
       run:
         working-directory: /src
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download GPU binaries
+        uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
           name: gpu
 
-      - uses: actions/download-artifact@v4
+      - name: Download Cedana binary
+        uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
           name: cedana
 
-      - uses: actions/download-artifact@v4
+      - name: Download Cedana plugins
+        uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
           name: plugins
@@ -174,17 +177,17 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: cedana-gpu/release-${{ github.ref }}-native
+          destination: cedana/release-${{ github.head_ref || github.ref_name }}-native
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ native)
         if: inputs.comparison_native
         id: summary-native
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-native/results
-          RESULTS_TITLE: "cedana-gpu"
-          RESULTS_DESCRIPTION: "**${{ github.ref }}** comparison w/ native"
-          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+          RESULTS_BASE_URL: https://storage.googleapis.com/cedana/release-${{ github.head_ref || github.ref_name }}-native/results
+          RESULTS_TITLE: ${{ github.repository }}
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ native"
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           utils/results-summary > $GITHUB_STEP_SUMMARY
           utils/results-summary > summary.md
@@ -225,17 +228,17 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-patch
+          destination: ${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-patch
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ last patch)
         if: inputs.comparison_patch
         id: summary-patch
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-patch/results
-          RESULTS_TITLE: "cedana-gpu"
-          RESULTS_DESCRIPTION: "**${{ github.ref }}** comparison w/ last patch"
-          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-patch/results
+          RESULTS_TITLE: ${{ github.repository }}
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ last patch"
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           utils/results-summary > $GITHUB_STEP_SUMMARY
           utils/results-summary > summary.md
@@ -276,17 +279,17 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-branded
+          destination: ${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-branded
           glob: "**/*.png"
 
       - name: Generate summary (branded)
         if: inputs.post_summary_slack_branded
         id: summary-branded
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/release-${{ github.ref }}-${{ github.run_number }}-branded/results
-          RESULTS_TITLE: "cedana-gpu"
-          RESULTS_DESCRIPTION: "**${{ github.ref }}** performance results"
-          RELEASE_NOTES_URL: https://github.com/cedana/cedana-gpu/releases/${{ github.ref }}
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-branded/results
+          RESULTS_TITLE: ${{ github.repository }}
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** performance results"
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           utils/results-summary > $GITHUB_STEP_SUMMARY
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
@@ -381,13 +384,13 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: cedana-gpu/bench-native-${{ github.ref }}
+          destination: ${{ github.repository }}/bench-native-${{ github.head_ref || github.ref_name }}
           glob: "**/*.png"
 
       - name: Generate summary
         if: success() || failure() && (inputs.post_summary_pr || inputs.post_summary_slack)
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/cedana-gpu/bench-native-${{ github.ref }}/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/bench-native-${{ github.head_ref || github.ref_name }}/results
           RESULTS_DESCRIPTION: "> Manual run (native)"
         run: |
           utils/results-summary > summary.md
