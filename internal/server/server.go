@@ -63,6 +63,10 @@ type MetricOpts struct {
 	OTel bool
 }
 
+func (s *CedanaRoot) Wait() {
+	s.wg.Wait()
+}
+
 func NewCedanaRoot(ctx context.Context) (*CedanaRoot, error) {
 	host, err := utils.GetHost(ctx)
 	if err != nil {
