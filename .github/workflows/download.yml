@@ -6,21 +6,80 @@ name: Download
 on:
   workflow_call:
     inputs:
+      cedana_version:
+        type: string
+        description: Version for Cedana binaries (branch name or "release" for latest release)
+        required: false
+        default: "none"
       gpu_version:
         type: string
         description: Version for GPU binaries (branch name or "release" for latest release)
         required: false
-        default: "main"
+        default: "none"
       streamer_version:
         type: string
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
-        default: "main"
+        default: "none"
 
 jobs:
+  cedana:
+    name: Cedana
+    runs-on: ubuntu-latest
+    if: ${{ inputs.cedana_version != 'none' }}
+    steps:
+      - name: Download cedana
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.cedana_version }}
+        run: |
+          mkdir -p cedana
+          cd cedana
+          if [ "$VERSION" = "release" ]; then
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/cedana
+          else
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/cedana
+          fi
+
+      - name: Download plugins
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.cedana_version }}
+        run: |
+          mkdir -p plugins
+          cd plugins
+          if [ "$VERSION" = "release" ]; then
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-runc.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-containerd.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-crio.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-k8s.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-kata.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/latest/libcedana-cloud-hypervisor.so
+          else
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-runc.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-containerd.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-crio.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-k8s.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-kata.so
+            curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/versions/$VERSION/libcedana-cloud-hypervisor.so
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedana
+          path: ./cedana/*
+
+      - name: Upload plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins
+          path: ./plugins/*
+
   gpu:
     name: GPU
     runs-on: ubuntu-latest
+    if: ${{ inputs.gpu_version != 'none' }}
     steps:
       - name: Download binaries
         env:
@@ -46,6 +105,7 @@ jobs:
   streamer:
     name: Streamer
     runs-on: ubuntu-latest
+    if: ${{ inputs.streamer_version != 'none' }}
     steps:
       - name: Download binaries
         env:
