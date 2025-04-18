@@ -27,7 +27,7 @@ on:
 jobs:
   unit:
     name: Unit
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest

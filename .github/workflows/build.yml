@@ -107,7 +107,7 @@ jobs:
 
   image-amd64:
     name: Image (amd64)
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-16
     if: inputs.amd64_image
     permissions:
       contents: read
@@ -170,7 +170,7 @@ jobs:
 
   image-arm64:
     name: Image (arm64)
-    runs-on: ubicloud-standard-8-arm
+    runs-on: ubicloud-standard-16-arm
     if: inputs.arm64_image
     permissions:
       contents: read
