@@ -68,7 +68,7 @@ jobs:
       packages: "read"
       id-token: "write"
       pull-requests: "write"
-    runs-on: ubicloud-gpu
+    runs-on: [runs-on,runner=amd64-cuda-12-4-bench]
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -321,7 +321,7 @@ jobs:
       contents: "read"
       packages: "read"
       id-token: "write"
-    runs-on: ubicloud-gpu
+    runs-on: [runs-on,runner=amd64-cuda-12-4-bench]
     container:
       image: cedana/cedana-bench:cuda
       credentials:
