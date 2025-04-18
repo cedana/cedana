@@ -5,93 +5,128 @@ before:
     - go generate ./...
 builds:
   - id: cedana
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     binary: cedana
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./cedana
   - id: libcedana-runc
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/runc
     binary: libcedana-runc.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-runc.so
   - id: libcedana-containerd
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/containerd
     binary: libcedana-containerd.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-containerd.so
   - id: libcedana-crio
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/crio
     binary: libcedana-crio.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-crio.so
   - id: libcedana-k8s
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/k8s
     binary: libcedana-k8s.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-k8s.so
   - id: libcedana-cloud-hypervisor
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/cloud-hypervisor
     binary: libcedana-cloud-hypervisor.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-cloud-hypervisor.so
   - id: libcedana-kata
+    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
       - linux
     goarch:
       - amd64
+    goamd64:
+      - v1
     main: ./plugins/kata
     binary: libcedana-kata.so
     buildmode: plugin
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
+    prebuilt:
+      path: ./libcedana-kata.so
 
 checksum:
   name_template: "checksums.txt"
