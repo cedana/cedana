@@ -369,8 +369,8 @@ jobs:
     uses: ./.github/workflows/test_gpu.yml
     secrets: inherit
     with:
-      debug: inputs.debug
-      streamer: inputs.streamer
+      debug: ${{ inputs.debug }}
+      streamer: ${{ inputs.streamer }}
       cuda_11_8: true
       cuda_12_2: true
       cuda_12_4: true
