@@ -18,6 +18,15 @@ on:
         description: "Run GPU tests"
         required: false
         default: true
+      cuda_versions:
+        type: string
+        description: "CUDA versions to test, line-separated"
+        required: false
+        default: |
+          11.8
+          12.2
+          12.4
+          12.8
       streamer:
         type: boolean
         description: "Run streamer tests"
@@ -366,7 +375,7 @@ jobs:
 
   regression-gpu:
     name: Regression (GPU)
-    runs-on: ubicloud-gpu
+    runs-on: [runs-on,runner=amd64-cuda-12.4]
     if: inputs.gpu
     container:
       image: cedana/cedana-test:cuda
