@@ -26,7 +26,7 @@ on:
 
 jobs:
   unit:
-    name: Unit
+    name: Unit (amd64)
     runs-on: ubuntu-latest
     if: inputs.cpu
     container:
@@ -66,7 +66,7 @@ jobs:
         run: make test-unit
 
   script:
-    name: Scripts
+    name: Scripts (amd64)
     runs-on: ubuntu-latest
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}

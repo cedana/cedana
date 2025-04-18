@@ -61,7 +61,7 @@ on:
 
 jobs:
   cedana:
-    name: Cedana
+    name: Cedana (amd64) / CUDA 12.4
     if: inputs.cedana
     permissions:
       contents: "read"
@@ -315,7 +315,7 @@ jobs:
             ${{ steps.summary-branded.outputs.slack_summary }}
 
   native:
-    name: Native
+    name: Native (amd64) / CUDA 12.4
     if: inputs.native
     permissions:
       contents: "read"
