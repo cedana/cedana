@@ -18,15 +18,6 @@ on:
         description: "Run GPU tests"
         required: false
         default: true
-      cuda_versions:
-        type: string
-        description: "CUDA versions to test, line-separated"
-        required: false
-        default: |
-          11.8
-          12.2
-          12.4
-          12.8
       streamer:
         type: boolean
         description: "Run streamer tests"
@@ -100,7 +91,7 @@ jobs:
           sudo -E /cedana/scripts/k8s-setup-host.sh
 
   regression:
-    name: Regression
+    name: Basic (amd64)
     runs-on: ubicloud-standard-4
     if: inputs.cpu
     container:
@@ -142,7 +133,7 @@ jobs:
         run: make test-regression TAGS=base
 
   regression-runc:
-    name: Regression (runc)
+    name: Runc (amd64)
     runs-on: ubicloud-standard-4
     if: inputs.cpu
     container:
@@ -193,7 +184,7 @@ jobs:
         run: make test-regression TAGS=!gpu,!streamer,runc
 
   regression-containerd:
-    name: Regression (containerd)
+    name: Containerd (amd64)
     runs-on: ubicloud-standard-4
     if: inputs.cpu
     container:
@@ -244,7 +235,7 @@ jobs:
         run: make test-regression TAGS=!gpu,!streamer,containerd
 
   regression-crio:
-    name: Regression (crio)
+    name: CRIO (amd64)
     runs-on: ubicloud-standard-4
     if: inputs.cpu
     container:
@@ -295,7 +286,7 @@ jobs:
         run: make test-regression TAGS=!gpu,!streamer,crio
 
   regression-streamer:
-    name: Regression (streamer)
+    name: Streamer (amd64)
     runs-on: ubicloud-gpu
     if: inputs.streamer
     container:
@@ -374,81 +365,14 @@ jobs:
           fi
 
   regression-gpu:
-    name: Regression (GPU)
-    runs-on: [runs-on,runner=amd64-cuda-12.4]
-    if: inputs.gpu
-    container:
-      image: cedana/cedana-test:cuda
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cedana
-
-      - name: Download plugins
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins
-
-      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        if: inputs.streamer
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: streamer
-
-      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: gpu
-
-      - name: Make executable
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./libcedana-*.so
-          echo "$PWD" >> $GITHUB_PATH
-
-      - name: Install plugins
-        env:
-          STREAMER: ${{ inputs.streamer }}
-        run: |
-          sudo -E ./cedana plugin install runc containerd crio
-          sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
-          if [ "$STREAMER" = "true" ]; then
-            sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
-          fi
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run regression tests
-        env:
-          STREAMER: ${{ inputs.streamer }}
-        run: |
-          if [ "$STREAMER" = "true" ]; then
-            make test-regression TAGS=gpu PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
-          else
-            make test-regression TAGS=gpu,!streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
-          fi
-
+    name: GPU (amd64)
+    uses: ./.github/workflows/test_gpu.yml
+    needs: [build, download]
+    secrets: inherit
+    with:
+      debug: inputs.debug
+      streamer: inputs.streamer
+      cuda_11_8: true
+      cuda_12_2: true
+      cuda_12_4: true
+      cuda_12_8: true
