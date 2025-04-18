@@ -367,7 +367,6 @@ jobs:
   regression-gpu:
     name: GPU (amd64)
     uses: ./.github/workflows/test_gpu.yml
-    needs: [build, download]
     secrets: inherit
     with:
       debug: inputs.debug
