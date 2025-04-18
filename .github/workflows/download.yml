@@ -24,7 +24,7 @@ on:
 
 jobs:
   cedana:
-    name: Cedana
+    name: Cedana (amd64)
     runs-on: ubuntu-latest
     if: ${{ inputs.cedana_version != 'none' }}
     steps:
@@ -79,7 +79,7 @@ jobs:
           path: ./plugins/*
 
   gpu:
-    name: GPU
+    name: GPU (amd64)
     runs-on: ubuntu-latest
     if: ${{ inputs.gpu_version != 'none' }}
     steps:
@@ -106,7 +106,7 @@ jobs:
           path: ./gpu/*
 
   streamer:
-    name: Streamer
+    name: Streamer (amd64)
     runs-on: ubuntu-latest
     if: ${{ inputs.streamer_version != 'none' }}
     steps:
