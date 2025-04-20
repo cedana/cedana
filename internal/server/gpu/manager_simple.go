@@ -175,6 +175,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
+        return
 			}
 			log.Info().Str("JID", jid).Msg("GPU dump complete")
 		}()
