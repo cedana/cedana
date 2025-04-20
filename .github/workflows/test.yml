@@ -365,7 +365,7 @@ jobs:
           fi
 
   regression-gpu:
-    name: CUDA
+    name: GPU
     uses: ./.github/workflows/test_gpu.yml
     secrets: inherit
     with:

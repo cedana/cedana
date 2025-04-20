@@ -36,7 +36,7 @@ on:
 
 jobs:
   cuda-11-8:
-    name: 11.8 (amd64)
+    name: CUDA 11.8 (amd64)
     runs-on: [runs-on,runner=amd64-cuda-11-8]
     if: inputs.cuda_11_8
     container:
@@ -115,7 +115,7 @@ jobs:
           fi
 
   cuda-12-2:
-    name: 12.2 (amd64)
+    name: CUDA 12.2 (amd64)
     runs-on: [runs-on,runner=amd64-cuda-12-2]
     if: inputs.cuda_12_2
     container:
@@ -194,7 +194,7 @@ jobs:
           fi
 
   cuda-12-4:
-    name: 12.4 (amd64)
+    name: CUDA 12.4 (amd64)
     runs-on: [runs-on,runner=amd64-cuda-12-4]
     if: inputs.cuda_12_4
     container:
@@ -273,7 +273,7 @@ jobs:
           fi
 
   cuda-12-8:
-    name: 12.8 (amd64)
+    name: CUDA 12.8 (amd64)
     runs-on: [runs-on,runner=amd64-cuda-12-8]
     if: inputs.cuda_12_8
     container:
