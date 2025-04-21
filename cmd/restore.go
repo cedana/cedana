@@ -128,7 +128,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		ctx = context.WithValue(cmd.Context(), keys.PIDFILE_PATH_KEY, &pidFilePath)
+		ctx = context.WithValue(ctx, keys.PIDFILE_PATH_KEY, &pidFilePath)
 		cmd.SetContext(ctx)
 
 		return nil
