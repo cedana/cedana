@@ -1,0 +1,110 @@
+name: Manual
+
+on:
+  workflow_call:
+    inputs:
+      debug_build:
+        type: boolean
+        description: "Run build with debugging enabled"
+        required: false
+        default: false
+      debug_test:
+        type: boolean
+        description: "Run tests with debugging enabled"
+        required: false
+        default: false
+      debug_bench:
+        type: boolean
+        description: "Run benchmark with debugging enabled"
+        required: false
+        default: false
+      gpu_version:
+        type: string
+        description: Version for GPU binaries (branch name or "release" for latest release)
+        required: false
+        default: "none"
+      streamer_version:
+        type: string
+        description: Version for streamer binaries (branch name or "release" for latest release)
+        required: false
+        default: "none"
+      bench_cedana:
+        type: boolean
+        description: Run benchmarks for Cedana
+        required: false
+        default: false
+      bench_native:
+        type: boolean
+        description: Run benchmarks for native
+        required: false
+        default: false
+      bench_samples:
+        type: number
+        description: Number of samples for the benchmark
+        required: false
+        default: 2
+      bench_push_results:
+        type: boolean
+        description: Push benchmark results to storage
+        required: false
+        default: false
+      bench_comparison_patch:
+        type: boolean
+        description: Compare benchmark results with last patch
+        required: false
+        default: false
+      bench_comparison_native:
+        type: boolean
+        description: Compare benchmark results with native
+        required: false
+        default: false
+      bench_post_summary_slack:
+        type: boolean
+        description: Post benchmark summary to Slack
+        required: false
+        default: false
+      bench_post_summary_slack_branded:
+        type: boolean
+        description: Post benchmark summary to Slack (ext channel) with branding
+        required: false
+        default: false
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      debug: ${{ inputs.debug_build }}
+
+  download:
+    name: Download
+    uses: ./.github/workflows/download.yml
+    secrets: inherit
+    with:
+      gpu_version: ${{ inputs.gpu_version }}
+      streamer_version: ${{ inputs.streamer_version }}
+
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+    needs: [build, download]
+    secrets: inherit
+    with:
+      debug: ${{ inputs.debug_test }}
+
+  bench:
+    name: Bench
+    uses: ./.github/workflows/bench.yml
+    needs: [build, download]
+    secrets: inherit
+    with:
+      debug: ${{ inputs.debug_bench }}
+      cedana: ${{ inputs.bench_cedana }}
+      native: ${ inputs.bench_native }}
+      samples: ${{ inputs.bench_samples }}
+      push_results: ${{ inputs.bench_push_results }}
+      comparison_patch: ${{ inputs.bench_comparison_patch }}
+      comparison_native: ${{ inputs.bench_comparison_native }}
+      post_summary_slack: ${{ inputs.bench_post_summary_slack }}
+      post_summary_slack_branded: ${{ inputs.bench_post_summary_slack_branded }}

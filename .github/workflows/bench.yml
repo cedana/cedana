@@ -171,7 +171,7 @@ jobs:
         run: ./bench results pull --runtime native:1 --runtime cedana:2
 
       - name: Plot comparison w/ native
-        if: inputs.comparison_native
+        if: (success() || failure()) && inputs.comparison_native
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_NATIVE }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
@@ -179,7 +179,7 @@ jobs:
           ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (comparison w/ native)
-        if: inputs.comparison_native
+        if: (success() || failure()) && inputs.comparison_native
         id: upload-plots-native
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -190,7 +190,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ native)
-        if: inputs.comparison_native
+        if: (success() || failure()) && inputs.comparison_native
         id: summary-native
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/cedana/release-${{ github.head_ref || github.ref_name }}-native/results
@@ -203,7 +203,7 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary to Slack (comparison w/ native)
-        if: inputs.post_summary_slack && inputs.comparison_native
+        if: (success() || failure()) && inputs.post_summary_slack && inputs.comparison_native
         id: slack-native
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -221,7 +221,7 @@ jobs:
           comment_tag: comparison_native
 
       - name: Plot comparison w/ last patch
-        if: inputs.comparison_patch
+        if: (success() || failure()) && inputs.comparison_patch
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
@@ -230,7 +230,7 @@ jobs:
           ./bench plot --runtime cedana:2 --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (comparison w/ last patch)
-        if: inputs.comparison_patch
+        if: (success() || failure()) && inputs.comparison_patch
         id: upload-plots-patch
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -241,7 +241,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ last patch)
-        if: inputs.comparison_patch
+        if: success() || failure() && inputs.comparison_patch
         id: summary-patch
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-patch/results
@@ -261,7 +261,7 @@ jobs:
           comment_tag: comparison_patch
 
       - name: Post summary to Slack (comparison w/ last patch)
-        if: inputs.post_summary_slack && inputs.comparison_patch
+        if: (success() || failure()) && inputs.post_summary_slack && inputs.comparison_patch
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -272,7 +272,7 @@ jobs:
             ${{ steps.summary-patch.outputs.slack_summary }}
 
       - name: Plot branded
-        if: inputs.post_summary_slack_branded
+        if: (success() || failure()) && inputs.post_summary_slack_branded
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
@@ -281,7 +281,7 @@ jobs:
           ./bench plot --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (branded)
-        if: inputs.post_summary_slack_branded
+        if: (success() || failure()) && inputs.post_summary_slack_branded
         id: upload-plots-branded
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -292,7 +292,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (branded)
-        if: inputs.post_summary_slack_branded
+        if: (success() || failure()) && inputs.post_summary_slack_branded
         id: summary-branded
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/release-${{ github.head_ref || github.ref_name }}-${{ github.run_number }}-branded/results
@@ -304,7 +304,7 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary (branded)
-        if: inputs.post_summary_slack_branded
+        if: (success() || failure()) && inputs.post_summary_slack_branded
         id: slack-branded
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -397,28 +397,10 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary
-        if: success() || failure() && (inputs.post_summary_pr || inputs.post_summary_slack)
+        if: success() || failure()
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/bench-native-${{ github.head_ref || github.ref_name }}/results
           RESULTS_DESCRIPTION: "> Manual run (native)"
         run: |
           utils/results-summary > summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY
-
-      - name: Post summary to PR
-        if: (success() || failure()) && inputs.post_summary_pr
-        uses: thollander/actions-comment-pull-request@v2
-        with:
-          filePath: /src/summary.md
-          comment_tag: native
-
-      - name: Post summary to Slack
-        if: inputs.post_summary_slack
-        id: slack-native
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            ${{ steps.summary.outputs.slack_summary }}
