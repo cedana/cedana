@@ -28,6 +28,8 @@ func init() {
 
 	// Select what api is used for restores
 	restoreCmd.PersistentFlags().
+		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "required for runc restores")
+	restoreCmd.PersistentFlags().
 		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
 	// Add common flags
 	restoreCmd.PersistentFlags().
@@ -85,6 +87,7 @@ var restoreCmd = &cobra.Command{
 	Short: "Restore a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
@@ -125,6 +128,7 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
+		ctx = context.WithValue(cmd.Context(), keys.PIDFILE_PATH_KEY, &pidFilePath)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -152,6 +156,20 @@ var restoreCmd = &cobra.Command{
 		resp, err := cedanaRoot.Restore(ctx, req)
 		if err != nil {
 			return fmt.Errorf("cedana restore run err: %v", err)
+		}
+
+		pidFilePath, ok := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
+		if req.GetDetails().GetRunc() != nil && !ok {
+			return fmt.Errorf("cedana runc restore without pidfile")
+		} else if req.GetDetails().GetRunc() != nil {
+			fs, err := os.Create(*pidFilePath)
+			if err != nil {
+				return err
+			}
+			_, err = fs.WriteString(fmt.Sprintf("%d", resp.PID))
+			if err != nil {
+				return err
+			}
 		}
 
 		for _, message := range resp.GetMessages() {
