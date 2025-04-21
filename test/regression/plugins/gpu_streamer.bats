@@ -118,7 +118,7 @@ teardown_file() {
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid" --stream 1
     assert_success
@@ -155,7 +155,7 @@ teardown_file() {
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid" --stream 1
     assert_success
@@ -192,7 +192,7 @@ teardown_file() {
     assert_exists "$dump_file/img-2"
     assert_exists "$dump_file/img-3"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid" --stream 4
     assert_success
