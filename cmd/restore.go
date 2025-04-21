@@ -26,6 +26,9 @@ func init() {
 	restoreCmd.AddCommand(processRestoreCmd)
 	restoreCmd.AddCommand(jobRestoreCmd)
 
+	// Select what api is used for restores
+	restoreCmd.PersistentFlags().
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
 	// Add common flags
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
@@ -140,17 +143,16 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		cedanaRoot, err := cedana_utils.NewCedanaRoot(cmd.Context())
+		ctx := context.WithoutCancel(cmd.Context())
+		cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
 		if err != nil {
 			return fmt.Errorf("cedana root err: %v", err)
 		}
 
-		resp, err := cedanaRoot.Restore(cmd.Context(), req)
+		resp, err := cedanaRoot.Restore(ctx, req)
 		if err != nil {
 			return fmt.Errorf("cedana restore run err: %v", err)
 		}
-
-		cedanaRoot.Wait()
 
 		for _, message := range resp.GetMessages() {
 			fmt.Println(message)
