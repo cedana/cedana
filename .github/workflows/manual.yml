@@ -25,7 +25,7 @@ on:
         default: false
       bench_samples:
         type: number
-        description: Number of samples for the benchmark
+        description: Number of samples to run for each metric
         required: false
         default: 2
       bench_push_results:
