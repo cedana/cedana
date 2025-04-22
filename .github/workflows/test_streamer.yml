@@ -16,7 +16,7 @@ on:
 
 jobs:
   all:
-    name: All (amd64)
+    name: Streamer (amd64)
     runs-on: ubicloud-gpu
     container:
       image: cedana/cedana-test:cuda
