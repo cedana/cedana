@@ -68,7 +68,7 @@ jobs:
       packages: "read"
       id-token: "write"
       pull-requests: "write"
-    runs-on: [runs-on,runner=amd64-cuda-12-4-bench]
+    runs-on: [runs-on, runner=amd64-cuda-12-4-bench]
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -148,6 +148,7 @@ jobs:
 
       - id: auth
         name: Authenticate to Google Cloud
+        if: success() || failure()
         uses: google-github-actions/auth@v1
         env:
           PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
@@ -165,6 +166,7 @@ jobs:
         run: ./bench results push --overwrite
 
       - name: Pull last results
+        if: success() || failure()
         env:
           GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
@@ -321,7 +323,7 @@ jobs:
       contents: "read"
       packages: "read"
       id-token: "write"
-    runs-on: [runs-on,runner=amd64-cuda-12-4-bench]
+    runs-on: [runs-on, runner=amd64-cuda-12-4-bench]
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -362,6 +364,7 @@ jobs:
 
       - id: auth
         name: Authenticate to Google Cloud
+        if: success() || failure()
         uses: google-github-actions/auth@v1
         env:
           PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
