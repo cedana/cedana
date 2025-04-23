@@ -637,7 +637,7 @@ import (
 )
 
 func main() {
-	diskConfig := *openapiclient.NewDiskConfig() // DiskConfig | The details of the new disk
+	diskConfig := *openapiclient.NewDiskConfig("Path_example") // DiskConfig | The details of the new disk
 
 	configuration := openapiclient.NewConfiguration()
 	apiClient := openapiclient.NewAPIClient(configuration)

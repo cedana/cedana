@@ -1762,6 +1762,8 @@ components:
           items:
             $ref: '#/components/schemas/VirtQueueAffinity'
           type: array
+      required:
+      - path
       type: object
     NetConfig:
       example:

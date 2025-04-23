@@ -18,7 +18,9 @@ import (
 	"syscall"
 	"time"
 
+	clhclient "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh/client"
 	utils "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/utils"
+	"github.com/rs/zerolog/log"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 )
@@ -29,7 +31,10 @@ const (
 )
 
 type CloudHypervisorVM struct {
-	fdStore sync.Map
+	fdStore   sync.Map
+	Pid       int
+	Config    clhclient.VmConfig
+	APIClient *clhclient.DefaultAPIService
 }
 
 type SnapshotRequest struct {
@@ -269,4 +274,58 @@ func (u *CloudHypervisorVM) GetPID(vmSocketPath string) (uint32, error) {
 // NewUnixSocketVMSnapshot creates a new UnixSocketVMSnapshot with the given socket path
 func NewUnixSocketVMSnapshot(socketPath string) *CloudHypervisorVM {
 	return &CloudHypervisorVM{}
+}
+
+func (u *CloudHypervisorVM) isCLHRunning(timeout uint) (bool, error) {
+	cl := u.APIClient
+	pid := u.Pid
+	timeStart := time.Now()
+	for {
+		waitedPid, err := syscall.Wait4(pid, nil, syscall.WNOHANG, nil)
+		if waitedPid == pid && err == nil {
+			return false, nil
+		}
+
+		err = syscall.Kill(pid, syscall.Signal(0))
+		if err != nil {
+			return false, nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		_, _, err = cl.VmmPingGet(ctx).Execute()
+		cancel()
+		if err == nil {
+			return true, nil
+		}
+
+		if time.Since(timeStart).Seconds() > float64(timeout) {
+			return false, fmt.Errorf("Failed to connect to API (timeout %ds): %s", timeout, utils.OpenAPIClientError(err))
+		}
+
+		time.Sleep(time.Duration(10) * time.Millisecond)
+	}
+}
+
+func (u *CloudHypervisorVM) WaitVMM(timeout uint) error {
+	clhRunning, err := u.isCLHRunning(timeout)
+	if err != nil {
+		return err
+	}
+
+	if !clhRunning {
+		return fmt.Errorf("CLH is not running")
+	}
+
+	return nil
+}
+
+func (clh *CloudHypervisorVM) VMInfo() (clhclient.VmInfo, error) {
+	cl := clh.APIClient
+	ctx, cancelInfo := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelInfo()
+
+	info, _, err := cl.VmInfoGet(ctx).Execute()
+	if err != nil {
+		log.Error().Msgf("VmInfoGet failed: %v", err)
+	}
+	return *info, utils.OpenAPIClientError(err)
 }

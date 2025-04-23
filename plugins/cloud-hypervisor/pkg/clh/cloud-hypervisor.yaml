@@ -885,6 +885,8 @@ components:
             type: integer
 
     DiskConfig:
+      required:
+        - path
       type: object
       properties:
         path:

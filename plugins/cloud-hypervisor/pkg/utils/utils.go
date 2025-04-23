@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	clhclient "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh/client"
 )
 
 type MemUnit uint64
@@ -68,4 +70,17 @@ func copyFile(src string, dest string) error {
 		return fmt.Errorf("failed to get source file info: %w", err)
 	}
 	return os.Chmod(dest, srcInfo.Mode())
+}
+
+func OpenAPIClientError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	reason := ""
+	if apierr, ok := err.(*clhclient.GenericOpenAPIError); ok {
+		reason = string(apierr.Body())
+	}
+
+	return fmt.Errorf("error: %v reason: %s", err, reason)
 }

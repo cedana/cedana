@@ -12,6 +12,8 @@ package openapi
 
 import (
 	"encoding/json"
+	"bytes"
+	"fmt"
 )
 
 // checks if the DiskConfig type satisfies the MappedNullable interface at compile time
@@ -19,7 +21,7 @@ var _ MappedNullable = &DiskConfig{}
 
 // DiskConfig struct for DiskConfig
 type DiskConfig struct {
-	Path *string `json:"path,omitempty"`
+	Path string `json:"path"`
 	Readonly *bool `json:"readonly,omitempty"`
 	Direct *bool `json:"direct,omitempty"`
 	Iommu *bool `json:"iommu,omitempty"`
@@ -35,12 +37,15 @@ type DiskConfig struct {
 	QueueAffinity []VirtQueueAffinity `json:"queue_affinity,omitempty"`
 }
 
+type _DiskConfig DiskConfig
+
 // NewDiskConfig instantiates a new DiskConfig object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDiskConfig() *DiskConfig {
+func NewDiskConfig(path string) *DiskConfig {
 	this := DiskConfig{}
+	this.Path = path
 	var readonly bool = false
 	this.Readonly = &readonly
 	var direct bool = false
@@ -76,36 +81,28 @@ func NewDiskConfigWithDefaults() *DiskConfig {
 	return &this
 }
 
-// GetPath returns the Path field value if set, zero value otherwise.
+// GetPath returns the Path field value
 func (o *DiskConfig) GetPath() string {
-	if o == nil || IsNil(o.Path) {
+	if o == nil {
 		var ret string
 		return ret
 	}
-	return *o.Path
+
+	return o.Path
 }
 
-// GetPathOk returns a tuple with the Path field value if set, nil otherwise
+// GetPathOk returns a tuple with the Path field value
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetPathOk() (*string, bool) {
-	if o == nil || IsNil(o.Path) {
+	if o == nil {
 		return nil, false
 	}
-	return o.Path, true
+	return &o.Path, true
 }
 
-// HasPath returns a boolean if a field has been set.
-func (o *DiskConfig) HasPath() bool {
-	if o != nil && !IsNil(o.Path) {
-		return true
-	}
-
-	return false
-}
-
-// SetPath gets a reference to the given string and assigns it to the Path field.
+// SetPath sets field value
 func (o *DiskConfig) SetPath(v string) {
-	o.Path = &v
+	o.Path = v
 }
 
 // GetReadonly returns the Readonly field value if set, zero value otherwise.
@@ -534,9 +531,7 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 
 func (o DiskConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Path) {
-		toSerialize["path"] = o.Path
-	}
+	toSerialize["path"] = o.Path
 	if !IsNil(o.Readonly) {
 		toSerialize["readonly"] = o.Readonly
 	}
@@ -577,6 +572,43 @@ func (o DiskConfig) ToMap() (map[string]interface{}, error) {
 		toSerialize["queue_affinity"] = o.QueueAffinity
 	}
 	return toSerialize, nil
+}
+
+func (o *DiskConfig) UnmarshalJSON(data []byte) (err error) {
+	// This validates that all required properties are included in the JSON object
+	// by unmarshalling the object into a generic map with string keys and checking
+	// that every required field exists as a key in the generic map.
+	requiredProperties := []string{
+		"path",
+	}
+
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err;
+	}
+
+	for _, requiredProperty := range(requiredProperties) {
+		if _, exists := allProperties[requiredProperty]; !exists {
+			return fmt.Errorf("no value given for required property %v", requiredProperty)
+		}
+	}
+
+	varDiskConfig := _DiskConfig{}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&varDiskConfig)
+
+	if err != nil {
+		return err
+	}
+
+	*o = DiskConfig(varDiskConfig)
+
+	return err
 }
 
 type NullableDiskConfig struct {
