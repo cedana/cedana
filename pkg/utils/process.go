@@ -104,11 +104,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 				file.Inode = fdInfo.Inode
 			}
 
-			isTTY, err := IsTTY(f.Path)
+			// isTTY, err := IsTTY(f.Path)
 			if err == nil {
 				sys := stat.Sys().(*syscall.Stat_t)
 
-				file.IsTTY = isTTY
+				file.IsTTY = false
 				file.Dev = sys.Dev
 				file.Rdev = sys.Rdev
 			}
