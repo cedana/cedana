@@ -105,13 +105,13 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 			}
 
 			// isTTY, err := IsTTY(f.Path)
-			if err == nil {
-				sys := stat.Sys().(*syscall.Stat_t)
+			// if err == nil {
+			// 	sys := stat.Sys().(*syscall.Stat_t)
 
-				file.IsTTY = false
-				file.Dev = sys.Dev
-				file.Rdev = sys.Rdev
-			}
+			// 	file.IsTTY = isTTY
+			// 	file.Dev = sys.Dev
+			// 	file.Rdev = sys.Rdev
+			// }
 
 			openFiles = append(openFiles, file)
 		}
