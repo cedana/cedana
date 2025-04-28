@@ -68,7 +68,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	var stdout, stderr io.Writer
 
 	// if we aren't using a client
-	if _, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client); !ok {
+	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
 		// use checkpoint process state information to setup req uid and gid
 		req.UID = uids[0]
 		req.GID = gids[0]

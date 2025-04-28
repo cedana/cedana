@@ -166,7 +166,8 @@ var restoreCmd = &cobra.Command{
 		}
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
-			ctx := context.WithoutCancel(cmd.Context())
+			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
+			ctx = context.WithoutCancel(ctx)
 			cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
 			if err != nil {
 				return fmt.Errorf("cedana root err: %v", err)
