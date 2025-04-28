@@ -430,6 +430,27 @@ teardown_file() {
     run runc delete "$id"
 }
 
+@test "restore container (without daemon)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --pidfile "$id.pidfile"
+    assert_success
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
 # FIXME: Below test fails because when using detach, TTY is inherited
 # and CRIU does not know how to restore that.
 
