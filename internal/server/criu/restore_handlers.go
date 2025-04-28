@@ -59,12 +59,6 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
 
-	// if UID is not set fetch from process state info from checkpoint
-	if req.UID == 0 {
-		req.UID = uids[0]
-		req.GID = gids[0]
-	}
-
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
@@ -75,6 +69,9 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	// if we aren't using a client
 	if _, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client); !ok {
+		// use checkpoint process state information to setup req uid and gid
+		req.UID = uids[0]
+		req.GID = gids[0]
 		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 		stdin = os.Stdin
 		stdout = os.Stdout
