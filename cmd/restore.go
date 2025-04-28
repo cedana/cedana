@@ -144,7 +144,7 @@ var restoreCmd = &cobra.Command{
 
 		cmd.SetContext(ctx)
 		// return without creating client, if in non-server mode
-		if !noServer {
+		if noServer {
 			return nil
 		}
 
