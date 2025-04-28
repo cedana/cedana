@@ -48,6 +48,7 @@ type Server struct {
 	daemongrpc.UnimplementedDaemonServer
 }
 
+// CedanaRoot struct avoids the use of jobs and provides runc compatible cli usage
 type CedanaRoot struct {
 	lifetime context.Context // context alive for the duration of the server
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish

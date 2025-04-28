@@ -72,6 +72,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	return resp, nil
 }
 
+// Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
 func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).

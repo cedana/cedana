@@ -18,6 +18,7 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -87,6 +88,12 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Restore a container/process",
 	Args:  cobra.ArbitraryArgs,
+	PreRun: func(cmd *cobra.Command, _ []string) {
+		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
+		if pidFilePath != "" {
+			cmd.MarkFlagRequired(flags.NoServerFlag.Full)
+		}
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
@@ -130,9 +137,10 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		if noServer {
+		if pidFilePath != "" {
 			ctx = context.WithValue(ctx, keys.PIDFILE_PATH_KEY, &pidFilePath)
-		} else {
+		}
+		if !noServer {
 			client, err := client.New(config.Global.Address, config.Global.Protocol)
 			if err != nil {
 				return fmt.Errorf("Error creating client: %v", err)
@@ -169,9 +177,9 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("cedana restore run err: %v", err)
 			}
 
-			pidFilePath, ok := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
-			if req.GetDetails().GetRunc() != nil && !ok {
-				return fmt.Errorf("cedana runc restore without pidfile")
+			pidFilePath, _ := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
+			if req.GetDetails().GetRunc() != nil && *pidFilePath == "" {
+				log.Error().Msg("cedana runc restore without pidfile")
 			} else if req.GetDetails().GetRunc() != nil {
 				fs, err := os.Create(*pidFilePath)
 				if err != nil {
