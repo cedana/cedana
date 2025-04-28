@@ -398,10 +398,11 @@ teardown_file() {
 
 
 # bats test_tags=restore
-@test "c/r mpi_pi_loop job" {
+@test "c/r mpi_pi_loop job w/ available cores" {
     jid=$(unix_nano)
 
-    run cedana run process -a --jid "$jid" -- mpirun --allow-run-as-root -np 4 /cedana-samples/cpu_smr/mpi/mpi_pi_loop 100000000
+    num_cpus=$(nproc)
+    run cedana run process -a --jid "$jid" -- mpirun --allow-run-as-root -np "$num_cpus" /cedana-samples/cpu_smr/mpi/mpi_pi_loop 100000000
     assert_success
 
     sleep 2

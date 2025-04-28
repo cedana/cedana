@@ -43,13 +43,6 @@ tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
 
-# Install backup CRIU
-RUN <<EOT
-wget https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_4.0-3_amd64.deb
-dpkg -i criu_4.0-3_amd64.deb
-rm criu_4.0-3_amd64.deb
-EOT
-
 # clone cedana-samples for test workloads
 RUN <<EOT
 set -eux
