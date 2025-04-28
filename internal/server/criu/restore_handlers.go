@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/client"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -57,25 +60,10 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
 
-	req.UID = uids[0]
-	req.GID = gids[0]
-
-	const (
-		LOG_FILE_PERMS os.FileMode = 0o644
-		LOG_FILE_FLAGS int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
-	)
-
-	if !req.Attachable && req.Log != "" {
-		logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open log file: %v", err)
-		}
-		defer logFile.Close()
-		err = os.Chown(req.Log, int(req.UID), int(req.GID))
-		if err != nil {
-			return nil, fmt.Errorf("failed to change log file owner: %v", err)
-		}
-		ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
+	// if UID is not set fetch from process state info from checkpoint
+	if req.UID == 0 {
+		req.UID = uids[0]
+		req.GID = gids[0]
 	}
 
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
@@ -85,17 +73,19 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	exitCode := make(chan int, 1)
 	var stdin io.Reader
 	var stdout, stderr io.Writer
-	if req.Attachable {
+
+	// if we aren't using a client
+	if _, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client); !ok {
 		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 		stdin = os.Stdin
 		stdout = os.Stdout
 		stderr = os.Stderr
-		// id := rand.Uint32()                    // Use a random number, since we don't have PID yet
-		// stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
-		// defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
-	} else {
+	} else if req.Attachable {
 		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
-		stdin = os.Stdin
+		id := rand.Uint32()                    // Use a random number, since we don't have PID yet
+		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
+		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
+	} else {
 		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
 		if ok {
 			stdout, stderr = logFile, logFile

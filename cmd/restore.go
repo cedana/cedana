@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedana_utils "github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
@@ -87,6 +88,7 @@ var restoreCmd = &cobra.Command{
 	Short: "Restore a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
@@ -128,7 +130,15 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		ctx = context.WithValue(ctx, keys.PIDFILE_PATH_KEY, &pidFilePath)
+		if noServer {
+			ctx = context.WithValue(ctx, keys.PIDFILE_PATH_KEY, &pidFilePath)
+		} else {
+			client, err := client.New(config.Global.Address, config.Global.Protocol)
+			if err != nil {
+				return fmt.Errorf("Error creating client: %v", err)
+			}
+			ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
+		}
 		cmd.SetContext(ctx)
 
 		return nil
@@ -146,34 +156,51 @@ var restoreCmd = &cobra.Command{
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
-
-		ctx := context.WithoutCancel(cmd.Context())
-		cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
-		if err != nil {
-			return fmt.Errorf("cedana root err: %v", err)
-		}
-
-		resp, err := cedanaRoot.Restore(ctx, req)
-		if err != nil {
-			return fmt.Errorf("cedana restore run err: %v", err)
-		}
-
-		pidFilePath, ok := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
-		if req.GetDetails().GetRunc() != nil && !ok {
-			return fmt.Errorf("cedana runc restore without pidfile")
-		} else if req.GetDetails().GetRunc() != nil {
-			fs, err := os.Create(*pidFilePath)
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+		if !ok {
+			ctx := context.WithoutCancel(cmd.Context())
+			cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
 			if err != nil {
-				return err
+				return fmt.Errorf("cedana root err: %v", err)
 			}
-			_, err = fs.WriteString(fmt.Sprintf("%d", resp.PID))
+
+			resp, err := cedanaRoot.Restore(ctx, req)
 			if err != nil {
-				return err
+				return fmt.Errorf("cedana restore run err: %v", err)
 			}
+
+			pidFilePath, ok := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
+			if req.GetDetails().GetRunc() != nil && !ok {
+				return fmt.Errorf("cedana runc restore without pidfile")
+			} else if req.GetDetails().GetRunc() != nil {
+				fs, err := os.Create(*pidFilePath)
+				if err != nil {
+					return err
+				}
+				_, err = fs.WriteString(fmt.Sprintf("%d", resp.PID))
+				if err != nil {
+					return err
+				}
+			}
+
+			for _, message := range resp.GetMessages() {
+				fmt.Println(message)
+			}
+			return nil
+		}
+		defer client.Close()
+
+		resp, profiling, err := client.Restore(cmd.Context(), req)
+		if err != nil {
+			return err
 		}
 
-		for _, message := range resp.GetMessages() {
-			fmt.Println(message)
+		if config.Global.Profiling.Enabled && profiling != nil {
+			printProfilingData(profiling)
+		}
+
+		if req.Attachable {
+			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 		}
 
 		return nil
