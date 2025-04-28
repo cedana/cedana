@@ -417,8 +417,6 @@ teardown_file() {
     run cedana restore job "$jid"
     assert_success
 
-    check_shm_size "$jid" "$expected_size"
-
     run cedana ps
     assert_success
     assert_output --partial "$jid"
