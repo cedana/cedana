@@ -2,7 +2,6 @@ package criu
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math/rand/v2"
 	"os"
