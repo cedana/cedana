@@ -47,7 +47,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: main
+      gpu_version: feature/ced-1140-add-gpu-unfreeze-call
       streamer_version: main
 
   test:
