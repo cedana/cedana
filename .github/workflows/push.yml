@@ -2,6 +2,8 @@ name: Push
 
 on:
   push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       debug_build:
@@ -46,8 +48,8 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
-      streamer_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
+      gpu_version: main
+      streamer_version: main
 
   test:
     name: Test
