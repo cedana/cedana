@@ -164,7 +164,7 @@ jobs:
         env:
           GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
-        run: ./bench results push --overwrite
+        run: ./bench results push
 
       - name: Pull last results
         if: success() || failure()
@@ -381,7 +381,7 @@ jobs:
         env:
           GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
-        run: ./bench results push --overwrite
+        run: ./bench results push
 
       - name: Plot
         if: success() || failure()
