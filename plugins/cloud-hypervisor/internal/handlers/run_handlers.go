@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
+
+	"math/rand"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -24,14 +27,13 @@ import (
 
 var Run types.Run = run
 
-const API_SOCK = "/tmp/clh.sock"
-
 type clhClientApi struct {
 	ApiInternal *clhclient.DefaultAPIService
 }
 
 // run runs a clh vm using cli + api
 func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	apiSock := generateSocketPath()
 	details := req.GetDetails().GetVm()
 	hypervisorConfig := details.GetHypervisorConfig()
 	hypervisorConfigJson, err := protojson.Marshal(hypervisorConfig)
@@ -67,7 +69,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	vm.Config.Disks = append(vm.Config.Disks, *rawDisk, *imgDisk)
 
-	args := []string{"--api-socket", API_SOCK}
+	args := []string{"--api-socket", apiSock}
 	args = append(args, "-vv")
 	args = append(args, "--log-file", "/tmp/clh.log")
 	args = append(args, "--seccomp", "false")
@@ -99,7 +101,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	cfg.HTTPClient = &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, path string) (net.Conn, error) {
-				addr, err := net.ResolveUnixAddr("unix", API_SOCK)
+				addr, err := net.ResolveUnixAddr("unix", apiSock)
 				if err != nil {
 					return nil, err
 				}
@@ -119,7 +121,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		return nil, status.Errorf(codes.Internal, "failed to wait for clh vm: %v", err)
 	}
 
-	_, err = os.Stat(API_SOCK)
+	_, err = os.Stat(apiSock)
 	if err != nil && os.IsNotExist(err) {
 		return nil, status.Errorf(codes.Internal, "failed to find API socket: %v", err)
 	}
@@ -154,4 +156,9 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 
 	return exited, nil
+}
+
+func generateSocketPath() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return fmt.Sprintf("/tmp/clh-%d.sock", r.Int63())
 }
