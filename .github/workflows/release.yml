@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 # Cancel any preceding run on the pull request.
 concurrency:
