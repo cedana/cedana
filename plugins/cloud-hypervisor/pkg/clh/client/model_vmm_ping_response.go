@@ -12,22 +12,15 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the VmmPingResponse type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmmPingResponse{}
 
 // VmmPingResponse Virtual Machine Monitor information
 type VmmPingResponse struct {
-	BuildVersion *string `json:"build_version,omitempty"`
-	Version string `json:"version"`
-	Pid *int64 `json:"pid,omitempty"`
-	Features []string `json:"features,omitempty"`
+	BuildVersion *string   `json:"build_version,omitempty"`
+	Version      string    `json:"version"`
+	Pid          *int64    `json:"pid,omitempty"`
+	Features     *[]string `json:"features,omitempty"`
 }
-
-type _VmmPingResponse VmmPingResponse
 
 // NewVmmPingResponse instantiates a new VmmPingResponse object
 // This constructor will assign default values to properties that have it defined,
@@ -49,7 +42,7 @@ func NewVmmPingResponseWithDefaults() *VmmPingResponse {
 
 // GetBuildVersion returns the BuildVersion field value if set, zero value otherwise.
 func (o *VmmPingResponse) GetBuildVersion() string {
-	if o == nil || IsNil(o.BuildVersion) {
+	if o == nil || o.BuildVersion == nil {
 		var ret string
 		return ret
 	}
@@ -59,7 +52,7 @@ func (o *VmmPingResponse) GetBuildVersion() string {
 // GetBuildVersionOk returns a tuple with the BuildVersion field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmmPingResponse) GetBuildVersionOk() (*string, bool) {
-	if o == nil || IsNil(o.BuildVersion) {
+	if o == nil || o.BuildVersion == nil {
 		return nil, false
 	}
 	return o.BuildVersion, true
@@ -67,7 +60,7 @@ func (o *VmmPingResponse) GetBuildVersionOk() (*string, bool) {
 
 // HasBuildVersion returns a boolean if a field has been set.
 func (o *VmmPingResponse) HasBuildVersion() bool {
-	if o != nil && !IsNil(o.BuildVersion) {
+	if o != nil && o.BuildVersion != nil {
 		return true
 	}
 
@@ -105,7 +98,7 @@ func (o *VmmPingResponse) SetVersion(v string) {
 
 // GetPid returns the Pid field value if set, zero value otherwise.
 func (o *VmmPingResponse) GetPid() int64 {
-	if o == nil || IsNil(o.Pid) {
+	if o == nil || o.Pid == nil {
 		var ret int64
 		return ret
 	}
@@ -115,7 +108,7 @@ func (o *VmmPingResponse) GetPid() int64 {
 // GetPidOk returns a tuple with the Pid field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmmPingResponse) GetPidOk() (*int64, bool) {
-	if o == nil || IsNil(o.Pid) {
+	if o == nil || o.Pid == nil {
 		return nil, false
 	}
 	return o.Pid, true
@@ -123,7 +116,7 @@ func (o *VmmPingResponse) GetPidOk() (*int64, bool) {
 
 // HasPid returns a boolean if a field has been set.
 func (o *VmmPingResponse) HasPid() bool {
-	if o != nil && !IsNil(o.Pid) {
+	if o != nil && o.Pid != nil {
 		return true
 	}
 
@@ -137,17 +130,17 @@ func (o *VmmPingResponse) SetPid(v int64) {
 
 // GetFeatures returns the Features field value if set, zero value otherwise.
 func (o *VmmPingResponse) GetFeatures() []string {
-	if o == nil || IsNil(o.Features) {
+	if o == nil || o.Features == nil {
 		var ret []string
 		return ret
 	}
-	return o.Features
+	return *o.Features
 }
 
 // GetFeaturesOk returns a tuple with the Features field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *VmmPingResponse) GetFeaturesOk() ([]string, bool) {
-	if o == nil || IsNil(o.Features) {
+func (o *VmmPingResponse) GetFeaturesOk() (*[]string, bool) {
+	if o == nil || o.Features == nil {
 		return nil, false
 	}
 	return o.Features, true
@@ -155,7 +148,7 @@ func (o *VmmPingResponse) GetFeaturesOk() ([]string, bool) {
 
 // HasFeatures returns a boolean if a field has been set.
 func (o *VmmPingResponse) HasFeatures() bool {
-	if o != nil && !IsNil(o.Features) {
+	if o != nil && o.Features != nil {
 		return true
 	}
 
@@ -164,67 +157,24 @@ func (o *VmmPingResponse) HasFeatures() bool {
 
 // SetFeatures gets a reference to the given []string and assigns it to the Features field.
 func (o *VmmPingResponse) SetFeatures(v []string) {
-	o.Features = v
+	o.Features = &v
 }
 
 func (o VmmPingResponse) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o VmmPingResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.BuildVersion) {
+	if o.BuildVersion != nil {
 		toSerialize["build_version"] = o.BuildVersion
 	}
-	toSerialize["version"] = o.Version
-	if !IsNil(o.Pid) {
+	if true {
+		toSerialize["version"] = o.Version
+	}
+	if o.Pid != nil {
 		toSerialize["pid"] = o.Pid
 	}
-	if !IsNil(o.Features) {
+	if o.Features != nil {
 		toSerialize["features"] = o.Features
 	}
-	return toSerialize, nil
-}
-
-func (o *VmmPingResponse) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"version",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varVmmPingResponse := _VmmPingResponse{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varVmmPingResponse)
-
-	if err != nil {
-		return err
-	}
-
-	*o = VmmPingResponse(varVmmPingResponse)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableVmmPingResponse struct {
@@ -262,5 +212,3 @@ func (v *NullableVmmPingResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

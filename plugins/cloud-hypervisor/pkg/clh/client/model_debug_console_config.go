@@ -12,21 +12,14 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the DebugConsoleConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &DebugConsoleConfig{}
 
 // DebugConsoleConfig struct for DebugConsoleConfig
 type DebugConsoleConfig struct {
-	File *string `json:"file,omitempty"`
-	Mode string `json:"mode"`
-	Iobase *int32 `json:"iobase,omitempty"`
+	File   *string `json:"file,omitempty"`
+	Mode   string  `json:"mode"`
+	Iobase *int32  `json:"iobase,omitempty"`
 }
-
-type _DebugConsoleConfig DebugConsoleConfig
 
 // NewDebugConsoleConfig instantiates a new DebugConsoleConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -48,7 +41,7 @@ func NewDebugConsoleConfigWithDefaults() *DebugConsoleConfig {
 
 // GetFile returns the File field value if set, zero value otherwise.
 func (o *DebugConsoleConfig) GetFile() string {
-	if o == nil || IsNil(o.File) {
+	if o == nil || o.File == nil {
 		var ret string
 		return ret
 	}
@@ -58,7 +51,7 @@ func (o *DebugConsoleConfig) GetFile() string {
 // GetFileOk returns a tuple with the File field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DebugConsoleConfig) GetFileOk() (*string, bool) {
-	if o == nil || IsNil(o.File) {
+	if o == nil || o.File == nil {
 		return nil, false
 	}
 	return o.File, true
@@ -66,7 +59,7 @@ func (o *DebugConsoleConfig) GetFileOk() (*string, bool) {
 
 // HasFile returns a boolean if a field has been set.
 func (o *DebugConsoleConfig) HasFile() bool {
-	if o != nil && !IsNil(o.File) {
+	if o != nil && o.File != nil {
 		return true
 	}
 
@@ -104,7 +97,7 @@ func (o *DebugConsoleConfig) SetMode(v string) {
 
 // GetIobase returns the Iobase field value if set, zero value otherwise.
 func (o *DebugConsoleConfig) GetIobase() int32 {
-	if o == nil || IsNil(o.Iobase) {
+	if o == nil || o.Iobase == nil {
 		var ret int32
 		return ret
 	}
@@ -114,7 +107,7 @@ func (o *DebugConsoleConfig) GetIobase() int32 {
 // GetIobaseOk returns a tuple with the Iobase field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DebugConsoleConfig) GetIobaseOk() (*int32, bool) {
-	if o == nil || IsNil(o.Iobase) {
+	if o == nil || o.Iobase == nil {
 		return nil, false
 	}
 	return o.Iobase, true
@@ -122,7 +115,7 @@ func (o *DebugConsoleConfig) GetIobaseOk() (*int32, bool) {
 
 // HasIobase returns a boolean if a field has been set.
 func (o *DebugConsoleConfig) HasIobase() bool {
-	if o != nil && !IsNil(o.Iobase) {
+	if o != nil && o.Iobase != nil {
 		return true
 	}
 
@@ -135,60 +128,17 @@ func (o *DebugConsoleConfig) SetIobase(v int32) {
 }
 
 func (o DebugConsoleConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o DebugConsoleConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.File) {
+	if o.File != nil {
 		toSerialize["file"] = o.File
 	}
-	toSerialize["mode"] = o.Mode
-	if !IsNil(o.Iobase) {
+	if true {
+		toSerialize["mode"] = o.Mode
+	}
+	if o.Iobase != nil {
 		toSerialize["iobase"] = o.Iobase
 	}
-	return toSerialize, nil
-}
-
-func (o *DebugConsoleConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"mode",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varDebugConsoleConfig := _DebugConsoleConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varDebugConsoleConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = DebugConsoleConfig(varDebugConsoleConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableDebugConsoleConfig struct {
@@ -226,5 +176,3 @@ func (v *NullableDebugConsoleConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

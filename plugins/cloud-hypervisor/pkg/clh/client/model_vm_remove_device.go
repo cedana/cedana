@@ -14,9 +14,6 @@ import (
 	"encoding/json"
 )
 
-// checks if the VmRemoveDevice type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmRemoveDevice{}
-
 // VmRemoveDevice struct for VmRemoveDevice
 type VmRemoveDevice struct {
 	Id *string `json:"id,omitempty"`
@@ -41,7 +38,7 @@ func NewVmRemoveDeviceWithDefaults() *VmRemoveDevice {
 
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *VmRemoveDevice) GetId() string {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
@@ -51,7 +48,7 @@ func (o *VmRemoveDevice) GetId() string {
 // GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmRemoveDevice) GetIdOk() (*string, bool) {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
 	return o.Id, true
@@ -59,7 +56,7 @@ func (o *VmRemoveDevice) GetIdOk() (*string, bool) {
 
 // HasId returns a boolean if a field has been set.
 func (o *VmRemoveDevice) HasId() bool {
-	if o != nil && !IsNil(o.Id) {
+	if o != nil && o.Id != nil {
 		return true
 	}
 
@@ -72,19 +69,11 @@ func (o *VmRemoveDevice) SetId(v string) {
 }
 
 func (o VmRemoveDevice) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o VmRemoveDevice) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Id) {
+	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableVmRemoveDevice struct {
@@ -122,5 +111,3 @@ func (v *NullableVmRemoveDevice) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

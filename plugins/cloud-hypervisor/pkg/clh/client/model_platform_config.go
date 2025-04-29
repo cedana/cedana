@@ -14,19 +14,16 @@ import (
 	"encoding/json"
 )
 
-// checks if the PlatformConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &PlatformConfig{}
-
 // PlatformConfig struct for PlatformConfig
 type PlatformConfig struct {
-	NumPciSegments *int32 `json:"num_pci_segments,omitempty"`
-	IommuSegments []int32 `json:"iommu_segments,omitempty"`
-	IommuAddressWidth *int32 `json:"iommu_address_width,omitempty"`
-	SerialNumber *string `json:"serial_number,omitempty"`
-	Uuid *string `json:"uuid,omitempty"`
-	OemStrings []string `json:"oem_strings,omitempty"`
-	Tdx *bool `json:"tdx,omitempty"`
-	SevSnp *bool `json:"sev_snp,omitempty"`
+	NumPciSegments    *int32    `json:"num_pci_segments,omitempty"`
+	IommuSegments     *[]int32  `json:"iommu_segments,omitempty"`
+	IommuAddressWidth *int32    `json:"iommu_address_width,omitempty"`
+	SerialNumber      *string   `json:"serial_number,omitempty"`
+	Uuid              *string   `json:"uuid,omitempty"`
+	OemStrings        *[]string `json:"oem_strings,omitempty"`
+	Tdx               *bool     `json:"tdx,omitempty"`
+	SevSnp            *bool     `json:"sev_snp,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -56,7 +53,7 @@ func NewPlatformConfigWithDefaults() *PlatformConfig {
 
 // GetNumPciSegments returns the NumPciSegments field value if set, zero value otherwise.
 func (o *PlatformConfig) GetNumPciSegments() int32 {
-	if o == nil || IsNil(o.NumPciSegments) {
+	if o == nil || o.NumPciSegments == nil {
 		var ret int32
 		return ret
 	}
@@ -66,7 +63,7 @@ func (o *PlatformConfig) GetNumPciSegments() int32 {
 // GetNumPciSegmentsOk returns a tuple with the NumPciSegments field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetNumPciSegmentsOk() (*int32, bool) {
-	if o == nil || IsNil(o.NumPciSegments) {
+	if o == nil || o.NumPciSegments == nil {
 		return nil, false
 	}
 	return o.NumPciSegments, true
@@ -74,7 +71,7 @@ func (o *PlatformConfig) GetNumPciSegmentsOk() (*int32, bool) {
 
 // HasNumPciSegments returns a boolean if a field has been set.
 func (o *PlatformConfig) HasNumPciSegments() bool {
-	if o != nil && !IsNil(o.NumPciSegments) {
+	if o != nil && o.NumPciSegments != nil {
 		return true
 	}
 
@@ -88,17 +85,17 @@ func (o *PlatformConfig) SetNumPciSegments(v int32) {
 
 // GetIommuSegments returns the IommuSegments field value if set, zero value otherwise.
 func (o *PlatformConfig) GetIommuSegments() []int32 {
-	if o == nil || IsNil(o.IommuSegments) {
+	if o == nil || o.IommuSegments == nil {
 		var ret []int32
 		return ret
 	}
-	return o.IommuSegments
+	return *o.IommuSegments
 }
 
 // GetIommuSegmentsOk returns a tuple with the IommuSegments field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PlatformConfig) GetIommuSegmentsOk() ([]int32, bool) {
-	if o == nil || IsNil(o.IommuSegments) {
+func (o *PlatformConfig) GetIommuSegmentsOk() (*[]int32, bool) {
+	if o == nil || o.IommuSegments == nil {
 		return nil, false
 	}
 	return o.IommuSegments, true
@@ -106,7 +103,7 @@ func (o *PlatformConfig) GetIommuSegmentsOk() ([]int32, bool) {
 
 // HasIommuSegments returns a boolean if a field has been set.
 func (o *PlatformConfig) HasIommuSegments() bool {
-	if o != nil && !IsNil(o.IommuSegments) {
+	if o != nil && o.IommuSegments != nil {
 		return true
 	}
 
@@ -115,12 +112,12 @@ func (o *PlatformConfig) HasIommuSegments() bool {
 
 // SetIommuSegments gets a reference to the given []int32 and assigns it to the IommuSegments field.
 func (o *PlatformConfig) SetIommuSegments(v []int32) {
-	o.IommuSegments = v
+	o.IommuSegments = &v
 }
 
 // GetIommuAddressWidth returns the IommuAddressWidth field value if set, zero value otherwise.
 func (o *PlatformConfig) GetIommuAddressWidth() int32 {
-	if o == nil || IsNil(o.IommuAddressWidth) {
+	if o == nil || o.IommuAddressWidth == nil {
 		var ret int32
 		return ret
 	}
@@ -130,7 +127,7 @@ func (o *PlatformConfig) GetIommuAddressWidth() int32 {
 // GetIommuAddressWidthOk returns a tuple with the IommuAddressWidth field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool) {
-	if o == nil || IsNil(o.IommuAddressWidth) {
+	if o == nil || o.IommuAddressWidth == nil {
 		return nil, false
 	}
 	return o.IommuAddressWidth, true
@@ -138,7 +135,7 @@ func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool) {
 
 // HasIommuAddressWidth returns a boolean if a field has been set.
 func (o *PlatformConfig) HasIommuAddressWidth() bool {
-	if o != nil && !IsNil(o.IommuAddressWidth) {
+	if o != nil && o.IommuAddressWidth != nil {
 		return true
 	}
 
@@ -152,7 +149,7 @@ func (o *PlatformConfig) SetIommuAddressWidth(v int32) {
 
 // GetSerialNumber returns the SerialNumber field value if set, zero value otherwise.
 func (o *PlatformConfig) GetSerialNumber() string {
-	if o == nil || IsNil(o.SerialNumber) {
+	if o == nil || o.SerialNumber == nil {
 		var ret string
 		return ret
 	}
@@ -162,7 +159,7 @@ func (o *PlatformConfig) GetSerialNumber() string {
 // GetSerialNumberOk returns a tuple with the SerialNumber field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetSerialNumberOk() (*string, bool) {
-	if o == nil || IsNil(o.SerialNumber) {
+	if o == nil || o.SerialNumber == nil {
 		return nil, false
 	}
 	return o.SerialNumber, true
@@ -170,7 +167,7 @@ func (o *PlatformConfig) GetSerialNumberOk() (*string, bool) {
 
 // HasSerialNumber returns a boolean if a field has been set.
 func (o *PlatformConfig) HasSerialNumber() bool {
-	if o != nil && !IsNil(o.SerialNumber) {
+	if o != nil && o.SerialNumber != nil {
 		return true
 	}
 
@@ -184,7 +181,7 @@ func (o *PlatformConfig) SetSerialNumber(v string) {
 
 // GetUuid returns the Uuid field value if set, zero value otherwise.
 func (o *PlatformConfig) GetUuid() string {
-	if o == nil || IsNil(o.Uuid) {
+	if o == nil || o.Uuid == nil {
 		var ret string
 		return ret
 	}
@@ -194,7 +191,7 @@ func (o *PlatformConfig) GetUuid() string {
 // GetUuidOk returns a tuple with the Uuid field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetUuidOk() (*string, bool) {
-	if o == nil || IsNil(o.Uuid) {
+	if o == nil || o.Uuid == nil {
 		return nil, false
 	}
 	return o.Uuid, true
@@ -202,7 +199,7 @@ func (o *PlatformConfig) GetUuidOk() (*string, bool) {
 
 // HasUuid returns a boolean if a field has been set.
 func (o *PlatformConfig) HasUuid() bool {
-	if o != nil && !IsNil(o.Uuid) {
+	if o != nil && o.Uuid != nil {
 		return true
 	}
 
@@ -216,17 +213,17 @@ func (o *PlatformConfig) SetUuid(v string) {
 
 // GetOemStrings returns the OemStrings field value if set, zero value otherwise.
 func (o *PlatformConfig) GetOemStrings() []string {
-	if o == nil || IsNil(o.OemStrings) {
+	if o == nil || o.OemStrings == nil {
 		var ret []string
 		return ret
 	}
-	return o.OemStrings
+	return *o.OemStrings
 }
 
 // GetOemStringsOk returns a tuple with the OemStrings field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PlatformConfig) GetOemStringsOk() ([]string, bool) {
-	if o == nil || IsNil(o.OemStrings) {
+func (o *PlatformConfig) GetOemStringsOk() (*[]string, bool) {
+	if o == nil || o.OemStrings == nil {
 		return nil, false
 	}
 	return o.OemStrings, true
@@ -234,7 +231,7 @@ func (o *PlatformConfig) GetOemStringsOk() ([]string, bool) {
 
 // HasOemStrings returns a boolean if a field has been set.
 func (o *PlatformConfig) HasOemStrings() bool {
-	if o != nil && !IsNil(o.OemStrings) {
+	if o != nil && o.OemStrings != nil {
 		return true
 	}
 
@@ -243,12 +240,12 @@ func (o *PlatformConfig) HasOemStrings() bool {
 
 // SetOemStrings gets a reference to the given []string and assigns it to the OemStrings field.
 func (o *PlatformConfig) SetOemStrings(v []string) {
-	o.OemStrings = v
+	o.OemStrings = &v
 }
 
 // GetTdx returns the Tdx field value if set, zero value otherwise.
 func (o *PlatformConfig) GetTdx() bool {
-	if o == nil || IsNil(o.Tdx) {
+	if o == nil || o.Tdx == nil {
 		var ret bool
 		return ret
 	}
@@ -258,7 +255,7 @@ func (o *PlatformConfig) GetTdx() bool {
 // GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetTdxOk() (*bool, bool) {
-	if o == nil || IsNil(o.Tdx) {
+	if o == nil || o.Tdx == nil {
 		return nil, false
 	}
 	return o.Tdx, true
@@ -266,7 +263,7 @@ func (o *PlatformConfig) GetTdxOk() (*bool, bool) {
 
 // HasTdx returns a boolean if a field has been set.
 func (o *PlatformConfig) HasTdx() bool {
-	if o != nil && !IsNil(o.Tdx) {
+	if o != nil && o.Tdx != nil {
 		return true
 	}
 
@@ -280,7 +277,7 @@ func (o *PlatformConfig) SetTdx(v bool) {
 
 // GetSevSnp returns the SevSnp field value if set, zero value otherwise.
 func (o *PlatformConfig) GetSevSnp() bool {
-	if o == nil || IsNil(o.SevSnp) {
+	if o == nil || o.SevSnp == nil {
 		var ret bool
 		return ret
 	}
@@ -290,7 +287,7 @@ func (o *PlatformConfig) GetSevSnp() bool {
 // GetSevSnpOk returns a tuple with the SevSnp field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *PlatformConfig) GetSevSnpOk() (*bool, bool) {
-	if o == nil || IsNil(o.SevSnp) {
+	if o == nil || o.SevSnp == nil {
 		return nil, false
 	}
 	return o.SevSnp, true
@@ -298,7 +295,7 @@ func (o *PlatformConfig) GetSevSnpOk() (*bool, bool) {
 
 // HasSevSnp returns a boolean if a field has been set.
 func (o *PlatformConfig) HasSevSnp() bool {
-	if o != nil && !IsNil(o.SevSnp) {
+	if o != nil && o.SevSnp != nil {
 		return true
 	}
 
@@ -311,40 +308,32 @@ func (o *PlatformConfig) SetSevSnp(v bool) {
 }
 
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o PlatformConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.NumPciSegments) {
+	if o.NumPciSegments != nil {
 		toSerialize["num_pci_segments"] = o.NumPciSegments
 	}
-	if !IsNil(o.IommuSegments) {
+	if o.IommuSegments != nil {
 		toSerialize["iommu_segments"] = o.IommuSegments
 	}
-	if !IsNil(o.IommuAddressWidth) {
+	if o.IommuAddressWidth != nil {
 		toSerialize["iommu_address_width"] = o.IommuAddressWidth
 	}
-	if !IsNil(o.SerialNumber) {
+	if o.SerialNumber != nil {
 		toSerialize["serial_number"] = o.SerialNumber
 	}
-	if !IsNil(o.Uuid) {
+	if o.Uuid != nil {
 		toSerialize["uuid"] = o.Uuid
 	}
-	if !IsNil(o.OemStrings) {
+	if o.OemStrings != nil {
 		toSerialize["oem_strings"] = o.OemStrings
 	}
-	if !IsNil(o.Tdx) {
+	if o.Tdx != nil {
 		toSerialize["tdx"] = o.Tdx
 	}
-	if !IsNil(o.SevSnp) {
+	if o.SevSnp != nil {
 		toSerialize["sev_snp"] = o.SevSnp
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullablePlatformConfig struct {
@@ -382,5 +371,3 @@ func (v *NullablePlatformConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

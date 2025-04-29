@@ -12,20 +12,13 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the NumaDistance type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &NumaDistance{}
 
 // NumaDistance struct for NumaDistance
 type NumaDistance struct {
 	Destination int32 `json:"destination"`
-	Distance int32 `json:"distance"`
+	Distance    int32 `json:"distance"`
 }
-
-type _NumaDistance NumaDistance
 
 // NewNumaDistance instantiates a new NumaDistance object
 // This constructor will assign default values to properties that have it defined,
@@ -95,56 +88,14 @@ func (o *NumaDistance) SetDistance(v int32) {
 }
 
 func (o NumaDistance) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
+	toSerialize := map[string]interface{}{}
+	if true {
+		toSerialize["destination"] = o.Destination
+	}
+	if true {
+		toSerialize["distance"] = o.Distance
 	}
 	return json.Marshal(toSerialize)
-}
-
-func (o NumaDistance) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{}
-	toSerialize["destination"] = o.Destination
-	toSerialize["distance"] = o.Distance
-	return toSerialize, nil
-}
-
-func (o *NumaDistance) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"destination",
-		"distance",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varNumaDistance := _NumaDistance{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varNumaDistance)
-
-	if err != nil {
-		return err
-	}
-
-	*o = NumaDistance(varNumaDistance)
-
-	return err
 }
 
 type NullableNumaDistance struct {
@@ -182,5 +133,3 @@ func (v *NullableNumaDistance) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

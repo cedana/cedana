@@ -12,25 +12,18 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the CpusConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &CpusConfig{}
 
 // CpusConfig struct for CpusConfig
 type CpusConfig struct {
-	BootVcpus int32 `json:"boot_vcpus"`
-	MaxVcpus int32 `json:"max_vcpus"`
-	Topology *CpuTopology `json:"topology,omitempty"`
-	KvmHyperv *bool `json:"kvm_hyperv,omitempty"`
-	MaxPhysBits *int32 `json:"max_phys_bits,omitempty"`
-	Affinity []CpuAffinity `json:"affinity,omitempty"`
-	Features *CpuFeatures `json:"features,omitempty"`
+	BootVcpus   int32          `json:"boot_vcpus"`
+	MaxVcpus    int32          `json:"max_vcpus"`
+	Topology    *CpuTopology   `json:"topology,omitempty"`
+	KvmHyperv   *bool          `json:"kvm_hyperv,omitempty"`
+	MaxPhysBits *int32         `json:"max_phys_bits,omitempty"`
+	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
+	Features    *CpuFeatures   `json:"features,omitempty"`
 }
-
-type _CpusConfig CpusConfig
 
 // NewCpusConfig instantiates a new CpusConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -105,7 +98,7 @@ func (o *CpusConfig) SetMaxVcpus(v int32) {
 
 // GetTopology returns the Topology field value if set, zero value otherwise.
 func (o *CpusConfig) GetTopology() CpuTopology {
-	if o == nil || IsNil(o.Topology) {
+	if o == nil || o.Topology == nil {
 		var ret CpuTopology
 		return ret
 	}
@@ -115,7 +108,7 @@ func (o *CpusConfig) GetTopology() CpuTopology {
 // GetTopologyOk returns a tuple with the Topology field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpusConfig) GetTopologyOk() (*CpuTopology, bool) {
-	if o == nil || IsNil(o.Topology) {
+	if o == nil || o.Topology == nil {
 		return nil, false
 	}
 	return o.Topology, true
@@ -123,7 +116,7 @@ func (o *CpusConfig) GetTopologyOk() (*CpuTopology, bool) {
 
 // HasTopology returns a boolean if a field has been set.
 func (o *CpusConfig) HasTopology() bool {
-	if o != nil && !IsNil(o.Topology) {
+	if o != nil && o.Topology != nil {
 		return true
 	}
 
@@ -137,7 +130,7 @@ func (o *CpusConfig) SetTopology(v CpuTopology) {
 
 // GetKvmHyperv returns the KvmHyperv field value if set, zero value otherwise.
 func (o *CpusConfig) GetKvmHyperv() bool {
-	if o == nil || IsNil(o.KvmHyperv) {
+	if o == nil || o.KvmHyperv == nil {
 		var ret bool
 		return ret
 	}
@@ -147,7 +140,7 @@ func (o *CpusConfig) GetKvmHyperv() bool {
 // GetKvmHypervOk returns a tuple with the KvmHyperv field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpusConfig) GetKvmHypervOk() (*bool, bool) {
-	if o == nil || IsNil(o.KvmHyperv) {
+	if o == nil || o.KvmHyperv == nil {
 		return nil, false
 	}
 	return o.KvmHyperv, true
@@ -155,7 +148,7 @@ func (o *CpusConfig) GetKvmHypervOk() (*bool, bool) {
 
 // HasKvmHyperv returns a boolean if a field has been set.
 func (o *CpusConfig) HasKvmHyperv() bool {
-	if o != nil && !IsNil(o.KvmHyperv) {
+	if o != nil && o.KvmHyperv != nil {
 		return true
 	}
 
@@ -169,7 +162,7 @@ func (o *CpusConfig) SetKvmHyperv(v bool) {
 
 // GetMaxPhysBits returns the MaxPhysBits field value if set, zero value otherwise.
 func (o *CpusConfig) GetMaxPhysBits() int32 {
-	if o == nil || IsNil(o.MaxPhysBits) {
+	if o == nil || o.MaxPhysBits == nil {
 		var ret int32
 		return ret
 	}
@@ -179,7 +172,7 @@ func (o *CpusConfig) GetMaxPhysBits() int32 {
 // GetMaxPhysBitsOk returns a tuple with the MaxPhysBits field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpusConfig) GetMaxPhysBitsOk() (*int32, bool) {
-	if o == nil || IsNil(o.MaxPhysBits) {
+	if o == nil || o.MaxPhysBits == nil {
 		return nil, false
 	}
 	return o.MaxPhysBits, true
@@ -187,7 +180,7 @@ func (o *CpusConfig) GetMaxPhysBitsOk() (*int32, bool) {
 
 // HasMaxPhysBits returns a boolean if a field has been set.
 func (o *CpusConfig) HasMaxPhysBits() bool {
-	if o != nil && !IsNil(o.MaxPhysBits) {
+	if o != nil && o.MaxPhysBits != nil {
 		return true
 	}
 
@@ -201,17 +194,17 @@ func (o *CpusConfig) SetMaxPhysBits(v int32) {
 
 // GetAffinity returns the Affinity field value if set, zero value otherwise.
 func (o *CpusConfig) GetAffinity() []CpuAffinity {
-	if o == nil || IsNil(o.Affinity) {
+	if o == nil || o.Affinity == nil {
 		var ret []CpuAffinity
 		return ret
 	}
-	return o.Affinity
+	return *o.Affinity
 }
 
 // GetAffinityOk returns a tuple with the Affinity field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *CpusConfig) GetAffinityOk() ([]CpuAffinity, bool) {
-	if o == nil || IsNil(o.Affinity) {
+func (o *CpusConfig) GetAffinityOk() (*[]CpuAffinity, bool) {
+	if o == nil || o.Affinity == nil {
 		return nil, false
 	}
 	return o.Affinity, true
@@ -219,7 +212,7 @@ func (o *CpusConfig) GetAffinityOk() ([]CpuAffinity, bool) {
 
 // HasAffinity returns a boolean if a field has been set.
 func (o *CpusConfig) HasAffinity() bool {
-	if o != nil && !IsNil(o.Affinity) {
+	if o != nil && o.Affinity != nil {
 		return true
 	}
 
@@ -228,12 +221,12 @@ func (o *CpusConfig) HasAffinity() bool {
 
 // SetAffinity gets a reference to the given []CpuAffinity and assigns it to the Affinity field.
 func (o *CpusConfig) SetAffinity(v []CpuAffinity) {
-	o.Affinity = v
+	o.Affinity = &v
 }
 
 // GetFeatures returns the Features field value if set, zero value otherwise.
 func (o *CpusConfig) GetFeatures() CpuFeatures {
-	if o == nil || IsNil(o.Features) {
+	if o == nil || o.Features == nil {
 		var ret CpuFeatures
 		return ret
 	}
@@ -243,7 +236,7 @@ func (o *CpusConfig) GetFeatures() CpuFeatures {
 // GetFeaturesOk returns a tuple with the Features field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpusConfig) GetFeaturesOk() (*CpuFeatures, bool) {
-	if o == nil || IsNil(o.Features) {
+	if o == nil || o.Features == nil {
 		return nil, false
 	}
 	return o.Features, true
@@ -251,7 +244,7 @@ func (o *CpusConfig) GetFeaturesOk() (*CpuFeatures, bool) {
 
 // HasFeatures returns a boolean if a field has been set.
 func (o *CpusConfig) HasFeatures() bool {
-	if o != nil && !IsNil(o.Features) {
+	if o != nil && o.Features != nil {
 		return true
 	}
 
@@ -264,71 +257,29 @@ func (o *CpusConfig) SetFeatures(v CpuFeatures) {
 }
 
 func (o CpusConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o CpusConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["boot_vcpus"] = o.BootVcpus
-	toSerialize["max_vcpus"] = o.MaxVcpus
-	if !IsNil(o.Topology) {
+	if true {
+		toSerialize["boot_vcpus"] = o.BootVcpus
+	}
+	if true {
+		toSerialize["max_vcpus"] = o.MaxVcpus
+	}
+	if o.Topology != nil {
 		toSerialize["topology"] = o.Topology
 	}
-	if !IsNil(o.KvmHyperv) {
+	if o.KvmHyperv != nil {
 		toSerialize["kvm_hyperv"] = o.KvmHyperv
 	}
-	if !IsNil(o.MaxPhysBits) {
+	if o.MaxPhysBits != nil {
 		toSerialize["max_phys_bits"] = o.MaxPhysBits
 	}
-	if !IsNil(o.Affinity) {
+	if o.Affinity != nil {
 		toSerialize["affinity"] = o.Affinity
 	}
-	if !IsNil(o.Features) {
+	if o.Features != nil {
 		toSerialize["features"] = o.Features
 	}
-	return toSerialize, nil
-}
-
-func (o *CpusConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"boot_vcpus",
-		"max_vcpus",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varCpusConfig := _CpusConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varCpusConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = CpusConfig(varCpusConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableCpusConfig struct {
@@ -366,5 +317,3 @@ func (v *NullableCpusConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

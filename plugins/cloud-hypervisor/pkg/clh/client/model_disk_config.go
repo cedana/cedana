@@ -12,32 +12,25 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the DiskConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &DiskConfig{}
 
 // DiskConfig struct for DiskConfig
 type DiskConfig struct {
-	Path string `json:"path"`
-	Readonly *bool `json:"readonly,omitempty"`
-	Direct *bool `json:"direct,omitempty"`
-	Iommu *bool `json:"iommu,omitempty"`
-	NumQueues *int32 `json:"num_queues,omitempty"`
-	QueueSize *int32 `json:"queue_size,omitempty"`
-	VhostUser *bool `json:"vhost_user,omitempty"`
-	VhostSocket *string `json:"vhost_socket,omitempty"`
-	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
-	PciSegment *int32 `json:"pci_segment,omitempty"`
-	Id *string `json:"id,omitempty"`
-	Serial *string `json:"serial,omitempty"`
-	RateLimitGroup *string `json:"rate_limit_group,omitempty"`
-	QueueAffinity []VirtQueueAffinity `json:"queue_affinity,omitempty"`
+	Path              string               `json:"path"`
+	Readonly          *bool                `json:"readonly,omitempty"`
+	Direct            *bool                `json:"direct,omitempty"`
+	Iommu             *bool                `json:"iommu,omitempty"`
+	NumQueues         *int32               `json:"num_queues,omitempty"`
+	QueueSize         *int32               `json:"queue_size,omitempty"`
+	VhostUser         *bool                `json:"vhost_user,omitempty"`
+	VhostSocket       *string              `json:"vhost_socket,omitempty"`
+	RateLimiterConfig *RateLimiterConfig   `json:"rate_limiter_config,omitempty"`
+	PciSegment        *int32               `json:"pci_segment,omitempty"`
+	Id                *string              `json:"id,omitempty"`
+	Serial            *string              `json:"serial,omitempty"`
+	RateLimitGroup    *string              `json:"rate_limit_group,omitempty"`
+	QueueAffinity     *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
 }
-
-type _DiskConfig DiskConfig
 
 // NewDiskConfig instantiates a new DiskConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -107,7 +100,7 @@ func (o *DiskConfig) SetPath(v string) {
 
 // GetReadonly returns the Readonly field value if set, zero value otherwise.
 func (o *DiskConfig) GetReadonly() bool {
-	if o == nil || IsNil(o.Readonly) {
+	if o == nil || o.Readonly == nil {
 		var ret bool
 		return ret
 	}
@@ -117,7 +110,7 @@ func (o *DiskConfig) GetReadonly() bool {
 // GetReadonlyOk returns a tuple with the Readonly field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetReadonlyOk() (*bool, bool) {
-	if o == nil || IsNil(o.Readonly) {
+	if o == nil || o.Readonly == nil {
 		return nil, false
 	}
 	return o.Readonly, true
@@ -125,7 +118,7 @@ func (o *DiskConfig) GetReadonlyOk() (*bool, bool) {
 
 // HasReadonly returns a boolean if a field has been set.
 func (o *DiskConfig) HasReadonly() bool {
-	if o != nil && !IsNil(o.Readonly) {
+	if o != nil && o.Readonly != nil {
 		return true
 	}
 
@@ -139,7 +132,7 @@ func (o *DiskConfig) SetReadonly(v bool) {
 
 // GetDirect returns the Direct field value if set, zero value otherwise.
 func (o *DiskConfig) GetDirect() bool {
-	if o == nil || IsNil(o.Direct) {
+	if o == nil || o.Direct == nil {
 		var ret bool
 		return ret
 	}
@@ -149,7 +142,7 @@ func (o *DiskConfig) GetDirect() bool {
 // GetDirectOk returns a tuple with the Direct field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetDirectOk() (*bool, bool) {
-	if o == nil || IsNil(o.Direct) {
+	if o == nil || o.Direct == nil {
 		return nil, false
 	}
 	return o.Direct, true
@@ -157,7 +150,7 @@ func (o *DiskConfig) GetDirectOk() (*bool, bool) {
 
 // HasDirect returns a boolean if a field has been set.
 func (o *DiskConfig) HasDirect() bool {
-	if o != nil && !IsNil(o.Direct) {
+	if o != nil && o.Direct != nil {
 		return true
 	}
 
@@ -171,7 +164,7 @@ func (o *DiskConfig) SetDirect(v bool) {
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
 func (o *DiskConfig) GetIommu() bool {
-	if o == nil || IsNil(o.Iommu) {
+	if o == nil || o.Iommu == nil {
 		var ret bool
 		return ret
 	}
@@ -181,7 +174,7 @@ func (o *DiskConfig) GetIommu() bool {
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetIommuOk() (*bool, bool) {
-	if o == nil || IsNil(o.Iommu) {
+	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
 	return o.Iommu, true
@@ -189,7 +182,7 @@ func (o *DiskConfig) GetIommuOk() (*bool, bool) {
 
 // HasIommu returns a boolean if a field has been set.
 func (o *DiskConfig) HasIommu() bool {
-	if o != nil && !IsNil(o.Iommu) {
+	if o != nil && o.Iommu != nil {
 		return true
 	}
 
@@ -203,7 +196,7 @@ func (o *DiskConfig) SetIommu(v bool) {
 
 // GetNumQueues returns the NumQueues field value if set, zero value otherwise.
 func (o *DiskConfig) GetNumQueues() int32 {
-	if o == nil || IsNil(o.NumQueues) {
+	if o == nil || o.NumQueues == nil {
 		var ret int32
 		return ret
 	}
@@ -213,7 +206,7 @@ func (o *DiskConfig) GetNumQueues() int32 {
 // GetNumQueuesOk returns a tuple with the NumQueues field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetNumQueuesOk() (*int32, bool) {
-	if o == nil || IsNil(o.NumQueues) {
+	if o == nil || o.NumQueues == nil {
 		return nil, false
 	}
 	return o.NumQueues, true
@@ -221,7 +214,7 @@ func (o *DiskConfig) GetNumQueuesOk() (*int32, bool) {
 
 // HasNumQueues returns a boolean if a field has been set.
 func (o *DiskConfig) HasNumQueues() bool {
-	if o != nil && !IsNil(o.NumQueues) {
+	if o != nil && o.NumQueues != nil {
 		return true
 	}
 
@@ -235,7 +228,7 @@ func (o *DiskConfig) SetNumQueues(v int32) {
 
 // GetQueueSize returns the QueueSize field value if set, zero value otherwise.
 func (o *DiskConfig) GetQueueSize() int32 {
-	if o == nil || IsNil(o.QueueSize) {
+	if o == nil || o.QueueSize == nil {
 		var ret int32
 		return ret
 	}
@@ -245,7 +238,7 @@ func (o *DiskConfig) GetQueueSize() int32 {
 // GetQueueSizeOk returns a tuple with the QueueSize field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetQueueSizeOk() (*int32, bool) {
-	if o == nil || IsNil(o.QueueSize) {
+	if o == nil || o.QueueSize == nil {
 		return nil, false
 	}
 	return o.QueueSize, true
@@ -253,7 +246,7 @@ func (o *DiskConfig) GetQueueSizeOk() (*int32, bool) {
 
 // HasQueueSize returns a boolean if a field has been set.
 func (o *DiskConfig) HasQueueSize() bool {
-	if o != nil && !IsNil(o.QueueSize) {
+	if o != nil && o.QueueSize != nil {
 		return true
 	}
 
@@ -267,7 +260,7 @@ func (o *DiskConfig) SetQueueSize(v int32) {
 
 // GetVhostUser returns the VhostUser field value if set, zero value otherwise.
 func (o *DiskConfig) GetVhostUser() bool {
-	if o == nil || IsNil(o.VhostUser) {
+	if o == nil || o.VhostUser == nil {
 		var ret bool
 		return ret
 	}
@@ -277,7 +270,7 @@ func (o *DiskConfig) GetVhostUser() bool {
 // GetVhostUserOk returns a tuple with the VhostUser field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetVhostUserOk() (*bool, bool) {
-	if o == nil || IsNil(o.VhostUser) {
+	if o == nil || o.VhostUser == nil {
 		return nil, false
 	}
 	return o.VhostUser, true
@@ -285,7 +278,7 @@ func (o *DiskConfig) GetVhostUserOk() (*bool, bool) {
 
 // HasVhostUser returns a boolean if a field has been set.
 func (o *DiskConfig) HasVhostUser() bool {
-	if o != nil && !IsNil(o.VhostUser) {
+	if o != nil && o.VhostUser != nil {
 		return true
 	}
 
@@ -299,7 +292,7 @@ func (o *DiskConfig) SetVhostUser(v bool) {
 
 // GetVhostSocket returns the VhostSocket field value if set, zero value otherwise.
 func (o *DiskConfig) GetVhostSocket() string {
-	if o == nil || IsNil(o.VhostSocket) {
+	if o == nil || o.VhostSocket == nil {
 		var ret string
 		return ret
 	}
@@ -309,7 +302,7 @@ func (o *DiskConfig) GetVhostSocket() string {
 // GetVhostSocketOk returns a tuple with the VhostSocket field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetVhostSocketOk() (*string, bool) {
-	if o == nil || IsNil(o.VhostSocket) {
+	if o == nil || o.VhostSocket == nil {
 		return nil, false
 	}
 	return o.VhostSocket, true
@@ -317,7 +310,7 @@ func (o *DiskConfig) GetVhostSocketOk() (*string, bool) {
 
 // HasVhostSocket returns a boolean if a field has been set.
 func (o *DiskConfig) HasVhostSocket() bool {
-	if o != nil && !IsNil(o.VhostSocket) {
+	if o != nil && o.VhostSocket != nil {
 		return true
 	}
 
@@ -331,7 +324,7 @@ func (o *DiskConfig) SetVhostSocket(v string) {
 
 // GetRateLimiterConfig returns the RateLimiterConfig field value if set, zero value otherwise.
 func (o *DiskConfig) GetRateLimiterConfig() RateLimiterConfig {
-	if o == nil || IsNil(o.RateLimiterConfig) {
+	if o == nil || o.RateLimiterConfig == nil {
 		var ret RateLimiterConfig
 		return ret
 	}
@@ -341,7 +334,7 @@ func (o *DiskConfig) GetRateLimiterConfig() RateLimiterConfig {
 // GetRateLimiterConfigOk returns a tuple with the RateLimiterConfig field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetRateLimiterConfigOk() (*RateLimiterConfig, bool) {
-	if o == nil || IsNil(o.RateLimiterConfig) {
+	if o == nil || o.RateLimiterConfig == nil {
 		return nil, false
 	}
 	return o.RateLimiterConfig, true
@@ -349,7 +342,7 @@ func (o *DiskConfig) GetRateLimiterConfigOk() (*RateLimiterConfig, bool) {
 
 // HasRateLimiterConfig returns a boolean if a field has been set.
 func (o *DiskConfig) HasRateLimiterConfig() bool {
-	if o != nil && !IsNil(o.RateLimiterConfig) {
+	if o != nil && o.RateLimiterConfig != nil {
 		return true
 	}
 
@@ -363,7 +356,7 @@ func (o *DiskConfig) SetRateLimiterConfig(v RateLimiterConfig) {
 
 // GetPciSegment returns the PciSegment field value if set, zero value otherwise.
 func (o *DiskConfig) GetPciSegment() int32 {
-	if o == nil || IsNil(o.PciSegment) {
+	if o == nil || o.PciSegment == nil {
 		var ret int32
 		return ret
 	}
@@ -373,7 +366,7 @@ func (o *DiskConfig) GetPciSegment() int32 {
 // GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetPciSegmentOk() (*int32, bool) {
-	if o == nil || IsNil(o.PciSegment) {
+	if o == nil || o.PciSegment == nil {
 		return nil, false
 	}
 	return o.PciSegment, true
@@ -381,7 +374,7 @@ func (o *DiskConfig) GetPciSegmentOk() (*int32, bool) {
 
 // HasPciSegment returns a boolean if a field has been set.
 func (o *DiskConfig) HasPciSegment() bool {
-	if o != nil && !IsNil(o.PciSegment) {
+	if o != nil && o.PciSegment != nil {
 		return true
 	}
 
@@ -395,7 +388,7 @@ func (o *DiskConfig) SetPciSegment(v int32) {
 
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *DiskConfig) GetId() string {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
@@ -405,7 +398,7 @@ func (o *DiskConfig) GetId() string {
 // GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetIdOk() (*string, bool) {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
 	return o.Id, true
@@ -413,7 +406,7 @@ func (o *DiskConfig) GetIdOk() (*string, bool) {
 
 // HasId returns a boolean if a field has been set.
 func (o *DiskConfig) HasId() bool {
-	if o != nil && !IsNil(o.Id) {
+	if o != nil && o.Id != nil {
 		return true
 	}
 
@@ -427,7 +420,7 @@ func (o *DiskConfig) SetId(v string) {
 
 // GetSerial returns the Serial field value if set, zero value otherwise.
 func (o *DiskConfig) GetSerial() string {
-	if o == nil || IsNil(o.Serial) {
+	if o == nil || o.Serial == nil {
 		var ret string
 		return ret
 	}
@@ -437,7 +430,7 @@ func (o *DiskConfig) GetSerial() string {
 // GetSerialOk returns a tuple with the Serial field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetSerialOk() (*string, bool) {
-	if o == nil || IsNil(o.Serial) {
+	if o == nil || o.Serial == nil {
 		return nil, false
 	}
 	return o.Serial, true
@@ -445,7 +438,7 @@ func (o *DiskConfig) GetSerialOk() (*string, bool) {
 
 // HasSerial returns a boolean if a field has been set.
 func (o *DiskConfig) HasSerial() bool {
-	if o != nil && !IsNil(o.Serial) {
+	if o != nil && o.Serial != nil {
 		return true
 	}
 
@@ -459,7 +452,7 @@ func (o *DiskConfig) SetSerial(v string) {
 
 // GetRateLimitGroup returns the RateLimitGroup field value if set, zero value otherwise.
 func (o *DiskConfig) GetRateLimitGroup() string {
-	if o == nil || IsNil(o.RateLimitGroup) {
+	if o == nil || o.RateLimitGroup == nil {
 		var ret string
 		return ret
 	}
@@ -469,7 +462,7 @@ func (o *DiskConfig) GetRateLimitGroup() string {
 // GetRateLimitGroupOk returns a tuple with the RateLimitGroup field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetRateLimitGroupOk() (*string, bool) {
-	if o == nil || IsNil(o.RateLimitGroup) {
+	if o == nil || o.RateLimitGroup == nil {
 		return nil, false
 	}
 	return o.RateLimitGroup, true
@@ -477,7 +470,7 @@ func (o *DiskConfig) GetRateLimitGroupOk() (*string, bool) {
 
 // HasRateLimitGroup returns a boolean if a field has been set.
 func (o *DiskConfig) HasRateLimitGroup() bool {
-	if o != nil && !IsNil(o.RateLimitGroup) {
+	if o != nil && o.RateLimitGroup != nil {
 		return true
 	}
 
@@ -491,17 +484,17 @@ func (o *DiskConfig) SetRateLimitGroup(v string) {
 
 // GetQueueAffinity returns the QueueAffinity field value if set, zero value otherwise.
 func (o *DiskConfig) GetQueueAffinity() []VirtQueueAffinity {
-	if o == nil || IsNil(o.QueueAffinity) {
+	if o == nil || o.QueueAffinity == nil {
 		var ret []VirtQueueAffinity
 		return ret
 	}
-	return o.QueueAffinity
+	return *o.QueueAffinity
 }
 
 // GetQueueAffinityOk returns a tuple with the QueueAffinity field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DiskConfig) GetQueueAffinityOk() ([]VirtQueueAffinity, bool) {
-	if o == nil || IsNil(o.QueueAffinity) {
+func (o *DiskConfig) GetQueueAffinityOk() (*[]VirtQueueAffinity, bool) {
+	if o == nil || o.QueueAffinity == nil {
 		return nil, false
 	}
 	return o.QueueAffinity, true
@@ -509,7 +502,7 @@ func (o *DiskConfig) GetQueueAffinityOk() ([]VirtQueueAffinity, bool) {
 
 // HasQueueAffinity returns a boolean if a field has been set.
 func (o *DiskConfig) HasQueueAffinity() bool {
-	if o != nil && !IsNil(o.QueueAffinity) {
+	if o != nil && o.QueueAffinity != nil {
 		return true
 	}
 
@@ -518,97 +511,54 @@ func (o *DiskConfig) HasQueueAffinity() bool {
 
 // SetQueueAffinity gets a reference to the given []VirtQueueAffinity and assigns it to the QueueAffinity field.
 func (o *DiskConfig) SetQueueAffinity(v []VirtQueueAffinity) {
-	o.QueueAffinity = v
+	o.QueueAffinity = &v
 }
 
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o DiskConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["path"] = o.Path
-	if !IsNil(o.Readonly) {
+	if true {
+		toSerialize["path"] = o.Path
+	}
+	if o.Readonly != nil {
 		toSerialize["readonly"] = o.Readonly
 	}
-	if !IsNil(o.Direct) {
+	if o.Direct != nil {
 		toSerialize["direct"] = o.Direct
 	}
-	if !IsNil(o.Iommu) {
+	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
 	}
-	if !IsNil(o.NumQueues) {
+	if o.NumQueues != nil {
 		toSerialize["num_queues"] = o.NumQueues
 	}
-	if !IsNil(o.QueueSize) {
+	if o.QueueSize != nil {
 		toSerialize["queue_size"] = o.QueueSize
 	}
-	if !IsNil(o.VhostUser) {
+	if o.VhostUser != nil {
 		toSerialize["vhost_user"] = o.VhostUser
 	}
-	if !IsNil(o.VhostSocket) {
+	if o.VhostSocket != nil {
 		toSerialize["vhost_socket"] = o.VhostSocket
 	}
-	if !IsNil(o.RateLimiterConfig) {
+	if o.RateLimiterConfig != nil {
 		toSerialize["rate_limiter_config"] = o.RateLimiterConfig
 	}
-	if !IsNil(o.PciSegment) {
+	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
 	}
-	if !IsNil(o.Id) {
+	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
-	if !IsNil(o.Serial) {
+	if o.Serial != nil {
 		toSerialize["serial"] = o.Serial
 	}
-	if !IsNil(o.RateLimitGroup) {
+	if o.RateLimitGroup != nil {
 		toSerialize["rate_limit_group"] = o.RateLimitGroup
 	}
-	if !IsNil(o.QueueAffinity) {
+	if o.QueueAffinity != nil {
 		toSerialize["queue_affinity"] = o.QueueAffinity
 	}
-	return toSerialize, nil
-}
-
-func (o *DiskConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"path",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varDiskConfig := _DiskConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varDiskConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = DiskConfig(varDiskConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableDiskConfig struct {
@@ -646,5 +596,3 @@ func (v *NullableDiskConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

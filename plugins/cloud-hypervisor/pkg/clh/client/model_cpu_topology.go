@@ -14,15 +14,12 @@ import (
 	"encoding/json"
 )
 
-// checks if the CpuTopology type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &CpuTopology{}
-
 // CpuTopology struct for CpuTopology
 type CpuTopology struct {
 	ThreadsPerCore *int32 `json:"threads_per_core,omitempty"`
-	CoresPerDie *int32 `json:"cores_per_die,omitempty"`
+	CoresPerDie    *int32 `json:"cores_per_die,omitempty"`
 	DiesPerPackage *int32 `json:"dies_per_package,omitempty"`
-	Packages *int32 `json:"packages,omitempty"`
+	Packages       *int32 `json:"packages,omitempty"`
 }
 
 // NewCpuTopology instantiates a new CpuTopology object
@@ -44,7 +41,7 @@ func NewCpuTopologyWithDefaults() *CpuTopology {
 
 // GetThreadsPerCore returns the ThreadsPerCore field value if set, zero value otherwise.
 func (o *CpuTopology) GetThreadsPerCore() int32 {
-	if o == nil || IsNil(o.ThreadsPerCore) {
+	if o == nil || o.ThreadsPerCore == nil {
 		var ret int32
 		return ret
 	}
@@ -54,7 +51,7 @@ func (o *CpuTopology) GetThreadsPerCore() int32 {
 // GetThreadsPerCoreOk returns a tuple with the ThreadsPerCore field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpuTopology) GetThreadsPerCoreOk() (*int32, bool) {
-	if o == nil || IsNil(o.ThreadsPerCore) {
+	if o == nil || o.ThreadsPerCore == nil {
 		return nil, false
 	}
 	return o.ThreadsPerCore, true
@@ -62,7 +59,7 @@ func (o *CpuTopology) GetThreadsPerCoreOk() (*int32, bool) {
 
 // HasThreadsPerCore returns a boolean if a field has been set.
 func (o *CpuTopology) HasThreadsPerCore() bool {
-	if o != nil && !IsNil(o.ThreadsPerCore) {
+	if o != nil && o.ThreadsPerCore != nil {
 		return true
 	}
 
@@ -76,7 +73,7 @@ func (o *CpuTopology) SetThreadsPerCore(v int32) {
 
 // GetCoresPerDie returns the CoresPerDie field value if set, zero value otherwise.
 func (o *CpuTopology) GetCoresPerDie() int32 {
-	if o == nil || IsNil(o.CoresPerDie) {
+	if o == nil || o.CoresPerDie == nil {
 		var ret int32
 		return ret
 	}
@@ -86,7 +83,7 @@ func (o *CpuTopology) GetCoresPerDie() int32 {
 // GetCoresPerDieOk returns a tuple with the CoresPerDie field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpuTopology) GetCoresPerDieOk() (*int32, bool) {
-	if o == nil || IsNil(o.CoresPerDie) {
+	if o == nil || o.CoresPerDie == nil {
 		return nil, false
 	}
 	return o.CoresPerDie, true
@@ -94,7 +91,7 @@ func (o *CpuTopology) GetCoresPerDieOk() (*int32, bool) {
 
 // HasCoresPerDie returns a boolean if a field has been set.
 func (o *CpuTopology) HasCoresPerDie() bool {
-	if o != nil && !IsNil(o.CoresPerDie) {
+	if o != nil && o.CoresPerDie != nil {
 		return true
 	}
 
@@ -108,7 +105,7 @@ func (o *CpuTopology) SetCoresPerDie(v int32) {
 
 // GetDiesPerPackage returns the DiesPerPackage field value if set, zero value otherwise.
 func (o *CpuTopology) GetDiesPerPackage() int32 {
-	if o == nil || IsNil(o.DiesPerPackage) {
+	if o == nil || o.DiesPerPackage == nil {
 		var ret int32
 		return ret
 	}
@@ -118,7 +115,7 @@ func (o *CpuTopology) GetDiesPerPackage() int32 {
 // GetDiesPerPackageOk returns a tuple with the DiesPerPackage field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpuTopology) GetDiesPerPackageOk() (*int32, bool) {
-	if o == nil || IsNil(o.DiesPerPackage) {
+	if o == nil || o.DiesPerPackage == nil {
 		return nil, false
 	}
 	return o.DiesPerPackage, true
@@ -126,7 +123,7 @@ func (o *CpuTopology) GetDiesPerPackageOk() (*int32, bool) {
 
 // HasDiesPerPackage returns a boolean if a field has been set.
 func (o *CpuTopology) HasDiesPerPackage() bool {
-	if o != nil && !IsNil(o.DiesPerPackage) {
+	if o != nil && o.DiesPerPackage != nil {
 		return true
 	}
 
@@ -140,7 +137,7 @@ func (o *CpuTopology) SetDiesPerPackage(v int32) {
 
 // GetPackages returns the Packages field value if set, zero value otherwise.
 func (o *CpuTopology) GetPackages() int32 {
-	if o == nil || IsNil(o.Packages) {
+	if o == nil || o.Packages == nil {
 		var ret int32
 		return ret
 	}
@@ -150,7 +147,7 @@ func (o *CpuTopology) GetPackages() int32 {
 // GetPackagesOk returns a tuple with the Packages field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CpuTopology) GetPackagesOk() (*int32, bool) {
-	if o == nil || IsNil(o.Packages) {
+	if o == nil || o.Packages == nil {
 		return nil, false
 	}
 	return o.Packages, true
@@ -158,7 +155,7 @@ func (o *CpuTopology) GetPackagesOk() (*int32, bool) {
 
 // HasPackages returns a boolean if a field has been set.
 func (o *CpuTopology) HasPackages() bool {
-	if o != nil && !IsNil(o.Packages) {
+	if o != nil && o.Packages != nil {
 		return true
 	}
 
@@ -171,28 +168,20 @@ func (o *CpuTopology) SetPackages(v int32) {
 }
 
 func (o CpuTopology) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o CpuTopology) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.ThreadsPerCore) {
+	if o.ThreadsPerCore != nil {
 		toSerialize["threads_per_core"] = o.ThreadsPerCore
 	}
-	if !IsNil(o.CoresPerDie) {
+	if o.CoresPerDie != nil {
 		toSerialize["cores_per_die"] = o.CoresPerDie
 	}
-	if !IsNil(o.DiesPerPackage) {
+	if o.DiesPerPackage != nil {
 		toSerialize["dies_per_package"] = o.DiesPerPackage
 	}
-	if !IsNil(o.Packages) {
+	if o.Packages != nil {
 		toSerialize["packages"] = o.Packages
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableCpuTopology struct {
@@ -230,5 +219,3 @@ func (v *NullableCpuTopology) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

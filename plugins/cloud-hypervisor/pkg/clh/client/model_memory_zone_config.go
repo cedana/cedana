@@ -12,29 +12,22 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the MemoryZoneConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &MemoryZoneConfig{}
 
 // MemoryZoneConfig struct for MemoryZoneConfig
 type MemoryZoneConfig struct {
-	Id string `json:"id"`
-	Size int64 `json:"size"`
-	File *string `json:"file,omitempty"`
-	Mergeable *bool `json:"mergeable,omitempty"`
-	Shared *bool `json:"shared,omitempty"`
-	Hugepages *bool `json:"hugepages,omitempty"`
-	HugepageSize *int64 `json:"hugepage_size,omitempty"`
-	HostNumaNode *int32 `json:"host_numa_node,omitempty"`
-	HotplugSize *int64 `json:"hotplug_size,omitempty"`
-	HotpluggedSize *int64 `json:"hotplugged_size,omitempty"`
-	Prefault *bool `json:"prefault,omitempty"`
+	Id             string  `json:"id"`
+	Size           int64   `json:"size"`
+	File           *string `json:"file,omitempty"`
+	Mergeable      *bool   `json:"mergeable,omitempty"`
+	Shared         *bool   `json:"shared,omitempty"`
+	Hugepages      *bool   `json:"hugepages,omitempty"`
+	HugepageSize   *int64  `json:"hugepage_size,omitempty"`
+	HostNumaNode   *int32  `json:"host_numa_node,omitempty"`
+	HotplugSize    *int64  `json:"hotplug_size,omitempty"`
+	HotpluggedSize *int64  `json:"hotplugged_size,omitempty"`
+	Prefault       *bool   `json:"prefault,omitempty"`
 }
-
-type _MemoryZoneConfig MemoryZoneConfig
 
 // NewMemoryZoneConfig instantiates a new MemoryZoneConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -121,7 +114,7 @@ func (o *MemoryZoneConfig) SetSize(v int64) {
 
 // GetFile returns the File field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetFile() string {
-	if o == nil || IsNil(o.File) {
+	if o == nil || o.File == nil {
 		var ret string
 		return ret
 	}
@@ -131,7 +124,7 @@ func (o *MemoryZoneConfig) GetFile() string {
 // GetFileOk returns a tuple with the File field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetFileOk() (*string, bool) {
-	if o == nil || IsNil(o.File) {
+	if o == nil || o.File == nil {
 		return nil, false
 	}
 	return o.File, true
@@ -139,7 +132,7 @@ func (o *MemoryZoneConfig) GetFileOk() (*string, bool) {
 
 // HasFile returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasFile() bool {
-	if o != nil && !IsNil(o.File) {
+	if o != nil && o.File != nil {
 		return true
 	}
 
@@ -153,7 +146,7 @@ func (o *MemoryZoneConfig) SetFile(v string) {
 
 // GetMergeable returns the Mergeable field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetMergeable() bool {
-	if o == nil || IsNil(o.Mergeable) {
+	if o == nil || o.Mergeable == nil {
 		var ret bool
 		return ret
 	}
@@ -163,7 +156,7 @@ func (o *MemoryZoneConfig) GetMergeable() bool {
 // GetMergeableOk returns a tuple with the Mergeable field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetMergeableOk() (*bool, bool) {
-	if o == nil || IsNil(o.Mergeable) {
+	if o == nil || o.Mergeable == nil {
 		return nil, false
 	}
 	return o.Mergeable, true
@@ -171,7 +164,7 @@ func (o *MemoryZoneConfig) GetMergeableOk() (*bool, bool) {
 
 // HasMergeable returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasMergeable() bool {
-	if o != nil && !IsNil(o.Mergeable) {
+	if o != nil && o.Mergeable != nil {
 		return true
 	}
 
@@ -185,7 +178,7 @@ func (o *MemoryZoneConfig) SetMergeable(v bool) {
 
 // GetShared returns the Shared field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetShared() bool {
-	if o == nil || IsNil(o.Shared) {
+	if o == nil || o.Shared == nil {
 		var ret bool
 		return ret
 	}
@@ -195,7 +188,7 @@ func (o *MemoryZoneConfig) GetShared() bool {
 // GetSharedOk returns a tuple with the Shared field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetSharedOk() (*bool, bool) {
-	if o == nil || IsNil(o.Shared) {
+	if o == nil || o.Shared == nil {
 		return nil, false
 	}
 	return o.Shared, true
@@ -203,7 +196,7 @@ func (o *MemoryZoneConfig) GetSharedOk() (*bool, bool) {
 
 // HasShared returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasShared() bool {
-	if o != nil && !IsNil(o.Shared) {
+	if o != nil && o.Shared != nil {
 		return true
 	}
 
@@ -217,7 +210,7 @@ func (o *MemoryZoneConfig) SetShared(v bool) {
 
 // GetHugepages returns the Hugepages field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetHugepages() bool {
-	if o == nil || IsNil(o.Hugepages) {
+	if o == nil || o.Hugepages == nil {
 		var ret bool
 		return ret
 	}
@@ -227,7 +220,7 @@ func (o *MemoryZoneConfig) GetHugepages() bool {
 // GetHugepagesOk returns a tuple with the Hugepages field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetHugepagesOk() (*bool, bool) {
-	if o == nil || IsNil(o.Hugepages) {
+	if o == nil || o.Hugepages == nil {
 		return nil, false
 	}
 	return o.Hugepages, true
@@ -235,7 +228,7 @@ func (o *MemoryZoneConfig) GetHugepagesOk() (*bool, bool) {
 
 // HasHugepages returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasHugepages() bool {
-	if o != nil && !IsNil(o.Hugepages) {
+	if o != nil && o.Hugepages != nil {
 		return true
 	}
 
@@ -249,7 +242,7 @@ func (o *MemoryZoneConfig) SetHugepages(v bool) {
 
 // GetHugepageSize returns the HugepageSize field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetHugepageSize() int64 {
-	if o == nil || IsNil(o.HugepageSize) {
+	if o == nil || o.HugepageSize == nil {
 		var ret int64
 		return ret
 	}
@@ -259,7 +252,7 @@ func (o *MemoryZoneConfig) GetHugepageSize() int64 {
 // GetHugepageSizeOk returns a tuple with the HugepageSize field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetHugepageSizeOk() (*int64, bool) {
-	if o == nil || IsNil(o.HugepageSize) {
+	if o == nil || o.HugepageSize == nil {
 		return nil, false
 	}
 	return o.HugepageSize, true
@@ -267,7 +260,7 @@ func (o *MemoryZoneConfig) GetHugepageSizeOk() (*int64, bool) {
 
 // HasHugepageSize returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasHugepageSize() bool {
-	if o != nil && !IsNil(o.HugepageSize) {
+	if o != nil && o.HugepageSize != nil {
 		return true
 	}
 
@@ -281,7 +274,7 @@ func (o *MemoryZoneConfig) SetHugepageSize(v int64) {
 
 // GetHostNumaNode returns the HostNumaNode field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetHostNumaNode() int32 {
-	if o == nil || IsNil(o.HostNumaNode) {
+	if o == nil || o.HostNumaNode == nil {
 		var ret int32
 		return ret
 	}
@@ -291,7 +284,7 @@ func (o *MemoryZoneConfig) GetHostNumaNode() int32 {
 // GetHostNumaNodeOk returns a tuple with the HostNumaNode field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetHostNumaNodeOk() (*int32, bool) {
-	if o == nil || IsNil(o.HostNumaNode) {
+	if o == nil || o.HostNumaNode == nil {
 		return nil, false
 	}
 	return o.HostNumaNode, true
@@ -299,7 +292,7 @@ func (o *MemoryZoneConfig) GetHostNumaNodeOk() (*int32, bool) {
 
 // HasHostNumaNode returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasHostNumaNode() bool {
-	if o != nil && !IsNil(o.HostNumaNode) {
+	if o != nil && o.HostNumaNode != nil {
 		return true
 	}
 
@@ -313,7 +306,7 @@ func (o *MemoryZoneConfig) SetHostNumaNode(v int32) {
 
 // GetHotplugSize returns the HotplugSize field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetHotplugSize() int64 {
-	if o == nil || IsNil(o.HotplugSize) {
+	if o == nil || o.HotplugSize == nil {
 		var ret int64
 		return ret
 	}
@@ -323,7 +316,7 @@ func (o *MemoryZoneConfig) GetHotplugSize() int64 {
 // GetHotplugSizeOk returns a tuple with the HotplugSize field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetHotplugSizeOk() (*int64, bool) {
-	if o == nil || IsNil(o.HotplugSize) {
+	if o == nil || o.HotplugSize == nil {
 		return nil, false
 	}
 	return o.HotplugSize, true
@@ -331,7 +324,7 @@ func (o *MemoryZoneConfig) GetHotplugSizeOk() (*int64, bool) {
 
 // HasHotplugSize returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasHotplugSize() bool {
-	if o != nil && !IsNil(o.HotplugSize) {
+	if o != nil && o.HotplugSize != nil {
 		return true
 	}
 
@@ -345,7 +338,7 @@ func (o *MemoryZoneConfig) SetHotplugSize(v int64) {
 
 // GetHotpluggedSize returns the HotpluggedSize field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetHotpluggedSize() int64 {
-	if o == nil || IsNil(o.HotpluggedSize) {
+	if o == nil || o.HotpluggedSize == nil {
 		var ret int64
 		return ret
 	}
@@ -355,7 +348,7 @@ func (o *MemoryZoneConfig) GetHotpluggedSize() int64 {
 // GetHotpluggedSizeOk returns a tuple with the HotpluggedSize field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetHotpluggedSizeOk() (*int64, bool) {
-	if o == nil || IsNil(o.HotpluggedSize) {
+	if o == nil || o.HotpluggedSize == nil {
 		return nil, false
 	}
 	return o.HotpluggedSize, true
@@ -363,7 +356,7 @@ func (o *MemoryZoneConfig) GetHotpluggedSizeOk() (*int64, bool) {
 
 // HasHotpluggedSize returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasHotpluggedSize() bool {
-	if o != nil && !IsNil(o.HotpluggedSize) {
+	if o != nil && o.HotpluggedSize != nil {
 		return true
 	}
 
@@ -377,7 +370,7 @@ func (o *MemoryZoneConfig) SetHotpluggedSize(v int64) {
 
 // GetPrefault returns the Prefault field value if set, zero value otherwise.
 func (o *MemoryZoneConfig) GetPrefault() bool {
-	if o == nil || IsNil(o.Prefault) {
+	if o == nil || o.Prefault == nil {
 		var ret bool
 		return ret
 	}
@@ -387,7 +380,7 @@ func (o *MemoryZoneConfig) GetPrefault() bool {
 // GetPrefaultOk returns a tuple with the Prefault field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *MemoryZoneConfig) GetPrefaultOk() (*bool, bool) {
-	if o == nil || IsNil(o.Prefault) {
+	if o == nil || o.Prefault == nil {
 		return nil, false
 	}
 	return o.Prefault, true
@@ -395,7 +388,7 @@ func (o *MemoryZoneConfig) GetPrefaultOk() (*bool, bool) {
 
 // HasPrefault returns a boolean if a field has been set.
 func (o *MemoryZoneConfig) HasPrefault() bool {
-	if o != nil && !IsNil(o.Prefault) {
+	if o != nil && o.Prefault != nil {
 		return true
 	}
 
@@ -408,83 +401,41 @@ func (o *MemoryZoneConfig) SetPrefault(v bool) {
 }
 
 func (o MemoryZoneConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o MemoryZoneConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["id"] = o.Id
-	toSerialize["size"] = o.Size
-	if !IsNil(o.File) {
+	if true {
+		toSerialize["id"] = o.Id
+	}
+	if true {
+		toSerialize["size"] = o.Size
+	}
+	if o.File != nil {
 		toSerialize["file"] = o.File
 	}
-	if !IsNil(o.Mergeable) {
+	if o.Mergeable != nil {
 		toSerialize["mergeable"] = o.Mergeable
 	}
-	if !IsNil(o.Shared) {
+	if o.Shared != nil {
 		toSerialize["shared"] = o.Shared
 	}
-	if !IsNil(o.Hugepages) {
+	if o.Hugepages != nil {
 		toSerialize["hugepages"] = o.Hugepages
 	}
-	if !IsNil(o.HugepageSize) {
+	if o.HugepageSize != nil {
 		toSerialize["hugepage_size"] = o.HugepageSize
 	}
-	if !IsNil(o.HostNumaNode) {
+	if o.HostNumaNode != nil {
 		toSerialize["host_numa_node"] = o.HostNumaNode
 	}
-	if !IsNil(o.HotplugSize) {
+	if o.HotplugSize != nil {
 		toSerialize["hotplug_size"] = o.HotplugSize
 	}
-	if !IsNil(o.HotpluggedSize) {
+	if o.HotpluggedSize != nil {
 		toSerialize["hotplugged_size"] = o.HotpluggedSize
 	}
-	if !IsNil(o.Prefault) {
+	if o.Prefault != nil {
 		toSerialize["prefault"] = o.Prefault
 	}
-	return toSerialize, nil
-}
-
-func (o *MemoryZoneConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"id",
-		"size",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varMemoryZoneConfig := _MemoryZoneConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varMemoryZoneConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = MemoryZoneConfig(varMemoryZoneConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableMemoryZoneConfig struct {
@@ -522,5 +473,3 @@ func (v *NullableMemoryZoneConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

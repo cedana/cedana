@@ -12,56 +12,62 @@ package openapi
 
 import (
 	"bytes"
-	"context"
-	"io"
-	"net/http"
-	"net/url"
+	_context "context"
+	_ioutil "io/ioutil"
+	_nethttp "net/http"
+	_neturl "net/url"
 )
 
+// Linger please
+var (
+	_ _context.Context
+)
 
-// DefaultAPIService DefaultAPI service
-type DefaultAPIService service
+// DefaultApiService DefaultApi service
+type DefaultApiService service
 
 type ApiBootVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiBootVMRequest) Execute() (*http.Response, error) {
+func (r ApiBootVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.BootVMExecute(r)
 }
 
 /*
 BootVM Boot the previously created VM instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiBootVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiBootVMRequest
 */
-func (a *DefaultAPIService) BootVM(ctx context.Context) ApiBootVMRequest {
+func (a *DefaultApiService) BootVM(ctx _context.Context) ApiBootVMRequest {
 	return ApiBootVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) BootVMExecute(r ApiBootVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) BootVMExecute(r ApiBootVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.BootVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.BootVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.boot"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -80,7 +86,7 @@ func (a *DefaultAPIService) BootVMExecute(r ApiBootVMRequest) (*http.Response, e
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -90,15 +96,15 @@ func (a *DefaultAPIService) BootVMExecute(r ApiBootVMRequest) (*http.Response, e
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -109,9 +115,9 @@ func (a *DefaultAPIService) BootVMExecute(r ApiBootVMRequest) (*http.Response, e
 }
 
 type ApiCreateVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	vmConfig *VmConfig
+	ctx        _context.Context
+	ApiService *DefaultApiService
+	vmConfig   *VmConfig
 }
 
 // The VM configuration
@@ -120,41 +126,43 @@ func (r ApiCreateVMRequest) VmConfig(vmConfig VmConfig) ApiCreateVMRequest {
 	return r
 }
 
-func (r ApiCreateVMRequest) Execute() (*http.Response, error) {
+func (r ApiCreateVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.CreateVMExecute(r)
 }
 
 /*
 CreateVM Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiCreateVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiCreateVMRequest
 */
-func (a *DefaultAPIService) CreateVM(ctx context.Context) ApiCreateVMRequest {
+func (a *DefaultApiService) CreateVM(ctx _context.Context) ApiCreateVMRequest {
 	return ApiCreateVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) CreateVMExecute(r ApiCreateVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) CreateVMExecute(r ApiCreateVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.CreateVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.CreateVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.create"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmConfig == nil {
 		return nil, reportError("vmConfig is required and must be specified")
 	}
@@ -178,7 +186,7 @@ func (a *DefaultAPIService) CreateVMExecute(r ApiCreateVMRequest) (*http.Respons
 	}
 	// body params
 	localVarPostBody = r.vmConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -188,15 +196,15 @@ func (a *DefaultAPIService) CreateVMExecute(r ApiCreateVMRequest) (*http.Respons
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -207,45 +215,47 @@ func (a *DefaultAPIService) CreateVMExecute(r ApiCreateVMRequest) (*http.Respons
 }
 
 type ApiDeleteVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiDeleteVMRequest) Execute() (*http.Response, error) {
+func (r ApiDeleteVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.DeleteVMExecute(r)
 }
 
 /*
 DeleteVM Delete the cloud-hypervisor Virtual Machine (VM) instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiDeleteVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiDeleteVMRequest
 */
-func (a *DefaultAPIService) DeleteVM(ctx context.Context) ApiDeleteVMRequest {
+func (a *DefaultApiService) DeleteVM(ctx _context.Context) ApiDeleteVMRequest {
 	return ApiDeleteVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) DeleteVMExecute(r ApiDeleteVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) DeleteVMExecute(r ApiDeleteVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.DeleteVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.DeleteVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.delete"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -264,7 +274,7 @@ func (a *DefaultAPIService) DeleteVMExecute(r ApiDeleteVMRequest) (*http.Respons
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -274,15 +284,15 @@ func (a *DefaultAPIService) DeleteVMExecute(r ApiDeleteVMRequest) (*http.Respons
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -293,45 +303,47 @@ func (a *DefaultAPIService) DeleteVMExecute(r ApiDeleteVMRequest) (*http.Respons
 }
 
 type ApiPauseVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiPauseVMRequest) Execute() (*http.Response, error) {
+func (r ApiPauseVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.PauseVMExecute(r)
 }
 
 /*
 PauseVM Pause a previously booted VM instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiPauseVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiPauseVMRequest
 */
-func (a *DefaultAPIService) PauseVM(ctx context.Context) ApiPauseVMRequest {
+func (a *DefaultApiService) PauseVM(ctx _context.Context) ApiPauseVMRequest {
 	return ApiPauseVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) PauseVMExecute(r ApiPauseVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) PauseVMExecute(r ApiPauseVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.PauseVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.PauseVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.pause"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -350,7 +362,7 @@ func (a *DefaultAPIService) PauseVMExecute(r ApiPauseVMRequest) (*http.Response,
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -360,15 +372,15 @@ func (a *DefaultAPIService) PauseVMExecute(r ApiPauseVMRequest) (*http.Response,
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -379,45 +391,47 @@ func (a *DefaultAPIService) PauseVMExecute(r ApiPauseVMRequest) (*http.Response,
 }
 
 type ApiPowerButtonVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiPowerButtonVMRequest) Execute() (*http.Response, error) {
+func (r ApiPowerButtonVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.PowerButtonVMExecute(r)
 }
 
 /*
 PowerButtonVM Trigger a power button in the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiPowerButtonVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiPowerButtonVMRequest
 */
-func (a *DefaultAPIService) PowerButtonVM(ctx context.Context) ApiPowerButtonVMRequest {
+func (a *DefaultApiService) PowerButtonVM(ctx _context.Context) ApiPowerButtonVMRequest {
 	return ApiPowerButtonVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) PowerButtonVMExecute(r ApiPowerButtonVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) PowerButtonVMExecute(r ApiPowerButtonVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.PowerButtonVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.PowerButtonVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.power-button"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -436,7 +450,7 @@ func (a *DefaultAPIService) PowerButtonVMExecute(r ApiPowerButtonVMRequest) (*ht
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -446,15 +460,15 @@ func (a *DefaultAPIService) PowerButtonVMExecute(r ApiPowerButtonVMRequest) (*ht
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -465,45 +479,47 @@ func (a *DefaultAPIService) PowerButtonVMExecute(r ApiPowerButtonVMRequest) (*ht
 }
 
 type ApiRebootVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiRebootVMRequest) Execute() (*http.Response, error) {
+func (r ApiRebootVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.RebootVMExecute(r)
 }
 
 /*
 RebootVM Reboot the VM instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiRebootVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiRebootVMRequest
 */
-func (a *DefaultAPIService) RebootVM(ctx context.Context) ApiRebootVMRequest {
+func (a *DefaultApiService) RebootVM(ctx _context.Context) ApiRebootVMRequest {
 	return ApiRebootVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) RebootVMExecute(r ApiRebootVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) RebootVMExecute(r ApiRebootVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.RebootVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.RebootVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.reboot"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -522,7 +538,7 @@ func (a *DefaultAPIService) RebootVMExecute(r ApiRebootVMRequest) (*http.Respons
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -532,15 +548,15 @@ func (a *DefaultAPIService) RebootVMExecute(r ApiRebootVMRequest) (*http.Respons
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -551,45 +567,47 @@ func (a *DefaultAPIService) RebootVMExecute(r ApiRebootVMRequest) (*http.Respons
 }
 
 type ApiResumeVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiResumeVMRequest) Execute() (*http.Response, error) {
+func (r ApiResumeVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.ResumeVMExecute(r)
 }
 
 /*
 ResumeVM Resume a previously paused VM instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiResumeVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiResumeVMRequest
 */
-func (a *DefaultAPIService) ResumeVM(ctx context.Context) ApiResumeVMRequest {
+func (a *DefaultApiService) ResumeVM(ctx _context.Context) ApiResumeVMRequest {
 	return ApiResumeVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) ResumeVMExecute(r ApiResumeVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) ResumeVMExecute(r ApiResumeVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ResumeVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.ResumeVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.resume"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -608,7 +626,7 @@ func (a *DefaultAPIService) ResumeVMExecute(r ApiResumeVMRequest) (*http.Respons
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -618,15 +636,15 @@ func (a *DefaultAPIService) ResumeVMExecute(r ApiResumeVMRequest) (*http.Respons
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -637,45 +655,47 @@ func (a *DefaultAPIService) ResumeVMExecute(r ApiResumeVMRequest) (*http.Respons
 }
 
 type ApiShutdownVMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiShutdownVMRequest) Execute() (*http.Response, error) {
+func (r ApiShutdownVMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.ShutdownVMExecute(r)
 }
 
 /*
 ShutdownVM Shut the VM instance down.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiShutdownVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiShutdownVMRequest
 */
-func (a *DefaultAPIService) ShutdownVM(ctx context.Context) ApiShutdownVMRequest {
+func (a *DefaultApiService) ShutdownVM(ctx _context.Context) ApiShutdownVMRequest {
 	return ApiShutdownVMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) ShutdownVMExecute(r ApiShutdownVMRequest) (*http.Response, error) {
+func (a *DefaultApiService) ShutdownVMExecute(r ApiShutdownVMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ShutdownVM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.ShutdownVM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.shutdown"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -694,7 +714,7 @@ func (a *DefaultAPIService) ShutdownVMExecute(r ApiShutdownVMRequest) (*http.Res
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -704,15 +724,15 @@ func (a *DefaultAPIService) ShutdownVMExecute(r ApiShutdownVMRequest) (*http.Res
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -723,45 +743,47 @@ func (a *DefaultAPIService) ShutdownVMExecute(r ApiShutdownVMRequest) (*http.Res
 }
 
 type ApiShutdownVMMRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiShutdownVMMRequest) Execute() (*http.Response, error) {
+func (r ApiShutdownVMMRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.ShutdownVMMExecute(r)
 }
 
 /*
 ShutdownVMM Shuts the cloud-hypervisor VMM.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiShutdownVMMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiShutdownVMMRequest
 */
-func (a *DefaultAPIService) ShutdownVMM(ctx context.Context) ApiShutdownVMMRequest {
+func (a *DefaultApiService) ShutdownVMM(ctx _context.Context) ApiShutdownVMMRequest {
 	return ApiShutdownVMMRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*http.Response, error) {
+func (a *DefaultApiService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ShutdownVMM")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.ShutdownVMM")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vmm.shutdown"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -780,7 +802,7 @@ func (a *DefaultAPIService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*http.R
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -790,15 +812,15 @@ func (a *DefaultAPIService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*http.R
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -809,8 +831,8 @@ func (a *DefaultAPIService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*http.R
 }
 
 type ApiVmAddDevicePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx          _context.Context
+	ApiService   *DefaultApiService
 	deviceConfig *DeviceConfig
 }
 
@@ -820,43 +842,46 @@ func (r ApiVmAddDevicePutRequest) DeviceConfig(deviceConfig DeviceConfig) ApiVmA
 	return r
 }
 
-func (r ApiVmAddDevicePutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddDevicePutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddDevicePutExecute(r)
 }
 
 /*
 VmAddDevicePut Add a new device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddDevicePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddDevicePutRequest
 */
-func (a *DefaultAPIService) VmAddDevicePut(ctx context.Context) ApiVmAddDevicePutRequest {
+func (a *DefaultApiService) VmAddDevicePut(ctx _context.Context) ApiVmAddDevicePutRequest {
 	return ApiVmAddDevicePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddDevicePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddDevicePut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-device"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.deviceConfig == nil {
 		return localVarReturnValue, nil, reportError("deviceConfig is required and must be specified")
 	}
@@ -880,7 +905,7 @@ func (a *DefaultAPIService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (*
 	}
 	// body params
 	localVarPostBody = r.deviceConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -890,15 +915,15 @@ func (a *DefaultAPIService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (*
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -907,7 +932,7 @@ func (a *DefaultAPIService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (*
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -918,8 +943,8 @@ func (a *DefaultAPIService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (*
 }
 
 type ApiVmAddDiskPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 	diskConfig *DiskConfig
 }
 
@@ -929,43 +954,46 @@ func (r ApiVmAddDiskPutRequest) DiskConfig(diskConfig DiskConfig) ApiVmAddDiskPu
 	return r
 }
 
-func (r ApiVmAddDiskPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddDiskPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddDiskPutExecute(r)
 }
 
 /*
 VmAddDiskPut Add a new disk to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddDiskPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddDiskPutRequest
 */
-func (a *DefaultAPIService) VmAddDiskPut(ctx context.Context) ApiVmAddDiskPutRequest {
+func (a *DefaultApiService) VmAddDiskPut(ctx _context.Context) ApiVmAddDiskPutRequest {
 	return ApiVmAddDiskPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddDiskPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddDiskPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-disk"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.diskConfig == nil {
 		return localVarReturnValue, nil, reportError("diskConfig is required and must be specified")
 	}
@@ -989,7 +1017,7 @@ func (a *DefaultAPIService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (*PciD
 	}
 	// body params
 	localVarPostBody = r.diskConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -999,15 +1027,15 @@ func (a *DefaultAPIService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (*PciD
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1016,7 +1044,7 @@ func (a *DefaultAPIService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (*PciD
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1027,9 +1055,9 @@ func (a *DefaultAPIService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (*PciD
 }
 
 type ApiVmAddFsPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	fsConfig *FsConfig
+	ctx        _context.Context
+	ApiService *DefaultApiService
+	fsConfig   *FsConfig
 }
 
 // The details of the new virtio-fs
@@ -1038,43 +1066,46 @@ func (r ApiVmAddFsPutRequest) FsConfig(fsConfig FsConfig) ApiVmAddFsPutRequest {
 	return r
 }
 
-func (r ApiVmAddFsPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddFsPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddFsPutExecute(r)
 }
 
 /*
 VmAddFsPut Add a new virtio-fs device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddFsPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddFsPutRequest
 */
-func (a *DefaultAPIService) VmAddFsPut(ctx context.Context) ApiVmAddFsPutRequest {
+func (a *DefaultApiService) VmAddFsPut(ctx _context.Context) ApiVmAddFsPutRequest {
 	return ApiVmAddFsPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddFsPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddFsPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-fs"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.fsConfig == nil {
 		return localVarReturnValue, nil, reportError("fsConfig is required and must be specified")
 	}
@@ -1098,7 +1129,7 @@ func (a *DefaultAPIService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (*PciDevic
 	}
 	// body params
 	localVarPostBody = r.fsConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1108,15 +1139,15 @@ func (a *DefaultAPIService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (*PciDevic
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1125,7 +1156,7 @@ func (a *DefaultAPIService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (*PciDevic
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1136,9 +1167,9 @@ func (a *DefaultAPIService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (*PciDevic
 }
 
 type ApiVmAddNetPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	netConfig *NetConfig
+	ctx        _context.Context
+	ApiService *DefaultApiService
+	netConfig  *NetConfig
 }
 
 // The details of the new network device
@@ -1147,43 +1178,46 @@ func (r ApiVmAddNetPutRequest) NetConfig(netConfig NetConfig) ApiVmAddNetPutRequ
 	return r
 }
 
-func (r ApiVmAddNetPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddNetPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddNetPutExecute(r)
 }
 
 /*
 VmAddNetPut Add a new network device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddNetPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddNetPutRequest
 */
-func (a *DefaultAPIService) VmAddNetPut(ctx context.Context) ApiVmAddNetPutRequest {
+func (a *DefaultApiService) VmAddNetPut(ctx _context.Context) ApiVmAddNetPutRequest {
 	return ApiVmAddNetPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddNetPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddNetPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-net"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.netConfig == nil {
 		return localVarReturnValue, nil, reportError("netConfig is required and must be specified")
 	}
@@ -1207,7 +1241,7 @@ func (a *DefaultAPIService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (*PciDev
 	}
 	// body params
 	localVarPostBody = r.netConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1217,15 +1251,15 @@ func (a *DefaultAPIService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (*PciDev
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1234,7 +1268,7 @@ func (a *DefaultAPIService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (*PciDev
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1245,8 +1279,8 @@ func (a *DefaultAPIService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (*PciDev
 }
 
 type ApiVmAddPmemPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 	pmemConfig *PmemConfig
 }
 
@@ -1256,43 +1290,46 @@ func (r ApiVmAddPmemPutRequest) PmemConfig(pmemConfig PmemConfig) ApiVmAddPmemPu
 	return r
 }
 
-func (r ApiVmAddPmemPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddPmemPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddPmemPutExecute(r)
 }
 
 /*
 VmAddPmemPut Add a new pmem device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddPmemPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddPmemPutRequest
 */
-func (a *DefaultAPIService) VmAddPmemPut(ctx context.Context) ApiVmAddPmemPutRequest {
+func (a *DefaultApiService) VmAddPmemPut(ctx _context.Context) ApiVmAddPmemPutRequest {
 	return ApiVmAddPmemPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddPmemPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddPmemPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-pmem"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.pmemConfig == nil {
 		return localVarReturnValue, nil, reportError("pmemConfig is required and must be specified")
 	}
@@ -1316,7 +1353,7 @@ func (a *DefaultAPIService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (*PciD
 	}
 	// body params
 	localVarPostBody = r.pmemConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1326,15 +1363,15 @@ func (a *DefaultAPIService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (*PciD
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1343,7 +1380,7 @@ func (a *DefaultAPIService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (*PciD
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1354,8 +1391,8 @@ func (a *DefaultAPIService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (*PciD
 }
 
 type ApiVmAddUserDevicePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx             _context.Context
+	ApiService      *DefaultApiService
 	vmAddUserDevice *VmAddUserDevice
 }
 
@@ -1365,43 +1402,46 @@ func (r ApiVmAddUserDevicePutRequest) VmAddUserDevice(vmAddUserDevice VmAddUserD
 	return r
 }
 
-func (r ApiVmAddUserDevicePutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddUserDevicePutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddUserDevicePutExecute(r)
 }
 
 /*
 VmAddUserDevicePut Add a new userspace device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddUserDevicePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddUserDevicePutRequest
 */
-func (a *DefaultAPIService) VmAddUserDevicePut(ctx context.Context) ApiVmAddUserDevicePutRequest {
+func (a *DefaultApiService) VmAddUserDevicePut(ctx _context.Context) ApiVmAddUserDevicePutRequest {
 	return ApiVmAddUserDevicePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddUserDevicePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddUserDevicePut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-user-device"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmAddUserDevice == nil {
 		return localVarReturnValue, nil, reportError("vmAddUserDevice is required and must be specified")
 	}
@@ -1425,7 +1465,7 @@ func (a *DefaultAPIService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutReq
 	}
 	// body params
 	localVarPostBody = r.vmAddUserDevice
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1435,15 +1475,15 @@ func (a *DefaultAPIService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutReq
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1452,7 +1492,7 @@ func (a *DefaultAPIService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutReq
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1463,8 +1503,8 @@ func (a *DefaultAPIService) VmAddUserDevicePutExecute(r ApiVmAddUserDevicePutReq
 }
 
 type ApiVmAddVdpaPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 	vdpaConfig *VdpaConfig
 }
 
@@ -1474,43 +1514,46 @@ func (r ApiVmAddVdpaPutRequest) VdpaConfig(vdpaConfig VdpaConfig) ApiVmAddVdpaPu
 	return r
 }
 
-func (r ApiVmAddVdpaPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddVdpaPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddVdpaPutExecute(r)
 }
 
 /*
 VmAddVdpaPut Add a new vDPA device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddVdpaPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddVdpaPutRequest
 */
-func (a *DefaultAPIService) VmAddVdpaPut(ctx context.Context) ApiVmAddVdpaPutRequest {
+func (a *DefaultApiService) VmAddVdpaPut(ctx _context.Context) ApiVmAddVdpaPutRequest {
 	return ApiVmAddVdpaPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddVdpaPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddVdpaPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-vdpa"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vdpaConfig == nil {
 		return localVarReturnValue, nil, reportError("vdpaConfig is required and must be specified")
 	}
@@ -1534,7 +1577,7 @@ func (a *DefaultAPIService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (*PciD
 	}
 	// body params
 	localVarPostBody = r.vdpaConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1544,15 +1587,15 @@ func (a *DefaultAPIService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (*PciD
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1561,7 +1604,7 @@ func (a *DefaultAPIService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (*PciD
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1572,8 +1615,8 @@ func (a *DefaultAPIService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (*PciD
 }
 
 type ApiVmAddVsockPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx         _context.Context
+	ApiService  *DefaultApiService
 	vsockConfig *VsockConfig
 }
 
@@ -1583,43 +1626,46 @@ func (r ApiVmAddVsockPutRequest) VsockConfig(vsockConfig VsockConfig) ApiVmAddVs
 	return r
 }
 
-func (r ApiVmAddVsockPutRequest) Execute() (*PciDeviceInfo, *http.Response, error) {
+func (r ApiVmAddVsockPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmAddVsockPutExecute(r)
 }
 
 /*
 VmAddVsockPut Add a new vsock device to the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddVsockPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddVsockPutRequest
 */
-func (a *DefaultAPIService) VmAddVsockPut(ctx context.Context) ApiVmAddVsockPutRequest {
+func (a *DefaultApiService) VmAddVsockPut(ctx _context.Context) ApiVmAddVsockPutRequest {
 	return ApiVmAddVsockPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
-func (a *DefaultAPIService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (*PciDeviceInfo, *http.Response, error) {
+//
+//	@return PciDeviceInfo
+func (a *DefaultApiService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *PciDeviceInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  PciDeviceInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmAddVsockPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmAddVsockPut")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.add-vsock"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vsockConfig == nil {
 		return localVarReturnValue, nil, reportError("vsockConfig is required and must be specified")
 	}
@@ -1643,7 +1689,7 @@ func (a *DefaultAPIService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (*Pc
 	}
 	// body params
 	localVarPostBody = r.vsockConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1653,15 +1699,15 @@ func (a *DefaultAPIService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (*Pc
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1670,7 +1716,7 @@ func (a *DefaultAPIService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (*Pc
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1681,8 +1727,8 @@ func (a *DefaultAPIService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (*Pc
 }
 
 type ApiVmCoredumpPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx            _context.Context
+	ApiService     *DefaultApiService
 	vmCoredumpData *VmCoredumpData
 }
 
@@ -1692,41 +1738,43 @@ func (r ApiVmCoredumpPutRequest) VmCoredumpData(vmCoredumpData VmCoredumpData) A
 	return r
 }
 
-func (r ApiVmCoredumpPutRequest) Execute() (*http.Response, error) {
+func (r ApiVmCoredumpPutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmCoredumpPutExecute(r)
 }
 
 /*
 VmCoredumpPut Takes a VM coredump.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmCoredumpPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmCoredumpPutRequest
 */
-func (a *DefaultAPIService) VmCoredumpPut(ctx context.Context) ApiVmCoredumpPutRequest {
+func (a *DefaultApiService) VmCoredumpPut(ctx _context.Context) ApiVmCoredumpPutRequest {
 	return ApiVmCoredumpPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmCoredumpPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmCoredumpPut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.coredump"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmCoredumpData == nil {
 		return nil, reportError("vmCoredumpData is required and must be specified")
 	}
@@ -1750,7 +1798,7 @@ func (a *DefaultAPIService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*ht
 	}
 	// body params
 	localVarPostBody = r.vmCoredumpData
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -1760,15 +1808,15 @@ func (a *DefaultAPIService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*ht
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1779,47 +1827,50 @@ func (a *DefaultAPIService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*ht
 }
 
 type ApiVmCountersGetRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiVmCountersGetRequest) Execute() (*map[string]map[string]int64, *http.Response, error) {
+func (r ApiVmCountersGetRequest) Execute() (map[string]map[string]int64, *_nethttp.Response, error) {
 	return r.ApiService.VmCountersGetExecute(r)
 }
 
 /*
 VmCountersGet Get counters from the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmCountersGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmCountersGetRequest
 */
-func (a *DefaultAPIService) VmCountersGet(ctx context.Context) ApiVmCountersGetRequest {
+func (a *DefaultApiService) VmCountersGet(ctx _context.Context) ApiVmCountersGetRequest {
 	return ApiVmCountersGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return map[string]map[string]int64
-func (a *DefaultAPIService) VmCountersGetExecute(r ApiVmCountersGetRequest) (*map[string]map[string]int64, *http.Response, error) {
+//
+//	@return map[string]map[string]int64
+func (a *DefaultApiService) VmCountersGetExecute(r ApiVmCountersGetRequest) (map[string]map[string]int64, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
+		localVarHTTPMethod   = _nethttp.MethodGet
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *map[string]map[string]int64
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  map[string]map[string]int64
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmCountersGet")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmCountersGet")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.counters"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -1838,7 +1889,7 @@ func (a *DefaultAPIService) VmCountersGetExecute(r ApiVmCountersGetRequest) (*ma
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1848,15 +1899,15 @@ func (a *DefaultAPIService) VmCountersGetExecute(r ApiVmCountersGetRequest) (*ma
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1865,7 +1916,7 @@ func (a *DefaultAPIService) VmCountersGetExecute(r ApiVmCountersGetRequest) (*ma
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1876,47 +1927,50 @@ func (a *DefaultAPIService) VmCountersGetExecute(r ApiVmCountersGetRequest) (*ma
 }
 
 type ApiVmInfoGetRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiVmInfoGetRequest) Execute() (*VmInfo, *http.Response, error) {
+func (r ApiVmInfoGetRequest) Execute() (VmInfo, *_nethttp.Response, error) {
 	return r.ApiService.VmInfoGetExecute(r)
 }
 
 /*
 VmInfoGet Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmInfoGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmInfoGetRequest
 */
-func (a *DefaultAPIService) VmInfoGet(ctx context.Context) ApiVmInfoGetRequest {
+func (a *DefaultApiService) VmInfoGet(ctx _context.Context) ApiVmInfoGetRequest {
 	return ApiVmInfoGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return VmInfo
-func (a *DefaultAPIService) VmInfoGetExecute(r ApiVmInfoGetRequest) (*VmInfo, *http.Response, error) {
+//
+//	@return VmInfo
+func (a *DefaultApiService) VmInfoGetExecute(r ApiVmInfoGetRequest) (VmInfo, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
+		localVarHTTPMethod   = _nethttp.MethodGet
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *VmInfo
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  VmInfo
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmInfoGet")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmInfoGet")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.info"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -1935,7 +1989,7 @@ func (a *DefaultAPIService) VmInfoGetExecute(r ApiVmInfoGetRequest) (*VmInfo, *h
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -1945,15 +1999,15 @@ func (a *DefaultAPIService) VmInfoGetExecute(r ApiVmInfoGetRequest) (*VmInfo, *h
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -1962,7 +2016,7 @@ func (a *DefaultAPIService) VmInfoGetExecute(r ApiVmInfoGetRequest) (*VmInfo, *h
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
@@ -1973,8 +2027,8 @@ func (a *DefaultAPIService) VmInfoGetExecute(r ApiVmInfoGetRequest) (*VmInfo, *h
 }
 
 type ApiVmReceiveMigrationPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                  _context.Context
+	ApiService           *DefaultApiService
 	receiveMigrationData *ReceiveMigrationData
 }
 
@@ -1984,41 +2038,43 @@ func (r ApiVmReceiveMigrationPutRequest) ReceiveMigrationData(receiveMigrationDa
 	return r
 }
 
-func (r ApiVmReceiveMigrationPutRequest) Execute() (*http.Response, error) {
+func (r ApiVmReceiveMigrationPutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmReceiveMigrationPutExecute(r)
 }
 
 /*
 VmReceiveMigrationPut Receive a VM migration from URL
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmReceiveMigrationPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmReceiveMigrationPutRequest
 */
-func (a *DefaultAPIService) VmReceiveMigrationPut(ctx context.Context) ApiVmReceiveMigrationPutRequest {
+func (a *DefaultApiService) VmReceiveMigrationPut(ctx _context.Context) ApiVmReceiveMigrationPutRequest {
 	return ApiVmReceiveMigrationPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmReceiveMigrationPutExecute(r ApiVmReceiveMigrationPutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmReceiveMigrationPutExecute(r ApiVmReceiveMigrationPutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmReceiveMigrationPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmReceiveMigrationPut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.receive-migration"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.receiveMigrationData == nil {
 		return nil, reportError("receiveMigrationData is required and must be specified")
 	}
@@ -2042,7 +2098,7 @@ func (a *DefaultAPIService) VmReceiveMigrationPutExecute(r ApiVmReceiveMigration
 	}
 	// body params
 	localVarPostBody = r.receiveMigrationData
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2052,15 +2108,15 @@ func (a *DefaultAPIService) VmReceiveMigrationPutExecute(r ApiVmReceiveMigration
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2071,8 +2127,8 @@ func (a *DefaultAPIService) VmReceiveMigrationPutExecute(r ApiVmReceiveMigration
 }
 
 type ApiVmRemoveDevicePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx            _context.Context
+	ApiService     *DefaultApiService
 	vmRemoveDevice *VmRemoveDevice
 }
 
@@ -2082,41 +2138,43 @@ func (r ApiVmRemoveDevicePutRequest) VmRemoveDevice(vmRemoveDevice VmRemoveDevic
 	return r
 }
 
-func (r ApiVmRemoveDevicePutRequest) Execute() (*http.Response, error) {
+func (r ApiVmRemoveDevicePutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmRemoveDevicePutExecute(r)
 }
 
 /*
 VmRemoveDevicePut Remove a device from the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmRemoveDevicePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmRemoveDevicePutRequest
 */
-func (a *DefaultAPIService) VmRemoveDevicePut(ctx context.Context) ApiVmRemoveDevicePutRequest {
+func (a *DefaultApiService) VmRemoveDevicePut(ctx _context.Context) ApiVmRemoveDevicePutRequest {
 	return ApiVmRemoveDevicePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmRemoveDevicePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmRemoveDevicePut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.remove-device"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmRemoveDevice == nil {
 		return nil, reportError("vmRemoveDevice is required and must be specified")
 	}
@@ -2140,7 +2198,7 @@ func (a *DefaultAPIService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutReque
 	}
 	// body params
 	localVarPostBody = r.vmRemoveDevice
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2150,15 +2208,15 @@ func (a *DefaultAPIService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutReque
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2169,9 +2227,9 @@ func (a *DefaultAPIService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutReque
 }
 
 type ApiVmResizePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	vmResize *VmResize
+	ctx        _context.Context
+	ApiService *DefaultApiService
+	vmResize   *VmResize
 }
 
 // The target size for the VM
@@ -2180,41 +2238,43 @@ func (r ApiVmResizePutRequest) VmResize(vmResize VmResize) ApiVmResizePutRequest
 	return r
 }
 
-func (r ApiVmResizePutRequest) Execute() (*http.Response, error) {
+func (r ApiVmResizePutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmResizePutExecute(r)
 }
 
 /*
 VmResizePut Resize the VM
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmResizePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmResizePutRequest
 */
-func (a *DefaultAPIService) VmResizePut(ctx context.Context) ApiVmResizePutRequest {
+func (a *DefaultApiService) VmResizePut(ctx _context.Context) ApiVmResizePutRequest {
 	return ApiVmResizePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmResizePutExecute(r ApiVmResizePutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmResizePutExecute(r ApiVmResizePutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmResizePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmResizePut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.resize"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmResize == nil {
 		return nil, reportError("vmResize is required and must be specified")
 	}
@@ -2238,7 +2298,7 @@ func (a *DefaultAPIService) VmResizePutExecute(r ApiVmResizePutRequest) (*http.R
 	}
 	// body params
 	localVarPostBody = r.vmResize
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2248,15 +2308,15 @@ func (a *DefaultAPIService) VmResizePutExecute(r ApiVmResizePutRequest) (*http.R
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2267,8 +2327,8 @@ func (a *DefaultAPIService) VmResizePutExecute(r ApiVmResizePutRequest) (*http.R
 }
 
 type ApiVmResizeZonePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx          _context.Context
+	ApiService   *DefaultApiService
 	vmResizeZone *VmResizeZone
 }
 
@@ -2278,41 +2338,43 @@ func (r ApiVmResizeZonePutRequest) VmResizeZone(vmResizeZone VmResizeZone) ApiVm
 	return r
 }
 
-func (r ApiVmResizeZonePutRequest) Execute() (*http.Response, error) {
+func (r ApiVmResizeZonePutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmResizeZonePutExecute(r)
 }
 
 /*
 VmResizeZonePut Resize a memory zone
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmResizeZonePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmResizeZonePutRequest
 */
-func (a *DefaultAPIService) VmResizeZonePut(ctx context.Context) ApiVmResizeZonePutRequest {
+func (a *DefaultApiService) VmResizeZonePut(ctx _context.Context) ApiVmResizeZonePutRequest {
 	return ApiVmResizeZonePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmResizeZonePutExecute(r ApiVmResizeZonePutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmResizeZonePutExecute(r ApiVmResizeZonePutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmResizeZonePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmResizeZonePut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.resize-zone"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmResizeZone == nil {
 		return nil, reportError("vmResizeZone is required and must be specified")
 	}
@@ -2336,7 +2398,7 @@ func (a *DefaultAPIService) VmResizeZonePutExecute(r ApiVmResizeZonePutRequest) 
 	}
 	// body params
 	localVarPostBody = r.vmResizeZone
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2346,15 +2408,15 @@ func (a *DefaultAPIService) VmResizeZonePutExecute(r ApiVmResizeZonePutRequest) 
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2365,8 +2427,8 @@ func (a *DefaultAPIService) VmResizeZonePutExecute(r ApiVmResizeZonePutRequest) 
 }
 
 type ApiVmRestorePutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx           _context.Context
+	ApiService    *DefaultApiService
 	restoreConfig *RestoreConfig
 }
 
@@ -2376,41 +2438,43 @@ func (r ApiVmRestorePutRequest) RestoreConfig(restoreConfig RestoreConfig) ApiVm
 	return r
 }
 
-func (r ApiVmRestorePutRequest) Execute() (*http.Response, error) {
+func (r ApiVmRestorePutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmRestorePutExecute(r)
 }
 
 /*
 VmRestorePut Restore a VM from a snapshot.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmRestorePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmRestorePutRequest
 */
-func (a *DefaultAPIService) VmRestorePut(ctx context.Context) ApiVmRestorePutRequest {
+func (a *DefaultApiService) VmRestorePut(ctx _context.Context) ApiVmRestorePutRequest {
 	return ApiVmRestorePutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmRestorePutExecute(r ApiVmRestorePutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmRestorePutExecute(r ApiVmRestorePutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmRestorePut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmRestorePut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.restore"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.restoreConfig == nil {
 		return nil, reportError("restoreConfig is required and must be specified")
 	}
@@ -2434,7 +2498,7 @@ func (a *DefaultAPIService) VmRestorePutExecute(r ApiVmRestorePutRequest) (*http
 	}
 	// body params
 	localVarPostBody = r.restoreConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2444,15 +2508,15 @@ func (a *DefaultAPIService) VmRestorePutExecute(r ApiVmRestorePutRequest) (*http
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2463,8 +2527,8 @@ func (a *DefaultAPIService) VmRestorePutExecute(r ApiVmRestorePutRequest) (*http
 }
 
 type ApiVmSendMigrationPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx               _context.Context
+	ApiService        *DefaultApiService
 	sendMigrationData *SendMigrationData
 }
 
@@ -2474,41 +2538,43 @@ func (r ApiVmSendMigrationPutRequest) SendMigrationData(sendMigrationData SendMi
 	return r
 }
 
-func (r ApiVmSendMigrationPutRequest) Execute() (*http.Response, error) {
+func (r ApiVmSendMigrationPutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmSendMigrationPutExecute(r)
 }
 
 /*
 VmSendMigrationPut Send a VM migration to URL
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmSendMigrationPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmSendMigrationPutRequest
 */
-func (a *DefaultAPIService) VmSendMigrationPut(ctx context.Context) ApiVmSendMigrationPutRequest {
+func (a *DefaultApiService) VmSendMigrationPut(ctx _context.Context) ApiVmSendMigrationPutRequest {
 	return ApiVmSendMigrationPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmSendMigrationPutExecute(r ApiVmSendMigrationPutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmSendMigrationPutExecute(r ApiVmSendMigrationPutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmSendMigrationPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmSendMigrationPut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.send-migration"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.sendMigrationData == nil {
 		return nil, reportError("sendMigrationData is required and must be specified")
 	}
@@ -2532,7 +2598,7 @@ func (a *DefaultAPIService) VmSendMigrationPutExecute(r ApiVmSendMigrationPutReq
 	}
 	// body params
 	localVarPostBody = r.sendMigrationData
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2542,15 +2608,15 @@ func (a *DefaultAPIService) VmSendMigrationPutExecute(r ApiVmSendMigrationPutReq
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2561,8 +2627,8 @@ func (a *DefaultAPIService) VmSendMigrationPutExecute(r ApiVmSendMigrationPutReq
 }
 
 type ApiVmSnapshotPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx              _context.Context
+	ApiService       *DefaultApiService
 	vmSnapshotConfig *VmSnapshotConfig
 }
 
@@ -2572,41 +2638,43 @@ func (r ApiVmSnapshotPutRequest) VmSnapshotConfig(vmSnapshotConfig VmSnapshotCon
 	return r
 }
 
-func (r ApiVmSnapshotPutRequest) Execute() (*http.Response, error) {
+func (r ApiVmSnapshotPutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmSnapshotPutExecute(r)
 }
 
 /*
 VmSnapshotPut Returns a VM snapshot.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmSnapshotPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmSnapshotPutRequest
 */
-func (a *DefaultAPIService) VmSnapshotPut(ctx context.Context) ApiVmSnapshotPutRequest {
+func (a *DefaultApiService) VmSnapshotPut(ctx _context.Context) ApiVmSnapshotPutRequest {
 	return ApiVmSnapshotPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmSnapshotPutExecute(r ApiVmSnapshotPutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmSnapshotPutExecute(r ApiVmSnapshotPutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmSnapshotPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmSnapshotPut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vm.snapshot"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 	if r.vmSnapshotConfig == nil {
 		return nil, reportError("vmSnapshotConfig is required and must be specified")
 	}
@@ -2630,7 +2698,7 @@ func (a *DefaultAPIService) VmSnapshotPutExecute(r ApiVmSnapshotPutRequest) (*ht
 	}
 	// body params
 	localVarPostBody = r.vmSnapshotConfig
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2640,15 +2708,15 @@ func (a *DefaultAPIService) VmSnapshotPutExecute(r ApiVmSnapshotPutRequest) (*ht
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2659,45 +2727,47 @@ func (a *DefaultAPIService) VmSnapshotPutExecute(r ApiVmSnapshotPutRequest) (*ht
 }
 
 type ApiVmmNmiPutRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiVmmNmiPutRequest) Execute() (*http.Response, error) {
+func (r ApiVmmNmiPutRequest) Execute() (*_nethttp.Response, error) {
 	return r.ApiService.VmmNmiPutExecute(r)
 }
 
 /*
 VmmNmiPut Inject an NMI.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmmNmiPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmmNmiPutRequest
 */
-func (a *DefaultAPIService) VmmNmiPut(ctx context.Context) ApiVmmNmiPutRequest {
+func (a *DefaultApiService) VmmNmiPut(ctx _context.Context) ApiVmmNmiPutRequest {
 	return ApiVmmNmiPutRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) VmmNmiPutExecute(r ApiVmmNmiPutRequest) (*http.Response, error) {
+func (a *DefaultApiService) VmmNmiPutExecute(r ApiVmmNmiPutRequest) (*_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = _nethttp.MethodPut
 		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmmNmiPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmmNmiPut")
 	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vmm.nmi"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -2716,7 +2786,7 @@ func (a *DefaultAPIService) VmmNmiPutExecute(r ApiVmmNmiPutRequest) (*http.Respo
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -2726,15 +2796,15 @@ func (a *DefaultAPIService) VmmNmiPutExecute(r ApiVmmNmiPutRequest) (*http.Respo
 		return localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2745,47 +2815,50 @@ func (a *DefaultAPIService) VmmNmiPutExecute(r ApiVmmNmiPutRequest) (*http.Respo
 }
 
 type ApiVmmPingGetRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx        _context.Context
+	ApiService *DefaultApiService
 }
 
-func (r ApiVmmPingGetRequest) Execute() (*VmmPingResponse, *http.Response, error) {
+func (r ApiVmmPingGetRequest) Execute() (VmmPingResponse, *_nethttp.Response, error) {
 	return r.ApiService.VmmPingGetExecute(r)
 }
 
 /*
 VmmPingGet Ping the VMM to check for API server availability
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmmPingGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmmPingGetRequest
 */
-func (a *DefaultAPIService) VmmPingGet(ctx context.Context) ApiVmmPingGetRequest {
+func (a *DefaultApiService) VmmPingGet(ctx _context.Context) ApiVmmPingGetRequest {
 	return ApiVmmPingGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return VmmPingResponse
-func (a *DefaultAPIService) VmmPingGetExecute(r ApiVmmPingGetRequest) (*VmmPingResponse, *http.Response, error) {
+//
+//	@return VmmPingResponse
+func (a *DefaultApiService) VmmPingGetExecute(r ApiVmmPingGetRequest) (VmmPingResponse, *_nethttp.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
+		localVarHTTPMethod   = _nethttp.MethodGet
 		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *VmmPingResponse
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+		localVarReturnValue  VmmPingResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.VmmPingGet")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmmPingGet")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vmm.ping"
 
 	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -2804,7 +2877,7 @@ func (a *DefaultAPIService) VmmPingGetExecute(r ApiVmmPingGetRequest) (*VmmPingR
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -2814,15 +2887,15 @@ func (a *DefaultAPIService) VmmPingGetExecute(r ApiVmmPingGetRequest) (*VmmPingR
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
@@ -2831,7 +2904,7 @@ func (a *DefaultAPIService) VmmPingGetExecute(r ApiVmmPingGetRequest) (*VmmPingR
 
 	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		newErr := GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}

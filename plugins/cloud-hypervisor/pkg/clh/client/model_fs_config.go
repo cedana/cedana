@@ -12,24 +12,17 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the FsConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &FsConfig{}
 
 // FsConfig struct for FsConfig
 type FsConfig struct {
-	Tag string `json:"tag"`
-	Socket string `json:"socket"`
-	NumQueues int32 `json:"num_queues"`
-	QueueSize int32 `json:"queue_size"`
-	PciSegment *int32 `json:"pci_segment,omitempty"`
-	Id *string `json:"id,omitempty"`
+	Tag        string  `json:"tag"`
+	Socket     string  `json:"socket"`
+	NumQueues  int32   `json:"num_queues"`
+	QueueSize  int32   `json:"queue_size"`
+	PciSegment *int32  `json:"pci_segment,omitempty"`
+	Id         *string `json:"id,omitempty"`
 }
-
-type _FsConfig FsConfig
 
 // NewFsConfig instantiates a new FsConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -154,7 +147,7 @@ func (o *FsConfig) SetQueueSize(v int32) {
 
 // GetPciSegment returns the PciSegment field value if set, zero value otherwise.
 func (o *FsConfig) GetPciSegment() int32 {
-	if o == nil || IsNil(o.PciSegment) {
+	if o == nil || o.PciSegment == nil {
 		var ret int32
 		return ret
 	}
@@ -164,7 +157,7 @@ func (o *FsConfig) GetPciSegment() int32 {
 // GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *FsConfig) GetPciSegmentOk() (*int32, bool) {
-	if o == nil || IsNil(o.PciSegment) {
+	if o == nil || o.PciSegment == nil {
 		return nil, false
 	}
 	return o.PciSegment, true
@@ -172,7 +165,7 @@ func (o *FsConfig) GetPciSegmentOk() (*int32, bool) {
 
 // HasPciSegment returns a boolean if a field has been set.
 func (o *FsConfig) HasPciSegment() bool {
-	if o != nil && !IsNil(o.PciSegment) {
+	if o != nil && o.PciSegment != nil {
 		return true
 	}
 
@@ -186,7 +179,7 @@ func (o *FsConfig) SetPciSegment(v int32) {
 
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *FsConfig) GetId() string {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
@@ -196,7 +189,7 @@ func (o *FsConfig) GetId() string {
 // GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *FsConfig) GetIdOk() (*string, bool) {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
 	return o.Id, true
@@ -204,7 +197,7 @@ func (o *FsConfig) GetIdOk() (*string, bool) {
 
 // HasId returns a boolean if a field has been set.
 func (o *FsConfig) HasId() bool {
-	if o != nil && !IsNil(o.Id) {
+	if o != nil && o.Id != nil {
 		return true
 	}
 
@@ -217,66 +210,26 @@ func (o *FsConfig) SetId(v string) {
 }
 
 func (o FsConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o FsConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["tag"] = o.Tag
-	toSerialize["socket"] = o.Socket
-	toSerialize["num_queues"] = o.NumQueues
-	toSerialize["queue_size"] = o.QueueSize
-	if !IsNil(o.PciSegment) {
+	if true {
+		toSerialize["tag"] = o.Tag
+	}
+	if true {
+		toSerialize["socket"] = o.Socket
+	}
+	if true {
+		toSerialize["num_queues"] = o.NumQueues
+	}
+	if true {
+		toSerialize["queue_size"] = o.QueueSize
+	}
+	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
 	}
-	if !IsNil(o.Id) {
+	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
-	return toSerialize, nil
-}
-
-func (o *FsConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"tag",
-		"socket",
-		"num_queues",
-		"queue_size",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varFsConfig := _FsConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varFsConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = FsConfig(varFsConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableFsConfig struct {
@@ -314,5 +267,3 @@ func (v *NullableFsConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

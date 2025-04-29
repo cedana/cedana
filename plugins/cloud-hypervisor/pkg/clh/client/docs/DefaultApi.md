@@ -1,38 +1,38 @@
-# \DefaultAPI
+# \DefaultApi
 
 All URIs are relative to *http://localhost/api/v1*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**BootVM**](DefaultAPI.md#BootVM) | **Put** /vm.boot | Boot the previously created VM instance.
-[**CreateVM**](DefaultAPI.md#CreateVM) | **Put** /vm.create | Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
-[**DeleteVM**](DefaultAPI.md#DeleteVM) | **Put** /vm.delete | Delete the cloud-hypervisor Virtual Machine (VM) instance.
-[**PauseVM**](DefaultAPI.md#PauseVM) | **Put** /vm.pause | Pause a previously booted VM instance.
-[**PowerButtonVM**](DefaultAPI.md#PowerButtonVM) | **Put** /vm.power-button | Trigger a power button in the VM
-[**RebootVM**](DefaultAPI.md#RebootVM) | **Put** /vm.reboot | Reboot the VM instance.
-[**ResumeVM**](DefaultAPI.md#ResumeVM) | **Put** /vm.resume | Resume a previously paused VM instance.
-[**ShutdownVM**](DefaultAPI.md#ShutdownVM) | **Put** /vm.shutdown | Shut the VM instance down.
-[**ShutdownVMM**](DefaultAPI.md#ShutdownVMM) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
-[**VmAddDevicePut**](DefaultAPI.md#VmAddDevicePut) | **Put** /vm.add-device | Add a new device to the VM
-[**VmAddDiskPut**](DefaultAPI.md#VmAddDiskPut) | **Put** /vm.add-disk | Add a new disk to the VM
-[**VmAddFsPut**](DefaultAPI.md#VmAddFsPut) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
-[**VmAddNetPut**](DefaultAPI.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
-[**VmAddPmemPut**](DefaultAPI.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
-[**VmAddUserDevicePut**](DefaultAPI.md#VmAddUserDevicePut) | **Put** /vm.add-user-device | Add a new userspace device to the VM
-[**VmAddVdpaPut**](DefaultAPI.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
-[**VmAddVsockPut**](DefaultAPI.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
-[**VmCoredumpPut**](DefaultAPI.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
-[**VmCountersGet**](DefaultAPI.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
-[**VmInfoGet**](DefaultAPI.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
-[**VmReceiveMigrationPut**](DefaultAPI.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
-[**VmRemoveDevicePut**](DefaultAPI.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
-[**VmResizePut**](DefaultAPI.md#VmResizePut) | **Put** /vm.resize | Resize the VM
-[**VmResizeZonePut**](DefaultAPI.md#VmResizeZonePut) | **Put** /vm.resize-zone | Resize a memory zone
-[**VmRestorePut**](DefaultAPI.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
-[**VmSendMigrationPut**](DefaultAPI.md#VmSendMigrationPut) | **Put** /vm.send-migration | Send a VM migration to URL
-[**VmSnapshotPut**](DefaultAPI.md#VmSnapshotPut) | **Put** /vm.snapshot | Returns a VM snapshot.
-[**VmmNmiPut**](DefaultAPI.md#VmmNmiPut) | **Put** /vmm.nmi | Inject an NMI.
-[**VmmPingGet**](DefaultAPI.md#VmmPingGet) | **Get** /vmm.ping | Ping the VMM to check for API server availability
+[**BootVM**](DefaultApi.md#BootVM) | **Put** /vm.boot | Boot the previously created VM instance.
+[**CreateVM**](DefaultApi.md#CreateVM) | **Put** /vm.create | Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
+[**DeleteVM**](DefaultApi.md#DeleteVM) | **Put** /vm.delete | Delete the cloud-hypervisor Virtual Machine (VM) instance.
+[**PauseVM**](DefaultApi.md#PauseVM) | **Put** /vm.pause | Pause a previously booted VM instance.
+[**PowerButtonVM**](DefaultApi.md#PowerButtonVM) | **Put** /vm.power-button | Trigger a power button in the VM
+[**RebootVM**](DefaultApi.md#RebootVM) | **Put** /vm.reboot | Reboot the VM instance.
+[**ResumeVM**](DefaultApi.md#ResumeVM) | **Put** /vm.resume | Resume a previously paused VM instance.
+[**ShutdownVM**](DefaultApi.md#ShutdownVM) | **Put** /vm.shutdown | Shut the VM instance down.
+[**ShutdownVMM**](DefaultApi.md#ShutdownVMM) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
+[**VmAddDevicePut**](DefaultApi.md#VmAddDevicePut) | **Put** /vm.add-device | Add a new device to the VM
+[**VmAddDiskPut**](DefaultApi.md#VmAddDiskPut) | **Put** /vm.add-disk | Add a new disk to the VM
+[**VmAddFsPut**](DefaultApi.md#VmAddFsPut) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
+[**VmAddNetPut**](DefaultApi.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
+[**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+[**VmAddUserDevicePut**](DefaultApi.md#VmAddUserDevicePut) | **Put** /vm.add-user-device | Add a new userspace device to the VM
+[**VmAddVdpaPut**](DefaultApi.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
+[**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+[**VmCoredumpPut**](DefaultApi.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
+[**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
+[**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+[**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
+[**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
+[**VmResizePut**](DefaultApi.md#VmResizePut) | **Put** /vm.resize | Resize the VM
+[**VmResizeZonePut**](DefaultApi.md#VmResizeZonePut) | **Put** /vm.resize-zone | Resize a memory zone
+[**VmRestorePut**](DefaultApi.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
+[**VmSendMigrationPut**](DefaultApi.md#VmSendMigrationPut) | **Put** /vm.send-migration | Send a VM migration to URL
+[**VmSnapshotPut**](DefaultApi.md#VmSnapshotPut) | **Put** /vm.snapshot | Returns a VM snapshot.
+[**VmmNmiPut**](DefaultApi.md#VmmNmiPut) | **Put** /vmm.nmi | Inject an NMI.
+[**VmmPingGet**](DefaultApi.md#VmmPingGet) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
 
@@ -48,21 +48,21 @@ Boot the previously created VM instance.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.BootVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.BootVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.BootVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.BootVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -105,22 +105,22 @@ Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not b
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmConfig := *openapiclient.NewVmConfig(*openapiclient.NewPayloadConfig()) // VmConfig | The VM configuration
+    vmConfig := *openapiclient.NewVmConfig(*openapiclient.NewPayloadConfig()) // VmConfig | The VM configuration
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.CreateVM(context.Background()).VmConfig(vmConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.CreateVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.CreateVM(context.Background()).VmConfig(vmConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.CreateVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -167,21 +167,21 @@ Delete the cloud-hypervisor Virtual Machine (VM) instance.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.DeleteVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.DeleteVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.DeleteVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.DeleteVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -224,21 +224,21 @@ Pause a previously booted VM instance.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.PauseVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.PauseVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.PauseVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.PauseVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -281,21 +281,21 @@ Trigger a power button in the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.PowerButtonVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.PowerButtonVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.PowerButtonVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.PowerButtonVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -338,21 +338,21 @@ Reboot the VM instance.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.RebootVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.RebootVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.RebootVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.RebootVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -395,21 +395,21 @@ Resume a previously paused VM instance.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.ResumeVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.ResumeVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ResumeVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ResumeVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -452,21 +452,21 @@ Shut the VM instance down.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.ShutdownVM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.ShutdownVM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ShutdownVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ShutdownVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -509,21 +509,21 @@ Shuts the cloud-hypervisor VMM.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.ShutdownVMM(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.ShutdownVMM``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ShutdownVMM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ShutdownVMM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -566,24 +566,24 @@ Add a new device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	deviceConfig := *openapiclient.NewDeviceConfig("Path_example") // DeviceConfig | The path of the new device
+    deviceConfig := *openapiclient.NewDeviceConfig("Path_example") // DeviceConfig | The path of the new device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddDevicePut(context.Background()).DeviceConfig(deviceConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddDevicePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddDevicePut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddDevicePut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddDevicePut(context.Background()).DeviceConfig(deviceConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddDevicePut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddDevicePut`: %v\n", resp)
 }
 ```
 
@@ -630,24 +630,24 @@ Add a new disk to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	diskConfig := *openapiclient.NewDiskConfig("Path_example") // DiskConfig | The details of the new disk
+    diskConfig := *openapiclient.NewDiskConfig("Path_example") // DiskConfig | The details of the new disk
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddDiskPut(context.Background()).DiskConfig(diskConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddDiskPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddDiskPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddDiskPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddDiskPut(context.Background()).DiskConfig(diskConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddDiskPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddDiskPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddDiskPut`: %v\n", resp)
 }
 ```
 
@@ -694,24 +694,24 @@ Add a new virtio-fs device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	fsConfig := *openapiclient.NewFsConfig("Tag_example", "Socket_example", int32(123), int32(123)) // FsConfig | The details of the new virtio-fs
+    fsConfig := *openapiclient.NewFsConfig("Tag_example", "Socket_example", int32(123), int32(123)) // FsConfig | The details of the new virtio-fs
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddFsPut(context.Background()).FsConfig(fsConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddFsPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddFsPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddFsPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddFsPut(context.Background()).FsConfig(fsConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddFsPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddFsPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddFsPut`: %v\n", resp)
 }
 ```
 
@@ -758,24 +758,24 @@ Add a new network device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	netConfig := *openapiclient.NewNetConfig() // NetConfig | The details of the new network device
+    netConfig := *openapiclient.NewNetConfig() // NetConfig | The details of the new network device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddNetPut(context.Background()).NetConfig(netConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddNetPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddNetPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddNetPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddNetPut(context.Background()).NetConfig(netConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddNetPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddNetPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddNetPut`: %v\n", resp)
 }
 ```
 
@@ -822,24 +822,24 @@ Add a new pmem device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	pmemConfig := *openapiclient.NewPmemConfig("File_example") // PmemConfig | The details of the new pmem device
+    pmemConfig := *openapiclient.NewPmemConfig("File_example") // PmemConfig | The details of the new pmem device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddPmemPut(context.Background()).PmemConfig(pmemConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddPmemPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddPmemPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddPmemPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddPmemPut(context.Background()).PmemConfig(pmemConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddPmemPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddPmemPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddPmemPut`: %v\n", resp)
 }
 ```
 
@@ -886,24 +886,24 @@ Add a new userspace device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmAddUserDevice := *openapiclient.NewVmAddUserDevice("Socket_example") // VmAddUserDevice | The path of the new device
+    vmAddUserDevice := *openapiclient.NewVmAddUserDevice("Socket_example") // VmAddUserDevice | The path of the new device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddUserDevicePut(context.Background()).VmAddUserDevice(vmAddUserDevice).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddUserDevicePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddUserDevicePut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddUserDevicePut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddUserDevicePut(context.Background()).VmAddUserDevice(vmAddUserDevice).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddUserDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddUserDevicePut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddUserDevicePut`: %v\n", resp)
 }
 ```
 
@@ -950,24 +950,24 @@ Add a new vDPA device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vdpaConfig := *openapiclient.NewVdpaConfig("Path_example", int32(123)) // VdpaConfig | The details of the new vDPA device
+    vdpaConfig := *openapiclient.NewVdpaConfig("Path_example", int32(123)) // VdpaConfig | The details of the new vDPA device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddVdpaPut(context.Background()).VdpaConfig(vdpaConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddVdpaPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddVdpaPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddVdpaPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddVdpaPut(context.Background()).VdpaConfig(vdpaConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddVdpaPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddVdpaPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddVdpaPut`: %v\n", resp)
 }
 ```
 
@@ -1014,24 +1014,24 @@ Add a new vsock device to the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vsockConfig := *openapiclient.NewVsockConfig(int64(123), "Socket_example") // VsockConfig | The details of the new vsock device
+    vsockConfig := *openapiclient.NewVsockConfig(int64(123), "Socket_example") // VsockConfig | The details of the new vsock device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmAddVsockPut(context.Background()).VsockConfig(vsockConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmAddVsockPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmAddVsockPut`: PciDeviceInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmAddVsockPut`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddVsockPut(context.Background()).VsockConfig(vsockConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddVsockPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddVsockPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddVsockPut`: %v\n", resp)
 }
 ```
 
@@ -1078,22 +1078,22 @@ Takes a VM coredump.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmCoredumpData := *openapiclient.NewVmCoredumpData() // VmCoredumpData | The coredump configuration
+    vmCoredumpData := *openapiclient.NewVmCoredumpData() // VmCoredumpData | The coredump configuration
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmCoredumpPut(context.Background()).VmCoredumpData(vmCoredumpData).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmCoredumpPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmCoredumpPut(context.Background()).VmCoredumpData(vmCoredumpData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmCoredumpPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1140,23 +1140,23 @@ Get counters from the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmCountersGet(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmCountersGet``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmCountersGet`: map[string]map[string]int64
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmCountersGet`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmCountersGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmCountersGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmCountersGet`: map[string]map[string]int64
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmCountersGet`: %v\n", resp)
 }
 ```
 
@@ -1199,23 +1199,23 @@ Returns general information about the cloud-hypervisor Virtual Machine (VM) inst
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmInfoGet(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmInfoGet``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmInfoGet`: VmInfo
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmInfoGet`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmInfoGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmInfoGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmInfoGet`: VmInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmInfoGet`: %v\n", resp)
 }
 ```
 
@@ -1258,22 +1258,22 @@ Receive a VM migration from URL
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	receiveMigrationData := *openapiclient.NewReceiveMigrationData("ReceiverUrl_example") // ReceiveMigrationData | The URL for the reception of migration state
+    receiveMigrationData := *openapiclient.NewReceiveMigrationData("ReceiverUrl_example") // ReceiveMigrationData | The URL for the reception of migration state
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmReceiveMigrationPut(context.Background()).ReceiveMigrationData(receiveMigrationData).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmReceiveMigrationPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmReceiveMigrationPut(context.Background()).ReceiveMigrationData(receiveMigrationData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmReceiveMigrationPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1320,22 +1320,22 @@ Remove a device from the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmRemoveDevice := *openapiclient.NewVmRemoveDevice() // VmRemoveDevice | The identifier of the device
+    vmRemoveDevice := *openapiclient.NewVmRemoveDevice() // VmRemoveDevice | The identifier of the device
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmRemoveDevicePut(context.Background()).VmRemoveDevice(vmRemoveDevice).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmRemoveDevicePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmRemoveDevicePut(context.Background()).VmRemoveDevice(vmRemoveDevice).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmRemoveDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1382,22 +1382,22 @@ Resize the VM
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmResize := *openapiclient.NewVmResize() // VmResize | The target size for the VM
+    vmResize := *openapiclient.NewVmResize() // VmResize | The target size for the VM
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmResizePut(context.Background()).VmResize(vmResize).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmResizePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizePut(context.Background()).VmResize(vmResize).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1444,22 +1444,22 @@ Resize a memory zone
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmResizeZone := *openapiclient.NewVmResizeZone() // VmResizeZone | The target size for the memory zone
+    vmResizeZone := *openapiclient.NewVmResizeZone() // VmResizeZone | The target size for the memory zone
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmResizeZonePut(context.Background()).VmResizeZone(vmResizeZone).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmResizeZonePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizeZonePut(context.Background()).VmResizeZone(vmResizeZone).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizeZonePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1506,22 +1506,22 @@ Restore a VM from a snapshot.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	restoreConfig := *openapiclient.NewRestoreConfig("SourceUrl_example") // RestoreConfig | The restore configuration
+    restoreConfig := *openapiclient.NewRestoreConfig("SourceUrl_example") // RestoreConfig | The restore configuration
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmRestorePut(context.Background()).RestoreConfig(restoreConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmRestorePut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmRestorePut(context.Background()).RestoreConfig(restoreConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmRestorePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1568,22 +1568,22 @@ Send a VM migration to URL
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	sendMigrationData := *openapiclient.NewSendMigrationData("DestinationUrl_example") // SendMigrationData | The URL for sending the migration state
+    sendMigrationData := *openapiclient.NewSendMigrationData("DestinationUrl_example") // SendMigrationData | The URL for sending the migration state
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmSendMigrationPut(context.Background()).SendMigrationData(sendMigrationData).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmSendMigrationPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmSendMigrationPut(context.Background()).SendMigrationData(sendMigrationData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmSendMigrationPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1630,22 +1630,22 @@ Returns a VM snapshot.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
-	vmSnapshotConfig := *openapiclient.NewVmSnapshotConfig() // VmSnapshotConfig | The snapshot configuration
+    vmSnapshotConfig := *openapiclient.NewVmSnapshotConfig() // VmSnapshotConfig | The snapshot configuration
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmSnapshotPut(context.Background()).VmSnapshotConfig(vmSnapshotConfig).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmSnapshotPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmSnapshotPut(context.Background()).VmSnapshotConfig(vmSnapshotConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmSnapshotPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1692,21 +1692,21 @@ Inject an NMI.
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	r, err := apiClient.DefaultAPI.VmmNmiPut(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmmNmiPut``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmmNmiPut(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmmNmiPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
 }
 ```
 
@@ -1749,23 +1749,23 @@ Ping the VMM to check for API server availability
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
 )
 
 func main() {
 
-	configuration := openapiclient.NewConfiguration()
-	apiClient := openapiclient.NewAPIClient(configuration)
-	resp, r, err := apiClient.DefaultAPI.VmmPingGet(context.Background()).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `DefaultAPI.VmmPingGet``: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
-	// response from `VmmPingGet`: VmmPingResponse
-	fmt.Fprintf(os.Stdout, "Response from `DefaultAPI.VmmPingGet`: %v\n", resp)
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmmPingGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmmPingGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmmPingGet`: VmmPingResponse
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmmPingGet`: %v\n", resp)
 }
 ```
 

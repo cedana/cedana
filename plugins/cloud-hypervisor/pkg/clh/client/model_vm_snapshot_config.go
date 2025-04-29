@@ -14,9 +14,6 @@ import (
 	"encoding/json"
 )
 
-// checks if the VmSnapshotConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmSnapshotConfig{}
-
 // VmSnapshotConfig struct for VmSnapshotConfig
 type VmSnapshotConfig struct {
 	DestinationUrl *string `json:"destination_url,omitempty"`
@@ -41,7 +38,7 @@ func NewVmSnapshotConfigWithDefaults() *VmSnapshotConfig {
 
 // GetDestinationUrl returns the DestinationUrl field value if set, zero value otherwise.
 func (o *VmSnapshotConfig) GetDestinationUrl() string {
-	if o == nil || IsNil(o.DestinationUrl) {
+	if o == nil || o.DestinationUrl == nil {
 		var ret string
 		return ret
 	}
@@ -51,7 +48,7 @@ func (o *VmSnapshotConfig) GetDestinationUrl() string {
 // GetDestinationUrlOk returns a tuple with the DestinationUrl field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmSnapshotConfig) GetDestinationUrlOk() (*string, bool) {
-	if o == nil || IsNil(o.DestinationUrl) {
+	if o == nil || o.DestinationUrl == nil {
 		return nil, false
 	}
 	return o.DestinationUrl, true
@@ -59,7 +56,7 @@ func (o *VmSnapshotConfig) GetDestinationUrlOk() (*string, bool) {
 
 // HasDestinationUrl returns a boolean if a field has been set.
 func (o *VmSnapshotConfig) HasDestinationUrl() bool {
-	if o != nil && !IsNil(o.DestinationUrl) {
+	if o != nil && o.DestinationUrl != nil {
 		return true
 	}
 
@@ -72,19 +69,11 @@ func (o *VmSnapshotConfig) SetDestinationUrl(v string) {
 }
 
 func (o VmSnapshotConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o VmSnapshotConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.DestinationUrl) {
+	if o.DestinationUrl != nil {
 		toSerialize["destination_url"] = o.DestinationUrl
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableVmSnapshotConfig struct {
@@ -122,5 +111,3 @@ func (v *NullableVmSnapshotConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

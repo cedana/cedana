@@ -14,9 +14,6 @@ import (
 	"encoding/json"
 )
 
-// checks if the VmResize type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmResize{}
-
 // VmResize struct for VmResize
 type VmResize struct {
 	DesiredVcpus *int32 `json:"desired_vcpus,omitempty"`
@@ -45,7 +42,7 @@ func NewVmResizeWithDefaults() *VmResize {
 
 // GetDesiredVcpus returns the DesiredVcpus field value if set, zero value otherwise.
 func (o *VmResize) GetDesiredVcpus() int32 {
-	if o == nil || IsNil(o.DesiredVcpus) {
+	if o == nil || o.DesiredVcpus == nil {
 		var ret int32
 		return ret
 	}
@@ -55,7 +52,7 @@ func (o *VmResize) GetDesiredVcpus() int32 {
 // GetDesiredVcpusOk returns a tuple with the DesiredVcpus field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmResize) GetDesiredVcpusOk() (*int32, bool) {
-	if o == nil || IsNil(o.DesiredVcpus) {
+	if o == nil || o.DesiredVcpus == nil {
 		return nil, false
 	}
 	return o.DesiredVcpus, true
@@ -63,7 +60,7 @@ func (o *VmResize) GetDesiredVcpusOk() (*int32, bool) {
 
 // HasDesiredVcpus returns a boolean if a field has been set.
 func (o *VmResize) HasDesiredVcpus() bool {
-	if o != nil && !IsNil(o.DesiredVcpus) {
+	if o != nil && o.DesiredVcpus != nil {
 		return true
 	}
 
@@ -77,7 +74,7 @@ func (o *VmResize) SetDesiredVcpus(v int32) {
 
 // GetDesiredRam returns the DesiredRam field value if set, zero value otherwise.
 func (o *VmResize) GetDesiredRam() int64 {
-	if o == nil || IsNil(o.DesiredRam) {
+	if o == nil || o.DesiredRam == nil {
 		var ret int64
 		return ret
 	}
@@ -87,7 +84,7 @@ func (o *VmResize) GetDesiredRam() int64 {
 // GetDesiredRamOk returns a tuple with the DesiredRam field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmResize) GetDesiredRamOk() (*int64, bool) {
-	if o == nil || IsNil(o.DesiredRam) {
+	if o == nil || o.DesiredRam == nil {
 		return nil, false
 	}
 	return o.DesiredRam, true
@@ -95,7 +92,7 @@ func (o *VmResize) GetDesiredRamOk() (*int64, bool) {
 
 // HasDesiredRam returns a boolean if a field has been set.
 func (o *VmResize) HasDesiredRam() bool {
-	if o != nil && !IsNil(o.DesiredRam) {
+	if o != nil && o.DesiredRam != nil {
 		return true
 	}
 
@@ -109,7 +106,7 @@ func (o *VmResize) SetDesiredRam(v int64) {
 
 // GetDesiredBalloon returns the DesiredBalloon field value if set, zero value otherwise.
 func (o *VmResize) GetDesiredBalloon() int64 {
-	if o == nil || IsNil(o.DesiredBalloon) {
+	if o == nil || o.DesiredBalloon == nil {
 		var ret int64
 		return ret
 	}
@@ -119,7 +116,7 @@ func (o *VmResize) GetDesiredBalloon() int64 {
 // GetDesiredBalloonOk returns a tuple with the DesiredBalloon field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmResize) GetDesiredBalloonOk() (*int64, bool) {
-	if o == nil || IsNil(o.DesiredBalloon) {
+	if o == nil || o.DesiredBalloon == nil {
 		return nil, false
 	}
 	return o.DesiredBalloon, true
@@ -127,7 +124,7 @@ func (o *VmResize) GetDesiredBalloonOk() (*int64, bool) {
 
 // HasDesiredBalloon returns a boolean if a field has been set.
 func (o *VmResize) HasDesiredBalloon() bool {
-	if o != nil && !IsNil(o.DesiredBalloon) {
+	if o != nil && o.DesiredBalloon != nil {
 		return true
 	}
 
@@ -140,25 +137,17 @@ func (o *VmResize) SetDesiredBalloon(v int64) {
 }
 
 func (o VmResize) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o VmResize) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.DesiredVcpus) {
+	if o.DesiredVcpus != nil {
 		toSerialize["desired_vcpus"] = o.DesiredVcpus
 	}
-	if !IsNil(o.DesiredRam) {
+	if o.DesiredRam != nil {
 		toSerialize["desired_ram"] = o.DesiredRam
 	}
-	if !IsNil(o.DesiredBalloon) {
+	if o.DesiredBalloon != nil {
 		toSerialize["desired_balloon"] = o.DesiredBalloon
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableVmResize struct {
@@ -196,5 +185,3 @@ func (v *NullableVmResize) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

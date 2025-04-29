@@ -28,7 +28,7 @@ import (
 var Run types.Run = run
 
 type clhClientApi struct {
-	ApiInternal *clhclient.DefaultAPIService
+	ApiInternal *clhclient.DefaultApiService
 }
 
 // run runs a clh vm using cli + api
@@ -67,7 +67,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	imgDisk := clhclient.NewDiskConfig(clhConfig.ImagePath)
 
-	vm.Config.Disks = append(vm.Config.Disks, *rawDisk, *imgDisk)
+	if vm.Config.Disks != nil {
+		*vm.Config.Disks = append(*vm.Config.Disks, *rawDisk, *imgDisk)
+	} else {
+		vm.Config.Disks = &[]clhclient.DiskConfig{*rawDisk, *imgDisk}
+	}
 
 	args := []string{"--api-socket", apiSock}
 	args = append(args, "-vv")
@@ -112,7 +116,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	}
 
 	apiClient := &clhClientApi{
-		ApiInternal: clhclient.NewAPIClient(cfg).DefaultAPI,
+		ApiInternal: clhclient.NewAPIClient(cfg).DefaultApi,
 	}
 
 	vm.APIClient = apiClient.ApiInternal

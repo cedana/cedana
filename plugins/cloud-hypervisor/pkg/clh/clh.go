@@ -34,7 +34,7 @@ type CloudHypervisorVM struct {
 	fdStore   sync.Map
 	Pid       int
 	Config    clhclient.VmConfig
-	APIClient *clhclient.DefaultAPIService
+	APIClient *clhclient.DefaultApiService
 }
 
 type SnapshotRequest struct {
@@ -327,5 +327,5 @@ func (clh *CloudHypervisorVM) VMInfo() (clhclient.VmInfo, error) {
 	if err != nil {
 		log.Error().Msgf("VmInfoGet failed: %v", err)
 	}
-	return *info, utils.OpenAPIClientError(err)
+	return info, utils.OpenAPIClientError(err)
 }

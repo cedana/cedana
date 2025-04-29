@@ -12,19 +12,12 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the VmAddUserDevice type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmAddUserDevice{}
 
 // VmAddUserDevice struct for VmAddUserDevice
 type VmAddUserDevice struct {
 	Socket string `json:"socket"`
 }
-
-type _VmAddUserDevice VmAddUserDevice
 
 // NewVmAddUserDevice instantiates a new VmAddUserDevice object
 // This constructor will assign default values to properties that have it defined,
@@ -69,54 +62,11 @@ func (o *VmAddUserDevice) SetSocket(v string) {
 }
 
 func (o VmAddUserDevice) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
+	toSerialize := map[string]interface{}{}
+	if true {
+		toSerialize["socket"] = o.Socket
 	}
 	return json.Marshal(toSerialize)
-}
-
-func (o VmAddUserDevice) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{}
-	toSerialize["socket"] = o.Socket
-	return toSerialize, nil
-}
-
-func (o *VmAddUserDevice) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"socket",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varVmAddUserDevice := _VmAddUserDevice{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varVmAddUserDevice)
-
-	if err != nil {
-		return err
-	}
-
-	*o = VmAddUserDevice(varVmAddUserDevice)
-
-	return err
 }
 
 type NullableVmAddUserDevice struct {
@@ -154,5 +104,3 @@ func (v *NullableVmAddUserDevice) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

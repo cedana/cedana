@@ -14,9 +14,6 @@ import (
 	"encoding/json"
 )
 
-// checks if the VmResizeZone type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &VmResizeZone{}
-
 // VmResizeZone struct for VmResizeZone
 type VmResizeZone struct {
 	Id *string `json:"id,omitempty"`
@@ -43,7 +40,7 @@ func NewVmResizeZoneWithDefaults() *VmResizeZone {
 
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *VmResizeZone) GetId() string {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
@@ -53,7 +50,7 @@ func (o *VmResizeZone) GetId() string {
 // GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmResizeZone) GetIdOk() (*string, bool) {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
 	return o.Id, true
@@ -61,7 +58,7 @@ func (o *VmResizeZone) GetIdOk() (*string, bool) {
 
 // HasId returns a boolean if a field has been set.
 func (o *VmResizeZone) HasId() bool {
-	if o != nil && !IsNil(o.Id) {
+	if o != nil && o.Id != nil {
 		return true
 	}
 
@@ -75,7 +72,7 @@ func (o *VmResizeZone) SetId(v string) {
 
 // GetDesiredRam returns the DesiredRam field value if set, zero value otherwise.
 func (o *VmResizeZone) GetDesiredRam() int64 {
-	if o == nil || IsNil(o.DesiredRam) {
+	if o == nil || o.DesiredRam == nil {
 		var ret int64
 		return ret
 	}
@@ -85,7 +82,7 @@ func (o *VmResizeZone) GetDesiredRam() int64 {
 // GetDesiredRamOk returns a tuple with the DesiredRam field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *VmResizeZone) GetDesiredRamOk() (*int64, bool) {
-	if o == nil || IsNil(o.DesiredRam) {
+	if o == nil || o.DesiredRam == nil {
 		return nil, false
 	}
 	return o.DesiredRam, true
@@ -93,7 +90,7 @@ func (o *VmResizeZone) GetDesiredRamOk() (*int64, bool) {
 
 // HasDesiredRam returns a boolean if a field has been set.
 func (o *VmResizeZone) HasDesiredRam() bool {
-	if o != nil && !IsNil(o.DesiredRam) {
+	if o != nil && o.DesiredRam != nil {
 		return true
 	}
 
@@ -106,22 +103,14 @@ func (o *VmResizeZone) SetDesiredRam(v int64) {
 }
 
 func (o VmResizeZone) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o VmResizeZone) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Id) {
+	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
-	if !IsNil(o.DesiredRam) {
+	if o.DesiredRam != nil {
 		toSerialize["desired_ram"] = o.DesiredRam
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableVmResizeZone struct {
@@ -159,5 +148,3 @@ func (v *NullableVmResizeZone) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

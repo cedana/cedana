@@ -12,20 +12,13 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the RngConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &RngConfig{}
 
 // RngConfig struct for RngConfig
 type RngConfig struct {
-	Src string `json:"src"`
-	Iommu *bool `json:"iommu,omitempty"`
+	Src   string `json:"src"`
+	Iommu *bool  `json:"iommu,omitempty"`
 }
-
-type _RngConfig RngConfig
 
 // NewRngConfig instantiates a new RngConfig object
 // This constructor will assign default values to properties that have it defined,
@@ -75,7 +68,7 @@ func (o *RngConfig) SetSrc(v string) {
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
 func (o *RngConfig) GetIommu() bool {
-	if o == nil || IsNil(o.Iommu) {
+	if o == nil || o.Iommu == nil {
 		var ret bool
 		return ret
 	}
@@ -85,7 +78,7 @@ func (o *RngConfig) GetIommu() bool {
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *RngConfig) GetIommuOk() (*bool, bool) {
-	if o == nil || IsNil(o.Iommu) {
+	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
 	return o.Iommu, true
@@ -93,7 +86,7 @@ func (o *RngConfig) GetIommuOk() (*bool, bool) {
 
 // HasIommu returns a boolean if a field has been set.
 func (o *RngConfig) HasIommu() bool {
-	if o != nil && !IsNil(o.Iommu) {
+	if o != nil && o.Iommu != nil {
 		return true
 	}
 
@@ -106,57 +99,14 @@ func (o *RngConfig) SetIommu(v bool) {
 }
 
 func (o RngConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o RngConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["src"] = o.Src
-	if !IsNil(o.Iommu) {
+	if true {
+		toSerialize["src"] = o.Src
+	}
+	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
 	}
-	return toSerialize, nil
-}
-
-func (o *RngConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"src",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varRngConfig := _RngConfig{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varRngConfig)
-
-	if err != nil {
-		return err
-	}
-
-	*o = RngConfig(varRngConfig)
-
-	return err
+	return json.Marshal(toSerialize)
 }
 
 type NullableRngConfig struct {
@@ -194,5 +144,3 @@ func (v *NullableRngConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

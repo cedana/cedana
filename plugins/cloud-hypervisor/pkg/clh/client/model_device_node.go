@@ -14,15 +14,12 @@ import (
 	"encoding/json"
 )
 
-// checks if the DeviceNode type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &DeviceNode{}
-
 // DeviceNode struct for DeviceNode
 type DeviceNode struct {
-	Id *string `json:"id,omitempty"`
-	Resources []map[string]interface{} `json:"resources,omitempty"`
-	Children []string `json:"children,omitempty"`
-	PciBdf *string `json:"pci_bdf,omitempty"`
+	Id        *string                   `json:"id,omitempty"`
+	Resources *[]map[string]interface{} `json:"resources,omitempty"`
+	Children  *[]string                 `json:"children,omitempty"`
+	PciBdf    *string                   `json:"pci_bdf,omitempty"`
 }
 
 // NewDeviceNode instantiates a new DeviceNode object
@@ -44,7 +41,7 @@ func NewDeviceNodeWithDefaults() *DeviceNode {
 
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *DeviceNode) GetId() string {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
@@ -54,7 +51,7 @@ func (o *DeviceNode) GetId() string {
 // GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DeviceNode) GetIdOk() (*string, bool) {
-	if o == nil || IsNil(o.Id) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
 	return o.Id, true
@@ -62,7 +59,7 @@ func (o *DeviceNode) GetIdOk() (*string, bool) {
 
 // HasId returns a boolean if a field has been set.
 func (o *DeviceNode) HasId() bool {
-	if o != nil && !IsNil(o.Id) {
+	if o != nil && o.Id != nil {
 		return true
 	}
 
@@ -76,17 +73,17 @@ func (o *DeviceNode) SetId(v string) {
 
 // GetResources returns the Resources field value if set, zero value otherwise.
 func (o *DeviceNode) GetResources() []map[string]interface{} {
-	if o == nil || IsNil(o.Resources) {
+	if o == nil || o.Resources == nil {
 		var ret []map[string]interface{}
 		return ret
 	}
-	return o.Resources
+	return *o.Resources
 }
 
 // GetResourcesOk returns a tuple with the Resources field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DeviceNode) GetResourcesOk() ([]map[string]interface{}, bool) {
-	if o == nil || IsNil(o.Resources) {
+func (o *DeviceNode) GetResourcesOk() (*[]map[string]interface{}, bool) {
+	if o == nil || o.Resources == nil {
 		return nil, false
 	}
 	return o.Resources, true
@@ -94,7 +91,7 @@ func (o *DeviceNode) GetResourcesOk() ([]map[string]interface{}, bool) {
 
 // HasResources returns a boolean if a field has been set.
 func (o *DeviceNode) HasResources() bool {
-	if o != nil && !IsNil(o.Resources) {
+	if o != nil && o.Resources != nil {
 		return true
 	}
 
@@ -103,22 +100,22 @@ func (o *DeviceNode) HasResources() bool {
 
 // SetResources gets a reference to the given []map[string]interface{} and assigns it to the Resources field.
 func (o *DeviceNode) SetResources(v []map[string]interface{}) {
-	o.Resources = v
+	o.Resources = &v
 }
 
 // GetChildren returns the Children field value if set, zero value otherwise.
 func (o *DeviceNode) GetChildren() []string {
-	if o == nil || IsNil(o.Children) {
+	if o == nil || o.Children == nil {
 		var ret []string
 		return ret
 	}
-	return o.Children
+	return *o.Children
 }
 
 // GetChildrenOk returns a tuple with the Children field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DeviceNode) GetChildrenOk() ([]string, bool) {
-	if o == nil || IsNil(o.Children) {
+func (o *DeviceNode) GetChildrenOk() (*[]string, bool) {
+	if o == nil || o.Children == nil {
 		return nil, false
 	}
 	return o.Children, true
@@ -126,7 +123,7 @@ func (o *DeviceNode) GetChildrenOk() ([]string, bool) {
 
 // HasChildren returns a boolean if a field has been set.
 func (o *DeviceNode) HasChildren() bool {
-	if o != nil && !IsNil(o.Children) {
+	if o != nil && o.Children != nil {
 		return true
 	}
 
@@ -135,12 +132,12 @@ func (o *DeviceNode) HasChildren() bool {
 
 // SetChildren gets a reference to the given []string and assigns it to the Children field.
 func (o *DeviceNode) SetChildren(v []string) {
-	o.Children = v
+	o.Children = &v
 }
 
 // GetPciBdf returns the PciBdf field value if set, zero value otherwise.
 func (o *DeviceNode) GetPciBdf() string {
-	if o == nil || IsNil(o.PciBdf) {
+	if o == nil || o.PciBdf == nil {
 		var ret string
 		return ret
 	}
@@ -150,7 +147,7 @@ func (o *DeviceNode) GetPciBdf() string {
 // GetPciBdfOk returns a tuple with the PciBdf field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DeviceNode) GetPciBdfOk() (*string, bool) {
-	if o == nil || IsNil(o.PciBdf) {
+	if o == nil || o.PciBdf == nil {
 		return nil, false
 	}
 	return o.PciBdf, true
@@ -158,7 +155,7 @@ func (o *DeviceNode) GetPciBdfOk() (*string, bool) {
 
 // HasPciBdf returns a boolean if a field has been set.
 func (o *DeviceNode) HasPciBdf() bool {
-	if o != nil && !IsNil(o.PciBdf) {
+	if o != nil && o.PciBdf != nil {
 		return true
 	}
 
@@ -171,28 +168,20 @@ func (o *DeviceNode) SetPciBdf(v string) {
 }
 
 func (o DeviceNode) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o DeviceNode) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Id) {
+	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
-	if !IsNil(o.Resources) {
+	if o.Resources != nil {
 		toSerialize["resources"] = o.Resources
 	}
-	if !IsNil(o.Children) {
+	if o.Children != nil {
 		toSerialize["children"] = o.Children
 	}
-	if !IsNil(o.PciBdf) {
+	if o.PciBdf != nil {
 		toSerialize["pci_bdf"] = o.PciBdf
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableDeviceNode struct {
@@ -230,5 +219,3 @@ func (v *NullableDeviceNode) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

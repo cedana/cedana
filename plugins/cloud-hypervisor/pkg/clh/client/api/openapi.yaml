@@ -61,8 +61,8 @@ paths:
       responses:
         "204":
           description: The VM instance was successfully created.
-      summary: "Create the cloud-hypervisor Virtual Machine (VM) instance. The instance\
-        \ is not booted, only created."
+      summary: Create the cloud-hypervisor Virtual Machine (VM) instance. The instance
+        is not booted, only created.
   /vm.delete:
     put:
       operationId: deleteVM
@@ -817,8 +817,8 @@ components:
             - children
             pci_bdf: pci_bdf
             resources:
-            - "{}"
-            - "{}"
+            - '{}'
+            - '{}'
             id: id
       properties:
         config:
@@ -848,8 +848,8 @@ components:
         - children
         pci_bdf: pci_bdf
         resources:
-        - "{}"
-        - "{}"
+        - '{}'
+        - '{}'
         id: id
       properties:
         id:
@@ -1603,14 +1603,14 @@ components:
       - size
       type: object
     TokenBucket:
-      description: "Defines a token bucket with a maximum capacity (_size_), an initial\
-        \ burst size (_one_time_burst_) and an interval for refilling purposes (_refill_time_).\
-        \ The refill-rate is derived from _size_ and _refill_time_, and it is the\
-        \ constant rate at which the tokens replenish. The refill process only starts\
-        \ happening after the initial burst budget is consumed. Consumption from the\
-        \ token bucket is unbounded in speed which allows for bursts bound in size\
-        \ by the amount of tokens available. Once the token bucket is empty, consumption\
-        \ speed is bound by the refill-rate."
+      description: Defines a token bucket with a maximum capacity (_size_), an initial
+        burst size (_one_time_burst_) and an interval for refilling purposes (_refill_time_).
+        The refill-rate is derived from _size_ and _refill_time_, and it is the constant
+        rate at which the tokens replenish. The refill process only starts happening
+        after the initial burst budget is consumed. Consumption from the token bucket
+        is unbounded in speed which allows for bursts bound in size by the amount
+        of tokens available. Once the token bucket is empty, consumption speed is
+        bound by the refill-rate.
       example:
         size: 0
         one_time_burst: 0
@@ -2040,7 +2040,7 @@ components:
           minimum: 3
           type: integer
         socket:
-          description: "Path to UNIX domain socket, used to proxy vsock connections."
+          description: Path to UNIX domain socket, used to proxy vsock connections.
           type: string
         iommu:
           default: false

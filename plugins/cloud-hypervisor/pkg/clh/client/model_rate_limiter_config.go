@@ -14,13 +14,10 @@ import (
 	"encoding/json"
 )
 
-// checks if the RateLimiterConfig type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &RateLimiterConfig{}
-
 // RateLimiterConfig Defines an IO rate limiter with independent bytes/s and ops/s limits. Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 type RateLimiterConfig struct {
 	Bandwidth *TokenBucket `json:"bandwidth,omitempty"`
-	Ops *TokenBucket `json:"ops,omitempty"`
+	Ops       *TokenBucket `json:"ops,omitempty"`
 }
 
 // NewRateLimiterConfig instantiates a new RateLimiterConfig object
@@ -42,7 +39,7 @@ func NewRateLimiterConfigWithDefaults() *RateLimiterConfig {
 
 // GetBandwidth returns the Bandwidth field value if set, zero value otherwise.
 func (o *RateLimiterConfig) GetBandwidth() TokenBucket {
-	if o == nil || IsNil(o.Bandwidth) {
+	if o == nil || o.Bandwidth == nil {
 		var ret TokenBucket
 		return ret
 	}
@@ -52,7 +49,7 @@ func (o *RateLimiterConfig) GetBandwidth() TokenBucket {
 // GetBandwidthOk returns a tuple with the Bandwidth field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *RateLimiterConfig) GetBandwidthOk() (*TokenBucket, bool) {
-	if o == nil || IsNil(o.Bandwidth) {
+	if o == nil || o.Bandwidth == nil {
 		return nil, false
 	}
 	return o.Bandwidth, true
@@ -60,7 +57,7 @@ func (o *RateLimiterConfig) GetBandwidthOk() (*TokenBucket, bool) {
 
 // HasBandwidth returns a boolean if a field has been set.
 func (o *RateLimiterConfig) HasBandwidth() bool {
-	if o != nil && !IsNil(o.Bandwidth) {
+	if o != nil && o.Bandwidth != nil {
 		return true
 	}
 
@@ -74,7 +71,7 @@ func (o *RateLimiterConfig) SetBandwidth(v TokenBucket) {
 
 // GetOps returns the Ops field value if set, zero value otherwise.
 func (o *RateLimiterConfig) GetOps() TokenBucket {
-	if o == nil || IsNil(o.Ops) {
+	if o == nil || o.Ops == nil {
 		var ret TokenBucket
 		return ret
 	}
@@ -84,7 +81,7 @@ func (o *RateLimiterConfig) GetOps() TokenBucket {
 // GetOpsOk returns a tuple with the Ops field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *RateLimiterConfig) GetOpsOk() (*TokenBucket, bool) {
-	if o == nil || IsNil(o.Ops) {
+	if o == nil || o.Ops == nil {
 		return nil, false
 	}
 	return o.Ops, true
@@ -92,7 +89,7 @@ func (o *RateLimiterConfig) GetOpsOk() (*TokenBucket, bool) {
 
 // HasOps returns a boolean if a field has been set.
 func (o *RateLimiterConfig) HasOps() bool {
-	if o != nil && !IsNil(o.Ops) {
+	if o != nil && o.Ops != nil {
 		return true
 	}
 
@@ -105,22 +102,14 @@ func (o *RateLimiterConfig) SetOps(v TokenBucket) {
 }
 
 func (o RateLimiterConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
-}
-
-func (o RateLimiterConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Bandwidth) {
+	if o.Bandwidth != nil {
 		toSerialize["bandwidth"] = o.Bandwidth
 	}
-	if !IsNil(o.Ops) {
+	if o.Ops != nil {
 		toSerialize["ops"] = o.Ops
 	}
-	return toSerialize, nil
+	return json.Marshal(toSerialize)
 }
 
 type NullableRateLimiterConfig struct {
@@ -158,5 +147,3 @@ func (v *NullableRateLimiterConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

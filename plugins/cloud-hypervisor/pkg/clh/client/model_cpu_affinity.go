@@ -12,20 +12,13 @@ package openapi
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
-
-// checks if the CpuAffinity type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &CpuAffinity{}
 
 // CpuAffinity struct for CpuAffinity
 type CpuAffinity struct {
-	Vcpu int32 `json:"vcpu"`
+	Vcpu     int32   `json:"vcpu"`
 	HostCpus []int32 `json:"host_cpus"`
 }
-
-type _CpuAffinity CpuAffinity
 
 // NewCpuAffinity instantiates a new CpuAffinity object
 // This constructor will assign default values to properties that have it defined,
@@ -82,11 +75,11 @@ func (o *CpuAffinity) GetHostCpus() []int32 {
 
 // GetHostCpusOk returns a tuple with the HostCpus field value
 // and a boolean to check if the value has been set.
-func (o *CpuAffinity) GetHostCpusOk() ([]int32, bool) {
+func (o *CpuAffinity) GetHostCpusOk() (*[]int32, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return o.HostCpus, true
+	return &o.HostCpus, true
 }
 
 // SetHostCpus sets field value
@@ -95,56 +88,14 @@ func (o *CpuAffinity) SetHostCpus(v []int32) {
 }
 
 func (o CpuAffinity) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
+	toSerialize := map[string]interface{}{}
+	if true {
+		toSerialize["vcpu"] = o.Vcpu
+	}
+	if true {
+		toSerialize["host_cpus"] = o.HostCpus
 	}
 	return json.Marshal(toSerialize)
-}
-
-func (o CpuAffinity) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{}
-	toSerialize["vcpu"] = o.Vcpu
-	toSerialize["host_cpus"] = o.HostCpus
-	return toSerialize, nil
-}
-
-func (o *CpuAffinity) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"vcpu",
-		"host_cpus",
-	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varCpuAffinity := _CpuAffinity{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varCpuAffinity)
-
-	if err != nil {
-		return err
-	}
-
-	*o = CpuAffinity(varCpuAffinity)
-
-	return err
 }
 
 type NullableCpuAffinity struct {
@@ -182,5 +133,3 @@ func (v *NullableCpuAffinity) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-
