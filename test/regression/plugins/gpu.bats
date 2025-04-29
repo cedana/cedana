@@ -194,7 +194,7 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid"
     assert_success
@@ -230,7 +230,7 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid"
     assert_success
@@ -263,7 +263,7 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 1
+    sleep 3
 
     run cedana restore job "$jid"
     assert_success
