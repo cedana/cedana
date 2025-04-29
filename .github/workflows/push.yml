@@ -39,6 +39,7 @@ jobs:
       amd64: true
       amd64_image: true
       arm64_image: true
+      image_name: cedana/cedana-helper-test
 
   download:
     name: Download
@@ -63,7 +64,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 3
+      samples: 2
       push_results: true
       post_summary_pr: false
       post_summary_slack: false
