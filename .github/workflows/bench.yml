@@ -32,7 +32,7 @@ on:
         type: string
         description: "BigQuery dataset to push results to"
         required: false
-        default: "cedana_alpha_bench"
+        default: "cedana_alpha"
       comparison_native:
         type: boolean
         description: "Plot comparison with native runtime"
