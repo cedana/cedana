@@ -45,8 +45,8 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: 'main'
-      streamer_version: 'main'
+      gpu_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
+      streamer_version: feature/ced-1034-run-all-benchmarks-on-all-repos-involved
 
   test:
     name: Test
