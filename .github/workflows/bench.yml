@@ -68,7 +68,7 @@ jobs:
       packages: "read"
       id-token: "write"
       pull-requests: "write"
-    runs-on: [runs-on, runner=amd64-cuda-12-4-bench]
+    runs-on: [runs-on, runner=amd64-cuda-12-4-ondemand-4x]
     container:
       image: cedana/cedana-bench:cuda
       credentials:

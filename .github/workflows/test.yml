@@ -28,6 +28,11 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      parallelism:
+        type: number
+        description: "Parallelism for running tests"
+        required: false
+        default: 4
 
 jobs:
   unit:
@@ -137,11 +142,12 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
         run: |
-          if [ "${{ inputs.large }}" = "true" ]; then
-            make test-regression TAGS=base
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM
           else
-            make test-regression TAGS=base,!large
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM
           fi
 
   regression-runc:
@@ -195,11 +201,12 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
         run: |
-          if [ "${{ inputs.large }}" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,runc
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,runc PARALLELISM=$PARALLELISM
           else
-            make test-regression TAGS=!gpu,!streamer,runc,!large
+            make test-regression TAGS=!gpu,!streamer,runc,!large PARALLELISM=$PARALLELISM
           fi
 
   regression-containerd:
@@ -253,11 +260,12 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
         run: |
-          if [ "${{ inputs.large }}" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,containerd
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,containerd PARALLELISM=$PARALLELISM
           else
-            make test-regression TAGS=!gpu,!streamer,containerd,!large
+            make test-regression TAGS=!gpu,!streamer,containerd,!large PARALLELISM=$PARALLELISM
           fi
 
   regression-crio:
@@ -311,11 +319,12 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
         run: |
-          if [ "${{ inputs.large }}" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,crio
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,crio PARALLELISM=$PARALLELISM
           else
-            make test-regression TAGS=!gpu,!streamer,crio,!large
+            make test-regression TAGS=!gpu,!streamer,crio,!large PARALLELISM=$PARALLELISM
           fi
 
   regression-streamer:
@@ -327,6 +336,7 @@ jobs:
       debug: ${{ inputs.debug }}
       gpu: ${{ inputs.gpu }}
       large: ${{ inputs.large }}
+      parallelism: ${{ inputs.parallelism }}
 
   regression-gpu:
     name: GPU
@@ -341,3 +351,4 @@ jobs:
       cuda_12_4: true
       cuda_12_8: true
       large: ${{ inputs.large }}
+      parallelism: 1 # Low parallelism to avoid OOM on GPU tests
