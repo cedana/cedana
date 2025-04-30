@@ -19,7 +19,7 @@ on:
         required: false
         default: false
       samples:
-        type: number
+        type: string
         description: "Number of samples to run for each metric"
         required: false
         default: 3
