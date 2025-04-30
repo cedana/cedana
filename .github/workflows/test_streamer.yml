@@ -13,6 +13,11 @@ on:
         description: "Run including GPU tests"
         required: false
         default: false
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
 
 jobs:
   all:
@@ -86,10 +91,18 @@ jobs:
       - name: Run regression tests
         env:
           GPU: ${{ inputs.gpu }}
+          LARGE: ${{ inputs.large }}
         run: |
-          if [ "$GPU" = "true" ]; then
-            make test-regression TAGS=streamer PARALLELISM=1 # Low parallelism to avoid OOM on GPU tests
+          if [ "$GPU" = "true" ]; then # Low parallelism to avoid OOM on GPU tests
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=streamer PARALLELISM=1
+            else
+              make test-regression TAGS=streamer,!large PARALLELISM=1
+            fi
           else
-            make test-regression TAGS=streamer,!gpu
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=streamer,!gpu
+            else
+              make test-regression TAGS=streamer,!gpu,!large
+            fi
           fi
-

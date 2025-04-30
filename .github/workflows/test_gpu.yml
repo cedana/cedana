@@ -33,11 +33,16 @@ on:
         description: "Run including streamer tests"
         required: false
         default: false
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
 
 jobs:
   cuda-11-8:
     name: CUDA 11.8 (amd64)
-    runs-on: [runs-on,runner=amd64-cuda-11-8]
+    runs-on: [runs-on, runner=amd64-cuda-11-8]
     if: inputs.cuda_11_8
     container:
       image: cedana/cedana-test:cuda
@@ -116,7 +121,7 @@ jobs:
 
   cuda-12-2:
     name: CUDA 12.2 (amd64)
-    runs-on: [runs-on,runner=amd64-cuda-12-2]
+    runs-on: [runs-on, runner=amd64-cuda-12-2]
     if: inputs.cuda_12_2
     container:
       image: cedana/cedana-test:cuda
@@ -195,7 +200,7 @@ jobs:
 
   cuda-12-4:
     name: CUDA 12.4 (amd64)
-    runs-on: [runs-on,runner=amd64-cuda-12-4]
+    runs-on: [runs-on, runner=amd64-cuda-12-4]
     if: inputs.cuda_12_4
     container:
       image: cedana/cedana-test:cuda
@@ -274,7 +279,7 @@ jobs:
 
   cuda-12-8:
     name: CUDA 12.8 (amd64)
-    runs-on: [runs-on,runner=amd64-cuda-12-8]
+    runs-on: [runs-on, runner=amd64-cuda-12-8]
     if: inputs.cuda_12_8
     container:
       image: cedana/cedana-test:cuda
@@ -344,9 +349,19 @@ jobs:
       - name: Run regression tests
         env:
           STREAMER: ${{ inputs.streamer }}
+          LARGE: ${{ inputs.large }}
         run: |
+          # Low parallelism to avoid OOM on GPU tests
           if [ "$STREAMER" = "true" ]; then
-            make test-regression TAGS=gpu PARALLELISM=2 # Low parallelism to avoid OOM on GPU tests
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=gpu PARALLELISM=2
+            else
+              make test-regression TAGS=gpu,!large PARALLELISM=2
+            fi
           else
-            make test-regression TAGS=gpu,!streamer PARALLELISM=2 # Low parallelism to avoid OOM on GPU tests
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=gpu,!streamer PARALLELISM=2
+            else
+              make test-regression TAGS=gpu,!streamer,!large PARALLELISM=2
+            fi
           fi

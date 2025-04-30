@@ -23,6 +23,11 @@ on:
         description: "Run streamer tests"
         required: false
         default: true
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
 
 jobs:
   unit:
@@ -130,7 +135,14 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=base
+        env:
+          LARGE: ${{ inputs.large }}
+        run: |
+          if [ "${{ inputs.large }}" = "true" ]; then
+            make test-regression TAGS=base
+          else
+            make test-regression TAGS=base,!large
+          fi
 
   regression-runc:
     name: Runc (amd64)
@@ -181,7 +193,14 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,runc
+        env:
+          LARGE: ${{ inputs.large }}
+        run: |
+          if [ "${{ inputs.large }}" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,runc
+          else
+            make test-regression TAGS=!gpu,!streamer,runc,!large
+          fi
 
   regression-containerd:
     name: Containerd (amd64)
@@ -232,7 +251,14 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,containerd
+        env:
+          LARGE: ${{ inputs.large }}
+        run: |
+          if [ "${{ inputs.large }}" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,containerd
+          else
+            make test-regression TAGS=!gpu,!streamer,containerd,!large
+          fi
 
   regression-crio:
     name: CRIO (amd64)
@@ -283,7 +309,14 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,crio
+        env:
+          LARGE: ${{ inputs.large }}
+        run: |
+          if [ "${{ inputs.large }}" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,crio
+          else
+            make test-regression TAGS=!gpu,!streamer,crio,!large
+          fi
 
   regression-streamer:
     name: Streamer
@@ -293,6 +326,7 @@ jobs:
     with:
       debug: ${{ inputs.debug }}
       gpu: ${{ inputs.gpu }}
+      large: ${{ inputs.large }}
 
   regression-gpu:
     name: GPU
@@ -306,3 +340,4 @@ jobs:
       cuda_12_2: true
       cuda_12_4: true
       cuda_12_8: true
+      large: ${{ inputs.large }}
