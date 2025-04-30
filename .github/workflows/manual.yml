@@ -67,8 +67,8 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: ${{ inputs.bench_cedana && inputs.gpu_version }}
-      streamer_version: ${{ inputs.bench_cedana && inputs.streamer_version }}
+      gpu_version: ${{ inputs.gpu_version }}
+      streamer_version: ${{ inputs.streamer_version }}
 
   bench:
     name: Bench
