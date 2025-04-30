@@ -59,13 +59,15 @@ jobs:
     name: Build
     uses: ./.github/workflows/build.yml
     secrets: inherit
+    if: inputs.bench_cedana
     with:
-      amd64: ${{ inputs.bench_cedana }}
+      amd64: true
 
   download:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
+    if: inputs.bench_cedana
     with:
       gpu_version: ${{ inputs.gpu_version }}
       streamer_version: ${{ inputs.streamer_version }}
