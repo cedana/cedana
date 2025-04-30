@@ -279,7 +279,7 @@ teardown_file() {
 ### Inference C/R ###
 #####################
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,large
 @test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
     # Requires an HF token!
     run_inference_test "stabilityai/stablelm-2-1_6b"

@@ -24,6 +24,7 @@ type NotifyCallback struct {
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
 	OnRestoreErrorFunc      NotifyFuncNoError
+  OnDumpErrorFunc         NotifyFuncNoError
 
 	Name string // to give some context to this callback
 }
@@ -213,4 +214,13 @@ func (n NotifyCallback) OnRestoreError(ctx context.Context) {
 		defer end()
 		n.OnRestoreErrorFunc(ctx)
 	}
+}
+
+func (n NotifyCallback) OnDumpError(ctx context.Context) {
+  if n.OnDumpErrorFunc != nil {
+    var end func()
+    ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+    defer end()
+    n.OnDumpErrorFunc(ctx)
+  }
 }

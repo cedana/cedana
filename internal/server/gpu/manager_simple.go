@@ -5,6 +5,7 @@ package gpu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -22,10 +23,11 @@ import (
 )
 
 const (
-	FREEZE_TIMEOUT  = 20 * time.Second
-	DUMP_TIMEOUT    = 5 * time.Minute
-	RESTORE_TIMEOUT = 5 * time.Minute
-	HEALTH_TIMEOUT  = 30 * time.Second
+	FREEZE_TIMEOUT   = 20 * time.Second
+	UNFREEZE_TIMEOUT = 20 * time.Second
+	DUMP_TIMEOUT     = 5 * time.Minute
+	RESTORE_TIMEOUT  = 5 * time.Minute
+	HEALTH_TIMEOUT   = 30 * time.Second
 )
 
 type ManagerSimple struct {
@@ -175,7 +177,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			if err != nil {
 				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
-        return
+				return
 			}
 			log.Info().Str("JID", jid).Msg("GPU dump complete")
 		}()
@@ -184,7 +186,39 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 
 	// Wait for GPU dump to finish before finalizing the dump
 	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		return <-dumpErr
+		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
+		defer cancel()
+
+		controller := m.controllers.Get(jid)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the task still running?")
+		}
+
+		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
+		if err != nil {
+			log.Error().Err(err).Str("JID", jid).Msg("failed to unfreeze GPU")
+		}
+
+		return errors.Join(err, <-dumpErr)
+	}
+
+	// Unfreeze on dump failure as well
+	callback.OnDumpErrorFunc = func(ctx context.Context) {
+		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
+		defer cancel()
+
+		controller := m.controllers.Get(jid)
+		if controller == nil {
+			log.Error().Str("JID", jid).Msg("GPU controller not found, is the task still running?")
+			return
+		}
+
+		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
+		if err != nil {
+			log.Error().Err(err).Str("JID", jid).Msg("failed to unfreeze GPU")
+		}
+
+		return
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
