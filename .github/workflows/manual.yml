@@ -73,6 +73,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
+    if: always() || github.event.inputs.bench_cedana || github.event.inputs.bench_native
     needs: [build, download]
     secrets: inherit
     with:
