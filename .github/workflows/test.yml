@@ -346,9 +346,5 @@ jobs:
     with:
       debug: ${{ inputs.debug }}
       streamer: ${{ inputs.streamer }}
-      cuda_11_8: true
-      cuda_12_2: true
-      cuda_12_4: true
-      cuda_12_8: true
       large: ${{ inputs.large }}
       parallelism: 1 # Low parallelism to avoid OOM on GPU tests
