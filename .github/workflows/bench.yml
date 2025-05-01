@@ -434,6 +434,8 @@ jobs:
   native:
     name: Native (all)
     if: inputs.native
+    permissions:
+      contents: read
     runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
       image: cedana/cedana-bench:cuda
