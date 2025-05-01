@@ -137,6 +137,7 @@ jobs:
           -m cuda-calls-cputime \
           -m concurrent-kernels-exectime \
           -m ml-training-itertime \
+          -m ml-training-time \
           --save -n $SAMPLES
 
       - name: Upload logs
