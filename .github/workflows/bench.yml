@@ -60,14 +60,9 @@ on:
         default: false
 
 jobs:
-  cedana:
-    name: Cedana (amd64)
+  cedana_runtime:
+    name: Cedana (runtime)
     if: inputs.cedana
-    permissions:
-      contents: "read"
-      packages: "read"
-      id-token: "write"
-      pull-requests: "write"
     runs-on: [runs-on, runner=amd64-cuda-12-4-ondemand-4x]
     container:
       image: cedana/cedana-bench:cuda
@@ -134,17 +129,170 @@ jobs:
         run: |
           echo Using bench config:
           cat bench.json
-          ./bench run cedana --save -n $SAMPLES
+          ./bench run cedana \
+          -m mem-throughput \
+          -m compute-throughput \
+          -m mem-throughput-d2h \
+          -m mem-throughput-h2d \
+          -m cuda-calls-cputime \
+          -m concurrent-kernels-exectime \
+          -m ml-training-itertime \
+          --save -n $SAMPLES
 
       - name: Upload logs
         if: always()
         id: upload-logs
         uses: actions/upload-artifact@v4
         with:
-          name: bench-logs
+          name: bench-logs-runtime
           path: |
             /src/*.log
             /tmp/*.log
+
+      - name: Upload results
+        id: upload-results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-runtime
+          path: |
+            /src/results
+
+  cedana_cr:
+    name: Cedana (C/R)
+    if: inputs.cedana
+    runs-on: [runs-on, runner=amd64-cuda-12-4-ondemand-4x]
+    container:
+      image: cedana/cedana-bench:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - name: Download GPU binaries
+        uses: actions/download-artifact@v4
+        id: download-binaries-gpu
+        with:
+          name: gpu
+
+      - name: Download Cedana binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-cedana
+        with:
+          name: cedana
+
+      - name: Download Cedana plugins
+        uses: actions/download-artifact@v4
+        id: download-binaries-plugins
+        with:
+          name: plugins
+
+      - name: Configure
+        env:
+          PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
+          PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
+          PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
+        run: |
+          cp $PATH_BINARIES_GPU/* bin
+          cp $PATH_BINARIES_CEDANA/* bin
+          cp $PATH_BINARIES_PLUGINS/* bin
+          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
+          mv temp.json bench.json
+          jq 'del(.crtools.list."cedana".tag)' bench.json > temp.json
+          mv temp.json bench.json
+          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
+          mv temp.json bench.json
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run
+        env:
+          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CEDANA_URL: ${{ vars.CEDANA_URL }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          echo Using bench config:
+          cat bench.json
+          ./bench run cedana \
+          -m warm-checkpoint-time \
+          -m cold-start-time \
+          -m save-migrate-resume \
+          --save -n $SAMPLES
+
+      - name: Upload logs
+        if: always()
+        id: upload-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-logs-cr
+          path: |
+            /src/*.log
+            /tmp/*.log
+
+      - name: Upload results
+        id: upload-results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-cr
+          path: |
+            /src/results
+
+  cedana_summarize:
+    name: Cedana (summarize)
+    if: inputs.cedana
+    needs: [cedana_runtime, cedana_cr]
+    permissions:
+      contents: "read"
+      packages: "read"
+      id-token: "write"
+      pull-requests: "write"
+    runs-on: ubuntu-latest
+    container:
+      image: cedana/cedana-bench:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - name: Download results (runtime)
+        uses: actions/download-artifact@v4
+        id: download-results-runtime
+        with:
+          name: results-runtime
+          path: /src/results
+
+      - name: Download results (C/R)
+        uses: actions/download-artifact@v4
+        id: download-results-cr
+        with:
+          name: results-cr
+          path: /src/results-cr
+
+      - name: Collate results
+        run: |
+          cp -Rf /src/results-cr /src/results
+          ls -l /src/results
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
 
       - id: auth
         name: Authenticate to Google Cloud

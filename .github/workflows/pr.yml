@@ -65,7 +65,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 2
+      samples: 1
       push_results: false
       post_summary_pr: true
       post_summary_slack: false
