@@ -434,11 +434,7 @@ jobs:
   native:
     name: Native (all)
     if: inputs.native
-    permissions:
-      contents: "read"
-      packages: "read"
-      id-token: "write"
-    runs-on: [runs-on, runner=amd64-cuda-12-4-ondemand-4x]
+    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -504,8 +500,14 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
       - name: Download results (runtime 1)
-        if: inputs.cedana
+        if: (success() || failure()) && inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-runtime-1
         with:
@@ -513,7 +515,7 @@ jobs:
           path: /src/results-runtime-1
 
       - name: Download results (runtime 2)
-        if: inputs.cedana
+        if: (success() || failure()) && inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-runtime-2
         with:
@@ -521,7 +523,7 @@ jobs:
           path: /src/results-runtime-2
 
       - name: Download results (C/R 1)
-        if: inputs.cedana
+        if: (success() || failure()) && inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-cr-1
         with:
@@ -529,7 +531,7 @@ jobs:
           path: /src/results-cr-1
 
       - name: Download results (C/R 2)
-        if: inputs.cedana
+        if: (success() || failure()) && inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-cr-2
         with:
@@ -537,7 +539,7 @@ jobs:
           path: /src/results-cr-2
 
       - name: Download results (native)
-        if: inputs.native
+        if: (success() || failure()) && inputs.native
         uses: actions/download-artifact@v4
         id: download-results-native
         with:
@@ -545,6 +547,7 @@ jobs:
           path: /src/results-native
 
       - name: Collate results
+        if: success() || failure()
         run: |
           ls -l /src
           mkdir -p /src/results
@@ -558,12 +561,6 @@ jobs:
           cp -Rf /src/results-cr-2/results /src/results || true
           cp -Rf /src/results-native/results /src/results || true
           ls -l /src/results
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
 
       - id: auth
         name: Authenticate to Google Cloud
