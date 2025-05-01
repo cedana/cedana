@@ -61,7 +61,7 @@ on:
 
 jobs:
   cedana_runtime_1:
-    name: Cedana (runtime \#1)
+    name: Cedana (runtime 1)
     if: inputs.cedana
     runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
@@ -157,7 +157,7 @@ jobs:
             /src/results
 
   cedana_runtime_2:
-    name: Cedana (runtime \#2)
+    name: Cedana (runtime 2)
     if: inputs.cedana
     runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
@@ -249,7 +249,7 @@ jobs:
             /src/results
 
   cedana_cr_1:
-    name: Cedana (C/R \#1)
+    name: Cedana (C/R 1)
     if: inputs.cedana
     runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
@@ -341,7 +341,7 @@ jobs:
             /src/results
 
   cedana_cr_2:
-    name: Cedana (C/R \#2)
+    name: Cedana (C/R 2)
     if: inputs.cedana
     runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
     container:
@@ -504,7 +504,7 @@ jobs:
       run:
         working-directory: /src
     steps:
-      - name: Download results (runtime \#1)
+      - name: Download results (runtime 1)
         if: inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-runtime-1
@@ -512,7 +512,7 @@ jobs:
           name: results-runtime-1
           path: /src/results-runtime-1
 
-      - name: Download results (runtime \#2)
+      - name: Download results (runtime 2)
         if: inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-runtime-2
@@ -520,7 +520,7 @@ jobs:
           name: results-runtime-2
           path: /src/results-runtime-2
 
-      - name: Download results (C/R \#1)
+      - name: Download results (C/R 1)
         if: inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-cr-1
@@ -528,7 +528,7 @@ jobs:
           name: results-cr-1
           path: /src/results-cr-1
 
-      - name: Download results (C/R \#2)
+      - name: Download results (C/R 2)
         if: inputs.cedana
         uses: actions/download-artifact@v4
         id: download-results-cr-2
