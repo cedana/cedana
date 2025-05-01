@@ -1,5 +1,8 @@
 name: Bench
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
