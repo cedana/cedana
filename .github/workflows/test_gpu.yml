@@ -26,8 +26,8 @@ on:
 
 jobs:
   cuda:
-    name: CUDA (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=amd64-cuda-${{ matrix.version }}
+    name: CUDA
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.platform }}-cuda-${{ matrix.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +36,8 @@ jobs:
           - 12-2
           - 12-4
           - 12-8
+        platform:
+          - amd64
     container:
       image: cedana/cedana-test:cuda
       credentials:
