@@ -136,6 +136,7 @@ jobs:
           -m mem-throughput-h2d \
           -m cuda-calls-cputime \
           -m concurrent-kernels-exectime \
+          -m ml-training-itertime \
           --save -n $SAMPLES
 
       - name: Upload logs
@@ -226,7 +227,6 @@ jobs:
           echo Using bench config:
           cat bench.json
           ./bench run cedana \
-          -m ml-training-itertime \
           -m ml-training-time \
           --save -n $SAMPLES
 
@@ -554,11 +554,12 @@ jobs:
           mv /src/results-runtime-2/run-summary.json /src/results-runtime-2/run-summary-runtime-2.json || true
           mv /src/results-cr-1/run-summary.json /src/results-cr-1/run-summary-cr-1.json || true
           mv /src/results-cr-2/run-summary.json /src/results-cr-2/run-summary-cr-2.json || true
-          cp -Rf /src/results-runtime-1 /src/results || true
-          cp -Rf /src/results-runtime-2 /src/results || true
-          cp -Rf /src/results-cr-1 /src/results || true
-          cp -Rf /src/results-cr-2 /src/results || true
-          cp -Rf /src/results-native /src/results || true
+          cp -Rf /src/results-runtime-1/* /src/results || true
+          cp -Rf /src/results-runtime-2/* /src/results || true
+          cp -Rf /src/results-cr-1/* /src/results || true
+          cp -Rf /src/results-cr-2/* /src/results || true
+          cp -Rf /src/results-native/* /src/results || true
+          ls -l /src/results
 
       - id: auth
         name: Authenticate to Google Cloud
@@ -756,4 +757,3 @@ jobs:
         run: |
           utils/results-summary > summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY
-
