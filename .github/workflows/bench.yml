@@ -549,19 +549,16 @@ jobs:
       - name: Collate results
         if: success() || failure()
         run: |
-          ls -l /src
-          ls -l /src/results-runtime-1
           mkdir -p /src/results
-          mv /src/results-runtime-1/results/run-summary.json /src/results-runtime-1/results/run-summary-runtime-1.json || true
-          mv /src/results-runtime-2/results/run-summary.json /src/results-runtime-2/results/run-summary-runtime-2.json || true
-          mv /src/results-cr-1/results/run-summary.json /src/results-cr-1/results/run-summary-cr-1.json || true
-          mv /src/results-cr-2/results/run-summary.json /src/results-cr-2/results/run-summary-cr-2.json || true
-          cp -Rf /src/results-runtime-1/results /src/results || true
-          cp -Rf /src/results-runtime-2/results /src/results || true
-          cp -Rf /src/results-cr-1/results /src/results || true
-          cp -Rf /src/results-cr-2/results /src/results || true
-          cp -Rf /src/results-native/results /src/results || true
-          ls -l /src/results
+          mv /src/results-runtime-1/run-summary.json /src/results-runtime-1/run-summary-runtime-1.json || true
+          mv /src/results-runtime-2/run-summary.json /src/results-runtime-2/run-summary-runtime-2.json || true
+          mv /src/results-cr-1/run-summary.json /src/results-cr-1/run-summary-cr-1.json || true
+          mv /src/results-cr-2/run-summary.json /src/results-cr-2/run-summary-cr-2.json || true
+          cp -Rf /src/results-runtime-1 /src/results || true
+          cp -Rf /src/results-runtime-2 /src/results || true
+          cp -Rf /src/results-cr-1 /src/results || true
+          cp -Rf /src/results-cr-2 /src/results || true
+          cp -Rf /src/results-native /src/results || true
 
       - id: auth
         name: Authenticate to Google Cloud
