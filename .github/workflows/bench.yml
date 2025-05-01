@@ -609,14 +609,14 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/native-comparison
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native-comparison
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ native)
         if: (success() || failure()) && inputs.comparison_native
         id: summary-native
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/native-comparison/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native-comparison/results
           RESULTS_TITLE: ${{ github.repository }}
           RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ native"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
@@ -660,14 +660,14 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/patch-comparison
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/patch-comparison
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ last patch)
         if: success() || failure() && inputs.comparison_patch
         id: summary-patch
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/patch-comparison/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/patch-comparison/results
           RESULTS_TITLE: ${{ github.repository }}
           RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ last patch"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
@@ -711,14 +711,14 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/branded
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/branded
           glob: "**/*.png"
 
       - name: Generate summary (branded)
         if: (success() || failure()) && inputs.post_summary_slack_branded
         id: summary-branded
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/branded/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/branded/results
           RESULTS_TITLE: ${{ github.repository }}
           RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** performance results"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
@@ -751,13 +751,13 @@ jobs:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/native
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native
           glob: "**/*.png"
 
       - name: Generate summary (native)
         if: (success() || failure()) && inputs.native
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_number }}/native/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native/results
           RESULTS_DESCRIPTION: "> Native"
         run: |
           utils/results-summary > summary.md
