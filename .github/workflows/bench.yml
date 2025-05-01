@@ -250,8 +250,8 @@ jobs:
           path: |
             /src/results
 
-  cedana_summarize:
-    name: Cedana (summarize)
+  post_summary:
+    name: Post Summary
     if: inputs.cedana
     needs: [cedana_runtime, cedana_cr]
     permissions:
