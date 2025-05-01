@@ -285,6 +285,7 @@ jobs:
 
       - name: Collate results
         run: |
+          mv /src/results-cr/run-summary.json /src/results-cr/run-summary-1.json
           cp -Rf /src/results-cr /src/results
           ls -l /src/results
 
