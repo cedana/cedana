@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,9 +16,16 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq"
+
 	"google.golang.org/grpc"
 )
 
@@ -96,6 +104,203 @@ func destroyCedana(ctx context.Context) error {
 	return nil
 }
 
+type EventStream struct {
+	conn      *rabbitmq.Conn
+	consumer  *rabbitmq.Consumer
+	publisher *rabbitmq.Publisher
+	queueURL  string
+}
+
+func NewEventStream(queueURL string) (*EventStream, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+	clientName := fmt.Sprintf("cedana-daemon-%s-%d", hostname, time.Now().UnixNano())
+
+	config := rabbitmq.Config{
+		Properties: amqp.Table{
+			"connection_name": clientName,
+		},
+	}
+	conn, err := rabbitmq.NewConn(
+		queueURL,
+		rabbitmq.WithConnectionOptionsConfig(config),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
+	}
+
+	es := &EventStream{
+		conn:     conn,
+		queueURL: queueURL,
+	}
+	return es, nil
+}
+
+func (es *EventStream) NewConsumer(queueName string) error {
+	consumer, err := rabbitmq.NewConsumer(
+		es.conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsRoutingKey(queueName),
+		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
+	)
+	if err != nil {
+		log.Fatal().Err(fmt.Errorf("Failed to connect to RabbitMQ: %v", err)).Msg("Consumer failed")
+	}
+	es.consumer = consumer
+	return nil
+}
+
+func (es *EventStream) NewPublisher() error {
+	publisher, err := rabbitmq.NewPublisher(
+		es.conn,
+		rabbitmq.WithPublisherOptionsExchangeDeclare,
+		rabbitmq.WithPublisherOptionsExchangeName("daemon_response"),
+	)
+	if err != nil {
+		log.Fatal().Err(fmt.Errorf("Failed to connect to RabbitMQ: %v", err)).Msg("new publisher failed")
+	}
+	es.publisher = publisher
+	return nil
+}
+
+type CheckpointPodReq struct {
+	PodName   string `json:"pod_name"`
+	RuncRoot  string `json:"runc_root"`
+	Namespace string `json:"namespace"`
+
+	ActionId string `json:"action_id"`
+}
+
+func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]string, error) {
+	client, err := client.New(address, protocol)
+	if err != nil {
+		return nil, err
+	}
+	query := &daemon.QueryReq{
+		Type: "k8s",
+		K8S: &k8s.QueryReq{
+			Root:         req.RuncRoot,
+			Namespace:    req.Namespace,
+			SandboxNames: []string{req.PodName},
+		},
+	}
+	resp, err := client.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	res := []string{}
+	for _, c := range resp.K8S.Containers {
+		res = append(res, c.Runc.ID)
+	}
+	return res, nil
+}
+
+func CheckpointContainer(ctx context.Context, runcId, runcRoot, address, protocol string) (*daemon.DumpResp, error) {
+	client, err := client.New(address, protocol)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+	leaveRunning := true
+	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
+		Dir:    "/tmp",
+		Stream: 0,
+		Type:   "runc",
+		Criu: &criu.CriuOpts{
+			LeaveRunning: &leaveRunning,
+		},
+		Details: &daemon.Details{
+			Runc: &runc.Runc{
+				ID:   runcId,
+				Root: runcRoot,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type CheckpointInformation struct {
+	ActionId     string `json:"action_id"`
+	PodId        string `json:"pod_id"`
+	CheckpointId string `json:"checkpoint_id"`
+	Status       string `json:"status"`
+}
+
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daemon.DumpResp) rabbitmq.Action {
+	err := es.NewPublisher()
+	if err != nil {
+		log.Error().Err(err).Msg("creation of publisher failed")
+		return rabbitmq.NackDiscard
+	}
+	data, err := json.Marshal(CheckpointInformation{
+		ActionId:     req.ActionId,
+		CheckpointId: *resp.Id,
+		Status:       "success",
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create checkpoint info")
+		return rabbitmq.NackDiscard
+	}
+	err = es.publisher.Publish(data, []string{"checkpoint_response"})
+	if err != nil {
+		log.Error().Err(err).Msg("creation of publisher failed")
+		return rabbitmq.NackDiscard
+	}
+	return rabbitmq.Ack
+}
+
+func (es *EventStream) ConsumeRequest(address, protocol string) error {
+	err := es.NewConsumer("checkpoint_pod")
+	if err != nil {
+		log.Error().Err(err).Msg("New Consumer failed")
+		return err
+	}
+	defer es.consumer.Close()
+
+	err = es.consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var req CheckpointPodReq
+		if err := json.Unmarshal(msg.Body, &req); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal message")
+			return rabbitmq.NackDiscard
+		}
+		containers, err := FindContainersForReq(req, address, protocol)
+		if err != nil {
+			log.Info().Err(err).Msg("Failed to find pod")
+			return rabbitmq.NackDiscard
+		}
+		// if no containers found skip
+		if len(containers) == 0 {
+			return rabbitmq.NackDiscard
+		}
+		runcRoot := req.RuncRoot
+		for _, runcId := range containers {
+			resp, err := CheckpointContainer(
+				context.Background(),
+				runcId,
+				runcRoot,
+				address,
+				protocol,
+			)
+			if err != nil {
+				return rabbitmq.NackDiscard
+			} else {
+				return es.PublishCheckpointSuccess(req, resp)
+			}
+		}
+		return rabbitmq.Ack
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Create Workload Consumer failed")
+		return err
+	}
+	return nil
+}
+
 func startHelper(ctx context.Context, startChroot bool, address string, protocol string) error {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
@@ -144,6 +349,12 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 				os.Exit(0)
 			}
 		}
+	}()
+
+	w.Add(1)
+	go func() {
+		defer w.Done()
+
 	}()
 
 	// scrape daemon logs for kubectl logs output
