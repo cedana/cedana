@@ -56,3 +56,21 @@ env_exists() {
 cmd_exists() {
     command -v "$1" >/dev/null 2>&1
 }
+
+# Execute a function only once
+# Usage: do_once <function_name>
+# If the function is currently running, other calls to do_once will wait for it to finish
+do_once() {
+    local func="$1"
+    local lock="/tmp/$1.lock"
+
+    if ! mkdir "$lock" 2>/dev/null; then
+        while [ ! -d "$lock" ]; do
+            sleep 0.2
+        done
+        return
+    fi
+
+    "$func"
+    rmdir "$lock" 2>/dev/null
+}

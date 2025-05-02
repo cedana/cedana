@@ -3,7 +3,7 @@ package criu
 import (
 	"context"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -65,7 +65,17 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	exitCode := make(chan int, 1)
 	var stdin io.Reader
 	var stdout, stderr io.Writer
-	if req.Attachable {
+
+	// if we aren't using a client
+	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
+		// use checkpoint process state information to setup req uid and gid
+		req.UID = uids[0]
+		req.GID = gids[0]
+		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
+		stdin = os.Stdin
+		stdout = os.Stdout
+		stderr = os.Stderr
+	} else if req.Attachable {
 		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
 		id := rand.Uint32()                    // Use a random number, since we don't have PID yet
 		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
