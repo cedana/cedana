@@ -1,3 +1,0 @@
-[submodule "external/cedana-go-sdk"]
-	path = external/cedana-go-sdk
-	url = git@github.com:cedana/cedana-go-sdk
