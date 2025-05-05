@@ -49,6 +49,8 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to files in the dump")
+	dumpCmd.PersistentFlags().
+		StringP(flags.GpuFreezeFlag.Full, flags.GpuFreezeFlag.Short, "", "freeze type to use for GPU processes (ipc, nccl)")
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -82,20 +84,22 @@ var dumpCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
-    leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
+		leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
+		gpuFreeze, _ := cmd.Flags().GetString(flags.GpuFreezeFlag.Full)
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:         dir,
-			Name:        name,
-			Compression: compression,
-			Stream:      int32(stream),
+			Dir:           dir,
+			Name:          name,
+			Compression:   compression,
+			Stream:        int32(stream),
+			GPUFreezeType: gpuFreeze,
 			Criu: &criu.CriuOpts{
 				LeaveRunning:    proto.Bool(leaveRunning),
 				TcpEstablished:  proto.Bool(tcpEstablished),

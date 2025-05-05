@@ -69,6 +69,9 @@ var Global Config = Config{
 	CRIU: CRIU{
 		LeaveRunning: false,
 	},
+	GPU: GPU{
+		FreezeType: "ipc",
+	},
 	Plugins: Plugins{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,

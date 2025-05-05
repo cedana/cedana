@@ -145,24 +145,26 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(opts CRIUCallbackOptions) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
 	dumpErr := make(chan error, 1)
-	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.PreDumpFunc = func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
 
-		controller := m.controllers.Get(jid)
+		controller := m.controllers.Get(opts.JID)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the task still running?")
 		}
 
-		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
+		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{
+			Type: *opts.FreezeType,
+		})
 		if err != nil {
-			log.Error().Err(err).Str("JID", jid).Msg("failed to freeze GPU")
+			log.Error().Err(err).Str("JID", opts.JID).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", err)
 		}
 
@@ -173,30 +175,30 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning()})
+			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: criuOpts.GetImagesDir(), Stream: opts.Stream > 0, LeaveRunning: criuOpts.GetLeaveRunning()})
 			if err != nil {
-				log.Error().Err(err).Str("JID", jid).Msg("failed to dump GPU")
+				log.Error().Err(err).Str("JID", opts.JID).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
 				return
 			}
-			log.Info().Str("JID", jid).Msg("GPU dump complete")
+			log.Info().Str("JID", opts.JID).Msg("GPU dump complete")
 		}()
 		return nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
-	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.PostDumpFunc = func(ctx context.Context, _ *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
 		defer cancel()
 
-		controller := m.controllers.Get(jid)
+		controller := m.controllers.Get(opts.JID)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the task still running?")
 		}
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
-			log.Error().Err(err).Str("JID", jid).Msg("failed to unfreeze GPU")
+			log.Error().Err(err).Str("JID", opts.JID).Msg("failed to unfreeze GPU")
 		}
 
 		return errors.Join(err, <-dumpErr)
@@ -207,15 +209,15 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
 		defer cancel()
 
-		controller := m.controllers.Get(jid)
+		controller := m.controllers.Get(opts.JID)
 		if controller == nil {
-			log.Error().Str("JID", jid).Msg("GPU controller not found, is the task still running?")
+			log.Error().Str("JID", opts.JID).Msg("GPU controller not found, is the task still running?")
 			return
 		}
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
-			log.Error().Err(err).Str("JID", jid).Msg("failed to unfreeze GPU")
+			log.Error().Err(err).Str("JID", opts.JID).Msg("failed to unfreeze GPU")
 		}
 
 		return
@@ -225,8 +227,8 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
-	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		err := m.Attach(ctx, lifetime, jid, user, pidChan, env) // Re-attach a GPU to the job
+	callback.InitializeRestoreFunc = func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
+		err := m.Attach(ctx, opts.Lifetime, opts.JID, opts.User, pidChan, opts.Env) // Re-attach a GPU to the job
 		if err != nil {
 			return err
 		}
@@ -237,18 +239,18 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
 			defer cancel()
 
-			controller := m.controllers.Get(jid)
+			controller := m.controllers.Get(opts.JID)
 			if controller == nil {
 				restoreErr <- fmt.Errorf("GPU controller not found, is the task still running?")
 			}
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
+			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: criuOpts.GetImagesDir(), Stream: opts.Stream > 0})
 			if err != nil {
-				log.Error().Err(err).Str("JID", jid).Msg("failed to restore GPU")
+				log.Error().Err(err).Str("JID", opts.JID).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", err)
 				return
 			}
-			log.Info().Str("JID", jid).Msg("GPU restore complete")
+			log.Info().Str("JID", opts.JID).Msg("GPU restore complete")
 
 			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
 			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
@@ -269,9 +271,9 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 
 	// If CRIU fails to restore, detach the GPU controller
 	callback.OnRestoreErrorFunc = func(ctx context.Context) {
-		err := m.Detach(jid)
+		err := m.Detach(opts.JID)
 		if err != nil {
-			log.Warn().Err(err).Str("JID", jid).Msg("failed to detach GPU controller on restore error")
+			log.Warn().Err(err).Str("JID", opts.JID).Msg("failed to detach GPU controller on restore error")
 		}
 	}
 

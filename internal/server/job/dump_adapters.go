@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,8 +47,30 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
+			gpuFreezeTypeStr := req.GPUFreezeType
+			if gpuFreezeTypeStr == "" {
+				gpuFreezeTypeStr = config.Global.GPU.FreezeType
+			}
+			var gpuFreezeType gpu.FreezeType
+			switch gpuFreezeTypeStr {
+			case "", "ipc":
+				gpuFreezeType = gpu.FreezeType_FREEZE_TYPE_IPC
+			case "nccl":
+				gpuFreezeType = gpu.FreezeType_FREEZE_TYPE_NCCL
+			default:
+				return nil, status.Errorf(codes.InvalidArgument, "invalid GPU freeze type: %s (should be 'ipc' or 'nccl')", gpuFreezeTypeStr)
+			}
+
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, nil, req.Stream))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(CRIUCallbackOptions{
+				opts.Lifetime,
+				jid,
+				nil,
+				req.Stream,
+				&gpuFreezeType,
+				nil,
+			},
+			))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
