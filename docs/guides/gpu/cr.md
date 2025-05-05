@@ -14,7 +14,7 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
     sudo cedana plugin install gpu
     ```
 
-    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
+    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
 
     * _Minimum NVIDIA driver version: 452 (API 11.8)_
     * _Maximum NVIDIA driver version: 550 (API 12.4). Newer drivers are unstable and may not work._
@@ -56,8 +56,21 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
+### Multi-process/node
+
+For multi-process/node workloads, you might need to specify the `--gpu-freeze` option during dump. If the workload is multi-process/multi-node and using [NCCL](https://developer.nvidia.com/nccl), use the `nccl` option.
+
+```sh
+cedana dump job <job_id> --gpu-freeze nccl
+```
+You may also set a default GPU freeze type in the [configuration](../../get-started/configuration.md).
+
 ## Usage (CRIU CUDA plugin)
 
 You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint/restore basics](../cr.md).
 
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+
+### Multi-process/node
+
+This is currently not supported. You should use the Cedana GPU plugin for this.

@@ -34,6 +34,8 @@ const (
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
+
+  DEFAULT_GPU_FREEZE_TYPE = "ipc"
 )
 
 // The default global config. This will get overwritten
@@ -70,7 +72,7 @@ var Global Config = Config{
 		LeaveRunning: false,
 	},
 	GPU: GPU{
-		FreezeType: "ipc",
+		FreezeType: DEFAULT_GPU_FREEZE_TYPE,
 	},
 	Plugins: Plugins{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,

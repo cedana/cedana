@@ -104,7 +104,7 @@ type GPU struct {
     LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// Track metrics associated with observability
 		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
-    // FreezeType is the type of freeze to use for GPU processes (ipc, nccl)
+    // FreezeType is the type of freeze to use for GPU processes (ipc, nccl). This only useful for multi-process/multi-node GPU dumps.
     FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 }
 ```

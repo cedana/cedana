@@ -53,7 +53,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			}
 			var gpuFreezeType gpu.FreezeType
 			switch gpuFreezeTypeStr {
-			case "", "ipc":
+			case "ipc":
 				gpuFreezeType = gpu.FreezeType_FREEZE_TYPE_IPC
 			case "nccl":
 				gpuFreezeType = gpu.FreezeType_FREEZE_TYPE_NCCL
