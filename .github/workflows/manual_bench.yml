@@ -1,18 +1,23 @@
-name: Manual
+name: Manual (bench)
 
 on:
   workflow_dispatch:
     inputs:
+      cedana_version:
+        type: string
+        description: Version for Cedana binaries (branch name or "release" for latest release)
+        required: false
+        default: "main"
       gpu_version:
         type: string
         description: Version for GPU binaries (branch name or "release" for latest release)
         required: false
-        default: "release"
+        default: "main"
       streamer_version:
         type: string
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
-        default: "release"
+        default: "main"
       bench_cedana:
         type: boolean
         description: Run benchmarks for Cedana
@@ -43,37 +48,25 @@ on:
         description: Compare benchmark results with native
         required: false
         default: false
-      bench_post_summary_slack:
-        type: boolean
-        description: Post benchmark summary to Slack
-        required: false
-        default: false
-      bench_post_summary_slack_branded:
-        type: boolean
-        description: Post benchmark summary to Slack (ext channel) with branding
-        required: false
-        default: false
       bench_result_dataset:
         type: string
         description: "BigQuery dataset to push results to"
         required: false
         default: "cedana_alpha"
+      runner_family:
+        type: string
+        description: "Runner family for benchmarks"
+        required: false
+        default: "g6-4xlarge"
 
 jobs:
-  build:
-    name: Build
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
-    if: inputs.bench_cedana
-    with:
-      amd64: true
-
   download:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
     if: inputs.bench_cedana
     with:
+      cedana_version: ${{ inputs.cedana_version }}
       gpu_version: ${{ inputs.gpu_version }}
       streamer_version: ${{ inputs.streamer_version }}
 
@@ -90,6 +83,5 @@ jobs:
       push_results: ${{ inputs.bench_push_results }}
       comparison_patch: ${{ inputs.bench_comparison_patch }}
       comparison_native: ${{ inputs.bench_comparison_native }}
-      post_summary_slack: ${{ inputs.bench_post_summary_slack }}
-      post_summary_slack_branded: ${{ inputs.bench_post_summary_slack_branded }}
       result_dataset: ${{ inputs.bench_result_dataset }}
+      runner_family: ${{ inputs.runner_family }}

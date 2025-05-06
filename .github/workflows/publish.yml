@@ -68,13 +68,13 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
@@ -93,13 +93,13 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Push cedana to Cloudsmith
         id: push-cedana

@@ -32,7 +32,13 @@ on:
 jobs:
   all:
     name: Streamer (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64${{ inputs.gpu && '-cuda-12-4' || '' }}
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          # - arm64
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -53,25 +59,25 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins
+          name: plugins-${{ matrix.arch }}
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: streamer
+          name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         if: inputs.gpu
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: gpu
+          name: gpu-${{ matrix.arch }}
 
       - name: Make executable
         run: |

@@ -61,12 +61,17 @@ on:
         description: "Post benchmark summary to Slack (branded)"
         required: false
         default: false
+      runner_family:
+        type: string
+        description: "Runner family for benchmark"
+        required: false
+        default: "g6-4xlarge"
 
 jobs:
   cedana_runtime_1:
     name: Cedana (runtime 1)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -81,19 +86,19 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -163,7 +168,7 @@ jobs:
   cedana_runtime_2:
     name: Cedana (runtime 2)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -178,19 +183,19 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -254,7 +259,7 @@ jobs:
   cedana_cr_1:
     name: Cedana (C/R 1)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -269,19 +274,19 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -346,7 +351,7 @@ jobs:
   cedana_cr_2:
     name: Cedana (C/R 2)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -361,19 +366,19 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -439,7 +444,7 @@ jobs:
     if: inputs.native
     permissions:
       contents: read
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:

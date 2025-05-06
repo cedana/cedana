@@ -69,13 +69,13 @@ jobs:
       - name: Upload cedana
         uses: actions/upload-artifact@v4
         with:
-          name: cedana
+          name: cedana-amd64
           path: ./cedana/*
 
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
-          name: plugins
+          name: plugins-amd64
           path: ./plugins/*
 
   gpu:
@@ -102,7 +102,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gpu
+          name: gpu-amd64
           path: ./gpu/*
 
   streamer:
@@ -127,5 +127,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: streamer
+          name: streamer-amd64
           path: ./streamer/*

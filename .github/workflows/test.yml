@@ -46,7 +46,7 @@ on:
 
 jobs:
   unit:
-    name: Unit (amd64)
+    name: Unit
     runs-on: ubuntu-latest
     if: inputs.cpu
     container:
@@ -86,7 +86,7 @@ jobs:
         run: make test-unit
 
   script:
-    name: Scripts (amd64)
+    name: Scripts
     runs-on: ubuntu-latest
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -111,8 +111,14 @@ jobs:
           sudo -E /cedana/scripts/k8s-setup-host.sh
 
   regression:
-    name: Basic (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
+    name: Basic
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          # - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -133,7 +139,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -160,9 +166,19 @@ jobs:
             make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM
           fi
 
-  regression-runc:
-    name: Runc (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
+  regression-plugins:
+    name: Plugins
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          # - arm64
+        plugin:
+          - runc
+          - containerd
+          - crio
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -183,12 +199,12 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins
+          name: plugins-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -197,7 +213,7 @@ jobs:
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install plugin
-        run: sudo -E ./cedana plugin install runc
+        run: sudo -E ./cedana plugin install ${{ matrix.plugin }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -214,127 +230,9 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,runc PARALLELISM=$PARALLELISM
+            make test-regression TAGS=!gpu,!streamer,${{ matrix.plugin }} PARALLELISM=$PARALLELISM
           else
-            make test-regression TAGS=!gpu,!streamer,runc,!large PARALLELISM=$PARALLELISM
-          fi
-
-  regression-containerd:
-    name: Containerd (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
-    if: inputs.cpu
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cedana
-
-      - name: Download plugins
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins
-
-      - name: Make executable
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./libcedana-*.so
-          echo "$PWD" >> $GITHUB_PATH
-
-      - name: Install plugin
-        run: sudo -E ./cedana plugin install containerd
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run regression tests
-        env:
-          LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
-        run: |
-          if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,containerd PARALLELISM=$PARALLELISM
-          else
-            make test-regression TAGS=!gpu,!streamer,containerd,!large PARALLELISM=$PARALLELISM
-          fi
-
-  regression-crio:
-    name: CRIO (amd64)
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
-    if: inputs.cpu
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cedana
-
-      - name: Download plugins
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins
-
-      - name: Make executable
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./libcedana-*.so
-          echo "$PWD" >> $GITHUB_PATH
-
-      - name: Install plugin
-        run: sudo -E ./cedana plugin install crio
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run regression tests
-        env:
-          LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
-        run: |
-          if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,crio PARALLELISM=$PARALLELISM
-          else
-            make test-regression TAGS=!gpu,!streamer,crio,!large PARALLELISM=$PARALLELISM
+            make test-regression TAGS=!gpu,!streamer,${{ matrix.plugin }},!large PARALLELISM=$PARALLELISM
           fi
 
   regression-streamer:
