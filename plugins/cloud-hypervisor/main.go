@@ -18,10 +18,13 @@ var Version string = "dev"
 
 var (
 	DumpVMCmd *cobra.Command = cmd.DumpCmd
+	RunCmd    *cobra.Command = cmd.RunCmd
 	// RestoreVMCmd *cobra.Command = cmd.RestoreCmd
 )
 
 var (
+	RunHandler       types.Run                      = handlers.Run
+	RunMiddleware    types.Middleware[types.Run]    = types.Middleware[types.Run]{}
 	DumpVMHandler    types.DumpVM                   = handlers.Dump
 	RestoreVMHandler types.RestoreVM                = handlers.Restore
 	DumpVMMiddleware types.Middleware[types.DumpVM] = types.Middleware[types.DumpVM]{
