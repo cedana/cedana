@@ -89,7 +89,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	defer runc.RestoreSpec(configFile)
 
 	logFile := filepath.Join(bundle, RUNC_LOG_FILE)
-	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+	pidFile := details.PidFile
+	// if no pidfile is provided then run this
+	if pidFile == "" {
+		pidFile = filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+	}
 	os.Remove(logFile)
 	os.Remove(pidFile)
 
@@ -117,7 +121,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if req.Attachable {
+	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
 		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)

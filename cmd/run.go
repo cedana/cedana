@@ -7,6 +7,7 @@ import (
 	"os/exec"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	cedana_utils "github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -20,6 +21,8 @@ func init() {
 	runCmd.AddCommand(processRunCmd)
 
 	// Add common flags
+	runCmd.PersistentFlags().StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "pid file path")
+	runCmd.PersistentFlags().BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	runCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	runCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
@@ -70,7 +73,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("Error getting user credentials: %v", err)
 		}
 
-		// Create half-baked request
+		// Create initial request
 		req := &daemon.RunReq{
 			JID:        jid,
 			Log:        log,
@@ -96,30 +99,52 @@ var runCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, err := client.New(config.Global.Address, config.Global.Protocol)
-		if err != nil {
-			return fmt.Errorf("Error creating client: %v", err)
-		}
-		defer client.Close()
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
-		// Assuming request is now ready to be sent to the server
 		req, ok := cmd.Context().Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
 		if !ok {
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, profiling, err := client.Run(cmd.Context(), req)
-		if err != nil {
-			return err
-		}
+		resp := &daemon.RunResp{}
+		if noServer {
+			client, err := client.New(config.Global.Address, config.Global.Protocol)
+			if err != nil {
+				return fmt.Errorf("Error creating client: %v", err)
+			}
+			defer client.Close()
+			// Assuming request is now ready to be sent to the server
+			resp, profiling, err := client.Run(cmd.Context(), req)
+			if err != nil {
+				return err
+			}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
-		}
+			if config.Global.Profiling.Enabled && profiling != nil {
+				printProfilingData(profiling)
+			}
 
-		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
-		if attach {
-			return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+			if attach {
+				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+			}
+		} else {
+			pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
+			ctx := context.WithoutCancel(
+				context.WithValue(
+					cmd.Context(),
+					keys.DAEMONLESS_CONTEXT_KEY,
+					true,
+				),
+			)
+			cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
+			if err != nil {
+				return fmt.Errorf("Error: failed to create cedana root: %v", err)
+			}
+			req.Details.Runc.PidFile = pidFilePath
+			resp, err = cedanaRoot.Run(ctx, req)
+			if err != nil {
+				return fmt.Errorf("Error: failed to run with cedana root: %v", err)
+			}
 		}
 
 		for _, message := range resp.GetMessages() {
