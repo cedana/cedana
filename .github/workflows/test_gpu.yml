@@ -23,21 +23,24 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 1
+      runner_family:
+        type: string
+        description: "Runner family for tests"
+        required: false
+        default: "g6-xlarge"
 
 jobs:
   cuda:
     name: CUDA
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.platform }}-cuda-${{ matrix.version }}
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-${{ matrix.cuda_version }}
     strategy:
       fail-fast: false
       matrix:
-        version:
+        cuda_version:
           # - 11-8  TODO: re-enable once compatibility is fixed
           # - 12-2
           - 12-4
           - 12-8
-        platform:
-          - amd64
     container:
       image: cedana/cedana-test:cuda
       credentials:

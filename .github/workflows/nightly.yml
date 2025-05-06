@@ -1,0 +1,29 @@
+# name: Nightly
+
+# # This workflow runs all the large tests and benchmarks nightly.
+
+# on:
+#   schedule:
+#     - cron: "0 0 * * *" # Every day at midnight
+
+# jobs:
+#   download:
+#     name: Download
+#     uses: ./.github/workflows/download.yml
+#     secrets: inherit
+#     with:
+#       cedana_version: main
+#       gpu_version: main
+#       streamer_version: main
+
+#   test:
+#     name: Test
+#     uses: ./.github/workflows/test.yml
+#     needs: [build, download]
+#     secrets: inherit
+#     with:
+#       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+#       cpu: true
+#       gpu: true
+#       streamer: true
+#       large: true # include large tests

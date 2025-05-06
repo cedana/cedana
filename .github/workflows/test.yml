@@ -33,6 +33,16 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 4
+      cpu_runner_family:
+        type: string
+        description: "Runner family for CPU tests"
+        required: false
+        default: "m7-xlarge"
+      gpu_runner_family:
+        type: string
+        description: "Runner family for GPU tests"
+        required: false
+        default: "g6-xlarge"
 
 jobs:
   unit:
@@ -102,7 +112,7 @@ jobs:
 
   regression:
     name: Basic (amd64)
-    runs-on: ubicloud-standard-4
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -152,7 +162,7 @@ jobs:
 
   regression-runc:
     name: Runc (amd64)
-    runs-on: ubicloud-standard-4
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -211,7 +221,7 @@ jobs:
 
   regression-containerd:
     name: Containerd (amd64)
-    runs-on: ubicloud-standard-4
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -270,7 +280,7 @@ jobs:
 
   regression-crio:
     name: CRIO (amd64)
-    runs-on: ubicloud-standard-4
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.cpu_runner_family }}-amd64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -336,7 +346,8 @@ jobs:
       debug: ${{ inputs.debug }}
       gpu: ${{ inputs.gpu }}
       large: ${{ inputs.large }}
-      parallelism: ${{ inputs.parallelism }}
+      parallelism: ${{ inputs.gpu && 1 || inputs.parallelism }} # Low parallelism to avoid OOM on GPU tests
+      runner_family: ${{ inputs.gpu && inputs.gpu_runner_family || inputs.cpu_runner_family }}
 
   regression-gpu:
     name: GPU
@@ -348,3 +359,4 @@ jobs:
       streamer: ${{ inputs.streamer }}
       large: ${{ inputs.large }}
       parallelism: 1 # Low parallelism to avoid OOM on GPU tests
+      runner_family: ${{ inputs.gpu_runner_family }}

@@ -18,16 +18,21 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      runner_family:
+        type: string
+        description: "Runner family for tests"
+        required: false
+        default: "g6-xlarge"
       parallelism:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 1
 
 jobs:
   all:
     name: Streamer (amd64)
-    runs-on: [runs-on, runner=amd64-cuda-12-4]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64${{ inputs.gpu && '-cuda-12-4' || '' }}
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -99,11 +104,11 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
         run: |
-          if [ "$GPU" = "true" ]; then # Low parallelism to avoid OOM on GPU tests
+          if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=1
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=1
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM
             fi
           else
             if [ "$LARGE" = "true" ]; then
