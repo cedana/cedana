@@ -4,7 +4,7 @@ FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.23.0
-ARG CEDANA_SAMPLES_VERSION=0.0.2
+ARG CEDANA_SAMPLES_VERSION=0.0.4
 
 # install packages
 RUN <<EOT
@@ -13,6 +13,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     pkg-config libbsd-dev containerd runc libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
+    openmpi-bin libopenmpi-dev openmpi-doc \
     zip jq
 "
 apt-get update
@@ -41,13 +42,6 @@ wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && rm -rf /usr/local/g
 tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.linux-amd64.tar.gz
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
-
-# Install backup CRIU
-RUN <<EOT
-wget https://download.opensuse.org/repositories/devel:/tools:/criu/xUbuntu_22.04/amd64/criu_4.0-3_amd64.deb
-dpkg -i criu_4.0-3_amd64.deb
-rm criu_4.0-3_amd64.deb
-EOT
 
 # clone cedana-samples for test workloads
 RUN <<EOT
