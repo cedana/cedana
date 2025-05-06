@@ -53,6 +53,11 @@ on:
         description: Post benchmark summary to Slack (ext channel) with branding
         required: false
         default: false
+      bench_result_dataset:
+        type: string
+        description: "BigQuery dataset to push results to"
+        required: false
+        default: "cedana_alpha"
 
 jobs:
   build:
@@ -87,3 +92,4 @@ jobs:
       comparison_native: ${{ inputs.bench_comparison_native }}
       post_summary_slack: ${{ inputs.bench_post_summary_slack }}
       post_summary_slack_branded: ${{ inputs.bench_post_summary_slack_branded }}
+      result_dataset: ${{ inputs.bench_result_dataset }}
