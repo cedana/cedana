@@ -1,0 +1,114 @@
+name: Test / Streamer
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
+      gpu:
+        type: boolean
+        description: "Run including GPU tests"
+        required: false
+        default: false
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
+      parallelism:
+        type: number
+        description: "Parallelism for running tests"
+        required: false
+        default: 4
+
+jobs:
+  all:
+    name: Streamer (amd64)
+    runs-on: [runs-on, runner=amd64-cuda-12-4]
+    container:
+      image: cedana/cedana-test:cuda
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --ipc=host --gpus all
+    env:
+      CEDANA_URL: ${{ vars.CEDANA_URL }}
+      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer
+
+      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
+        if: inputs.gpu
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./libcedana-*.so
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install plugins
+        env:
+          GPU: ${{ inputs.gpu }}
+        run: |
+          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
+          if [ "$GPU" = "true" ]; then
+            sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          fi
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run regression tests
+        env:
+          GPU: ${{ inputs.gpu }}
+          LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          if [ "$GPU" = "true" ]; then # Low parallelism to avoid OOM on GPU tests
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=streamer PARALLELISM=1
+            else
+              make test-regression TAGS=streamer,!large PARALLELISM=1
+            fi
+          else
+            if [ "$LARGE" = "true" ]; then
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM
+            else
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM
+            fi
+          fi

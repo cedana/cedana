@@ -72,6 +72,54 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	return resp, nil
 }
 
+// Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
+func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+	// Add adapters. The order below is the order followed before executing
+	// the final handler (criu.Restore).
+
+	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
+	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
+		dumpDirAdapter = streamer.PrepareDumpDirForRestore
+	}
+
+	middleware := types.Middleware[types.Restore]{
+		defaults.FillMissingRestoreDefaults,
+		validation.ValidateRestoreRequest,
+		dumpDirAdapter, // auto-detects compression
+		process.ReloadProcessStateForRestore,
+
+		pluginRestoreMiddleware, // middleware from plugins
+
+		// Process state-dependent adapters
+		process.DetectShellJobForRestore,
+		process.InheritFilesForRestore,
+		network.DetectNetworkOptionsForRestore,
+
+		criu.CheckOptsForRestore,
+	}
+
+	restore := criu.Restore.With(middleware...)
+
+	opts := types.Opts{
+		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
+		WG:       s.wg,
+	}
+	resp := &daemon.RestoreResp{}
+
+	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
+
+	_, err := criu(restore)(ctx, opts, resp, req)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Restored successfully, PID: %d", resp.PID))
+
+	return resp, nil
+}
+
 //////////////////////////
 //// Helper Adapters /////
 //////////////////////////
