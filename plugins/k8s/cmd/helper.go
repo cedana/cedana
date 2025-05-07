@@ -138,25 +138,9 @@ func NewEventStream(queueURL string) (*EventStream, error) {
 	return es, nil
 }
 
-func (es *EventStream) NewConsumer(queueName string) error {
-	consumer, err := rabbitmq.NewConsumer(
-		es.conn,
-		queueName,
-		rabbitmq.WithConsumerOptionsRoutingKey(queueName),
-		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
-	)
-	if err != nil {
-		log.Fatal().Err(fmt.Errorf("Failed to connect to RabbitMQ: %v", err)).Msg("Consumer failed")
-	}
-	es.consumer = consumer
-	return nil
-}
-
 func (es *EventStream) NewPublisher() error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
-		rabbitmq.WithPublisherOptionsExchangeDeclare,
-		rabbitmq.WithPublisherOptionsExchangeName("daemon_response"),
 	)
 	if err != nil {
 		log.Fatal().Err(fmt.Errorf("Failed to connect to RabbitMQ: %v", err)).Msg("new publisher failed")
@@ -244,40 +228,49 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
-		return rabbitmq.NackDiscard
+		return rabbitmq.Ack
 	}
 	err = es.publisher.Publish(data, []string{"checkpoint_response"})
 	if err != nil {
 		log.Error().Err(err).Msg("creation of publisher failed")
-		return rabbitmq.NackDiscard
+		return rabbitmq.Ack
 	}
 	return rabbitmq.Ack
 }
 
-func (es *EventStream) ConsumeRequest(address, protocol string) error {
-	err := es.NewConsumer("checkpoint_pod")
+func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) error {
+	queueName := "cedana_daemon_helper"
+	consumer, err := rabbitmq.NewConsumer(
+		es.conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
+	)
 	if err != nil {
-		log.Error().Err(err).Msg("New Consumer failed")
-		return err
+		log.Error().Err(err).Msg("Failed to connect to rabbitmq")
+		return fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
 	}
-	defer es.consumer.Close()
+	defer consumer.Close()
 
 	err = es.consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal message")
-			return rabbitmq.NackDiscard
+			return rabbitmq.Manual
 		}
 		containers, err := FindContainersForReq(req, address, protocol)
 		if err != nil {
 			log.Info().Err(err).Msg("Failed to find pod")
-			return rabbitmq.NackDiscard
+			return rabbitmq.Manual
 		}
 		// if no containers found skip
 		if len(containers) == 0 {
-			return rabbitmq.NackDiscard
+			return rabbitmq.Manual
 		}
 		runcRoot := req.RuncRoot
+		// TODO SA: support multiple container pod checkpoint/restore
 		for _, runcId := range containers {
 			resp, err := CheckpointContainer(
 				context.Background(),
@@ -287,7 +280,8 @@ func (es *EventStream) ConsumeRequest(address, protocol string) error {
 				protocol,
 			)
 			if err != nil {
-				return rabbitmq.NackDiscard
+				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+				return rabbitmq.Ack
 			} else {
 				return es.PublishCheckpointSuccess(req, resp)
 			}
