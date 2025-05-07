@@ -241,12 +241,17 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to connect to rabbitmq")
 		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
 	}
 	err = consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+		log.Info().Msg("Received Checkpoint Request over RabbitMQ")
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal message")
@@ -254,7 +259,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		}
 		containers, err := FindContainersForReq(req, address, protocol)
 		if err != nil {
-			log.Info().Err(err).Msg("Failed to find pod")
+			log.Error().Err(err).Msg("Failed to find pod")
 			return rabbitmq.Manual
 		}
 		// if no containers found skip
@@ -355,6 +360,7 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 		return err
 	}
 	go func() {
+		log.Info().Msg("Listening on rabbitmq stream for checkpoint requests")
 		consumer, err := stream.ConsumeCheckpointRequest(address, protocol)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
