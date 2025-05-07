@@ -11,7 +11,7 @@ require (
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-c88794a7a777.2
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-c88794a7a777.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250327172915-325539e9f25d.1
-	github.com/cedana/cedana-go-sdk v0.2.0
+	github.com/cedana/cedana-go-sdk v0.2.2
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/errdefs v0.3.0

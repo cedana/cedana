@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	cedanagosdk "github.com/cedana/cedana-go-sdk"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq"
 
@@ -105,10 +106,8 @@ func destroyCedana(ctx context.Context) error {
 }
 
 type EventStream struct {
-	conn      *rabbitmq.Conn
-	consumer  *rabbitmq.Consumer
-	publisher *rabbitmq.Publisher
-	queueURL  string
+	conn     *rabbitmq.Conn
+	queueURL string
 }
 
 func NewEventStream(queueURL string) (*EventStream, error) {
@@ -139,13 +138,6 @@ func NewEventStream(queueURL string) (*EventStream, error) {
 }
 
 func (es *EventStream) NewPublisher() error {
-	publisher, err := rabbitmq.NewPublisher(
-		es.conn,
-	)
-	if err != nil {
-		log.Fatal().Err(fmt.Errorf("Failed to connect to RabbitMQ: %v", err)).Msg("new publisher failed")
-	}
-	es.publisher = publisher
 	return nil
 }
 
@@ -215,11 +207,13 @@ type CheckpointInformation struct {
 	Status       string `json:"status"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daemon.DumpResp) rabbitmq.Action {
-	err := es.NewPublisher()
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daemon.DumpResp) error {
+	publisher, err := rabbitmq.NewPublisher(
+		es.conn,
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("creation of publisher failed")
-		return rabbitmq.NackDiscard
+		return err
 	}
 	data, err := json.Marshal(CheckpointInformation{
 		ActionId:     req.ActionId,
@@ -228,17 +222,17 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
-		return rabbitmq.Ack
+		return err
 	}
-	err = es.publisher.Publish(data, []string{"checkpoint_response"})
+	err = publisher.Publish(data, []string{"checkpoint_response"})
 	if err != nil {
 		log.Error().Err(err).Msg("creation of publisher failed")
-		return rabbitmq.Ack
+		return err
 	}
-	return rabbitmq.Ack
+	return err
 }
 
-func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) error {
+func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabbitmq.Consumer, error) {
 	queueName := "cedana_daemon_helper"
 	consumer, err := rabbitmq.NewConsumer(
 		es.conn,
@@ -250,11 +244,9 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) error 
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to connect to rabbitmq")
-		return fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
+		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
 	}
-	defer consumer.Close()
-
-	err = es.consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+	err = consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal message")
@@ -281,18 +273,21 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) error 
 			)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
-				return rabbitmq.Ack
 			} else {
-				return es.PublishCheckpointSuccess(req, resp)
+				err := es.PublishCheckpointSuccess(req, resp)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to publish checkpoint success")
+				}
 			}
+			break
 		}
 		return rabbitmq.Ack
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Create Workload Consumer failed")
-		return err
+		log.Error().Err(err).Msg("Failed to create checkpoint")
+		return nil, err
 	}
-	return nil
+	return consumer, err
 }
 
 func startHelper(ctx context.Context, startChroot bool, address string, protocol string) error {
@@ -345,10 +340,25 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 		}
 	}()
 
-	w.Add(1)
+	client := cedanagosdk.NewCedanaClient(
+		strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""),
+		os.Getenv("CEDANA_AUTH_TOKEN"),
+	)
+	url, err := client.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	stream, err := NewEventStream(*url)
+	if err != nil {
+		return err
+	}
 	go func() {
-		defer w.Done()
-
+		consumer, err := stream.ConsumeCheckpointRequest(address, protocol)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
+		}
+		defer consumer.Close()
+		w.Wait()
 	}()
 
 	// scrape daemon logs for kubectl logs output
