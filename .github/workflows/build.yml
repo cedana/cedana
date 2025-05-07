@@ -51,6 +51,7 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
+      - uses: runs-on/action@v4
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -66,6 +67,12 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
+
+      - name: Load from cache
+        uses: runs-on/cache@v4
+        with:
+          path: ./cedana
+          key: cedana-${{ matrix.arch }}
 
       - name: Build
         run: make build
@@ -92,6 +99,7 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
+      - uses: runs-on/action@v4
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -107,6 +115,12 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
+
+      - name: Load from cache
+        uses: runs-on/cache@v4
+        with:
+          path: ./libcedana-*.so
+          key: plugins-${{ matrix.arch }}
 
       - name: Build
         run: make plugins
@@ -131,6 +145,7 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: runs-on/action@v4
       - name: Checkout
         uses: actions/checkout@v4
         with:

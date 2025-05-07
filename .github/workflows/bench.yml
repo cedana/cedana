@@ -82,6 +82,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v4
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
@@ -179,6 +180,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v4
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
@@ -270,6 +272,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v4
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
@@ -362,6 +365,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v4
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
@@ -455,6 +459,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v4
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug

@@ -130,6 +130,7 @@ jobs:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
+      - uses: runs-on/action@v4
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -190,6 +191,7 @@ jobs:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
+      - uses: runs-on/action@v4
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
