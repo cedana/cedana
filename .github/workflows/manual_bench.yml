@@ -18,16 +18,13 @@ on:
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
         default: "main"
-      bench_cedana:
-        type: boolean
-        description: Run benchmarks for Cedana
-        required: false
-        default: false
-      bench_native:
-        type: boolean
-        description: Run benchmarks for native
-        required: false
-        default: false
+      runtime:
+        type: choice
+        description: Runtime to run benchmark on
+        required: true
+        options:
+          - native
+          - cedana
       bench_samples:
         type: number
         description: Number of samples to run for each metric
@@ -64,7 +61,7 @@ jobs:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
-    if: inputs.bench_cedana
+    if: inputs.runtime == 'cedana'
     with:
       cedana_version: ${{ inputs.cedana_version }}
       gpu_version: ${{ inputs.gpu_version }}
@@ -73,12 +70,12 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    if: always() || github.event.inputs.bench_cedana || github.event.inputs.bench_native
+    if: always()
     needs: [build, download]
     secrets: inherit
     with:
-      cedana: ${{ inputs.bench_cedana }}
-      native: ${{ inputs.bench_native }}
+      cedana: ${{ inputs.runtime == 'cedana' }}
+      native: ${{ inputs.runtime == 'native' }}
       samples: ${{ inputs.bench_samples }}
       push_results: ${{ inputs.bench_push_results }}
       comparison_patch: ${{ inputs.bench_comparison_patch }}
