@@ -340,8 +340,10 @@ func startHelper(ctx context.Context, startChroot bool, address string, protocol
 		}
 	}()
 
+	cedanaUrl := os.Getenv("CEDANA_URL")
+	log.Info().Msgf("cedanaURL: %v", cedanaUrl)
 	client := cedanagosdk.NewCedanaClient(
-		strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""),
+		cedanaUrl,
 		os.Getenv("CEDANA_AUTH_TOKEN"),
 	)
 	url, err := client.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
