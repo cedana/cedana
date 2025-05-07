@@ -22,6 +22,8 @@ github.com/Microsoft/hcsshim v0.11.7 h1:vl/nj3Bar/CvJSYo7gIQPyRWc9f3c6IeSNavBTSZ
 github.com/Microsoft/hcsshim v0.11.7/go.mod h1:MV8xMfmECjl5HdO7U/3/hFVnkmSBjAjmA09d4bExKcU=
 github.com/cedana/cedana-go-sdk v0.2.2 h1:BWfTdz9/yeAGgFfxjNxO4guto6q9r5sffwCH5U6mCcI=
 github.com/cedana/cedana-go-sdk v0.2.2/go.mod h1:wGEvHdFuc8cSCij39keGYaT0R0FUtDuNV0nwUp0AuMo=
+github.com/cedana/cedana-go-sdk v0.2.3 h1:lUaCOtdkGZjkVKJF4Uyd6mH6PWMmT+49RyYl3uOD4hY=
+github.com/cedana/cedana-go-sdk v0.2.3/go.mod h1:zAjZVqGTuQbqlV2cKRpjanI4FpHQ0thbkFnURd8yrnA=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
