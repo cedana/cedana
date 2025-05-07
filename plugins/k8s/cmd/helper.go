@@ -215,6 +215,9 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
+	if resp.Id != nil {
+		return fmt.Errorf("failed remote checkpoint")
+	}
 	data, err := json.Marshal(CheckpointInformation{
 		ActionId:     req.ActionId,
 		CheckpointId: *resp.Id,

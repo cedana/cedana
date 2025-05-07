@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana-go-sdk/models"
@@ -78,8 +77,8 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
 
-		log.Info().Msg("Creating new client")
-		client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
+		cedanaUrl := os.Getenv("CEDANA_URL")
+		client := cedanagosdk.NewCedanaClient(cedanaUrl, os.Getenv("CEDANA_AUTH_TOKEN"))
 		uuid, err := client.V2().Checkpoints().Post(ctx, nil)
 		if err != nil {
 			log.Warn().Msgf("we can't write checkpoint to remote: %v", err)
