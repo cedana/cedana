@@ -76,7 +76,6 @@ jobs:
       push_results: true
       post_summary_pr: false
       post_summary_slack: true
-      post_summary_slack_branded: true
       comparison_patch: true
       comparison_native: true
       results_dataset: cedana
