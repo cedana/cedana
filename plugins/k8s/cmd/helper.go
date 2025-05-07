@@ -241,6 +241,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
 			BindingOptions: rabbitmq.BindingOptions{},
