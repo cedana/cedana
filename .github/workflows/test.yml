@@ -57,7 +57,13 @@ on:
 jobs:
   unit:
     name: Unit
-    runs-on: ubuntu-latest
+    runs-on: 1cpu-4g-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          # - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -74,12 +80,12 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins
+          name: plugins-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -97,7 +103,13 @@ jobs:
 
   script:
     name: Scripts
-    runs-on: ubuntu-latest
+    runs-on: 1cpu-4g-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          # - arm64
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -110,7 +122,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Run k8s setup host
         run: |
