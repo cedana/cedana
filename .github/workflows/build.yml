@@ -51,7 +51,7 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
-      - uses: runs-on/action@v4
+      - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -99,7 +99,7 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
-      - uses: runs-on/action@v4
+      - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -145,7 +145,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v4
+      - uses: runs-on/action@v1
       - name: Checkout
         uses: actions/checkout@v4
         with:
