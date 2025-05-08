@@ -1,5 +1,10 @@
 name: Test
 
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
 on:
   workflow_call:
     inputs:
