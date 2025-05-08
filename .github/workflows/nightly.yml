@@ -1,7 +1,8 @@
 name: Nightly
+permissions:
+  contents: read
 
 # This workflow runs all the large tests and benchmarks nightly.
-
 on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
