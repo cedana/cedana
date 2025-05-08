@@ -1,5 +1,10 @@
 name: Build
 
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
 on:
   workflow_call:
     inputs:
