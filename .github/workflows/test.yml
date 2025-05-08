@@ -42,7 +42,7 @@ on:
         type: string
         description: "Runner family for CPU tests"
         required: false
-        default: "m7-xlarge"
+        default: "t-xlarge"
       runner_family_gpu:
         type: string
         description: "Runner family for GPU tests"
