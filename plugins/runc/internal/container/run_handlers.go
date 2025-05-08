@@ -89,11 +89,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	defer runc.RestoreSpec(configFile)
 
 	logFile := filepath.Join(bundle, RUNC_LOG_FILE)
-	pidFile := details.PidFile
-	// if no pidfile is provided then run this
-	if pidFile == "" {
-		pidFile = filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
-	}
+	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+
 	os.Remove(logFile)
 	os.Remove(pidFile)
 

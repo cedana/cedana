@@ -7,12 +7,14 @@ import (
 	"os/exec"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	cedana_utils "github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +23,8 @@ func init() {
 	runCmd.AddCommand(processRunCmd)
 
 	// Add common flags
-	runCmd.PersistentFlags().StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "pid file path")
+	runCmd.PersistentFlags().
+		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	runCmd.PersistentFlags().BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	runCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	runCmd.PersistentFlags().
@@ -66,6 +69,19 @@ var runCmd = &cobra.Command{
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
+		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+
+		if noServer && (log != "" || attach || attachable) {
+			fmt.Println(
+				style.WarningColors.Sprintf(
+					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
+					flags.NoServerFlag.Full,
+					flags.LogFlag.Full,
+					flags.AttachFlag.Full,
+					flags.AttachableFlag.Full,
+				))
+		}
 
 		env := os.Environ()
 		user, err := utils.GetCredentials()
@@ -77,6 +93,7 @@ var runCmd = &cobra.Command{
 		req := &daemon.RunReq{
 			JID:        jid,
 			Log:        log,
+			PidFile:    pidFile,
 			GPUEnabled: gpuEnabled,
 			Attachable: attach || attachable,
 			Action:     daemon.RunAction_START_NEW,
@@ -87,6 +104,18 @@ var runCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
+		cmd.SetContext(ctx)
+
+		if noServer {
+			return nil
+		}
+
+		client, err := client.New(config.Global.Address, config.Global.Protocol)
+		if err != nil {
+			return fmt.Errorf("Error creating client: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
 
 		return nil
@@ -101,20 +130,42 @@ var runCmd = &cobra.Command{
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
+		// Assuming request is now ready to be sent to the server
 		req, ok := cmd.Context().Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
 		if !ok {
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp := &daemon.RunResp{}
+		var resp *daemon.RunResp
+		var profiling *profiling.Data
+
 		if noServer {
-			client, err := client.New(config.Global.Address, config.Global.Protocol)
+			ctx := context.WithoutCancel(
+				context.WithValue(
+					cmd.Context(),
+					keys.DAEMONLESS_CONTEXT_KEY,
+					true,
+				),
+			)
+
+			root, err := server.NewRoot(ctx)
 			if err != nil {
-				return fmt.Errorf("Error creating client: %v", err)
+				return fmt.Errorf("Error: failed to create cedana root: %v", err)
+			}
+
+			resp, err = root.Run(ctx, req)
+			if err != nil {
+				return utils.GRPCErrorColored(err)
+			}
+		} else {
+			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			if !ok {
+				return fmt.Errorf("invalid client in context")
 			}
 			defer client.Close()
+
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err := client.Run(cmd.Context(), req)
+			resp, profiling, err = client.Run(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -126,24 +177,6 @@ var runCmd = &cobra.Command{
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
 				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-			}
-		} else {
-			pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
-			ctx := context.WithoutCancel(
-				context.WithValue(
-					cmd.Context(),
-					keys.DAEMONLESS_CONTEXT_KEY,
-					true,
-				),
-			)
-			cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
-			if err != nil {
-				return fmt.Errorf("Error: failed to create cedana root: %v", err)
-			}
-			req.Details.Runc.PidFile = pidFilePath
-			resp, err = cedanaRoot.Run(ctx, req)
-			if err != nil {
-				return fmt.Errorf("Error: failed to run with cedana root: %v", err)
 			}
 		}
 

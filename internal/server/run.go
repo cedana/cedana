@@ -27,6 +27,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		job.Manage(s.jobs), // always manage jobs run through daemon
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+		process.WritePIDFile,
 
 		pluginRunMiddleware, // middleware from plugins
 	}
@@ -51,7 +52,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	return resp, nil
 }
 
-func (s *CedanaRoot) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
+func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
@@ -59,6 +60,7 @@ func (s *CedanaRoot) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunRe
 	middleware := types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+		process.WritePIDFile,
 
 		pluginRunMiddleware, // middleware from plugins
 	}

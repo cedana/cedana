@@ -24,7 +24,7 @@ func Interception(next types.Run) types.Run {
 
 		jid := req.JID
 		if jid == "" {
-			jid = req.GetDetails().GetRunc().ID
+			jid = req.GetDetails().GetRunc().GetID()
 			if jid == "" {
 				return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
 			}

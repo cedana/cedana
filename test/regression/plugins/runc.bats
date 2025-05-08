@@ -430,6 +430,30 @@ teardown_file() {
     run runc delete "$id"
 }
 
+@test "restore container (PID file)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$id.pidfile"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --pid-file "$pid_file"
+    assert_success
+
+    assert_exists "$pid_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
 @test "restore container (without daemon)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -444,8 +468,32 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --pidfile "$id.pidfile"
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server
     assert_success
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+@test "restore container (without daemon, PID file)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$id.pidfile"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --pid-file "$pid_file"
+    assert_success
+
+    assert_exists "$pid_file"
 
     run runc kill "$id" KILL
     run runc delete "$id"
