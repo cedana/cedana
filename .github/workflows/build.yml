@@ -42,7 +42,7 @@ on:
 jobs:
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=t-medium-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -102,7 +102,7 @@ jobs:
 
   plugins:
     name: Plugins
-    runs-on: runs-on=${{github.run_id}}/runner=t-medium-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -162,7 +162,7 @@ jobs:
 
   image:
     name: Image
-    runs-on: runs-on=${{github.run_id}}/runner=t-xlarge-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

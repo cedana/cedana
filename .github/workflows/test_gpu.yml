@@ -23,16 +23,16 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 1
-      runner_family:
+      runner:
         type: string
-        description: "Runner family for tests"
+        description: "Runner machine for tests"
         required: false
-        default: "g6-xlarge"
+        default: 4cpu-16g-l4
 
 jobs:
   cuda:
     name: CUDA
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

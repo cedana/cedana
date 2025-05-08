@@ -18,16 +18,16 @@ on:
         description: "Run large tests"
         required: false
         default: false
-      runner_family:
+      runner:
         type: string
-        description: "Runner family for CPU tests"
+        description: "Runner machine for CPU tests"
         required: false
-        default: "t-xlarge"
-      runner_family_gpu:
+        default: 4cpu-16g
+      runner_gpu:
         type: string
-        description: "Runner family for GPU tests"
+        description: "Runner machine for GPU tests"
         required: false
-        default: "g6-xlarge"
+        default: 4cpu-16g-l4
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -42,7 +42,7 @@ on:
 jobs:
   streamer:
     name: Streamer
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && inputs.runner_family_gpu || inputs.runner_family }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && inputs.runner_gpu || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

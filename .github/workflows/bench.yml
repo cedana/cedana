@@ -61,17 +61,17 @@ on:
         description: "Post benchmark summary to Slack (nightly)"
         required: false
         default: false
-      runner_family:
+      runner:
         type: string
-        description: "Runner family for benchmark"
+        description: "Runner machine for benchmark"
         required: false
-        default: "g6-4xlarge"
+        default: "16cpu-64g-l4"
 
 jobs:
   cedana_runtime_1:
     name: Cedana (runtime 1)
     if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -169,7 +169,7 @@ jobs:
   cedana_runtime_2:
     name: Cedana (runtime 2)
     if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -261,7 +261,7 @@ jobs:
   cedana_cr_1:
     name: Cedana (C/R 1)
     if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -354,7 +354,7 @@ jobs:
   cedana_cr_2:
     name: Cedana (C/R 2)
     if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -448,7 +448,7 @@ jobs:
     if: inputs.native
     permissions:
       contents: read
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner_family }}-amd64-cuda-12-4/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:

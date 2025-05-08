@@ -50,9 +50,9 @@ on:
         description: "BigQuery dataset to push results to"
         required: false
         default: "cedana_alpha"
-      runner_family:
+      runner:
         type: string
-        description: "Runner family for benchmarks"
+        description: "Runner machine for benchmarks"
         required: false
         default: "g6-4xlarge"
 
@@ -81,4 +81,4 @@ jobs:
       comparison_patch: ${{ inputs.bench_comparison_patch }}
       comparison_native: ${{ inputs.bench_comparison_native }}
       result_dataset: ${{ inputs.bench_result_dataset }}
-      runner_family: ${{ inputs.runner_family }}
+      runner: ${{ inputs.runner }}
