@@ -105,8 +105,14 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		return nil, status.Error(codes.InvalidArgument, "missing PID")
 	}
 
-	if !utils.PidExists(details.PID) {
-		return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
+	switch req.Action {
+	case daemon.RunAction_MANAGE_EXISTING:
+		if !utils.PidExists(details.PID) {
+			return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
+		}
+	case daemon.RunAction_MANAGE_UPCOMING:
+    // Not possible for linux processes, as you cannot create a process with a specific PID
+		return nil, status.Errorf(codes.InvalidArgument, "manage upcoming is not supported for linux processes")
 	}
 
 	resp.PID = details.PID

@@ -35,7 +35,8 @@ const (
 	RUNC_LOG_FILE  = "runc.log"
 	RUNC_LOG_DEBUG = false
 
-	waitForRunErrTimeout = 2 * time.Second
+	waitForRunErrTimeout         = 2 * time.Second
+	waitForManageUpcomingTimeout = 2 * time.Minute
 )
 
 type RuncState struct {
@@ -89,7 +90,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	defer runc.RestoreSpec(configFile)
 
 	logFile := filepath.Join(bundle, RUNC_LOG_FILE)
-	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("cedana-runc-%s.pid", id))
 
 	os.Remove(logFile)
 	os.Remove(pidFile)
@@ -153,6 +154,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for PID file to be created, until the process exists
 	utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
+	os.Remove(pidFile)
 
 	// Capture logs from runc
 	lastMsg := utils.LogFromFile(
@@ -224,9 +226,32 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		root = defaults.DEFAULT_ROOT
 	}
 
-	container, err := libcontainer.Load(root, id)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "container with ID %s does not exist: %v", id, err)
+	var container *libcontainer.Container
+
+	switch req.Action {
+	case daemon.RunAction_MANAGE_EXISTING:
+		container, err = libcontainer.Load(root, id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "container with ID %s does not exist: %v", id, err)
+		}
+	case daemon.RunAction_MANAGE_UPCOMING: // wait until the container is created
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-opts.Lifetime.Done():
+				return nil, opts.Lifetime.Err()
+			case <-time.After(500 * time.Millisecond):
+				container, err = libcontainer.Load(root, id)
+				if err == nil {
+					break loop
+				}
+				log.Trace().Str("id", id).Msg("waiting for upcoming container to start managing")
+			case <-time.After(waitForManageUpcomingTimeout):
+				return nil, status.Errorf(codes.DeadlineExceeded, "timed out waiting for upcoming container %s", id)
+			}
+		}
 	}
 
 	state, err := container.State()

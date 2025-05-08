@@ -34,6 +34,7 @@ var (
 	ErrorsFlag      = Flag{Full: "errors"}
 	CompressionFlag = Flag{Full: "compression"}
 	AsRootFlag      = Flag{Full: "as-root"}
+  UpcomingFlag    = Flag{Full: "upcoming"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}
