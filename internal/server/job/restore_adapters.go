@@ -84,11 +84,19 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			opts.Lifetime = lifetime
 
 			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, &syscall.Credential{
-				Uid:    req.UID,
-				Gid:    req.GID,
-				Groups: req.Groups,
-			}, req.Stream, req.Env...))
+			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(
+				CRIUCallbackOptions{
+					opts.Lifetime,
+					jid,
+					&syscall.Credential{
+						Uid:    req.UID,
+						Gid:    req.GID,
+						Groups: req.Groups,
+					},
+					req.Stream,
+					nil,
+					req.Env,
+				}))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {

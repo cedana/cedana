@@ -22,7 +22,6 @@ var (
 	StreamFlag      = Flag{Full: "stream"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
 	JidFlag         = Flag{Full: "jid", Short: "j"}
-	GpuEnabledFlag  = Flag{Full: "gpu-enabled", Short: "g"}
 	AttachFlag      = Flag{Full: "attach", Short: "a"}
 	AttachableFlag  = Flag{Full: "attachable"}
 	AllFlag         = Flag{Full: "all", Short: "a"}
@@ -34,6 +33,10 @@ var (
 	ErrorsFlag      = Flag{Full: "errors"}
 	CompressionFlag = Flag{Full: "compression"}
 	AsRootFlag      = Flag{Full: "as-root"}
+
+	// GPU
+	GpuEnabledFlag = Flag{Full: "gpu-enabled", Short: "g"}
+	GpuFreezeFlag  = Flag{Full: "gpu-freeze"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}

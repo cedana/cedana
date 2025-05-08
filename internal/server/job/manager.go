@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 
+	gpuproto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/criu"
@@ -76,8 +77,17 @@ type Manager interface {
 	GPUs() gpu.Manager
 
 	// CRIUCallback returns the saved CRIU notify callback for the job.
-	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallbackMulti
+	CRIUCallback(options CRIUCallbackOptions) *criu.NotifyCallbackMulti
 
 	// GetWG returns the waitgroup for the manager.
 	GetWG() *sync.WaitGroup
+}
+
+type CRIUCallbackOptions struct {
+	Lifetime      context.Context
+	JID           string
+	User          *syscall.Credential
+	Stream        int32
+	GPUFreezeType *gpuproto.FreezeType
+	Env           []string
 }

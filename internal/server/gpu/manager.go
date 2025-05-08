@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"syscall"
 
+	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 )
@@ -29,7 +30,16 @@ type Manager interface {
 	Checks() types.Checks
 
 	// CRIUCallback returns the CRIU notify callback for GPU C/R.
-	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallback
+	CRIUCallback(options CRIUCallbackOptions) *criu.NotifyCallback
+}
+
+type CRIUCallbackOptions struct {
+	Lifetime   context.Context
+	JID        string
+	User       *syscall.Credential
+	Stream     int32
+	FreezeType *gpu.FreezeType
+	Env        []string
 }
 
 /////////////////
@@ -58,7 +68,7 @@ func (ManagerMissing) Detach(jid string) error {
 	return fmt.Errorf("GPU manager missing")
 }
 
-func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(options CRIUCallbackOptions) *criu.NotifyCallback {
 	return nil
 }
 
