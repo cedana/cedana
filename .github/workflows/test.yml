@@ -57,7 +57,7 @@ on:
 jobs:
   unit:
     name: Unit
-    runs-on: 1cpu-4g-${{ matrix.arch }}
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -103,7 +103,7 @@ jobs:
 
   script:
     name: Scripts
-    runs-on: 1cpu-4g-${{ matrix.arch }}
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
