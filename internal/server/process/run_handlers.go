@@ -51,7 +51,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
+	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if ok && daemonless {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -82,19 +83,21 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		err := cmd.Wait()
-		if err != nil {
-			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
-		}
-		code := cmd.ProcessState.ExitCode()
-		log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
-		exitCode <- code
-		close(exitCode)
-		close(exited)
-	}()
+	if !daemonless {
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			err := cmd.Wait()
+			if err != nil {
+				log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
+			}
+			code := cmd.ProcessState.ExitCode()
+			log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
+			exitCode <- code
+			close(exitCode)
+			close(exited)
+		}()
+	}
 
 	return exited, nil
 }

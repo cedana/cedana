@@ -119,7 +119,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
+	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if ok && daemonless {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -179,24 +180,26 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-		status, err := p.Wait()
-		if err != nil {
-			log.Debug().Err(err).Msg("runc container Wait()")
-		}
-		code := status.ExitCode()
-		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
+	if !daemonless {
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+			status, err := p.Wait()
+			if err != nil {
+				log.Debug().Err(err).Msg("runc container Wait()")
+			}
+			code := status.ExitCode()
+			log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
 
-		cmd.Wait() // IO should be complete by now
-		container.Destroy()
+			cmd.Wait() // IO should be complete by now
+			container.Destroy()
 
-		exitCode <- code
-		close(exitCode)
-		close(exited)
-	}()
+			exitCode <- code
+			close(exitCode)
+			close(exited)
+		}()
+	}
 
 	// Also kill the container if lifetime expires
 	opts.WG.Add(1)
