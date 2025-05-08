@@ -195,13 +195,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - amd64
-          # - arm64
         plugin:
           - runc
           - containerd
           - crio
+        arch:
+          - amd64
+          # - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
