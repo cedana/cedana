@@ -5,7 +5,6 @@ before:
     - go generate ./...
 builds:
   - id: cedana
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -17,10 +16,7 @@ builds:
     binary: cedana
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./cedana
   - id: libcedana-runc
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -35,10 +31,7 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-runc.so
   - id: libcedana-containerd
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -53,10 +46,7 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-containerd.so
   - id: libcedana-crio
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -71,10 +61,7 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-crio.so
   - id: libcedana-k8s
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -89,10 +76,7 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-k8s.so
   - id: libcedana-cloud-hypervisor
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -107,10 +91,7 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-cloud-hypervisor.so
   - id: libcedana-kata
-    builder: prebuilt
     env:
       - CGO_ENABLED=1
     goos:
@@ -125,8 +106,6 @@ builds:
     no_main_check: true
     ldflags:
       - -X main.Version={{ .Summary }}
-    prebuilt:
-      path: ./libcedana-kata.so
 
 checksum:
   name_template: "checksums.txt"
@@ -140,7 +119,6 @@ changelog:
   filters:
     exclude:
       - "^GITBOOK-"
-
 
 archives:
   - id: cedana
