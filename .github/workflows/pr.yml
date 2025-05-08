@@ -47,7 +47,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: main
+      gpu_version: feat/gpu-multiproc
       streamer_version: main
 
   test:
