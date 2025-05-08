@@ -73,6 +73,12 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      - name: Set go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+
       - name: Go build cache
         uses: runs-on/cache@v4
         with:
@@ -126,6 +132,12 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
+
+      - name: Set go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
 
       - name: Go build cache
         uses: runs-on/cache@v4
