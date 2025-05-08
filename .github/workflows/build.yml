@@ -72,13 +72,13 @@ jobs:
         uses: runs-on/cache@v4
         with:
           path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: ${{ matrix.arch }}-go-build
+          key: cedana-build-${{ matrix.arch }}
 
       - name: Go mod cache
         uses: runs-on/cache@v4
         with:
           path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: ${{ matrix.arch }}-go-mod
+          key: cedana-mod-${{ matrix.arch }}
 
       - name: Build
         run: make build
@@ -126,13 +126,13 @@ jobs:
         uses: runs-on/cache@v4
         with:
           path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: ${{ matrix.arch }}-go-build
+          key: plugins-build-${{ matrix.arch }}
 
       - name: Go mod cache
         uses: runs-on/cache@v4
         with:
           path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: ${{ matrix.arch }}-go-mod
+          key: plugins-mod-${{ matrix.arch }}
 
       - name: Build
         run: make plugins
