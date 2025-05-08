@@ -396,6 +396,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=daemonless
 @test "restore process (without daemon)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -410,6 +411,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=daemonless
 @test "restore process (without daemon, PID file)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!

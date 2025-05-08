@@ -44,6 +44,14 @@ teardown_file() {
     kill $pid
 }
 
+@test "manage process (upcoming)" {
+    pid=$(unix_nano)
+
+    run cedana manage process "$pid" --upcoming
+
+    assert_failure # not possible for linux processes
+}
+
 @test "manage non-existent process" {
     jid=$(unix_nano)
 

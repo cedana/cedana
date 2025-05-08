@@ -51,7 +51,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if req.Attachable {
+	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
 		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
@@ -111,7 +115,7 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 			return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
 		}
 	case daemon.RunAction_MANAGE_UPCOMING:
-    // Not possible for linux processes, as you cannot create a process with a specific PID
+		// Not possible for linux processes, as you cannot create a process with a specific PID
 		return nil, status.Errorf(codes.InvalidArgument, "manage upcoming is not supported for linux processes")
 	}
 

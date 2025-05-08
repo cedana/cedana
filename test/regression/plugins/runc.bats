@@ -49,6 +49,35 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
+# bats test_tags=daemonless
+@test "run container (without daemon)" {
+    jid=$(unix_nano)
+    bundle="$(create_cmd_bundle "echo hello")"
+
+    run cedana run --no-server runc --bundle "$bundle" --jid "$jid"
+
+    assert_success
+    assert_output --partial "hello"
+
+    run runc delete "$jid"
+}
+
+# bats test_tags=daemonless
+@test "run container (without daemon, PID file)" {
+    jid=$(unix_nano)
+    bundle="$(create_cmd_bundle "echo hello")"
+    pid_file="/tmp/$jid.pid"
+
+    run cedana run --no-server runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file"
+
+    assert_success
+    assert_output --partial "hello"
+
+    assert_exists "$pid_file"
+
+    run runc delete "$jid"
+}
+
 @test "run non-existent container" {
     jid=$(unix_nano)
 
@@ -94,6 +123,45 @@ teardown_file() {
     run cedana run runc --bundle "$bundle" --jid "$jid" --attach
 
     assert_equal $status $code
+}
+
+# bats test_tags=manage
+@test "manage container (existing)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    runc run --detach --bundle "$bundle" "$id"
+
+    sleep 1
+
+    run cedana manage runc "$id" --bundle "$bundle" --jid "$id"
+    assert_success
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$id"
+
+    run cedana job kill "$id"
+}
+
+# bats test_tags=manage
+@test "manage container (upcoming)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    run cedana manage runc "$id" --bundle "$bundle" --jid "$id" --upcoming &
+
+    sleep 1
+
+    runc run --detach --bundle "$bundle" "$id"
+
+    sleep 1
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$id"
+
+    run cedana job kill "$id"
 }
 
 ############
@@ -170,8 +238,8 @@ teardown_file() {
     run cedana kill "$jid"
 }
 
-# bats test_tags=dump
-@test "dump container (manage existing job)" {
+# bats test_tags=dump,manage
+@test "dump container (manage existing)" {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -182,6 +250,30 @@ teardown_file() {
 
     run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
     assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+# bats test_tags=dump,manage
+@test "dump container (manage upcoming)" {
+    id=$(unix_nano)
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle" --upcoming &
+
+    sleep 1
+
+    runc run --detach --bundle "$bundle" "$id"
+
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
@@ -430,6 +522,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore
 @test "restore container (PID file)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -454,6 +547,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore,daemonless
 @test "restore container (without daemon)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -475,6 +569,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore,daemonless
 @test "restore container (without daemon, PID file)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
