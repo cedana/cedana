@@ -68,11 +68,23 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Load from cache
+      - name: Set go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+
+      - name: Go build cache
         uses: runs-on/cache@v4
         with:
-          path: ./cedana
-          key: cedana-${{ matrix.arch }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
+          key: ${{ matrix.arch }}-go-build-${{ hashFiles('**/go.sum') }}
+
+      - name: Go mod cache
+        uses: runs-on/cache@v4
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ matrix.arch }}-go-mod-${{ hashFiles('**/go.sum') }}
 
       - name: Build
         run: make build
@@ -116,11 +128,23 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Load from cache
+      - name: Set go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+
+      - name: Go build cache
         uses: runs-on/cache@v4
         with:
-          path: ./libcedana-*.so
-          key: plugins-${{ matrix.arch }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
+          key: ${{ matrix.arch }}-go-build-${{ hashFiles('**/go.sum') }}
+
+      - name: Go mod cache
+        uses: runs-on/cache@v4
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ matrix.arch }}-go-mod-${{ hashFiles('**/go.sum') }}
 
       - name: Build
         run: make plugins
