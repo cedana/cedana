@@ -58,39 +58,32 @@ jobs:
   build:
     name: Build
     uses: ./.github/workflows/build.yml
-    if: inputs.bench_cedana
     secrets: inherit
+    if: inputs.bench_cedana
+    with:
+      amd64: true
 
   download:
     name: Download
-    if: inputs.bench_cedana
     uses: ./.github/workflows/download.yml
     secrets: inherit
+    if: inputs.bench_cedana
     with:
       gpu_version: ${{ inputs.gpu_version }}
       streamer_version: ${{ inputs.streamer_version }}
 
   bench:
-    name: Bench (Cedana)
+    name: Bench
     uses: ./.github/workflows/bench.yml
-    if: inputs.bench_cedana
+    if: always() || github.event.inputs.bench_cedana || github.event.inputs.bench_native
     needs: [build, download]
     secrets: inherit
     with:
-      cedana: true
+      cedana: ${{ inputs.bench_cedana }}
+      native: ${{ inputs.bench_native }}
       samples: ${{ inputs.bench_samples }}
       push_results: ${{ inputs.bench_push_results }}
       comparison_patch: ${{ inputs.bench_comparison_patch }}
       comparison_native: ${{ inputs.bench_comparison_native }}
       post_summary_slack: ${{ inputs.bench_post_summary_slack }}
       post_summary_slack_branded: ${{ inputs.bench_post_summary_slack_branded }}
-
-  bench_native:
-    name: Bench (native)
-    uses: ./.github/workflows/bench.yml
-    if: inputs.bench_native
-    secrets: inherit
-    with:
-      native: true
-      samples: ${{ inputs.bench_samples }}
-      push_results: ${{ inputs.bench_push_results }}

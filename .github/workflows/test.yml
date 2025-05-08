@@ -23,6 +23,16 @@ on:
         description: "Run streamer tests"
         required: false
         default: true
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
+      parallelism:
+        type: number
+        description: "Parallelism for running tests"
+        required: false
+        default: 4
 
 jobs:
   unit:
@@ -130,7 +140,15 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=base
+        env:
+          LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM
+          else
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM
+          fi
 
   regression-runc:
     name: Runc (amd64)
@@ -181,7 +199,15 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,runc
+        env:
+          LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,runc PARALLELISM=$PARALLELISM
+          else
+            make test-regression TAGS=!gpu,!streamer,runc,!large PARALLELISM=$PARALLELISM
+          fi
 
   regression-containerd:
     name: Containerd (amd64)
@@ -232,7 +258,15 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,containerd
+        env:
+          LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,containerd PARALLELISM=$PARALLELISM
+          else
+            make test-regression TAGS=!gpu,!streamer,containerd,!large PARALLELISM=$PARALLELISM
+          fi
 
   regression-crio:
     name: CRIO (amd64)
@@ -283,7 +317,15 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run regression tests
-        run: make test-regression TAGS=!gpu,!streamer,crio
+        env:
+          LARGE: ${{ inputs.large }}
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          if [ "$LARGE" = "true" ]; then
+            make test-regression TAGS=!gpu,!streamer,crio PARALLELISM=$PARALLELISM
+          else
+            make test-regression TAGS=!gpu,!streamer,crio,!large PARALLELISM=$PARALLELISM
+          fi
 
   regression-streamer:
     name: Streamer
@@ -293,6 +335,8 @@ jobs:
     with:
       debug: ${{ inputs.debug }}
       gpu: ${{ inputs.gpu }}
+      large: ${{ inputs.large }}
+      parallelism: ${{ inputs.parallelism }}
 
   regression-gpu:
     name: GPU
@@ -302,7 +346,5 @@ jobs:
     with:
       debug: ${{ inputs.debug }}
       streamer: ${{ inputs.streamer }}
-      cuda_11_8: true
-      cuda_12_2: true
-      cuda_12_4: true
-      cuda_12_8: true
+      large: ${{ inputs.large }}
+      parallelism: 1 # Low parallelism to avoid OOM on GPU tests
