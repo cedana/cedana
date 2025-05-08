@@ -7,10 +7,14 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	cedanagosdk "github.com/cedana/cedana-go-sdk"
 	cedana_utils "github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
@@ -114,6 +118,32 @@ var restoreCmd = &cobra.Command{
 		user, err := utils.GetCredentials()
 		if err != nil {
 			return fmt.Errorf("Error getting user credentials: %v", err)
+		}
+
+		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
+			// fetch from checkpointId
+			client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
+			downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(cmd.Context(), nil)
+			if err != nil {
+				return fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
+			}
+			// TODO (SA): handle checksum validation to ensure if the file is already present we don't redownload it
+			checkpointFilePath := "/tmp/cedana-checkpoint-" + checkpointId + ".tar"
+			r, err := http.Get(*downloadUrl)
+			if err != nil {
+				return fmt.Errorf("failed to download cedana checkpoint: %v", err)
+			}
+			defer r.Body.Close()
+			file, err := os.Create(checkpointFilePath)
+			if err != nil {
+				return fmt.Errorf("failed to create checkpoint file on disk: %v", err)
+			}
+			_, err = io.Copy(file, r.Body)
+			if err != nil {
+				return fmt.Errorf("failed to write cedana checkpoint to disk: %v", err)
+			}
+			defer file.Close()
+			path = checkpointFilePath
 		}
 
 		// Create half-baked request
