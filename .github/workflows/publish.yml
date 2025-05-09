@@ -43,15 +43,27 @@ jobs:
   github:
     name: GitHub
     if: inputs.github
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+      - uses: runs-on/action@v1
 
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
+      - name: Download Cedana binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-cedana
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Download Cedana plugins
+        uses: actions/download-artifact@v4
+        id: download-binaries-plugins
+        with:
+          name: plugins-${{ matrix.arch }}
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -59,19 +71,30 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+      - name: Create tarballs
+        run: |
+          tar -czf cedana-${{ matrix.arch }}.tar.gz cedana
+          find -maxdepth 1 -type f -name "libcedana*.so" -exec sh -c 'f="{}"; base=$(basename "$f" .so); tar -czf "${base}-amd64.tar.gz" "$f"' \;
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4
-        with:
-          distribution: goreleaser
-          args: release --clean --auto-snapshot
+      - name: Create release
+        id: create-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.head_ref || github.ref_name }}
+        run: |
+          gh release create "$tag" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
+              --generate-notes
+
+      - name: Upload assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+        run: |
+          gh release upload --clobber "$tag" \
+              --repo="$GITHUB_REPOSITORY" \
+              *.tar.gz \
 
   cloudsmith:
     name: Cloudsmith
@@ -108,8 +131,9 @@ jobs:
           repo: "${{ inputs.cloudsmith_repo }}"
           file: "cedana"
           name: "cedana"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-runc.so to Cloudsmith
         id: push-libcedana-runc
@@ -122,8 +146,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-runc.so"
           name: "libcedana-runc.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-containerd.so to Cloudsmith
         id: push-libcedana-containerd
@@ -136,8 +161,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-containerd.so"
           name: "libcedana-containerd.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-crio.so to Cloudsmith
         id: push-libcedana-crio
@@ -150,8 +176,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-crio.so"
           name: "libcedana-crio.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-k8s.so to Cloudsmith
         id: push-libcedana-k8s
@@ -164,8 +191,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-k8s.so"
           name: "libcedana-k8s.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
         id: push-libcedana-cloud-hypervisor
@@ -178,8 +206,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-cloud-hypervisor.so"
           name: "libcedana-cloud-hypervisor.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
       - name: Push libcedana-kata.so to Cloudsmith
         id: push-libcedana-kata
@@ -192,8 +221,9 @@ jobs:
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-kata.so"
           name: "libcedana-kata.so"
-          version: ${{ github.head_ref || github.ref_name }}
+          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
           republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
   dockerhub:
     name: DockerHub
