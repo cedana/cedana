@@ -21,6 +21,8 @@ func init() {
 	manageCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	manageCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
+	manageCmd.PersistentFlags().
+		BoolP(flags.UpcomingFlag.Full, flags.UpcomingFlag.Short, false, "wait for upcoming process/container")
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -42,12 +44,18 @@ var manageCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
+		upcoming, _ := cmd.Flags().GetBool(flags.UpcomingFlag.Full)
+
+		action := daemon.RunAction_MANAGE_EXISTING
+		if upcoming {
+			action = daemon.RunAction_MANAGE_UPCOMING
+		}
 
 		// Create half-baked request
 		req := &daemon.RunReq{
 			JID:        jid,
 			GPUEnabled: gpuEnabled,
-			Action:     daemon.RunAction_MANAGE_EXISTING,
+			Action:     action,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)

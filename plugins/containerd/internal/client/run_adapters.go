@@ -2,15 +2,19 @@ package client
 
 import (
 	"context"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+const waitForManageUpcomingTimeout = 2 * time.Minute
 
 func SetupForRun(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
@@ -68,6 +72,25 @@ func CreateContainerForRun(next types.Run) types.Run {
 			container, err = client.LoadContainer(ctx, details.ID)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+			}
+
+		case daemon.RunAction_MANAGE_UPCOMING:
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-opts.Lifetime.Done():
+					return nil, opts.Lifetime.Err()
+				case <-time.After(500 * time.Millisecond):
+					container, err = client.LoadContainer(ctx, details.ID)
+					if err == nil {
+						break loop
+					}
+					log.Trace().Str("id", details.ID).Msg("waiting for upcoming container to start managing")
+				case <-time.After(waitForManageUpcomingTimeout):
+					return nil, status.Errorf(codes.DeadlineExceeded, "timed out waiting for upcoming container %s", details.ID)
+				}
 			}
 		}
 

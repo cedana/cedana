@@ -17,8 +17,8 @@ var (
 	DirFlag         = Flag{Full: "dir", Short: "d"}
 	NameFlag        = Flag{Full: "name"}
 	PathFlag        = Flag{Full: "path", Short: "p"}
-	PidFileFlag     = Flag{Full: "pidfile"}
-	NoServerFlag    = Flag{Full: "no-server", Short: "n"}
+	PidFileFlag     = Flag{Full: "pid-file"}
+	NoServerFlag    = Flag{Full: "no-server"}
 	StreamFlag      = Flag{Full: "stream"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
 	JidFlag         = Flag{Full: "jid", Short: "j"}
@@ -34,6 +34,7 @@ var (
 	ErrorsFlag      = Flag{Full: "errors"}
 	CompressionFlag = Flag{Full: "compression"}
 	AsRootFlag      = Flag{Full: "as-root"}
+  UpcomingFlag    = Flag{Full: "upcoming"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}

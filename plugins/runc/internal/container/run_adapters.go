@@ -17,13 +17,17 @@ import (
 // LoadSpecFromBundle loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundle(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		if req.Action != daemon.RunAction_START_NEW {
+			return next(ctx, opts, resp, req)
+		}
+
 		details := req.GetDetails().GetRunc()
 		bundle := details.GetBundle()
 		workingDir := details.GetWorkingDir()
 
 		if !strings.HasPrefix(bundle, "/") { // if root path is not absolute
 			bundle = filepath.Join(workingDir, bundle)
-      details.Bundle = bundle
+			details.Bundle = bundle
 		}
 
 		configFile := filepath.Join(bundle, runc.SpecConfigFile)

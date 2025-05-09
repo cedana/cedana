@@ -51,7 +51,12 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if req.Attachable {
+	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if ok && daemonless {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
 		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
@@ -78,19 +83,21 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		err := cmd.Wait()
-		if err != nil {
-			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
-		}
-		code := cmd.ProcessState.ExitCode()
-		log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
-		exitCode <- code
-		close(exitCode)
-		close(exited)
-	}()
+	if !daemonless {
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			err := cmd.Wait()
+			if err != nil {
+				log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
+			}
+			code := cmd.ProcessState.ExitCode()
+			log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
+			exitCode <- code
+			close(exitCode)
+			close(exited)
+		}()
+	}
 
 	return exited, nil
 }
@@ -105,8 +112,14 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		return nil, status.Error(codes.InvalidArgument, "missing PID")
 	}
 
-	if !utils.PidExists(details.PID) {
-		return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
+	switch req.Action {
+	case daemon.RunAction_MANAGE_EXISTING:
+		if !utils.PidExists(details.PID) {
+			return nil, status.Errorf(codes.NotFound, "process with PID %d does not exist", details.PID)
+		}
+	case daemon.RunAction_MANAGE_UPCOMING:
+		// Not possible for linux processes, as you cannot create a process with a specific PID
+		return nil, status.Errorf(codes.InvalidArgument, "manage upcoming is not supported for linux processes")
 	}
 
 	resp.PID = details.PID
