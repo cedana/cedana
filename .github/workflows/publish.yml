@@ -312,32 +312,34 @@ jobs:
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
+          ARCH: amd64
         run: |
           mkdir current
           cd current
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/cedana-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-runc.so-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-containerd.so-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-crio.so-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-k8s.so-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-kata.so-amd64
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-cloud-hypervisor.so-amd64
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$TAG/cedana
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so
 
       - name: Download previous binary
         id: download-previous
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           TAG: ${{ steps.previous-tag.outputs.tag }}
+          ARCH: amd64
         run: |
           mkdir previous
           cd previous
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/cedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-rcedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-containcedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-ccedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-cedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-kcedana-amd64 || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/versions/$TAG/libcedana-cloud-hypervicedana-amd64 || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$TAG/cedana || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so || true
 
       - name: Generate summary
         id: summary
