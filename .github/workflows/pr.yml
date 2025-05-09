@@ -54,8 +54,8 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      gpu_version: main
-      streamer_version: main
+      gpu_version: ci/add-arm64-builds
+      streamer_version: ci/add-arm64-builds
 
   test:
     name: Test
