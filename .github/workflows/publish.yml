@@ -50,6 +50,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1 # DO NOT CHANGE: required to run in order
     steps:
       - uses: runs-on/action@v1
 
@@ -77,6 +78,7 @@ jobs:
           find -maxdepth 1 -type f -name "libcedana*.so" -exec sh -c 'f="{}"; base=$(basename "$f" .so); tar -czf "${base}-amd64.tar.gz" "$f"' \;
 
       - name: Create release
+        if: matrix.arch == 'amd64'
         id: create-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
