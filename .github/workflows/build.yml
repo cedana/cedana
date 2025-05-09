@@ -50,11 +50,6 @@ jobs:
           - amd64
           - arm64
     if: inputs.cedana
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -73,23 +68,11 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Set go cache paths
-        id: go-cache-paths
-        run: |
-          echo "::set-output name=go-build::$(go env GOCACHE)"
-          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
-
-      - name: Go build cache
-        uses: runs-on/cache@v4
+      - name: Setup go
+        uses: actions/setup-go@v5
         with:
-          path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: cedana-build-${{ matrix.arch }}
-
-      - name: Go mod cache
-        uses: runs-on/cache@v4
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: cedana-mod-${{ matrix.arch }}
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build
         run: make build
@@ -110,11 +93,6 @@ jobs:
           - amd64
           - arm64
     if: inputs.plugins
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -133,23 +111,11 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Set go cache paths
-        id: go-cache-paths
-        run: |
-          echo "::set-output name=go-build::$(go env GOCACHE)"
-          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
-
-      - name: Go build cache
-        uses: runs-on/cache@v4
+      - name: Setup go
+        uses: actions/setup-go@v5
         with:
-          path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: plugins-build-${{ matrix.arch }}
-
-      - name: Go mod cache
-        uses: runs-on/cache@v4
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: plugins-mod-${{ matrix.arch }}
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build
         run: make plugins
