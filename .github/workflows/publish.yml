@@ -130,8 +130,8 @@ jobs:
           owner: "cedana"
           repo: "${{ inputs.cloudsmith_repo }}"
           file: "cedana"
-          name: "cedana"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "cedana-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -145,8 +145,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-runc.so"
-          name: "libcedana-runc.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-runc.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -160,8 +160,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-containerd.so"
-          name: "libcedana-containerd.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-containerd.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -175,8 +175,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-crio.so"
-          name: "libcedana-crio.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-crio.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -190,8 +190,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-k8s.so"
-          name: "libcedana-k8s.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-k8s.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -205,8 +205,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-cloud-hypervisor.so"
-          name: "libcedana-cloud-hypervisor.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-cloud-hypervisor.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
@@ -220,8 +220,8 @@ jobs:
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
           file: "libcedana-kata.so"
-          name: "libcedana-kata.so"
-          version: ${{ github.head_ref || github.ref_name }}-${{ matrix.arch }}
+          name: "libcedana-kata.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
