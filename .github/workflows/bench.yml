@@ -56,17 +56,22 @@ on:
         description: "Post benchmark summary to Slack"
         required: false
         default: false
-      post_summary_slack_branded:
+      post_summary_slack_nightly:
         type: boolean
-        description: "Post benchmark summary to Slack (branded)"
+        description: "Post benchmark summary to Slack (nightly)"
         required: false
         default: false
+      runner:
+        type: string
+        description: "Runner machine for benchmark"
+        required: false
+        default: "16cpu-64g-l4"
 
 jobs:
   cedana_runtime_1:
     name: Cedana (runtime 1)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -77,23 +82,24 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v1
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -163,7 +169,7 @@ jobs:
   cedana_runtime_2:
     name: Cedana (runtime 2)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -174,23 +180,24 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v1
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -254,7 +261,7 @@ jobs:
   cedana_cr_1:
     name: Cedana (C/R 1)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -265,23 +272,24 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v1
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -346,7 +354,7 @@ jobs:
   cedana_cr_2:
     name: Cedana (C/R 2)
     if: inputs.cedana
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -357,23 +365,24 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v1
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
-          name: gpu
+          name: gpu-amd64
 
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana
+          name: cedana-amd64
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins
+          name: plugins-amd64
 
       - name: Configure
         env:
@@ -439,7 +448,7 @@ jobs:
     if: inputs.native
     permissions:
       contents: read
-    runs-on: [runs-on, runner=amd64-cuda-12-4-4x]
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -450,6 +459,7 @@ jobs:
       run:
         working-directory: /src
     steps:
+      - uses: runs-on/action@v1
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
@@ -694,48 +704,47 @@ jobs:
           payload: |
             ${{ steps.summary-patch.outputs.slack_summary }}
 
-      - name: Plot branded
-        if: (success() || failure()) && inputs.post_summary_slack_branded
+      - name: Plot (nightly)
+        if: (success() || failure()) && inputs.post_summary_slack_nightly
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
         run: |
           rm -rf results/*.png
-          ./bench plot --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
+          ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
 
-      - name: Upload plots (branded)
-        if: (success() || failure()) && inputs.post_summary_slack_branded
-        id: upload-plots-branded
+      - name: Upload plots (nightly)
+        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        id: upload-plots-nightly
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/branded
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly
           glob: "**/*.png"
 
-      - name: Generate summary (branded)
-        if: (success() || failure()) && inputs.post_summary_slack_branded
-        id: summary-branded
+      - name: Generate summary (nightly)
+        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        id: summary-nightly
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/branded/results
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly/results
           RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** performance results"
-          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: "Nightly performance results (comparison w/ native)"
         run: |
           utils/results-summary > $GITHUB_STEP_SUMMARY
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
-      - name: Post summary (branded)
-        if: (success() || failure()) && inputs.post_summary_slack_branded
-        id: slack-branded
+      - name: Post summary (nightly)
+        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        id: slack-nightly
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE_EXT }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
-            ${{ steps.summary-branded.outputs.slack_summary }}
+            ${{ steps.summary-nightly.outputs.slack_summary }}
 
       - name: Plot (native)
         if: (success() || failure()) && inputs.native

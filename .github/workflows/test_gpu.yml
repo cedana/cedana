@@ -23,21 +23,27 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 1
+      runner:
+        type: string
+        description: "Runner machine for tests"
+        required: false
+        default: 4cpu-16g-l4
 
 jobs:
   cuda:
     name: CUDA
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.platform }}-cuda-${{ matrix.version }}
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
-        version:
+        cuda_version:
           # - 11-8  TODO: re-enable once compatibility is fixed
           # - 12-2
           - 12-4
           - 12-8
-        platform:
+        arch:
           - amd64
+          # - arm64
     container:
       image: cedana/cedana-test:cuda
       credentials:
@@ -49,6 +55,7 @@ jobs:
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
+      - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -58,25 +65,25 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cedana
+          name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins
+          name: plugins-${{ matrix.arch }}
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: inputs.streamer
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: streamer
+          name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: gpu
+          name: gpu-${{ matrix.arch }}
 
       - name: Make executable
         run: |

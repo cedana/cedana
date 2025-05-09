@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -75,7 +76,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	url := fmt.Sprintf("%s/plugins?names=%s&compatibility=%s", m.URL, strings.Join(names, ","), m.compatibility)
+	url := fmt.Sprintf("%s/plugins?names=%s&compatibility=%s&arch=%s", m.URL, strings.Join(names, ","), m.compatibility, runtime.GOARCH)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.AuthToken))

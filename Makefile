@@ -223,13 +223,13 @@ DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE) . ;\
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
 docker-test-cuda: ## Build the test Docker image (CUDA)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda . ;\
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image
