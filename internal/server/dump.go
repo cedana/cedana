@@ -77,8 +77,9 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
 		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
 
-		cedanaUrl := os.Getenv("CEDANA_URL")
-		client := cedanagosdk.NewCedanaClient(cedanaUrl, os.Getenv("CEDANA_AUTH_TOKEN"))
+		cedanaUrl := config.Global.Connection.URL
+		cedanaAuthToken := config.Global.Connection.AuthToken
+		client := cedanagosdk.NewCedanaClient(cedanaUrl, cedanaAuthToken)
 		uuid, err := client.V2().Checkpoints().Post(ctx, nil)
 		if err != nil {
 			log.Warn().Msgf("we can't write checkpoint to remote: %v", err)

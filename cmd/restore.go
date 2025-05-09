@@ -122,7 +122,7 @@ var restoreCmd = &cobra.Command{
 
 		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
 			// fetch from checkpointId
-			client := cedanagosdk.NewCedanaClient(strings.ReplaceAll(os.Getenv("CEDANA_URL"), "/v1", ""), os.Getenv("CEDANA_AUTH_TOKEN"))
+			client := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 			downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(cmd.Context(), nil)
 			if err != nil {
 				return fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
