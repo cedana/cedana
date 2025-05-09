@@ -63,7 +63,7 @@ jobs:
       matrix:
         arch:
           - amd64
-          # - arm64
+          - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -110,7 +110,7 @@ jobs:
       matrix:
         arch:
           - amd64
-          # - arm64
+          - arm64
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -142,7 +142,7 @@ jobs:
       matrix:
         arch:
           - amd64
-          # - arm64
+          - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest
@@ -203,7 +203,7 @@ jobs:
           - crio
         arch:
           - amd64
-          # - arm64
+          - arm64
     if: inputs.cpu
     container:
       image: cedana/cedana-test:latest

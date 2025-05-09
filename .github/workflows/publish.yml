@@ -44,11 +44,6 @@ jobs:
     name: GitHub
     if: inputs.github
     runs-on: ubuntu-latest
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,17 +59,11 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Download Cedana binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-cedana
+      - name: Setup go
+        uses: actions/setup-go@v5
         with:
-          name: cedana-amd64
-
-      - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-amd64
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
