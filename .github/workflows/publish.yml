@@ -76,19 +76,26 @@ jobs:
   cloudsmith:
     name: Cloudsmith
     if: inputs.cloudsmith
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
     steps:
+      - uses: runs-on/action@v1
       - name: Download Cedana binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
-          name: cedana-amd64
+          name: cedana-${{ matrix.arch }}
 
       - name: Download Cedana plugins
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins-amd64
+          name: plugins-${{ matrix.arch }}
 
       - name: Push cedana to Cloudsmith
         id: push-cedana
@@ -103,6 +110,7 @@ jobs:
           name: "cedana"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-runc.so to Cloudsmith
         id: push-libcedana-runc
@@ -117,6 +125,7 @@ jobs:
           name: "libcedana-runc.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-containerd.so to Cloudsmith
         id: push-libcedana-containerd
@@ -131,6 +140,7 @@ jobs:
           name: "libcedana-containerd.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-crio.so to Cloudsmith
         id: push-libcedana-crio
@@ -145,6 +155,7 @@ jobs:
           name: "libcedana-crio.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-k8s.so to Cloudsmith
         id: push-libcedana-k8s
@@ -159,6 +170,7 @@ jobs:
           name: "libcedana-k8s.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
         id: push-libcedana-cloud-hypervisor
@@ -173,6 +185,7 @@ jobs:
           name: "libcedana-cloud-hypervisor.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
       - name: Push libcedana-kata.so to Cloudsmith
         id: push-libcedana-kata
@@ -187,6 +200,7 @@ jobs:
           name: "libcedana-kata.so"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
+          tags: ${{ matrix.arch }}
 
   dockerhub:
     name: DockerHub
