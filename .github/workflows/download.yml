@@ -26,7 +26,7 @@ jobs:
   cedana:
     name: Cedana
     if: ${{ inputs.cedana_version != 'none' }}
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -90,7 +90,7 @@ jobs:
   gpu:
     name: GPU
     if: ${{ inputs.gpu_version != 'none' }}
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +125,7 @@ jobs:
   streamer:
     name: Streamer
     if: ${{ inputs.streamer_version != 'none' }}
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
