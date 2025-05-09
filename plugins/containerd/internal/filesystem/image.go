@@ -18,6 +18,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/remotes/docker"
 	"github.com/containerd/containerd/rootfs"
 	"github.com/containerd/containerd/snapshots"
 	"github.com/containerd/errdefs"
@@ -297,4 +298,30 @@ func uniquePart() string {
 	// Ignore read failures, just decreases uniqueness
 	rand.Read(b[:])
 	return fmt.Sprintf("%d-%s", t.Nanosecond(), base64.URLEncoding.EncodeToString(b[:]))
+}
+
+var PushTracker = docker.NewInMemoryTracker()
+
+func pushImage(ctx context.Context, client *containerd.Client, ref, username, secret string) error {
+	img, err := client.ImageService().Get(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("unable to resolve image to manifest: %w", err)
+	}
+
+	resolver := docker.NewResolver(docker.ResolverOptions{
+		Authorizer: docker.NewDockerAuthorizer(
+			docker.WithAuthCreds(func(host string) (string, string, error) {
+				return username, secret, nil
+			}),
+		),
+		Tracker: PushTracker,
+	})
+
+	ropts := []containerd.RemoteOpt{
+		containerd.WithResolver(resolver),
+	}
+
+	desc := img.Target
+
+	return client.Push(ctx, ref, desc, ropts...)
 }
