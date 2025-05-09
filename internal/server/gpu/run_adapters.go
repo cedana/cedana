@@ -65,11 +65,6 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, err
 			}
 
-			if err != nil {
-				cancel()
-				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
-			}
-
 			pid <- resp.PID
 
 			log.Info().Str("jid", jid).Msg("GPU support enabled")
@@ -87,10 +82,6 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 // Each plugin must implement its own support for GPU interception.
 func Interception(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		if req.JID == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU interception")
-		}
-
 		t := req.GetType()
 		var handler types.Run
 		switch t {

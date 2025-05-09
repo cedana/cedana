@@ -80,7 +80,10 @@ func pluginManageHandler() types.Run {
 			defer end()
 		}
 		if req.GPUEnabled {
-			log.Warn().Msg("GPU interception must be manually enabled, as it can't be added for already running process/container")
+			log.Warn().Msg("GPU interception for the process/container must be manually enabled." +
+				"You may use the `--no-server` run option with `--gpu-enabled` to spawn a process/container with just GPU interception.")
+			resp.Messages = append(resp.Messages, "GPU interception for the process/container must be manually enabled.\n"+
+				"You may use the `--no-server` run option with `--gpu-enabled` to spawn a process/container with just GPU interception.")
 		}
 		return handler(ctx, opts, resp, req)
 	}

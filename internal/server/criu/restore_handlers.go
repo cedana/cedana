@@ -67,11 +67,9 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	var stdout, stderr io.Writer
 
 	// if we aren't using a client
-	if r, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool); ok && r {
-		// use checkpoint process state information to setup req uid and gid
-		req.UID = uids[0]
-		req.GID = gids[0]
-		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
+	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if ok && daemonless {
+		criuOpts.RstSibling = proto.Bool(true) // restore as child, so the caller can wait for the exit code
 		stdin = os.Stdin
 		stdout = os.Stdout
 		stderr = os.Stderr
@@ -122,7 +120,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
 	// as their could be goroutines waiting on it.
 	var exited chan int
-	if criuOpts.GetRstSibling() {
+	if !daemonless && criuOpts.GetRstSibling() {
 		exited = make(chan int)
 		opts.WG.Add(1)
 		go func() {

@@ -24,7 +24,10 @@ func Interception(next types.Run) types.Run {
 
 		jid := req.JID
 		if jid == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
+			jid = req.GetDetails().GetRunc().GetID()
+			if jid == "" {
+				return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
+			}
 		}
 
 		// Check if GPU plugin is installed

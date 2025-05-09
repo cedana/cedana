@@ -60,17 +60,18 @@ cmd_exists() {
 # Execute a function only once
 # Usage: do_once <function_name>
 # If the function is currently running, other calls to do_once will wait for it to finish
+# If the function is already finished, it will not be executed again
 do_once() {
     local func="$1"
     local lock="/tmp/$1.lock"
 
     if ! mkdir "$lock" 2>/dev/null; then
-        while [ ! -d "$lock" ]; do
+        while [ ! -d "$lock.done" ]; do
             sleep 0.2
         done
         return
     fi
 
     "$func"
-    rmdir "$lock" 2>/dev/null
+    mkdir "$lock.done"
 }
