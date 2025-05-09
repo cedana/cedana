@@ -15,15 +15,15 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
-	cedana_utils "github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -33,12 +33,11 @@ func init() {
 	restoreCmd.AddCommand(processRestoreCmd)
 	restoreCmd.AddCommand(jobRestoreCmd)
 
-	// Select what api is used for restores
+	// Add common flags
 	restoreCmd.PersistentFlags().
-		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "required for runc restores")
+		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
-	// Add common flags
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
@@ -57,6 +56,8 @@ func init() {
 		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
+	restoreCmd.PersistentFlags().
+		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	restoreCmd.PersistentFlags().
@@ -93,15 +94,7 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Restore a container/process",
 	Args:  cobra.ArbitraryArgs,
-	PreRun: func(cmd *cobra.Command, _ []string) {
-		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
-		if pidFilePath != "" {
-			cmd.MarkFlagRequired(flags.NoServerFlag.Full)
-		}
-	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
-		pidFilePath, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
@@ -112,7 +105,21 @@ var restoreCmd = &cobra.Command{
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
+		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+
+		if noServer && (log != "" || attach || attachable) {
+			fmt.Println(
+				style.WarningColors.Sprintf(
+					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
+					flags.NoServerFlag.Full,
+					flags.LogFlag.Full,
+					flags.AttachFlag.Full,
+					flags.AttachableFlag.Full,
+				))
+		}
 
 		env := os.Environ()
 		user, err := utils.GetCredentials()
@@ -149,9 +156,10 @@ var restoreCmd = &cobra.Command{
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:       path,
+			PidFile:    pidFile,
 			Stream:     stream,
 			Log:        log,
-			Attachable: attach,
+			Attachable: attach || attachable,
 			Criu: &criu.CriuOpts{
 				TcpEstablished: proto.Bool(tcpEstablished),
 				TcpClose:       proto.Bool(tcpClose),
@@ -168,12 +176,8 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		if pidFilePath != "" {
-			ctx = context.WithValue(ctx, keys.PIDFILE_PATH_KEY, &pidFilePath)
-		}
-
 		cmd.SetContext(ctx)
-		// return without creating client, if in non-server mode
+
 		if noServer {
 			return nil
 		}
@@ -182,8 +186,10 @@ var restoreCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
 		}
+
 		ctx = context.WithValue(ctx, keys.CLIENT_CONTEXT_KEY, client)
 		cmd.SetContext(ctx)
+
 		return nil
 	},
 
@@ -194,27 +200,18 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+
 		// Assuming request is now ready to be sent to the server
 		req, ok := cmd.Context().Value(keys.RESTORE_REQ_CONTEXT_KEY).(*daemon.RestoreReq)
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
+
 		var resp *daemon.RestoreResp
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
-		if ok {
-			defer client.Close()
-			var profiling *profiling.Data
-			resp, profiling, err = client.Restore(cmd.Context(), req)
-			if err != nil {
-				return err
-			}
-			if config.Global.Profiling.Enabled && profiling != nil {
-				printProfilingData(profiling)
-			}
-			if req.Attachable {
-				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
-			}
-		} else {
+		var profiling *profiling.Data
+
+		if noServer {
 			ctx := context.WithoutCancel(
 				context.WithValue(
 					cmd.Context(),
@@ -222,31 +219,43 @@ var restoreCmd = &cobra.Command{
 					true,
 				),
 			)
-			cedanaRoot, err := cedana_utils.NewCedanaRoot(ctx)
+
+			root, err := server.NewRoot(ctx)
 			if err != nil {
-				return fmt.Errorf("cedana root err: %v", err)
+				return fmt.Errorf("Error creating root: %v", err)
 			}
-			resp, err = cedanaRoot.Restore(ctx, req)
+
+			resp, err = root.Restore(ctx, req)
 			if err != nil {
-				return fmt.Errorf("cedana restore run err: %v", err)
+				return utils.GRPCErrorColored(err)
 			}
-			pidFilePath, _ := cmd.Context().Value(keys.PIDFILE_PATH_KEY).(*string)
-			if req.GetDetails().GetRunc() != nil && *pidFilePath == "" {
-				log.Debug().Msg("cedana runc restore without pidfile")
-			} else if req.GetDetails().GetRunc() != nil {
-				fs, err := os.Create(*pidFilePath)
-				if err != nil {
-					return err
-				}
-				_, err = fs.WriteString(fmt.Sprintf("%d", resp.PID))
-				if err != nil {
-					return err
-				}
+		} else {
+			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			if !ok {
+				return fmt.Errorf("invalids client in context")
+			}
+			defer client.Close()
+
+			// Assuming request is now ready to be sent to the server
+			resp, profiling, err = client.Restore(cmd.Context(), req)
+			if err != nil {
+				return err
+			}
+
+			if config.Global.Profiling.Enabled && profiling != nil {
+				printProfilingData(profiling)
+			}
+
+			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+			if attach {
+				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 			}
 		}
+
 		for _, message := range resp.GetMessages() {
 			fmt.Println(message)
 		}
+
 		return nil
 	},
 }
@@ -281,6 +290,11 @@ var jobRestoreCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: ValidJIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+		if noServer {
+			return fmt.Errorf("restore job is not supported when using `--%s`", flags.NoServerFlag.Full)
+		}
+
 		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 		if !ok {
 			return fmt.Errorf("invalid client in context")

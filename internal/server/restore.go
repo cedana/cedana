@@ -33,6 +33,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
+		process.WritePIDFileForRestore,
 		dumpDirAdapter, // auto-detects compression
 		process.ReloadProcessStateForRestore,
 
@@ -73,7 +74,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -85,6 +86,7 @@ func (s *CedanaRoot) Restore(ctx context.Context, req *daemon.RestoreReq) (*daem
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
+		process.WritePIDFileForRestore,
 		dumpDirAdapter, // auto-detects compression
 		process.ReloadProcessStateForRestore,
 

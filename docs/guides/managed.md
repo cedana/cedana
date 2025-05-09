@@ -42,6 +42,22 @@ For example, to manage an existing process:
 cedana manage process <PID> [args...]
 ```
 
+## Manage an upcoming job
+
+It's also possible to start managing an upcoming process/container:
+
+```sh
+cedana manage --upcoming <type> ...
+```
+
+Where `<type>` can be `process`, `containerd`, `runc`, etc. See [feature matrix](../get-started/features.md) for all plugins that support managing upcoming jobs. The manage command will block and wait for the process/container to become available.
+
+For example, to manage an existing runc container:
+
+```sh
+cedana manage --upcoming runc <container-id> [args...]
+```
+
 ## List managed jobs
 
 The subcommand `cedana job` has many subcommands such as `list`, `kill`,m `delete`, etc. Check the [CLI reference](../references/cli/cedana_job.md) for all available subcommands.
@@ -118,4 +134,4 @@ Once the daemon has started managing a job, it can be checkpointed and restored 
 
 ## Checkpoint/restore with GPUs
 
-GPU C/R support is only available for managed jobs. Check out the [checkpoint/restore with GPUs](gpu/cr.md) guide for more information.
+GPU C/R support is also available for managed jobs. Check out the [checkpoint/restore with GPUs](gpu/cr.md) guide for more information.
