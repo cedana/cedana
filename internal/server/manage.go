@@ -36,7 +36,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 	manage := pluginManageHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
+		Lifetime: context.WithoutCancel(s.lifetime),
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
