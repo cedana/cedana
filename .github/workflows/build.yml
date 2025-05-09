@@ -108,7 +108,7 @@ jobs:
       matrix:
         arch:
           - amd64
-          # - arm64
+          - arm64
     if: inputs.plugins
     container:
       image: cedana/cedana-test:latest
@@ -168,7 +168,7 @@ jobs:
       matrix:
         arch:
           - amd64
-          # - arm64
+          - arm64
     if: inputs.image
     permissions:
       contents: read
