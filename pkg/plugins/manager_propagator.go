@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -65,13 +66,27 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	}
 
 	// Now fetch the latest versions from the propagator for only plugins
-	// that were not available locally. We don't want to fetch latest
+	// that were not available locally. We don't want to fetch anything
 	// if the user is using locally built plugins.
 
 	var names []string
-	for _, p := range list {
-		if p.AvailableVersion != "local" {
-			names = append(names, p.Name)
+	if len(filter) == 0 {
+		for _, p := range list {
+			if p.AvailableVersion != "local" {
+				names = append(names, p.Name)
+			}
+		}
+	} else {
+		for _, name := range filter {
+			if slices.ContainsFunc(list, func(p Plugin) bool {
+				nameOnly := name
+				if strings.Contains(name, "@") {
+					nameOnly = strings.Split(name, "@")[0]
+				}
+				return p.Name == nameOnly && p.AvailableVersion != "local"
+			}) {
+				names = append(names, name)
+			}
 		}
 	}
 
@@ -162,6 +177,10 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
+			if strings.Contains(name, "@") {
+				name = strings.Split(name, "@")[0] // strip version
+			}
+
 			if _, ok := availableSet[name]; !ok {
 				errs <- fmt.Errorf("Plugin %s is not available", name)
 				continue

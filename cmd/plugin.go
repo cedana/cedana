@@ -52,17 +52,17 @@ var pluginCmd = &cobra.Command{
 ////////////////////
 
 var pluginListCmd = &cobra.Command{
-	Use:     "list",
-	Short:   "List plugins",
+	Use:     "list [plugin]...",
+	Short:   "List plugins (specify plugin <name>@<version> to filter)",
 	Aliases: []string{"ls"},
-	Args:    cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Args:    cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, names []string) error {
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
 		}
 
-		list, err := manager.List(true)
+		list, err := manager.List(true, names...)
 		if err != nil {
 			return err
 		}
