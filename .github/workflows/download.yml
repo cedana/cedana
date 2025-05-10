@@ -3,6 +3,9 @@ name: Download
 # This workload downloads external dependencies (binaries)  and uploads them as artifacts,
 # that can be used in other workflows.
 
+permissions:
+  contents: write
+
 on:
   workflow_call:
     inputs:
