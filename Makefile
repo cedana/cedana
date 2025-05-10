@@ -165,7 +165,6 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<
 	if [ -f /.dockerenv ]; then \
 		echo "Running all regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ;\
@@ -206,12 +205,14 @@ PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -nam
 PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_BIN_MOUNTS_CRIU=$(shell find /usr/local/bin -type f -name 'criu' -exec printf '-v %s:%s ' {} {} \;)
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
 DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm \
 				-v $(PWD):/src:ro \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
+				$(PLUGIN_BIN_MOUNTS_CRIU) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
 DOCKER_TEST_RUN_CUDA=docker run --gpus=all \

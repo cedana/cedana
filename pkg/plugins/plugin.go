@@ -40,7 +40,7 @@ type Plugin struct {
 	Type          Type      `json:"type"`
 	Status        Status    `json:"status"`
 	Version       string    `json:"version"`
-	LatestVersion string    `json:"latest_version"`
+	AvailableVersion string    `json:"latest_version"`
 	Libraries     []Binary  `json:"libraries"`
 	Binaries      []Binary  `json:"binaries"`
 	Size          int64     `json:"size"` // in bytes
