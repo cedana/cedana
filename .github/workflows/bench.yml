@@ -101,16 +101,24 @@ jobs:
         with:
           name: plugins-amd64
 
+      - name: Download CRIU binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-criu
+        with:
+          name: criu-amd64
+
       - name: Configure
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
           PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
+          cp $PATH_BINARIES_CRIU/* bin
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -199,16 +207,24 @@ jobs:
         with:
           name: plugins-amd64
 
+      - name: Download CRIU binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-criu
+        with:
+          name: criu-amd64
+
       - name: Configure
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
           PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
+          cp $PATH_BINARIES_CRIU/* bin
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -291,16 +307,24 @@ jobs:
         with:
           name: plugins-amd64
 
+      - name: Download CRIU binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-criu
+        with:
+          name: criu-amd64
+
       - name: Configure
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
           PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
+          cp $PATH_BINARIES_CRIU/* bin
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -384,16 +408,24 @@ jobs:
         with:
           name: plugins-amd64
 
+      - name: Download CRIU binary
+        uses: actions/download-artifact@v4
+        id: download-binaries-criu
+        with:
+          name: criu-amd64
+
       - name: Configure
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
           PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
+          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
+          cp $PATH_BINARIES_CRIU/* bin
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json

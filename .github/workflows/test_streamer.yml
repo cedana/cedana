@@ -90,6 +90,11 @@ jobs:
         with:
           name: gpu-${{ matrix.arch }}
 
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
       - name: Make executable
         run: |
           chmod +x ./cedana*
@@ -100,7 +105,7 @@ jobs:
         env:
           GPU: ${{ inputs.gpu }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio
+          sudo -E ./cedana plugin install runc containerd crio criu
           sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead

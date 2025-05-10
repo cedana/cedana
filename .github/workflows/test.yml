@@ -167,10 +167,18 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
       - name: Make executable
         run: |
           chmod +x ./cedana*
           echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install CRIU
+        run: sudo -E ./cedana plugin install criu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -233,6 +241,11 @@ jobs:
         with:
           name: plugins-${{ matrix.arch }}
 
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
       - name: Make executable
         run: |
           chmod +x ./cedana*
@@ -240,7 +253,7 @@ jobs:
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install plugin
-        run: sudo -E ./cedana plugin install ${{ matrix.plugin }}
+        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

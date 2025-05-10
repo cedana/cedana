@@ -11,6 +11,11 @@ on:
         description: Version for Cedana binaries (branch name or "release" for latest release)
         required: false
         default: "none"
+      criu_version:
+        type: string
+        description: Version for CRIU binaries (branch name or "release" for latest release)
+        required: false
+        default: "none"
       gpu_version:
         type: string
         description: Version for GPU binaries (branch name or "release" for latest release)
@@ -87,6 +92,40 @@ jobs:
         with:
           name: plugins-${{ matrix.arch }}
           path: ./plugins/*
+
+  criu:
+    name: CRIU
+    if: ${{ inputs.criu_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+      max-parallel: 1 # to avoid unknown cloudsmith failures
+    steps:
+      - uses: runs-on/action@v1
+      - name: Download CRIU
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.criu_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p criu
+          cd criu
+          if [ "$VERSION" = "release" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/latest/criu
+          else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu-alpha/raw/names/criu-$ARCH/versions/$VERSION/criu
+          fi
+
+      - name: Upload CRIU
+        uses: actions/upload-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+          path: ./criu/*
 
   gpu:
     name: GPU

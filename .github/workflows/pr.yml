@@ -54,6 +54,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
+      criu_version: release
       gpu_version: ci/add-arm64-builds
       streamer_version: ci/add-arm64-builds
 
