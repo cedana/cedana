@@ -33,6 +33,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
       - uses: runs-on/action@v1
       - name: Download cedana
@@ -97,6 +98,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
       - uses: runs-on/action@v1
       - name: Download binaries
@@ -132,6 +134,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
       - uses: runs-on/action@v1
       - name: Download binaries
