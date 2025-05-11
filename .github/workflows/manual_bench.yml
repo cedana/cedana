@@ -54,7 +54,7 @@ on:
         type: string
         description: "Runner machine for benchmarks"
         required: false
-        default: "g6-4xlarge"
+        default: "16cpu-64g-1xL4"
 
 jobs:
   download:

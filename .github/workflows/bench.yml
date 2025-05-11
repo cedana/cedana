@@ -65,7 +65,7 @@ on:
         type: string
         description: "Runner machine for benchmark"
         required: false
-        default: "16cpu-64g-1gpu-20g"
+        default: "16cpu-64g-1xL4"
 
 jobs:
   cedana_runtime_1:

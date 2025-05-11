@@ -52,7 +52,12 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1gpu-20g
+        default: 4cpu-16g-1xL4
+      runner_gpu_arm64:
+        type: string
+        description: "Runner machine for GPU tests (arm64)"
+        required: false
+        default: 4cpu-8g-1xT4G
 
 jobs:
   unit:
@@ -290,6 +295,7 @@ jobs:
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
 
   regression-gpu:
     name: GPU
@@ -302,3 +308,4 @@ jobs:
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
+      runner_arm64: ${{ inputs.runner_gpu_arm64 }}
