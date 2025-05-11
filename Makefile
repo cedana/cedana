@@ -29,12 +29,12 @@ build: $(BINARY)
 $(BINARY): $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+	$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
 	@echo "Building $(BINARY) with debug symbols..."
 	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+	$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 install: $(INSTALL_PATH) ## Install the binary
 
@@ -92,11 +92,11 @@ PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
 plugin-debug:
 	@echo "Building plugin $$PLUGIN with debug symbols..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
 plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
@@ -109,7 +109,7 @@ plugins-debug: ## Build all plugins with debug symbols
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
 			echo "Building plugin $$name with debug symbols..."; \
-			$(GOBUILD) -C $$path -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			$(GOBUILD) -C $$path -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 
@@ -118,7 +118,7 @@ $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
 			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			$(GOBUILD) -C $$path -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 

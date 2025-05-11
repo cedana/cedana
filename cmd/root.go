@@ -92,6 +92,13 @@ func Execute(ctx context.Context, version string) error {
 	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
 
 	rootCmd.Version = version
+  revision := getRevision()
+  versionTemplate := rootCmd.VersionTemplate()
+  if revision != "" {
+    versionTemplate = fmt.Sprintf("%sgit: %s\n", versionTemplate, revision)
+  }
+  rootCmd.SetVersionTemplate(versionTemplate)
+
 	rootCmd.Long = rootCmd.Long + "\n " + version
 	rootCmd.SilenceUsage = true // only show usage when true usage error
 
