@@ -3,6 +3,11 @@ name: Test / CUDA
 on:
   workflow_call:
     inputs:
+      ref:
+        type: string
+        description: "The branch, tag, or SHA to run on"
+        required: false
+        default: ""
       debug:
         type: boolean
         description: "Run with debugging enabled"
@@ -64,6 +69,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
