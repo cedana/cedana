@@ -86,13 +86,13 @@ jobs:
         run: |
           gh release create "$tag" \
               --repo="$GITHUB_REPOSITORY" \
-              --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
+              --title="${tag#v}" \
               --generate-notes
 
       - name: Upload assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          tag: ${{ github.head_ref || github.ref_name }}
         run: |
           gh release upload --clobber "$tag" \
               --repo="$GITHUB_REPOSITORY" \
