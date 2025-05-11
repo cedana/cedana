@@ -29,7 +29,7 @@ jobs:
       streamer: true
       large: true # include large tests
       runner: 16cpu-64g # use larger runner
-      runner_gpu: 16cpu-64g-l40s # use larger runner
+      runner_gpu: 16cpu-64g-1gpu-40g # use larger runner
       parallelism: 8
       parallelism_gpu: 4
 
@@ -48,4 +48,4 @@ jobs:
       comparison_patch: true
       comparison_native: true
       post_summary_slack_nightly: true
-      runner: 16cpu-64g-l40s # use larger runner (bench will automatically run larger metrics)
+      runner: 16cpu-64g-1gpu-40g # use larger runner (bench will automatically run larger metrics)

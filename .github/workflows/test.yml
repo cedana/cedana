@@ -52,7 +52,7 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-l4
+        default: 4cpu-16g-1gpu-20g
 
 jobs:
   unit:
