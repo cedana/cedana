@@ -14,9 +14,7 @@ check_huggingface_token() {
 }
 
 install_requirements() {
-    local torch_version="${torch_version:-torch2.4}"
-
-    local req_file="/cedana-samples/requirements-${torch_version}.txt"
+    local req_file="/cedana-samples/requirements.txt"
 
     if [ ! -f "$req_file" ]; then
         echo "Requirements file not found: $req_file"
