@@ -237,7 +237,7 @@ docker-test-push: ## Push the test Docker image
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-push-cuda: ## Push the test Docker image (CUDA)
+docker-test-cuda-push: ## Push the test Docker image (CUDA)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
