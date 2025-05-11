@@ -64,4 +64,5 @@ run_inference_test() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
