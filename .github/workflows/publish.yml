@@ -259,7 +259,7 @@ jobs:
           images: |
             ${{ inputs.image_name }}
           tags: |
-            type=raw,value=${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+            type=raw,value=${{ github.sha }}
             type=raw,value=${{ github.head_ref || github.ref_name }}
 
       - name: Create manifest list and push
