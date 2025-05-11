@@ -43,7 +43,7 @@ jobs:
           - 12-8
         arch:
           - amd64
-          # - arm64
+          - arm64
     container:
       image: cedana/cedana-test:cuda
       credentials:
