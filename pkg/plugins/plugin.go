@@ -119,8 +119,8 @@ func (p *Plugin) SyncVersion() {
 			version = version[i+1:]
 		}
 
-		// Add 'v' prefix if missing
-		if !strings.HasPrefix(version, "v") {
+		// Add 'v' prefix if missing, and version starts with a number
+		if version != "" && version[0] >= '0' && version[0] <= '9' {
 			version = "v" + version
 		}
 	}
