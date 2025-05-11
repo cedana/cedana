@@ -42,6 +42,26 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
+# bats test_tags=daemonless
+@test "run process (without daemon)" {
+    run cedana run --no-server process echo hello
+
+    assert_success
+    assert_output --partial "hello"
+}
+
+# bats test_tags=daemonless
+@test "run process (without daemon, PID file)" {
+    pid_file=/tmp/$(unix_nano).pid
+
+    run cedana run --no-server process echo hello --pid-file "$pid_file"
+
+    assert_success
+    assert_output --partial "hello"
+
+    assert_exists "$pid_file"
+}
+
 @test "run non-existent process" {
     jid=$(unix_nano)
 
@@ -88,6 +108,7 @@ teardown_file() {
     assert_output --partial "hello"
 }
 
+# bats test_tags=attach
 @test "run process with attach (exit code)" {
     jid=$(unix_nano)
     code=42
