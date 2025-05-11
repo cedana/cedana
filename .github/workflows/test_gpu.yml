@@ -93,6 +93,7 @@ jobs:
       - name: Make executable
         run: |
           chmod +x ./cedana*
+          chmod +x ./criu
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 

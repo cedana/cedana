@@ -115,6 +115,7 @@ jobs:
           PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
+          chmod +x $PATH_BINARIES_CRIU/*
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
@@ -221,6 +222,7 @@ jobs:
           PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
+          chmod +x $PATH_BINARIES_CRIU/*
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
@@ -321,6 +323,7 @@ jobs:
           PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
+          chmod +x $PATH_BINARIES_CRIU/*
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
@@ -422,6 +425,7 @@ jobs:
           PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
+          chmod +x $PATH_BINARIES_CRIU/*
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
