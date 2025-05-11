@@ -32,7 +32,7 @@ on:
         type: string
         description: "Runner machine for tests (arm64)"
         required: false
-        default: 4cpu-8g-1xT4G
+        default: 8cpu-16g-1xT4G
 
 jobs:
   cuda:
