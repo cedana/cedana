@@ -258,7 +258,7 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
 			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
-		return <-restoreErr
+		return nil
 	}
 
 	// Wait for GPU restore to finish before resuming the process
