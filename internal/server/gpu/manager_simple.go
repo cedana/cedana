@@ -17,6 +17,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -226,7 +227,9 @@ func (m *ManagerSimple) CRIUCallback(lifetime context.Context, jid string, user 
 	restoreErr := make(chan error, 1)
 	pidChan := make(chan uint32, 1)
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		_, end := profiling.StartTimingComponent(ctx, m.Attach)
 		err := m.Attach(ctx, lifetime, jid, user, pidChan, env) // Re-attach a GPU to the job
+    end()
 		if err != nil {
 			return err
 		}
