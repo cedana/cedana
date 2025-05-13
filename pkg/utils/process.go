@@ -350,11 +350,9 @@ func IsTTY(path string) (isTTY bool, err error) {
 	statInfo, _ := os.Stat(path)
 	pathFromProc, _ := os.Readlink(path)
 
-	// Check for TTY
 	if statInfo.Mode()&os.ModeDevice != 0 && statInfo.Mode()&os.ModeCharDevice != 0 {
 		actualPath := pathFromProc
 
-		// Open the resolved actualPath with O_RDONLY, O_NOCTTY, and O_NONBLOCK
 		tempFile, openErr := os.OpenFile(actualPath, os.O_RDONLY|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0)
 		if openErr == nil {
 			defer tempFile.Close()

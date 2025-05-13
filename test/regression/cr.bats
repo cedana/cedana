@@ -403,7 +403,7 @@ teardown_file() {
 
     num_cpus=$(nproc)
     echo "Num CPUs: $num_cpus"
-    run cedana run process -a --jid "$jid" -- mpirun --oversubscribe --allow-run-as-root -np "$num_cpus" /cedana-samples/cpu_smr/mpi/mpi_pi_loop 100000000
+    run cedana run process -a --jid "$jid" -- mpirun --allow-run-as-root -np "$num_cpus" /cedana-samples/cpu_smr/mpi/mpi_pi_loop 100000000
     assert_success
 
     sleep 2
