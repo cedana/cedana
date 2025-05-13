@@ -75,7 +75,7 @@ jobs:
       - name: Create tarballs
         run: |
           tar -czf cedana-${{ matrix.arch }}.tar.gz cedana
-          find -maxdepth 1 -type f -name "libcedana*.so" -exec sh -c 'f="{}"; base=$(basename "$f" .so); tar -czf "${base}-amd64.tar.gz" "$f"' \;
+          find -maxdepth 1 -type f -name "libcedana*.so" -exec sh -c 'f="{}"; base=$(basename "$f" .so); tar -czf "${base}-${{ matrix.arch }}.tar.gz" "$f"' \;
 
       - name: Create release
         if: matrix.arch == 'amd64'
