@@ -14,9 +14,7 @@ check_huggingface_token() {
 }
 
 install_requirements() {
-    TORCH_VERSION="${TORCH_VERSION:-torch2_4}"
-
-    local req_file="/cedana-samples/requirements-${TORCH_VERSION}.txt"
+    local req_file="/cedana-samples/requirements.txt"
 
     if [ ! -f "$req_file" ]; then
         echo "Requirements file not found: $req_file"
@@ -66,4 +64,5 @@ run_inference_test() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }

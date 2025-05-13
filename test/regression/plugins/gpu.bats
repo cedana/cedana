@@ -143,6 +143,7 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
 
 # bats test_tags=dump
@@ -169,6 +170,7 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
 
 ###############
@@ -204,6 +206,7 @@ teardown_file() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
 
 # bats test_tags=restore
@@ -242,6 +245,7 @@ teardown_file() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
 
 # bats test_tags=restore
@@ -273,6 +277,7 @@ teardown_file() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }
 
 #####################

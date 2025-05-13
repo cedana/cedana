@@ -34,7 +34,7 @@ Query handler          •                 ✔     •           •     •    
 Health checks          •                 ✔     ✔           •     ✔     •
 
 ✔ = implemented, • = unimplemented, — = not installed, ✖ = incompatible
-Not showing external plugins: criu, criu/cuda, gpu, streamer, k8s-containerd-shim
+Not showing external plugins: criu, criu/cuda, gpu, streamer, k8s/runtime-shim
 
 ```
 

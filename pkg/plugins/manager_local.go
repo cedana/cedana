@@ -56,8 +56,12 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 	list = make([]Plugin, 0)
 
 	set := make(map[string]any)
-	for _, s := range filter {
-		set[s] = nil
+	for _, name := range filter {
+    nameOnly := strings.TrimSpace(name)
+		if strings.Contains(name, "@") {
+			nameOnly = strings.Split(name, "@")[0]
+		}
+		set[nameOnly] = nil
 	}
 
 	for _, p := range Registry {
@@ -100,7 +104,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
-			p.LatestVersion = "local"
+			p.AvailableVersion = "local"
 			if p.Status == INSTALLED || p.Status == OUTDATED {
 				if p.Checksum() != totalSum {
 					p.Status = OUTDATED
