@@ -55,8 +55,8 @@ jobs:
     secrets: inherit
     with:
       criu_version: release
-      gpu_version: ci/add-arm64-builds
-      streamer_version: ci/add-arm64-builds
+      gpu_version: main
+      streamer_version: main
 
   test:
     name: Test
