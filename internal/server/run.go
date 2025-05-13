@@ -27,6 +27,40 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		job.Manage(s.jobs), // always manage jobs run through daemon
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+		process.WritePIDFile,
+
+		pluginRunMiddleware, // middleware from plugins
+	}
+
+	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
+
+	opts := types.Opts{
+		Lifetime: s.lifetime,
+		Plugins:  s.plugins,
+		WG:       s.wg,
+	}
+	resp := &daemon.RunResp{}
+
+	_, err := run(ctx, opts, resp, req)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("run successful")
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Running managed %s PID %d", req.Type, resp.PID))
+
+	return resp, nil
+}
+
+func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
+	// Add adapters. The order below is the order followed before executing
+	// the final handler, which depends on the type of job being run, thus it will be
+	// inserted from a plugin or will be the built-in process run handler.
+
+	middleware := types.Middleware[types.Run]{
+		defaults.FillMissingRunDefaults,
+		validation.ValidateRunRequest,
+		process.WritePIDFile,
 
 		pluginRunMiddleware, // middleware from plugins
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -235,10 +236,8 @@ func WaitForPid(pid uint32) chan int {
 			if err != nil {
 				return
 			}
-			for _, status := range s {
-				if status == "zombie" {
-					return
-				}
+			if slices.Contains(s, "zombie") {
+				return
 			}
 			time.Sleep(300 * time.Millisecond)
 		}
@@ -268,10 +267,8 @@ func WaitForPidCtx(ctx context.Context, pid uint32) chan int {
 			if err != nil {
 				return
 			}
-			for _, status := range s {
-				if status == "zombie" {
-					return
-				}
+			if slices.Contains(s, "zombie") {
+				return
 			}
 			time.Sleep(300 * time.Millisecond)
 		}

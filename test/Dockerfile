@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1.6
 
+FROM cedana/cedana-samples:cuda12.4-torch2.4 AS cedana-samples
+
 FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.23.0
-ARG CEDANA_SAMPLES_VERSION=0.0.4
 
 # install packages
 RUN <<EOT
@@ -43,14 +44,8 @@ tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
 
-# clone cedana-samples for test workloads
-RUN <<EOT
-set -eux
-curl -L -o cedana-samples.zip https://github.com/cedana/cedana-samples/archive/refs/tags/v${CEDANA_SAMPLES_VERSION}.zip
-unzip cedana-samples.zip
-mv cedana-samples-${CEDANA_SAMPLES_VERSION} cedana-samples
-rm cedana-samples.zip
-EOT
+# copy cedana-samples
+COPY --from=cedana-samples /app /cedana-samples
 
 VOLUME ["/src"]
 WORKDIR /src

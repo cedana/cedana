@@ -52,17 +52,17 @@ var pluginCmd = &cobra.Command{
 ////////////////////
 
 var pluginListCmd = &cobra.Command{
-	Use:     "list",
-	Short:   "List plugins",
+	Use:     "list [plugin]...",
+	Short:   "List plugins (specify plugin <name>@<version> to filter)",
 	Aliases: []string{"ls"},
-	Args:    cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Args:    cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, names []string) error {
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
 		}
 
-		list, err := manager.List(true)
+		list, err := manager.List(true, names...)
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,7 @@ var pluginListCmd = &cobra.Command{
 			"Size",
 			"Status",
 			"Installed version",
-			"Latest version",
+			"Available version",
 			"Published",
 		})
 
@@ -97,7 +97,7 @@ var pluginListCmd = &cobra.Command{
 				utils.SizeStr(p.Size),
 				statusStr(p.Status),
 				p.Version,
-				p.LatestVersion,
+				p.AvailableVersion,
 				utils.TimeAgo(p.PublishedAt),
 			}
 			tableWriter.AppendRow(row)
@@ -123,7 +123,7 @@ var pluginListCmd = &cobra.Command{
 
 var pluginInstallCmd = &cobra.Command{
 	Use:               "install <plugin>...",
-	Short:             "Install a plugin",
+	Short:             "Install a plugin (specify version with <plugin>@<version>)",
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, names []string) error {

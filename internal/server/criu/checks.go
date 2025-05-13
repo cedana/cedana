@@ -48,7 +48,7 @@ func CheckVersion(manager plugins.Manager) types.Check {
 				)
 			}
 		} else {
-			c.SetCriuPath(p.Binaries[0].Name)
+			c.SetCriuPath(p.BinaryPaths()[0])
 		}
 
 		if installed {
@@ -92,7 +92,7 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 				installed = false
 			}
 		} else {
-			c.SetCriuPath(p.Binaries[0].Name)
+			c.SetCriuPath(p.BinaryPaths()[0])
 		}
 
 		if installed {

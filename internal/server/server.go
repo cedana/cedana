@@ -48,8 +48,8 @@ type Server struct {
 	daemongrpc.UnimplementedDaemonServer
 }
 
-// CedanaRoot avoids the use of the server and provides direct run/restores
-type CedanaRoot struct {
+// Root avoids the use of the server and provides direct run/restores
+type Root struct {
 	lifetime context.Context // context alive for the duration of the server
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	plugins  plugins.Manager
@@ -70,18 +70,18 @@ type MetricOpts struct {
 	OTel bool
 }
 
-func (s *CedanaRoot) Wait() {
+func (s *Root) Wait() {
 	s.wg.Wait()
 }
 
-func NewCedanaRoot(ctx context.Context) (*CedanaRoot, error) {
+func NewRoot(ctx context.Context) (*Root, error) {
 	host, err := utils.GetHost(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %w", err)
 	}
 	pluginManager := plugins.NewLocalManager()
 	var wg = sync.WaitGroup{}
-	return &CedanaRoot{
+	return &Root{
 		lifetime: ctx,
 		wg:       &wg,
 		plugins:  pluginManager,

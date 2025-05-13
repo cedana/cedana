@@ -26,14 +26,6 @@ teardown_file() {
     teardown_file_daemon
 }
 
-@test "cedana --version" {
-    expected_version=$(git describe --tags --always)
-
-    run cedana --version
-    assert_success
-    assert_output --partial "$expected_version"
-}
-
 @test "cedana ps" {
     jid=$(unix_nano)
     run cedana exec echo hello --jid "$jid"

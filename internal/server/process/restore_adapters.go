@@ -3,6 +3,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -14,6 +15,39 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+// Adapter that writes PID to a file after the next handler is called.
+func WritePIDFileForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		exited, err := next(ctx, opts, resp, req)
+		if err != nil {
+			return exited, err
+		}
+
+		pidFile := req.PidFile
+		if pidFile == "" {
+			return exited, err
+		}
+
+		file, err := os.Create(pidFile)
+		if err != nil {
+			log.Warn().Err(err).Msgf("Failed to create PID file %s", pidFile)
+			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to create PID file %s: %s", pidFile, err.Error()))
+		}
+
+		_, err = file.WriteString(fmt.Sprintf("%d", resp.PID))
+		if err != nil {
+			log.Warn().Err(err).Msgf("Failed to write PID to file %s", pidFile)
+			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to write PID to file %s: %s", pidFile, err.Error()))
+		}
+
+		log.Debug().Msgf("Wrote PID %d to file %s", resp.PID, pidFile)
+
+		// Do not fail the request if we cannot write the PID file
+
+		return exited, nil
+	}
+}
 
 // Reload process state from the dump dir in the restore response
 func ReloadProcessStateForRestore(next types.Restore) types.Restore {

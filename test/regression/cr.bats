@@ -379,6 +379,56 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
+@test "restore process (PID file)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    pid_file="/tmp/$name.pid"
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
+    assert_success
+
+    run cedana restore process --path "/tmp/$name.tar" --pid-file "$pid_file"
+    assert_success
+
+    assert_exists "$pid_file"
+
+    run kill $pid
+}
+
+# bats test_tags=daemonless
+@test "restore process (without daemon)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
+    assert_success
+
+    run cedana restore process --path "/tmp/$name.tar" --no-server
+    assert_success
+
+    run kill $pid
+}
+
+# bats test_tags=daemonless
+@test "restore process (without daemon, PID file)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    pid_file="/tmp/$name.pid"
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
+    assert_success
+
+    run cedana restore process --path "/tmp/$name.tar" --no-server --pid-file "$pid_file"
+    assert_success
+
+    assert_exists "$pid_file"
+
+    run kill $pid
+}
+
 # bats test_tags=restore
 @test "restore non-existent process" {
     run cedana restore process --path /tmp/non-existent

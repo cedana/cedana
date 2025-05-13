@@ -35,7 +35,8 @@ const (
 	RUNC_LOG_FILE  = "runc.log"
 	RUNC_LOG_DEBUG = false
 
-	waitForRunErrTimeout = 2 * time.Second
+	waitForRunErrTimeout         = 2 * time.Second
+	waitForManageUpcomingTimeout = 2 * time.Minute
 )
 
 type RuncState struct {
@@ -89,7 +90,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	defer runc.RestoreSpec(configFile)
 
 	logFile := filepath.Join(bundle, RUNC_LOG_FILE)
-	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.pid", id))
+	pidFile := filepath.Join(os.TempDir(), fmt.Sprintf("cedana-runc-%s.pid", id))
+
 	os.Remove(logFile)
 	os.Remove(pidFile)
 
@@ -117,7 +119,12 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	if req.Attachable {
+	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if ok && daemonless {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
 		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
@@ -148,6 +155,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for PID file to be created, until the process exists
 	utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
+	os.Remove(pidFile)
 
 	// Capture logs from runc
 	lastMsg := utils.LogFromFile(
@@ -172,24 +180,26 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Wait for the process to exit, send exit code
 	exited = make(chan int)
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-		status, err := p.Wait()
-		if err != nil {
-			log.Debug().Err(err).Msg("runc container Wait()")
-		}
-		code := status.ExitCode()
-		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
+	if !daemonless {
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+			status, err := p.Wait()
+			if err != nil {
+				log.Debug().Err(err).Msg("runc container Wait()")
+			}
+			code := status.ExitCode()
+			log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
 
-		cmd.Wait() // IO should be complete by now
-		container.Destroy()
+			cmd.Wait() // IO should be complete by now
+			container.Destroy()
 
-		exitCode <- code
-		close(exitCode)
-		close(exited)
-	}()
+			exitCode <- code
+			close(exitCode)
+			close(exited)
+		}()
+	}
 
 	// Also kill the container if lifetime expires
 	opts.WG.Add(1)
@@ -219,9 +229,32 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		root = defaults.DEFAULT_ROOT
 	}
 
-	container, err := libcontainer.Load(root, id)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "container with ID %s does not exist: %v", id, err)
+	var container *libcontainer.Container
+
+	switch req.Action {
+	case daemon.RunAction_MANAGE_EXISTING:
+		container, err = libcontainer.Load(root, id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "container with ID %s does not exist: %v", id, err)
+		}
+	case daemon.RunAction_MANAGE_UPCOMING: // wait until the container is created
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-opts.Lifetime.Done():
+				return nil, opts.Lifetime.Err()
+			case <-time.After(500 * time.Millisecond):
+				container, err = libcontainer.Load(root, id)
+				if err == nil {
+					break loop
+				}
+				log.Trace().Str("id", id).Msg("waiting for upcoming container to start managing")
+			case <-time.After(waitForManageUpcomingTimeout):
+				return nil, status.Errorf(codes.DeadlineExceeded, "timed out waiting for upcoming container %s", id)
+			}
+		}
 	}
 
 	state, err := container.State()
