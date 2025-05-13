@@ -1,7 +1,11 @@
-buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-9b8d50cdf583.2 h1:URs/OXEp2eu05uZXGyh/XwhWwT61aYjbbDqBUbM8hUM=
-buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-9b8d50cdf583.2/go.mod h1:XVvUM2gtdw2lBddqdSR60mUQBU9WWC5IFq+G2td0edg=
-buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-9b8d50cdf583.1 h1:WDklvlxMPq5lqUJzCYKf2OF84ZB0j7zSJ6iExOV1fK0=
-buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-9b8d50cdf583.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-50541ff86651.2 h1:gf2bUSGbj+3pSJZsDJBKTlDyiW+UL6KNpmolPbJofGY=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-50541ff86651.2/go.mod h1:MRCBoubN1WIurLYzS3eCGGEkOjF/g620udhLJ5E/LAQ=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-ac620f9f2e2e.2 h1:NZZn3lg8KB1ttsRTzazdwO3Ac/93i0JhgnoMmlyeqPI=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-00000000000000-ac620f9f2e2e.2/go.mod h1:v+uQbAy3oRQ86UQcKk1oZ1eSUV97UdA8274GaIIBvmc=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-50541ff86651.1 h1:D9jZWkvP6OWHFNRnDtQUWqgE7hEGsY9edlTLlpY848o=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-50541ff86651.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-ac620f9f2e2e.1 h1:E3njKq5knnXafV30r0iv8QWjwzQRewEtVoq9BzY6LPY=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-00000000000000-ac620f9f2e2e.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1 h1:Iew3zeXgWB14lkY/Gf6t8N1u64R2wMuRWbAvrsrAUZU=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250327172915-aa3de1eca880.1/go.mod h1:aBOGTWtzs/KK01BRrLRKUwkytDF2R6w9RGsFJY3zL/w=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250507203859-0782b7b990f1.2 h1:PjOWnRuVBee+hQ7PsvqKEj4snxe4Y95dTB1dzcCtG+I=
