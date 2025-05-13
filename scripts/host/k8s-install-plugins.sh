@@ -14,7 +14,7 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 source "$DIR"/utils.sh
 
 # NOTE: Assuming Go plugins like k8s, runc, containerd, etc are already built with the image
-PLUGINS="criu k8s/containerd-shim" # bare minimum plugins required for k8s
+PLUGINS="criu k8s/runtime-shim" # bare minimum plugins required for k8s
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
