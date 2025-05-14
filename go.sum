@@ -20,12 +20,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/Microsoft/hcsshim v0.11.7 h1:vl/nj3Bar/CvJSYo7gIQPyRWc9f3c6IeSNavBTSZNZQ=
 github.com/Microsoft/hcsshim v0.11.7/go.mod h1:MV8xMfmECjl5HdO7U/3/hFVnkmSBjAjmA09d4bExKcU=
-github.com/cedana/cedana-go-sdk v0.2.3 h1:lUaCOtdkGZjkVKJF4Uyd6mH6PWMmT+49RyYl3uOD4hY=
-github.com/cedana/cedana-go-sdk v0.2.3/go.mod h1:zAjZVqGTuQbqlV2cKRpjanI4FpHQ0thbkFnURd8yrnA=
-github.com/cedana/cedana-go-sdk v0.2.7 h1:juhXO/wsIOU8bCScnNxArE4ftj2ql9QWgurvC18xGAI=
-github.com/cedana/cedana-go-sdk v0.2.7/go.mod h1:zAjZVqGTuQbqlV2cKRpjanI4FpHQ0thbkFnURd8yrnA=
-github.com/cedana/cedana-go-sdk v0.2.9 h1:WbU0T8mz8xogJQnjyE1lcmKZNarEYVrgrRl6kSaDpLg=
-github.com/cedana/cedana-go-sdk v0.2.9/go.mod h1:zAjZVqGTuQbqlV2cKRpjanI4FpHQ0thbkFnURd8yrnA=
+github.com/cedana/cedana-go-sdk v0.2.10 h1:Rl3F2PNsy4vCm2NlbCZc2gYXzV+o9G1k3hkmZdFad3w=
+github.com/cedana/cedana-go-sdk v0.2.10/go.mod h1:zAjZVqGTuQbqlV2cKRpjanI4FpHQ0thbkFnURd8yrnA=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
