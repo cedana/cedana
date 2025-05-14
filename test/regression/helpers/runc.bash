@@ -3,7 +3,7 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export WORKLOADS="test/workloads"
-export ROOTFS_URL="https://dl-cdn.alpinelinux.org/alpine/v3.10/releases/x86_64/alpine-minirootfs-3.10.1-x86_64.tar.gz"
+export ROOTFS_URL="https://dl-cdn.alpinelinux.org/alpine/v3.10/releases/$(uname -m)/alpine-minirootfs-3.10.1-$(uname -m).tar.gz"
 
 ROOTFS="/tmp/_rootfs"
 BUNDLE="$WORKLOADS/bundle"

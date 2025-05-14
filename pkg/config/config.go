@@ -34,6 +34,7 @@ const (
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
+	DEFAULT_PLUGINS_BUILDS  = "release"
 )
 
 // The default global config. This will get overwritten
@@ -72,6 +73,7 @@ var Global Config = Config{
 	Plugins: Plugins{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
+		Builds: DEFAULT_PLUGINS_BUILDS,
 	},
 }
 

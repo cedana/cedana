@@ -40,7 +40,7 @@ type Plugin struct {
 	Type          Type      `json:"type"`
 	Status        Status    `json:"status"`
 	Version       string    `json:"version"`
-	LatestVersion string    `json:"latest_version"`
+	AvailableVersion string    `json:"latest_version"`
 	Libraries     []Binary  `json:"libraries"`
 	Binaries      []Binary  `json:"binaries"`
 	Size          int64     `json:"size"` // in bytes
@@ -119,8 +119,8 @@ func (p *Plugin) SyncVersion() {
 			version = version[i+1:]
 		}
 
-		// Add 'v' prefix if missing
-		if !strings.HasPrefix(version, "v") {
+		// Add 'v' prefix if missing, and version starts with a number
+		if version != "" && version[0] >= '0' && version[0] <= '9' {
 			version = "v" + version
 		}
 	}

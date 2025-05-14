@@ -87,7 +87,7 @@ func CheckCriuForCuda(manager plugins.Manager) types.Check {
 				)
 			}
 		} else {
-			c.SetCriuPath(p.Binaries[0].Name)
+			c.SetCriuPath(p.BinaryPaths()[0])
 		}
 
 		if installed {

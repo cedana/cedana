@@ -35,7 +35,7 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
 ## Usage (GPU plugin)
 
-**NOTE**: Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` (see [managed process/container](../managed.md)).
+**NOTE**: Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)).
 
 1. You may clone the [cedana-samples repository](https://github.com/cedana/cedana-samples) for some example GPU workloads.
 2. Run a process with GPU support:
