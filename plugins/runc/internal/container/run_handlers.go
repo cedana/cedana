@@ -242,10 +242,8 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		for {
 			select {
 			case <-ctx.Done():
-				log.Error().Msg("context for request done")
 				return nil, ctx.Err()
 			case <-opts.Lifetime.Done():
-				log.Error().Msg("context for lifetime done")
 				return nil, opts.Lifetime.Err()
 			case <-time.After(500 * time.Millisecond):
 				container, err = libcontainer.Load(root, id)
@@ -254,7 +252,6 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 				}
 				log.Trace().Str("id", id).Msg("waiting for upcoming container to start managing")
 			case <-time.After(waitForManageUpcomingTimeout):
-				log.Error().Msg("context for timeout done")
 				return nil, status.Errorf(codes.DeadlineExceeded, "timed out waiting for upcoming container %s", id)
 			}
 		}

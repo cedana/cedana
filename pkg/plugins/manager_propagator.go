@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -28,6 +30,8 @@ type PropagatorManager struct {
 	client *http.Client
 
 	compatibility string // used to fetch plugins compatible with this version
+	builds        string // builds to look for (release, alpha)
+	arch          string // architecture to look for (amd64, arm64)
 	downloadDir   string
 	*LocalManager
 }
@@ -38,13 +42,14 @@ func NewPropagatorManager(connection config.Connection, compatibility string) *P
 	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
 
 	localManager := NewLocalManager()
-
-	// Add the temp download directory to its search path
+	builds := config.Global.Plugins.Builds
 
 	return &PropagatorManager{
 		connection,
 		&http.Client{},
 		compatibility,
+		builds,
+		runtime.GOARCH,
 		downloadDir,
 		localManager,
 	}
@@ -61,13 +66,27 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	}
 
 	// Now fetch the latest versions from the propagator for only plugins
-	// that were not available locally. We don't want to fetch latest
+	// that were not available locally. We don't want to fetch anything
 	// if the user is using locally built plugins.
 
 	var names []string
-	for _, p := range list {
-		if p.LatestVersion != "local" {
-			names = append(names, p.Name)
+	if len(filter) == 0 {
+		for _, p := range list {
+			if p.AvailableVersion != "local" {
+				names = append(names, p.Name)
+			}
+		}
+	} else {
+		for _, name := range filter {
+			if slices.ContainsFunc(list, func(p Plugin) bool {
+				nameOnly := name
+				if strings.Contains(name, "@") {
+					nameOnly = strings.Split(name, "@")[0]
+				}
+				return p.Name == nameOnly && p.AvailableVersion != "local"
+			}) {
+				names = append(names, name)
+			}
 		}
 	}
 
@@ -75,7 +94,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	url := fmt.Sprintf("%s/plugins?names=%s&compatibility=%s", m.URL, strings.Join(names, ","), m.compatibility)
+	url := fmt.Sprintf("%s/plugins?names=%s&build=%s&compatibility=%s&arch=%s", m.URL, strings.Join(names, ","), m.builds, m.compatibility, m.arch)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.AuthToken))
@@ -101,7 +120,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 				for i := range list {
 					for j := range onlineList {
 						if list[i].Name == onlineList[j].Name {
-							list[i].LatestVersion = onlineList[j].LatestVersion
+							list[i].AvailableVersion = onlineList[j].AvailableVersion
 							list[i].Size = onlineList[j].Size
 							list[i].PublishedAt = onlineList[j].PublishedAt
 
@@ -158,6 +177,10 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
+			if strings.Contains(name, "@") {
+				name = strings.Split(name, "@")[0] // strip version
+			}
+
 			if _, ok := availableSet[name]; !ok {
 				errs <- fmt.Errorf("Plugin %s is not available", name)
 				continue
@@ -171,7 +194,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 			installList = append(installList, name)
 
 			// If locally built plugins are available, skip downloading
-			if availableSet[name].LatestVersion == "local" {
+			if availableSet[name].AvailableVersion == "local" {
 				continue
 			}
 
@@ -182,7 +205,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 
 				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
 				for _, binary := range plugin.Binaries {
-					err := m.downloadBinary(binary.Name, plugin.LatestVersion, BINARY_PERMS)
+					err := m.downloadBinary(binary.Name, plugin.AvailableVersion, m.arch, m.builds, BINARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
@@ -191,7 +214,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				}
 
 				for _, library := range plugin.Libraries {
-					err := m.downloadBinary(library.Name, plugin.LatestVersion, LIBRARY_PERMS)
+					err := m.downloadBinary(library.Name, plugin.AvailableVersion, m.arch, m.builds, LIBRARY_PERMS)
 					if err != nil {
 						msgs <- err.Error()
 						msgs <- fmt.Sprintf("Will try a local version of %s if available", name)
@@ -242,11 +265,12 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 //// Helper Methods ////
 ////////////////////////
 
-func (m *PropagatorManager) downloadBinary(binary string, version string, perms os.FileMode) error {
+func (m *PropagatorManager) downloadBinary(binary string, version string, arch string, build string, perms os.FileMode) error {
 	if version == "" {
 		version = "latest"
 	}
-	url := fmt.Sprintf("%s/download/%s/%s", m.URL, binary, version)
+	version = strings.ReplaceAll(version, "/", "-")
+	url := fmt.Sprintf("%s/download/%s/%s?arch=%s&build=%s", m.URL, binary, version, arch, build)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("Failed to build request for %s: %v", binary, err)

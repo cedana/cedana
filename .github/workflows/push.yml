@@ -38,9 +38,9 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
-      amd64: true
-      amd64_image: true
-      arm64_image: true
+      cedana: true
+      plugins: true
+      image: true
       image_name: cedana/cedana-helper-test
 
   download:
@@ -48,6 +48,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
+      criu_version: release
       gpu_version: main
       streamer_version: main
 

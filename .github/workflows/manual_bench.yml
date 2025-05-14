@@ -1,28 +1,30 @@
-name: Manual
+name: Manual (bench)
 
 on:
   workflow_dispatch:
     inputs:
+      cedana_version:
+        type: string
+        description: Version for Cedana binaries (branch name or "release" for latest release)
+        required: false
+        default: "main"
       gpu_version:
         type: string
         description: Version for GPU binaries (branch name or "release" for latest release)
         required: false
-        default: "release"
+        default: "main"
       streamer_version:
         type: string
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
-        default: "release"
-      bench_cedana:
-        type: boolean
-        description: Run benchmarks for Cedana
-        required: false
-        default: false
-      bench_native:
-        type: boolean
-        description: Run benchmarks for native
-        required: false
-        default: false
+        default: "main"
+      runtime:
+        type: choice
+        description: Runtime to run benchmark on
+        required: true
+        options:
+          - native
+          - cedana
       bench_samples:
         type: number
         description: Number of samples to run for each metric
@@ -43,47 +45,40 @@ on:
         description: Compare benchmark results with native
         required: false
         default: false
-      bench_post_summary_slack:
-        type: boolean
-        description: Post benchmark summary to Slack
+      bench_result_dataset:
+        type: string
+        description: "BigQuery dataset to push results to"
         required: false
-        default: false
-      bench_post_summary_slack_branded:
-        type: boolean
-        description: Post benchmark summary to Slack (ext channel) with branding
+        default: "cedana_alpha"
+      runner:
+        type: string
+        description: "Runner machine for benchmarks"
         required: false
-        default: false
+        default: "16cpu-64g-1xL4"
 
 jobs:
-  build:
-    name: Build
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
-    if: inputs.bench_cedana
-    with:
-      amd64: true
-
   download:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
-    if: inputs.bench_cedana
+    if: inputs.runtime == 'cedana'
     with:
+      cedana_version: ${{ inputs.cedana_version }}
       gpu_version: ${{ inputs.gpu_version }}
       streamer_version: ${{ inputs.streamer_version }}
 
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    if: always() || github.event.inputs.bench_cedana || github.event.inputs.bench_native
+    if: always()
     needs: [build, download]
     secrets: inherit
     with:
-      cedana: ${{ inputs.bench_cedana }}
-      native: ${{ inputs.bench_native }}
+      cedana: ${{ inputs.runtime == 'cedana' }}
+      native: ${{ inputs.runtime == 'native' }}
       samples: ${{ inputs.bench_samples }}
       push_results: ${{ inputs.bench_push_results }}
       comparison_patch: ${{ inputs.bench_comparison_patch }}
       comparison_native: ${{ inputs.bench_comparison_native }}
-      post_summary_slack: ${{ inputs.bench_post_summary_slack }}
-      post_summary_slack_branded: ${{ inputs.bench_post_summary_slack_branded }}
+      result_dataset: ${{ inputs.bench_result_dataset }}
+      runner: ${{ inputs.runner }}

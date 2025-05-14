@@ -3,7 +3,7 @@
 List plugins
 
 ```
-cedana plugin list [flags]
+cedana plugin list [plugin]... [flags]
 ```
 
 ### Options

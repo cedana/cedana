@@ -31,15 +31,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check:
+    name: Check
+    uses: ./.github/workflows/check.yml
+    secrets: inherit
+    with:
+      shell: true
+
   build:
     name: Build
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_build }}
-      amd64: true
-      amd64_image: true
-      arm64_image: false
+      cedana: true
+      plugins: true
+      image: true
       image_name: cedana/cedana-helper-test
 
   download:
@@ -47,6 +54,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
+      criu_version: release
       gpu_version: main
       streamer_version: main
 
@@ -84,24 +92,3 @@ jobs:
       dockerhub: true
       image_name: cedana/cedana-helper-test
       post_summary: false
-
-  shellcheck:
-    name: Shell Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: shellcheck
-        uses: reviewdog/action-shellcheck@v1
-        with:
-          reporter: github-pr-review
-          pattern: |
-            *.bash
-            *.sh
-            *.bats
-          check_all_files_with_shebangs: true
-          shellcheck_flags: "--external-sources --severity=warning"

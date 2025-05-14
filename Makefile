@@ -29,12 +29,12 @@ build: $(BINARY)
 $(BINARY): $(BINARY_SOURCES) ## Build the binary
 	@echo "Building $(BINARY)..."
 	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=false -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+	$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
 	@echo "Building $(BINARY) with debug symbols..."
 	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
+	$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
 
 install: $(INSTALL_PATH) ## Install the binary
 
@@ -92,11 +92,11 @@ PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
 plugin-debug:
 	@echo "Building plugin $$PLUGIN with debug symbols..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
+	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
 plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
 	@echo "Installing plugin $$PLUGIN..."
@@ -109,7 +109,7 @@ plugins-debug: ## Build all plugins with debug symbols
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
 			echo "Building plugin $$name with debug symbols..."; \
-			$(GOBUILD) -C $$path -buildvcs=false $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			$(GOBUILD) -C $$path -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 
@@ -118,7 +118,7 @@ $(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
 			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -buildvcs=false -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
+			$(GOBUILD) -C $$path -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
 		fi ;\
 	done ;\
 
@@ -165,7 +165,6 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<
 	if [ -f /.dockerenv ]; then \
 		echo "Running all regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		$(SUDO) $(BINARY) plugin install criu ;\
 		echo "Using unique instance of daemon per test..." ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ;\
@@ -206,12 +205,14 @@ PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -nam
 PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_BIN_MOUNTS_CRIU=$(shell find /usr/local/bin -type f -name 'criu' -exec printf '-v %s:%s ' {} {} \;)
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
 DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm \
 				-v $(PWD):/src:ro \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
+				$(PLUGIN_BIN_MOUNTS_CRIU) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
 DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
@@ -223,20 +224,20 @@ DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE) . ;\
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
 docker-test-cuda: ## Build the test Docker image (CUDA)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker build -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda . ;\
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-push-cuda: ## Push the test Docker image (CUDA)
+docker-test-cuda-push: ## Push the test Docker image (CUDA)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
