@@ -53,6 +53,7 @@ type Root struct {
 	lifetime context.Context // context alive for the duration of the server
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	plugins  plugins.Manager
+	gpus     gpu.Manager
 
 	host    *daemon.Host
 	version string
@@ -79,12 +80,23 @@ func NewRoot(ctx context.Context) (*Root, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %w", err)
 	}
+
+	wg := &sync.WaitGroup{}
 	pluginManager := plugins.NewLocalManager()
-	var wg = sync.WaitGroup{}
+
+	var gpuManager gpu.Manager
+	gpuPoolSize := config.Global.GPU.PoolSize
+	if gpuPoolSize > 0 {
+		log.Debug().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
+		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
+	} else {
+		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
+	}
 	return &Root{
 		lifetime: ctx,
-		wg:       &wg,
+		wg:       wg,
 		plugins:  pluginManager,
+		gpus:     gpuManager,
 		host:     host,
 		version:  "dev",
 	}, nil
@@ -121,7 +133,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	var gpuManager gpu.Manager
 	gpuPoolSize := config.Global.GPU.PoolSize
 	if gpuPoolSize > 0 {
-		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
+		log.Debug().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
 		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
 	} else {
 		gpuManager = gpu.NewSimpleManager(wg, pluginManager)

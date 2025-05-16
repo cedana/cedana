@@ -10,20 +10,16 @@ import (
 )
 
 type Manager interface {
-	// Attach attaches a GPU controller to a process with the given JID, and PID.
+	// Attach attaches a GPU controller to a process with the PID.
 	// Takse in a channel for the PID, allowing this to be called before the process is started,
 	// so that the PID can be passed in later.
-	Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) error
+	Attach(ctx context.Context, lifetime context.Context, user *syscall.Credential, pid <-chan uint32, env []string) error
 
-	// AttachAsync calls Attach in background.
-	// Returns a channel that will receive an error if the attach fails.
-	AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) <-chan error
+	// IsAttached returns true if GPU is attached to for the given PID.
+	IsAttached(pid uint32) bool
 
-	// IsAttached returns true if GPU is attached to for the given JID.
-	IsAttached(jid string) bool
-
-	// Detach detaches the GPU controller from a process with the given JID, and PID.
-	Detach(jid string) error
+	// Detach detaches the GPU controller from a process with the given PID.
+	Detach(pid uint32) error
 
 	// Returns server-compatible health checks.
 	Checks() types.Checks

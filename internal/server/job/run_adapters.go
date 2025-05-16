@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
@@ -21,7 +20,6 @@ const (
 )
 
 // Adapter that manages the job state.
-// Also attaches GPU support to the job, if requested.
 // Allows management of existing processes as well (not started by the daemon).
 func Manage(jobs Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
@@ -53,10 +51,6 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 
 			job.SetLog(req.Log)
 			job.SetDetails(req.Details)
-
-			if req.GPUEnabled {
-				next = next.With(gpu.Attach(jobs.GPUs()))
-			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
 			lifetime, cancel := context.WithCancel(opts.Lifetime)

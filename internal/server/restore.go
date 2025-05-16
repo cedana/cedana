@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
@@ -36,6 +37,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.WritePIDFileForRestore,
 		dumpDirAdapter, // auto-detects compression
 		process.ReloadProcessStateForRestore,
+    gpu.AttachForRestore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 
@@ -89,6 +91,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 		process.WritePIDFileForRestore,
 		dumpDirAdapter, // auto-detects compression
 		process.ReloadProcessStateForRestore,
+    gpu.AttachForRestore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 

@@ -22,21 +22,12 @@ import (
 )
 
 // Adapter that adds GPU support to the request.
-// GPU Dump/Restore is automatically managed by the job manager using
-// CRIU callbacks. Assumes the job is already created (not running).
 func Attach(gpus Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
 			if !opts.Plugins.IsInstalled("gpu") {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to use GPU support")
 			}
-
-			jid := req.JID
-			if jid == "" {
-				return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU support")
-			}
-
-			log.Info().Str("jid", jid).Msg("enabling GPU support")
 
 			// Create child lifetime context, so we have cancellation ability over restored
 			// process created by the next handler(s).
@@ -67,7 +58,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			pid <- resp.PID
 
-			log.Info().Str("jid", jid).Msg("GPU support enabled")
+			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
 			return exited, nil
 		}

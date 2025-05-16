@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 )
 
@@ -71,9 +70,6 @@ type Manager interface {
 	//////////////
 	//// Misc ////
 	//////////////
-
-	// GPUs returns the GPU manager.
-	GPUs() gpu.Manager
 
 	// CRIUCallback returns the saved CRIU notify callback for the job.
 	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallbackMulti

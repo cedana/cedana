@@ -30,7 +30,7 @@ type ManagerLazy struct {
 	checkpoints sync.Map
 
 	plugins plugins.Manager
-	gpus    gpu.Manager
+	gpus    gpu.Manager // required just for GPUEnabled info
 	db      db.DB
 	pending chan action
 
