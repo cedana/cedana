@@ -117,7 +117,7 @@ func (m *controllers) spawnAsync(
 
 	controller := &controller{
 		ErrBuf: &bytes.Buffer{},
-		Cmd:    exec.CommandContext(lifetime, binary, jid, "--port", strconv.Itoa(port), observability),
+		Cmd:    exec.CommandContext(context.WithoutCancel(lifetime), binary, jid, "--port", strconv.Itoa(port), observability),
 	}
 
 	controller.Stderr = controller.ErrBuf
