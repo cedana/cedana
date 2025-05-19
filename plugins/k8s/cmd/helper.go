@@ -237,7 +237,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 }
 
 func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabbitmq.Consumer, error) {
-	queueName := "cedana_daemon_helper"
+	queueName := "cedana_daemon_helper-" + rand.Text()
 	consumer, err := rabbitmq.NewConsumer(
 		es.conn,
 		queueName,
@@ -245,7 +245,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		rabbitmq.WithConsumerOptionsConcurrency(100),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
-		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper-"+rand.Text()),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
