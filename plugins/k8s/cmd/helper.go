@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -244,7 +245,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		rabbitmq.WithConsumerOptionsConcurrency(100),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
-		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper-"+rand.Text()),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
