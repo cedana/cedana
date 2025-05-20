@@ -1,11 +1,13 @@
 package logging
 
 import (
+	"context"
 	"io"
 	"os"
 	"time"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
@@ -45,25 +47,23 @@ func SetLevel(level string) {
 		TimeLocation: time.Local,
 	}
 
-	if !config.Global.Metrics.Otel {
-		log.Logger = zerolog.New(consoleWriter).
-			Level(logLevel).
-			With().
-			Timestamp().
-			Logger().Hook(LineInfoHook{})
+	var writers []io.Writer
+	writers = append(writers, consoleWriter)
 
-		return
-	} else {
-		writers := []io.Writer{}
-		writers = append(writers, consoleWriter)
-
+	if config.Global.Metrics.Otel {
 		endpoint, headers, err := getOtelCreds()
 		if err != nil {
 			return
 		}
 
+		host, err := utils.GetHost(context.Background())
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get host info")
+			return
+		}
+
 		resourceAttrs := map[string]string{
-			"host.name": os.Getenv("HOSTNAME"),
+			"host.name": host.Hostname,
 		}
 
 		// Add SigNoz writer
@@ -77,12 +77,12 @@ func SetLevel(level string) {
 		)
 
 		writers = append(writers, globalSigNozWriter)
-		multiWriter := io.MultiWriter(writers...)
-
-		log.Logger = zerolog.New(multiWriter).
-			Level(logLevel).
-			With().
-			Timestamp().
-			Logger().Hook(LineInfoHook{})
 	}
+	multiWriter := io.MultiWriter(writers...)
+
+	log.Logger = zerolog.New(multiWriter).
+		Level(logLevel).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
 }

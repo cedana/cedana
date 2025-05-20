@@ -135,26 +135,12 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	body, _ := zerologEntry[zerolog.MessageFieldName].(string)
 
 	attributes := make(map[string]string)
-	var traceID, spanID string
-	var traceFlags uint32
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName {
 			continue
 		}
 		switch k {
-		case "trace_id", "traceId": // Allow for different conventions
-			traceID, _ = v.(string)
-		case "span_id", "spanId":
-			spanID, _ = v.(string)
-		case "trace_flags", "traceFlags":
-			if tf, ok := v.(float64); ok { // JSON numbers often unmarshal as float64
-				traceFlags = uint32(tf)
-			} else if tfStr, ok := v.(string); ok { // Handle if it's a string
-				var tfInt int
-				fmt.Sscan(tfStr, &tfInt)
-				traceFlags = uint32(tfInt)
-			}
 		case zerolog.CallerFieldName:
 			attributes["code.filepath"], _ = v.(string)
 		case zerolog.ErrorStackFieldName:
@@ -166,9 +152,6 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 
 	logEntry := SigNozLogEntry{
 		Timestamp:      tsNano,
-		TraceID:        traceID,
-		SpanID:         spanID,
-		TraceFlags:     traceFlags,
 		SeverityText:   severityText,
 		SeverityNumber: severityNumber,
 		Body:           body,
@@ -215,7 +198,7 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 	jsonData, err := json.Marshal(batchToSend)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error marshalling log batch: %v\n", err)
-		return // Or handle retry for the batch
+		return
 	}
 
 	req, err := http.NewRequest("POST", sw.endpoint, bytes.NewBuffer(jsonData))
@@ -228,7 +211,7 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {
-		// Basic retry could be added here, or more robust backoff
+		// TODO NR - add backoff?
 		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error sending log batch to SigNoz: %v\n", err)
 		return
 	}
@@ -238,12 +221,9 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: SigNoz returned non-2xx status: %d. Response: %s\n", resp.StatusCode, string(bodyBytes))
 	} else {
-		// Optional: Log success (can be noisy)
-		// fmt.Printf("SigNozJsonWriter: Batch of %d logs sent successfully. Status: %d\n", len(batchToSend), resp.StatusCode)
 	}
 }
 
-// Close flushes remaining logs and stops the writer.
 func (sw *SigNozJsonWriter) Close() error {
 	if sw.endpoint == "" || sw.accessToken == "" { // If writer was disabled
 		return nil
@@ -255,7 +235,6 @@ func (sw *SigNozJsonWriter) Close() error {
 	return nil
 }
 
-// CloseLoggers should be called on application shutdown (e.g., via defer in main).
 func CloseLoggers() {
 	log.Info().Msg("Closing loggers...")
 	if globalSigNozWriter != nil {
