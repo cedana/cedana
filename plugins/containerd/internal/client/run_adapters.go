@@ -9,6 +9,7 @@ import (
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -57,9 +58,11 @@ func CreateContainerForRun(next types.Run) types.Run {
 				ctx,
 				details.ID,
 				containerd.WithImage(image),
+				containerd.WithNewSnapshot(details.ID+"-snapshot", image),
+				containerd.WithNewSpec(oci.WithImageConfig(image)),
 			)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}
 			defer func() {
 				if err != nil {
