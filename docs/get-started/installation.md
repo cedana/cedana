@@ -62,12 +62,12 @@ To install CRIU independently, see the [CRIU installation guide](https://criu.or
 You can directly start the daemon with:
 
 ```sh
-make start
+sudo cedana daemon start
 ```
 
 The daemon requires root privileges for checkpoint/restore operations.
 
-If you're a systemd user, you may also install it as a service:
+If you're a systemd user, you may also install it as a service (if built from source):
 
 ```sh
 make install-systemd
