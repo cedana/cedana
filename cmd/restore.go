@@ -7,14 +7,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	cedanagosdk "github.com/cedana/cedana-go-sdk"
+
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
@@ -24,6 +22,7 @@ import (
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -127,32 +126,6 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("Error getting user credentials: %v", err)
 		}
 
-		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
-			// fetch from checkpointId
-			client := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
-			downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(cmd.Context(), nil)
-			if err != nil {
-				return fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
-			}
-			// TODO (SA): handle checksum validation to ensure if the file is already present we don't redownload it
-			checkpointFilePath := "/tmp/cedana-checkpoint-" + checkpointId + ".tar"
-			r, err := http.Get(*downloadUrl)
-			if err != nil {
-				return fmt.Errorf("failed to download cedana checkpoint: %v", err)
-			}
-			defer r.Body.Close()
-			file, err := os.Create(checkpointFilePath)
-			if err != nil {
-				return fmt.Errorf("failed to create checkpoint file on disk: %v", err)
-			}
-			_, err = io.Copy(file, r.Body)
-			if err != nil {
-				return fmt.Errorf("failed to write cedana checkpoint to disk: %v", err)
-			}
-			defer file.Close()
-			path = checkpointFilePath
-		}
-
 		// Create half-baked request
 		req := &daemon.RestoreReq{
 			Path:       path,
@@ -176,6 +149,9 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
+		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
+			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, &checkpointId)
+		}
 		cmd.SetContext(ctx)
 
 		if noServer {

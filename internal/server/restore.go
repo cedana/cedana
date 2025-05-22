@@ -31,6 +31,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 
 	middleware := types.Middleware[types.Restore]{
+		process.DownloadCheckpoint,
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
@@ -84,6 +85,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	}
 
 	middleware := types.Middleware[types.Restore]{
+		process.DownloadCheckpoint,
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,

@@ -3,17 +3,26 @@ package process
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	cedanagosdk_models "github.com/cedana/cedana-go-sdk/models"
 )
 
 const STATE_FILE = "process_state.json"
@@ -182,5 +191,81 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 		}
 
 		return next(ctx, opts, resp, req)
+	}
+}
+
+// UploadCheckpoint Middleware
+func UploadCheckpoint(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		res, err := next(ctx, opts, resp, req)
+		if err != nil {
+			return nil, err
+		}
+
+		uuid := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(*string)
+		resp.Id = uuid
+
+		go func() {
+			cedanaUrl := config.Global.Connection.URL
+			cedanaAuthToken := config.Global.Connection.AuthToken
+			// Creating the client is no extra compute/work as this is not a durable connection
+			client := cedanagosdk.NewCedanaClient(cedanaUrl, cedanaAuthToken)
+
+			// ensure ctx cancel doesn't interrupt the upload
+			ctx := context.WithoutCancel(ctx)
+			// write information about process and checkpoint meta first before starting upload
+			gpu := "none"
+			platform := "none"
+			if resp.State.GPUEnabled {
+				gpu = "nvidia"
+			}
+			if resp.State.Host.Platform != "" {
+				platform = resp.State.Host.Platform
+			}
+			body := cedanagosdk_models.CheckpointInfo{}
+			body.SetGpu(&gpu)
+			body.SetPlatform(&platform)
+			_, err := client.V2().Checkpoints().Info().ById(*uuid).Put(ctx, &body, nil)
+			if err != nil {
+				log.Warn().Msgf("put failed: checkpoint info to remote: %v", err)
+				return
+			}
+			// get upload url to upload the dumped artifacts to
+			url, err := client.V2().Checkpoints().Upload().ById(*uuid).Patch(ctx, nil)
+			if err != nil {
+				log.Warn().Msg("we can't get upload url from remote")
+				return
+			}
+			// start uploading the file to url
+			fs, err := os.Open(resp.Path)
+			if err != nil {
+				log.Warn().Msg("we can't open resp.Path")
+				return
+			}
+			// TODO (SA): handle the multipart upload properly, make it resumable so that we can retry in case of transient network errors
+			req, err := http.NewRequest("PUT", *url, fs)
+			if err != nil {
+				log.Warn().Msg("we can't build a request from checkpoint file")
+				return
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Warn().Msg("we can't get upload url from remote")
+				return
+			}
+			if resp.StatusCode == 200 {
+				log.Info().Msgf("successfully uploaded checkpoint: %v", *uuid)
+				for {
+					_, err := client.V2().Checkpoints().Uploaded().ById(*uuid).Post(ctx, nil)
+					if err != nil {
+						time.Sleep(time.Second * 10)
+						continue
+					}
+					break
+				}
+			}
+		}()
+		// UploadCheckpoint after the checkpoints are completed
+		return res, err
 	}
 }

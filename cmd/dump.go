@@ -29,6 +29,8 @@ func init() {
 	dumpCmd.PersistentFlags().
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpCmd.PersistentFlags().
+		StringP(flags.RemoteCheckpoint.Full, flags.RemoteCheckpoint.Short, "", "mark if the checkpoint should be uploaded or not")
+	dumpCmd.PersistentFlags().
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
@@ -82,7 +84,8 @@ var dumpCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
-    leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
+		remoteCheckpoint, _ := cmd.Flags().GetString(flags.RemoteCheckpoint.Full)
+		leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
@@ -108,6 +111,9 @@ var dumpCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
+		if remoteCheckpoint != "" {
+			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, &remoteCheckpoint)
+		}
 		cmd.SetContext(ctx)
 
 		client, err := client.New(config.Global.Address, config.Global.Protocol)
