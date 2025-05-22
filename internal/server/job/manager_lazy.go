@@ -155,7 +155,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 
 	job.(*Job).SetState(job.(*Job).latestState())
 	if !job.(*Job).GPUEnabled() {
-		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
+		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
 	}
 
 	return job.(*Job)
@@ -197,7 +197,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		}
 		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(jid))
+			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -228,7 +228,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		}
 		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.JID))
+			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -275,7 +275,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		m.gpus.Detach(jid)
+		m.gpus.Detach(pid)
 
 		m.pending <- action{putJob, jid}
 	}()
@@ -400,9 +400,6 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string, user *s
 	}
 	multiCallback := &criu.NotifyCallbackMulti{}
 	multiCallback.IncludeMulti(job.GetCRIUCallback())
-	if job.GPUEnabled() {
-		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid, user, stream, env...))
-	}
 	return multiCallback
 }
 

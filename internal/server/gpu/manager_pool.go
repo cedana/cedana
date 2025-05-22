@@ -13,6 +13,6 @@ type PoolManager struct {
 	ManagerMissing
 }
 
-func NewPoolManager(ctx context.Context, wg *sync.WaitGroup, size int) *PoolManager {
-	return &PoolManager{}
+func NewPoolManager(ctx context.Context, wg *sync.WaitGroup, size int) (*PoolManager, error) {
+	return &PoolManager{}, nil
 }

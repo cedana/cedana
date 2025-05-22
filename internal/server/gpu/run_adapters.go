@@ -3,7 +3,7 @@ package gpu
 // Defines adapters for adding GPU support to a job. GPU controller attachment is agnostic
 // to the job type. GPU interception is specific to the job type. For e.g.,
 // for a process, it's simply modifying the environment. For runc, it's
-// modifying the config. Therefore:
+// modifying the config.json. Therefore:
 // NOTE: Each plugin must implement its own GPU interception adapter.
 // The process one is implmented here.
 
@@ -13,6 +13,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -22,26 +23,16 @@ import (
 )
 
 // Adapter that adds GPU support to the request.
-// GPU Dump/Restore is automatically managed by the job manager using
-// CRIU callbacks. Assumes the job is already created (not running).
 func Attach(gpus Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+			if !req.GPUEnabled {
+				return next(ctx, opts, resp, req)
+			}
+
 			if !opts.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to use GPU support")
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to enable GPU support")
 			}
-
-			jid := req.JID
-			if jid == "" {
-				return nil, status.Errorf(codes.InvalidArgument, "a JID is required for GPU support")
-			}
-
-			log.Info().Str("jid", jid).Msg("enabling GPU support")
-
-			// Create child lifetime context, so we have cancellation ability over restored
-			// process created by the next handler(s).
-			lifetime, cancel := context.WithCancel(opts.Lifetime)
-			opts.Lifetime = lifetime
 
 			user := &syscall.Credential{
 				Uid:    req.UID,
@@ -52,22 +43,25 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			env := req.GetEnv()
 
 			pid := make(chan uint32, 1)
+			defer close(pid)
+
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			err := gpus.Attach(ctx, lifetime, jid, user, pid, env)
+			id, err := gpus.Attach(ctx, user, pid, env...)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 			}
 
+			ctx = context.WithValue(ctx, keys.GPU_CONTROLLER_ID_CONTEXT_KEY, id)
+
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
-				cancel()
 				return nil, err
 			}
 
 			pid <- resp.PID
 
-			log.Info().Str("jid", jid).Msg("GPU support enabled")
+			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
 			return exited, nil
 		}

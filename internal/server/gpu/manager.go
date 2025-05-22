@@ -10,26 +10,22 @@ import (
 )
 
 type Manager interface {
-	// Attach attaches a GPU controller to a process with the given JID, and PID.
-	// Takse in a channel for the PID, allowing this to be called before the process is started,
-	// so that the PID can be passed in later.
-	Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) error
+	// Attach attaches a GPU controller to a process with the given PID.
+	// Takes in a channel for the PID, allowing this to be called before the process is started,
+	// so that the PID can be passed in later. Returns a unique ID for the GPU controller.
+	Attach(ctx context.Context, user *syscall.Credential, pid <-chan uint32, env ...string) (string, error)
 
-	// AttachAsync calls Attach in background.
-	// Returns a channel that will receive an error if the attach fails.
-	AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) <-chan error
+	// IsAttached returns true if GPU is attached to a process with the given PID.
+	IsAttached(pid uint32) bool
 
-	// IsAttached returns true if GPU is attached to for the given JID.
-	IsAttached(jid string) bool
-
-	// Detach detaches the GPU controller from a process with the given JID, and PID.
-	Detach(jid string) error
+	// Detach detaches the GPU controller from a process with the given and PID.
+	Detach(pid uint32) error
 
 	// Returns server-compatible health checks.
 	Checks() types.Checks
 
-	// CRIUCallback returns the CRIU notify callback for GPU C/R.
-	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallback
+	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
+	CRIUCallback(stream int32, env ...string) *criu.NotifyCallback
 }
 
 /////////////////
@@ -39,29 +35,22 @@ type Manager interface {
 // Embed this into unimplmented implmentations
 type ManagerMissing struct{}
 
-func (ManagerMissing) Attach(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) error {
-	return fmt.Errorf("GPU manager missing")
+func (ManagerMissing) Attach(ctx context.Context, user *syscall.Credential, pid <-chan uint32, env ...string) (string, error) {
+	return "", fmt.Errorf("GPU manager missing")
 }
 
-func (ManagerMissing) AttachAsync(ctx context.Context, lifetime context.Context, jid string, user *syscall.Credential, pid <-chan uint32, env []string) <-chan error {
-	err := make(chan error)
-	err <- fmt.Errorf("GPU manager missing")
-	close(err)
-	return err
-}
-
-func (ManagerMissing) IsAttached(jid string) bool {
+func (ManagerMissing) IsAttached(pid uint32) bool {
 	return false
 }
 
-func (ManagerMissing) Detach(jid string) error {
+func (ManagerMissing) Detach(pid uint32) error {
 	return fmt.Errorf("GPU manager missing")
-}
-
-func (ManagerMissing) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallback {
-	return nil
 }
 
 func (ManagerMissing) Checks() types.Checks {
 	return types.Checks{}
+}
+
+func (ManagerMissing) CRIUCallback(stream int32, env ...string) *criu.NotifyCallback {
+	return nil
 }
