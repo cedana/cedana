@@ -15,7 +15,7 @@ type Flag struct {
 
 var (
 	DirFlag          = Flag{Full: "dir", Short: "d"}
-	RemoteCheckpoint = Flag{Full: "remote-checkpoint", Short: "r"}
+	RemoteCheckpoint = Flag{Full: "remote-checkpoint", Short: "c"}
 	NameFlag         = Flag{Full: "name"}
 	PathFlag         = Flag{Full: "path", Short: "p"}
 	PidFileFlag      = Flag{Full: "pid-file"}
