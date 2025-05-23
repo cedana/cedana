@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -135,6 +136,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	body, _ := zerologEntry[zerolog.MessageFieldName].(string)
 
 	attributes := make(map[string]string)
+	attributes["version"] = version.GetVersion()
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName {
