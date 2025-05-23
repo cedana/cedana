@@ -86,7 +86,7 @@ func NewManagerLazy(
 		for {
 			select {
 			case <-lifetime.Done():
-				log.Info().Msg("syncing DB before shutdown")
+				log.Info().Msg("syncing job manager with DB before shutdown")
 				var errs []error
 				var failedActions []action
 				manager.wg.Wait() // wait for all background routines
@@ -104,7 +104,7 @@ func NewManagerLazy(
 				}
 				err = errors.Join(errs...)
 				if err != nil {
-					log.Error().Msg("failed to sync DB before shutdown")
+					log.Error().Msg("failed to sync job manager with DB before shutdown")
 					for i, action := range failedActions {
 						log.Debug().Err(errs[i]).Str("id", action.id).Str("type", action.typ.String()).Send()
 					}
@@ -114,7 +114,7 @@ func NewManagerLazy(
 				err := manager.syncWithDB(lifetime, action)
 				if err != nil {
 					manager.pending <- action
-					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("DB sync failed, retrying...")
+					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("job manager DB sync failed, retrying...")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
 				}
 			}

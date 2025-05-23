@@ -62,7 +62,7 @@ func (m *controllers) Find(attachedPID uint32) *controller {
 	var found *controller
 	m.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if uint32(c.Process.Pid) == attachedPID {
+		if c.AttachedPID == attachedPID {
 			found = c
 			return false
 		}
@@ -112,6 +112,7 @@ func (m *controllers) Spawn(
 	}
 
 	controller := &controller{
+		ID:     id,
 		ErrBuf: &bytes.Buffer{},
 		Cmd:    exec.Command(binary, id, observability),
 	}
@@ -133,16 +134,18 @@ func (m *controllers) Spawn(
 	}
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Credential: user,
+		Setpgid:    true, // So it can run independently in its own process group
 	}
-	controller.Env = append(
-		os.Environ(),
-		"CEDANA_URL="+config.Global.Connection.URL,
-		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
-	)
 
 	// Add user, runtime-specific environment variables.
 	// Could potentially override os.Environ() variables, which is intended.
-	controller.Env = append(controller.Env, env...)
+	controller.Env = append(os.Environ(), env...)
+
+	controller.Env = append(
+		controller.Env,
+		"CEDANA_URL="+config.Global.Connection.URL,
+		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
+	)
 
 	err := controller.Start()
 	if err != nil {
@@ -203,13 +206,14 @@ func (controller *controller) WaitForHealthCheck(ctx context.Context, wg *sync.W
 	var components []*daemon.HealthCheckComponent
 	if resp != nil {
 		l := log.Debug()
+		l.Str("ID", controller.ID)
 		for _, c := range resp.Components {
 			l = l.Str(c.Name, c.Data)
 			for _, w := range c.Warnings {
-				log.Warn().Str(c.Name, c.Data).Msg(w)
+				log.Warn().Str("ID", controller.ID).Str(c.Name, c.Data).Msg(w)
 			}
 			for _, e := range c.Errors {
-				log.Error().Str(c.Name, c.Data).Msg(e)
+				log.Error().Str("ID", controller.ID).Str(c.Name, c.Data).Msg(e)
 			}
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:     c.Name,
@@ -218,7 +222,7 @@ func (controller *controller) WaitForHealthCheck(ctx context.Context, wg *sync.W
 				Errors:   c.Errors,
 			})
 		}
-		l.Msg("GPU health check")
+		l.Msg("health checked GPU controller")
 	}
 	if err != nil {
 		return components, utils.GRPCErrorShort(err, controller.ErrBuf.String())

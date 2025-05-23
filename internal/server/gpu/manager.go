@@ -24,8 +24,11 @@ type Manager interface {
 	// Returns server-compatible health checks.
 	Checks() types.Checks
 
+	// GetID returns the ID of the GPU controller for a given PID.
+	GetID(pid uint32) (string, error)
+
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
-	CRIUCallback(stream int32, env ...string) *criu.NotifyCallback
+	CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback
 }
 
 /////////////////
@@ -51,6 +54,10 @@ func (ManagerMissing) Checks() types.Checks {
 	return types.Checks{}
 }
 
-func (ManagerMissing) CRIUCallback(stream int32, env ...string) *criu.NotifyCallback {
+func (ManagerMissing) GetID(pid uint32) (string, error) {
+	return "", fmt.Errorf("GPU manager missing")
+}
+
+func (ManagerMissing) CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback {
 	return nil
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/cgroups/manager"
+	"github.com/opencontainers/cgroups/manager"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/system"

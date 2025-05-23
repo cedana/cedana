@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	runc_gpu "github.com/cedana/cedana/plugins/runc/pkg/gpu"
@@ -22,12 +23,9 @@ func Interception(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to get spec from context")
 		}
 
-		jid := req.JID
-		if jid == "" {
-			jid = req.GetDetails().GetRunc().GetID()
-			if jid == "" {
-				return nil, status.Errorf(codes.InvalidArgument, "JID is required for GPU interception")
-			}
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
 		}
 
 		// Check if GPU plugin is installed
@@ -41,7 +39,7 @@ func Interception(next types.Run) types.Run {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
+		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, id)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}

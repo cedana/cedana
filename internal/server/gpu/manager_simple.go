@@ -58,8 +58,9 @@ type action struct {
 
 func NewSimpleManager(lifetime context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, db db.GPU) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
+		pending:     make(chan action, 64),
 		plugins:     plugins,
-		wg:          serverWg,
+		wg:          &sync.WaitGroup{},
 		db:          db,
 		controllers: controllers{},
 	}
@@ -77,7 +78,7 @@ func NewSimpleManager(lifetime context.Context, serverWg *sync.WaitGroup, plugin
 		for {
 			select {
 			case <-lifetime.Done():
-				log.Info().Msg("syncing GPU DB before shutdown")
+				log.Info().Msg("syncing GPU manager with DB before shutdown")
 				var errs []error
 				var failedActions []action
 				manager.wg.Wait() // wait for all background routines
@@ -95,7 +96,7 @@ func NewSimpleManager(lifetime context.Context, serverWg *sync.WaitGroup, plugin
 				}
 				err = errors.Join(errs...)
 				if err != nil {
-					log.Error().Msg("failed to sync GPU DB before shutdown")
+					log.Error().Msg("failed to sync GPU manager with DB before shutdown")
 					for i, action := range failedActions {
 						log.Debug().Err(errs[i]).Str("id", action.id).Str("type", action.typ.String()).Send()
 					}
@@ -105,7 +106,7 @@ func NewSimpleManager(lifetime context.Context, serverWg *sync.WaitGroup, plugin
 				err := manager.syncWithDB(lifetime, action)
 				if err != nil {
 					manager.pending <- action
-					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("GPU DB sync failed, retrying...")
+					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("GPU manager DB sync failed, retrying...")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
 				}
 			}
@@ -127,44 +128,51 @@ func (m *ManagerSimple) Attach(ctx context.Context, user *syscall.Credential, pi
 		return "", err
 	}
 
-	log.Debug().Msg("spawning a GPU controller...")
+	log.Debug().Msg("spawning a GPU controller")
 
 	controller, err := m.controllers.Spawn(binary, user, env...)
 	if err != nil {
 		return "", err
 	}
 
-	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller...")
+	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
 
 	err = controller.Connect(ctx, m.wg)
 	if err != nil {
 		return "", err
 	}
 
+	log.Debug().Str("ID", controller.ID).Str("Address", controller.Target()).Msg("connected to GPU controller")
+
 	m.pending <- action{putController, controller.ID}
 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		ok := false
 		select {
 		case <-ctx.Done():
+		case controller.AttachedPID, ok = <-pid:
+		}
+		if !ok {
 			log.Debug().Err(ctx.Err()).Str("ID", controller.ID).Msg("terminating GPU controller")
 			controller.Terminate()
 			m.controllers.Delete(controller.ID)
-			m.pending <- action{putController, controller.ID}
-		case controller.AttachedPID = <-pid:
+		} else {
+			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
 		}
 		m.pending <- action{putController, controller.ID}
-		log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
 	}()
 
 	return controller.ID, nil
 }
 
 func (m *ManagerSimple) Detach(pid uint32) error {
+	log.Debug().Uint32("PID", pid).Msg("detaching GPU controller from process")
 	controller := m.controllers.Find(pid)
 	if controller == nil {
-		return fmt.Errorf("no GPU controller not found attached to PID %d", pid)
+		log.Debug().Uint32("PID", pid).Msg("no GPU controller found attached to process")
+		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
 	controller.Terminate()
 	m.controllers.Delete(controller.ID)
@@ -174,6 +182,14 @@ func (m *ManagerSimple) Detach(pid uint32) error {
 
 func (m *ManagerSimple) IsAttached(pid uint32) bool {
 	return m.controllers.Find(pid) != nil
+}
+
+func (m *ManagerSimple) GetID(pid uint32) (string, error) {
+	controller := m.controllers.Find(pid)
+	if controller == nil {
+		return "", fmt.Errorf("no GPU controller found attached to PID %d", pid)
+	}
+	return controller.ID, nil
 }
 
 func (m *ManagerSimple) Checks() types.Checks {
@@ -237,7 +253,7 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.NotifyCallback {
+func (m *ManagerSimple) CRIUCallback(id string, stream int32, env ...string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -249,16 +265,18 @@ func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.N
 
 		pid := uint32(opts.GetPid())
 
-		controller := m.controllers.Find(pid)
+		controller := m.controllers.Get(id)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
 		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to freeze GPU")
+			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", err)
 		}
+
+		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -269,11 +287,11 @@ func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.N
 
 			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
-				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to dump GPU")
+				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
 				return
 			}
-			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU dump complete")
+			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU dump complete")
 		}()
 		return nil
 	}
@@ -285,7 +303,7 @@ func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.N
 
 		pid := uint32(opts.GetPid())
 
-		controller := m.controllers.Find(pid)
+		controller := m.controllers.Get(id)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
@@ -305,9 +323,9 @@ func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.N
 
 		pid := uint32(opts.GetPid())
 
-		controller := m.controllers.Find(pid)
+		controller := m.controllers.Get(id)
 		if controller == nil {
-			log.Error().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU controller not found, is the process still running?")
+			log.Error().Uint32("PID", pid).Msg("GPU controller not found, is the process still running?")
 			return
 		}
 
@@ -331,9 +349,10 @@ func (m *ManagerSimple) CRIUCallback(stream int32, env ...string) *criu_client.N
 
 			pid := uint32(opts.GetPid())
 
-			controller := m.controllers.Find(pid)
+			controller := m.controllers.Get(id)
 			if controller == nil {
 				restoreErr <- fmt.Errorf("GPU controller not found, is the process still running?")
+				return
 			}
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
@@ -386,7 +405,7 @@ func (m *ManagerSimple) syncWithDB(ctx context.Context, action action) error {
 			err = m.controllers.Import(ctx, m.wg, dbController)
 			if err != nil {
 				// If import fails, we assume the controller is no longer running
-				log.Debug().Str("reason", err.Error()).Str("ID", dbController.ID).Msg("found stale GPU controller in DB")
+				log.Debug().Str("reason", err.Error()).Str("ID", dbController.ID).Msg("clearing stale GPU controller in DB")
 				err = m.db.DeleteGPUController(ctx, dbController.ID)
 			}
 		}

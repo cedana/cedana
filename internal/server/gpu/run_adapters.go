@@ -52,7 +52,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 			}
 
-			ctx = context.WithValue(ctx, keys.GPU_CONTROLLER_ID_CONTEXT_KEY, id)
+			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
@@ -101,6 +101,11 @@ func Interception(next types.Run) types.Run {
 // Adapter that adds GPU interception to a process job.
 func ProcessInterception(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+		}
+
 		// Check if GPU plugin is installed
 		var gpu *plugins.Plugin
 		if gpu = opts.Plugins.Get("gpu"); !gpu.IsInstalled() {
@@ -113,7 +118,7 @@ func ProcessInterception(next types.Run) types.Run {
 		env := req.GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
-		env = append(env, "CEDANA_JID="+req.JID)
+		env = append(env, "CEDANA_GPU_ID="+id)
 
 		req.Env = env
 
