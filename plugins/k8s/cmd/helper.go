@@ -285,7 +285,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				continue
 			}
 			resp, err := CheckpointContainer(
-				context.WithValue(context.Background(), keys.REMOTE_CHECKPOINT_KEY, &remoteCheckpoint),
+				context.WithValue(context.Background(), keys.REMOTE_CHECKPOINT_KEY, remoteCheckpoint),
 				runcId,
 				runcRoot,
 				address,

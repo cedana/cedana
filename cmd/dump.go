@@ -112,7 +112,7 @@ var dumpCmd = &cobra.Command{
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		if remoteCheckpoint != "" {
-			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, &remoteCheckpoint)
+			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, remoteCheckpoint)
 		}
 		cmd.SetContext(ctx)
 

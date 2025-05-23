@@ -150,7 +150,7 @@ var restoreCmd = &cobra.Command{
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
-			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, &checkpointId)
+			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, checkpointId)
 		}
 		cmd.SetContext(ctx)
 

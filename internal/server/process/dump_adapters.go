@@ -202,7 +202,7 @@ func UploadCheckpoint(next types.Dump) types.Dump {
 			return nil, err
 		}
 
-		uuid := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(*string)
+		uuid := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(string)
 		resp.Id = uuid
 
 		go func() {
@@ -225,7 +225,7 @@ func UploadCheckpoint(next types.Dump) types.Dump {
 			body := cedanagosdk_models.CheckpointInfo{}
 			body.SetGpu(&gpu)
 			body.SetPlatform(&platform)
-			_, err := client.V2().Checkpoints().Info().ById(*uuid).Put(ctx, &body, nil)
+			_, err := client.V2().Checkpoints().Info().ById(uuid).Put(ctx, &body, nil)
 			if err != nil {
 				log.Warn().Msgf("put failed: checkpoint info to remote: %v", err)
 				return

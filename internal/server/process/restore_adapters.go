@@ -194,13 +194,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 func DownloadCheckpoint(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-		checkpointId, found := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(*string)
+		checkpointId, found := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(string)
 		if !found {
 			return next(ctx, opts, resp, req)
 		}
 		// fetch from checkpointId
 		client := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
-		downloadUrl, err := client.V2().Checkpoints().Download().ById(*checkpointId).Get(ctx, nil)
+		downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(ctx, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
 		}
