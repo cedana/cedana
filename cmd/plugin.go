@@ -89,6 +89,7 @@ var pluginListCmd = &cobra.Command{
 
 		tableWriter.SortBy([]table.SortBy{
 			{Name: "Status", Mode: table.Asc},
+			{Name: "Plugin", Mode: table.Asc},
 		})
 
 		for _, p := range list {

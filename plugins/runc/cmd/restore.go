@@ -37,12 +37,14 @@ var RestoreCmd = &cobra.Command{
 		}
 
 		req.Type = "runc"
-		req.Details = &daemon.Details{Runc: &runc.Runc{
-			ID:         id,
-			Root:       root,
-			Bundle:     bundle,
-			WorkingDir: wd,
-		}}
+		req.Details = &daemon.Details{
+			Runc: &runc.Runc{
+				ID:         id,
+				Root:       root,
+				Bundle:     bundle,
+				WorkingDir: wd,
+			},
+		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
