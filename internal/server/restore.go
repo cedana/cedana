@@ -106,7 +106,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	restore := criu.Restore.With(middleware...)
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
+		Lifetime: context.WithoutCancel(s.lifetime),
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}

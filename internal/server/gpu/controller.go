@@ -71,12 +71,16 @@ func (m *controllers) Find(attachedPID uint32) *controller {
 	return found
 }
 
-// Imports an existing (DB) GPU controller, and connects to it
+// Imports an existing (DB) GPU controller
 func (m *controllers) Import(ctx context.Context, wg *sync.WaitGroup, c *db.GPUController) error {
 	controller := &controller{
 		ID:          c.ID,
 		AttachedPID: c.AttachedPID,
 		ErrBuf:      &bytes.Buffer{},
+	}
+
+	if !utils.PidRunning(c.PID) {
+		return fmt.Errorf("no longer running")
 	}
 
 	process, err := os.FindProcess(int(c.PID))
@@ -97,7 +101,7 @@ func (m *controllers) FreeList() []*controller {
 	var controllers []*controller
 	m.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if utils.PidExists(uint32(c.Process.Pid)) && c.AttachedPID == 0 {
+		if utils.PidRunning(uint32(c.Process.Pid)) && c.AttachedPID == 0 {
 			controllers = append(controllers, c)
 		}
 		return true
@@ -110,7 +114,7 @@ func (m *controllers) BusyList() []*controller {
 	var controllers []*controller
 	m.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if utils.PidExists(uint32(c.Process.Pid)) && c.AttachedPID != 0 && utils.PidExists(c.AttachedPID) {
+		if utils.PidRunning(uint32(c.Process.Pid)) && c.AttachedPID != 0 && utils.PidRunning(c.AttachedPID) {
 			controllers = append(controllers, c)
 		}
 		return true
@@ -206,7 +210,9 @@ func (controller *controller) Connect(ctx context.Context, wg *sync.WaitGroup) e
 
 func (controller *controller) Terminate() {
 	controller.Process.Signal(CONTROLLER_TERMINATE_SIGNAL)
-	controller.Close()
+	if controller.ClientConn != nil {
+		controller.ClientConn.Close()
+	}
 }
 
 // Health checks the GPU controller, blocking on connection until ready.

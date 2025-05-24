@@ -438,6 +438,8 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 		busyList := m.controllers.BusyList()
 		activeList := slices.Concat(freeList, busyList)
 
+		log.Debug().Int("free", len(freeList)).Int("busy", len(busyList)).Int("target", m.poolSize).Msg("GPU controller pool")
+
 		// Remove controllers not in either free or busy list
 
 		m.controllers.Range(func(key, value any) bool {
@@ -445,7 +447,10 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 			if !slices.ContainsFunc(activeList, func(c2 *controller) bool {
 				return c2.ID == c.ID
 			}) {
+				log.Debug().Str("ID", c.ID).Msg("clearing stale GPU controller in pool")
+				c.Terminate()
 				m.controllers.Delete(c.ID)
+				m.pending <- action{putController, c.ID}
 			}
 			return true
 		})

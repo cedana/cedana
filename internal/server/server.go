@@ -51,6 +51,7 @@ type Server struct {
 // Root avoids the use of the server and provides direct run/restores
 type Root struct {
 	lifetime context.Context // context alive for the duration of the server
+	shutdown context.CancelFunc
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	plugins  plugins.Manager
 	gpus     gpu.Manager
@@ -71,13 +72,15 @@ type MetricOpts struct {
 	OTel bool
 }
 
-func (s *Root) Wait() {
+func (s *Root) Shutdown() {
+	s.shutdown()
 	s.wg.Wait()
 }
 
 func NewRoot(ctx context.Context) (*Root, error) {
 	var err error
 	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx)
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
@@ -101,8 +104,10 @@ func NewRoot(ctx context.Context) (*Root, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
+
 	return &Root{
 		lifetime: ctx,
+		shutdown: cancel,
 		wg:       wg,
 		plugins:  pluginManager,
 		gpus:     gpuManager,
