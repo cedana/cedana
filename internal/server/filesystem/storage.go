@@ -33,6 +33,19 @@ func (s *Storage) Delete(path string) error {
 	return nil
 }
 
+func (s *Storage) ReadDir(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	var files []string
+	for _, entry := range entries {
+		files = append(files, entry.Name())
+	}
+	return files, nil
+}
+
 func (s *Storage) IsRemote() bool {
 	return false
 }

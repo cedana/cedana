@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -439,13 +440,22 @@ func (fs *Fs) stopListener() error {
 func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int32) ([]string, error) {
 	switch mode {
 	case READ_ONLY:
-		matches, err := filepath.Glob(filepath.Join(dir, IMG_FILE_PATTERN))
+		list, err := storage.ReadDir(dir)
 		if err != nil {
 			return nil, err
 		}
+
+		matches := make([]string, 0, len(list))
+		for _, entry := range list {
+			if regexp.MustCompile(IMG_FILE_PATTERN).MatchString(entry) {
+				matches = append(matches, filepath.Join(dir, entry))
+			}
+		}
+
 		if len(matches) != int(parallelism) {
 			return nil, fmt.Errorf("expected %d images, got %d. please specify correct parallelism", parallelism, len(matches))
 		}
+
 		return matches, nil
 	case WRITE_ONLY:
 		paths := make([]string, parallelism)
