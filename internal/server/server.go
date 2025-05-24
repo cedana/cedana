@@ -97,13 +97,7 @@ func NewRoot(ctx context.Context) (*Root, error) {
 
 	pluginManager := plugins.NewLocalManager()
 
-	var gpuManager gpu.Manager
-	gpuPoolSize := config.Global.GPU.PoolSize
-	if gpuPoolSize > 0 {
-		gpuManager, err = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
-	} else {
-		gpuManager, err = gpu.NewSimpleManager(ctx, wg, pluginManager, database)
-	}
+	gpuManager, err := gpu.NewPoolManager(ctx, wg, 0, pluginManager, database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
@@ -144,13 +138,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	pluginManager := plugins.NewLocalManager()
 
-	var gpuManager gpu.Manager
 	gpuPoolSize := config.Global.GPU.PoolSize
-	if gpuPoolSize > 0 {
-		gpuManager, err = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
-	} else {
-		gpuManager, err = gpu.NewSimpleManager(ctx, wg, pluginManager, database)
-	}
+	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager, database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}

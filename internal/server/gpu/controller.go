@@ -87,14 +87,35 @@ func (m *controllers) Import(ctx context.Context, wg *sync.WaitGroup, c *db.GPUC
 		Process: process,
 	}
 
-	err = controller.Connect(ctx, wg)
-	if err != nil {
-		return err
-	}
-
 	m.Store(c.ID, controller)
 
 	return nil
+}
+
+// Returns a list of free GPU controllers
+func (m *controllers) FreeList() []*controller {
+	var controllers []*controller
+	m.Range(func(key, value any) bool {
+		c := value.(*controller)
+		if utils.PidExists(uint32(c.Process.Pid)) && c.AttachedPID == 0 {
+			controllers = append(controllers, c)
+		}
+		return true
+	})
+	return controllers
+}
+
+// Returns a list of busy GPU controllers
+func (m *controllers) BusyList() []*controller {
+	var controllers []*controller
+	m.Range(func(key, value any) bool {
+		c := value.(*controller)
+		if utils.PidExists(uint32(c.Process.Pid)) && c.AttachedPID != 0 && utils.PidExists(c.AttachedPID) {
+			controllers = append(controllers, c)
+		}
+		return true
+	})
+	return controllers
 }
 
 // Spawns a GPU controller
