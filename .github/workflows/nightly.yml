@@ -1,6 +1,6 @@
 name: Nightly
 permissions:
-  contents: read
+  contents: write
 
 # This workflow runs all the large tests and benchmarks nightly.
 on:
