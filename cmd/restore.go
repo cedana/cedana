@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -149,9 +148,6 @@ var restoreCmd = &cobra.Command{
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		if checkpointId, found := strings.CutPrefix(path, "cedana://"); found {
-			ctx = context.WithValue(ctx, keys.REMOTE_CHECKPOINT_KEY, checkpointId)
-		}
 		cmd.SetContext(ctx)
 
 		if noServer {

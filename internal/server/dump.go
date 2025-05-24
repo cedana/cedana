@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"google.golang.org/grpc/codes"
@@ -17,6 +19,7 @@ import (
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -27,16 +30,20 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
-	dumpDirAdapter := filesystem.PrepareDumpDir
+	storage, err := pluginDumpStorage(req.Dir)
+	if err != nil {
+		return nil, err
+	}
+
+	setupDumpFS := filesystem.SetupDumpFS(storage)
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDir
+		setupDumpFS = streamer.SetupDumpFS(storage)
 	}
 
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		dumpDirAdapter,
-		process.UploadCheckpoint,
+		setupDumpFS,
 
 		pluginDumpMiddleware, // middleware from plugins
 
@@ -66,7 +73,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	criu := criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)
 
-	_, err := criu(dump)(ctx, opts, resp, req)
+	_, err = criu(dump)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +108,33 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Error(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unavailable, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, opts, resp, req)
 	}
+}
+
+// Detects and returns the storage to use from the specified dump dir.
+// If dump dir is prepended with "plugin://", it will return the plugin storage if
+// an available plugin is found and supports the storage feature.
+func pluginDumpStorage(dir string) (*io.Storage, error) {
+	storage := &io.Storage{
+		Remote:   false,
+		WriteTo:  utils.WriteTo,
+		ReadFrom: utils.ReadFrom,
+	}
+
+	if strings.Contains(dir, "://") {
+		pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+		err := features.Storage.IfAvailable(func(name string, pluginStorage io.Storage) error {
+			storage = &pluginStorage
+			return nil
+		}, pluginName)
+		if err != nil {
+			return nil, status.Errorf(codes.Unavailable, err.Error())
+		}
+	}
+
+	return storage, nil
 }
