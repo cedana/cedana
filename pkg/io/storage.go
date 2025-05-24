@@ -1,14 +1,15 @@
 package io
 
-import "os"
+import (
+	"io"
+)
 
 type (
-	WriteToFunc  func(src *os.File, target string, compression string) (int64, error)
-	ReadFromFunc func(src string, target *os.File) (int64, error)
+	Storage interface {
+		Open(path string) (io.ReadCloser, error)
+		Create(path string) (io.ReadWriteCloser, error)
+		Delete(path string) error
 
-	Storage struct {
-		Remote   bool
-		WriteTo  WriteToFunc
-		ReadFrom ReadFromFunc
+		IsRemote() bool
 	}
 )

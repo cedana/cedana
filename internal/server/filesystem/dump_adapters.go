@@ -27,21 +27,24 @@ const DUMP_DIR_PERMS = 0o755
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
-func SetupDumpFS(storage *io.Storage) types.Adapter[types.Dump] {
+func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+			dir := req.Dir
 			compression := req.Compression
+
 			if compression == "" {
 				compression = config.Global.Checkpoint.Compression
 			}
 
-			// Check if compression is valid, because we don't want to fail after the dump
-			// as the process would be killed
 			if _, ok := io.SUPPORTED_COMPRESSIONS[compression]; !ok {
 				return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 			}
 
-			dir := req.GetDir()
+			// If remote storage, we instead use a temporary directory for CRIU
+			if storage.IsRemote() {
+				dir = os.TempDir()
+			}
 
 			// Check if the provided dir exists
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -99,26 +102,38 @@ func SetupDumpFS(storage *io.Storage) types.Adapter[types.Dump] {
 
 			resp.Path = imagesDirectory
 
-			if compression == "" || compression == "none" {
+			// If not remote storage, we can just return here
+			// If remote storage, we need to still at least tar the directory even if no compression specified
+
+			if !storage.IsRemote() && (compression == "" || compression == "none") {
 				return exited, err // Nothing else to do
 			}
 
-			// Create the compressed tarball
+			// Create the tarball
 
-			log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("creating tarball")
+			ext, _ := io.ExtForCompression(compression)
+			path := imagesDirectory + ".tar" + ext
+			tarball, err := storage.Create(path)
+			if err != nil {
+				return exited, status.Errorf(codes.Internal, "failed to create tarball file: %v", err)
+			}
+			defer tarball.Close()
 
-			_, end := profiling.StartTimingCategory(ctx, "compression", utils.Tar)
-			tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
+			log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
+
+			_, end := profiling.StartTimingCategory(ctx, "storage", utils.Tar)
+			err = utils.Tar(imagesDirectory, tarball, compression)
 			end()
 			if err != nil {
-				return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
+				storage.Delete(path)
+				return exited, status.Errorf(codes.Internal, "failed to tarball into storage: %v", err)
 			}
+
+			log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 			os.RemoveAll(imagesDirectory)
 
-			resp.Path = tarball
-
-			log.Debug().Str("path", tarball).Str("compression", compression).Msg("created tarball")
+			resp.Path = path
 
 			return exited, nil
 		}

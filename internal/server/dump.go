@@ -30,7 +30,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
-	storage, err := pluginDumpStorage(req.Dir)
+	storage, err := pluginStorage(req.Dir)
 	if err != nil {
 		return nil, err
 	}
@@ -115,24 +115,23 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 	}
 }
 
-// Detects and returns the storage to use from the specified dump dir.
-// If dump dir is prepended with "plugin://", it will return the plugin storage if
+// Detects and returns the storage to use from the specified path,
+// If path is prepended with "plugin://", it will return the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginDumpStorage(dir string) (*io.Storage, error) {
-	storage := &io.Storage{
-		Remote:   false,
-		WriteTo:  utils.WriteTo,
-		ReadFrom: utils.ReadFrom,
-	}
+func pluginStorage(path string) (io.Storage, error) {
+	var storage io.Storage = &filesystem.Storage{}
 
-	if strings.Contains(dir, "://") {
-		pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+	if strings.Contains(path, "://") {
+		pluginName := fmt.Sprintf("storage/%s", strings.Split(path, "://")[0])
 		err := features.Storage.IfAvailable(func(name string, pluginStorage io.Storage) error {
-			storage = &pluginStorage
+			if pluginStorage == nil {
+				return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+			}
+			storage = pluginStorage
 			return nil
 		}, pluginName)
 		if err != nil {
-			return nil, status.Errorf(codes.Unavailable, err.Error())
+			return nil, status.Error(codes.Unavailable, err.Error())
 		}
 	}
 

@@ -22,7 +22,6 @@ import (
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -278,14 +277,15 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		// TODO SA: support multiple container pod checkpoint/restore
 		cedanaClient := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 		for _, runcId := range containers {
-			remoteCheckpoint, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
+			_, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
 			if err != nil {
 				// if propagator is reachable we make the dump request otherwise we log error
 				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
 				continue
 			}
 			resp, err := CheckpointContainer(
-				context.WithValue(context.Background(), keys.REMOTE_CHECKPOINT_KEY, remoteCheckpoint),
+				// context.WithValue(context.Background(), keys.REMOTE_CHECKPOINT_KEY, remoteCheckpoint),
+				context.Background(),
 				runcId,
 				runcRoot,
 				address,

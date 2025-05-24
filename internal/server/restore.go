@@ -25,16 +25,21 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
-	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
+	storage, err := pluginStorage(req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	setupRestoreFS := filesystem.SetupRestoreFS(storage)
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDirForRestore
+		setupRestoreFS = streamer.SetupRestoreFS(storage)
 	}
 
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
-		dumpDirAdapter, // auto-detects compression
+		setupRestoreFS, // auto-detects compression
 		process.ReloadProcessStateForRestore,
 
 		pluginRestoreMiddleware, // middleware from plugins
@@ -62,7 +67,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
 
-	_, err := criu(restore)(ctx, opts, resp, req)
+	_, err = criu(restore)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +83,14 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
-	dumpDirAdapter := filesystem.PrepareDumpDirForRestore
+	storage, err := pluginStorage(req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	dumpDirAdapter := filesystem.SetupRestoreFS(storage)
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDirForRestore
+		dumpDirAdapter = streamer.SetupRestoreFS(storage)
 	}
 
 	middleware := types.Middleware[types.Restore]{
@@ -111,7 +121,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 
 	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
 
-	_, err := criu(restore)(ctx, opts, resp, req)
+	_, err = criu(restore)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}

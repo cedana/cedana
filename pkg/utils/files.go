@@ -21,31 +21,11 @@ const (
 )
 
 // Tar creates a tarball from the provided sources and writes it to the destination.
-// The desination should be a path without any file extension, as the function will add extension
-// based on the compression format specified.
 // FIXME: Works only with files, not directories in the tarball.
-func Tar(src string, tarball string, compression string) (string, error) {
-	ext, err := cedana_io.ExtForCompression(compression)
+func Tar(src string, dst io.WriteCloser, compression string) error {
+	writer, err := cedana_io.NewCompressionWriter(dst, compression)
 	if err != nil {
-		return "", err
-	}
-
-	tarball += ".tar" + ext
-
-	file, err := os.Create(tarball)
-	if err != nil {
-		return "", fmt.Errorf("Could not create tarball file: %s", err)
-	}
-	defer file.Close()
-	defer func() {
-		if err != nil {
-			os.Remove(tarball)
-		}
-	}()
-
-	writer, err := cedana_io.NewCompressionWriter(file, compression)
-	if err != nil {
-		return "", err
+		return err
 	}
 	defer writer.Close()
 
@@ -87,32 +67,14 @@ func Tar(src string, tarball string, compression string) (string, error) {
 		return err
 	})
 
-	return tarball, nil
+	return err
 }
 
 // Untar decompresses the provided tarball to the destination directory.
 // The destination directory should already exist.
-// The function automatically detects the compression format from the file extension.
 // FIXME: Works only with files, not directories in the tarball.
-func Untar(tarball string, dest string) error {
-	file, err := os.Open(tarball)
-	if err != nil {
-		return fmt.Errorf("Could not open tarball file: %s", err)
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("Could not get file stats: %s", err)
-	}
-	perm := stat.Mode().Perm()
-
-	compression, err := cedana_io.CompressionFromExt(tarball)
-	if err != nil {
-		return err
-	}
-
-	reader, err := cedana_io.NewCompressionReader(file, compression)
+func Untar(src io.ReadCloser, dest string, compression string) error {
+	reader, err := cedana_io.NewCompressionReader(src, compression)
 	if err != nil {
 		return err
 	}
@@ -143,7 +105,7 @@ func Untar(tarball string, dest string) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			// Create directory
-			if err := os.MkdirAll(target, perm); err != nil {
+			if err := os.MkdirAll(target, os.ModePerm); err != nil {
 				return err
 			}
 		case tar.TypeReg:
