@@ -24,6 +24,7 @@ import (
 func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+			dir := req.Dir
 			compression := req.Compression
 			if compression == "" {
 				compression = config.Global.Checkpoint.Compression
@@ -35,7 +36,10 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 			}
 
-			dir := req.GetDir()
+			// If remote storage, we instead use a temporary directory for CRIU
+			if storage.IsRemote() {
+				dir = os.TempDir()
+			}
 
 			// Check if the provided dir exists
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -104,6 +108,8 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 				opts.WG,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
+				storage,
+				filepath.Join(req.Dir, req.Name),
 				parallelism,
 				WRITE_ONLY,
 				compression,
@@ -131,7 +137,7 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 			if err != nil {
 				return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
 			}
-			if len(entries) == 0 {
+			if !storage.IsRemote() && len(entries) == 0 {
 				os.RemoveAll(imagesDirectory)
 				return exited, nil
 			}

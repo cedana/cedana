@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -111,8 +110,16 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 
 			// Create the tarball
 
+			var path string
+
 			ext, _ := io.ExtForCompression(compression)
-			path := imagesDirectory + ".tar" + ext
+
+			if storage.IsRemote() {
+				path = filepath.Join(dir, req.Name+".tar"+ext)
+			} else {
+				path = imagesDirectory + ".tar" + ext
+			}
+
 			tarball, err := storage.Create(path)
 			if err != nil {
 				return exited, status.Errorf(codes.Internal, "failed to create tarball file: %v", err)
@@ -121,8 +128,8 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 
 			log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
-			_, end := profiling.StartTimingCategory(ctx, "storage", utils.Tar)
-			err = utils.Tar(imagesDirectory, tarball, compression)
+			_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
+			err = io.Tar(imagesDirectory, tarball, compression)
 			end()
 			if err != nil {
 				storage.Delete(path)

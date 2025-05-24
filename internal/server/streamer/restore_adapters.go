@@ -20,19 +20,26 @@ func SetupRestoreFS(storage io.Storage) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 			path := req.GetPath()
-			stat, err := os.Stat(path)
-			if err != nil {
-				return nil, status.Errorf(codes.NotFound, "path error: %s", path)
-			}
 
-			var dir *os.File
 			var imagesDirectory string
 
-			if !stat.IsDir() {
-				return nil, status.Errorf(codes.InvalidArgument, "path must be a directory containing streamed images")
+			if !storage.IsRemote() {
+				stat, err := os.Stat(path)
+				if err != nil {
+					return nil, status.Errorf(codes.NotFound, "path error: %s", path)
+				}
+				if !stat.IsDir() {
+					return nil, status.Errorf(codes.InvalidArgument, "path must be a directory containing streamed images")
+				}
+				imagesDirectory = path
+			} else {
+				// For remote storage, we create a temporary directory for CRIU
+				imagesDirectory, err = os.MkdirTemp("", "restore-\\*")
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to create temp restore dir: %v", err)
+				}
+				defer os.RemoveAll(imagesDirectory)
 			}
-
-			imagesDirectory = path
 
 			// Streamer also requires Cedana's CRIU version until the Stream proto option
 			// is merged into CRIU upstream.
@@ -43,7 +50,7 @@ func SetupRestoreFS(storage io.Storage) types.Adapter[types.Restore] {
 				)
 			}
 
-			dir, err = os.Open(imagesDirectory)
+			dir, err := os.Open(imagesDirectory)
 			if err != nil {
 				os.RemoveAll(imagesDirectory)
 				return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
@@ -83,6 +90,8 @@ func SetupRestoreFS(storage io.Storage) types.Adapter[types.Restore] {
 				opts.WG,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
+				storage,
+				req.Path,
 				parallelism,
 				READ_ONLY,
 			)

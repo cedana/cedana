@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -24,10 +23,9 @@ import (
 // Automatically detects the compression format from the file extension.
 func SetupRestoreFS(storage io.Storage) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 			path := req.GetPath()
 
-			var err error
 			var isDir bool
 			var imagesDirectory string
 
@@ -70,8 +68,8 @@ func SetupRestoreFS(storage io.Storage) types.Adapter[types.Restore] {
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
-				_, end := profiling.StartTimingCategory(ctx, "compression", utils.Untar)
-				err = utils.Untar(tarball, imagesDirectory, compression)
+				_, end := profiling.StartTimingCategory(ctx, "compression", io.Untar)
+				err = io.Untar(tarball, imagesDirectory, compression)
 				end()
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)

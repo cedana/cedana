@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -60,7 +61,9 @@ func NewStreamingFs(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	streamerBinary string,
-	dir string,
+	imagesDir string,
+	storage cedana_io.Storage,
+	storagePath string,
 	parallelism int32,
 	mode Mode,
 	compressions ...string,
@@ -90,7 +93,7 @@ func NewStreamingFs(
 	// Start IO on the pipes from the dir
 	io := &sync.WaitGroup{}
 	ioErr := make(chan error, 1)
-	paths, err := imgPaths(dir, mode, parallelism)
+	paths, err := imgPaths(storage, storagePath, mode, parallelism)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,7 +104,21 @@ func NewStreamingFs(
 			defer readFds[i].Close()
 			go func() {
 				defer io.Done()
-				_, err := utils.ReadFrom(paths[i], writeFds[i])
+
+				compression, err := cedana_io.CompressionFromExt(paths[i])
+				if err != nil {
+					ioErr <- err
+					return
+				}
+
+				file, err := storage.Open(paths[i])
+				if err != nil {
+					ioErr <- err
+					return
+				}
+				defer file.Close()
+
+				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -111,7 +128,22 @@ func NewStreamingFs(
 			defer writeFds[i].Close()
 			go func() {
 				defer io.Done()
-				_, err := utils.WriteTo(readFds[i], paths[i], compression)
+
+				ext, err := cedana_io.ExtForCompression(compression)
+				if err != nil {
+					ioErr <- err
+					return
+				}
+
+				path := paths[i] + ext
+				file, err := storage.Create(path)
+				if err != nil {
+					ioErr <- err
+					return
+				}
+				defer file.Close()
+
+				_, err = cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -120,7 +152,7 @@ func NewStreamingFs(
 		}
 	}
 
-	args := []string{"--images-dir", dir}
+	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
 
 	switch mode {
@@ -146,7 +178,7 @@ func NewStreamingFs(
 	}
 
 	ready := make(chan bool, 1)
-  exited := make(chan bool, 1)
+	exited := make(chan bool, 1)
 	defer close(ready)
 
 	// Mark ready when we read init progress message on stderr
@@ -161,7 +193,7 @@ func NewStreamingFs(
 			if scanner.Text() == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Str("context", "streamer").Str("dir", dir).Msg(scanner.Text())
+			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(scanner.Text())
 		}
 	}()
 
@@ -170,13 +202,13 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
 	}
 
-	fs = &Fs{mode, nil, dir}
+	fs = &Fs{mode, nil, imagesDir}
 
 	// Clean up on exit
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-    defer close(exited)
+		defer close(exited)
 
 		err := cmd.Wait()
 		if err != nil {
@@ -185,7 +217,7 @@ func NewStreamingFs(
 		log.Trace().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
-		matches, err := filepath.Glob(filepath.Join(dir, "*.sock"))
+		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
 		if err == nil {
 			for _, match := range matches {
 				os.Remove(match)
@@ -199,22 +231,22 @@ func NewStreamingFs(
 	case <-time.After(CONNECTION_TIMEOUT):
 		return nil, nil, fmt.Errorf("timed out waiting for streamer to start")
 	case <-ready:
-  case <-exited:
+	case <-exited:
 	}
 
 	// Connect to the streamer
 	var conn net.Conn
 	switch mode {
 	case READ_ONLY:
-		conn, err = net.Dial("unix", filepath.Join(dir, SERVE_SOCK))
+		conn, err = net.Dial("unix", filepath.Join(imagesDir, SERVE_SOCK))
 	case WRITE_ONLY:
-		conn, err = net.Dial("unix", filepath.Join(dir, CAPTURE_SOCK))
+		conn, err = net.Dial("unix", filepath.Join(imagesDir, CAPTURE_SOCK))
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w", err)
 	}
 	fs.conn = conn.(*net.UnixConn)
-	log.Debug().Str("dir", dir).Msg("streamer connected")
+	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
 
 	signal.Ignored(syscall.SIGPIPE) // Avoid program termination due to broken pipe
 
@@ -404,7 +436,7 @@ func (fs *Fs) stopListener() error {
 
 // Returns a list of image paths found in the image directory.
 // Returns an error if the number of images found is not equal to the parallelism.
-func imgPaths(dir string, mode Mode, parallelism int32) ([]string, error) {
+func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int32) ([]string, error) {
 	switch mode {
 	case READ_ONLY:
 		matches, err := filepath.Glob(filepath.Join(dir, IMG_FILE_PATTERN))
