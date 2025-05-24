@@ -50,6 +50,7 @@ type actionType int
 const (
 	maintainPool actionType = iota
 	putController
+	shutdownPool
 	shutdown
 )
 
@@ -85,6 +86,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 				var errs []error
 				var failedActions []action
 				manager.wg.Wait() // wait for all background routines
+				manager.pending <- action{shutdownPool, ""}
 				manager.pending <- action{shutdown, ""}
 				for action := range manager.pending {
 					if action.typ == shutdown {
@@ -403,7 +405,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 ////////////////////////
 
 func (i actionType) String() string {
-	return [...]string{"maintainPool", "putController", "shutdown"}[i]
+	return [...]string{"maintainPool", "putController", "shutdownPool", "shutdown"}[i]
 }
 
 func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
@@ -478,6 +480,18 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 				m.controllers.Delete(controller.ID)
 				m.pending <- action{putController, controller.ID}
 			}
+		}
+
+	case shutdownPool:
+		// This action is used to shutdown the pool and terminate all free controllers
+
+		freeList := m.controllers.FreeList()
+
+		for _, controller := range freeList {
+			log.Debug().Str("ID", controller.ID).Msg("terminating free GPU controller")
+			controller.Terminate()
+			m.controllers.Delete(controller.ID)
+			m.pending <- action{putController, controller.ID}
 		}
 
 	case putController:
