@@ -160,14 +160,14 @@ func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) erro
 	return nil
 }
 
-func (n NotifyCallbackMulti) OnRestoreError(ctx context.Context) {
+func (n NotifyCallbackMulti) OnRestoreError(ctx context.Context, opts *criu.CriuOpts) {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		n.callbacks[i].OnRestoreError(ctx)
+		n.callbacks[i].OnRestoreError(ctx, opts)
 	}
 }
 
-func (n NotifyCallbackMulti) OnDumpError(ctx context.Context) {
+func (n NotifyCallbackMulti) OnDumpError(ctx context.Context, opts *criu.CriuOpts) {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		n.callbacks[i].OnDumpError(ctx)
+		n.callbacks[i].OnDumpError(ctx, opts)
 	}
 }

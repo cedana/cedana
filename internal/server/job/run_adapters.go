@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
@@ -44,19 +43,15 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
 				defer logFile.Close()
-        err = os.Chown(req.Log, int(req.UID), int(req.GID))
-        if err != nil {
-          return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
-        }
+				err = os.Chown(req.Log, int(req.UID), int(req.GID))
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
+				}
 				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
 			}
 
 			job.SetLog(req.Log)
 			job.SetDetails(req.Details)
-
-			if req.GPUEnabled {
-				next = next.With(gpu.Attach(jobs.GPUs()))
-			}
 
 			// Create child lifetime context, so we have cancellation ability over started process
 			lifetime, cancel := context.WithCancel(opts.Lifetime)

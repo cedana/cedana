@@ -6,6 +6,7 @@ sql:
       - job.sql
       - host.sql
       - checkpoint.sql
+      - gpu_controller.sql
     gen:
       go:
         out: .

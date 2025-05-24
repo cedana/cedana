@@ -28,6 +28,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		process.WritePIDFile,
+		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
 	}
@@ -61,6 +62,7 @@ func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, er
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		process.WritePIDFile,
+		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
 	}
@@ -68,7 +70,7 @@ func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, er
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
+		Lifetime: context.WithoutCancel(s.lifetime),
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}

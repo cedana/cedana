@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
@@ -43,6 +44,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
+		gpu.Restore(s.gpus),
 
 		criu.CheckOptsForRestore,
 	}
@@ -96,6 +98,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
+		gpu.Restore(s.gpus),
 
 		criu.CheckOptsForRestore,
 	}
@@ -103,7 +106,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	restore := criu.Restore.With(middleware...)
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
+		Lifetime: context.WithoutCancel(s.lifetime),
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}

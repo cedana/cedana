@@ -14,8 +14,8 @@ import (
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
+	"github.com/opencontainers/cgroups"
 	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -24,7 +24,7 @@ import (
 
 	// WARN: DO NOT REMOVE THIS IMPORT. Has side effects.
 	// See -> 'github.com/opencontainers/runc/libcontainer/cgroups/cgroups.go'
-	_ "github.com/opencontainers/runc/libcontainer/cgroups/devices"
+	_ "github.com/opencontainers/cgroups/devices"
 )
 
 // Sets the ManageCgroups field in the criu options to true.

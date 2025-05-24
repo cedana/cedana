@@ -32,6 +32,8 @@ const (
 	DEFAULT_COMPRESSION = "tar"
 	DEFAULT_DUMP_DIR    = "/tmp"
 
+	DEFAULT_GPU_POOL_SIZE = 0
+
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
@@ -66,6 +68,9 @@ var Global Config = Config{
 	},
 	Client: Client{
 		WaitForReady: false,
+	},
+	GPU: GPU{
+		PoolSize: DEFAULT_GPU_POOL_SIZE,
 	},
 	CRIU: CRIU{
 		LeaveRunning: false,

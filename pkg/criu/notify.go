@@ -21,8 +21,8 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
-	OnRestoreError(ctx context.Context)
-	OnDumpError(ctx context.Context)
+	OnRestoreError(ctx context.Context, opts *criu.CriuOpts)
+	OnDumpError(ctx context.Context, opts *criu.CriuOpts)
 }
 
 // NoNotify struct
@@ -92,8 +92,8 @@ func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
 }
 
-func (c NoNotify) OnRestoreError(ctx context.Context) {
+func (c NoNotify) OnRestoreError(ctx context.Context, opts *criu.CriuOpts) {
 }
 
-func (c NoNotify) OnDumpError(ctx context.Context) {
+func (c NoNotify) OnDumpError(ctx context.Context, opts *criu.CriuOpts) {
 }

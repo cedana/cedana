@@ -86,7 +86,7 @@ func NewManagerLazy(
 		for {
 			select {
 			case <-lifetime.Done():
-				log.Info().Msg("syncing DB before shutdown")
+				log.Info().Msg("syncing job manager with DB before shutdown")
 				var errs []error
 				var failedActions []action
 				manager.wg.Wait() // wait for all background routines
@@ -104,7 +104,7 @@ func NewManagerLazy(
 				}
 				err = errors.Join(errs...)
 				if err != nil {
-					log.Error().Msg("failed to sync DB before shutdown")
+					log.Error().Msg("failed to sync job manager with DB before shutdown")
 					for i, action := range failedActions {
 						log.Debug().Err(errs[i]).Str("id", action.id).Str("type", action.typ.String()).Send()
 					}
@@ -114,7 +114,7 @@ func NewManagerLazy(
 				err := manager.syncWithDB(lifetime, action)
 				if err != nil {
 					manager.pending <- action
-					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("DB sync failed, retrying...")
+					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("job manager DB sync failed, retrying...")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
 				}
 			}
@@ -155,7 +155,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 
 	job.(*Job).SetState(job.(*Job).latestState())
 	if !job.(*Job).GPUEnabled() {
-		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(jid))
+		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
 	}
 
 	return job.(*Job)
@@ -197,7 +197,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		}
 		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(jid))
+			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -228,7 +228,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		}
 		job.SetState(job.latestState())
 		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.JID))
+			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
 		jobs = append(jobs, job)
 		return true
@@ -275,7 +275,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		m.gpus.Detach(jid)
+		m.gpus.Detach(pid)
 
 		m.pending <- action{putJob, jid}
 	}()
@@ -400,9 +400,6 @@ func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string, user *s
 	}
 	multiCallback := &criu.NotifyCallbackMulti{}
 	multiCallback.IncludeMulti(job.GetCRIUCallback())
-	if job.GPUEnabled() {
-		multiCallback.Include(m.gpus.CRIUCallback(lifetime, jid, user, stream, env...))
-	}
 	return multiCallback
 }
 

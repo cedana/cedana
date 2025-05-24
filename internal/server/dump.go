@@ -7,6 +7,7 @@ import (
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/network"
 	"github.com/cedana/cedana/internal/server/process"
@@ -44,6 +45,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		process.AddExternalFilesForDump,
 		process.CloseCommonFilesForDump,
 		network.DetectNetworkOptionsForDump,
+    gpu.Dump(s.gpus),
 
 		criu.CheckOptsForDump,
 	}

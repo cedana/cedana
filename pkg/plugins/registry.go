@@ -46,13 +46,6 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-kata.so"}},
 	},
 
-	// Checkpoint inspection
-	{
-		Name: "inspector",
-		// Type:      Supported,
-		Libraries: []Binary{{Name: "libcedana-inspector.so"}},
-	},
-
 	// Others
 	{
 		Name:      "gpu",

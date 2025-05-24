@@ -140,18 +140,17 @@ var runCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithoutCancel(
-				context.WithValue(
-					cmd.Context(),
-					keys.DAEMONLESS_CONTEXT_KEY,
-					true,
-				),
+			ctx := context.WithValue(
+				cmd.Context(),
+				keys.DAEMONLESS_CONTEXT_KEY,
+				true,
 			)
 
 			root, err := server.NewRoot(ctx)
 			if err != nil {
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
 			}
+			defer root.Shutdown()
 
 			resp, err = root.Run(ctx, req)
 			if err != nil {
