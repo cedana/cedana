@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -41,6 +42,8 @@ type ManagerPool struct {
 	plugins plugins.Manager
 	db      db.GPU
 	pending chan action
+
+	pendingAttaches atomic.Int32
 
 	wg *sync.WaitGroup
 }
@@ -138,6 +141,13 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid 
 		return "", err
 	}
 
+	m.pendingAttaches.Add(1)
+	defer func() {
+		if err != nil {
+			m.pendingAttaches.Add(-1)
+		}
+	}()
+
 	var controller *controller
 
 	freeList := m.controllers.FreeList()
@@ -167,6 +177,7 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer m.pendingAttaches.Add(-1)
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -471,7 +482,7 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 				log.Debug().Str("ID", controller.ID).Msg("spawned GPU controller to maintain pool size")
 				m.pending <- action{putController, controller.ID}
 			}
-		} else if len(freeList) > m.poolSize {
+		} else if len(freeList)-int(m.pendingAttaches.Load()) > m.poolSize {
 			log.Debug().Int("target", m.poolSize).Int("current", len(freeList)).Msg("reducing GPU pool size")
 			for i := len(freeList); i > m.poolSize; i-- {
 				controller := freeList[i-1]
