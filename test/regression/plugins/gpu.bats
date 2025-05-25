@@ -78,7 +78,8 @@ teardown_file() {
     assert_success
     assert_exists "$log_file"
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 }
 
 @test "run GPU process (non-existent binary)" {
@@ -219,7 +220,8 @@ teardown_file() {
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
     assert_success
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 
     sleep 2
 
@@ -234,7 +236,8 @@ teardown_file() {
     run cedana restore job "$jid"
     assert_success
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 
     run cedana ps
     assert_success
