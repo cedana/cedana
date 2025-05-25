@@ -185,36 +185,3 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		return next(ctx, opts, resp, req)
 	}
 }
-
-// func DownloadCheckpoint(next types.Restore) types.Restore {
-// 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
-// 		checkpointId, found := ctx.Value(keys.REMOTE_CHECKPOINT_KEY).(string)
-// 		if !found {
-// 			return next(ctx, opts, resp, req)
-// 		}
-// 		// fetch from checkpointId
-// 		client := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
-// 		downloadUrl, err := client.V2().Checkpoints().Download().ById(checkpointId).Get(ctx, nil)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to fetch download url for cedana checkpoint: %v", err)
-// 		}
-// 		// TODO (SA): handle checksum validation to ensure if the file is already present we don't redownload it
-// 		checkpointFilePath := "/tmp/cedana-checkpoint-" + *checkpointId + ".tar"
-// 		r, err := http.Get(*downloadUrl)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to download cedana checkpoint: %v", err)
-// 		}
-// 		defer r.Body.Close()
-// 		file, err := os.Create(checkpointFilePath)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to create checkpoint file on disk: %v", err)
-// 		}
-// 		_, err = io.Copy(file, r.Body)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to write cedana checkpoint to disk: %v", err)
-// 		}
-// 		defer file.Close()
-// 		req.Path = checkpointFilePath
-// 		return next(ctx, opts, resp, req)
-// 	}
-// }

@@ -4,6 +4,7 @@ package features
 // that plugins can export
 
 import (
+	"context"
 	"syscall"
 
 	"github.com/cedana/cedana/pkg/io"
@@ -55,5 +56,5 @@ var (
 	HealthChecks = plugins.Feature[types.Checks]{Symbol: "HealthChecks", Description: "Health checks"}
 
 	// Storage
-	Storage = plugins.Feature[io.Storage]{Symbol: "Storage", Description: "Checkpoint storage"}
+	Storage = plugins.Feature[func(context.Context) (io.Storage, error)]{Symbol: "NewStorage", Description: "Checkpoint storage"}
 )

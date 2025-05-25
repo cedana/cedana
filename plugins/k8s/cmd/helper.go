@@ -175,7 +175,7 @@ func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]str
 	return res, nil
 }
 
-func CheckpointContainer(ctx context.Context, runcId, runcRoot, address, protocol string) (*daemon.DumpResp, error) {
+func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, address, protocol string) (*daemon.DumpResp, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func CheckpointContainer(ctx context.Context, runcId, runcRoot, address, protoco
 	defer client.Close()
 	leaveRunning := true
 	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:    "/tmp",
+		Dir:    fmt.Sprintf("cedana://%s", checkpointId),
 		Stream: 0,
 		Type:   "runc",
 		Criu: &criu.CriuOpts{
@@ -277,15 +277,15 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		// TODO SA: support multiple container pod checkpoint/restore
 		cedanaClient := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 		for _, runcId := range containers {
-			_, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
+			checkpointId, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
 			if err != nil {
 				// if propagator is reachable we make the dump request otherwise we log error
 				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
 				continue
 			}
 			resp, err := CheckpointContainer(
-				// context.WithValue(context.Background(), keys.REMOTE_CHECKPOINT_KEY, remoteCheckpoint),
 				context.Background(),
+				*checkpointId,
 				runcId,
 				runcRoot,
 				address,

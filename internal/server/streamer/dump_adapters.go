@@ -109,7 +109,7 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
-				filepath.Join(req.Dir, req.Name),
+				req.Dir+"/"+req.Name, // do not use filepath.Join as it removes a slash
 				parallelism,
 				WRITE_ONLY,
 				compression,

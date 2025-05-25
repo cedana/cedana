@@ -115,10 +115,12 @@ func SetupDumpFS(storage io.Storage) types.Adapter[types.Dump] {
 			ext, _ := io.ExtForCompression(compression)
 
 			if storage.IsRemote() {
-				path = filepath.Join(dir, req.Name+".tar"+ext)
+				path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash
 			} else {
 				path = imagesDirectory + ".tar" + ext
 			}
+
+			log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
 			tarball, err := storage.Create(path)
 			if err != nil {

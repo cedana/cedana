@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// Default filesystem storage.
+// Default filesystem storage
 type Storage struct{}
 
 func (s *Storage) Open(path string) (io.ReadCloser, error) {

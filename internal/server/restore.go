@@ -25,7 +25,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
-	storage, err := pluginStorage(req.Path)
+	storage, err := pluginStorage(ctx, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
-	storage, err := pluginStorage(req.Path)
+	storage, err := pluginStorage(ctx, req.Path)
 	if err != nil {
 		return nil, err
 	}
