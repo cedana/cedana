@@ -199,15 +199,15 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 			close(exitCode)
 			close(exited)
 		}()
-	}
 
-	// Also kill the container if lifetime expires
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		<-opts.Lifetime.Done()
-		syscall.Kill(int(resp.PID), syscall.SIGKILL)
-	}()
+		// Also kill the container if lifetime expires
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			<-opts.Lifetime.Done()
+			syscall.Kill(int(resp.PID), syscall.SIGKILL)
+		}()
+	}
 
 	return exited, nil
 }
