@@ -2,15 +2,16 @@ package gpu
 
 import (
 	"context"
-	"strings"
+	"fmt"
+	"os"
+	"path/filepath"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/go-criu/v7/crit"
-	"github.com/cedana/go-criu/v7/crit/images/fdinfo"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -68,8 +69,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 	}
 }
 
-// Manipulates GPU files in image (shm) to inherit a new file
-// HACK: This is required until CRIU supports --inherit-fd for shared memory files
 func InheritFilesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
@@ -77,44 +76,35 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
 		}
 
-		fileR, err := opts.DumpFs.Open("files.img")
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
+		}
+
+		extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		if !ok {
+			extraFiles = []*os.File{}
+		}
+
+		// Open new GPU shm file
+		shmFile, err := os.OpenFile(filepath.Join("/dev/shm", "cedana-gpu."+id), os.O_RDWR, 0o777)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to open files.img for manipulation: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
 		}
-		defer fileR.Close()
+		defer shmFile.Close()
 
-		fileW, err := opts.DumpFs.Create("files-new.img")
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create files-new.img for manipulation: %v", err)
-		}
-		defer fileW.Close()
+		extraFiles = append(extraFiles, shmFile)
 
-		critter := crit.New(fileR, fileW, "", false, false)
-
-		img, err := critter.Decode(&fdinfo.FileEntry{})
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to decode files.img for manipulation: %v", err)
+		if req.Criu == nil {
+			req.Criu = &criu.CriuOpts{}
 		}
 
-		// Find the regular file in /dev/shm, and update the shm file name
+		req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
+			Key: proto.String(fmt.Sprintf("dev/shm/cedana-gpu.%s", state.GPUID)), // pass in old GPU ID
+			Fd:  proto.Int32(int32(2 + len(extraFiles))),
+		})
 
-		for _, entry := range img.Entries {
-			entry := entry.Message.(*fdinfo.FileEntry)
-			name := entry.GetReg().GetName()
-			if strings.HasPrefix(name, "/dev/shm/cedana-gpu.") {
-				entry.Reg.Name = proto.String(strings.Split(name, ".")[0] + "." + id)
-			}
-		}
-
-		err = critter.Encode(img)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to encode files.img after manipulation: %v", err)
-		}
-
-		err = opts.DumpFs.Rename("files-new.img", "files.img")
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to rename files-new.img to files.img: %v", err)
-		}
+		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 
 		return next(ctx, opts, resp, req)
 	}

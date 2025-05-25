@@ -28,6 +28,13 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 
+			state := resp.GetState()
+			if state == nil {
+				return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
+			}
+
+			state.GPUID = id
+
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id, req.Stream))
 
