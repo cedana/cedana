@@ -6,9 +6,8 @@ import (
 	"net/http"
 )
 
-// Cedana managed checkpoint
-type Checkpoint struct {
-	ID          string
+// Cedana managed file
+type File struct {
 	DownloadURL string
 	UploadURL   string
 
@@ -18,12 +17,12 @@ type Checkpoint struct {
 	resp   *http.Response
 }
 
-func NewCheckpoint(id, downloadUrl, uploadUrl string) *Checkpoint {
-	return &Checkpoint{ID: id, DownloadURL: downloadUrl, UploadURL: uploadUrl}
+func NewFile(downloadUrl, uploadUrl string) *File {
+	return &File{DownloadURL: downloadUrl, UploadURL: uploadUrl}
 }
 
 // Read streams data from the download URL
-func (c *Checkpoint) Read(p []byte) (int, error) {
+func (c *File) Read(p []byte) (int, error) {
 	if c.reader == nil {
 		resp, err := http.Get(c.DownloadURL)
 		if err != nil {
@@ -40,7 +39,7 @@ func (c *Checkpoint) Read(p []byte) (int, error) {
 }
 
 // Write streams data to the upload URL using io.Pipe
-func (c *Checkpoint) Write(p []byte) (int, error) {
+func (c *File) Write(p []byte) (int, error) {
 	if c.writer == nil {
 		pr, pw := io.Pipe()
 		c.pipeW = pw
@@ -71,7 +70,7 @@ func (c *Checkpoint) Write(p []byte) (int, error) {
 }
 
 // Close closes underlying readers/writers
-func (c *Checkpoint) Close() error {
+func (c *File) Close() error {
 	var err error
 
 	if c.reader != nil {

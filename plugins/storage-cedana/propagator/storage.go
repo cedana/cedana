@@ -33,15 +33,12 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
 
-	path = strings.TrimPrefix(path, PATH_PREFIX)
-	id := strings.Split(path, "/")[0] // FIXME: actual path of file ignore for now
-
-	downloadUrl, err := s.Checkpoints().Download().ById(id).Get(s.ctx, nil)
+	downloadUrl, err := s.Checkpoints().Files().ByPath(path).Get(s.ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get download URL: %w", err)
 	}
 
-	return NewCheckpoint(id, *downloadUrl, ""), nil
+	return NewFile(*downloadUrl, ""), nil
 }
 
 func (s *Storage) Create(path string) (io.WriteCloser, error) {
@@ -49,19 +46,12 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
 
-	_ = strings.TrimPrefix(path, PATH_PREFIX) // FIXME: id from path ignored for now
-
-	id, err := s.Checkpoints().Post(s.ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create checkpoint: %w", err)
-	}
-
-	uploadUrl, err := s.Checkpoints().Upload().ById(*id).Patch(s.ctx, nil)
+	uploadUrl, err := s.Checkpoints().Files().ByPath(path).Patch(s.ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get upload URL: %w", err)
 	}
 
-	return NewCheckpoint(*id, "", *uploadUrl), nil
+	return NewFile("", *uploadUrl), nil
 }
 
 func (s *Storage) Delete(path string) error {
@@ -69,7 +59,7 @@ func (s *Storage) Delete(path string) error {
 }
 
 func (s *Storage) ReadDir(path string) ([]string, error) {
-	return nil, fmt.Errorf("this operation is currently not supported for cedana storage")
+	return s.ReadDir(path)
 }
 
 func (s *Storage) IsRemote() bool {
