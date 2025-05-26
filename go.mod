@@ -1,6 +1,8 @@
 module github.com/cedana/cedana
 
-go 1.23.0
+go 1.24.1
+
+toolchain go1.24.3
 
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250512165450-b39d961d96d5.2
@@ -9,6 +11,7 @@ require (
 	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250525161854-1eb56ded270a.2
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250525161854-1eb56ded270a.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250525161854-c70b3c8d3839.1
+	github.com/cedana/cedana-go-sdk v0.2.11
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.5
 	github.com/containerd/containerd v1.7.27
@@ -89,6 +92,12 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
+	github.com/microsoft/kiota-abstractions-go v1.9.2 // indirect
+	github.com/microsoft/kiota-http-go v1.5.2 // indirect
+	github.com/microsoft/kiota-serialization-form-go v1.1.2 // indirect
+	github.com/microsoft/kiota-serialization-json-go v1.1.2 // indirect
+	github.com/microsoft/kiota-serialization-multipart-go v1.1.2 // indirect
+	github.com/microsoft/kiota-serialization-text-go v1.1.2 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/sys/capability v0.4.0 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
@@ -107,6 +116,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
+	github.com/std-uritemplate/std-uritemplate/go/v2 v2.0.3 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
