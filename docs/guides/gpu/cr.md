@@ -28,7 +28,7 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
     * _Minimum NVIDIA driver version: 570 (API 12.8)_
     * _Minimum CRIU version: 4.0_
 
-    Check out [Cedana vs. CRIU CUDA  for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/examples/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
+    Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/articles/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
 
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
