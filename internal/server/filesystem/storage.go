@@ -17,7 +17,7 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	return file, nil
 }
 
-func (s *Storage) Create(path string) (io.ReadWriteCloser, error) {
+func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)

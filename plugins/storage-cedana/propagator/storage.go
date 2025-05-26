@@ -44,7 +44,7 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	return NewCheckpoint(id, *downloadUrl, ""), nil
 }
 
-func (s *Storage) Create(path string) (io.ReadWriteCloser, error) {
+func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	if !strings.HasPrefix(path, PATH_PREFIX) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
