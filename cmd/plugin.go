@@ -89,6 +89,7 @@ var pluginListCmd = &cobra.Command{
 
 		tableWriter.SortBy([]table.SortBy{
 			{Name: "Status", Mode: table.Asc},
+			{Name: "Plugin", Mode: table.Asc},
 		})
 
 		for _, p := range list {
@@ -329,6 +330,8 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
+			tableWriter.AppendSeparator()
+			tableWriter.AppendRow(featureRow(manager, features.Storage, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.QueryHandler, pluginNames, &errs))
 			tableWriter.AppendSeparator()
