@@ -4,8 +4,10 @@ package features
 // that plugins can export
 
 import (
+	"context"
 	"syscall"
 
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -28,13 +30,13 @@ var (
 	DumpVMMiddleware    = plugins.Feature[types.Middleware[types.DumpVM]]{Symbol: "DumpVMMiddleware", Description: "Dump VM middleware"}
 	RestoreVMMiddleware = plugins.Feature[types.Middleware[types.RestoreVM]]{Symbol: "RestoreVMMiddleware", Description: "Restore VM middleware"}
 	RestoreMiddleware   = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
-	KillSignal          = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
 	DumpVMHandler       = plugins.Feature[types.DumpVM]{Symbol: "DumpVMHandler", Description: "DumpVM handler"}
 	RestoreVMHandler    = plugins.Feature[types.RestoreVM]{Symbol: "RestoreVMHandler", Description: "RestoreVM handler"}
 
 	// Run
 	RunHandler    = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
 	RunMiddleware = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
+	KillSignal    = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
 
 	// Manage
 	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}
@@ -52,4 +54,7 @@ var (
 
 	// Health check
 	HealthChecks = plugins.Feature[types.Checks]{Symbol: "HealthChecks", Description: "Health checks"}
+
+	// Storage
+	Storage = plugins.Feature[func(context.Context) (io.Storage, error)]{Symbol: "NewStorage", Description: "Checkpoint storage"}
 )

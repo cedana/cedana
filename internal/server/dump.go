@@ -2,8 +2,13 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/cedana/cedana/internal/server/criu"
 	"github.com/cedana/cedana/internal/server/defaults"
 	"github.com/cedana/cedana/internal/server/filesystem"
@@ -14,26 +19,31 @@ import (
 	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
-	dumpDirAdapter := filesystem.PrepareDumpDir
+	storage, err := pluginStorage(ctx, req.Dir)
+	if err != nil {
+		return nil, err
+	}
+
+	setupDumpFS := filesystem.SetupDumpFS(storage)
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.PrepareDumpDir
+		setupDumpFS = streamer.SetupDumpFS(storage)
 	}
 
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		dumpDirAdapter,
+		setupDumpFS,
 
 		pluginDumpMiddleware, // middleware from plugins
 
@@ -63,7 +73,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	criu := criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)
 
-	_, err := criu(dump)(ctx, opts, resp, req)
+	_, err = criu(dump)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -98,9 +108,32 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Error(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unavailable, err.Error())
 			}
 		}
 		return next.With(middleware...)(ctx, opts, resp, req)
 	}
+}
+
+// Detects and returns the storage to use from the specified path,
+// If path is prepended with "plugin://", it will return the plugin storage if
+// an available plugin is found and supports the storage feature.
+func pluginStorage(ctx context.Context, path string) (io.Storage, error) {
+	var storage io.Storage = &filesystem.Storage{}
+
+	if strings.Contains(path, "://") {
+		pluginName := fmt.Sprintf("storage/%s", strings.Split(path, "://")[0])
+		err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
+			if pluginStorage == nil {
+				return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+			}
+			storage, err = newPluginStorage(ctx)
+			return err
+		}, pluginName)
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, err.Error())
+		}
+	}
+
+	return storage, nil
 }

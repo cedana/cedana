@@ -228,6 +228,51 @@ jobs:
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
+      - name: Push libcedana-storage-cedana.so to Cloudsmith
+        id: push-libcedana-storage-cedana
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: ${{ inputs.cloudsmith_repo }}
+          file: "libcedana-storage-cedana.so"
+          name: "libcedana-storage-cedana.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      - name: Push libcedana-storage-s3.so to Cloudsmith
+        id: push-libcedana-storage-s3
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: ${{ inputs.cloudsmith_repo }}
+          file: "libcedana-storage-s3.so"
+          name: "libcedana-storage-s3.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      - name: Push libcedana-storage-gcs.so to Cloudsmith
+        id: push-libcedana-storage-gcs
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: ${{ inputs.cloudsmith_repo }}
+          file: "libcedana-storage-gcs.so"
+          name: "libcedana-storage-gcs.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
   dockerhub:
     name: DockerHub (multi-arch)
     if: inputs.dockerhub
@@ -327,6 +372,9 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so
 
       - name: Download previous binary
         id: download-previous
@@ -345,6 +393,9 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so || true
 
       - name: Generate summary
         id: summary
