@@ -8,6 +8,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/spf13/afero"
 )
@@ -21,6 +22,7 @@ type (
 		CRIUCallback *criu.NotifyCallbackMulti
 		Plugins      plugins.Manager
 		Lifetime     context.Context
+		Storage      io.Storage
 		DumpFs       afero.Fs
 		FdStore      *sync.Map
 	}

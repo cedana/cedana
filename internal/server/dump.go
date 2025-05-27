@@ -22,7 +22,6 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -31,19 +30,15 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
-	storage, err := pluginStorage(ctx, req.Dir)
-	if err != nil {
-		return nil, err
-	}
-
-	setupDumpFS := filesystem.SetupDumpFS(storage)
+	setupDumpFS := filesystem.SetupDumpFS
 	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		setupDumpFS = streamer.SetupDumpFS(storage)
+		setupDumpFS = streamer.SetupDumpFS
 	}
 
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
+		pluginDumpStorage,
 		setupDumpFS,
 
 		pluginDumpMiddleware, // middleware from plugins
@@ -55,7 +50,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		process.AddExternalFilesForDump,
 		process.CloseCommonFilesForDump,
 		network.DetectNetworkOptionsForDump,
-    gpu.Dump(s.gpus),
+		gpu.Dump(s.gpus),
 
 		criu.CheckOptsForDump,
 	}
@@ -75,15 +70,13 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	criu := criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)
 
-	_, err = criu(dump)(ctx, opts, resp, req)
+	_, err := criu(dump)(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if utils.PathExists(resp.Path) {
-		log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
-		resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
-	}
+	log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
+	resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
 
 	return resp, nil
 }
@@ -117,25 +110,31 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 	}
 }
 
-// Detects and returns the storage to use from the specified path,
-// If path is prepended with "plugin://", it will return the plugin storage if
+// Detects and plugs in the storage to use from the specified path,
+// If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginStorage(ctx context.Context, path string) (io.Storage, error) {
-	var storage io.Storage = &filesystem.Storage{}
+func pluginDumpStorage(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		dir := req.GetDir()
 
-	if strings.Contains(path, "://") {
-		pluginName := fmt.Sprintf("storage/%s", strings.Split(path, "://")[0])
-		err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
-			if pluginStorage == nil {
-				return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+		var storage io.Storage = &filesystem.Storage{}
+
+		if strings.Contains(dir, "://") {
+			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+			err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
+				if newPluginStorage == nil {
+					return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+				}
+				storage, err = newPluginStorage(ctx)
+				return err
+			}, pluginName)
+			if err != nil {
+				return nil, status.Error(codes.Unavailable, err.Error())
 			}
-			storage, err = newPluginStorage(ctx)
-			return err
-		}, pluginName)
-		if err != nil {
-			return nil, status.Error(codes.Unavailable, err.Error())
 		}
-	}
 
-	return storage, nil
+		opts.Storage = storage
+
+		return next(ctx, opts, resp, req)
+	}
 }
