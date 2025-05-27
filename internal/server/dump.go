@@ -44,6 +44,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		pluginDumpMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
+		process.FillProcessStateForDump,
 		process.DetectShellJobForDump,
 		process.DetectIOUringForDump,
 		process.AddExternalFilesForDump,
@@ -51,7 +52,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		network.DetectNetworkOptionsForDump,
 		gpu.Dump(s.gpus),
 
-		process.FillProcessStateForDump,
+		process.SaveProcessStateForDump,
 		criu.CheckOptsForDump,
 	}
 

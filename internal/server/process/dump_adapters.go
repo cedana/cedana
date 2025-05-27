@@ -41,8 +41,6 @@ func SetPIDForDump(next types.Dump) types.Dump {
 }
 
 // Fills process state in the dump response.
-// Requires at least the PID to be present in the DumpResp.State
-// Also saves the state to a file in the dump directory, post dump.
 func FillProcessStateForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
 		state := resp.GetState()
@@ -65,17 +63,34 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Saves process state in the dump directory.
+func SaveProcessStateForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		if state.PID == 0 {
+			return nil, status.Errorf(
+				codes.NotFound,
+				"missing PID. Ensure an adapter sets this PID in response.",
+			)
+		}
+
 		// Save the state to a file in the dump
 		if err := utils.SaveJSONToFile(state, STATE_FILE, opts.DumpFs); err != nil {
 			log.Warn().Err(err).Str("file", STATE_FILE).Msg("failed to save process state")
 		}
 
-		exited, err = next(ctx, opts, resp, req)
-		if err != nil {
-			return exited, err
-		}
-
-		return exited, nil
+		return next(ctx, opts, resp, req)
 	}
 }
 
