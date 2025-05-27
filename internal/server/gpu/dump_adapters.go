@@ -13,10 +13,6 @@ import (
 func Dump(gpus Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
-			if !opts.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
-			}
-
 			state := resp.GetState()
 			if state == nil {
 				return nil, status.Errorf(
@@ -34,6 +30,10 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			if !gpus.IsAttached(pid) {
 				return next(ctx, opts, resp, req)
+			}
+
+			if !opts.Plugins.IsInstalled("gpu") {
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
 			id, err := gpus.GetID(pid)
