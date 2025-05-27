@@ -64,11 +64,15 @@ func SetupRestoreFS(next types.Restore) types.Restore {
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open dump file: %v", err)
 			}
-			defer tarball.Close()
+			defer func() {
+				if e := tarball.Close(); e != nil && err == nil {
+					err = e
+				}
+			}()
 
 			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
-			_, end := profiling.StartTimingCategory(ctx, "compression", io.Untar)
+			_, end := profiling.StartTimingCategory(ctx, "storage", io.Untar)
 			err = io.Untar(tarball, imagesDirectory, compression)
 			end()
 			if err != nil {

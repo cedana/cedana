@@ -65,14 +65,14 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
+		// Save the state to a file in the dump
+		if err := utils.SaveJSONToFile(state, STATE_FILE, opts.DumpFs); err != nil {
+			log.Warn().Err(err).Str("file", STATE_FILE).Msg("failed to save process state")
+		}
+
 		exited, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return exited, err
-		}
-
-		// Post dump, save the state to a file in the dump
-		if err := utils.SaveJSONToFile(state, STATE_FILE, opts.DumpFs); err != nil {
-			log.Warn().Err(err).Str("file", STATE_FILE).Msg("failed to save process state")
 		}
 
 		return exited, nil

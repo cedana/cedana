@@ -34,6 +34,9 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
 
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = strings.TrimPrefix(path, "/")
+
 	downloadUrl, err := s.Files().ByPath(path).Get(s.ctx, nil)
 	if err != nil {
 		switch v := err.(type) {
@@ -52,7 +55,10 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
 
-	uploadUrl, err := s.Checkpoints().Files().ByPath(path).Patch(s.ctx, nil)
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = strings.TrimPrefix(path, "/")
+
+	uploadUrl, err := s.Files().ByPath(path).Put(s.ctx, nil)
 	if err != nil {
 		switch v := err.(type) {
 		case *models.HttpError:
@@ -66,10 +72,20 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 }
 
 func (s *Storage) Delete(path string) error {
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = strings.TrimPrefix(path, "/")
+
 	return fmt.Errorf("this operation is currently not supported for cedana storage")
 }
 
 func (s *Storage) ReadDir(path string) ([]string, error) {
+	if !strings.HasPrefix(path, PATH_PREFIX) {
+		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
+	}
+
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = strings.TrimPrefix(path, "/")
+
 	list, err := s.Files().Dir().ByPath(path).Get(s.ctx, nil)
 	if err != nil {
 		switch v := err.(type) {

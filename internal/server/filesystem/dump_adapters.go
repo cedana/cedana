@@ -2,14 +2,15 @@ package filesystem
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/io"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -84,64 +85,50 @@ func SetupDumpFS(next types.Dump) types.Dump {
 		// to the dump directory
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
 
-		exited, err = next(ctx, opts, resp, req)
-		if err != nil {
-			return nil, err
-		}
+		// If remote storage, or compression needs to be done, we do it in CRIU's post-dump hook
+		// so that if we fail compression/upload, CRIU can still resume the process
 
-		// If nothing was put in the directory, remove it and return early
-		entries, err := os.ReadDir(imagesDirectory)
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
-		}
-		if len(entries) == 0 {
-			os.RemoveAll(imagesDirectory)
-			return exited, nil
-		}
+		if storage.IsRemote() || (compression != "" && compression != "none") {
+			callback := &criu_client.NotifyCallback{Name: "storage"}
+			callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) (err error) {
+				var path string
+				ext, err := io.ExtForCompression(compression)
+				if err != nil {
+					return err
+				}
 
-		resp.Path = imagesDirectory
+				path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
-		// If not remote storage, we can just return here
-		// If remote storage, we need to still at least tar the directory even if no compression specified
+				tarball, err := storage.Create(path)
+				if err != nil {
+					return fmt.Errorf("failed to create tarball in storage: %w", err)
+				}
+				defer func() {
+					if e := tarball.Close(); e != nil && err == nil {
+						err = e
+					}
+				}()
 
-		if !storage.IsRemote() && (compression == "" || compression == "none") {
-			return exited, err // Nothing else to do
-		}
+				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
-		// Create the tarball
+				err = io.Tar(imagesDirectory, tarball, compression)
+				if err != nil {
+					storage.Delete(path)
+					return fmt.Errorf("failed to create tarball: %w", err)
+				}
 
-		var path string
+				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
-		ext, _ := io.ExtForCompression(compression)
-
-		if storage.IsRemote() {
-			path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash
+				os.RemoveAll(imagesDirectory)
+				resp.Path = path
+				return nil
+			}
+			opts.CRIUCallback.Include(callback)
 		} else {
-			path = imagesDirectory + ".tar" + ext
+			// Nothing else to do, just set the path
+			resp.Path = imagesDirectory
 		}
 
-		tarball, err := storage.Create(path)
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to create tarball file: %v", err)
-		}
-		defer tarball.Close()
-
-		log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
-
-		_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
-		err = io.Tar(imagesDirectory, tarball, compression)
-		end()
-		if err != nil {
-			storage.Delete(path)
-			return exited, status.Errorf(codes.Internal, "failed to tarball into storage: %v", err)
-		}
-
-		log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
-
-		os.RemoveAll(imagesDirectory)
-
-		resp.Path = path
-
-		return exited, nil
+		return next(ctx, opts, resp, req)
 	}
 }
