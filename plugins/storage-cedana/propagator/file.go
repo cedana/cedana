@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/rs/zerolog/log"
 )
 
 // Cedana managed file
@@ -28,11 +26,9 @@ func (c *File) Read(p []byte) (int, error) {
 	if c.reader == nil {
 		resp, err := http.Get(c.DownloadURL)
 		if err != nil {
-      log.Error().Err(err).Msg("failed to download file")
 			return 0, err
 		}
 		if resp.StatusCode != http.StatusOK {
-      log.Error().Str("status", resp.Status).Msg("failed to download file")
 			resp.Body.Close()
 			return 0, fmt.Errorf("failed to download: %s", resp.Status)
 		}

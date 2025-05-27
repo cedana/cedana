@@ -445,6 +445,7 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int3
 
 		matches := make([]string, 0, len(list))
 		for _, entry := range list {
+			entry := filepath.Base(entry)
 			if regexp.MustCompile(IMG_FILE_PATTERN).MatchString(entry) {
 				matches = append(matches, dir+"/"+entry)
 			}
