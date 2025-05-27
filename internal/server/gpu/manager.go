@@ -29,6 +29,9 @@ type Manager interface {
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
 	CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback
+
+	// Sync is used to synchronize the manager with the current system state.
+	Sync(ctx context.Context) error
 }
 
 /////////////////
@@ -60,4 +63,8 @@ func (ManagerMissing) GetID(pid uint32) (string, error) {
 
 func (ManagerMissing) CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback {
 	return nil
+}
+
+func (ManagerMissing) Sync(ctx context.Context) error {
+	return fmt.Errorf("GPU manager missing")
 }

@@ -72,7 +72,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 		controllers: controllers{},
 	}
 
-	err := manager.syncWithDB(lifetime, action{maintainPool, ""})
+	err := manager.Sync(lifetime)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +221,10 @@ func (m *ManagerPool) GetID(pid uint32) (string, error) {
 	return controller.ID, nil
 }
 
+func (m *ManagerPool) Sync(ctx context.Context) error {
+	return m.syncWithDB(ctx, action{maintainPool, ""})
+}
+
 func (m *ManagerPool) Checks() types.Checks {
 	check := func(ctx context.Context) []*daemon.HealthCheckComponent {
 		statusComponent := &daemon.HealthCheckComponent{Name: "status"}
@@ -297,6 +301,14 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 		controller := m.controllers.Get(id)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
+		}
+
+		// Make sure we are connected
+		if controller.ClientConn == nil {
+			err := controller.Connect(ctx, m.wg)
+			if err != nil {
+				return fmt.Errorf("failed to connect to GPU controller: %v", err)
+			}
 		}
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})

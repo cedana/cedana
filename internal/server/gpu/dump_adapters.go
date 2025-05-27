@@ -27,6 +27,11 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			pid := state.GetPID()
 
+			err := gpus.Sync(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to sync GPU manager: %v", err)
+			}
+
 			if !gpus.IsAttached(pid) {
 				return next(ctx, opts, resp, req)
 			}
