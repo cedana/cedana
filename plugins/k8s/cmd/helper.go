@@ -298,6 +298,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
 			} else {
+				log.Info().Msg("Publishing checkpoint success")
 				err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to publish checkpoint success")
