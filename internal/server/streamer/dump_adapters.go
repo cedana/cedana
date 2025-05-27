@@ -13,7 +13,6 @@ import (
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -54,7 +53,7 @@ func SetupDumpFS(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 		}
 		defer func() {
-			if err != nil {
+			if err != nil || storage.IsRemote() {
 				os.RemoveAll(imagesDirectory)
 			}
 		}()
@@ -101,6 +100,8 @@ func SetupDumpFS(next types.Dump) types.Dump {
 			parallelism = config.Global.Checkpoint.Stream
 		}
 
+		path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
+
 		streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
 		var waitForIO func() error
 		opts.DumpFs, waitForIO, err = NewStreamingFs(
@@ -109,7 +110,7 @@ func SetupDumpFS(next types.Dump) types.Dump {
 			imgStreamer.BinaryPaths()[0],
 			imagesDirectory,
 			storage,
-			req.Dir+"/"+req.Name, // do not use filepath.Join as it removes a slash
+			path,
 			parallelism,
 			WRITE_ONLY,
 			compression,
@@ -125,26 +126,14 @@ func SetupDumpFS(next types.Dump) types.Dump {
 		}
 
 		// Wait for all the streaming to finish
-		_, end = profiling.StartTimingCategory(ctx, "streamer", "streamer.WaitForIO")
+		_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
 		err = waitForIO()
 		end()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
 		}
 
-		// If nothing was put in the directory, remove it and return early
-		entries, err := os.ReadDir(imagesDirectory)
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
-		}
-		if !storage.IsRemote() && len(entries) == 0 {
-			os.RemoveAll(imagesDirectory)
-			return exited, nil
-		}
-
-		resp.Path = imagesDirectory
-
-		log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("stream dump completed")
+		resp.Path = path
 
 		return exited, nil
 	}

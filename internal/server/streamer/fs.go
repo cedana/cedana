@@ -93,7 +93,7 @@ func NewStreamingFs(
 
 	// Start IO on the pipes from the dir
 	io := &sync.WaitGroup{}
-	ioErr := make(chan error, 1)
+	ioErr := make(chan error, parallelism)
 	paths, err := imgPaths(storage, storagePath, mode, parallelism)
 	if err != nil {
 		return nil, nil, err
@@ -103,21 +103,19 @@ func NewStreamingFs(
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
+			compression, err := cedana_io.CompressionFromExt(paths[i])
+			if err != nil {
+				return nil, nil, err
+			}
+			file, err := storage.Open(paths[i])
+			if err != nil {
+				return nil, nil, err
+			}
 			go func() {
 				defer io.Done()
-
-				compression, err := cedana_io.CompressionFromExt(paths[i])
-				if err != nil {
-					ioErr <- err
-					return
-				}
-
-				file, err := storage.Open(paths[i])
-				if err != nil {
-					ioErr <- err
-					return
-				}
-				defer file.Close()
+				defer func() {
+					ioErr <- file.Close()
+				}()
 
 				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
@@ -127,22 +125,20 @@ func NewStreamingFs(
 			}()
 		case WRITE_ONLY:
 			defer writeFds[i].Close()
+			ext, err := cedana_io.ExtForCompression(compression)
+			if err != nil {
+				return nil, nil, err
+			}
+			path := paths[i] + ext
+			file, err := storage.Create(path)
+			if err != nil {
+				return nil, nil, err
+			}
 			go func() {
 				defer io.Done()
-
-				ext, err := cedana_io.ExtForCompression(compression)
-				if err != nil {
-					ioErr <- err
-					return
-				}
-
-				path := paths[i] + ext
-				file, err := storage.Create(path)
-				if err != nil {
-					ioErr <- err
-					return
-				}
-				defer file.Close()
+				defer func() {
+					ioErr <- file.Close()
+				}()
 
 				_, err = cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
@@ -155,6 +151,7 @@ func NewStreamingFs(
 
 	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
+	var lastMsg string
 
 	switch mode {
 	case READ_ONLY:
@@ -191,10 +188,11 @@ func NewStreamingFs(
 			if !scanner.Scan() || ctx.Err() != nil {
 				break
 			}
-			if scanner.Text() == INIT_PROGRESS_MSG {
+			lastMsg = scanner.Text()
+			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(scanner.Text())
+			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(lastMsg)
 		}
 	}()
 
@@ -230,7 +228,7 @@ func NewStreamingFs(
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	case <-time.After(CONNECTION_TIMEOUT):
-		return nil, nil, fmt.Errorf("timed out waiting for streamer to start")
+		return nil, nil, fmt.Errorf("timed out waiting for streamer to start: %s", lastMsg)
 	case <-ready:
 	case <-exited:
 	}
@@ -244,7 +242,7 @@ func NewStreamingFs(
 		conn, err = net.Dial("unix", filepath.Join(imagesDir, CAPTURE_SOCK))
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to connect to streamer: %w", err)
+		return nil, nil, fmt.Errorf("failed to connect to streamer: %w: %s", err, lastMsg)
 	}
 	fs.conn = conn.(*net.UnixConn)
 	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
@@ -448,7 +446,7 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int3
 		matches := make([]string, 0, len(list))
 		for _, entry := range list {
 			if regexp.MustCompile(IMG_FILE_PATTERN).MatchString(entry) {
-				matches = append(matches, filepath.Join(dir, entry))
+				matches = append(matches, dir+"/"+entry)
 			}
 		}
 
@@ -460,7 +458,7 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int3
 	case WRITE_ONLY:
 		paths := make([]string, parallelism)
 		for i := range parallelism {
-			paths[i] = filepath.Join(dir, fmt.Sprintf(IMG_FILE_FORMATTER, i))
+			paths[i] = dir + "/" + fmt.Sprintf(IMG_FILE_FORMATTER, i)
 		}
 		return paths, nil
 	default:
