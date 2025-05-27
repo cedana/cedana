@@ -238,6 +238,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
+	log.Info().Msg("Published checkpoint sucessfully")
 	return err
 }
 
@@ -298,7 +299,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
 			} else {
-				log.Info().Msg("Publishing checkpoint success")
+				log.Info().Msg("Publishing checkpoint...")
 				err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to publish checkpoint success")
