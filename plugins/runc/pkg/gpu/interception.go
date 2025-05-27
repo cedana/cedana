@@ -28,7 +28,7 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, id string) e
 	}
 	spec.Mounts = mounts
 	spec.Mounts = append(spec.Mounts, specs.Mount{
-		Destination: "/dev/shm/cedana-gpu." + id,
+		Destination: "/dev/shm/cedana-gpu.container",
 		Source:      "/dev/shm/cedana-gpu." + id,
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
@@ -47,7 +47,7 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, id string) e
 		return fmt.Errorf("spec does not have a process")
 	}
 	spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
-	spec.Process.Env = append(spec.Process.Env, "CEDANA_GPU_ID="+id)
+	spec.Process.Env = append(spec.Process.Env, "CEDANA_GPU_ID=container")
 
 	return nil
 }
