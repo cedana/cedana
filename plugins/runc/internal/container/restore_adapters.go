@@ -17,8 +17,8 @@ import (
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/coreos/go-systemd/v22/activation"
-	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/cgroups/manager"
+	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/system"
@@ -78,8 +78,8 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 			CgroupName:      id,
 			Spec:            spec,
-			RootlessEUID:    os.Geteuid() != 0,
-			RootlessCgroups: false,
+			RootlessEUID:    req.UID != 0,
+			RootlessCgroups: req.UID != 0,
 		})
 		labels := config.Labels
 		config.Labels = []string{}
