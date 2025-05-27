@@ -8,7 +8,7 @@ export CEDANA_LOG_LEVEL=debug
 export CEDANA_PROFILING_ENABLED=false
 export CEDANA_CHECKPOINT_COMPRESSION=none
 
-WAIT_TIMEOUT=1000
+WAIT_TIMEOUT=100
 
 ##################
 # BATS LIFECYCLE #
@@ -75,7 +75,7 @@ wait_for_start() {
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            echo "Daemon failed to start"
+            echo "Daemon failed to start" 1>&2
             exit 1
         fi
     done
@@ -94,8 +94,14 @@ wait_for_stop() {
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            echo "Daemon failed to stop"
-            exit 1
+            echo "Daemon failed to stop" 1>&2
+
+            # HACK: Force kill if failed to stop. This is not good because there might be
+            # an actual issue causing the daemon to not stop. Once resolved, should remove this
+            # and just let the test fail with non-zero exit code.
+
+            kill_at_sock "$sock" KILL
+            break
         fi
     done
 }

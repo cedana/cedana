@@ -290,6 +290,19 @@ func PidExists(pid uint32) bool {
 	return true
 }
 
+// PidRunning checks if a process with the given PID is running
+func PidRunning(pid uint32) bool {
+	p, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return false
+	}
+	s, err := p.Status()
+	if err != nil {
+		return false
+	}
+	return !slices.Contains(s, "zombie")
+}
+
 // FdInfo returns file descriptor information for the provided process and file descriptor.
 func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
 	path := fmt.Sprintf("/proc/%d/fdinfo/%d", pid, fd)

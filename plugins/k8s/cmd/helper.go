@@ -151,7 +151,7 @@ type CheckpointPodReq struct {
 	ActionId string `json:"action_id"`
 }
 
-func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]string, error) {
+func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]*k8s.Container, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
 		return nil, err
@@ -168,9 +168,9 @@ func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]str
 	if err != nil {
 		return nil, err
 	}
-	res := []string{}
+	res := []*k8s.Container{}
 	for _, c := range resp.K8S.Containers {
-		res = append(res, c.Runc.ID)
+		res = append(res, c)
 	}
 	return res, nil
 }
@@ -207,9 +207,12 @@ type CheckpointInformation struct {
 	PodId        string `json:"pod_id"`
 	CheckpointId string `json:"checkpoint_id"`
 	Status       string `json:"status"`
+	Path         string `json:"path"`
+	Gpu          bool   `json:"gpu"`
+	Platform     string `json:"platform"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daemon.DumpResp) error {
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, resp *daemon.DumpResp) error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
 	)
@@ -217,13 +220,14 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
-	if resp.Id == nil {
-		return fmt.Errorf("failed remote checkpoint")
-	}
 	data, err := json.Marshal(CheckpointInformation{
 		ActionId:     req.ActionId,
-		CheckpointId: *resp.Id,
+		PodId:        pod_id,
+		Path:         resp.Path,
+		CheckpointId: id,
 		Status:       "success",
+		Gpu:          resp.State.GPUEnabled,
+		Platform:     resp.State.Host.Platform,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
@@ -234,6 +238,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, resp *daem
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
+	log.Info().Msg("Published checkpoint sucessfully")
 	return err
 }
 
@@ -276,7 +281,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		runcRoot := req.RuncRoot
 		// TODO SA: support multiple container pod checkpoint/restore
 		cedanaClient := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
-		for _, runcId := range containers {
+		for _, container := range containers {
 			checkpointId, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
 			if err != nil {
 				// if propagator is reachable we make the dump request otherwise we log error
@@ -286,7 +291,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 			resp, err := CheckpointContainer(
 				context.Background(),
 				*checkpointId,
-				runcId,
+				container.Runc.ID,
 				runcRoot,
 				address,
 				protocol,
@@ -294,7 +299,8 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
 			} else {
-				err := es.PublishCheckpointSuccess(req, resp)
+				log.Info().Msg("Publishing checkpoint...")
+				err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to publish checkpoint success")
 				}

@@ -44,11 +44,6 @@ var (
 	// GPU
 	GPUInterception = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
 
-	// Checkpoints
-	CheckpointInspect = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointInspect", Description: "Checkpoint inspect"}
-	CheckpointDecode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointDecode", Description: "Checkpoint decode"}
-	CheckpointEncode  = plugins.Feature[func(path string, imgType string) ([]byte, error)]{Symbol: "CheckpointEncode", Description: "Checkpoint encode"}
-
 	// Query
 	QueryHandler = plugins.Feature[types.Query]{Symbol: "QueryHandler", Description: "Query handler"}
 

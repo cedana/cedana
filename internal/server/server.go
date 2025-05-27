@@ -51,8 +51,10 @@ type Server struct {
 // Root avoids the use of the server and provides direct run/restores
 type Root struct {
 	lifetime context.Context // context alive for the duration of the server
+	shutdown context.CancelFunc
 	wg       *sync.WaitGroup // for waiting for all background tasks to finish
 	plugins  plugins.Manager
+	gpus     gpu.Manager
 
 	host    *daemon.Host
 	version string
@@ -70,21 +72,45 @@ type MetricOpts struct {
 	OTel bool
 }
 
-func (s *Root) Wait() {
+func (s *Root) Shutdown() {
+	s.shutdown()
 	s.wg.Wait()
 }
 
 func NewRoot(ctx context.Context) (*Root, error) {
+	var err error
+	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx)
+
 	host, err := utils.GetHost(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %w", err)
 	}
+
+	var database db.DB
+
+	database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local sqlite db: %w", err)
+	}
+
+	if config.Global.DB.Remote {
+		database = db.NewPropagatorDB(ctx, config.Global.Connection, database)
+	}
+
 	pluginManager := plugins.NewLocalManager()
-	var wg = sync.WaitGroup{}
+
+	gpuManager, err := gpu.NewPoolManager(ctx, wg, 0, pluginManager, database)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
+	}
+
 	return &Root{
 		lifetime: ctx,
-		wg:       &wg,
+		shutdown: cancel,
+		wg:       wg,
 		plugins:  pluginManager,
+		gpus:     gpuManager,
 		host:     host,
 		version:  "dev",
 	}, nil
@@ -93,7 +119,6 @@ func NewRoot(ctx context.Context) (*Root, error) {
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	ctx = log.With().Str("context", "server").Logger().WithContext(ctx)
 	var err error
-
 	wg := &sync.WaitGroup{}
 
 	host, err := utils.GetHost(ctx)
@@ -102,13 +127,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	var database db.DB
-	if config.Global.DB.Remote {
-		database = db.NewPropagatorDB(ctx, config.Global.Connection)
-	} else {
-		database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
-	}
+	database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create local sqlite db: %w", err)
+	}
+
+	if config.Global.DB.Remote {
+		database = db.NewPropagatorDB(ctx, config.Global.Connection, database)
 	}
 
 	err = database.PutHost(ctx, host)
@@ -118,13 +143,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	pluginManager := plugins.NewLocalManager()
 
-	var gpuManager gpu.Manager
 	gpuPoolSize := config.Global.GPU.PoolSize
-	if gpuPoolSize > 0 {
-		log.Info().Int("pool_size", gpuPoolSize).Msg("GPU pool size set")
-		gpuManager = gpu.NewPoolManager(ctx, wg, gpuPoolSize)
-	} else {
-		gpuManager = gpu.NewSimpleManager(wg, pluginManager)
+	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager, database)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
 
 	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)

@@ -9,7 +9,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) error {
+func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, id string) error {
 	// HACK: Remove nvidia prestart hook as we don't support working around it, yet
 	if spec.Hooks != nil {
 		for i, hook := range spec.Hooks.Prestart {
@@ -28,8 +28,8 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) 
 	}
 	spec.Mounts = mounts
 	spec.Mounts = append(spec.Mounts, specs.Mount{
-		Destination: "/dev/shm/cedana-gpu." + jid,
-		Source:      "/dev/shm/cedana-gpu." + jid,
+		Destination: "/dev/shm/cedana-gpu.container",
+		Source:      "/dev/shm/cedana-gpu." + id,
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
 	})
@@ -47,7 +47,7 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, jid string) 
 		return fmt.Errorf("spec does not have a process")
 	}
 	spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
-	spec.Process.Env = append(spec.Process.Env, "CEDANA_JID="+jid)
+	spec.Process.Env = append(spec.Process.Env, "CEDANA_GPU_ID=container")
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/server/defaults"
+	"github.com/cedana/cedana/internal/server/gpu"
 	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/internal/server/process"
 	"github.com/cedana/cedana/internal/server/validation"
@@ -29,6 +30,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 		job.Manage(s.jobs),
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
 	}

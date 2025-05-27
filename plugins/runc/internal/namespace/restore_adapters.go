@@ -110,12 +110,11 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 				defer nsFd.Close()
 				extraFiles = append(extraFiles, nsFd)
 
-				criuOpts := req.GetCriu()
-				if criuOpts == nil {
-					criuOpts = &criu_proto.CriuOpts{}
+				if req.Criu == nil {
+					req.Criu = &criu_proto.CriuOpts{}
 				}
 
-				criuOpts.InheritFd = append(criuOpts.InheritFd, &criu_proto.InheritFd{
+				req.Criu.InheritFd = append(req.Criu.InheritFd, &criu_proto.InheritFd{
 					Key: proto.String(CriuNsToKey(t)),
 					Fd:  proto.Int32(int32(2 + len(extraFiles))),
 				})
@@ -157,11 +156,10 @@ func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
 				}
 				// CRIU will issue a warning for NEWUSER:
 				// criu/namespaces.c: 'join-ns with user-namespace is not fully tested and dangerous'
-				criuOpts := req.GetCriu()
-				if criuOpts == nil {
-					criuOpts = &criu_proto.CriuOpts{}
+				if req.Criu == nil {
+					req.Criu = &criu_proto.CriuOpts{}
 				}
-				criuOpts.JoinNs = append(criuOpts.JoinNs, &criu_proto.JoinNamespace{
+				req.Criu.JoinNs = append(req.Criu.JoinNs, &criu_proto.JoinNamespace{
 					Ns:     proto.String(configs.NsName(ns.Type)),
 					NsFile: proto.String(nsPath),
 				})

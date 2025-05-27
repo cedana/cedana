@@ -22,7 +22,7 @@ func CopyNotify(dst io.Writer, src io.Reader) chan error {
 
 // Tar creates a tarball from the provided sources and writes it to the destination.
 // FIXME: Works only with files, not directories in the tarball.
-func Tar(src string, dst io.Writer, compression string) error {
+func Tar(src string, dst io.Writer, compression string) (err error) {
 	writer, err := NewCompressionWriter(dst, compression)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func Tar(src string, dst io.Writer, compression string) error {
 // Untar decompresses the provided tarball to the destination directory.
 // The destination directory should already exist.
 // FIXME: Works only with files, not directories in the tarball.
-func Untar(src io.Reader, dest string, compression string) error {
+func Untar(src io.Reader, dest string, compression string) (err error) {
 	reader, err := NewCompressionReader(src, compression)
 	if err != nil {
 		return err
@@ -114,12 +114,11 @@ func Untar(src io.Reader, dest string, compression string) error {
 			if err != nil {
 				return err
 			}
+			defer outFile.Close()
 
 			if _, err := io.Copy(outFile, tarReader); err != nil {
-				outFile.Close()
 				return err
 			}
-			outFile.Close()
 		}
 	}
 
@@ -128,7 +127,7 @@ func Untar(src io.Reader, dest string, compression string) error {
 
 // WriteTo writes the contents from the provided src to the the provided destination.
 // Compression format is specified by the compression argument.
-func WriteTo(src *os.File, dst io.Writer, compression string) (int64, error) {
+func WriteTo(src *os.File, dst io.Writer, compression string) (n int64, err error) {
 	writer, err := NewCompressionWriter(dst, compression)
 	if err != nil {
 		return 0, err
@@ -140,7 +139,7 @@ func WriteTo(src *os.File, dst io.Writer, compression string) (int64, error) {
 
 // ReadFrom reads the contents of the src and writes it to the provided target.
 // The function automatically detects the compression format from the file extension.
-func ReadFrom(src io.Reader, dst *os.File, compression string) (int64, error) {
+func ReadFrom(src io.Reader, dst *os.File, compression string) (n int64, err error) {
 	reader, err := NewCompressionReader(src, compression)
 	if err != nil {
 		return 0, err
