@@ -55,7 +55,7 @@ jobs:
     secrets: inherit
     with:
       criu_version: release
-      gpu_version: feature/ced-1119-feat-support-gpu-controller-detach-from-root-cedana-process
+      gpu_version: main
       streamer_version: main
 
   test:
