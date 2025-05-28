@@ -1,9 +1,9 @@
-buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250512165450-b39d961d96d5.2 h1:k39Jabt+o17s2o1uw9yT4Bl8IOh2K6KCeT5EeO386DM=
-buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250512165450-b39d961d96d5.2/go.mod h1:aCXGuCoQUlESpF1FgDgDvS9x9vdATbo46/OcmH3yyAs=
-buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250512165450-b39d961d96d5.1 h1:6m5Ry4IeHNFtpqYBjsSY5P2y5oS/lbXelOzlOn8P4yU=
-buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250512165450-b39d961d96d5.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
-buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250512165450-1892890c29f3.1 h1:ghN6F21mckkTklq2ZOq/kczRHxqhAuTHYx6xIfiMGXo=
-buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250512165450-1892890c29f3.1/go.mod h1:aBOGTWtzs/KK01BRrLRKUwkytDF2R6w9RGsFJY3zL/w=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250525161854-7f7c34522962.2 h1:X9fttcEIzP/JdOxgvQpuIHRMQHueVwXIInqAR0jhopU=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250525161854-7f7c34522962.2/go.mod h1:O42IKU5/XJUdF/e4fnlUtssZkYwGq8OWaYCGHzvo4Sw=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250525161854-7f7c34522962.1 h1:RU/tAjHX5EkVYv/Fz7dDlxrlVyM7gGIbFtjaQzcdYdE=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250525161854-7f7c34522962.1/go.mod h1:euGEyg3zUBAzRV4qbd1NlMcpirM7r9LxLnTBTnWLEMc=
+buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250525161854-1d3afa7cca3c.1 h1:sTX8ZCsO15c0U2HRyXBWcnRMC7P7JsyuYoxs8nz89m4=
+buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250525161854-1d3afa7cca3c.1/go.mod h1:aBOGTWtzs/KK01BRrLRKUwkytDF2R6w9RGsFJY3zL/w=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250525161854-1eb56ded270a.2 h1:MqMNAqolTTIZN0fKZHf1JjeQHMwKNF64iU7wcQmmpJ0=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250525161854-1eb56ded270a.2/go.mod h1:Wh6FJg0g9IswRPlDAs+di1tohNaCcB1J/cQotWFhflM=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250525161854-1eb56ded270a.1 h1:SSZ+GWwQt31xaHNK4P4nNnuguoDhVDzfTAiS0Goj6ho=
