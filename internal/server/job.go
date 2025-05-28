@@ -21,7 +21,7 @@ func (s *Server) Get(ctx context.Context, req *daemon.GetReq) (*daemon.GetResp, 
 	}
 
 	jobProto := job.GetProto()
-	if job.IsRunning() && cedana_io.GetIOSlave(job.GetPID()) != nil {
+	if jobProto.GetState().GetIsRunning() && cedana_io.GetIOSlave(jobProto.GetState().GetPID()) != nil {
 		jobProto.Log = LOG_ATTACHABLE
 	}
 
@@ -31,7 +31,7 @@ func (s *Server) Get(ctx context.Context, req *daemon.GetReq) (*daemon.GetResp, 
 func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListResp, error) {
 	var jobs []*job.Job
 
-	if req.Remote {
+	if !req.Remote {
 		jobs = s.jobs.ListByHostIDs(s.host.ID)
 	} else {
 		jobs = s.jobs.List(req.JIDs...)
@@ -39,12 +39,12 @@ func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListRes
 
 	jobProtos := []*daemon.Job{}
 	for _, job := range jobs {
-		proto := *job.GetProto()
-		if job.IsRunning() && cedana_io.GetIOSlave(job.GetPID()) != nil {
+		proto := job.GetProto()
+		if proto.GetState().GetIsRunning() && cedana_io.GetIOSlave(proto.GetState().GetPID()) != nil {
 			proto.Log = LOG_ATTACHABLE
 		}
 
-		jobProtos = append(jobProtos, &proto)
+		jobProtos = append(jobProtos, proto)
 	}
 
 	return &daemon.ListResp{Jobs: jobProtos}, nil

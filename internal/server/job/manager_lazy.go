@@ -15,7 +15,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
@@ -23,16 +22,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const DB_SYNC_RETRY_INTERVAL = 1 * time.Second
+const (
+	DB_SYNC_INTERVAL       = 10 * time.Second
+	DB_SYNC_RETRY_INTERVAL = 1 * time.Second
+)
 
 type ManagerLazy struct {
-	jobs        sync.Map
-	checkpoints sync.Map
+	jobs               sync.Map
+	checkpoints        sync.Map
+	deletedJobs        sync.Map // to keep track of deleted jobs
+	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
 
 	plugins plugins.Manager
 	gpus    gpu.Manager
 	db      db.DB
 	pending chan action
+	sync    sync.Mutex // to protect syncWithDB from concurrent access
 
 	wg *sync.WaitGroup // for all manger background routines
 }
@@ -73,7 +78,7 @@ func NewManagerLazy(
 		db:      db,
 	}
 
-	err := manager.syncWithDB(lifetime, action{initialize, ""})
+	err := manager.Sync(lifetime)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +122,8 @@ func NewManagerLazy(
 					log.Debug().Err(err).Str("id", action.id).Str("type", action.typ.String()).Msg("job manager DB sync failed, retrying...")
 					time.Sleep(DB_SYNC_RETRY_INTERVAL)
 				}
+			case <-time.After(DB_SYNC_INTERVAL):
+				manager.pending <- action{initialize, ""} // periodically sync with DB
 			}
 		}
 	}()
@@ -127,10 +134,6 @@ func NewManagerLazy(
 /////////////////
 //// Methods ////
 /////////////////
-
-func (m *ManagerLazy) GetWG() *sync.WaitGroup {
-	return m.wg
-}
 
 func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	if jid == "" {
@@ -162,11 +165,13 @@ func (m *ManagerLazy) Get(jid string) *Job {
 }
 
 func (m *ManagerLazy) Delete(jid string) {
-	_, ok := m.jobs.Load(jid)
+	job, ok := m.jobs.Load(jid)
 	if !ok {
 		return
 	}
 	m.jobs.Delete(jid)
+
+	m.deletedJobs.Store(jid, job)
 
 	m.pending <- action{putJob, jid}
 
@@ -182,11 +187,6 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 	jidSet := make(map[string]any)
 	for _, jid := range jids {
 		jidSet[jid] = nil
-	}
-
-	err := m.syncWithDB(context.TODO(), action{initialize, ""})
-	if err != nil {
-		m.pending <- action{initialize, ""}
 	}
 
 	m.jobs.Range(func(key any, val any) bool {
@@ -212,11 +212,6 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 	hostIDSet := make(map[string]any)
 	for _, hostID := range hostIDs {
 		hostIDSet[hostID] = nil
-	}
-
-	err := m.syncWithDB(context.TODO(), action{initialize, ""})
-	if err != nil {
-		m.pending <- action{initialize, ""}
 	}
 
 	m.jobs.Range(func(key any, val any) bool {
@@ -275,9 +270,9 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
-		m.gpus.Detach(pid)
-
-		m.pending <- action{putJob, jid}
+		if m.gpus.IsAttached(pid) {
+			m.gpus.Detach(pid)
+		}
 	}()
 
 	return nil
@@ -384,27 +379,19 @@ func (m *ManagerLazy) GetLatestCheckpoint(jid string) *daemon.Checkpoint {
 }
 
 func (m *ManagerLazy) DeleteCheckpoint(id string) {
-	_, ok := m.checkpoints.Load(id)
+	c, ok := m.checkpoints.Load(id)
 	if !ok {
 		return
 	}
 	m.checkpoints.Delete(id)
 
+	m.deletedCheckpoints.Store(id, c)
+
 	m.pending <- action{putCheckpoint, id}
 }
 
-func (m *ManagerLazy) CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallbackMulti {
-	job := m.Get(jid)
-	if job == nil {
-		return nil
-	}
-	multiCallback := &criu.NotifyCallbackMulti{}
-	multiCallback.IncludeMulti(job.GetCRIUCallback())
-	return multiCallback
-}
-
-func (m *ManagerLazy) GPUs() gpu.Manager {
-	return m.gpus
+func (m *ManagerLazy) Sync(ctx context.Context) error {
+	return m.syncWithDB(ctx, action{initialize, ""})
 }
 
 ////////////////////////
@@ -416,6 +403,8 @@ func (i actionType) String() string {
 }
 
 func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
+	m.sync.Lock()
+	defer m.sync.Unlock()
 	typ := action.typ
 
 	var err error
@@ -428,16 +417,19 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		}
 		for _, proto := range jobProtos {
 			job := fromProto(proto)
-			checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, job.JID)
-			if err != nil {
-				return err
-			}
-			if !m.Exists(job.JID) {
-				m.jobs.Store(job.JID, job)
-			}
+			_, deleted := m.deletedJobs.Load(job.JID)
 
-			for _, checkpoint := range checkpoints {
-				m.checkpoints.Store(checkpoint.ID, checkpoint)
+			if !deleted && (!m.Exists(job.JID) || job.IsRemote()) {
+				m.jobs.Store(job.JID, job)
+
+				checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, job.JID)
+				if err != nil {
+					return err
+				}
+
+				for _, checkpoint := range checkpoints {
+					m.checkpoints.Store(checkpoint.ID, checkpoint)
+				}
 			}
 		}
 
@@ -447,19 +439,25 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 
 	case putJob:
 		jid := action.id
-		job := m.Get(jid)
-		if job == nil {
+		job, ok := m.jobs.Load(jid)
+		if ok {
+			err = m.db.PutJob(ctx, job.(*Job).GetProto())
+		} else if _, deleted := m.deletedJobs.Load(jid); deleted {
 			err = m.db.DeleteJob(ctx, jid)
-		} else {
-			err = m.db.PutJob(ctx, job.GetProto())
+			if err == nil {
+				m.deletedJobs.Delete(jid)
+			}
 		}
 	case putCheckpoint:
 		id := action.id
 		checkpoint, ok := m.checkpoints.Load(id)
-		if !ok {
-			err = m.db.DeleteCheckpoint(ctx, id)
-		} else {
+		if ok {
 			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
+		} else if _, deleted := m.deletedCheckpoints.Load(id); deleted {
+			err = m.db.DeleteCheckpoint(ctx, id)
+			if err == nil {
+				m.deletedCheckpoints.Delete(id)
+			}
 		}
 	}
 	return err

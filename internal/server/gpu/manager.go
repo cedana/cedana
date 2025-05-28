@@ -30,7 +30,7 @@ type Manager interface {
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
 	CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback
 
-	// Sync is used to synchronize the manager with the current system state.
+	// Sync is used to force the GPU manager to sync its state with the current system state.
 	Sync(ctx context.Context) error
 }
 

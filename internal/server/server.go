@@ -262,8 +262,6 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	err = lifetime.Err()
 
 	// Wait for all background go routines to finish
-	// WARN: Careful before changing beflow order, as it may cause deadlock
-	s.jobs.GetWG().Wait()
 	s.wg.Wait()
 	s.Stop()
 

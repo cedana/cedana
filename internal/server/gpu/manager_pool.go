@@ -42,6 +42,7 @@ type ManagerPool struct {
 	plugins plugins.Manager
 	db      db.GPU
 	pending chan action
+	sync    sync.Mutex // Used to prevent concurrent syncs
 
 	pendingAttaches atomic.Int32
 
@@ -432,6 +433,8 @@ func (i actionType) String() string {
 }
 
 func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
+	m.sync.Lock()
+	defer m.sync.Unlock()
 	typ := a.typ
 
 	var err error

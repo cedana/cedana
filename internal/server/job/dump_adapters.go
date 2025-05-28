@@ -45,9 +45,6 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
-			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, nil, req.Stream))
-
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
 				return exited, err
