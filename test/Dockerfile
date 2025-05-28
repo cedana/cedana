@@ -14,7 +14,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     pkg-config libbsd-dev containerd runc libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
-    zip jq
+    zip jq systemctl ca-certificates gnupg lsb-release
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
@@ -42,6 +42,30 @@ wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && rm -rf /usr/local/g
 tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.linux-amd64.tar.gz
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
+
+# install helm
+RUN <<EOT
+set -eux
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+rm get_helm.sh
+EOT
+
+# install k3s (download only, will be installed in tests as needed)
+RUN <<EOT
+set -eux
+curl -sfL https://get.k3s.io -o /usr/local/bin/install-k3s.sh
+chmod +x /usr/local/bin/install-k3s.sh
+EOT
+
+# install kubectl
+RUN <<EOT
+set -eux
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+mv kubectl /usr/local/bin/kubectl
+EOT
 
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples

@@ -27,6 +27,13 @@ Implementation tasks for creating an end-to-end regression test that sets up a c
   - Add JSON response parsing utilities
   - Add error handling and timeout mechanisms
 
+- [x] **Update test Dockerfile**
+  - Ensure k3s is properly installed in `test/Dockerfile`
+  - Add helm installation to container
+  - Verify kubectl is available
+  - Add any missing dependencies for k3s cluster setup
+  - Configure container networking for k3s
+
 ## In Progress Tasks
 
 _No tasks in progress yet._
@@ -36,13 +43,6 @@ _No tasks in progress yet._
 ### 1. Test Infrastructure Setup
 
 ### 2. Docker Environment Setup
-
-- [ ] **Update test Dockerfile**
-  - Ensure k3s is properly installed in `test/Dockerfile`
-  - Add helm installation to container
-  - Verify kubectl is available
-  - Add any missing dependencies for k3s cluster setup
-  - Configure container networking for k3s
 
 - [ ] **Create Docker test runner script**
   - Create script to build test Docker image
