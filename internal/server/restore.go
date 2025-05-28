@@ -95,6 +95,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 		pluginRestoreStorage, // detects and plugs in the storage to use
 		dumpDirAdapter,       // auto-detects compression
 		process.ReloadProcessStateForRestore,
+		gpu.Restore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 
@@ -102,7 +103,6 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
-		gpu.Restore(s.gpus),
 
 		criu.CheckOptsForRestore,
 	}
