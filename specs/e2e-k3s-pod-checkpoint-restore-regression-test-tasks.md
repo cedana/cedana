@@ -34,6 +34,13 @@ Implementation tasks for creating an end-to-end regression test that sets up a c
   - Add any missing dependencies for k3s cluster setup
   - Configure container networking for k3s
 
+- [x] **Create Docker test runner script**
+  - Create script to build test Docker image
+  - Add script to run container with proper environment variables
+  - Mount source code into container
+  - Configure container networking and privileges if needed
+  - Add cleanup of Docker containers after test
+
 ## In Progress Tasks
 
 _No tasks in progress yet._
@@ -43,13 +50,6 @@ _No tasks in progress yet._
 ### 1. Test Infrastructure Setup
 
 ### 2. Docker Environment Setup
-
-- [ ] **Create Docker test runner script**
-  - Create script to build test Docker image
-  - Add script to run container with proper environment variables
-  - Mount source code into container
-  - Configure container networking and privileges if needed
-  - Add cleanup of Docker containers after test
 
 - [ ] **Configure containerized test environment**
   - Set up environment variable passing to Docker container
