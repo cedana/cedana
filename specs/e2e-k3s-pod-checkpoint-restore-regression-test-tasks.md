@@ -8,6 +8,14 @@ Implementation tasks for creating an end-to-end regression test that sets up a c
   - Create `test/regression/e2e/` directory
   - Set up proper permissions and organization
 
+- [x] **Extend k3s helper functions for containerized environment**
+  - Add `setup_k3s_cluster_with_helm()` function to `test/regression/helpers/k3s.bash`
+  - Add `teardown_k3s_cluster()` function to `test/regression/helpers/k3s.bash`
+  - Add `deploy_cedana_helm_chart()` function to `test/regression/helpers/k3s.bash`
+  - Add `wait_for_k3s_ready()` utility function
+  - Add `configure_k3s_runc_root()` function for container environment
+  - Ensure k3s works properly inside Docker container
+
 ## In Progress Tasks
 
 _No tasks in progress yet._
@@ -15,14 +23,6 @@ _No tasks in progress yet._
 ## Future Tasks
 
 ### 1. Test Infrastructure Setup
-
-- [ ] **Extend k3s helper functions for containerized environment**
-  - Add `setup_k3s_cluster_with_helm()` function to `test/regression/helpers/k3s.bash`
-  - Add `teardown_k3s_cluster()` function to `test/regression/helpers/k3s.bash`
-  - Add `deploy_cedana_helm_chart()` function to `test/regression/helpers/k3s.bash`
-  - Add `wait_for_k3s_ready()` utility function
-  - Add `configure_k3s_runc_root()` function for container environment
-  - Ensure k3s works properly inside Docker container
 
 - [ ] **Create propagator API helper functions**
   - Create `test/regression/helpers/propagator.bash` file

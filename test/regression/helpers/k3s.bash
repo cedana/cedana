@@ -5,6 +5,128 @@
 ################################
 
 #
+# Set up k3s cluster with Helm support for containerized environment
+# Designed to work inside Docker containers for e2e testing
+#
+setup_k3s_cluster_with_helm() {
+    echo "Setting up k3s cluster with Helm support in containerized environment..."
+    
+    # Install k3s in container-friendly mode
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -s -
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install k3s."
+        return 1
+    fi
+    
+    # Set up kubeconfig
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    chmod 644 "$KUBECONFIG"
+    
+    # Wait for k3s to be ready
+    wait_for_k3s_ready
+    
+    echo "k3s cluster with Helm support is ready."
+    return 0
+}
+
+#
+# Wait for k3s cluster to be ready
+#
+wait_for_k3s_ready() {
+    echo "Waiting for k3s cluster to become ready..."
+    
+    for i in $(seq 1 60); do
+        if kubectl get nodes 2>/dev/null | grep -q 'Ready'; then
+            echo "k3s cluster is ready."
+            return 0
+        fi
+        echo "Waiting for k3s (attempt $i/60)..."
+        sleep 5
+    done
+    
+    echo "Error: Timed out waiting for k3s cluster."
+    kubectl get nodes 2>/dev/null || echo "kubectl not accessible"
+    return 1
+}
+
+#
+# Configure k3s runc root path for container environment
+#
+configure_k3s_runc_root() {
+    echo "Configuring k3s runc root path..."
+    
+    # Ensure the runc root directory exists
+    mkdir -p /run/containerd/runc/k8s.io
+    
+    # Set proper permissions
+    chmod 755 /run/containerd/runc/k8s.io
+    
+    echo "k3s runc root configured at /run/containerd/runc/k8s.io"
+    return 0
+}
+
+#
+# Deploy Cedana Helm chart using OCI registry
+# @param $1: Auth token for Cedana
+# @param $2: Cedana URL (default: ci.cedana.ai/v1)
+#
+deploy_cedana_helm_chart() {
+    local auth_token="$1"
+    local cedana_url="${2:-ci.cedana.ai/v1}"
+    
+    if [ -z "$auth_token" ]; then
+        echo "Error: Auth token required for Cedana Helm chart deployment"
+        return 1
+    fi
+    
+    echo "Deploying Cedana Helm chart from OCI registry..."
+    
+    # Install Cedana using OCI registry
+    helm install cedana oci://registry-1.docker.io/cedana/cedana-helm \
+        --create-namespace -n cedanacontroller-system \
+        --set cedanaConfig.cedanaAuthToken="$auth_token" \
+        --set cedanaConfig.cedanaUrl="$cedana_url" \
+        --set controllerManager.manager.resources.limits.cpu=200m \
+        --set controllerManager.manager.resources.limits.memory=128Mi \
+        --set controllerManager.manager.resources.requests.cpu=100m \
+        --set controllerManager.manager.resources.requests.memory=64Mi \
+        --wait --timeout=10m
+    
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to deploy Cedana Helm chart"
+        kubectl get pods -n cedanacontroller-system 2>/dev/null || true
+        return 1
+    fi
+    
+    echo "Cedana Helm chart deployed successfully."
+    return 0
+}
+
+#
+# Teardown k3s cluster completely
+#
+teardown_k3s_cluster() {
+    echo "Tearing down k3s cluster..."
+    
+    # Uninstall Cedana helm release if it exists
+    if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+        helm uninstall cedana -n cedanacontroller-system --wait 2>/dev/null || true
+    fi
+    
+    # Uninstall k3s
+    if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
+        /usr/local/bin/k3s-uninstall.sh
+    fi
+    
+    # Clean up any remaining artifacts
+    rm -rf /etc/rancher/k3s /var/lib/rancher/k3s /run/k3s 2>/dev/null || true
+    
+    echo "k3s cluster teardown complete."
+    return 0
+}
+
+#
 # Assumes 'curl' and 'helm' are installed.
 #
 # @param $1: Path to the Cedana helm chart (e.g., ./cedana-helm)
