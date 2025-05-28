@@ -201,7 +201,6 @@ func (controller *controller) Connect(ctx context.Context, wg *sync.WaitGroup) e
 
 	_, err = controller.WaitForHealthCheck(ctx, wg)
 	if err != nil {
-		controller.Terminate()
 		return err
 	}
 

@@ -37,7 +37,8 @@ const (
 
 type ManagerPool struct {
 	controllers controllers
-	poolSize    int
+
+	poolSize int
 
 	plugins plugins.Manager
 	db      db.GPU
@@ -166,6 +167,14 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid 
 
 	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
 
+	defer func() {
+		if err != nil {
+			controller.Terminate()
+			m.controllers.Delete(controller.ID)
+			m.pending <- action{putController, controller.ID}
+		}
+	}()
+
 	err = controller.Connect(ctx, m.wg)
 	if err != nil {
 		return "", err
@@ -254,8 +263,10 @@ func (m *ManagerPool) Checks() types.Checks {
 		// Spawn a new GPU controller
 
 		controller, err := m.controllers.Spawn(binary, user)
-		defer controller.Terminate()
-		defer m.controllers.Delete(controller.ID)
+		defer func() {
+			controller.Terminate()
+			m.controllers.Delete(controller.ID)
+		}()
 		if err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
