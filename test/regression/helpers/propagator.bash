@@ -1,0 +1,320 @@
+#!/usr/bin/env bash
+
+########################################
+### Cedana Propagator API Helpers   ###
+########################################
+
+# Default propagator service configuration
+PROPAGATOR_BASE_URL="${CEDANA_URL:-ci.cedana.ai/v1}"
+PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
+
+#
+# Set up authentication for propagator API calls
+# @param $1: Auth token (optional, uses CEDANA_AUTH_TOKEN if not provided)
+#
+setup_propagator_auth() {
+    local token="${1:-$CEDANA_AUTH_TOKEN}"
+    
+    if [ -z "$token" ]; then
+        echo "Error: CEDANA_AUTH_TOKEN not set and no token provided"
+        return 1
+    fi
+    
+    export PROPAGATOR_AUTH_TOKEN="$token"
+    echo "Propagator authentication configured"
+    return 0
+}
+
+#
+# Get available clusters from the propagator service
+# Returns JSON array of clusters
+#
+get_available_clusters() {
+    echo "Retrieving available clusters from propagator..."
+    
+    local response
+    response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/cluster" \
+        -H "Authorization: ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        echo "Error: Failed to get clusters (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# Get cluster ID (uses first available cluster or returns placeholder)
+#
+get_cluster_id() {
+    local clusters
+    clusters=$(get_available_clusters)
+    
+    if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ]; then
+        echo "$clusters" | jq -r '.[0].id' 2>/dev/null || echo "test-cluster-id"
+    else
+        echo "test-cluster-id"
+    fi
+}
+
+#
+# Checkpoint a pod via propagator API
+# @param $1: Pod name
+# @param $2: Runc root path
+# @param $3: Namespace
+# @param $4: Cluster ID
+# Returns: Action ID for polling
+#
+checkpoint_pod_via_api() {
+    local pod_name="$1"
+    local runc_root="$2"
+    local namespace="$3"
+    local cluster_id="$4"
+    
+    if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ] || [ -z "$cluster_id" ]; then
+        echo "Error: checkpoint_pod_via_api requires pod_name, runc_root, namespace, cluster_id" >&2
+        return 1
+    fi
+    
+    echo "Checkpointing pod '$pod_name' in namespace '$namespace'..."
+    
+    local payload
+    payload=$(jq -n \
+        --arg pod_name "$pod_name" \
+        --arg runc_root "$runc_root" \
+        --arg namespace "$namespace" \
+        --arg cluster_id "$cluster_id" \
+        '{
+            "pod_name": $pod_name,
+            "runc_root": $runc_root,
+            "namespace": $namespace,
+            "cluster_id": $cluster_id
+        }')
+    
+    local response
+    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL}/checkpoint/pod" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -d "$payload" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        echo "Error: Failed to checkpoint pod (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# Restore a pod via propagator API
+# @param $1: Action ID from checkpoint operation
+# @param $2: Cluster ID (optional, uses same cluster if not provided)
+# Returns: Action ID for polling
+#
+restore_pod_via_api() {
+    local action_id="$1"
+    local cluster_id="$2"
+    
+    if [ -z "$action_id" ]; then
+        echo "Error: restore_pod_via_api requires action_id" >&2
+        return 1
+    fi
+    
+    echo "Restoring pod from action '$action_id'..."
+    
+    local payload
+    if [ -n "$cluster_id" ]; then
+        payload=$(jq -n \
+            --arg action_id "$action_id" \
+            --arg cluster_id "$cluster_id" \
+            '{
+                "action_id": $action_id,
+                "cluster_id": $cluster_id
+            }')
+    else
+        payload=$(jq -n \
+            --arg action_id "$action_id" \
+            '{
+                "action_id": $action_id
+            }')
+    fi
+    
+    local response
+    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL}/restore/pod" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -d "$payload" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        echo "Error: Failed to restore pod (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# Poll action status until completion
+# @param $1: Action ID
+# @param $2: Operation type (checkpoint|restore) for logging
+#
+poll_action_status() {
+    local action_id="$1"
+    local operation="${2:-operation}"
+    
+    if [ -z "$action_id" ]; then
+        echo "Error: poll_action_status requires action_id" >&2
+        return 1
+    fi
+    
+    echo "Polling status for $operation action '$action_id'..."
+    
+    for i in $(seq 1 60); do  # 5 minute timeout
+        local response
+        response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/actions?type=$operation" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -w "%{http_code}")
+        
+        local http_code="${response: -3}"
+        local body="${response%???}"
+        
+        if [ "$http_code" -eq 200 ]; then
+            local action_info
+            action_info=$(echo "$body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
+            
+            if [ -n "$action_info" ]; then
+                local status
+                status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
+                
+                echo "Action status: $status (attempt $i/60)"
+                
+                case "$status" in
+                    "completed"|"ready")
+                        echo "$operation action completed successfully"
+                        return 0
+                        ;;
+                    "failed"|"error")
+                        echo "Error: $operation action failed with status '$status'" >&2
+                        echo "Action details: $action_info" >&2
+                        return 1
+                        ;;
+                    *)
+                        # Continue polling for other statuses
+                        ;;
+                esac
+            else
+                echo "Warning: Action '$action_id' not found in response (attempt $i/60)"
+            fi
+        else
+            echo "Warning: Failed to get actions (HTTP $http_code) (attempt $i/60)"
+        fi
+        
+        sleep 5
+    done
+    
+    echo "Error: Timeout waiting for $operation action '$action_id' to complete" >&2
+    return 1
+}
+
+#
+# Cleanup/deprecate a checkpoint
+# @param $1: Checkpoint ID (can be extracted from action response)
+#
+cleanup_checkpoint() {
+    local checkpoint_id="$1"
+    
+    if [ -z "$checkpoint_id" ]; then
+        echo "Error: cleanup_checkpoint requires checkpoint_id" >&2
+        return 1
+    fi
+    
+    echo "Deprecating checkpoint '$checkpoint_id'..."
+    
+    local response
+    response=$(curl -s -X PATCH "https://${PROPAGATOR_BASE_URL}/checkpoints/deprecate/${checkpoint_id}" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "Checkpoint deprecated successfully"
+        return 0
+    else
+        echo "Warning: Failed to deprecate checkpoint (HTTP $http_code): $body" >&2
+        # Don't fail the test if cleanup fails
+        return 0
+    fi
+}
+
+#
+# Extract checkpoint ID from action response
+# @param $1: Action response JSON
+#
+extract_checkpoint_id() {
+    local action_response="$1"
+    
+    if [ -z "$action_response" ]; then
+        echo "Error: extract_checkpoint_id requires action_response" >&2
+        return 1
+    fi
+    
+    echo "$action_response" | jq -r '.checkpoint_id' 2>/dev/null || echo ""
+}
+
+#
+# Validate propagator service connectivity
+#
+validate_propagator_connectivity() {
+    echo "Validating propagator service connectivity..."
+    
+    local response
+    response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/user" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "Propagator service connectivity validated"
+        return 0
+    else
+        echo "Error: Failed to connect to propagator service (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# Parse JSON response safely
+# @param $1: JSON string
+# @param $2: jq filter
+#
+parse_json_response() {
+    local json="$1"
+    local filter="$2"
+    
+    if [ -z "$json" ] || [ -z "$filter" ]; then
+        echo "Error: parse_json_response requires json and filter" >&2
+        return 1
+    fi
+    
+    echo "$json" | jq -r "$filter" 2>/dev/null || echo ""
+} 

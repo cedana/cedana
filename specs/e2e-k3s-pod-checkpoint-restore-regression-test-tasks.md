@@ -16,15 +16,7 @@ Implementation tasks for creating an end-to-end regression test that sets up a c
   - Add `configure_k3s_runc_root()` function for container environment
   - Ensure k3s works properly inside Docker container
 
-## In Progress Tasks
-
-_No tasks in progress yet._
-
-## Future Tasks
-
-### 1. Test Infrastructure Setup
-
-- [ ] **Create propagator API helper functions**
+- [x] **Create propagator API helper functions**
   - Create `test/regression/helpers/propagator.bash` file
   - Implement `checkpoint_pod_via_api()` function for POST /v2/checkpoint/pod
   - Implement `restore_pod_via_api()` function for POST /v2/restore/pod
@@ -34,6 +26,14 @@ _No tasks in progress yet._
   - Add authentication helper for bearer token setup
   - Add JSON response parsing utilities
   - Add error handling and timeout mechanisms
+
+## In Progress Tasks
+
+_No tasks in progress yet._
+
+## Future Tasks
+
+### 1. Test Infrastructure Setup
 
 ### 2. Docker Environment Setup
 
