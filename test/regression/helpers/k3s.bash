@@ -125,17 +125,17 @@ teardown_k3s() {
 #
 # @param $1: Pod name (e.g., "my-test-pod")
 # @param $2: Container image (e.g., "myregistry/myimage:latest")
-# @param $3: Container command as a single string (e.g., "/app/workload; sleep 3600")
+# @param $3: Container command as a single string (e.g., "/app/workload")
 # @param $4: Number of GPUs to request (e.g., 1 for GPU, 0 for CPU-only)
 #
 generate_pod_manifest() {
     local pod_name="$1"
     local image_name="$2"
-    local container_command_script="$3"
+    local container_command="$3"
     local gpu_count="$4"
 
-    if [ -z "$pod_name" ] || [ -z "$image_name" ] || [ -z "$container_command_script" ] || [ -z "$gpu_count" ]; then
-        echo "Usage: generate_pod_manifest <pod_name> <image_name> <container_command_script> <gpu_count>" >&2
+    if [ -z "$pod_name" ] || [ -z "$image_name" ] || [ -z "$container_command" ] || [ -z "$gpu_count" ]; then
+        echo "Usage: generate_pod_manifest <pod_name> <image_name> <container_command> <gpu_count>" >&2
         return 1
     fi
 
@@ -162,12 +162,8 @@ spec:
   containers:
   - name: workload-container
     image: "$image_name"
-    command: ["/bin/sh", "-c", "$container_command_script"]
+    command: ["/bin/sh", "-c", "$container_command"]
 $resources_yaml
-  # Optional: If your k3s worker nodes with GPUs have specific labels,
-  # you might need a nodeSelector.
-  # nodeSelector:
-  #   your-gpu-node-label-key: "your-gpu-node-label-value"
 EOF
 }
 
