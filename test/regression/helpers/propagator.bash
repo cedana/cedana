@@ -324,4 +324,66 @@ parse_json_response() {
     fi
     
     echo "$json" | jq -r "$filter" 2>/dev/null || echo ""
+}
+
+#
+# Get list of checkpoints from the propagator service
+# @param $1: Optional cluster ID to filter by cluster
+# Returns: JSON array of checkpoints
+#
+get_checkpoints() {
+    local cluster_id="$1"
+    
+    echo "Retrieving checkpoints from propagator..."
+    
+    local url="https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoints"
+    if [ -n "$cluster_id" ]; then
+        url="${url}?cluster_id=${cluster_id}"
+    fi
+    
+    local response
+    response=$(curl -s -X GET "$url" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+    
+    local http_code="${response: -3}"
+    local body="${response%???}"
+    
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        echo "Error: Failed to get checkpoints (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# List checkpoints in a human-readable format
+# @param $1: Optional cluster ID to filter by cluster
+#
+list_checkpoints() {
+    local cluster_id="$1"
+    
+    echo "=== Cedana Checkpoints ==="
+    
+    local checkpoints
+    checkpoints=$(get_checkpoints "$cluster_id")
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        echo "Failed to retrieve checkpoints"
+        return $exit_code
+    fi
+    
+    if [ -z "$checkpoints" ] || [ "$checkpoints" = "[]" ] || [ "$checkpoints" = "null" ]; then
+        echo "No checkpoints found"
+        return 0
+    fi
+    
+    # Parse and display checkpoints in readable format
+    echo "$checkpoints" | jq -r '.[] | "ID: \(.id // "N/A")\nStatus: \(.status // "N/A")\nPod: \(.pod_name // "N/A")\nNamespace: \(.namespace // "N/A")\nCluster: \(.cluster_id // "N/A")\nCreated: \(.created_at // "N/A")\n---"' 2>/dev/null || {
+        echo "Raw response:"
+        echo "$checkpoints"
+    }
 } 

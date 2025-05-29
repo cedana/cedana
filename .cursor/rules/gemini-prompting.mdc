@@ -1,0 +1,10 @@
+---
+description: 
+globs: **/*
+alwaysApply: true
+---
+# Code comments
+- Keep code comments concise and straight to the point
+- Only add a comment when necessary to describe WHY a code choice was made. 
+
+- Do **NOT** include comments describing WHAT something is doing.
