@@ -17,12 +17,16 @@ import (
 type PropagatorDB struct {
 	config.Connection
 	client *http.Client
+
+	// Fallback DBs are used for all unimplemented methods
+	fallback []DB
 }
 
-func NewPropagatorDB(ctx context.Context, connection config.Connection) *PropagatorDB {
+func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback ...DB) *PropagatorDB {
 	return &PropagatorDB{
 		connection,
 		&http.Client{},
+		fallback,
 	}
 }
 
@@ -339,4 +343,25 @@ func (db *PropagatorDB) DeleteHost(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func (db *PropagatorDB) PutGPUController(ctx context.Context, controller *GPUController) error {
+	for _, fallback := range db.fallback {
+		return fallback.PutGPUController(ctx, controller)
+	}
+	return fmt.Errorf("Unimplemented and no fallback available")
+}
+
+func (db *PropagatorDB) ListGPUControllers(ctx context.Context, ids ...string) ([]*GPUController, error) {
+	for _, fallback := range db.fallback {
+		return fallback.ListGPUControllers(ctx, ids...)
+	}
+	return nil, fmt.Errorf("Unimplemented and no fallback available")
+}
+
+func (db *PropagatorDB) DeleteGPUController(ctx context.Context, id string) error {
+	for _, fallback := range db.fallback {
+		return fallback.DeleteGPUController(ctx, id)
+	}
+	return fmt.Errorf("Unimplemented and no fallback available")
 }

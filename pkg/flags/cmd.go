@@ -23,6 +23,7 @@ var (
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
 	JidFlag         = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag  = Flag{Full: "gpu-enabled", Short: "g"}
+	GpuTypeFlag     = Flag{Full: "gpu-type"}
 	AttachFlag      = Flag{Full: "attach", Short: "a"}
 	AttachableFlag  = Flag{Full: "attachable"}
 	AllFlag         = Flag{Full: "all", Short: "a"}
@@ -34,7 +35,7 @@ var (
 	ErrorsFlag      = Flag{Full: "errors"}
 	CompressionFlag = Flag{Full: "compression"}
 	AsRootFlag      = Flag{Full: "as-root"}
-  UpcomingFlag    = Flag{Full: "upcoming"}
+	UpcomingFlag    = Flag{Full: "upcoming"}
 
 	// CRIU
 	LeaveRunningFlag    = Flag{Full: "leave-running"}

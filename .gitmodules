@@ -1,4 +1,0 @@
-[submodule "pkg/api/proto"]
-	path = pkg/api/proto
-	url = git@github.com:cedana/cedana-api.git
-  branch = refactor/ced-621-plugin-arch

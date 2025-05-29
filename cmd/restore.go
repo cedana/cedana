@@ -11,6 +11,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+
 	"github.com/cedana/cedana/internal/server"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -182,18 +184,17 @@ var restoreCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithoutCancel(
-				context.WithValue(
-					cmd.Context(),
-					keys.DAEMONLESS_CONTEXT_KEY,
-					true,
-				),
+			ctx := context.WithValue(
+				cmd.Context(),
+				keys.DAEMONLESS_CONTEXT_KEY,
+				true,
 			)
 
 			root, err := server.NewRoot(ctx)
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
+			defer root.Shutdown()
 
 			resp, err = root.Restore(ctx, req)
 			if err != nil {

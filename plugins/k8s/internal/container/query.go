@@ -44,7 +44,8 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
 
-	skipNameMatch := len(query.ContainerNames) == 0 && 0 == len(query.SandboxNames)
+	skipContainerNameMatch := len(query.ContainerNames) == 0
+	skipSandboxNameMatch := 0 == len(query.SandboxNames)
 	containerNameSet := make(map[string]bool)
 	sandboxNameSet := make(map[string]bool)
 	for _, name := range query.ContainerNames {
@@ -54,7 +55,8 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 		sandboxNameSet[name] = true
 	}
 	for _, container := range containers {
-		if skipNameMatch || (containerNameSet[container.Name] && sandboxNameSet[container.SandboxName]) {
+		if (skipContainerNameMatch || containerNameSet[container.Name]) &&
+			(skipSandboxNameMatch || sandboxNameSet[container.SandboxName]) {
 			resp.K8S.Containers = append(resp.K8S.Containers, &k8s.Container{
 				SandboxID:        container.SandboxID,
 				SandboxName:      container.SandboxName,

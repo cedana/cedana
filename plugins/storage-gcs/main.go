@@ -1,6 +1,8 @@
 package main
 
-import "github.com/cedana/cedana/plugins/inspector/internal/checkpoint"
+import (
+	"github.com/cedana/cedana/pkg/io"
+)
 
 ///////////////////////////
 //// Exported Features ////
@@ -9,4 +11,4 @@ import "github.com/cedana/cedana/plugins/inspector/internal/checkpoint"
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var CheckpointInspect = checkpoint.Inspect
+var Storage io.Storage = nil

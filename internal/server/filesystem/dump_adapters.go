@@ -2,16 +2,16 @@ package filesystem
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/io"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -21,28 +21,30 @@ import (
 
 const DUMP_DIR_PERMS = 0o755
 
-// This adapter ensures the specified dump dir exists and is writable.
-// Creates a unique directory within this directory for the dump.
-// Updates the CRIU server to use this newly created directory.
+// This adapter uses the provided storage to setup the dump.
 // Compresses the dump directory post-dump, based on a compression format:
 //   - "none" does not compress the dump directory
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
-func PrepareDumpDir(next types.Dump) types.Dump {
+func SetupDumpFS(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		storage := opts.Storage
+		dir := req.Dir
 		compression := req.Compression
+
 		if compression == "" {
 			compression = config.Global.Checkpoint.Compression
 		}
 
-		// Check if compression is valid, because we don't want to fail after the dump
-		// as the process would be killed
 		if _, ok := io.SUPPORTED_COMPRESSIONS[compression]; !ok {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
-		dir := req.GetDir()
+		// If remote storage, we instead use a temporary directory for CRIU
+		if storage.IsRemote() {
+			dir = os.TempDir()
+		}
 
 		// Check if the provided dir exists
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -83,44 +85,50 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		// to the dump directory
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
 
-		exited, err = next(ctx, opts, resp, req)
-		if err != nil {
-			return nil, err
+		// If remote storage, or compression needs to be done, we do it in CRIU's post-dump hook
+		// so that if we fail compression/upload, CRIU can still resume the process
+
+		if storage.IsRemote() || (compression != "" && compression != "none") {
+			callback := &criu_client.NotifyCallback{Name: "storage"}
+			callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) (err error) {
+				var path string
+				ext, err := io.ExtForCompression(compression)
+				if err != nil {
+					return err
+				}
+
+				path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
+
+				tarball, err := storage.Create(path)
+				if err != nil {
+					return fmt.Errorf("failed to create tarball in storage: %w", err)
+				}
+				defer func() {
+					if e := tarball.Close(); e != nil && err == nil {
+						err = e
+					}
+				}()
+
+				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
+
+				err = io.Tar(imagesDirectory, tarball, compression)
+				if err != nil {
+					storage.Delete(path)
+					return fmt.Errorf("failed to create tarball: %w", err)
+				}
+
+				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
+
+				os.RemoveAll(imagesDirectory)
+				resp.Path = path
+				return nil
+			}
+			opts.CRIUCallback.Include(callback)
+		} else {
+			// Nothing else to do, just set the path
+			resp.Path = imagesDirectory
 		}
 
-		// If nothing was put in the directory, remove it and return early
-		entries, err := os.ReadDir(imagesDirectory)
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
-		}
-		if len(entries) == 0 {
-			os.RemoveAll(imagesDirectory)
-			return exited, nil
-		}
-
-		resp.Path = imagesDirectory
-
-		if compression == "" || compression == "none" {
-			return exited, err // Nothing else to do
-		}
-
-		// Create the compressed tarball
-
-		log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("creating tarball")
-
-		_, end := profiling.StartTimingCategory(ctx, "compression", utils.Tar)
-		tarball, err := utils.Tar(imagesDirectory, imagesDirectory, compression)
-		end()
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to create tarball: %v", err)
-		}
-
-		os.RemoveAll(imagesDirectory)
-
-		resp.Path = tarball
-
-		log.Debug().Str("path", tarball).Str("compression", compression).Msg("created tarball")
-
-		return exited, nil
+		return next(ctx, opts, resp, req)
 	}
 }

@@ -9,9 +9,9 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -21,18 +21,25 @@ import (
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
-func PrepareDumpDirForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func SetupRestoreFS(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+		storage := opts.Storage
 		path := req.GetPath()
-		stat, err := os.Stat(path)
-		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "path error: %s", path)
-		}
 
-		var dir *os.File
+		var isDir bool
 		var imagesDirectory string
 
-		if stat.IsDir() {
+		if !storage.IsRemote() {
+			stat, err := os.Stat(path)
+			if err != nil {
+				return nil, status.Errorf(codes.NotFound, "path error: %s", path)
+			}
+			isDir = stat.IsDir()
+		}
+
+		// If not remote storage, and path is directory, we can directly use it for CRIU
+
+		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
 		} else {
 			// Create a temporary directory for the restore
@@ -46,19 +53,36 @@ func PrepareDumpDirForRestore(next types.Restore) types.Restore {
 			}
 			defer os.RemoveAll(imagesDirectory)
 
-			log.Debug().Str("path", path).Str("dir", imagesDirectory).Msg("decompressing dump")
+			// Detect compression from path
 
-			// Decompress the dump
+			compression, err := io.CompressionFromExt(path)
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 
-			_, end := profiling.StartTimingCategory(ctx, "compression", utils.Untar)
-			err = utils.Untar(path, imagesDirectory)
+			tarball, err := storage.Open(path)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to open dump file: %v", err)
+			}
+			defer func() {
+				if e := tarball.Close(); e != nil && err == nil {
+					err = e
+				}
+			}()
+
+			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
+
+			_, end := profiling.StartTimingCategory(ctx, "storage", io.Untar)
+			err = io.Untar(tarball, imagesDirectory, compression)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
 			}
+
+			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressed tarball")
 		}
 
-		dir, err = os.Open(imagesDirectory)
+		dir, err := os.Open(imagesDirectory)
 		if err != nil {
 			os.RemoveAll(imagesDirectory)
 			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)

@@ -13,7 +13,6 @@ import (
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -21,8 +20,10 @@ import (
 
 // This adapter sets up the cedana-image-streamer for directly streaming
 // files to the dump directory.
-func PrepareDumpDir(next types.Dump) types.Dump {
+func SetupDumpFS(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+		storage := opts.Storage
+		dir := req.Dir
 		compression := req.Compression
 		if compression == "" {
 			compression = config.Global.Checkpoint.Compression
@@ -34,7 +35,10 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
-		dir := req.GetDir()
+		// If remote storage, we instead use a temporary directory for CRIU
+		if storage.IsRemote() {
+			dir = os.TempDir()
+		}
 
 		// Check if the provided dir exists
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -49,7 +53,7 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 		}
 		defer func() {
-			if err != nil {
+			if err != nil || storage.IsRemote() {
 				os.RemoveAll(imagesDirectory)
 			}
 		}()
@@ -96,6 +100,8 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			parallelism = config.Global.Checkpoint.Stream
 		}
 
+		path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
+
 		streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
 		var waitForIO func() error
 		opts.DumpFs, waitForIO, err = NewStreamingFs(
@@ -103,6 +109,8 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 			opts.WG,
 			imgStreamer.BinaryPaths()[0],
 			imagesDirectory,
+			storage,
+			path,
 			parallelism,
 			WRITE_ONLY,
 			compression,
@@ -118,26 +126,14 @@ func PrepareDumpDir(next types.Dump) types.Dump {
 		}
 
 		// Wait for all the streaming to finish
-		_, end = profiling.StartTimingCategory(ctx, "streamer", "streamer.WaitForIO")
+		_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
 		err = waitForIO()
-    end()
+		end()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
 		}
 
-		// If nothing was put in the directory, remove it and return early
-		entries, err := os.ReadDir(imagesDirectory)
-		if err != nil {
-			return exited, status.Errorf(codes.Internal, "failed to read dump dir: %v", err)
-		}
-		if len(entries) == 0 {
-			os.RemoveAll(imagesDirectory)
-			return exited, nil
-		}
-
-		resp.Path = imagesDirectory
-
-		log.Debug().Str("path", imagesDirectory).Str("compression", compression).Msg("stream dump completed")
+		resp.Path = path
 
 		return exited, nil
 	}

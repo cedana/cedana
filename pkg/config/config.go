@@ -29,8 +29,12 @@ const (
 	DEFAULT_PROTOCOL  = "unix"
 	DEFAULT_LOG_LEVEL = "info"
 
-	DEFAULT_COMPRESSION = "tar"
+	DEFAULT_COMPRESSION = "lz4"
 	DEFAULT_DUMP_DIR    = "/tmp"
+
+	DEFAULT_GPU_POOL_SIZE         = 0
+	DEFAULT_GPU_LOG_DIR           = "/tmp"
+	DEFAULT_GPU_MULTIPROCESS_TYPE = "IPC"
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -66,6 +70,11 @@ var Global Config = Config{
 	},
 	Client: Client{
 		WaitForReady: false,
+	},
+	GPU: GPU{
+		PoolSize:         DEFAULT_GPU_POOL_SIZE,
+		LogDir:           DEFAULT_GPU_LOG_DIR,
+		MultiprocessType: DEFAULT_GPU_MULTIPROCESS_TYPE,
 	},
 	CRIU: CRIU{
 		LeaveRunning: false,

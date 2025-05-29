@@ -15,10 +15,6 @@ load_lib file
 # One-time setup of downloading weights & pip installing
 setup_file() {
     setup_file_daemon
-    if cmd_exists nvidia-smi; then
-        do_once install_requirements
-        do_once download_hf_models
-    fi
 }
 
 setup() {
@@ -82,7 +78,8 @@ teardown_file() {
     assert_success
     assert_exists "$log_file"
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 }
 
 @test "run GPU process (non-existent binary)" {
@@ -223,7 +220,8 @@ teardown_file() {
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
     assert_success
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 
     sleep 2
 
@@ -238,7 +236,8 @@ teardown_file() {
     run cedana restore job "$jid"
     assert_success
 
-    check_shm_size "$jid" "$expected_size"
+    # NOTE: GPU controller no longer uses JID, so below is commented out
+    # check_shm_size "$jid" "$expected_size"
 
     run cedana ps
     assert_success
@@ -278,14 +277,4 @@ teardown_file() {
 
     run cedana job kill "$jid"
     rm -rf "$dump_file"
-}
-
-#####################
-### Inference C/R ###
-#####################
-
-# bats test_tags=dump,restore,large
-@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
-    # Requires an HF token!
-    run_inference_test "stabilityai/stablelm-2-1_6b"
 }

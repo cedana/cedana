@@ -108,7 +108,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		id,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(0), Gid: uint32(0)},
+		Credential: &syscall.Credential{Uid: req.UID, Gid: req.GID, Groups: req.Groups},
 		// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 		// XXX: Above is commented out because if we try to restore a managed job,
 		// one that was started by the daemon,
@@ -199,15 +199,15 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 			close(exitCode)
 			close(exited)
 		}()
-	}
 
-	// Also kill the container if lifetime expires
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
-		<-opts.Lifetime.Done()
-		syscall.Kill(int(resp.PID), syscall.SIGKILL)
-	}()
+		// Also kill the container if lifetime expires
+		opts.WG.Add(1)
+		go func() {
+			defer opts.WG.Done()
+			<-opts.Lifetime.Done()
+			syscall.Kill(int(resp.PID), syscall.SIGKILL)
+		}()
+	}
 
 	return exited, nil
 }
