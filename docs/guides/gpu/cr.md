@@ -14,7 +14,7 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
     sudo cedana plugin install gpu
     ```
 
-    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore. If unavailable to you, check option 2.
+    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
 
     * _Minimum NVIDIA driver version: 452 (API 11.8)_
     * _Maximum NVIDIA driver version: 550 (API 12.4). Newer drivers are unstable and may not work._

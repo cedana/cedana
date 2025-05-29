@@ -88,10 +88,12 @@ type (
 	GPU struct {
 		// Number of warm GPU controllers to keep in pool
 		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
-		// LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
+		// LogDir is the directory to write GPU logs to
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// Track metrics associated with observability
 		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
+		// MultiprocessType is the type of multiprocess support to use (IPC, NCCL)
+		MultiprocessType string `json:"multiprocess_type" key:"multiprocess_type" yaml:"multiprocess_type" mapstructure:"multiprocess_type"`
 	}
 
 	Plugins struct {
