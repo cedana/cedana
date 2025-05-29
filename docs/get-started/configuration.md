@@ -102,6 +102,8 @@ type GPU struct {
     PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
     // LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
     LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+    // MultiprocessType is the type of multiprocess support to use (IPC, NCCL)                                                 
+    MultiprocessType string `json:"multiprocess_type" key:"multiprocess_type" yaml:"multiprocess_type" mapstructure:"multiprocess_type”`
 }
 ```
 
@@ -124,8 +126,8 @@ type Plugins struct {
     BinDir string `json:"bin_dir" key:"bin_dir" yaml:"bin_dir" mapstructure:"bin_dir"`
     // LibDir is the directory where plugin libraries are stored
     LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
-		// Builds is the build versions to list/download for plugins (release, alpha)
-		Builds string `json:"builds" key:"build" yaml:"builds" mapstructure:"builds"`
+    // Builds is the build versions to list/download for plugins (release, alpha)
+    Builds string `json:"builds" key:"build" yaml:"builds" mapstructure:"builds"`
 }
 ```
 
