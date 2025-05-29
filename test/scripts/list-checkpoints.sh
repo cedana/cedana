@@ -10,10 +10,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Default environment variables
-DEFAULT_CEDANA_AUTH_TOKEN="fa4318d1569bc89ac95c1223bbb41719e737640027c87200714204cb813de8a74546a5ec647052bcf19c507ca7013685"
-DEFAULT_CEDANA_URL="ci.cedana.ai/v1"
-
 usage() {
     cat <<EOF
 Usage: $0 [OPTIONS] [CLUSTER_ID]
