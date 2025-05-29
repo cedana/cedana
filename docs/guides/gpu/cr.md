@@ -16,6 +16,7 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
     The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
 
+
 *   **Option 2: CRIU CUDA Plugin**
 
     ```sh
@@ -28,13 +29,14 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
 Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/articles/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
 
-|   | Min. NVIDIA Driver | Max. NVIDIA Driver | Multi-GPU | Multi-process/node | amd64 | arm64 |
+|   | Min. driver | Max. driver | Multi-GPU | Multi-process | amd64 | arm64 |
 |---|---------------------|---------------------|--------------------|-------|-------|-------|
-| Cedana GPU | 452 (API 11.8) | 570 (API 12.8) | ✅ | ✅ | ✅ |✅ |
-| CRIU CUDA | 570 (API 12.8) | 570 (API 12.8) | ❌ |❌ | ✅ | ❌ |
+|o Cedana GPU | 452 (API 11.8) | 570 (API 12.8) | ✅ | ✅ | ✅ |✅ |
+| CRIU CUDA | 570 (API 12.8) | 570 (API 12.8) | ❌✅ |❌ | ✅ | ❌ |
 
 ## Usage (GPU plugin)
 
+### Single process
 **NOTE**: Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)).
 
 1. You may clone the [cedana-samples repository](https://github.com/cedana/cedana-samples) for some example GPU workloads.
@@ -56,8 +58,21 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
+### Multi-process/node
+For multi-process/node workloads, you just need to specify the `--gpu-type` option during run. If the workload is multi-process/multi-node and using [NCCL](https://developer.nvidia.com/nccl), use the `nccl` option.
+
+```sh
+cedana run process --gpu-enabled --gpu-type nccl ...
+```
+
+You can then checkpoint/restore as usual. You may also set a default GPU multi-process type in the [configuration](../../get-started/configuration.md).``)]
+
 ## Usage (CRIU CUDA plugin)
 
+### Single process
 You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint/restore basics](../cr.md).
 
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+
+### Multi-process/node
+This is currently not supported. You should use the Cedana GPU plugin for this.
