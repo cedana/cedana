@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=e2e,docker,setup,k3s,helm
+# bats file_tags=base,e2e,docker,setup,k3s,helm
 
 load ../helpers/k3s
 load ../helpers/utils

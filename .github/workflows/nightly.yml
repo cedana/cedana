@@ -27,6 +27,7 @@ jobs:
       cpu: true
       gpu: true
       streamer: true
+      e2e: true
       large: true # include large tests
       runner: 16cpu-64g # use larger runner
       runner_gpu: 16cpu-64g-1xL40S # use larger runner

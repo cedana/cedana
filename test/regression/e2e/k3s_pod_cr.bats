@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=e2e,k3s,propagator,checkpoint,restore
+# bats file_tags=base,e2e,k3s,propagator,checkpoint,restore
 
 load ../helpers/k3s
 load ../helpers/propagator

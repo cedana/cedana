@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=e2e,docker,setup,simple
+# bats file_tags=base,e2e,docker,setup,simple
 
 load ../helpers/k3s
 load ../helpers/propagator
