@@ -28,10 +28,10 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
 Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/articles/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
 
-|                | Min. driver | Max. driver | Multi-GPU | Multi-process | Arch         |
-| -------------- | ----------- | ----------- | --------- | ------------- | ------------ |
-| **Cedana GPU** | 452         | 570         | ✅         | ✅             | amd64, arm64 |
-| **CRIU CUDA**  | 570         | 570         | ✅         | ❌             | amd64        |
+|                | Min driver | Max driver | Multi-GPU | Multi-process | Arch         |
+| -------------- | ---------- | ---------- | --------- | ------------- | ------------ |
+| **Cedana GPU** | 452        | 570        | ✅         | ✅             | amd64, arm64 |
+| **CRIU CUDA**  | 570        | 570        | ✅         | ❌             | amd64        |
 
 ## Usage (GPU plugin)
 
