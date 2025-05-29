@@ -34,7 +34,7 @@ get_available_clusters() {
     
     local response
     response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/cluster" \
-        -H "Authorization: ${PROPAGATOR_AUTH_TOKEN}" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
     
     local http_code="${response: -3}"
@@ -54,13 +54,20 @@ get_available_clusters() {
 #
 get_cluster_id() {
     local clusters
-    clusters=$(get_available_clusters)
+    clusters=$(get_available_clusters 2>/dev/null)
     
-    if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ]; then
-        echo "$clusters" | jq -r '.[0].id' 2>/dev/null || echo "test-cluster-id"
-    else
-        echo "test-cluster-id"
+    if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ] && [ "$clusters" != "null" ]; then
+        local cluster_id
+        cluster_id=$(echo "$clusters" | jq -r '.[0].id' 2>/dev/null)
+        if [ -n "$cluster_id" ] && [ "$cluster_id" != "null" ]; then
+            echo "$cluster_id"
+            return 0
+        fi
     fi
+    
+    # Return a placeholder cluster ID if none available
+    echo "test-cluster-placeholder"
+    return 0
 }
 
 #
@@ -98,7 +105,7 @@ checkpoint_pod_via_api() {
         }')
     
     local response
-    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL}/checkpoint/pod" \
+    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoint/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
@@ -151,7 +158,7 @@ restore_pod_via_api() {
     fi
     
     local response
-    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL}/restore/pod" \
+    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL%/v1}/v2/restore/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
@@ -187,7 +194,7 @@ poll_action_status() {
     
     for i in $(seq 1 60); do  # 5 minute timeout
         local response
-        response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/actions?type=$operation" \
+        response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL%/v1}/v2/actions?type=$operation" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
         
@@ -247,7 +254,7 @@ cleanup_checkpoint() {
     echo "Deprecating checkpoint '$checkpoint_id'..."
     
     local response
-    response=$(curl -s -X PATCH "https://${PROPAGATOR_BASE_URL}/checkpoints/deprecate/${checkpoint_id}" \
+    response=$(curl -s -X PATCH "https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoints/deprecate/${checkpoint_id}" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
     
