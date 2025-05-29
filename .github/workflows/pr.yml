@@ -65,7 +65,6 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      e2e: true
 
   bench:
     name: Bench
