@@ -10,29 +10,29 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 
 *   **Option 1: GPU Plugin**
 
+    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
+
     ```sh
     sudo cedana plugin install gpu
     ```
 
-    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
-
-
 *   **Option 2: CRIU CUDA Plugin**
+
+    The CRIU CUDA plugin (CRIUgpu) is developed by the CRIU community and uses the [NVIDIA CUDA checkpoint utility](https://github.com/NVIDIA/cuda-checkpoint) under the hood.
 
     ```sh
     sudo cedana plugin install criu/cuda
     ```
-    The CRIU CUDA plugin (CRIUgpu) is developed by the CRIU community and uses the [NVIDIA CUDA checkpoint utility](https://github.com/NVIDIA/cuda-checkpoint) under the hood.
 
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
 
 Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.com/s/2VUqakyWqaX9NCnQNYjD/articles/cedana-vs.-criu-cuda-for-gpu-checkpoint-restore "mention") for a performance comparison between the two plugins.
 
-|   | Min. driver | Max. driver | Multi-GPU | Multi-process | amd64 | arm64 |
-|---|---------------------|---------------------|--------------------|-------|-------|-------|
-|o Cedana GPU | 452 (API 11.8) | 570 (API 12.8) | ✅ | ✅ | ✅ |✅ |
-| CRIU CUDA | 570 (API 12.8) | 570 (API 12.8) | ❌✅ |❌ | ✅ | ❌ |
+|   | Min. driver | Max. driver | Multi-GPU | Multi-process | Arch |
+|---|---------------------|---------------------|--------------------|-------|-------|
+|Cedana GPU | 452  | 570  | ✅ | ✅ amd64, arm64 |
+|CRIU CUDA | 570  | 570  | ❌ |❌| amd64 |
 
 ## Usage (GPU plugin)
 
@@ -65,7 +65,7 @@ For multi-process/node workloads, you just need to specify the `--gpu-type` opti
 cedana run process --gpu-enabled --gpu-type nccl ...
 ```
 
-You can then checkpoint/restore as usual. You may also set a default GPU multi-process type in the [configuration](../../get-started/configuration.md).``)]
+You can then checkpoint/restore as usual. You may also set a default GPU multi-process type in the [configuration](../../get-started/configuration.md).
 
 ## Usage (CRIU CUDA plugin)
 
