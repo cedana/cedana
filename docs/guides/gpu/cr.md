@@ -31,7 +31,7 @@ Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.
 
 |   | Min. driver | Max. driver | Multi-GPU | Multi-process | Arch |
 |---|---------------------|---------------------|--------------------|-------|-------|
-|Cedana GPU | 452  | 570  | ✅ | ✅ amd64, arm64 |
+|Cedana GPU | 452  | 570  | ✅ | ✅| amd64, arm64 |
 |CRIU CUDA | 570  | 570  | ❌ |❌| amd64 |
 
 ## Usage (GPU plugin)
@@ -75,4 +75,4 @@ You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
 
 ### Multi-process/node
-This is currently not supported. You should use the Cedana GPU plugin for this.
+This is currently not supported. You should use the Cedana GPU plugin for multi-process/node workloads.
