@@ -41,7 +41,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			}
 
 			// Use saved job details, but allow overriding from request
-			mergedDetails := proto.Clone(job.GetDetails()).(*daemon.Details)
+			mergedDetails := job.GetDetails()
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
