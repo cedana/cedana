@@ -264,7 +264,7 @@ jobs:
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install plugin
-        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu
+        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu storage/cedana
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
