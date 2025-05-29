@@ -57,29 +57,29 @@ error() {
 list_checkpoints_docker() {
     local cluster_id="$1"
     local show_raw="$2"
-    
+
     log "Listing checkpoints via Docker container..."
-    
+
     # Prepare environment variables
     local env_args=()
     env_args+=("-e" "CEDANA_AUTH_TOKEN=${CEDANA_AUTH_TOKEN}")
     env_args+=("-e" "CEDANA_URL=${CEDANA_URL}")
-    
+
     # Prepare Docker run arguments
     local docker_args=(
         "--rm"
         "--volume" "${REPO_ROOT}:/src"
         "--workdir" "/src"
     )
-    
+
     # Add environment variables
     for env_arg in "${env_args[@]}"; do
         docker_args+=("$env_arg")
     done
-    
+
     # Prepare command
     local cmd="source test/regression/helpers/propagator.bash && setup_propagator_auth"
-    
+
     if [ "$show_raw" = "true" ]; then
         if [ -n "$cluster_id" ]; then
             cmd="$cmd && get_checkpoints '$cluster_id'"
@@ -93,7 +93,7 @@ list_checkpoints_docker() {
             cmd="$cmd && list_checkpoints"
         fi
     fi
-    
+
     # Run the container
     docker run "${docker_args[@]}" cedana-e2e-test:latest /bin/bash -c "$cmd"
 }
@@ -101,19 +101,19 @@ list_checkpoints_docker() {
 list_checkpoints_local() {
     local cluster_id="$1"
     local show_raw="$2"
-    
+
     log "Listing checkpoints locally..."
-    
+
     # Source the helper functions
     if [ ! -f "$REPO_ROOT/test/regression/helpers/propagator.bash" ]; then
         error "Propagator helpers not found. Please run from the cedana repository root."
     fi
-    
+
     export CEDANA_AUTH_TOKEN CEDANA_URL
     source "$REPO_ROOT/test/regression/helpers/propagator.bash"
-    
+
     setup_propagator_auth
-    
+
     if [ "$show_raw" = "true" ]; then
         get_checkpoints "$cluster_id"
     else
@@ -126,11 +126,11 @@ main() {
     USE_DOCKER=true
     SHOW_RAW=false
     CLUSTER_ID=""
-    
+
     # Environment variables with defaults
     CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-$DEFAULT_CEDANA_AUTH_TOKEN}"
     CEDANA_URL="${CEDANA_URL:-$DEFAULT_CEDANA_URL}"
-    
+
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -171,26 +171,26 @@ main() {
                 ;;
         esac
     done
-    
+
     # Validate required environment variables
     if [ -z "$CEDANA_AUTH_TOKEN" ]; then
         error "CEDANA_AUTH_TOKEN is required"
     fi
-    
+
     if [ -z "$CEDANA_URL" ]; then
         error "CEDANA_URL is required"
     fi
-    
+
     # Check Docker availability if using Docker mode
     if [ "$USE_DOCKER" = "true" ]; then
         if ! command -v docker &> /dev/null; then
             error "Docker is not installed or not in PATH"
         fi
-        
+
         if ! docker info &> /dev/null; then
             error "Docker daemon is not running"
         fi
-        
+
         # Check if Docker image exists
         if ! docker image inspect cedana-e2e-test:latest &> /dev/null; then
             log "Docker image not found, building it..."
@@ -198,7 +198,7 @@ main() {
             docker build -t cedana-e2e-test:latest -f test/Dockerfile test/
         fi
     fi
-    
+
     log "Cedana Checkpoint Listing Tool"
     log "URL: $CEDANA_URL"
     if [ -n "$CLUSTER_ID" ]; then
@@ -206,7 +206,7 @@ main() {
     else
         log "Listing all clusters"
     fi
-    
+
     # List checkpoints
     if [ "$USE_DOCKER" = "true" ]; then
         list_checkpoints_docker "$CLUSTER_ID" "$SHOW_RAW"
@@ -216,4 +216,4 @@ main() {
 }
 
 # Run main function
-main "$@" 
+main "$@"

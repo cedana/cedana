@@ -94,20 +94,21 @@ teardown_file() {
 }
 
 @test "Docker environment: Helm can work with basic operations" {
-    # Test helm can create a chart
+    # Test helm can create a chart in writable directory
+    cd /tmp
     run helm create test-chart
     assert_success
     
     # Test chart was created
-    run test -d test-chart
+    run test -d /tmp/test-chart
     assert_success
     
     # Test chart has expected structure
-    run test -f test-chart/Chart.yaml
+    run test -f /tmp/test-chart/Chart.yaml
     assert_success
     
     # Clean up
-    run rm -rf test-chart
+    run rm -rf /tmp/test-chart
     assert_success
 }
 

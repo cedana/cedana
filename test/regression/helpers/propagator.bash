@@ -5,7 +5,28 @@
 ########################################
 
 # Default propagator service configuration
-PROPAGATOR_BASE_URL="${CEDANA_URL:-ci.cedana.ai/v1}"
+# Normalize the URL to ensure it includes protocol and has the correct format
+normalize_url() {
+    local url="$1"
+    # Remove trailing slashes and /v1 suffix
+    url="${url%/}"
+    url="${url%/v1}"
+    
+    # Add https:// if no protocol specified
+    if [[ ! "$url" =~ ^https?:// ]]; then
+        url="https://$url"
+    fi
+    
+    echo "$url"
+}
+
+PROPAGATOR_BASE_URL=""
+if [ -n "${CEDANA_URL:-}" ]; then
+    PROPAGATOR_BASE_URL=$(normalize_url "$CEDANA_URL")
+else
+    PROPAGATOR_BASE_URL="https://ci.cedana.ai"
+fi
+
 PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
 
 #
@@ -33,7 +54,7 @@ get_available_clusters() {
     echo "Retrieving available clusters from propagator..."
     
     local response
-    response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/cluster" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/cluster" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
     
@@ -105,7 +126,7 @@ checkpoint_pod_via_api() {
         }')
     
     local response
-    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoint/pod" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/checkpoint/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
@@ -158,7 +179,7 @@ restore_pod_via_api() {
     fi
     
     local response
-    response=$(curl -s -X POST "https://${PROPAGATOR_BASE_URL%/v1}/v2/restore/pod" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
@@ -194,7 +215,7 @@ poll_action_status() {
     
     for i in $(seq 1 60); do  # 5 minute timeout
         local response
-        response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL%/v1}/v2/actions?type=$operation" \
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions?type=$operation" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
         
@@ -254,10 +275,10 @@ cleanup_checkpoint() {
     echo "Deprecating checkpoint '$checkpoint_id'..."
     
     local response
-    response=$(curl -s -X PATCH "https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoints/deprecate/${checkpoint_id}" \
+    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/checkpoints/deprecate/${checkpoint_id}" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
-    
+        
     local http_code="${response: -3}"
     local body="${response%???}"
     
@@ -293,7 +314,7 @@ validate_propagator_connectivity() {
     echo "Validating propagator service connectivity..."
     
     local response
-    response=$(curl -s -X GET "https://${PROPAGATOR_BASE_URL}/user" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/user" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
     
@@ -336,7 +357,7 @@ get_checkpoints() {
     
     echo "Retrieving checkpoints from propagator..."
     
-    local url="https://${PROPAGATOR_BASE_URL%/v1}/v2/checkpoints"
+    local url="${PROPAGATOR_BASE_URL}/v2/checkpoints"
     if [ -n "$cluster_id" ]; then
         url="${url}?cluster_id=${cluster_id}"
     fi

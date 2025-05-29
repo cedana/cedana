@@ -1,0 +1,117 @@
+name: K3s Pod Checkpoint/Restore E2E Tests
+
+on:
+  push:
+    branches: [ main, develop, feat/* ]
+    paths:
+      - 'test/regression/e2e/k3s_pod_cr.bats'
+      - 'test/regression/helpers/**'
+      - 'test/run-e2e-docker.sh'
+      - '.github/workflows/k3s-cr-e2e.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'test/regression/e2e/k3s_pod_cr.bats'
+      - 'test/regression/helpers/**'
+      - 'test/run-e2e-docker.sh'
+  workflow_dispatch:
+    inputs:
+      test_level:
+        description: 'Test level to run'
+        required: false
+        default: 'standard'
+        type: choice
+        options:
+        - standard
+        - comprehensive
+        - debug
+
+env:
+  CEDANA_URL: https://ci.cedana.ai
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+
+jobs:
+  k3s-checkpoint-restore:
+    name: K3s Pod C/R E2E Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Validate environment
+      run: |
+        echo "Validating test environment..."
+        if [ -z "$CEDANA_AUTH_TOKEN" ]; then
+          echo "Error: CEDANA_AUTH_TOKEN secret not set"
+          exit 1
+        fi
+        echo "✓ Environment validation passed"
+        echo "✓ Using official test runner: ./test/run-e2e-docker.sh"
+
+    - name: Run k3s pod checkpoint/restore test
+      run: |
+        echo "Running k3s pod checkpoint/restore E2E test..."
+        echo "Command: ./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats"
+        ./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: k3s-cr-test-results
+        path: |
+          test/regression/results/
+          /tmp/bats-*.log
+        retention-days: 7
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## K3s Pod Checkpoint/Restore Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test file**: \`test/regression/e2e/k3s_pod_cr.bats\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test runner**: \`./test/run-e2e-docker.sh\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Propagator URL**: $CEDANA_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test result**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
+  validate-integration:
+    name: Validate API Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Quick connectivity test
+      run: |
+        echo "Testing basic connectivity to Propagator API..."
+        curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" || true
+        echo "✓ Connectivity test completed"
+
+    - name: Validate test structure
+      run: |
+        echo "Validating test file structure..."
+        if [ ! -f "test/regression/e2e/k3s_pod_cr.bats" ]; then
+          echo "Error: k3s_pod_cr.bats test file not found"
+          exit 1
+        fi
+        
+        if [ ! -f "test/regression/helpers/propagator.bash" ]; then
+          echo "Error: propagator helper not found"
+          exit 1
+        fi
+        
+        if [ ! -f "test/run-e2e-docker.sh" ]; then
+          echo "Error: run-e2e-docker.sh test runner not found"
+          exit 1
+        fi
+        
+        echo "✓ Test structure validation passed" 

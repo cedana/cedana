@@ -59,6 +59,21 @@ curl -sfL https://get.k3s.io -o /usr/local/bin/install-k3s.sh
 chmod +x /usr/local/bin/install-k3s.sh
 EOT
 
+# install k3d (for better Docker container support)
+RUN <<EOT
+set -eux
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+EOT
+
+# install docker (needed for k3d) with proper setup for containers
+RUN <<EOT
+set -eux
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+EOT
+
 # install kubectl
 RUN <<EOT
 set -eux
