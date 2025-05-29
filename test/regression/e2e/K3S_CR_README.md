@@ -47,11 +47,10 @@ make test-k3s-cr
 
 ### Required Environment Variables
 
-The test has sensible defaults but you can override:
 
 ```bash
 export CEDANA_URL="https://ci.cedana.ai"
-export CEDANA_AUTH_TOKEN="fa4318d1569bc89ac95c1223bbb41719e737640027c87200714204cb813de8a74546a5ec647052bcf19c507ca7013685"
+export CEDANA_AUTH_TOKEN="***"
 ```
 
 **Note**: The `test/run-e2e-docker.sh` script includes default values, so environment variables are optional for testing.
@@ -238,7 +237,3 @@ docker ps -a | grep cedana-e2e-test
 **Primary Command**: `./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats`
 
 This uses the official Cedana test infrastructure and handles all Docker setup, environment configuration, and cleanup automatically.
-
-**Status**: ✅ Ready for production use  
-**Framework**: BATS with official Docker test runner  
-**Integration**: Works with existing CI/CD and development workflows 
