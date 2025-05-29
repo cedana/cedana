@@ -31,7 +31,7 @@ Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.
 |                | Min. driver | Max. driver | Multi-GPU | Multi-process | Arch         |
 | -------------- | ----------- | ----------- | --------- | ------------- | ------------ |
 | **Cedana GPU** | 452         | 570         | ✅         | ✅             | amd64, arm64 |
-| **CRIU CUDA**  | 570         | 570         | ❌         | ❌             | amd64        |
+| **CRIU CUDA**  | 570         | 570         | ✅         | ❌             | amd64        |
 
 ## Usage (GPU plugin)
 
