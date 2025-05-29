@@ -11,16 +11,51 @@
 setup_k3s_cluster_with_helm() {
     echo "Setting up k3s cluster with Helm support in containerized environment..."
     
-    # Install k3s in container-friendly mode
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -s -
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to install k3s."
+    # Download k3s binary directly instead of using installer
+    if [ ! -f /usr/local/bin/k3s ]; then
+        echo "Downloading k3s binary..."
+        curl -Lo /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/latest/download/k3s
+        chmod +x /usr/local/bin/k3s
+    fi
+    
+    # Create necessary directories
+    mkdir -p /etc/rancher/k3s
+    mkdir -p /var/lib/rancher/k3s
+    
+    # Start k3s server directly in background
+    echo "Starting k3s server..."
+    nohup k3s server \
+        --disable=traefik \
+        --disable=servicelb \
+        --disable=metrics-server \
+        --write-kubeconfig-mode=644 \
+        --data-dir=/var/lib/rancher/k3s \
+        > /tmp/k3s.log 2>&1 &
+    
+    K3S_PID=$!
+    echo "k3s server started with PID: $K3S_PID"
+    
+    # Wait for kubeconfig to be created
+    echo "Waiting for kubeconfig..."
+    for i in $(seq 1 60); do
+        if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+            echo "Kubeconfig found, setting permissions..."
+            chmod 644 /etc/rancher/k3s/k3s.yaml
+            break
+        fi
+        echo "Waiting for kubeconfig (attempt $i/60)..."
+        sleep 2
+    done
+    
+    if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
+        echo "Error: Kubeconfig not created after 120 seconds"
+        echo "k3s log output:"
+        tail -20 /tmp/k3s.log || echo "No log file found"
         return 1
     fi
     
     # Set up kubeconfig
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    chmod 644 "$KUBECONFIG"
     
     # Wait for k3s to be ready
     wait_for_k3s_ready
@@ -114,13 +149,20 @@ teardown_k3s_cluster() {
         helm uninstall cedana -n cedanacontroller-system --wait 2>/dev/null || true
     fi
     
+    # Stop k3s processes
+    pkill -f "k3s server" 2>/dev/null || true
+    pkill -f "k3s agent" 2>/dev/null || true
+    
+    # Wait for processes to stop
+    sleep 5
+    
     # Uninstall k3s
     if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
-        /usr/local/bin/k3s-uninstall.sh
+        /usr/local/bin/k3s-uninstall.sh 2>/dev/null || true
     fi
     
     # Clean up any remaining artifacts
-    rm -rf /etc/rancher/k3s /var/lib/rancher/k3s /run/k3s 2>/dev/null || true
+    rm -rf /etc/rancher/k3s /var/lib/rancher/k3s /run/k3s /tmp/k3s.log 2>/dev/null || true
     
     echo "k3s cluster teardown complete."
     return 0
