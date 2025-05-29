@@ -38,7 +38,7 @@ const (
 	SERVE_SOCK          = "streamer-serve.sock"
 	INIT_PROGRESS_MSG   = "socket-init"
 	STOP_LISTENER_MSG   = "stop-listener"
-	IMG_FILE_PATTERN    = "img-*"
+	IMG_FILE_PATTERN    = "^img-*"
 	IMG_FILE_FORMATTER  = "img-%d"
 	CONNECTION_TIMEOUT  = 30 * time.Second
 	DEFAULT_PARALLELISM = 4

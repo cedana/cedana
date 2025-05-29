@@ -39,7 +39,7 @@ func init() {
 // Parent manage command
 var manageCmd = &cobra.Command{
 	Use:   "manage",
-	Short: "Manage an existing process/container (create a job)",
+	Short: "Manage an existing/upcoming process/container (create a job)",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)

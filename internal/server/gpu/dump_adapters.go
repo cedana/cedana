@@ -3,6 +3,7 @@ package gpu
 import (
 	"context"
 
+	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
@@ -42,7 +43,14 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			}
 
 			state.GPUID = id
-			resp.State.GPUEnabled = true
+			state.GPUEnabled = true
+
+			switch gpus.MultiprocessType(pid) {
+			case gpu.FreezeType_FREEZE_TYPE_IPC:
+				state.GPUMultiprocessType = "IPC"
+			case gpu.FreezeType_FREEZE_TYPE_NCCL:
+				state.GPUMultiprocessType = "NCCL"
+			}
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id, req.Stream))

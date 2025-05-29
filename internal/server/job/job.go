@@ -162,6 +162,12 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 
 	// Check if job belongs to this machine
 
+	if state.GetHost() == nil {
+		state.Status = "unknown"
+		state.IsRunning = false
+		return
+	}
+
 	hostId, _ := host.HostID()
 	if state.GetHost().GetID() != hostId {
 		state.Status = "remote"

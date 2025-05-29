@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,8 +42,6 @@ type ManagerPool struct {
 	db      db.GPU
 	pending chan action
 	sync    sync.Mutex // Used to prevent concurrent syncs
-
-	pendingAttaches atomic.Int32
 
 	wg *sync.WaitGroup
 }
@@ -129,9 +125,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 	return manager, nil
 }
 
-func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid <-chan uint32, env ...string) (id string,
-	err error,
-) {
+func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, multiprocessType gpu.FreezeType, pid <-chan uint32, env ...string) (id string, err error) {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -143,27 +137,17 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid 
 		return "", err
 	}
 
-	m.pendingAttaches.Add(1)
-	defer func() {
-		if err != nil {
-			m.pendingAttaches.Add(-1)
-		}
-	}()
+	controller := m.controllers.GetFree()
 
-	var controller *controller
-
-	freeList := m.controllers.FreeList()
-
-	if len(freeList) > 0 {
-		controller = freeList[0]
-		log.Debug().Str("ID", controller.ID).Msg("using existing GPU controller in pool")
-	} else {
+	if controller == nil {
 		log.Debug().Msg("spawning a new GPU controller")
 		controller, err = m.controllers.Spawn(binary, user, env...)
 		if err != nil {
 			return "", err
 		}
 	}
+
+	controller.FreezeType = multiprocessType
 
 	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
 
@@ -187,7 +171,7 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, pid 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		defer m.pendingAttaches.Add(-1)
+		defer controller.PendingAttach.Store(false)
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -221,6 +205,14 @@ func (m *ManagerPool) Detach(pid uint32) error {
 
 func (m *ManagerPool) IsAttached(pid uint32) bool {
 	return m.controllers.Find(pid) != nil
+}
+
+func (m *ManagerPool) MultiprocessType(pid uint32) gpu.FreezeType {
+	controller := m.controllers.Find(pid)
+	if controller == nil {
+		return gpu.FreezeType_FREEZE_TYPE_IPC
+	}
+	return controller.FreezeType
 }
 
 func (m *ManagerPool) GetID(pid uint32) (string, error) {
@@ -323,10 +315,10 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 			}
 		}
 
-		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
+		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: controller.FreezeType})
 		if err != nil {
 			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
-			return fmt.Errorf("failed to freeze GPU: %v", err)
+			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
 		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
@@ -341,7 +333,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
 				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
-				dumpErr <- fmt.Errorf("failed to dump GPU: %v", err)
+				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
 			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU dump complete")
@@ -366,7 +358,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
 		}
 
-		return errors.Join(err, <-dumpErr)
+		return errors.Join(err, utils.GRPCError(<-dumpErr))
 	}
 
 	// Unfreeze on dump failure as well
@@ -411,7 +403,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
 			if err != nil {
 				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to restore GPU")
-				restoreErr <- fmt.Errorf("failed to restore GPU: %v", err)
+				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
 			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU restore complete")
@@ -473,32 +465,24 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 			}
 		}
 
-		freeList := m.controllers.FreeList()
-		busyList := m.controllers.BusyList()
-		activeList := slices.Concat(freeList, busyList)
+		free, pending, busy, remaining := m.controllers.List()
 
-		log.Debug().Int("free", len(freeList)).Int("busy", len(busyList)).Int("target", m.poolSize).Msg("GPU controller pool")
+		log.Debug().Int("free", len(free)).Int("pending", len(pending)).Int("busy", len(busy)).Int("target", m.poolSize).Msg("GPU controller pool")
 
 		// Remove controllers not in either free or busy list
 
-		m.controllers.Range(func(key, value any) bool {
-			c := value.(*controller)
-			if !slices.ContainsFunc(activeList, func(c2 *controller) bool {
-				return c2.ID == c.ID
-			}) {
-				log.Debug().Str("ID", c.ID).Msg("clearing stale GPU controller in pool")
-				c.Terminate()
-				m.controllers.Delete(c.ID)
-				m.pending <- action{putController, c.ID}
-			}
-			return true
-		})
+		for _, controller := range remaining {
+			log.Debug().Str("ID", controller.ID).Msg("clearing stale GPU controller in pool")
+			controller.Terminate()
+			m.controllers.Delete(controller.ID)
+			m.pending <- action{putController, controller.ID}
+		}
 
 		// Maintain the pool size
 
-		if len(freeList) < m.poolSize {
-			log.Debug().Int("target", m.poolSize).Int("current", len(freeList)).Msg("maintaining GPU pool size")
-			for i := len(freeList); i < m.poolSize; i++ {
+		if len(free) < m.poolSize {
+			log.Debug().Int("target", m.poolSize).Int("current", len(free)).Msg("maintaining GPU pool size")
+			for i := len(free); i < m.poolSize; i++ {
 				controller, err := m.controllers.Spawn(m.plugins.Get("gpu").BinaryPaths()[0], nil)
 				if err != nil {
 					log.Debug().Err(err).Msg("failed to spawn GPU controller to maintain pool size")
@@ -506,12 +490,13 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 					return nil
 				}
 				log.Debug().Str("ID", controller.ID).Msg("spawned GPU controller to maintain pool size")
+				controller.PendingAttach.Store(false)
 				m.pending <- action{putController, controller.ID}
 			}
-		} else if len(freeList)-int(m.pendingAttaches.Load()) > m.poolSize {
-			log.Debug().Int("target", m.poolSize).Int("current", len(freeList)).Msg("reducing GPU pool size")
-			for i := len(freeList); i > m.poolSize; i-- {
-				controller := freeList[i-1]
+		} else if len(free) > m.poolSize {
+			log.Debug().Int("target", m.poolSize).Int("current", len(free)).Msg("reducing GPU pool size")
+			for i := len(free); i > m.poolSize; i-- {
+				controller := m.controllers.GetFree()
 				log.Debug().Str("ID", controller.ID).Msg("terminating GPU controller to reduce pool size")
 				controller.Terminate()
 				m.controllers.Delete(controller.ID)
@@ -522,9 +507,9 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 	case shutdownPool:
 		// This action is used to shutdown the pool and terminate all free controllers
 
-		freeList := m.controllers.FreeList()
+		free, _, _, _ := m.controllers.List()
 
-		for _, controller := range freeList {
+		for _, controller := range free {
 			log.Debug().Str("ID", controller.ID).Msg("terminating free GPU controller")
 			controller.Terminate()
 			m.controllers.Delete(controller.ID)

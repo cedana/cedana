@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
@@ -17,27 +17,24 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	CONTROLLER_ADDRESS_FORMATTER  = "unix:///tmp/cedana-gpu-controller-%s.sock"
-	CONTROLLER_TERMINATE_SIGNAL   = syscall.SIGTERM
-	CONTROLLER_LOG_FILE_FORMATTER = "cedana-gpu-controller-%s.log"
-	CONTROLLER_LOG_FILE_MODE      = os.O_CREATE | os.O_WRONLY | os.O_APPEND
-	CONTROLLER_LOG_FILE_PERMS     = 0o644
+	CONTROLLER_ADDRESS_FORMATTER = "unix:///tmp/cedana-gpu-controller-%s.sock"
+	CONTROLLER_TERMINATE_SIGNAL  = syscall.SIGTERM
 )
 
 type controller struct {
-	ID          string
-	AttachedPID uint32
-	ErrBuf      *bytes.Buffer
+	ID            string
+	AttachedPID   uint32
+	ErrBuf        *bytes.Buffer
+	PendingAttach atomic.Bool
+	FreezeType    gpu.FreezeType
 
 	*exec.Cmd
 	gpugrpc.ControllerClient
@@ -96,30 +93,42 @@ func (m *controllers) Import(ctx context.Context, wg *sync.WaitGroup, c *db.GPUC
 	return nil
 }
 
-// Returns a list of free GPU controllers
-func (m *controllers) FreeList() []*controller {
-	var controllers []*controller
+// Returns a list of all GPU controllers grouped by free, pending, and busy states
+func (m *controllers) List() (free []*controller, pending []*controller, busy []*controller, remaining []*controller) {
 	m.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if utils.PidRunning(uint32(c.Process.Pid)) && c.AttachedPID == 0 {
-			controllers = append(controllers, c)
+		if c.PendingAttach.Load() {
+			pending = append(pending, c)
+			return true
 		}
+		if utils.PidRunning(uint32(c.Process.Pid)) {
+			if c.AttachedPID == 0 {
+				free = append(free, c)
+				return true
+			}
+			if utils.PidRunning(c.AttachedPID) {
+				busy = append(busy, c)
+				return true
+			}
+		}
+		remaining = append(remaining, c)
 		return true
 	})
-	return controllers
+	return
 }
 
-// Returns a list of busy GPU controllers
-func (m *controllers) BusyList() []*controller {
-	var controllers []*controller
-	m.Range(func(key, value any) bool {
-		c := value.(*controller)
-		if utils.PidRunning(uint32(c.Process.Pid)) && c.AttachedPID != 0 && utils.PidRunning(c.AttachedPID) {
-			controllers = append(controllers, c)
+// Gets a free GPU controller
+func (m *controllers) GetFree() *controller {
+	free, _, _, _ := m.List()
+	if len(free) == 0 {
+		return nil
+	}
+	for _, c := range free {
+		if c.PendingAttach.CompareAndSwap(false, true) {
+			return c
 		}
-		return true
-	})
-	return controllers
+	}
+	return nil
 }
 
 // Spawns a GPU controller
@@ -139,24 +148,10 @@ func (m *controllers) Spawn(
 	controller := &controller{
 		ID:     id,
 		ErrBuf: &bytes.Buffer{},
-		Cmd:    exec.Command(binary, id, observability),
+		Cmd:    exec.Command(binary, id, observability, "--log-dir", config.Global.GPU.LogDir),
 	}
 
 	controller.Stderr = controller.ErrBuf
-
-	if dir := config.Global.GPU.LogDir; dir != "" {
-		file, err := os.OpenFile(
-			filepath.Join(dir, fmt.Sprintf(CONTROLLER_LOG_FILE_FORMATTER, id)),
-			CONTROLLER_LOG_FILE_MODE,
-			CONTROLLER_LOG_FILE_PERMS,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open log file for GPU controller: %w", err)
-		}
-		controller.Stdout = file
-	} else {
-		controller.Stdout = logging.Writer("gpu-controller", id, zerolog.TraceLevel)
-	}
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Credential: user,
 		Setpgid:    true, // So it can run independently in its own process group
@@ -179,6 +174,8 @@ func (m *controllers) Spawn(
 			utils.GRPCErrorShort(err, controller.ErrBuf.String()),
 		)
 	}
+
+	controller.PendingAttach.Store(true)
 
 	m.Store(id, controller)
 
