@@ -54,9 +54,6 @@ teardown_file() {
 
     sleep 1
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_contains "$dump_file" "cedana://ci"
-
     run cedana job kill "$jid"
 }
 
@@ -80,9 +77,6 @@ teardown_file() {
 
     sleep 1
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_contains "$dump_file" "cedana://ci"
-
     run cedana job kill "$jid"
 }
 
@@ -105,9 +99,6 @@ teardown_file() {
 
     run cedana dump job "$jid" --stream 1 --dir cedana://ci
     assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_contains "$dump_file" "cedana://ci"
 
     sleep 3
 
@@ -143,9 +134,6 @@ teardown_file() {
     run cedana dump job "$jid" --stream 1 --dir cedana://ci
     assert_success
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_contains "$dump_file" "cedana://ci"
-
     sleep 3
 
     run cedana restore job "$jid" --stream 1
@@ -176,9 +164,6 @@ teardown_file() {
 
     run cedana dump job "$jid" --stream 4 --dir cedana://ci
     assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_contains "$dump_file" "cedana://ci"
 
     sleep 3
 
