@@ -1,0 +1,139 @@
+#!/usr/bin/env bats
+
+# This file assumes its being run from the same directory as the Makefile
+#
+# bats file_tags=gpu,runc,streamer
+
+load ../helpers/utils
+load ../helpers/daemon
+load ../helpers/runc
+load ../helpers/gpu
+
+load_lib support
+load_lib assert
+load_lib file
+
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+
+setup_file() {
+    setup_file_daemon
+    do_once setup_rootfs_cuda
+}
+
+setup() {
+    setup_daemon
+}
+
+teardown() {
+    teardown_daemon
+}
+
+teardown_file() {
+    teardown_file_daemon
+}
+
+############
+### Dump ###
+############
+
+# bats test_tags=dump
+@test "stream dump GPU container (vector add)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    assert_success
+
+    run cedana dump job "$jid" --stream 2 --stream 1
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file/img-0.gz"
+
+    run cedana job kill "$jid"
+}
+
+# bats test_tags=dump
+@test "stream dump GPU container (mem throughput saxpy)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    assert_success
+
+    run cedana dump job "$jid" --stream 4
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
+
+    run cedana job kill "$jid"
+}
+
+###############
+### Restore ###
+###############
+
+# bats test_tags=restore
+@test "restore GPU container (vector add)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    assert_success
+
+    run cedana dump job "$jid" --stream 1
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file/img-0.gz"
+
+    run cedana restore job "$jid" --stream 1
+    assert_success
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
+}
+
+# bats test_tags=restore
+@test "restore GPU container (mem throughput saxpy)" {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    assert_success
+
+    run cedana dump job "$jid" --stream 4
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
+
+    run cedana restore job "$jid" --stream 4
+    assert_success
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
+}

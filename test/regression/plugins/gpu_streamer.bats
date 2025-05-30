@@ -12,6 +12,8 @@ load_lib support
 load_lib assert
 load_lib file
 
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+
 setup_file() {
     setup_file_daemon
 }
@@ -47,14 +49,14 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --compression none
+    run cedana dump job "$jid" --stream 1
     assert_success
 
     sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-0.gz"
 
     run cedana job kill "$jid"
 }
@@ -74,17 +76,17 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --compression none
+    run cedana dump job "$jid" --stream 4
     assert_success
 
     sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-    assert_exists "$dump_file/img-1"
-    assert_exists "$dump_file/img-2"
-    assert_exists "$dump_file/img-3"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
 
     run cedana job kill "$jid"
 }
@@ -106,12 +108,12 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --compression none
+    run cedana dump job "$jid" --stream 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-0.gz"
 
     sleep 3
 
@@ -144,12 +146,12 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --compression none
+    run cedana dump job "$jid" --stream 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-0.gz"
 
     sleep 3
 
@@ -179,15 +181,15 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --compression none
+    run cedana dump job "$jid" --stream 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-    assert_exists "$dump_file/img-1"
-    assert_exists "$dump_file/img-2"
-    assert_exists "$dump_file/img-3"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
 
     sleep 3
 
