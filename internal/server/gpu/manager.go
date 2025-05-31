@@ -3,7 +3,6 @@ package gpu
 import (
 	"context"
 	"fmt"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"github.com/cedana/cedana/pkg/criu"
@@ -14,7 +13,7 @@ type Manager interface {
 	// Attach attaches a GPU controller to a process with the given PID.
 	// Takes in a channel for the PID, allowing this to be called before the process is started,
 	// so that the PID can be passed in later. Returns a unique ID for the GPU controller.
-	Attach(ctx context.Context, user *syscall.Credential, multiprocessType gpu.FreezeType, pid <-chan uint32, env ...string) (string, error)
+	Attach(ctx context.Context, multiprocessType gpu.FreezeType, pid <-chan uint32) (string, error)
 
 	// IsAttached returns true if GPU is attached to a process with the given PID.
 	IsAttached(pid uint32) bool
@@ -32,7 +31,7 @@ type Manager interface {
 	MultiprocessType(pid uint32) gpu.FreezeType
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
-	CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback
+	CRIUCallback(id string, stream int32) *criu.NotifyCallback
 
 	// Sync is used to force the GPU manager to sync its state with the current system state.
 	Sync(ctx context.Context) error
@@ -45,7 +44,7 @@ type Manager interface {
 // Embed this into unimplmented implmentations
 type ManagerMissing struct{}
 
-func (ManagerMissing) Attach(ctx context.Context, user *syscall.Credential, multiprocessType gpu.FreezeType, pid <-chan uint32, env ...string) (string, error) {
+func (ManagerMissing) Attach(ctx context.Context, multiprocessType gpu.FreezeType, pid <-chan uint32) (string, error) {
 	return "", fmt.Errorf("GPU manager missing")
 }
 
@@ -69,7 +68,7 @@ func (ManagerMissing) MultiprocessType(pid uint32) gpu.FreezeType {
 	return 0
 }
 
-func (ManagerMissing) CRIUCallback(id string, stream int32, env ...string) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(id string, stream int32) *criu.NotifyCallback {
 	return nil
 }
 

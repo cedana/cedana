@@ -29,8 +29,9 @@ create_workload_bundle() {
     local workload="$1"
     local arg="$2"
     local workload_path="$WORKLOADS/$workload"
+    local workload_name=$(basename "$workload_path")
 
-    if [ ! -f "$ROOTFS"/"$workload" ]; then
+    if [ ! -f "$ROOTFS/$workload_name" ]; then
         cp "$workload_path" "$ROOTFS"
     fi
 
@@ -40,9 +41,9 @@ create_workload_bundle() {
 
     local config="$bundle"/config.json
     if [ -n "$arg" ]; then
-        args="[\"/$workload\",\"$arg\"]"
+        args="[\"/$workload_name\",\"$arg\"]"
     else
-        args="[\"/$workload\"]"
+        args="[\"/$workload_name\"]"
     fi
 
     # add args as an singleton array of strings
@@ -56,8 +57,9 @@ create_workload_bundle_cuda() {
     local workload="$1"
     local arg="$2"
     local workload_path="$WORKLOADS/$workload"
+    local workload_name=$(basename "$workload_path")
 
-    if [ ! -f "$ROOTFS_CUDA"/"$workload" ]; then
+    if [ ! -f "$ROOTFS_CUDA/$workload_name" ]; then
         cp "$workload_path" "$ROOTFS_CUDA"
     fi
 
@@ -67,9 +69,9 @@ create_workload_bundle_cuda() {
 
     local config="$bundle"/config.json
     if [ -n "$arg" ]; then
-        args="[\"/$workload\",\"$arg\"]"
+        args="[\"/$workload_name\",\"$arg\"]"
     else
-        args="[\"/$workload\"]"
+        args="[\"/$workload_name\"]"
     fi
 
     # add args as an singleton array of strings
@@ -83,8 +85,9 @@ create_samples_workload_bundle() {
     local workload="$1"
     local arg="$2"
     local workload_path="/cedana-samples/$workload"
+    local workload_name=$(basename "$workload_path")
 
-    if [ ! -f "$ROOTFS"/"$workload" ]; then
+    if [ ! -f "$ROOTFS/$workload_name" ]; then
         cp "$workload_path" "$ROOTFS"
     fi
 
@@ -94,9 +97,9 @@ create_samples_workload_bundle() {
 
     local config="$bundle"/config.json
     if [ -n "$arg" ]; then
-        args="[\"/$workload\",\"$arg\"]"
+        args="[\"/$workload_name\",\"$arg\"]"
     else
-        args="[\"/$workload\"]"
+        args="[\"/$workload_name\"]"
     fi
 
     # add args as an singleton array of strings
@@ -110,8 +113,9 @@ create_samples_workload_bundle_cuda() {
     local workload="$1"
     local arg="$2"
     local workload_path="/cedana-samples/$workload"
+    local workload_name=$(basename "$workload_path")
 
-    if [ ! -f "$ROOTFS_CUDA"/"$workload" ]; then
+    if [ ! -f "$ROOTFS_CUDA/$workload_name" ]; then
         cp "$workload_path" "$ROOTFS_CUDA"
     fi
 
@@ -121,9 +125,9 @@ create_samples_workload_bundle_cuda() {
 
     local config="$bundle"/config.json
     if [ -n "$arg" ]; then
-        args="[\"/$workload\",\"$arg\"]"
+        args="[\"/$workload_name\",\"$arg\"]"
     else
-        args="[\"/$workload\"]"
+        args="[\"/$workload_name\"]"
     fi
 
     # add args as an singleton array of strings

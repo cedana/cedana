@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -50,26 +49,18 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid GPU multiprocess type: %s", state.GPUMultiprocessType)
 			}
 
-			user := &syscall.Credential{
-				Uid:    req.UID,
-				Gid:    req.GID,
-				Groups: req.Groups,
-			}
-
-			env := req.GetEnv()
-
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			id, err := gpus.Attach(ctx, user, multiprocessType, pid, env...)
+			id, err := gpus.Attach(ctx, multiprocessType, pid)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 			}
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id, req.Stream, req.Env...))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id, req.Stream))
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 

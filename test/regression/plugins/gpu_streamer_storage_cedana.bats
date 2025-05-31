@@ -13,6 +13,7 @@ load_lib assert
 load_lib file
 
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+export CEDANA_GPU_SHM_SIZE=$((1*GIGABYTE)) # Since workloads here are small
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
@@ -51,8 +52,6 @@ teardown_file() {
     run cedana dump job "$jid" --stream 1 --dir cedana://ci
     assert_success
 
-    sleep 1
-
     run cedana job kill "$jid"
 }
 
@@ -69,8 +68,6 @@ teardown_file() {
 
     run cedana dump job "$jid" --stream 4 --dir cedana://ci
     assert_success
-
-    sleep 1
 
     run cedana job kill "$jid"
 }
@@ -90,8 +87,6 @@ teardown_file() {
 
     run cedana dump job "$jid" --stream 1 --dir cedana://ci
     assert_success
-
-    sleep 3
 
     run cedana restore job "$jid" --stream 1
     assert_success
@@ -121,8 +116,6 @@ teardown_file() {
     run cedana dump job "$jid" --stream 1 --dir cedana://ci
     assert_success
 
-    sleep 3
-
     run cedana restore job "$jid" --stream 1
     assert_success
 
@@ -147,8 +140,6 @@ teardown_file() {
 
     run cedana dump job "$jid" --stream 4 --dir cedana://ci
     assert_success
-
-    sleep 3
 
     run cedana restore job "$jid" --stream 4
     assert_success

@@ -132,11 +132,7 @@ func (m *controllers) GetFree() *controller {
 }
 
 // Spawns a GPU controller
-func (m *controllers) Spawn(
-	binary string,
-	user *syscall.Credential,
-	env ...string,
-) (*controller, error) {
+func (m *controllers) Spawn(binary string) (*controller, error) {
 	// Generate a unique ID for the GPU controller
 	id := uuid.NewString()
 
@@ -153,18 +149,14 @@ func (m *controllers) Spawn(
 
 	controller.Stderr = controller.ErrBuf
 	controller.SysProcAttr = &syscall.SysProcAttr{
-		Credential: user,
-		Setpgid:    true, // So it can run independently in its own process group
+		Setpgid: true, // So it can run independently in its own process group
 	}
 
-	// Add user, runtime-specific environment variables.
-	// Could potentially override os.Environ() variables, which is intended.
-	controller.Env = append(os.Environ(), env...)
-
 	controller.Env = append(
-		controller.Env,
+		os.Environ(),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
+		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%d", config.Global.GPU.ShmSize),
 	)
 
 	err := controller.Start()

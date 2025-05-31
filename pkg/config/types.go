@@ -94,6 +94,8 @@ type (
 		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 		// MultiprocessType is the type of multiprocess support to use (IPC, NCCL)
 		MultiprocessType string `json:"multiprocess_type" key:"multiprocess_type" yaml:"multiprocess_type" mapstructure:"multiprocess_type"`
+		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
+		ShmSize int `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 	}
 
 	Plugins struct {

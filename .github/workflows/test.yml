@@ -42,7 +42,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 1 # Low parallelism to avoid OOM on the GPU runner
+        default: 4
       runner:
         type: string
         description: "Runner machine for CPU tests"
