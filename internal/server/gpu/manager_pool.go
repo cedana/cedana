@@ -282,7 +282,7 @@ func (m *ManagerPool) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerPool) CRIUCallback(id string, stream int32) *criu_client.NotifyCallback {
+func (m *ManagerPool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -322,7 +322,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32) *criu_client.NotifyC
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning()})
+			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
 				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
@@ -392,7 +392,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32) *criu_client.NotifyC
 				return
 			}
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
+			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
 				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))

@@ -31,7 +31,7 @@ type Manager interface {
 	MultiprocessType(pid uint32) gpu.FreezeType
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
-	CRIUCallback(id string, stream int32) *criu.NotifyCallback
+	CRIUCallback(id string) *criu.NotifyCallback
 
 	// Sync is used to force the GPU manager to sync its state with the current system state.
 	Sync(ctx context.Context) error
@@ -68,7 +68,7 @@ func (ManagerMissing) MultiprocessType(pid uint32) gpu.FreezeType {
 	return 0
 }
 
-func (ManagerMissing) CRIUCallback(id string, stream int32) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(id string) *criu.NotifyCallback {
 	return nil
 }
 
