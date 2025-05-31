@@ -42,7 +42,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 2
+        default: 4
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -155,7 +155,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -228,7 +228,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
