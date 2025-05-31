@@ -1,7 +1,6 @@
 {
   "ociVersion": "1.2.0",
   "process": {
-    "terminal": true,
     "user": {
       "uid": 0,
       "gid": 0
