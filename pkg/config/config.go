@@ -142,12 +142,7 @@ func Init(args InitArgs) error {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
 	} else {
-		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
-		if err != nil {
-			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
-				return fmt.Errorf("Failed to write config file: %w", err)
-			}
-		}
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
 	}
 
 	err = viper.UnmarshalExact(&Global)

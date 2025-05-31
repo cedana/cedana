@@ -16,6 +16,9 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
     setup_file_daemon
     do_once setup_rootfs_cuda
 }
@@ -37,10 +40,6 @@ teardown_file() {
 ###########
 
 @test "run GPU container (non-GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_cmd_bundle_cuda "echo hello")"
@@ -58,10 +57,6 @@ teardown_file() {
 }
 
 @test "run GPU container (GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
@@ -83,10 +78,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU container (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -104,10 +95,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU container (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -129,10 +116,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU container (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -154,10 +137,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU container (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 

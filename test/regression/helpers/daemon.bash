@@ -52,7 +52,7 @@ setup_daemon() {
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
-    else
+    elif env_exists "TAIL_PID"; then
         kill "$TAIL_PID"
     fi
 }
@@ -83,6 +83,10 @@ wait_for_start() {
 
 stop_daemon_at() {
     local sock=$1
+    if [ ! -e "$sock" ] || [ ! -S "$sock" ]; then
+        echo "Socket $sock does not exist, skipping stop"
+        return 0
+    fi
     kill_at_sock "$sock" TERM
     wait_for_stop "$sock"
 }

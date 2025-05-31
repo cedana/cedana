@@ -15,12 +15,16 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
-    setup_file_daemon
-    if cmd_exists nvidia-smi; then
-        do_once install_requirements
-        do_once download_hf_models
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
     fi
+    setup_file_daemon
+    do_once install_requirements
+    do_once download_hf_models
+}
 
+teardown_file() {
+    teardown_file_daemon
 }
 
 #####################

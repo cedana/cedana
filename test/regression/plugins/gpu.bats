@@ -15,6 +15,9 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
     setup_file_daemon
 }
 
@@ -35,10 +38,6 @@ teardown_file() {
 ###########
 
 @test "run GPU process (non-GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -52,10 +51,6 @@ teardown_file() {
 }
 
 @test "run GPU process (GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -65,10 +60,6 @@ teardown_file() {
 }
 
 @test "run GPU process (GPU binary) with modified env" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -84,10 +75,6 @@ teardown_file() {
 }
 
 @test "run GPU process (non-existent binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -101,10 +88,6 @@ teardown_file() {
 }
 
 @test "exec GPU process (run process alias)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -119,10 +102,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -146,10 +125,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -177,10 +152,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -209,10 +180,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU process with smaller shm (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     expected_size=$((4*1024*1024*1024))
@@ -250,10 +217,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
