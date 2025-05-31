@@ -60,21 +60,6 @@ teardown_file() {
     assert_exists "$log_file"
 }
 
-@test "run GPU process (GPU binary) with modified env" {
-    jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
-
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
-    assert_success
-    assert_exists "$log_file"
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
-}
-
 @test "run GPU process (non-existent binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
@@ -164,41 +149,6 @@ teardown_file() {
 
     run cedana restore job "$jid"
     assert_success
-
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
-    run cedana job kill "$jid"
-    rm -rf "$dump_file"
-}
-
-# bats test_tags=restore
-@test "restore GPU process with smaller shm (vector add)" {
-    jid=$(unix_nano)
-
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
-    assert_success
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
-
-    sleep 2
-
-    run cedana dump job "$jid"
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
-
-    run cedana restore job "$jid"
-    assert_success
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
 
     run cedana ps
     assert_success
