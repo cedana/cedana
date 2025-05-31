@@ -72,6 +72,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	var names []string
 	if len(filter) == 0 {
 		for _, p := range list {
+      fmt.Println(p.Name)
 			if p.AvailableVersion != "local" {
 				names = append(names, p.Name)
 			}

@@ -223,7 +223,6 @@ func (controller *controller) Terminate() {
 		controller.Process.Wait()
 		// Clean up controller resources, if not already done
 		os.Remove(strings.TrimPrefix(fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, controller.ID), "unix://"))
-		os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, controller.ID))
 	}
 }
 
