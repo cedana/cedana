@@ -20,8 +20,6 @@ setup_rootfs() {
 
 setup_rootfs_cuda() {
     mkdir -p "$ROOTFS_CUDA"
-
-    # Create and export the docker container's filesystem
     cid=$(docker create "$ROOTFS_CUDA_IMAGE")
     docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
     docker rm "$cid"
@@ -36,7 +34,7 @@ create_workload_bundle() {
         cp "$workload_path" "$ROOTFS"
     fi
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE"/config.json "$bundle"
 
@@ -63,7 +61,7 @@ create_workload_bundle_cuda() {
         cp "$workload_path" "$ROOTFS_CUDA"
     fi
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 
@@ -90,7 +88,7 @@ create_samples_workload_bundle() {
         cp "$workload_path" "$ROOTFS"
     fi
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE"/config.json "$bundle"
 
@@ -117,7 +115,7 @@ create_samples_workload_bundle_cuda() {
         cp "$workload_path" "$ROOTFS_CUDA"
     fi
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 
@@ -139,7 +137,7 @@ create_cmd_bundle() {
     local cmd="$1"
     local arg="$2"
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE"/config.json "$bundle"
 
@@ -161,7 +159,7 @@ create_cmd_bundle_cuda() {
     local cmd="$1"
     local arg="$2"
 
-    bundle=$(mktemp -d)
+    local bundle=$(mktemp -d)
 
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 

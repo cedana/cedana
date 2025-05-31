@@ -13,6 +13,8 @@ load_lib support
 load_lib assert
 load_lib file
 
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+
 setup_file() {
     setup_file_daemon
     do_once setup_rootfs_cuda
