@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/process"
@@ -20,10 +19,6 @@ import (
 type Job struct {
 	JID   string
 	proto daemon.Job
-
-	// Notify callbacks that can be saved for later use.
-	// Will be called each time the job is C/R'd.
-	criuCallback *criu.NotifyCallbackMulti
 
 	sync.RWMutex
 }
@@ -69,7 +64,7 @@ func (j *Job) GetProto() *daemon.Job {
 	j.proto.State = j.latestState()
 	j.proto.Log = j.latestLog()
 
-	return &j.proto
+	return proto.CloneOf(&j.proto)
 }
 
 func (j *Job) GetType() string {
@@ -88,7 +83,7 @@ func (j *Job) GetState() *daemon.ProcessState {
 func (j *Job) SetState(state *daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.State = state
+	j.proto.State = proto.CloneOf(state)
 }
 
 func (j *Job) FillState(ctx context.Context, pid uint32) error {
@@ -101,13 +96,13 @@ func (j *Job) FillState(ctx context.Context, pid uint32) error {
 func (j *Job) GetDetails() *daemon.Details {
 	j.RLock()
 	defer j.RUnlock()
-	return j.proto.Details
+	return proto.CloneOf(j.proto.Details)
 }
 
 func (j *Job) SetDetails(details *daemon.Details) {
 	j.Lock()
 	defer j.Unlock()
-	j.proto.Details = details
+	j.proto.Details = proto.CloneOf(details)
 	j.proto.Details.JID = proto.String(j.JID)
 }
 
@@ -152,21 +147,6 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 	j.proto.State.GPUEnabled = enabled
 }
 
-func (j *Job) GetCRIUCallback() *criu.NotifyCallbackMulti {
-	j.RLock()
-	defer j.RUnlock()
-	return j.criuCallback
-}
-
-func (j *Job) AddCRIUCallback(n *criu.NotifyCallback) {
-	j.Lock()
-	defer j.Unlock()
-	if j.criuCallback == nil {
-		j.criuCallback = &criu.NotifyCallbackMulti{}
-	}
-	j.criuCallback.Include(n)
-}
-
 ///////////////
 /// Helpers ///
 ///////////////
@@ -178,7 +158,7 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 	if j.proto.State == nil {
 		return nil
 	}
-	state = j.proto.State
+	state = proto.CloneOf(j.proto.State)
 
 	// Check if job belongs to this machine
 

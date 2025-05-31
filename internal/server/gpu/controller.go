@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -20,13 +21,15 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	CONTROLLER_ADDRESS_FORMATTER = "unix:///tmp/cedana-gpu-controller-%s.sock"
-	CONTROLLER_TERMINATE_SIGNAL  = syscall.SIGTERM
+	CONTROLLER_ADDRESS_FORMATTER  = "unix:///tmp/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SHM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s"
+	CONTROLLER_TERMINATE_SIGNAL   = syscall.SIGTERM
 )
 
 type controller struct {
@@ -132,11 +135,7 @@ func (m *controllers) GetFree() *controller {
 }
 
 // Spawns a GPU controller
-func (m *controllers) Spawn(
-	binary string,
-	user *syscall.Credential,
-	env ...string,
-) (*controller, error) {
+func (m *controllers) Spawn(binary string) (*controller, error) {
 	// Generate a unique ID for the GPU controller
 	id := uuid.NewString()
 
@@ -153,18 +152,14 @@ func (m *controllers) Spawn(
 
 	controller.Stderr = controller.ErrBuf
 	controller.SysProcAttr = &syscall.SysProcAttr{
-		Credential: user,
-		Setpgid:    true, // So it can run independently in its own process group
+		Setpgid: true, // So it can run independently in its own process group
 	}
 
-	// Add user, runtime-specific environment variables.
-	// Could potentially override os.Environ() variables, which is intended.
-	controller.Env = append(os.Environ(), env...)
-
 	controller.Env = append(
-		controller.Env,
+		os.Environ(),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
+		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%d", config.Global.GPU.ShmSize),
 	)
 
 	err := controller.Start()
@@ -205,9 +200,29 @@ func (controller *controller) Connect(ctx context.Context, wg *sync.WaitGroup) e
 }
 
 func (controller *controller) Terminate() {
+	if controller.Process == nil {
+		return
+	}
 	controller.Process.Signal(CONTROLLER_TERMINATE_SIGNAL)
 	if controller.ClientConn != nil {
 		controller.ClientConn.Close()
+	}
+	process, err := process.NewProcess(int32(controller.Process.Pid))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get process of GPU controller")
+		return
+	}
+	parent, err := process.Parent()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get parent process of GPU controller")
+		return
+	}
+	if os.Getpid() == int(parent.Pid) {
+		// If the parent is the current process, we can wait for it to exit
+		// This is useful for cleaning up the controller process when the daemon exits
+		controller.Process.Wait()
+		// Clean up controller resources, if not already done
+		os.Remove(strings.TrimPrefix(fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, controller.ID), "unix://"))
 	}
 }
 

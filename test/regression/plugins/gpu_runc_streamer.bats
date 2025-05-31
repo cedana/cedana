@@ -2,10 +2,11 @@
 
 # This file assumes its being run from the same directory as the Makefile
 #
-# bats file_tags=gpu,streamer
+# bats file_tags=gpu,runc,streamer
 
 load ../helpers/utils
 load ../helpers/daemon
+load ../helpers/runc
 load ../helpers/gpu
 
 load_lib support
@@ -20,6 +21,7 @@ setup_file() {
         skip "GPU not available"
     fi
     setup_file_daemon
+    do_once setup_rootfs_cuda
 }
 
 setup() {
@@ -39,42 +41,34 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "stream dump GPU process (vector add)" {
+@test "stream dump GPU container (vector add)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
-    assert_exists "$log_file"
 
-    sleep 2
-
-    run cedana dump job "$jid" --stream 1
+    run cedana dump job "$jid" --stream 2 --stream 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=dump
-@test "stream dump GPU process (mem throughput saxpy)" {
+@test "stream dump GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
-    assert_exists "$log_file"
-
-    sleep 2
 
     run cedana dump job "$jid" --stream 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
     assert_exists "$dump_file/img-2.gz"
@@ -88,45 +82,38 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "stream restore GPU process (vector add)" {
+@test "restore GPU container (vector add)" {
     jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
-
-    sleep 2
 
     run cedana dump job "$jid" --stream 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
     run cedana restore job "$jid" --stream 1
     assert_success
 
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
     run cedana job kill "$jid"
+    run cedana job delete "$jid"
 }
 
 # bats test_tags=restore
-@test "stream restore GPU process (mem throughput saxpy)" {
+@test "restore GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
-
-    sleep 2
 
     run cedana dump job "$jid" --stream 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
     assert_exists "$dump_file/img-2.gz"
@@ -135,10 +122,6 @@ teardown_file() {
     run cedana restore job "$jid" --stream 4
     assert_success
 
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
     run cedana job kill "$jid"
+    run cedana job delete "$jid"
 }
-

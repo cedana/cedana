@@ -63,6 +63,8 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 				return nil, err
 			}
 
+			job.SetDetails(req.Details) // Set again, in case they get modified later
+
 			err = jobs.Manage(opts.Lifetime, job.JID, resp.PID, exited)
 			if err != nil {
 				if req.Action == daemon.RunAction_START_NEW { // we don't want to cancel if manage was called for an existing process

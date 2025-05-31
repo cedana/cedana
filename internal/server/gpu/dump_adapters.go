@@ -53,7 +53,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			}
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id, req.Stream))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
 
 			return next(ctx, opts, resp, req)
 		}

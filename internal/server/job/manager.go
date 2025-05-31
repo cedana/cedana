@@ -6,12 +6,9 @@ package job
 
 import (
 	"context"
-	"sync"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/pkg/criu"
 )
 
 type Manager interface {
@@ -72,12 +69,6 @@ type Manager interface {
 	//// Misc ////
 	//////////////
 
-	// GPUs returns the GPU manager.
-	GPUs() gpu.Manager
-
-	// CRIUCallback returns the saved CRIU notify callback for the job.
-	CRIUCallback(lifetime context.Context, jid string, user *syscall.Credential, stream int32, env ...string) *criu.NotifyCallbackMulti
-
-	// GetWG returns the waitgroup for the manager.
-	GetWG() *sync.WaitGroup
+  // Sync is used to force the manager to sync its state with the underlying storage.
+  Sync(ctx context.Context) error
 }

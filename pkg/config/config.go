@@ -35,6 +35,7 @@ const (
 	DEFAULT_GPU_POOL_SIZE         = 0
 	DEFAULT_GPU_LOG_DIR           = "/tmp"
 	DEFAULT_GPU_MULTIPROCESS_TYPE = "IPC"
+	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -75,6 +76,7 @@ var Global Config = Config{
 		PoolSize:         DEFAULT_GPU_POOL_SIZE,
 		LogDir:           DEFAULT_GPU_LOG_DIR,
 		MultiprocessType: DEFAULT_GPU_MULTIPROCESS_TYPE,
+		ShmSize:          DEFAULT_GPU_SHM_SIZE,
 	},
 	CRIU: CRIU{
 		LeaveRunning: false,
@@ -142,12 +144,7 @@ func Init(args InitArgs) error {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
 	} else {
-		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
-		if err != nil {
-			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
-				return fmt.Errorf("Failed to write config file: %w", err)
-			}
-		}
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
 	}
 
 	err = viper.UnmarshalExact(&Global)

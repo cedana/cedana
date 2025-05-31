@@ -160,7 +160,7 @@ func (p *Plugin) SyncInstalled() {
 		} else {
 			path = filepath.Join(file.InstallDir, file.Name)
 		}
-		if s, err = os.Stat(path); err != nil {
+		if s, err = os.Stat(path); err != nil || s.IsDir() {
 			continue
 		}
 		found += 1
@@ -179,7 +179,7 @@ func (p *Plugin) SyncInstalled() {
 		} else {
 			path = filepath.Join(file.InstallDir, file.Name)
 		}
-		if s, err = os.Stat(path); err != nil {
+		if s, err = os.Stat(path); err != nil || s.IsDir() {
 			continue
 		}
 		found += 1

@@ -43,7 +43,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 		for _, file := range t.Libraries {
 			path := filepath.Join(LibDir, file.Name)
-			if _, err := os.Stat(path); os.IsNotExist(err) {
+			if s, err := os.Stat(path); os.IsNotExist(err) || s.IsDir() {
 				continue
 			}
 

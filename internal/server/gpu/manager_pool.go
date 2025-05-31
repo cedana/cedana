@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
@@ -35,7 +34,8 @@ const (
 
 type ManagerPool struct {
 	controllers controllers
-	poolSize    int
+
+	poolSize int
 
 	plugins plugins.Manager
 	db      db.GPU
@@ -124,7 +124,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 	return manager, nil
 }
 
-func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, multiprocessType gpu.FreezeType, pid <-chan uint32, env ...string) (id string, err error) {
+func (m *ManagerPool) Attach(ctx context.Context, multiprocessType gpu.FreezeType, pid <-chan uint32) (id string, err error) {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -140,7 +140,7 @@ func (m *ManagerPool) Attach(ctx context.Context, user *syscall.Credential, mult
 
 	if controller == nil {
 		log.Debug().Msg("spawning a new GPU controller")
-		controller, err = m.controllers.Spawn(binary, user, env...)
+		controller, err = m.controllers.Spawn(binary)
 		if err != nil {
 			return "", err
 		}
@@ -244,18 +244,13 @@ func (m *ManagerPool) Checks() types.Checks {
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 
-		user, err := utils.GetCredentials()
-		if err != nil {
-			statusComponent.Data = "failed"
-			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed to get user credentials: %v", err))
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-
 		// Spawn a new GPU controller
 
-		controller, err := m.controllers.Spawn(binary, user)
-		defer controller.Terminate()
-		defer m.controllers.Delete(controller.ID)
+		controller, err := m.controllers.Spawn(binary)
+		defer func() {
+			controller.Terminate()
+			m.controllers.Delete(controller.ID)
+		}()
 		if err != nil {
 			statusComponent.Data = "failed"
 			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
@@ -287,7 +282,7 @@ func (m *ManagerPool) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu_client.NotifyCallback {
+func (m *ManagerPool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -327,7 +322,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: stream > 0, LeaveRunning: opts.GetLeaveRunning()})
+			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
 				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
@@ -397,7 +392,7 @@ func (m *ManagerPool) CRIUCallback(id string, stream int32, env ...string) *criu
 				return
 			}
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: stream > 0})
+			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
 				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
@@ -480,7 +475,7 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 		if len(free) < m.poolSize {
 			log.Debug().Int("target", m.poolSize).Int("current", len(free)).Msg("maintaining GPU pool size")
 			for i := len(free); i < m.poolSize; i++ {
-				controller, err := m.controllers.Spawn(m.plugins.Get("gpu").BinaryPaths()[0], nil)
+				controller, err := m.controllers.Spawn(m.plugins.Get("gpu").BinaryPaths()[0])
 				if err != nil {
 					log.Debug().Err(err).Msg("failed to spawn GPU controller to maintain pool size")
 					// Stop trying to spawn more right now as it could be an OOM condition

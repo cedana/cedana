@@ -29,4 +29,6 @@ go.work.sum
 *.tar
 *.tar.gz
 rootfs
+rootfs_cuda
 _rootfs
+_rootfs_cuda

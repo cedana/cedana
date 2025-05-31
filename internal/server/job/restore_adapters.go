@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -82,13 +81,6 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 			// process created by the next handler(s).
 			lifetime, cancel := context.WithCancel(opts.Lifetime)
 			opts.Lifetime = lifetime
-
-			// Import saved notify callbacks
-			opts.CRIUCallback.IncludeMulti(jobs.CRIUCallback(opts.Lifetime, jid, &syscall.Credential{
-				Uid:    req.UID,
-				Gid:    req.GID,
-				Groups: req.Groups,
-			}, req.Stream, req.Env...))
 
 			exited, err := next(ctx, opts, resp, req)
 			if err != nil {
