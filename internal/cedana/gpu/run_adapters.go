@@ -9,11 +9,8 @@ package gpu
 
 import (
 	"context"
-	"strings"
 
-	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -36,26 +33,11 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to enable GPU support")
 			}
 
-			var multiprocessType gpu.FreezeType
-
-			if req.GPUMultiprocessType == "" {
-				req.GPUMultiprocessType = config.Global.GPU.MultiprocessType
-			}
-
-			switch strings.ToUpper(req.GPUMultiprocessType) {
-			case "IPC":
-				multiprocessType = gpu.FreezeType_FREEZE_TYPE_IPC
-			case "NCCL":
-				multiprocessType = gpu.FreezeType_FREEZE_TYPE_NCCL
-			default:
-				return nil, status.Errorf(codes.InvalidArgument, "invalid GPU multiprocess type: %s", req.GPUMultiprocessType)
-			}
-
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			id, err := gpus.Attach(ctx, multiprocessType, pid)
+			id, err := gpus.Attach(ctx, pid)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)

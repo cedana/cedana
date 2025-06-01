@@ -48,7 +48,6 @@ type controller struct {
 	AttachedPID   uint32
 	ErrBuf        *bytes.Buffer
 	PendingAttach atomic.Bool
-	FreezeType    gpu.FreezeType
 
 	*exec.Cmd
 	gpugrpc.ControllerClient
@@ -87,7 +86,6 @@ func (p *pool) Import(ctx context.Context, c *db.GPUController) error {
 	controller := &controller{
 		ID:          c.ID,
 		AttachedPID: c.AttachedPID,
-		FreezeType:  c.FreezeType,
 		ErrBuf:      &bytes.Buffer{},
 	}
 
@@ -293,7 +291,7 @@ func (c *controller) WaitForHealthCheck(ctx context.Context) ([]*daemon.HealthCh
 	return components, nil
 }
 
-func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
+func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
@@ -318,7 +316,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			}
 		}
 
-		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: controller.FreezeType})
+		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
+
+		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: freezeType[0]})
 		if err != nil {
 			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))

@@ -115,7 +115,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 	return manager, nil
 }
 
-func (m *ManagerPool) Attach(ctx context.Context, multiprocessType gpu.FreezeType, pid <-chan uint32) (id string, err error) {
+func (m *ManagerPool) Attach(ctx context.Context, pid <-chan uint32) (id string, err error) {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -136,8 +136,6 @@ func (m *ManagerPool) Attach(ctx context.Context, multiprocessType gpu.FreezeTyp
 			return "", err
 		}
 	}
-
-	controller.FreezeType = multiprocessType
 
 	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
 
@@ -197,14 +195,6 @@ func (m *ManagerPool) IsAttached(pid uint32) bool {
 	return m.controllers.Find(pid) != nil
 }
 
-func (m *ManagerPool) MultiprocessType(pid uint32) gpu.FreezeType {
-	controller := m.controllers.Find(pid)
-	if controller == nil {
-		return gpu.FreezeType_FREEZE_TYPE_IPC
-	}
-	return controller.FreezeType
-}
-
 func (m *ManagerPool) GetID(pid uint32) (string, error) {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
@@ -244,8 +234,8 @@ func (m *ManagerPool) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerPool) CRIUCallback(id string) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id)
+func (m *ManagerPool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id, freezeType...)
 }
 
 ////////////////////////
@@ -352,7 +342,6 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 				PID:         uint32(controller.Process.Pid),
 				Address:     address,
 				AttachedPID: controller.AttachedPID,
-				FreezeType:  controller.FreezeType,
 			})
 		}
 	}

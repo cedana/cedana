@@ -30,8 +30,6 @@ func init() {
 	runCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
 	runCmd.PersistentFlags().
-		StringP(flags.GpuTypeFlag.Full, flags.GpuTypeFlag.Short, "", "multi-process type for GPU support (IPC, NCCL)")
-	runCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
@@ -68,7 +66,6 @@ var runCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
-		gpuType, _ := cmd.Flags().GetString(flags.GpuTypeFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
@@ -94,17 +91,16 @@ var runCmd = &cobra.Command{
 
 		// Create initial request
 		req := &daemon.RunReq{
-			JID:                 jid,
-			Log:                 log,
-			PidFile:             pidFile,
-			GPUEnabled:          gpuEnabled,
-			GPUMultiprocessType: gpuType,
-			Attachable:          attach || attachable,
-			Action:              daemon.RunAction_START_NEW,
-			Env:                 env,
-			UID:                 user.Uid,
-			GID:                 user.Gid,
-			Groups:              user.Groups,
+			JID:        jid,
+			Log:        log,
+			PidFile:    pidFile,
+			GPUEnabled: gpuEnabled,
+			Attachable: attach || attachable,
+			Action:     daemon.RunAction_START_NEW,
+			Env:        env,
+			UID:        user.Uid,
+			GID:        user.Gid,
+			Groups:     user.Groups,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)

@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -45,15 +46,17 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			state.GPUID = id
 			state.GPUEnabled = true
 
-			switch gpus.MultiprocessType(pid) {
-			case gpu.FreezeType_FREEZE_TYPE_IPC:
-				state.GPUMultiprocessType = "IPC"
-			case gpu.FreezeType_FREEZE_TYPE_NCCL:
-				state.GPUMultiprocessType = "NCCL"
+			var freezeType gpu.FreezeType
+
+			switch strings.ToUpper(req.GPUFreezeType) {
+			case "IPC":
+				freezeType = gpu.FreezeType_FREEZE_TYPE_IPC
+			case "NCCL":
+				freezeType = gpu.FreezeType_FREEZE_TYPE_NCCL
 			}
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id, freezeType))
 
 			return next(ctx, opts, resp, req)
 		}

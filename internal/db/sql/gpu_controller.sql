@@ -1,13 +1,12 @@
 -- name: CreateGPUController :exec
-INSERT INTO gpu_controllers (ID, Address, PID, AttachedPID, FreezeType)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO gpu_controllers (ID, Address, PID, AttachedPID)
+VALUES (?, ?, ?, ?);
 
 -- name: UpdateGPUController :exec
 UPDATE gpu_controllers SET
     Address = ?,
     PID = ?,
-    AttachedPID = ?,
-    FreezeType = ?
+    AttachedPID = ?
 WHERE ID = ?;
 
 -- name: ListGPUControllers :many

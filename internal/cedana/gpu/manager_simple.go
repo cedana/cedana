@@ -37,7 +37,7 @@ func NewSimpleManager(ctx context.Context, plugins plugins.Manager, db db.GPU) (
 	return manager, nil
 }
 
-func (m *ManagerSimple) Attach(ctx context.Context, multiprocessType gpu.FreezeType, pid <-chan uint32) (id string, err error) {
+func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id string, err error) {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -58,8 +58,6 @@ func (m *ManagerSimple) Attach(ctx context.Context, multiprocessType gpu.FreezeT
 			return "", err
 		}
 	}
-
-	controller.FreezeType = multiprocessType
 
 	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
 
@@ -95,7 +93,6 @@ func (m *ManagerSimple) Attach(ctx context.Context, multiprocessType gpu.FreezeT
 			err = m.db.PutGPUController(ctx, &db.GPUController{
 				ID:          controller.ID,
 				PID:         uint32(controller.Process.Pid),
-				FreezeType:  controller.FreezeType,
 				Address:     controller.Target(),
 				AttachedPID: controller.AttachedPID,
 			})
@@ -122,14 +119,6 @@ func (m *ManagerSimple) Detach(pid uint32) error {
 
 func (m *ManagerSimple) IsAttached(pid uint32) bool {
 	return m.controllers.Find(pid) != nil
-}
-
-func (m *ManagerSimple) MultiprocessType(pid uint32) gpu.FreezeType {
-	controller := m.controllers.Find(pid)
-	if controller == nil {
-		return gpu.FreezeType_FREEZE_TYPE_IPC
-	}
-	return controller.FreezeType
 }
 
 func (m *ManagerSimple) GetID(pid uint32) (string, error) {
@@ -189,6 +178,6 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(id string) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id)
+func (m *ManagerSimple) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id, freezeType...)
 }

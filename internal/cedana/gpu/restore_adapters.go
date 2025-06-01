@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -34,26 +31,11 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to restore GPU support")
 			}
 
-			var multiprocessType gpu.FreezeType
-
-			if state.GPUMultiprocessType == "" {
-				state.GPUMultiprocessType = config.Global.GPU.MultiprocessType
-			}
-
-			switch strings.ToUpper(state.GPUMultiprocessType) {
-			case "IPC":
-				multiprocessType = gpu.FreezeType_FREEZE_TYPE_IPC
-			case "NCCL":
-				multiprocessType = gpu.FreezeType_FREEZE_TYPE_NCCL
-			default:
-				return nil, status.Errorf(codes.InvalidArgument, "invalid GPU multiprocess type: %s", state.GPUMultiprocessType)
-			}
-
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			id, err := gpus.Attach(ctx, multiprocessType, pid)
+			id, err := gpus.Attach(ctx, pid)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)

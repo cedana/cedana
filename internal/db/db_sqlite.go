@@ -11,7 +11,6 @@ import (
 
 	_ "embed"
 
-	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/db/sql"
 	"github.com/cedana/cedana/pkg/utils"
@@ -327,7 +326,6 @@ func (db *SqliteDB) PutGPUController(ctx context.Context, controller *GPUControl
 			Address:     controller.Address,
 			Pid:         int64(controller.PID),
 			Attachedpid: int64(controller.AttachedPID),
-			Freezetype:  int64(controller.FreezeType.Number()),
 		})
 	}
 
@@ -336,7 +334,6 @@ func (db *SqliteDB) PutGPUController(ctx context.Context, controller *GPUControl
 		Address:     controller.Address,
 		Pid:         int64(controller.PID),
 		Attachedpid: int64(controller.AttachedPID),
-		Freezetype:  int64(controller.FreezeType.Number()),
 	})
 }
 
@@ -361,7 +358,6 @@ func (db *SqliteDB) ListGPUControllers(ctx context.Context, ids ...string) ([]*G
 			Address:     dbController.Address,
 			PID:         uint32(dbController.Pid),
 			AttachedPID: uint32(dbController.Attachedpid),
-			FreezeType:  gpu.FreezeType(dbController.Freezetype),
 		})
 	}
 
