@@ -1,4 +1,4 @@
-package server
+package cedana
 
 import (
 	"context"

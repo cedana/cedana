@@ -7,7 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/server/filesystem"
+	"github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"

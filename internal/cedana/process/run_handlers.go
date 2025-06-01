@@ -53,6 +53,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	exitCode := make(chan int, 1)
 	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
 	if ok && daemonless {
+		cmd.SysProcAttr.Setsid = false                     // We want to run in the foreground
+		cmd.SysProcAttr.Foreground = true                  // Run in the foreground, so IO and signals work correctly
+		cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())          // Set the controlling terminal to the current stdin
+		cmd.SysProcAttr.GidMappingsEnableSetgroups = false // Avoid permission issues when running as non-root user
+		cmd.SysProcAttr.Credential = nil                   // Current user's credentials (caller)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -81,23 +86,27 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	resp.PID = uint32(cmd.Process.Pid)
 
-	// Wait for the process to exit, send exit code
-	exited = make(chan int)
-	if !daemonless {
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			err := cmd.Wait()
-			if err != nil {
-				log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
-			}
-			code := cmd.ProcessState.ExitCode()
-			log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
-			exitCode <- code
-			close(exitCode)
-			close(exited)
-		}()
+	if daemonless {
+		exited = exitCode // In daemonless mode, we return the exit code channel directly
+	} else {
+		exited = make(chan int, 1)
 	}
+
+	opts.WG.Add(1)
+	go func() {
+		defer opts.WG.Done()
+		err := cmd.Wait()
+		if err != nil {
+			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
+		}
+		code := cmd.ProcessState.ExitCode()
+		log.Debug().Int("code", code).Uint8("PID", uint8(resp.PID)).Msg("process exited")
+		exitCode <- code
+		close(exited)
+		if exitCode != exited {
+			close(exitCode)
+		}
+	}()
 
 	return exited, nil
 }

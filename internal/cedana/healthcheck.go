@@ -1,12 +1,12 @@
-package server
+package cedana
 
 import (
 	"context"
 	"slices"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/criu"
-	"github.com/cedana/cedana/internal/server/streamer"
+	"github.com/cedana/cedana/internal/cedana/criu"
+	"github.com/cedana/cedana/internal/cedana/streamer"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"

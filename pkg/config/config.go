@@ -26,8 +26,9 @@ const (
 	DEFAULT_SOCK_ADDR  = "/run/cedana.sock"
 	DEFAULT_SOCK_PERMS = 0o666
 
-	DEFAULT_PROTOCOL  = "unix"
-	DEFAULT_LOG_LEVEL = "info"
+	DEFAULT_PROTOCOL            = "unix"
+	DEFAULT_LOG_LEVEL           = "info"
+	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
 	DEFAULT_COMPRESSION = "lz4"
 	DEFAULT_DUMP_DIR    = "/tmp"
@@ -47,8 +48,9 @@ const (
 var Global Config = Config{
 	// NOTE: Don't specify default address here as it depends on default protocol.
 	// Use above constants for default address for each protocol.
-	Protocol: DEFAULT_PROTOCOL,
-	LogLevel: DEFAULT_LOG_LEVEL,
+	Protocol:         DEFAULT_PROTOCOL,
+	LogLevel:         DEFAULT_LOG_LEVEL,
+	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Checkpoint: Checkpoint{
 		Dir:         DEFAULT_DUMP_DIR,
 		Compression: DEFAULT_COMPRESSION,

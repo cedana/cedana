@@ -12,12 +12,10 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/db"
-	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,7 +31,7 @@ const (
 )
 
 type ManagerPool struct {
-	controllers controllers
+	controllers pool
 
 	poolSize int
 
@@ -66,7 +64,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 		plugins:     plugins,
 		wg:          &sync.WaitGroup{},
 		db:          db,
-		controllers: controllers{},
+		controllers: pool{},
 	}
 
 	err := manager.Sync(lifetime)
@@ -158,7 +156,7 @@ func (m *ManagerPool) Attach(ctx context.Context, multiprocessType gpu.FreezeTyp
 		}
 	}()
 
-	err = controller.Connect(ctx, m.wg)
+	err = controller.Connect(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -244,36 +242,7 @@ func (m *ManagerPool) Checks() types.Checks {
 			return []*daemon.HealthCheckComponent{statusComponent}
 		}
 
-		// Spawn a new GPU controller
-
-		controller, err := m.controllers.Spawn(binary)
-		defer func() {
-			controller.Terminate()
-			m.controllers.Delete(controller.ID)
-		}()
-		if err != nil {
-			statusComponent.Data = "failed"
-			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-
-		err = controller.Connect(ctx, m.wg)
-		if err != nil {
-			statusComponent.Data = "failed"
-			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller connect: %v", err))
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-
-		components, err := controller.WaitForHealthCheck(ctx, m.wg)
-		if components == nil && err != nil {
-			statusComponent.Data = "failed"
-			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Failed controller health check: %v", err))
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-
-		statusComponent.Data = "available"
-
-		return append([]*daemon.HealthCheckComponent{statusComponent}, components...)
+		return m.controllers.Check(binary)(ctx)
 	}
 
 	return types.Checks{
@@ -282,141 +251,8 @@ func (m *ManagerPool) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerPool) CRIUCallback(id string) *criu_client.NotifyCallback {
-	callback := &criu_client.NotifyCallback{Name: "gpu"}
-
-	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
-	// do the GPU dump in parallel to CRIU dump.
-	dumpErr := make(chan error, 1)
-	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
-		defer cancel()
-
-		pid := uint32(opts.GetPid())
-
-		controller := m.controllers.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-
-		// Make sure we are connected
-		if controller.ClientConn == nil {
-			err := controller.Connect(ctx, m.wg)
-			if err != nil {
-				return fmt.Errorf("failed to connect to GPU controller: %v", err)
-			}
-		}
-
-		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: controller.FreezeType})
-		if err != nil {
-			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
-			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
-		}
-
-		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
-
-		// Begin GPU dump in parallel to CRIU dump
-
-		go func() {
-			defer close(dumpErr)
-			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
-			defer cancel()
-
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), LeaveRunning: opts.GetLeaveRunning()})
-			if err != nil {
-				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
-				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
-				return
-			}
-			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU dump complete")
-		}()
-		return nil
-	}
-
-	// Wait for GPU dump to finish before finalizing the dump
-	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
-		defer cancel()
-
-		pid := uint32(opts.GetPid())
-
-		controller := m.controllers.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-
-		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
-		}
-
-		return errors.Join(err, utils.GRPCError(<-dumpErr))
-	}
-
-	// Unfreeze on dump failure as well
-	callback.OnDumpErrorFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) {
-		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
-		defer cancel()
-
-		pid := uint32(opts.GetPid())
-
-		controller := m.controllers.Get(id)
-		if controller == nil {
-			log.Error().Uint32("PID", pid).Msg("GPU controller not found, is the process still running?")
-			return
-		}
-
-		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU on dump error")
-		}
-
-		return
-	}
-
-	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
-	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
-	restoreErr := make(chan error, 1)
-	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		go func() {
-			defer close(restoreErr)
-
-			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
-			defer cancel()
-
-			pid := uint32(opts.GetPid())
-
-			controller := m.controllers.Get(id)
-			if controller == nil {
-				restoreErr <- fmt.Errorf("GPU controller not found, is the process still running?")
-				return
-			}
-
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
-			if err != nil {
-				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to restore GPU")
-				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
-				return
-			}
-			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU restore complete")
-
-			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
-			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
-
-			// copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
-			// replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
-			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
-			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
-		}()
-		return <-restoreErr // FIXME: This is until hostmem restore is fixed for runc
-	}
-
-	// Wait for GPU restore to finish before resuming the process
-	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
-		return <-restoreErr
-	}
-
-	return callback
+func (m *ManagerPool) CRIUCallback(id string) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id)
 }
 
 ////////////////////////
@@ -449,7 +285,7 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 				continue
 			}
 
-			err = m.controllers.Import(ctx, m.wg, dbController)
+			err = m.controllers.Import(ctx, dbController)
 			if err != nil {
 				// If import fails, we assume the controller is no longer running
 				log.Debug().Str("reason", err.Error()).Str("ID", dbController.ID).Msg("clearing stale GPU controller in DB")
@@ -459,7 +295,7 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 
 		free, pending, busy, remaining := m.controllers.List()
 
-		log.Debug().Int("free", len(free)).Int("pending", len(pending)).Int("busy", len(busy)).Int("target", m.poolSize).Msg("GPU controller pool")
+		log.Trace().Int("free", len(free)).Int("pending", len(pending)).Int("busy", len(busy)).Int("target", m.poolSize).Msg("GPU controller pool")
 
 		// Remove controllers not in either free or busy list
 
@@ -523,6 +359,7 @@ func (m *ManagerPool) syncWithDB(ctx context.Context, a action) error {
 				PID:         uint32(controller.Process.Pid),
 				Address:     address,
 				AttachedPID: controller.AttachedPID,
+				FreezeType:  controller.FreezeType,
 			})
 		}
 	}

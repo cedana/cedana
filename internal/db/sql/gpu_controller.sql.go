@@ -11,8 +11,8 @@ import (
 )
 
 const createGPUController = `-- name: CreateGPUController :exec
-INSERT INTO gpu_controllers (ID, Address, PID, AttachedPID)
-VALUES (?, ?, ?, ?)
+INSERT INTO gpu_controllers (ID, Address, PID, AttachedPID, FreezeType)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateGPUControllerParams struct {
@@ -20,6 +20,7 @@ type CreateGPUControllerParams struct {
 	Address     string
 	Pid         int64
 	Attachedpid int64
+	Freezetype  int64
 }
 
 func (q *Queries) CreateGPUController(ctx context.Context, arg CreateGPUControllerParams) error {
@@ -28,6 +29,7 @@ func (q *Queries) CreateGPUController(ctx context.Context, arg CreateGPUControll
 		arg.Address,
 		arg.Pid,
 		arg.Attachedpid,
+		arg.Freezetype,
 	)
 	return err
 }
@@ -43,7 +45,7 @@ func (q *Queries) DeleteGPUController(ctx context.Context, id string) error {
 }
 
 const listGPUControllers = `-- name: ListGPUControllers :many
-SELECT id, address, pid, attachedpid FROM gpu_controllers
+SELECT id, address, pid, attachedpid, freezetype FROM gpu_controllers
 `
 
 func (q *Queries) ListGPUControllers(ctx context.Context) ([]GpuController, error) {
@@ -60,6 +62,7 @@ func (q *Queries) ListGPUControllers(ctx context.Context) ([]GpuController, erro
 			&i.Address,
 			&i.Pid,
 			&i.Attachedpid,
+			&i.Freezetype,
 		); err != nil {
 			return nil, err
 		}
@@ -75,7 +78,7 @@ func (q *Queries) ListGPUControllers(ctx context.Context) ([]GpuController, erro
 }
 
 const listGPUControllersByIDs = `-- name: ListGPUControllersByIDs :many
-SELECT id, address, pid, attachedpid FROM gpu_controllers
+SELECT id, address, pid, attachedpid, freezetype FROM gpu_controllers
 WHERE ID IN (/*SLICE:ids*/?)
 `
 
@@ -103,6 +106,7 @@ func (q *Queries) ListGPUControllersByIDs(ctx context.Context, ids []string) ([]
 			&i.Address,
 			&i.Pid,
 			&i.Attachedpid,
+			&i.Freezetype,
 		); err != nil {
 			return nil, err
 		}
@@ -121,7 +125,8 @@ const updateGPUController = `-- name: UpdateGPUController :exec
 UPDATE gpu_controllers SET
     Address = ?,
     PID = ?,
-    AttachedPID = ?
+    AttachedPID = ?,
+    FreezeType = ?
 WHERE ID = ?
 `
 
@@ -129,6 +134,7 @@ type UpdateGPUControllerParams struct {
 	Address     string
 	Pid         int64
 	Attachedpid int64
+	Freezetype  int64
 	ID          string
 }
 
@@ -137,6 +143,7 @@ func (q *Queries) UpdateGPUController(ctx context.Context, arg UpdateGPUControll
 		arg.Address,
 		arg.Pid,
 		arg.Attachedpid,
+		arg.Freezetype,
 		arg.ID,
 	)
 	return err

@@ -1,11 +1,11 @@
-package server
+package cedana
 
 import (
 	"context"
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/job"
+	"github.com/cedana/cedana/internal/cedana/job"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -150,16 +150,17 @@ var runCmd = &cobra.Command{
 				true,
 			)
 
-			root, err := server.NewRoot(ctx)
+			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
 			}
-			defer root.Shutdown()
 
-			resp, err = root.Run(ctx, req)
+			code, err := cedana.Run(ctx, req)
 			if err != nil {
 				return utils.GRPCErrorColored(err)
 			}
+
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

@@ -12,7 +12,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
-	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -190,16 +190,17 @@ var restoreCmd = &cobra.Command{
 				true,
 			)
 
-			root, err := server.NewRoot(ctx)
+			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
-			defer root.Shutdown()
 
-			resp, err = root.Restore(ctx, req)
+			code, err := cedana.Restore(ctx, req)
 			if err != nil {
 				return utils.GRPCErrorColored(err)
 			}
+
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

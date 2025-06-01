@@ -1,15 +1,15 @@
-package server
+package cedana
 
 import (
 	"context"
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/defaults"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/server/process"
-	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/internal/cedana/defaults"
+	"github.com/cedana/cedana/internal/cedana/gpu"
+	"github.com/cedana/cedana/internal/cedana/job"
+	"github.com/cedana/cedana/internal/cedana/process"
+	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"

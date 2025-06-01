@@ -1,4 +1,4 @@
-package server
+package cedana
 
 import (
 	"context"
@@ -9,15 +9,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/cedana/cedana/internal/server/criu"
-	"github.com/cedana/cedana/internal/server/defaults"
-	"github.com/cedana/cedana/internal/server/filesystem"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/server/network"
-	"github.com/cedana/cedana/internal/server/process"
-	"github.com/cedana/cedana/internal/server/streamer"
-	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/internal/cedana/criu"
+	"github.com/cedana/cedana/internal/cedana/defaults"
+	"github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/cedana/cedana/internal/cedana/gpu"
+	"github.com/cedana/cedana/internal/cedana/job"
+	"github.com/cedana/cedana/internal/cedana/network"
+	"github.com/cedana/cedana/internal/cedana/process"
+	"github.com/cedana/cedana/internal/cedana/streamer"
+	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"

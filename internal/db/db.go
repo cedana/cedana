@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 
+	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 )
 
@@ -51,6 +52,7 @@ type GPUController struct {
 	Address     string
 	PID         uint32
 	AttachedPID uint32
+	FreezeType  gpu.FreezeType
 }
 
 type UnimplementedDB struct{}

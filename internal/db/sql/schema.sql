@@ -51,5 +51,6 @@ CREATE TABLE IF NOT EXISTS gpu_controllers (
     ID          TEXT PRIMARY KEY,
     Address     TEXT NOT NULL,
     PID         INTEGER NOT NULL,
-    AttachedPID INTEGER NOT NULL
+    AttachedPID INTEGER NOT NULL,
+    FreezeType  INTEGER NOT NULL
 );

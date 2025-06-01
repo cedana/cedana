@@ -1,11 +1,9 @@
-package server
+package cedana
 
 import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/defaults"
-	"github.com/cedana/cedana/internal/server/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -15,48 +13,47 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpVMResp, error) {
+func (s *Server) RestoreVM(ctx context.Context, req *daemon.RestoreVMReq) (*daemon.RestoreVMResp, error) {
 
-	middleware := types.Middleware[types.DumpVM]{
-    defaults.FillMissingDumpVMDefaults,
-		validation.ValidateDumpVMRequest,
+	middleware := types.Middleware[types.RestoreVM]{
 
-		pluginDumpVMMiddleware, // middleware from plugins
+		pluginRestoreVMMiddleware, // middleware from plugins
 
 	}
 
-	dump := pluginDumpVMHandler().With(middleware...)
+	restore := pluginRestoreVMHandler().With(middleware...)
 
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
+		FdStore:  &s.fdStore,
 	}
-	resp := &daemon.DumpVMResp{}
+	resp := &daemon.RestoreVMResp{}
 
-	_, err := dump(ctx, opts, resp, req)
+	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if utils.PathExists(resp.TarDumpDir) {
-		log.Info().Str("path", resp.TarDumpDir).Str("type", req.Type).Msg("dump successful")
+	if utils.PathExists(resp.State) {
+		log.Info().Str("vm state", resp.State).Str("type", req.Type).Msg("restore successful")
 	}
 
 	return resp, nil
 }
 
 // Adapter that inserts new adapters after itself based on the type of dump.
-func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
-		middleware := types.Middleware[types.DumpVM]{}
+func pluginRestoreVMMiddleware(next types.RestoreVM) types.RestoreVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
+		middleware := types.Middleware[types.RestoreVM]{}
 		t := req.GetType()
 		switch t {
 		default:
 			// Insert plugin-specific middleware
-			err = features.DumpVMMiddleware.IfAvailable(func(
+			err = features.RestoreVMMiddleware.IfAvailable(func(
 				name string,
-				pluginMiddleware types.Middleware[types.DumpVM],
+				pluginMiddleware types.Middleware[types.RestoreVM],
 			) error {
 				middleware = append(middleware, pluginMiddleware...)
 				return nil
@@ -70,14 +67,14 @@ func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
 }
 
 // Handler that returns the type-specific handler for the job
-func pluginDumpVMHandler() types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+func pluginRestoreVMHandler() types.RestoreVM {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
 		t := req.Type
-		var handler types.DumpVM
+		var handler types.RestoreVM
 		switch t {
 		default:
 			// Use plugin-specific handler
-			err = features.DumpVMHandler.IfAvailable(func(name string, pluginHandler types.DumpVM) error {
+			err = features.RestoreVMHandler.IfAvailable(func(name string, pluginHandler types.RestoreVM) error {
 				handler = pluginHandler
 				return nil
 			}, t)

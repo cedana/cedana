@@ -1,15 +1,15 @@
-package server
+package cedana
 
 import (
 	"context"
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/defaults"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/server/process"
-	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/internal/cedana/defaults"
+	"github.com/cedana/cedana/internal/cedana/gpu"
+	"github.com/cedana/cedana/internal/cedana/job"
+	"github.com/cedana/cedana/internal/cedana/process"
+	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -53,7 +53,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	return resp, nil
 }
 
-func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, error) {
+func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (exitCode chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
@@ -70,21 +70,13 @@ func (s *Root) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, er
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.Opts{
-		Lifetime: context.WithoutCancel(s.lifetime),
+		Lifetime: ctx,
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
 	resp := &daemon.RunResp{}
 
-	_, err := run(ctx, opts, resp, req)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("run successful")
-	resp.Messages = append(resp.Messages, fmt.Sprintf("Running managed %s PID %d", req.Type, resp.PID))
-
-	return resp, nil
+	return run(ctx, opts, resp, req)
 }
 
 //////////////////////////

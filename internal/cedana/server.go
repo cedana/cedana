@@ -1,4 +1,4 @@
-package server
+package cedana
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/cedana/gpu"
+	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/metrics"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/internal/server/job"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -26,21 +26,19 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// Server is the main server struct that holds all the components of the Cedana server.
 type Server struct {
+	Cedana
+
 	grpcServer *grpc.Server
 	listener   net.Listener
+	wg         *sync.WaitGroup // for waiting for all background tasks to finish
+	lifetime   context.Context // lifetime of the server, used for graceful shutdown
 
-	jobs job.Manager
-	gpus gpu.Manager
-
-	db db.DB
 	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
 	// to the appropriate clh vm api
 	fdStore sync.Map
-
-	lifetime context.Context // context alive for the duration of the server
-	wg       *sync.WaitGroup // for waiting for all background tasks to finish
-	plugins  plugins.Manager
+	jobs    job.Manager
 
 	host    *daemon.Host
 	version string
@@ -48,72 +46,11 @@ type Server struct {
 	daemongrpc.UnimplementedDaemonServer
 }
 
-// Root avoids the use of the server and provides direct run/restores
-type Root struct {
-	lifetime context.Context // context alive for the duration of the server
-	shutdown context.CancelFunc
-	wg       *sync.WaitGroup // for waiting for all background tasks to finish
-	plugins  plugins.Manager
-	gpus     gpu.Manager
-
-	host    *daemon.Host
-	version string
-}
-
 type ServeOpts struct {
 	Address  string
 	Protocol string
 	Version  string
 	Metrics  config.Metrics
-}
-
-type MetricOpts struct {
-	ASR  bool
-	OTel bool
-}
-
-func (s *Root) Shutdown() {
-	s.shutdown()
-	s.wg.Wait()
-}
-
-func NewRoot(ctx context.Context) (*Root, error) {
-	var err error
-	wg := &sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(ctx)
-
-	host, err := utils.GetHost(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get host info: %w", err)
-	}
-
-	var database db.DB
-
-	database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create local sqlite db: %w", err)
-	}
-
-	if config.Global.DB.Remote {
-		database = db.NewPropagatorDB(ctx, config.Global.Connection, database)
-	}
-
-	pluginManager := plugins.NewLocalManager()
-
-	gpuManager, err := gpu.NewPoolManager(ctx, wg, 0, pluginManager, database)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
-	}
-
-	return &Root{
-		lifetime: ctx,
-		shutdown: cancel,
-		wg:       wg,
-		plugins:  pluginManager,
-		gpus:     gpuManager,
-		host:     host,
-		version:  "dev",
-	}, nil
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -155,6 +92,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	}
 
 	server := &Server{
+		Cedana: Cedana{
+			gpus:    gpuManager,
+			db:      database,
+			plugins: pluginManager,
+		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
 				logging.StreamLogger(),
@@ -166,13 +108,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
-		jobs:    jobManager,
-		gpus:    gpuManager,
-		db:      database,
-		plugins: pluginManager,
-		wg:      wg,
-		host:    host,
-		version: opts.Version,
+		jobs:     jobManager,
+		wg:       wg,
+		lifetime: ctx,
+		host:     host,
+		version:  opts.Version,
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)

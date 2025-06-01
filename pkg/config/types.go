@@ -14,6 +14,8 @@ type (
 		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
 		// LogLevel is the default log level used by the server
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
+		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`

@@ -21,6 +21,7 @@ type GpuController struct {
 	Address     string
 	Pid         int64
 	Attachedpid int64
+	Freezetype  int64
 }
 
 type Host struct {

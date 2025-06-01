@@ -1,4 +1,4 @@
-package server
+package cedana
 
 import (
 	"context"
@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server/criu"
-	"github.com/cedana/cedana/internal/server/defaults"
-	"github.com/cedana/cedana/internal/server/filesystem"
-	"github.com/cedana/cedana/internal/server/gpu"
-	"github.com/cedana/cedana/internal/server/job"
-	"github.com/cedana/cedana/internal/server/network"
-	"github.com/cedana/cedana/internal/server/process"
-	"github.com/cedana/cedana/internal/server/streamer"
-	"github.com/cedana/cedana/internal/server/validation"
+	"github.com/cedana/cedana/internal/cedana/criu"
+	"github.com/cedana/cedana/internal/cedana/defaults"
+	"github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/cedana/cedana/internal/cedana/gpu"
+	"github.com/cedana/cedana/internal/cedana/job"
+	"github.com/cedana/cedana/internal/cedana/network"
+	"github.com/cedana/cedana/internal/cedana/process"
+	"github.com/cedana/cedana/internal/cedana/streamer"
+	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
@@ -79,7 +79,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+func (s *Cedana) Restore(ctx context.Context, req *daemon.RestoreReq) (exitCode chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -110,7 +110,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 	restore := criu.Restore.With(middleware...)
 
 	opts := types.Opts{
-		Lifetime: context.WithoutCancel(s.lifetime),
+		Lifetime: ctx,
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
@@ -118,15 +118,7 @@ func (s *Root) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.Res
 
 	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
 
-	_, err := criu(restore)(ctx, opts, resp, req)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
-	resp.Messages = append(resp.Messages, fmt.Sprintf("Restored successfully, PID: %d", resp.PID))
-
-	return resp, nil
+	return criu(restore)(ctx, opts, resp, req)
 }
 
 //////////////////////////
