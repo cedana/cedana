@@ -128,10 +128,6 @@ var pluginInstallCmd = &cobra.Command{
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, names []string) error {
-		if utils.IsRootUser() == false {
-			return fmt.Errorf("this command must be run as root")
-		}
-
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -183,10 +179,6 @@ var pluginRemoveCmd = &cobra.Command{
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if utils.IsRootUser() == false {
-			return fmt.Errorf("this command must be run as root")
-		}
-
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
