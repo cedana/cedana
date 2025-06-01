@@ -15,7 +15,6 @@ import (
 )
 
 // Implements a simple GPU manager that spawns GPU controllers on-demand
-
 type ManagerSimple struct {
 	controllers pool
 

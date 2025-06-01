@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
@@ -34,6 +35,12 @@ const (
 	CONTROLLER_SHM_FILE_FORMATTER        = "/dev/shm/cedana-gpu.%s"
 	CONTROLLER_TERMINATE_SIGNAL          = syscall.SIGTERM
 	GPU_CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1 // Used to signal that the GPU controller exited prematurely
+
+	FREEZE_TIMEOUT   = 1 * time.Minute
+	UNFREEZE_TIMEOUT = 1 * time.Minute
+	DUMP_TIMEOUT     = 5 * time.Minute
+	RESTORE_TIMEOUT  = 5 * time.Minute
+	HEALTH_TIMEOUT   = 30 * time.Second
 )
 
 type controller struct {

@@ -1,7 +1,5 @@
 package gpu
 
-// Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
-
 import (
 	"context"
 	"errors"
@@ -22,14 +20,9 @@ import (
 const (
 	DB_SYNC_INTERVAL       = 10 * time.Second
 	DB_SYNC_RETRY_INTERVAL = 1 * time.Second
-
-	FREEZE_TIMEOUT   = 20 * time.Second
-	UNFREEZE_TIMEOUT = 20 * time.Second
-	DUMP_TIMEOUT     = 5 * time.Minute
-	RESTORE_TIMEOUT  = 5 * time.Minute
-	HEALTH_TIMEOUT   = 30 * time.Second
 )
 
+// Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
 type ManagerPool struct {
 	controllers pool
 
