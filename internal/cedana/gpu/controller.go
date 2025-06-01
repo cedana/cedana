@@ -168,12 +168,6 @@ func (p *pool) Spawn(binary string) (*controller, error) {
 	controller.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:                     true,  // Create a new session and process group for the controller
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
-
-		// FIXME: temp
-		Credential: &syscall.Credential{
-			Uid: 1000,
-			Gid: 1000,
-		},
 	}
 
 	controller.Stderr = controller.ErrBuf
@@ -425,8 +419,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
 			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
-    return nil
-		// return <-restoreErr // FIXME: This is until hostmem restore is fixed for runc
+		return nil
 	}
 
 	// Wait for GPU restore to finish before resuming the process
