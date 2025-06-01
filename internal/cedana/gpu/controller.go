@@ -425,7 +425,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
 			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
-		return <-restoreErr // FIXME: This is until hostmem restore is fixed for runc
+    return nil
+		// return <-restoreErr // FIXME: This is until hostmem restore is fixed for runc
 	}
 
 	// Wait for GPU restore to finish before resuming the process
