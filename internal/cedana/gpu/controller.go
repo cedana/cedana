@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -261,6 +262,7 @@ func (p *pool) Terminate(id string) {
 		// If we are the parent process of the GPU controller, we should clean it up properly
 		syscall.Wait4(int(c.PID), nil, syscall.WNOHANG, nil)
 	}
+	os.RemoveAll(filepath.Join(os.TempDir(), fmt.Sprintf(CONTROLLER_SOCKET_PATTERN, id)))
 }
 
 func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_client.NotifyCallback {
