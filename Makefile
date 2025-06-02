@@ -87,13 +87,14 @@ reset-logs: ## Reset logs
 
 PLUGIN_SOURCES=$(shell find plugins -name '*.go')
 PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
+PKG_SOURCES=$(shell find pkg plugins -name '*.go')
 PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
-plugin-debug:
+plugin-debug: ## Build a plugin with debug symbols and no optimizations (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN with debug symbols..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
@@ -112,7 +113,7 @@ plugins-debug: ## Build all plugins with debug symbols
 		fi ;\
 	done ;\
 
-$(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
+$(PLUGIN_BINARIES): $(PLUGIN_SOURCES) $(PKG_SOURCES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \

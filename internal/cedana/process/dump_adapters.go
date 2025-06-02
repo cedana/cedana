@@ -189,12 +189,11 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
 			if external {
-				req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
-				continue
-			}
-
-			if f.IsTTY {
-				req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
+				if f.IsTTY {
+					req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
+				} else {
+					req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
+				}
 			}
 		}
 

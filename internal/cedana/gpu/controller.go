@@ -100,11 +100,15 @@ func (p *pool) List() (free []*controller, busy []*controller, remaining []*cont
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
 		if utils.PidRunning(c.PID) {
-			if c.Busy.Load() || c.External {
+			if c.Busy.Load() {
 				busy = append(busy, c)
 				return true
 			}
 			if c.AttachedPID == 0 {
+				if c.External { // Conservative with external controllers, as they might be busy (e.g. just spawned for restore)
+					busy = append(busy, c)
+					return true
+				}
 				free = append(free, c)
 				return true
 			}

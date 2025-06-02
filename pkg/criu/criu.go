@@ -59,7 +59,6 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stderr = stderr
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid:    true,
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 

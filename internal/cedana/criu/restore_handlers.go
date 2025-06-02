@@ -26,7 +26,7 @@ const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
 var Restore types.Restore = restore
 
 // Returns a CRIU restore handler for the server
-func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
 	extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 
 	if req.GetCriu() == nil {
@@ -60,7 +60,6 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	}
 
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
-	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
@@ -118,11 +117,16 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	}
 	resp.PID = uint32(*criuResp.Pid)
 
+	if daemonless {
+		exited = exitCode // In daemonless mode, we return the exit code channel directly
+	} else {
+		exited = make(chan int, 1)
+	}
+
 	// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
 	// as their could be goroutines waiting on it.
-	var exited chan int
-	if !daemonless && criuOpts.GetRstSibling() {
-		exited = make(chan int)
+
+	if criuOpts.GetRstSibling() {
 		opts.WG.Add(1)
 		go func() {
 			defer opts.WG.Done()
@@ -134,17 +138,21 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 			code := status.ExitCode()
 			log.Debug().Uint8("code", uint8(code)).Msg("process exited")
 			exitCode <- code
-			close(exitCode)
 			close(exited)
+			if exitCode != exited {
+				close(exitCode)
+			}
 		}()
 
-		// Also kill the process if it's lifetime expires
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			<-opts.Lifetime.Done()
-			syscall.Kill(int(resp.PID), syscall.SIGKILL)
-		}()
+		if !daemonless {
+			// Also kill the process if it's lifetime expires
+			opts.WG.Add(1)
+			go func() {
+				defer opts.WG.Done()
+				<-opts.Lifetime.Done()
+				syscall.Kill(int(resp.PID), syscall.SIGKILL)
+			}()
+		}
 	}
 
 	log.Debug().Int("CRIU", version).Msg("CRIU restore complete")

@@ -51,8 +51,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-	if ok && daemonless {
+	daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if daemonless {
 		cmd.SysProcAttr.Setsid = false                     // We want to run in the foreground
 		cmd.SysProcAttr.Foreground = true                  // Run in the foreground, so IO and signals work correctly
 		cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())          // Set the controlling terminal to the current stdin
