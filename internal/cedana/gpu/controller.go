@@ -55,10 +55,10 @@ type controller struct {
 	ShmSize     uint64
 	ShmName     string
 	Version     string
-	Child       bool // If it's our child
 
-	Busy   atomic.Bool
-	ErrBuf *bytes.Buffer
+	External bool // If it wasn't spawned by us
+	Busy     atomic.Bool
+	ErrBuf   *bytes.Buffer
 
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
@@ -99,11 +99,11 @@ func (p *pool) Find(attachedPID uint32) *controller {
 func (p *pool) List() (free []*controller, busy []*controller, remaining []*controller) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if c.Busy.Load() {
-			busy = append(busy, c)
-			return true
-		}
 		if utils.PidRunning(c.PID) {
+			if c.Busy.Load() || c.External {
+				busy = append(busy, c)
+				return true
+			}
 			if c.AttachedPID == 0 {
 				free = append(free, c)
 				return true
@@ -157,8 +157,9 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 
 		if c == nil {
 			c = &controller{
-				ID:      id,
-				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id),
+				ID:       id,
+				Address:  fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id),
+				External: true, // If we are here, we didn't spawn this controller, so it is external
 			}
 		} else if c.Busy.Load() {
 			continue
@@ -212,7 +213,6 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 	)
 
 	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id)
-	c.Child = true     // We are the parent process of the GPU controller
 	c.Busy.Store(true) // Busy until whoever spawned us sets us free
 
 	p.Store(id, c)
@@ -243,6 +243,8 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 }
 
 func (p *pool) Terminate(id string) {
+	defer os.RemoveAll(filepath.Join(os.TempDir(), fmt.Sprintf(CONTROLLER_SOCKET_PATTERN, id)))
+
 	c := p.Get(id)
 	if c == nil {
 		return
@@ -258,11 +260,10 @@ func (p *pool) Terminate(id string) {
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
-	if c.Child {
+	if !c.External {
 		// If we are the parent process of the GPU controller, we should clean it up properly
 		syscall.Wait4(int(c.PID), nil, syscall.WNOHANG, nil)
 	}
-	os.RemoveAll(filepath.Join(os.TempDir(), fmt.Sprintf(CONTROLLER_SOCKET_PATTERN, id)))
 }
 
 func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_client.NotifyCallback {
