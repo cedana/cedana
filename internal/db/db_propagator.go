@@ -344,24 +344,3 @@ func (db *PropagatorDB) DeleteHost(ctx context.Context, id string) error {
 
 	return nil
 }
-
-func (db *PropagatorDB) PutGPUController(ctx context.Context, controller *GPUController) error {
-	for _, fallback := range db.fallback {
-		return fallback.PutGPUController(ctx, controller)
-	}
-	return fmt.Errorf("Unimplemented and no fallback available")
-}
-
-func (db *PropagatorDB) ListGPUControllers(ctx context.Context, ids ...string) ([]*GPUController, error) {
-	for _, fallback := range db.fallback {
-		return fallback.ListGPUControllers(ctx, ids...)
-	}
-	return nil, fmt.Errorf("Unimplemented and no fallback available")
-}
-
-func (db *PropagatorDB) DeleteGPUController(ctx context.Context, id string) error {
-	for _, fallback := range db.fallback {
-		return fallback.DeleteGPUController(ctx, id)
-	}
-	return fmt.Errorf("Unimplemented and no fallback available")
-}

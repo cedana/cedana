@@ -39,6 +39,7 @@ type Server struct {
 	// to the appropriate clh vm api
 	fdStore sync.Map
 	jobs    job.Manager
+	db      db.DB
 
 	host    *daemon.Host
 	version string
@@ -81,7 +82,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	pluginManager := plugins.NewLocalManager()
 
 	gpuPoolSize := config.Global.GPU.PoolSize
-	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager, database)
+	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
@@ -94,7 +95,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 	server := &Server{
 		Cedana: Cedana{
 			gpus:    gpuManager,
-			db:      database,
 			plugins: pluginManager,
 		},
 		grpcServer: grpc.NewServer(
@@ -108,6 +108,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
+		db:       database,
 		jobs:     jobManager,
 		wg:       wg,
 		lifetime: ctx,

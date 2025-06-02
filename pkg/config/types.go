@@ -97,7 +97,7 @@ type (
 		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
 		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
-		ShmSize int `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 	}
 
 	Plugins struct {

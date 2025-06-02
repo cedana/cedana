@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -80,7 +80,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		// Open new GPU shm file
-		shmFile, err := os.OpenFile(filepath.Join("/dev/shm", "cedana-gpu."+id), os.O_RDWR, 0o777)
+		shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o777)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
 		}
@@ -93,7 +93,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-			Key: proto.String(fmt.Sprintf("dev/shm/cedana-gpu.%s", state.GPUID)), // pass in old GPU ID
+			Key: proto.String(strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")),
 			Fd:  proto.Int32(int32(2 + len(extraFiles))),
 		})
 

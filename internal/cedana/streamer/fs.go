@@ -40,7 +40,7 @@ const (
 	STOP_LISTENER_MSG   = "stop-listener"
 	IMG_FILE_PATTERN    = "^img-*"
 	IMG_FILE_FORMATTER  = "img-%d"
-	CONNECTION_TIMEOUT  = 1 * time.Second
+	CONNECTION_TIMEOUT  = 1 * time.Minute
 	DEFAULT_PARALLELISM = 4
 	PIPE_SIZE           = 4 * utils.MEBIBYTE
 )

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -18,41 +19,53 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/shirou/gopsutil/v4/process"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	CONTROLLER_ADDRESS_FORMATTER         = "unix:///tmp/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SHM_FILE_FORMATTER        = "/dev/shm/cedana-gpu.%s"
-	CONTROLLER_TERMINATE_SIGNAL          = syscall.SIGTERM
-	GPU_CONTROLLER_PREMATURE_EXIT_SIGNAL = syscall.SIGUSR1 // Used to signal that the GPU controller exited prematurely
+	CONTROLLER_ADDRESS_FORMATTER  = "unix:///tmp/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_PATTERN     = "cedana-gpu-controller-(.*).sock"
+	CONTROLLER_SHM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s"
+	CONTROLLER_SHM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_PROCESS_NAME       = "cedana-gpu-controller"
+	CONTROLLER_TERMINATE_SIGNAL   = syscall.SIGTERM
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
 	DUMP_TIMEOUT     = 5 * time.Minute
 	RESTORE_TIMEOUT  = 5 * time.Minute
 	HEALTH_TIMEOUT   = 30 * time.Second
+	INFO_TIMEOUT     = 30 * time.Second
 )
 
 type controller struct {
-	ID            string
-	AttachedPID   uint32
-	ErrBuf        *bytes.Buffer
-	PendingAttach atomic.Bool
+	ID          string
+	PID         uint32
+	Address     string
+	AttachedPID uint32
+	ShmSize     uint64
+	ShmName     string
+	Version     string
+	Child       bool // If it's our child
 
-	*exec.Cmd
+	Busy   atomic.Bool
+	ErrBuf *bytes.Buffer
+
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
+
+///////////////////////
+/// CONTROLLER POOL ///
+///////////////////////
 
 type pool struct {
 	sync.Map
@@ -81,40 +94,15 @@ func (p *pool) Find(attachedPID uint32) *controller {
 	return found
 }
 
-// Imports an existing (DB) GPU controller
-func (p *pool) Import(ctx context.Context, c *db.GPUController) error {
-	controller := &controller{
-		ID:          c.ID,
-		AttachedPID: c.AttachedPID,
-		ErrBuf:      &bytes.Buffer{},
-	}
-
-	if !utils.PidRunning(c.PID) {
-		return fmt.Errorf("no longer running")
-	}
-
-	process, err := os.FindProcess(int(c.PID))
-	if err != nil {
-		return err
-	}
-	controller.Cmd = &exec.Cmd{
-		Process: process,
-	}
-
-	p.Store(c.ID, controller)
-
-	return nil
-}
-
 // Returns a list of all GPU controllers grouped by free, pending, and busy states
-func (p *pool) List() (free []*controller, pending []*controller, busy []*controller, remaining []*controller) {
+func (p *pool) List() (free []*controller, busy []*controller, remaining []*controller) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if c.PendingAttach.Load() {
-			pending = append(pending, c)
+		if c.Busy.Load() {
+			busy = append(busy, c)
 			return true
 		}
-		if utils.PidRunning(uint32(c.Process.Pid)) {
+		if utils.PidRunning(c.PID) {
 			if c.AttachedPID == 0 {
 				free = append(free, c)
 				return true
@@ -130,22 +118,66 @@ func (p *pool) List() (free []*controller, pending []*controller, busy []*contro
 	return
 }
 
-// Gets a free GPU controller
+// Gets a free GPU controller, and marks it as busy.
 func (p *pool) GetFree() *controller {
-	free, _, _, _ := p.List()
+	free, _, _ := p.List()
 	if len(free) == 0 {
 		return nil
 	}
 	for _, c := range free {
-		if c.PendingAttach.CompareAndSwap(false, true) {
+		if c.Busy.CompareAndSwap(false, true) { // Set busy until whoever asked for us sets us free
 			return c
 		}
 	}
 	return nil
 }
 
+// Sync with all existing GPU controllers in the system
+func (p *pool) Sync(ctx context.Context) (err error) {
+	list, err := os.ReadDir(os.TempDir())
+	if err != nil {
+		return fmt.Errorf("failed to read temp directory: %w", err)
+	}
+
+	wg := sync.WaitGroup{}
+
+	for _, entry := range list {
+		name := entry.Name()
+		matches := regexp.MustCompile(CONTROLLER_SOCKET_PATTERN).FindStringSubmatch(name)
+		if len(matches) < 2 {
+			continue
+		}
+		id := matches[1]
+		if id == "" {
+			continue
+		}
+
+		c := p.Get(id)
+
+		if c == nil {
+			c = &controller{
+				ID:      id,
+				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id),
+			}
+		} else if c.Busy.Load() {
+			continue
+		}
+
+		wg.Add(1)
+		go func() {
+			c.Connect(ctx, false)
+			p.Store(id, c)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	return nil
+}
+
 // Spawns a GPU controller
-func (p *pool) Spawn(binary string) (*controller, error) {
+func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err error) {
 	// Generate a unique ID for the GPU controller
 	id := uuid.NewString()
 
@@ -154,141 +186,81 @@ func (p *pool) Spawn(binary string) (*controller, error) {
 		observability = "--observability"
 	}
 
-	controller := &controller{
+	c = &controller{
 		ID:     id,
 		ErrBuf: &bytes.Buffer{},
-		Cmd:    exec.Command(binary, id, observability, "--log-dir", config.Global.GPU.LogDir),
 	}
+
+	cmd := exec.Command(binary, id, observability, "--log-dir", config.Global.GPU.LogDir)
 
 	// We create a new process group and session to essentially daemonize the controller process.
 	// So that workers of the controller can all be signaled together.
 
-	controller.SysProcAttr = &syscall.SysProcAttr{
+	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:                     true,  // Create a new session and process group for the controller
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
 	}
 
-	controller.Stderr = controller.ErrBuf
+	cmd.Stderr = c.ErrBuf
 
-	controller.Env = append(
+	cmd.Env = append(
 		os.Environ(),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%d", config.Global.GPU.ShmSize),
 	)
 
-	err := controller.Start()
+	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id)
+	c.Child = true     // We are the parent process of the GPU controller
+	c.Busy.Store(true) // Busy until whoever spawned us sets us free
+
+	p.Store(id, c)
+
+	defer func() {
+		if err != nil {
+			p.Terminate(id)
+		}
+	}()
+
+	err = cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to start GPU controller: %w",
-			utils.GRPCErrorShort(err, controller.ErrBuf.String()),
-		)
-	}
-
-	controller.PendingAttach.Store(true)
-
-	p.Store(id, controller)
-
-	return controller, nil
-}
-
-// Connect to an existing GPU controller.
-func (c *controller) Connect(ctx context.Context) error {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	address := fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, c.ID)
-	conn, err := grpc.NewClient(address, opts...)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to create GPU controller client: %w",
 			utils.GRPCErrorShort(err, c.ErrBuf.String()),
 		)
 	}
-	c.ClientConn = conn
-	c.ControllerClient = gpugrpc.NewControllerClient(conn)
 
-	_, err = c.WaitForHealthCheck(ctx)
+	c.PID = uint32(cmd.Process.Pid)
+
+	err = c.Connect(ctx, true)
 	if err != nil {
-		return err
+		syscall.Kill(-int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
+		return nil, fmt.Errorf("failed to connect to GPU controller: %w", err)
 	}
 
-	return nil
+	return
 }
 
-func (c *controller) Terminate() {
-	defer func() {
-		if c.AttachedPID == 0 {
-			return
-		}
-		process, err := process.NewProcess(int32(c.AttachedPID))
-		if err != nil {
-			return
-		}
-		process.SendSignal(GPU_CONTROLLER_PREMATURE_EXIT_SIGNAL)
-	}()
-
-	if c.Process == nil {
+func (p *pool) Terminate(id string) {
+	c := p.Get(id)
+	if c == nil {
 		return
 	}
-	c.Process.Signal(CONTROLLER_TERMINATE_SIGNAL)
+	p.Delete(id) // Remove from the pool
+
+	if c.PID == 0 {
+		return
+	}
+	syscall.Kill(-int(c.PID), CONTROLLER_TERMINATE_SIGNAL) // To process group so even its workers are killed
 	if c.ClientConn != nil {
 		c.ClientConn.Close()
+		c.ClientConn = nil
+		c.ControllerClient = nil
 	}
-	process, err := process.NewProcess(int32(c.Process.Pid))
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get process of GPU controller")
-		return
+	if c.Child {
+		// If we are the parent process of the GPU controller, we should clean it up properly
+		syscall.Wait4(int(c.PID), nil, syscall.WNOHANG, nil)
 	}
-	parent, err := process.Parent()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get parent process of GPU controller")
-		return
-	}
-	if os.Getpid() == int(parent.Pid) {
-		// If the parent is the current process, we can wait for it to exit
-		// This is useful for cleaning up the controller process when the daemon exits
-		c.Process.Wait()
-	}
-}
-
-// Health checks the GPU controller, blocking on connection until ready.
-// This can be used as a proxy to wait for the controller to be ready.
-func (c *controller) WaitForHealthCheck(ctx context.Context) ([]*daemon.HealthCheckComponent, error) {
-	waitCtx, cancel := context.WithTimeout(ctx, HEALTH_TIMEOUT)
-	defer cancel()
-
-	// Wait for early controller exit, and cancel the blocking health check
-	go func() {
-		<-utils.WaitForPidCtx(waitCtx, uint32(c.Process.Pid))
-		cancel()
-	}()
-
-	resp, err := c.HealthCheck(waitCtx, &gpu.HealthCheckReq{}, grpc.WaitForReady(true))
-	var components []*daemon.HealthCheckComponent
-	if resp != nil {
-		l := log.Debug()
-		l.Str("ID", c.ID)
-		for _, component := range resp.Components {
-			l = l.Str(component.Name, component.Data)
-			for _, w := range component.Warnings {
-				log.Warn().Str("ID", c.ID).Str(component.Name, component.Data).Msg(w)
-			}
-			for _, e := range component.Errors {
-				log.Error().Str("ID", c.ID).Str(component.Name, component.Data).Msg(e)
-			}
-			components = append(components, &daemon.HealthCheckComponent{
-				Name:     component.Name,
-				Data:     component.Data,
-				Warnings: component.Warnings,
-				Errors:   component.Errors,
-			})
-		}
-		l.Msg("health checked GPU controller")
-	}
-	if err != nil {
-		return components, utils.GRPCErrorShort(err, c.ErrBuf.String())
-	}
-
-	return components, nil
 }
 
 func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_client.NotifyCallback {
@@ -306,14 +278,6 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		controller := p.Get(id)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-
-		// Make sure we are connected
-		if controller.ClientConn == nil {
-			err := controller.Connect(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to connect to GPU controller: %v", err)
-			}
 		}
 
 		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
@@ -434,30 +398,20 @@ func (p *pool) Check(binary string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
-		// Spawn a new GPU controller
-
-		controller, err := p.Spawn(binary)
+		controller, err := p.Spawn(ctx, binary)
 		defer func() {
-			controller.Terminate()
-			p.Delete(controller.ID)
+			p.Terminate(controller.ID)
 		}()
 		if err != nil {
 			component.Data = "failed"
-			component.Errors = append(component.Errors, fmt.Sprintf("Failed controller spawn: %v", err))
-			return []*daemon.HealthCheckComponent{component}
-		}
-
-		err = controller.Connect(ctx)
-		if err != nil {
-			component.Data = "failed"
-			component.Errors = append(component.Errors, fmt.Sprintf("Failed controller connect: %v", err))
+			component.Errors = append(component.Errors, err.Error())
 			return []*daemon.HealthCheckComponent{component}
 		}
 
 		components, err := controller.WaitForHealthCheck(ctx)
 		if components == nil && err != nil {
 			component.Data = "failed"
-			component.Errors = append(component.Errors, fmt.Sprintf("Failed controller health check: %v", err))
+			component.Errors = append(component.Errors, fmt.Sprintf("Failed health check: %v", err))
 			return []*daemon.HealthCheckComponent{component}
 		}
 
@@ -465,4 +419,112 @@ func (p *pool) Check(binary string) types.Check {
 
 		return append([]*daemon.HealthCheckComponent{component}, components...)
 	}
+}
+
+//////////////////
+/// CONTROLLER ///
+//////////////////
+
+// Connect connects to the GPU controller. If already connected, it will refresh the controller info.
+func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
+	if c.Address == "" {
+		return fmt.Errorf("controller address is not set")
+	}
+
+	if c.ClientConn == nil || c.ClientConn.GetState() == connectivity.Shutdown {
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		conn, err := grpc.NewClient(c.Address, opts...)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to create GPU controller client: %w",
+				utils.GRPCErrorShort(err, c.ErrBuf.String()),
+			)
+		}
+		c.ClientConn = conn
+		c.ControllerClient = gpugrpc.NewControllerClient(conn)
+
+	}
+
+	var info *gpu.InfoResp
+
+	if wait {
+		info, err = c.WaitForInfo(ctx)
+	} else {
+		info, err = c.Info(ctx, &gpu.InfoReq{})
+	}
+	if err != nil {
+		return err
+	}
+
+	c.AttachedPID = info.GetAttachedPID()
+	c.ShmSize = info.GetShmSize()
+	c.ShmName = info.GetShmName()
+	c.Version = info.GetVersion()
+	c.PID = info.GetPID()
+
+	return
+}
+
+// WaitForInfo gets info from the GPU controller, blocking on connection until ready.
+// This can be used as a proxy to wait for the controller to be ready.
+func (c *controller) WaitForInfo(ctx context.Context) (*gpu.InfoResp, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, INFO_TIMEOUT)
+	defer cancel()
+
+	if c.PID != 0 {
+		go func() {
+			<-utils.WaitForPidCtx(waitCtx, c.PID)
+			cancel()
+		}()
+	}
+
+	resp, err := c.Info(waitCtx, &gpu.InfoReq{}, grpc.WaitForReady(true))
+	if err != nil {
+		return nil, utils.GRPCErrorShort(err, c.ErrBuf.String())
+	}
+
+	return resp, nil
+}
+
+// Health checks the GPU controller, blocking on connection until ready.
+// This can be used as a proxy to wait for the controller to be ready.
+func (c *controller) WaitForHealthCheck(ctx context.Context) ([]*daemon.HealthCheckComponent, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, HEALTH_TIMEOUT)
+	defer cancel()
+
+	// Wait for early controller exit, and cancel the blocking health check
+	if c.PID != 0 {
+		go func() {
+			<-utils.WaitForPidCtx(waitCtx, c.PID)
+			cancel()
+		}()
+	}
+
+	resp, err := c.HealthCheck(waitCtx, &gpu.HealthCheckReq{}, grpc.WaitForReady(true))
+	var components []*daemon.HealthCheckComponent
+	if resp != nil {
+		l := log.Debug()
+		l.Str("ID", c.ID)
+		for _, component := range resp.Components {
+			l = l.Str(component.Name, component.Data)
+			for _, w := range component.Warnings {
+				log.Warn().Str("ID", c.ID).Str(component.Name, component.Data).Msg(w)
+			}
+			for _, e := range component.Errors {
+				log.Error().Str("ID", c.ID).Str(component.Name, component.Data).Msg(e)
+			}
+			components = append(components, &daemon.HealthCheckComponent{
+				Name:     component.Name,
+				Data:     component.Data,
+				Warnings: component.Warnings,
+				Errors:   component.Errors,
+			})
+		}
+		l.Msg("health checked GPU controller")
+	}
+	if err != nil {
+		return components, utils.GRPCErrorShort(err, c.ErrBuf.String())
+	}
+
+	return components, nil
 }

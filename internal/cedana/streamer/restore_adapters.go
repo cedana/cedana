@@ -105,7 +105,7 @@ func SetupRestoreFS(next types.Restore) types.Restore {
 		}
 
 		// Wait for all the streaming to finish
-		_, end = profiling.StartTimingCategory(ctx, "streamer", "streamer.WaitForIO")
+		_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
 		err = waitForIO()
 		end()
 		if err != nil {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
@@ -19,13 +19,12 @@ type ManagerSimple struct {
 	controllers pool
 
 	plugins plugins.Manager
-	db      db.GPU
+	sync    sync.Mutex // Used to prevent concurrent syncs
 }
 
-func NewSimpleManager(ctx context.Context, plugins plugins.Manager, db db.GPU) (*ManagerSimple, error) {
+func NewSimpleManager(ctx context.Context, plugins plugins.Manager) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
 		plugins:     plugins,
-		db:          db,
 		controllers: pool{},
 	}
 
@@ -49,33 +48,23 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		return "", err
 	}
 
+	var spawnedNew bool
+
 	controller := m.controllers.GetFree()
 
 	if controller == nil {
 		log.Debug().Msg("spawning a new GPU controller")
-		controller, err = m.controllers.Spawn(binary)
+		controller, err = m.controllers.Spawn(ctx, binary)
 		if err != nil {
 			return "", err
 		}
+		spawnedNew = true
+	} else {
+		log.Debug().Str("ID", controller.ID).Msg("using free GPU controller")
 	}
-
-	log.Debug().Str("ID", controller.ID).Msg("connecting to GPU controller")
-
-	defer func() {
-		if err != nil {
-			controller.Terminate()
-		}
-	}()
-
-	err = controller.Connect(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	log.Debug().Str("ID", controller.ID).Str("Address", controller.Target()).Msg("connected to GPU controller")
 
 	go func() {
-		defer controller.PendingAttach.Store(false)
+		defer controller.Busy.Store(false)
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -83,23 +72,11 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 		if !ok {
 			log.Debug().Err(ctx.Err()).Str("ID", controller.ID).Msg("terminating GPU controller")
-			controller.Terminate()
-			err := m.db.DeleteGPUController(ctx, controller.ID)
-			if err != nil {
-				log.Warn().Err(err).Str("ID", controller.ID).Msg("failed to delete GPU controller from db, should get cleaned up eventually")
+			if spawnedNew {
+				m.controllers.Terminate(controller.ID)
 			}
 		} else {
 			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
-			err = m.db.PutGPUController(ctx, &db.GPUController{
-				ID:          controller.ID,
-				PID:         uint32(controller.Process.Pid),
-				Address:     controller.Target(),
-				AttachedPID: controller.AttachedPID,
-			})
-			if err != nil {
-				log.Error().Err(err).Str("ID", controller.ID).Msg("failed to update GPU controller in db, terminating to maintain consistency")
-				controller.Terminate()
-			}
 		}
 	}()
 
@@ -113,8 +90,8 @@ func (m *ManagerSimple) Detach(pid uint32) error {
 		log.Debug().Uint32("PID", pid).Msg("no GPU controller found attached to process")
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
-	controller.Terminate()
-	return m.db.DeleteGPUController(context.Background(), controller.ID)
+	m.controllers.Terminate(controller.ID)
+	return nil
 }
 
 func (m *ManagerSimple) IsAttached(pid uint32) bool {
@@ -130,25 +107,10 @@ func (m *ManagerSimple) GetID(pid uint32) (string, error) {
 }
 
 func (m *ManagerSimple) Sync(ctx context.Context) error {
-	dbControllers, err := m.db.ListGPUControllers(ctx)
-	if err != nil {
-		return err
-	}
-	for _, dbController := range dbControllers {
-		if existing := m.controllers.Get(dbController.ID); existing != nil {
-			existing.AttachedPID = dbController.AttachedPID
-			continue
-		}
+	m.sync.Lock()
+	defer m.sync.Unlock()
 
-		err = m.controllers.Import(ctx, dbController)
-		if err != nil {
-			// If import fails, we assume the controller is no longer running
-			log.Debug().Str("reason", err.Error()).Str("ID", dbController.ID).Msg("clearing stale GPU controller in DB")
-			m.db.DeleteGPUController(ctx, dbController.ID)
-		}
-	}
-
-	return nil
+	return m.controllers.Sync(ctx)
 }
 
 func (m *ManagerSimple) Checks() types.Checks {

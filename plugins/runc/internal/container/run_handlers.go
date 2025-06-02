@@ -108,6 +108,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		id,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid:     true,
 		Credential: &syscall.Credential{Uid: req.UID, Gid: req.GID, Groups: req.Groups},
 		// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 		// XXX: Above is commented out because if we try to restore a managed job,
