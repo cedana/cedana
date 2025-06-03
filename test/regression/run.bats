@@ -99,7 +99,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "run process with attach" {
+@test "attach" {
     jid=$(unix_nano)
 
     run cedana run process echo hello --jid "$jid" --attach
@@ -109,7 +109,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "run process with attach (exit code)" {
+@test "attach (exit code)" {
     jid=$(unix_nano)
     code=42
 
@@ -124,6 +124,7 @@ teardown_file() {
     code=42
 
     cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    assert_success
 
     pid=$(pid_for_jid "$jid")
 
@@ -133,7 +134,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "attach job" {
+@test "attach (job)" {
     jid=$(unix_nano)
     code=42
 

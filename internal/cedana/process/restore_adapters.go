@@ -166,7 +166,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			} else {
 				path := strings.TrimPrefix(f.Path, "/")
 
-				if f.IsTTY {
+				if f.IsTTY || daemonless {
 					if !daemonless {
 						return nil, status.Errorf(codes.FailedPrecondition,
 							"found open file %s with fd %d which is a TTY and so restoring will fail because no TTY to inherit. Try --no-server restore", f.Path, f.Fd)

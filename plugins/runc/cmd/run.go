@@ -15,6 +15,7 @@ import (
 func init() {
 	RunCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	RunCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
+	RunCmd.Flags().BoolP(runc_flags.DetachFlag.Full, runc_flags.DetachFlag.Short, false, "detach from the container's process, ignored if not using --no-server and is always true")
 	RunCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "do not use pivot root to jail process inside rootfs.")
 	RunCmd.Flags().BoolP(runc_flags.NoNewKeyringFlag.Full, runc_flags.NoNewKeyringFlag.Short, false, "do not create a new session keyring.")
 }
@@ -36,6 +37,7 @@ var RunCmd = &cobra.Command{
 
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 		bundle, _ := cmd.Flags().GetString(runc_flags.BundleFlag.Full)
+		detach, _ := cmd.Flags().GetBool(runc_flags.DetachFlag.Full)
 		noPivot, _ := cmd.Flags().GetBool(runc_flags.NoPivotFlag.Full)
 		noNewKeyring, _ := cmd.Flags().GetBool(runc_flags.NoNewKeyringFlag.Full)
 		wd, err := os.Getwd()
@@ -47,6 +49,7 @@ var RunCmd = &cobra.Command{
 		req.Details = &daemon.Details{Runc: &runc.Runc{
 			Root:         root,
 			Bundle:       bundle,
+			Detach:       detach,
 			ID:           id,
 			NoPivot:      noPivot,
 			NoNewKeyring: noNewKeyring,

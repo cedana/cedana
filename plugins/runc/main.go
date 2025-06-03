@@ -56,6 +56,7 @@ var (
 		container.LoadSpecFromBundle,
 		container.SetUsChildSubreaper,
 	}
+	RunDaemonlessSupport bool = true
 
 	ManageHandler types.Run = container.Manage
 

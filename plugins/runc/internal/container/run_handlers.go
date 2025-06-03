@@ -72,13 +72,19 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	bundle := details.GetBundle()
 	noPivot := details.GetNoPivot()
 	noNewKeyring := details.GetNoNewKeyring()
+	detach := details.GetDetach()
 
 	spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get spec from context")
 	}
 
-	spec.Process.Terminal = false // force pass-through terminal, since we're managing it
+	daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+
+	if !daemonless {
+		spec.Process.Terminal = false // force pass-through terminal, since we're managing it
+		detach = true                 // always detach when we are managing IO
+	}
 
 	// Apply updated spec to the bundle
 	configFile := filepath.Join(bundle, runc.SpecConfigFile)
@@ -101,7 +107,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		fmt.Sprintf("--log=%s", logFile),
 		fmt.Sprintf("--log-format=%s", "json"),
 		fmt.Sprintf("--debug=%t", RUNC_LOG_DEBUG),
-		"run", "--detach",
+		"run",
+		fmt.Sprintf("--detach=%t", detach),
 		fmt.Sprintf("--no-pivot=%t", noPivot),
 		fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
 		fmt.Sprintf("--pid-file=%s", pidFile),
@@ -110,21 +117,23 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:     true,
 		Credential: &syscall.Credential{Uid: req.UID, Gid: req.GID, Groups: req.Groups},
-		// Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
-		// XXX: Above is commented out because if we try to restore a managed job,
-		// one that was started by the daemon,
-		// using a dump path (directly w/ restore -p <path>), instead of using job
-		// restore, the restored process dies immediately.
 	}
+	cmd.Env = req.Env
 	cmd.Dir = bundle
 
 	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
-	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-	if ok && daemonless {
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+	if daemonless {
+		cmd.SysProcAttr.Setsid = false                     // We want to run in the foreground
+		cmd.SysProcAttr.Foreground = true                  // Run in the foreground, so IO and signals work correctly
+		cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())          // Set the controlling terminal to the current stdin
+		cmd.SysProcAttr.GidMappingsEnableSetgroups = false // Avoid permission issues when running as non-root user
+		cmd.SysProcAttr.Credential = nil                   // Current user's credentials (caller)
+		if !detach {
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
 	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
@@ -147,16 +156,18 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to start container: %v", err)
 	}
-	defer func() {
-		if err != nil {
-			// Don't use cmd.Wait() as it will indefinitely wait for IO to complete
-			cmd.Process.Wait()
-		}
-	}()
 
-	// Wait for PID file to be created, until the process exists
-	utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
-	os.Remove(pidFile)
+	if !daemonless {
+		defer func() {
+			if err != nil {
+				// Don't use cmd.Wait() as it will indefinitely wait for IO to complete
+				cmd.Process.Wait()
+			}
+		}()
+
+		// Wait for PID file to be created, until the process exists
+		utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
+	}
 
 	// Capture logs from runc
 	lastMsg := utils.LogFromFile(
@@ -168,39 +179,53 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		RuncLogMsgToString,
 	)
 
-	container, err := libcontainer.Load(root, id)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to load container: %v: %s", err, lastMsg)
-	}
-	state, err := container.State()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get container state: %v: %s", err, lastMsg)
-	}
+	var container *libcontainer.Container
 
-	resp.PID = uint32(state.InitProcessPid)
-
-	// Wait for the process to exit, send exit code
-	exited = make(chan int)
 	if !daemonless {
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-			status, err := p.Wait()
-			if err != nil {
-				log.Debug().Err(err).Msg("runc container Wait()")
-			}
-			code := status.ExitCode()
-			log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
+		container, err = libcontainer.Load(root, id)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load container: %v: %s", err, lastMsg)
+		}
+		state, err := container.State()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container state: %v: %s", err, lastMsg)
+		}
 
-			cmd.Wait() // IO should be complete by now
+		resp.PID = uint32(state.InitProcessPid)
+	} else {
+		resp.PID = uint32(cmd.Process.Pid)
+	}
+
+	if daemonless {
+		exited = exitCode // In daemonless mode, we return the exit code channel directly
+	} else {
+		exited = make(chan int, 1)
+	}
+
+	opts.WG.Add(1)
+	go func() {
+		defer opts.WG.Done()
+		p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+		status, err := p.Wait()
+		if err != nil {
+			log.Debug().Err(err).Msg("runc container Wait()")
+		}
+		code := status.ExitCode()
+		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
+
+		cmd.Wait() // IO should be complete by now
+		if !daemonless {
 			container.Destroy()
+		}
 
-			exitCode <- code
+		exitCode <- code
+		close(exited)
+		if exitCode != exited {
 			close(exitCode)
-			close(exited)
-		}()
+		}
+	}()
 
+	if !daemonless {
 		// Also kill the container if lifetime expires
 		opts.WG.Add(1)
 		go func() {

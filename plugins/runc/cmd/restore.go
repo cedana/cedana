@@ -16,6 +16,7 @@ func init() {
 	RestoreCmd.Flags().StringP(runc_flags.IdFlag.Full, runc_flags.IdFlag.Short, "", "new id")
 	RestoreCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	RestoreCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
+	RestoreCmd.Flags().BoolP(runc_flags.DetachFlag.Full, runc_flags.DetachFlag.Short, false, "detach from the container's process, ignored if not using --no-server and is always true")
 }
 
 var RestoreCmd = &cobra.Command{
@@ -31,6 +32,7 @@ var RestoreCmd = &cobra.Command{
 		id, _ := cmd.Flags().GetString(runc_flags.IdFlag.Full)
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 		bundle, _ := cmd.Flags().GetString(runc_flags.BundleFlag.Full)
+		detach, _ := cmd.Flags().GetBool(runc_flags.DetachFlag.Full)
 		wd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("Error getting working directory: %v", err)
@@ -43,6 +45,7 @@ var RestoreCmd = &cobra.Command{
 				Root:       root,
 				Bundle:     bundle,
 				WorkingDir: wd,
+				Detach:     detach,
 			},
 		}
 

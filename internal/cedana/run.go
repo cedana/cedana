@@ -11,6 +11,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -118,18 +119,28 @@ func pluginRunHandler() types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
 		t := req.Type
 		var handler types.Run
+
+		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+
 		switch t {
 		case "process":
 			handler = process.Run
 		default:
 			// Use plugin-specific handler
 			err = features.RunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
+				if daemonless {
+					daemonlessSupported, _ := features.RunDaemonlessSupport.IsAvailable(name)
+					if !daemonlessSupported {
+						return fmt.Errorf("plugin %s does not support daemonless mode", name)
+					}
+				}
 				handler = pluginHandler
 				return nil
 			}, t)
 			if err != nil {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
+
 			var end func()
 			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
 			defer end()
