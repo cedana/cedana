@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"sync"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/utils"
@@ -54,6 +55,24 @@ func (j *Job) GetPID() uint32 {
 	j.RLock()
 	defer j.RUnlock()
 	return j.proto.GetState().GetPID()
+}
+
+func (j *Job) GetPGID() uint32 {
+	j.RLock()
+	defer j.RUnlock()
+
+	pid := j.proto.GetState().GetPID()
+
+	if pid == 0 {
+		return 0
+	}
+
+	pgid, err := syscall.Getpgid(int(pid))
+	if err != nil {
+		return 0
+	}
+
+	return uint32(pgid)
 }
 
 func (j *Job) GetProto() *daemon.Job {

@@ -123,7 +123,7 @@ teardown_file() {
     jid=$(unix_nano)
     code=42
 
-    cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    run cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
     assert_success
 
     pid=$(pid_for_jid "$jid")

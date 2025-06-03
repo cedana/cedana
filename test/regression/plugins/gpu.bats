@@ -53,11 +53,19 @@ teardown_file() {
 
 @test "run GPU process (GPU binary)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --attach
     assert_success
-    assert_exists "$log_file"
+    assert_output --partial "Throughput"
+}
+
+# bats test_tags=daemonless
+@test "run GPU process (GPU binary, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --no-server
+    assert_success
+    assert_output --partial "Throughput"
 }
 
 @test "run GPU process (non-existent binary)" {
@@ -174,6 +182,32 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana restore job "$jid"
+    assert_success
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
+
+# bats test_tags=restore,daemonless
+@test "restore GPU process (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    assert_success
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore process "$jid" --path "$dump_file" --no-server
     assert_success
 
     run cedana ps

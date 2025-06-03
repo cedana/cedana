@@ -313,7 +313,15 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 		signalToUse = signal[0]
 	}
 
-	err := syscall.Kill(-int(job.GetPID()), signalToUse) // Send signal to the entire process group
+	pid := job.GetPID()
+	pgid := job.GetPGID()
+	target := int(job.GetPID())
+
+	if pgid != 0 && pgid == pid {
+		target = -int(pgid) // If the job is the process group leader, send signal to the entire process group
+	}
+
+	err := syscall.Kill(target, signalToUse) // Send signal to the entire process group
 	if err != nil {
 		return fmt.Errorf("failed to kill process: %w", err)
 	}
