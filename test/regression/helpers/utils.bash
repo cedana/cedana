@@ -4,9 +4,9 @@
 
 export WORKLOADS="test/workloads"
 
-KIBIBYTE=1024
-MEBIBYTE=$(( KIBIBYTE * 1024 ))
-GIBIBYTE=$(( MEBIBYTE * 1024 ))
+export KIBIBYTE=1024
+export MEBIBYTE=$(( KIBIBYTE * 1024 ))
+export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load

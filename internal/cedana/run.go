@@ -128,15 +128,17 @@ func pluginRunHandler() types.Run {
 		default:
 			// Use plugin-specific handler
 			err = features.RunHandler.IfAvailable(func(name string, pluginHandler types.Run) error {
-				if daemonless {
-					daemonlessSupported, _ := features.RunDaemonlessSupport.IsAvailable(name)
-					if !daemonlessSupported {
-						return fmt.Errorf("plugin %s does not support daemonless mode", name)
-					}
-				}
 				handler = pluginHandler
 				return nil
 			}, t)
+			if daemonless {
+				err = features.RunDaemonlessSupport.IfAvailable(func(name string, support bool) error {
+					if !support {
+						return fmt.Errorf("plugin '%s' does not support daemonless run", name)
+					}
+					return nil
+				}, t)
+			}
 			if err != nil {
 				return nil, status.Error(codes.Unimplemented, err.Error())
 			}

@@ -86,6 +86,9 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana job kill "$jid"
+
+    sleep 1
+
     run cedana job delete "$jid"
     assert_output --partial "Deleted"
 
@@ -111,6 +114,9 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana job kill "$jid"
+
+    sleep 1
+
     run cedana job delete "$jid"
     assert_output --partial "Deleted"
 
@@ -144,6 +150,9 @@ teardown_file() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+
+    sleep 1
+
     run cedana job delete "$jid"
     assert_output --partial "Deleted"
 
@@ -177,6 +186,9 @@ teardown_file() {
     assert_output --partial "$jid"
 
     run cedana job kill "$jid"
+
+    sleep 1
+
     run cedana job delete "$jid"
     assert_output --partial "Deleted"
 
