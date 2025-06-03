@@ -37,8 +37,8 @@ Try `make help` to see all available targets.
 Download the latest release from the [releases](https://github.com/cedana/cedana/releases).
 
 ```sh
-curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v${CEDANA_VERSION}/cedana_${CEDANA_VERSION}_linux_amd64.tar.gz
-tar -xzf cedana.tar.gz cedana
+curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-amd64.tar.gz
+chmod +x cedana
 mv cedana /usr/local/bin/cedana
 rm cedana.tar.gz
 ```
