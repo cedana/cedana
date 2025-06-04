@@ -76,8 +76,8 @@ func (j *Job) GetPGID() uint32 {
 }
 
 func (j *Job) GetProto() *daemon.Job {
-	j.Lock()
-	defer j.Unlock()
+	j.RLock()
+	defer j.RUnlock()
 
 	// Get all latest info
 	j.proto.State = j.latestState()
@@ -93,8 +93,8 @@ func (j *Job) GetType() string {
 }
 
 func (j *Job) GetState() *daemon.ProcessState {
-	j.Lock()
-	defer j.Unlock()
+	j.RLock()
+	defer j.RUnlock()
 
 	return j.latestState()
 }
@@ -139,14 +139,14 @@ func (j *Job) SetLog(log string) {
 }
 
 func (j *Job) IsRunning() bool {
-	j.Lock()
-	defer j.Unlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.latestState().GetIsRunning()
 }
 
 func (j *Job) IsRemote() bool {
-	j.Lock()
-	defer j.Unlock()
+	j.RLock()
+	defer j.RUnlock()
 	return j.latestState().GetStatus() == "remote"
 }
 

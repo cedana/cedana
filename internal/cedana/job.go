@@ -7,7 +7,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/job"
 	cedana_io "github.com/cedana/cedana/pkg/io"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -67,7 +66,6 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 			}
 			err := s.jobs.Kill(job.JID)
 			if err != nil {
-				log.Error().Err(err).Msgf("failed to kill job %s", job.JID)
 				messages = append(messages, fmt.Sprintf("Failed to kill job %s: %v", job.JID, err))
 				continue
 			}
