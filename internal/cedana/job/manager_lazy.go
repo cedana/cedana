@@ -299,9 +299,6 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 
 	// Check if the plugin for the job type exports a custom signal
 	features.KillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
-		if len(signal) > 0 {
-			return nil
-		}
 		log.Debug().
 			Str("JID", job.JID).
 			Str("type", job.GetType()).
@@ -323,12 +320,7 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 		target = -int(pgid) // If the job is the process group leader, send signal to the entire process group
 	}
 
-	err := syscall.Kill(target, signalToUse) // Send signal to the entire process group
-	if err != nil {
-		return fmt.Errorf("failed to kill process: %w", err)
-	}
-
-	return nil
+	return syscall.Kill(target, signalToUse)
 }
 
 func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
