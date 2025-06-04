@@ -298,10 +298,10 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: false
+      gpu: true
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
-      parallelism_gpu: ${{ inputs.parallelism_gpu }}
+      parallelism_gpu: 1
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
