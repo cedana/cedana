@@ -256,16 +256,16 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	go func() {
 		defer m.wg.Done()
 
-	loop:
-		for {
-			select {
-			case <-lifetime.Done():
-				m.Kill(jid)
-			case exitCode := <-code:
-				log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
-				break loop // will eventually reach here
-			}
+		var exitCode int
+
+		select {
+		case <-lifetime.Done():
+			m.Kill(jid)
+			exitCode = <-code
+		case exitCode = <-code:
 		}
+
+		log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
 
 		if m.gpus.IsAttached(pid) {
 			m.gpus.Detach(pid)
@@ -313,14 +313,18 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	}
 
 	pid := job.GetPID()
-	pgid := job.GetPGID()
-	target := int(job.GetPID())
 
-	if pgid != 0 && pgid == pid {
-		target = -int(pgid) // If the job is the process group leader, send signal to the entire process group
+	if pid != 0 {
+		pgid := job.GetPGID()
+		target := int(job.GetPID())
+		if pgid == pid {
+			target = -int(pgid) // If the job is the process group leader, send signal to the entire process group
+		}
+
+		return syscall.Kill(target, signalToUse)
 	}
 
-	return syscall.Kill(target, signalToUse)
+	return fmt.Errorf("job %s is not running, PID %d is not valid", jid, pid)
 }
 
 func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
