@@ -91,6 +91,26 @@ teardown_file() {
     run runc delete "$jid"
 }
 
+# bats test_tags=daemonless
+@test "run container (without daemon, detached)" {
+    jid=$(unix_nano)
+    bundle="$(create_cmd_bundle "echo hello")"
+    pid_file="/tmp/$jid.pid"
+
+    run cedana run --no-server runc --bundle "$bundle" --jid "$jid" --detach --pid-file "$pid_file"
+
+    assert_success
+
+    sleep 1
+
+    assert_exists "$pid_file"
+    pid=$(cat "$pid_file")
+
+    pid_exists "$pid"
+
+    run runc delete "$jid"
+}
+
 @test "run non-existent container" {
     jid=$(unix_nano)
 
@@ -630,7 +650,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,detached
+# bats test_tags=restore
 @test "restore container (detached to attached)" {
     id=$(unix_nano)
     code=42
@@ -653,7 +673,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as it was attached)
 }
 
-# bats test_tags=restore,detached
+# bats test_tags=restore,daemonless
 @test "restore container (detached to without daemon)" {
     id=$(unix_nano)
     code=42
@@ -676,7 +696,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as not detached & without daemon)
 }
 
-# bats test_tags=restore,detached
+# bats test_tags=restore,daemonless
 @test "restore container (detached to without daemon detached)" {
     id=$(unix_nano)
     code=42
