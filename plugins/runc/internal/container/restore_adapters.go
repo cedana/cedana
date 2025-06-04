@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +23,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/system"
+	runc_utils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
@@ -234,10 +234,6 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
 		}
-		process, ok := ctx.Value(runc_keys.INIT_PROCESS_CONTEXT_KEY).(*libcontainer.Process)
-		if !ok {
-			return nil, status.Errorf(codes.FailedPrecondition, "failed to get process from context")
-		}
 
 		config := container.Config()
 		callback := &criu.NotifyCallback{
@@ -258,17 +254,6 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 				}
 				return nil
 			},
-			OrphanPtsMasterFunc: func(ctx context.Context, fd int32) error {
-				log.Debug().Msg("orphan pts master setup console socket")
-				master := os.NewFile(uintptr(fd), "orphan-pts-master")
-				defer master.Close()
-
-				// While we can access console.master, using the API is a good idea.
-				if err := SendFile(process.ConsoleSocket, master); err != nil {
-					return err
-				}
-				return nil
-			},
 		}
 		opts.CRIUCallback.Include(callback)
 
@@ -276,25 +261,30 @@ func RunHooksOnRestore(next types.Restore) types.Restore {
 	}
 }
 
-const MaxNameLen = 4096
+func RestoreConsole(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		process, ok := ctx.Value(runc_keys.INIT_PROCESS_CONTEXT_KEY).(*libcontainer.Process)
+		if !ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "failed to get process from context")
+		}
 
-// SendFile sends a file over the given AF_UNIX socket. file.Name() is also
-// included so that if the other end uses RecvFile, the file will have the same
-// name information.
-func SendFile(socket *os.File, file *os.File) error {
-	name := file.Name()
-	if len(name) >= MaxNameLen {
-		return fmt.Errorf("sendfd: filename too long: %s", name)
+		callback := &criu.NotifyCallback{
+			OrphanPtsMasterFunc: func(ctx context.Context, fd int32) error {
+				master := os.NewFile(uintptr(fd), "orphan-pts-master")
+				defer master.Close()
+
+				// While we can access console.master, using the API is a good idea.
+				if err := runc_utils.SendFile(process.ConsoleSocket, master); err != nil {
+					return err
+				}
+				return nil
+			},
+		}
+
+		opts.CRIUCallback.Include(callback)
+
+		return next(ctx, opts, resp, req)
 	}
-	err := SendRawFd(socket, name, file.Fd())
-	runtime.KeepAlive(file)
-	return err
-}
-
-// SendRawFd sends a specific file descriptor over the given AF_UNIX socket.
-func SendRawFd(socket *os.File, msg string, fd uintptr) error {
-	oob := unix.UnixRights(int(fd))
-	return unix.Sendmsg(int(socket.Fd()), []byte(msg), oob, nil, 0)
 }
 
 // UpdateStateOnRestore updates the container state after restore

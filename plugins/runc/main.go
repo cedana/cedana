@@ -104,6 +104,7 @@ var (
 		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
+    container.RestoreConsole,
 		container.UpdateStateOnRestore,
 		process.SetUsChildSubReaper[daemon.RestoreReq, daemon.RestoreResp],
 	}

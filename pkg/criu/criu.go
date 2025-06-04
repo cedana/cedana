@@ -96,7 +96,7 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 	cln := c.swrkSk
 
 	// Try write a couple of times
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		var wrote int
 		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
 		if err == nil && wrote == len(reqB) {

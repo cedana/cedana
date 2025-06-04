@@ -1,6 +1,7 @@
 {
   "ociVersion": "1.0.2-dev",
   "process": {
+    "terminal": true,
     "user": { "uid": 0, "gid": 0 },
     "args": ["/bin/sh", "-c", "while true; do date; sleep 1; done"],
     "env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "TERM=xterm"],
