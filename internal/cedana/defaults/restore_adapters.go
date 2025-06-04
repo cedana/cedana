@@ -9,7 +9,7 @@ import (
 
 // Adapter that fills missing info from the request using config defaults
 func FillMissingRestoreDefaults(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		// Nothing to do, yet
 
 		return next(ctx, opts, resp, req)

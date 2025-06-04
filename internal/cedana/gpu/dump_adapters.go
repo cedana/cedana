@@ -14,7 +14,7 @@ import (
 // Adapter that adds GPU dump to the request.
 func Dump(gpus Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			state := resp.GetState()
 			if state == nil {
 				return nil, status.Errorf(
@@ -25,7 +25,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			pid := state.GetPID()
 
-			err := gpus.Sync(ctx)
+			err = gpus.Sync(ctx)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to sync GPU manager: %v", err)
 			}

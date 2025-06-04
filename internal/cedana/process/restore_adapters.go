@@ -21,7 +21,7 @@ import (
 
 // Adapter that writes PID to a file after the next handler is called.
 func WritePIDFileForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		exited, err := next(ctx, opts, resp, req)
 		if err != nil {
 			return exited, err
@@ -54,7 +54,7 @@ func WritePIDFileForRestore(next types.Restore) types.Restore {
 
 // Reload process state from the dump dir in the restore response
 func ReloadProcessStateForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		// Check if path is a directory
 		path := req.GetCriu().GetImagesDir()
 		if path == "" {
@@ -87,7 +87,7 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
 			if state.SID != state.PID {
@@ -118,7 +118,7 @@ func DetectShellJobForRestore(next types.Restore) types.Restore {
 // If there were any external (namespace) files during dump, they are also
 // added to be inherited. Note that this would still fail if the files don't exist.
 func InheritFilesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -33,7 +34,7 @@ func init() {
 var Dump types.Dump = dump
 
 // Returns a CRIU dump handler for the server
-func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
@@ -91,5 +92,5 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
 
-	return utils.WaitForPid(resp.State.PID), nil
+	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
 }

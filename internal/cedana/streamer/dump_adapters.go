@@ -21,7 +21,7 @@ import (
 // This adapter sets up the cedana-image-streamer for directly streaming
 // files to the dump directory.
 func SetupDumpFS(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		dir := req.Dir
 		compression := req.Compression
@@ -120,7 +120,7 @@ func SetupDumpFS(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 		}
 
-		exited, err = next(ctx, opts, resp, req)
+		code, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
 		}
@@ -135,6 +135,6 @@ func SetupDumpFS(next types.Dump) types.Dump {
 
 		resp.Path = path
 
-		return exited, nil
+		return code, nil
 	}
 }

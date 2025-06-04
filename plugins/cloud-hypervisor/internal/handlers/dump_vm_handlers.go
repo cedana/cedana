@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	clh "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh"
@@ -15,7 +16,7 @@ import (
 var Dump types.DumpVM = dump
 
 // Returns a VM dump handler for the server
-func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (code func() <-chan int, err error) {
 	var snapshotter vm.Snapshotter
 
 	snapshotter = &clh.CloudHypervisorVM{}
@@ -46,5 +47,5 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *da
 		return nil, status.Errorf(codes.Internal, "Failed to get PID: %v", err)
 	}
 
-	return utils.WaitForPid(pid), nil
+	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, pid)), nil
 }

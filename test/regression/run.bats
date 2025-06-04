@@ -51,6 +51,14 @@ teardown_file() {
 }
 
 # bats test_tags=daemonless
+@test "run process (without daemon, exit code)" {
+    code=42
+    run cedana run --no-server process "$WORKLOADS"/exit-code.sh "$code"
+
+    assert_equal $status $code
+}
+
+# bats test_tags=daemonless
 @test "run process (without daemon, PID file)" {
     pid_file=/tmp/$(unix_nano).pid
 

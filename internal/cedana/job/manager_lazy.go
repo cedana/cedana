@@ -237,19 +237,12 @@ func (m *ManagerLazy) Exists(jid string) bool {
 	return ok
 }
 
-func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, exited ...<-chan int) error {
+func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, code <-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
 	job := m.Get(jid)
-
-	var exitedChan <-chan int
-	if len(exited) > 0 {
-		exitedChan = exited[0]
-	} else {
-		exitedChan = utils.WaitForPid(pid)
-	}
 
 	// Try to update the process state with the latest information,
 	// Only possible if process is still running.
@@ -263,16 +256,27 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, e
 	go func() {
 		defer m.wg.Done()
 
-		select {
-		case <-lifetime.Done():
-		case <-exitedChan:
+	loop:
+		for {
+			select {
+			case <-lifetime.Done():
+				m.Kill(jid)
+			case exitCode := <-code:
+				log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
+				break loop // will eventually reach here
+			}
 		}
-
-		log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("job exited")
 
 		if m.gpus.IsAttached(pid) {
 			m.gpus.Detach(pid)
 		}
+
+		// Check if a clean up handler is available for the job type
+
+		features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
+			log.Debug().Str("JID", jid).Str("type", job.GetType()).Msg("using custom cleanup from plugin")
+			return cleanup(job.GetDetails())
+		}, job.GetType())
 	}()
 
 	return nil
@@ -296,15 +300,13 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	// Check if the plugin for the job type exports a custom signal
 	features.KillSignal.IfAvailable(func(plugin string, pluginSignal syscall.Signal) error {
 		if len(signal) > 0 {
-			return fmt.Errorf(
-				"%s plugin exports a custom kill signal `%s`, so cannot use signal `%s`",
-				plugin, pluginSignal, signal[0])
+			return nil
 		}
 		log.Debug().
 			Str("JID", job.JID).
 			Str("type", job.GetType()).
 			Str("signal", pluginSignal.String()).
-			Msg("using custom kill signal exported by plugin")
+			Msg("using custom kill signal exported by plugin as the default")
 		signalToUse = pluginSignal
 		return nil
 	}, job.GetType())

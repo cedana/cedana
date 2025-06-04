@@ -16,7 +16,7 @@ import (
 )
 
 func SetupRestoreFS(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		path := req.GetPath()
 
@@ -99,7 +99,7 @@ func SetupRestoreFS(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 		}
 
-		exited, err = next(ctx, opts, resp, req)
+		code, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
 		}
@@ -112,6 +112,6 @@ func SetupRestoreFS(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
 		}
 
-		return exited, nil
+		return code, nil
 	}
 }

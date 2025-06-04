@@ -141,16 +141,19 @@ var restoreCmd = &cobra.Command{
 				ShellJob:       proto.Bool(shellJob),
 				LinkRemap:      proto.Bool(linkRemap),
 			},
-			Env:    env,
-			UID:    user.Uid,
-			GID:    user.Gid,
-			Groups: user.Groups,
+			Env:     env,
+			UID:     user.Uid,
+			GID:     user.Gid,
+			Groups:  user.Groups,
+			Details: &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		if noServer {
+			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
+			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -172,6 +175,7 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
+		ctx := cmd.Context()
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
@@ -184,12 +188,6 @@ var restoreCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithValue(
-				cmd.Context(),
-				keys.DAEMONLESS_CONTEXT_KEY,
-				true,
-			)
-
 			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
@@ -200,7 +198,7 @@ var restoreCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			os.Exit(<-code)
+			os.Exit(<-code())
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

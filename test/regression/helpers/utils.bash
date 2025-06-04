@@ -79,3 +79,11 @@ do_once() {
     "$func"
     mkdir "$lock.done"
 }
+
+pid_exists() {
+    local pid=$1
+    if [ -z "$pid" ]; then
+        return 1
+    fi
+    kill -0 "$pid" 2>/dev/null
+}

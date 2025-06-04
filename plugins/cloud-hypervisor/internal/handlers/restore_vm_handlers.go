@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	clh "github.com/cedana/cedana/plugins/cloud-hypervisor/pkg/clh"
@@ -18,7 +19,7 @@ import (
 var Restore types.RestoreVM = restore
 
 // Returns a VM dump handler for the server
-func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
+func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (code func() <-chan int, err error) {
 	var netFds []int
 	var netFdsInt64 []int64
 	var snapshotter vm.Snapshotter
@@ -84,5 +85,5 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, r
 		}
 	}()
 
-	return utils.WaitForPid(pid), nil
+	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, pid)), nil
 }

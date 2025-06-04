@@ -20,7 +20,7 @@ import (
 // Adapter that restores GPU support to the request.
 func Restore(gpus Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			state := resp.GetState()
 
 			if !state.GPUEnabled {
@@ -63,7 +63,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 }
 
 func InheritFilesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")

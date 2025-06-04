@@ -10,11 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 
+	"github.com/cedana/cedana/pkg/channel"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
@@ -22,6 +24,7 @@ import (
 	"github.com/cedana/cedana/plugins/runc/internal/defaults"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
+	"github.com/mattn/go-isatty"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog"
@@ -65,13 +68,14 @@ var (
 )
 
 // run runs a container using CLI directly
-func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 	details := req.GetDetails().GetRunc()
 	root := details.GetRoot()
 	id := details.GetID()
 	bundle := details.GetBundle()
 	noPivot := details.GetNoPivot()
 	noNewKeyring := details.GetNoNewKeyring()
+	consoleSocket := details.GetConsoleSocketPath()
 	detach := details.GetDetach()
 
 	spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
@@ -111,7 +115,8 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		fmt.Sprintf("--detach=%t", detach),
 		fmt.Sprintf("--no-pivot=%t", noPivot),
 		fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
-		fmt.Sprintf("--pid-file=%s", pidFile),
+		fmt.Sprintf("--pid-file=%s", pidFile), // this isonly used for synchronization, we have our own PID file flag
+		fmt.Sprintf("--console-socket=%s", consoleSocket),
 		id,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -121,23 +126,24 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	cmd.Env = req.Env
 	cmd.Dir = bundle
 
-	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
+	code = channel.Broadcaster(exitCode)
+
 	if daemonless {
 		cmd.SysProcAttr.Setsid = false                     // We want to run in the foreground
-		cmd.SysProcAttr.Foreground = true                  // Run in the foreground, so IO and signals work correctly
-		cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())          // Set the controlling terminal to the current stdin
 		cmd.SysProcAttr.GidMappingsEnableSetgroups = false // Avoid permission issues when running as non-root user
 		cmd.SysProcAttr.Credential = nil                   // Current user's credentials (caller)
-		if !detach {
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if !detach && isatty.IsTerminal(os.Stdin.Fd()) {
+			cmd.SysProcAttr.Foreground = isatty.IsTerminal(os.Stdin.Fd()) // Run in the foreground to catch signals
+			cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())                     // Set the controlling terminal
 		}
 	} else if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
-		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
+		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		cmd.Stdin = stdIn
 		cmd.Stdout = stdOut
@@ -157,20 +163,28 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		return nil, status.Errorf(codes.Internal, "failed to start container: %v", err)
 	}
 
-	if !daemonless {
-		defer func() {
-			if err != nil {
-				// Don't use cmd.Wait() as it will indefinitely wait for IO to complete
-				cmd.Process.Wait()
-			}
-		}()
+	defer func() {
+		if err != nil {
+			// Don't use cmd.Wait() as it will indefinitely wait for IO to complete
+			cmd.Process.Wait()
+		}
+	}()
 
-		// Wait for PID file to be created, until the process exists
-		utils.WaitForFile(ctx, pidFile, utils.WaitForPid(uint32(cmd.Process.Pid)))
+	// Wait for PID file to be created, until the process exists
+	pidData, err := utils.WaitForFile(ctx, pidFile, utils.WaitForPidCtx(ctx, uint32(cmd.Process.Pid)))
+	if err != nil {
+		lastMsg, _ := utils.LastMsgFromFile(logFile, RuncLogMsgToString)
+		return nil, status.Error(codes.Internal, lastMsg)
+	}
+
+	pid, err := strconv.ParseUint(string(pidData), 10, 32)
+	if err != nil {
+		lastMsg, _ := utils.LastMsgFromFile(logFile, RuncLogMsgToString)
+		return nil, status.Errorf(codes.Internal, "failed to parse PID from file: %v %s", err, lastMsg)
 	}
 
 	// Capture logs from runc
-	lastMsg := utils.LogFromFile(
+	utils.LogFromFile(
 		log.With().
 			Str("spec", spec.Version).
 			Logger().WithContext(ctx),
@@ -179,67 +193,32 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		RuncLogMsgToString,
 	)
 
-	var container *libcontainer.Container
+	resp.PID = uint32(pid)
 
-	if !daemonless {
-		container, err = libcontainer.Load(root, id)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load container: %v: %s", err, lastMsg)
-		}
-		state, err := container.State()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container state: %v: %s", err, lastMsg)
-		}
-
-		resp.PID = uint32(state.InitProcessPid)
-	} else {
-		resp.PID = uint32(cmd.Process.Pid)
-	}
-
+	var processToReap *os.Process
 	if daemonless {
-		exited = exitCode // In daemonless mode, we return the exit code channel directly
+		processToReap = cmd.Process // the runc process itself
 	} else {
-		exited = make(chan int, 1)
+		processToReap, _ = os.FindProcess(int(resp.PID)) // the container process
 	}
 
 	opts.WG.Add(1)
 	go func() {
 		defer opts.WG.Done()
-		p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-		status, err := p.Wait()
+		status, err := processToReap.Wait()
 		if err != nil {
-			log.Debug().Err(err).Msg("runc container Wait()")
+			log.Trace().Err(err).Msg("process Wait()")
 		}
-		code := status.ExitCode()
-		log.Debug().Uint8("code", uint8(code)).Msg("runc container exited")
-
-		cmd.Wait() // IO should be complete by now
-		if !daemonless {
-			container.Destroy()
-		}
-
-		exitCode <- code
-		close(exited)
-		if exitCode != exited {
-			close(exitCode)
-		}
+		cmd.Wait() // Wait for all IO to complete
+		exitCode <- status.ExitCode()
+		close(exitCode)
 	}()
 
-	if !daemonless {
-		// Also kill the container if lifetime expires
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			<-opts.Lifetime.Done()
-			syscall.Kill(int(resp.PID), syscall.SIGKILL)
-		}()
-	}
-
-	return exited, nil
+	return code, nil
 }
 
 // manage simply sets the PID in response, if the container exists, and returns a valid exited channel
-func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 	details := req.GetDetails().GetRunc()
 	if details == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing runc options")
@@ -290,5 +269,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = uint32(state.InitProcessPid)
 
-	return utils.WaitForPid(resp.PID), nil
+	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.PID)), nil
 }

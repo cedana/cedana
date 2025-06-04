@@ -62,7 +62,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 
 // Handler that returns the type-specific handler for the job
 func pluginManageHandler() types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		t := req.GetType()
 		var handler types.Run
 		switch t {

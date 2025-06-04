@@ -45,7 +45,6 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
 
@@ -54,7 +53,10 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	restore := criu.Restore.With(middleware...)
 
-	if req.GetDetails().GetJID() != "" { // If using job restore
+	// If using job restore, or restoring as attachable. If restoring as attachable, its necessary
+	// that we manage the restore job, as the IO is managed by the daemon.
+
+	if req.GetDetails().GetJID() != "" || req.Attachable {
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
@@ -79,7 +81,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *Cedana) Restore(ctx context.Context, req *daemon.RestoreReq) (exitCode chan int, err error) {
+func (s *Cedana) Restore(ctx context.Context, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -100,7 +102,6 @@ func (s *Cedana) Restore(ctx context.Context, req *daemon.RestoreReq) (exitCode 
 		pluginRestoreMiddleware, // middleware from plugins
 
 		// Process state-dependent adapters
-		process.DetectShellJobForRestore,
 		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
 
@@ -127,12 +128,12 @@ func (s *Cedana) Restore(ctx context.Context, req *daemon.RestoreReq) (exitCode 
 
 // Adapter that inserts new adapters based on the type of restore request
 func pluginRestoreMiddleware(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		middleware := types.Middleware[types.Restore]{}
 		t := req.Type
 		switch t {
 		case "process":
-			// Nothing to do
+			middleware = append(middleware, process.DetectShellJobForRestore)
 		default:
 			// Insert plugin-specific middleware
 			err = features.RestoreMiddleware.IfAvailable(func(
@@ -155,7 +156,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
 func pluginRestoreStorage(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		dir := req.GetPath()
 
 		var storage io.Storage = &filesystem.Storage{}

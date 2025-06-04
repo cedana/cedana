@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -33,6 +32,7 @@ import (
 
 const (
 	CONTROLLER_ADDRESS_FORMATTER  = "unix:///tmp/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_FORMATTER   = "/tmp/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_PATTERN     = "cedana-gpu-controller-(.*).sock"
 	CONTROLLER_SHM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s"
 	CONTROLLER_SHM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*)"
@@ -239,7 +239,6 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 
 	err = c.Connect(ctx, true)
 	if err != nil {
-		syscall.Kill(-int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
 		return nil, fmt.Errorf("failed to connect to GPU controller: %w", err)
 	}
 
@@ -247,7 +246,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 }
 
 func (p *pool) Terminate(id string) {
-	defer os.RemoveAll(filepath.Join(os.TempDir(), fmt.Sprintf(CONTROLLER_SOCKET_PATTERN, id)))
+	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, id))
 
 	c := p.Get(id)
 	if c == nil {
@@ -463,7 +462,9 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 		return err
 	}
 
-	c.AttachedPID = info.GetAttachedPID()
+	if c.AttachedPID == 0 {
+		c.AttachedPID = info.GetAttachedPID()
+	}
 	c.ShmSize = info.GetShmSize()
 	c.ShmName = info.GetShmName()
 	c.Version = info.GetVersion()

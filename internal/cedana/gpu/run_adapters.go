@@ -24,7 +24,7 @@ import (
 // Adapter that adds GPU support to the request.
 func Attach(gpus Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 			if !req.GPUEnabled {
 				return next(ctx, opts, resp, req)
 			}
@@ -66,7 +66,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 // Adapter that adds GPU interception to the request based on the job type.
 // Each plugin must implement its own support for GPU interception.
 func Interception(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		t := req.GetType()
 		var handler types.Run
 		switch t {
@@ -82,7 +82,7 @@ func Interception(next types.Run) types.Run {
 				return nil
 			}, t)
 			if err != nil {
-				return nil, status.Errorf(codes.Unimplemented, err.Error())
+				return nil, status.Error(codes.Unimplemented, err.Error())
 			}
 		}
 		return handler(ctx, opts, resp, req)
@@ -91,7 +91,7 @@ func Interception(next types.Run) types.Run {
 
 // Adapter that adds GPU interception to a process job.
 func ProcessInterception(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")

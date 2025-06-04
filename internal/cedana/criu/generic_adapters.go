@@ -17,7 +17,7 @@ import (
 // Creates a new instance of CRIU and passes it to the server opts
 func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ, RESP]] {
 	return func(next types.Handler[REQ, RESP]) types.Handler[REQ, RESP] {
-		return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (func() <-chan int, error) {
 			criuInstance := criu.MakeCriu()
 
 			// Check if CRIU plugin is installed, then use that binary

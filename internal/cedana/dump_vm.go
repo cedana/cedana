@@ -16,9 +16,8 @@ import (
 )
 
 func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.DumpVMResp, error) {
-
 	middleware := types.Middleware[types.DumpVM]{
-    defaults.FillMissingDumpVMDefaults,
+		defaults.FillMissingDumpVMDefaults,
 		validation.ValidateDumpVMRequest,
 
 		pluginDumpVMMiddleware, // middleware from plugins
@@ -48,7 +47,7 @@ func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.Dum
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (code func() <-chan int, err error) {
 		middleware := types.Middleware[types.DumpVM]{}
 		t := req.GetType()
 		switch t {
@@ -71,7 +70,7 @@ func pluginDumpVMMiddleware(next types.DumpVM) types.DumpVM {
 
 // Handler that returns the type-specific handler for the job
 func pluginDumpVMHandler() types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (code func() <-chan int, err error) {
 		t := req.Type
 		var handler types.DumpVM
 		switch t {
@@ -87,7 +86,6 @@ func pluginDumpVMHandler() types.DumpVM {
 			var end func()
 			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
 			defer end()
-
 		}
 
 		return handler(ctx, opts, resp, req)

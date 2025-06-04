@@ -10,7 +10,7 @@ import (
 
 // Adapter that fills missing info from the request using config defaults
 func FillMissingDumpVMDefaults(next types.DumpVM) types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (code func() <-chan int, err error) {
 		if req.Dir == "" {
 			req.Dir = config.Global.Checkpoint.Dir
 		}

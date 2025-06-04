@@ -11,7 +11,7 @@ import (
 
 // Adapter that validates the restore request
 func ValidateRestoreRequest(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		if req.GetPath() == "" {
 			return nil, status.Error(codes.InvalidArgument, "no path provided")
 		}

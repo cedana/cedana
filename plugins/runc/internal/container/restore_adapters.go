@@ -13,7 +13,9 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/coreos/go-systemd/v22/activation"
@@ -31,7 +33,7 @@ import (
 
 // LoadSpecFromBundleForRestore loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetRunc()
 		bundle := details.GetBundle()
 		workingDir := details.GetWorkingDir()
@@ -55,7 +57,7 @@ func LoadSpecFromBundleForRestore(next types.Restore) types.Restore {
 }
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetRunc()
 		root := details.GetRoot()
 		id := details.GetID()
@@ -69,8 +71,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			spec.Root.Path = filepath.Join(bundle, spec.Root.Path)
 		}
 
-		// TODO SA: get env will not provide the env to the daemon provide env as option
-		notifySocket := runc.NewNotifySocket(root, os.Getenv("NOTIFY_SOCKET"), id)
+		notifySocket := runc.NewNotifySocket(root, utils.Getenv(req.Env, "NOTIFY_SOCKET"), id)
 		if notifySocket != nil {
 			notifySocket.SetupSpec(spec)
 		}
@@ -81,6 +82,10 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			RootlessEUID:    req.UID != 0,
 			RootlessCgroups: req.UID != 0,
 		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create libcontainer config: %v", err)
+		}
+
 		labels := config.Labels
 		config.Labels = []string{}
 		for _, label := range labels {
@@ -89,10 +94,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			}
 		}
 		config.Labels = append(config.Labels, "bundle="+details.Bundle)
-
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create libcontainer config: %v", err)
-		}
 
 		container, err := libcontainer.Create(root, id, config)
 		if err != nil {
@@ -110,9 +111,8 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			}
 		}
 
-		// TODO SA: get env will not provide the env to the daemon provide env as option
 		listenFDs := []*os.File{}
-		if os.Getenv("LISTEN_FDS") != "" {
+		if utils.Getenv(req.Env, "LISTEN_FDS") != "" {
 			listenFDs = activation.Files(false)
 		}
 
@@ -159,62 +159,77 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(listenFDs)), "LISTEN_PID=1")
 			process.ExtraFiles = append(process.ExtraFiles, listenFDs...)
 		}
-		rootuid, err := config.HostRootUID()
-		if err != nil {
-			return nil, err
+
+		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+
+		// Setup signal handler when running in daemonless mode. For daemon mode, this is currently not supported
+
+		var handlerCh chan *runc.SignalHandler
+		var tty *runc.Tty
+
+		if daemonless {
+			handlerCh = runc.NewSignalHandler(notifySocket)
+			tty, err = runc.SetupIO(process, container, spec.Process.Terminal, details.Detach, details.ConsoleSocketPath)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to setup container IO: %v", err)
+			}
+			defer tty.Close()
 		}
-		rootgid, err := config.HostRootGID()
-		if err != nil {
-			return nil, err
-		}
-		// Setting up IO is a two stage process. We need to modify process to deal
-		// with detaching containers, and then we get a tty after the container has
-		// started.
-		handler := runc.NewSignalHandler(notifySocket)
-		tty, err := runc.SetupIO(process, rootuid, rootgid, spec.Process.Terminal, details.Detach, details.ConsoleSocketPath)
-		if err != nil {
-			return nil, err
-		}
-		// defer tty.Close()
 
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CONTEXT_KEY, container)
 		ctx = context.WithValue(ctx, runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY, manager)
 		ctx = context.WithValue(ctx, runc_keys.INIT_PROCESS_CONTEXT_KEY, process)
-		ctx = context.WithValue(ctx, runc_keys.SIGNAL_HANDLER_CONTEXT_KEY, handler)
-		ctx = context.WithValue(ctx, runc_keys.TTY_CONTEXT_KEY, tty)
 
-		exited, err = next(ctx, opts, resp, req)
+		// We preset the exit code channel for the restore handler to use, as we will
+		// be the one reaping and sending the exit code.
+
+		exitCode := make(chan int, 1)
+		ctx = context.WithValue(ctx, keys.EXIT_CODE_CHANNEL_CONTEXT_KEY, exitCode)
+
+		code, err = next(ctx, opts, resp, req)
 		if err != nil {
 			return nil, err
 		}
 
-		// Launch a background routine that ensures the container is
-		// cleaned up after it exits. Only does so if a valid exit channel is received,
-		// ie. when the container managed by the daemon (job).
+		if !daemonless {
+			opts.WG.Add(1)
+			go func() {
+				defer opts.WG.Done()
+				log.Warn().Int("pid", int(resp.PID)).Msg("waiting for container process to exit")
+				p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+				log.Warn().Int("pid", int(resp.PID)).Msg("waited for container process to exit")
+				status, err := p.Wait()
+				if err != nil {
+					log.Trace().Err(err).Msg("container Wait()")
+				}
+				exitCode <- status.ExitCode()
+				close(exitCode)
+			}()
 
-		if exited == nil { // probably not a managed restore, so we don't care
-			return exited, nil
+			return code, nil
 		}
 
-		// TODO SA: handle unmanaged workloads separately
-		// if !strings.HasPrefix(details.Root, "/run/containerd/runc/k8s.io") {
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
-			<-exited
-			log.Debug().Str("id", container.ID()).Msg("runc container exited, cleaning up")
+		status, err := (<-handlerCh).Forward(int(resp.PID), tty, details.Detach) // ignore status code, as the restore handler reaps for it
+		if err != nil {
+			container.Signal(unix.SIGKILL)
+		}
+		exitCode <- status
+		close(exitCode)
+		if details.Detach {
+			return code, nil
+		}
+		if err == nil {
 			container.Destroy()
-		}()
-		return exited, nil
-		// }
-		// return nil, nil
+		}
+
+		return code, nil
 	}
 }
 
 // Adds CRIU callback to run the prestart and create runtime hooks
 // before the namespaces are setup during restore
 func RunHooksOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -285,7 +300,7 @@ func SendRawFd(socket *os.File, msg string, fd uintptr) error {
 // UpdateStateOnRestore updates the container state after restore
 // Without this, runc won't be able to 'detect' the container
 func UpdateStateOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")

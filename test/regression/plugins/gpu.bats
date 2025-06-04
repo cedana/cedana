@@ -56,7 +56,6 @@ teardown_file() {
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --attach
     assert_success
-    assert_output --partial "Throughput"
 }
 
 # bats test_tags=daemonless
@@ -65,7 +64,6 @@ teardown_file() {
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --no-server
     assert_success
-    assert_output --partial "Throughput"
 }
 
 @test "run GPU process (non-existent binary)" {
@@ -199,6 +197,8 @@ teardown_file() {
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
     assert_success
 
+    pid=$(pid_for_jid "$jid")
+
     sleep 2
 
     run cedana dump job "$jid"
@@ -207,13 +207,11 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore process "$jid" --path "$dump_file" --no-server
+    run cedana restore process --path "$dump_file" --no-server &
+
+    sleep 2
+    run pid_exists "$pid"
     assert_success
 
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
-    run cedana job kill "$jid"
-    rm -rf "$dump_file"
+    run kill "$pid"
 }

@@ -16,7 +16,7 @@ import (
 // Post-dump, updates the saved job details.
 func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			jid := req.GetDetails().GetJID()
 
 			if jid == "" {

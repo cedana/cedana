@@ -12,7 +12,7 @@ import (
 
 // Adapter that writes PID to a file after the next handler is called.
 func WritePIDFile(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		exited, err := next(ctx, opts, resp, req)
 		if err != nil {
 			return exited, err
@@ -35,7 +35,7 @@ func WritePIDFile(next types.Run) types.Run {
 			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to write PID to file %s: %s", pidFile, err.Error()))
 		}
 
-    log.Debug().Msgf("Wrote PID %d to file %s", resp.PID, pidFile)
+		log.Debug().Msgf("Wrote PID %d to file %s", resp.PID, pidFile)
 
 		// Do not fail the request if we cannot write the PID file
 

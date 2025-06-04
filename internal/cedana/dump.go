@@ -45,7 +45,6 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 		// Process state-dependent adapters
 		process.FillProcessStateForDump,
-		process.DetectShellJobForDump,
 		process.DetectIOUringForDump,
 		process.AddExternalFilesForDump,
 		process.CloseCommonFilesForDump,
@@ -88,12 +87,16 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginDumpMiddleware(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		middleware := types.Middleware[types.Dump]{}
 		t := req.GetType()
 		switch t {
 		case "process":
-			middleware = append(middleware, process.SetPIDForDump)
+			middleware = append(
+				middleware,
+				process.SetPIDForDump,
+				process.DetectShellJobForDump,
+			)
 		default:
 			// Insert plugin-specific middleware
 			err = features.DumpMiddleware.IfAvailable(func(
@@ -115,7 +118,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
 func pluginDumpStorage(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		dir := req.GetDir()
 
 		var storage io.Storage = &filesystem.Storage{}

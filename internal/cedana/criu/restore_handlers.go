@@ -6,9 +6,10 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/features"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -26,7 +27,7 @@ const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
 var Restore types.Restore = restore
 
 // Returns a CRIU restore handler for the server
-func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (exited chan int, err error) {
+func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 	extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 
 	if req.GetCriu() == nil {
@@ -47,6 +48,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
+	criuOpts.RstSibling = proto.Bool(true) // always restore as a child of the daemon
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()
@@ -61,22 +63,34 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 
-	// Attach IO if requested, otherwise log to file
-	exitCode := make(chan int, 1)
+	// NOTE: We don't handle reaping if the plugin has indicated that it's a 'reaper', assuming it will
+	// handle it when and how it wants to.
+
+	var exitCode chan int
+	var ok bool
+	reaper, _ := features.Reaper.IsAvailable(req.Type)
+	if !reaper || req.Type == "process" {
+		exitCode = make(chan int, 1)
+	} else {
+		exitCode, ok = ctx.Value(keys.EXIT_CODE_CHANNEL_CONTEXT_KEY).(chan int)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "exit code channel must be set by now since plugin '%s' is a reaper", req.Type)
+		}
+	}
+	code = channel.Broadcaster(exitCode)
+
 	var stdin io.Reader
 	var stdout, stderr io.Writer
 
 	// if we aren't using a client
-	daemonless, ok := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-	if ok && daemonless {
-		criuOpts.RstSibling = proto.Bool(true) // restore as child, so the caller can wait for the exit code
+	daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+	if daemonless {
 		stdin = os.Stdin
 		stdout = os.Stdout
 		stderr = os.Stderr
 	} else if req.Attachable {
-		criuOpts.RstSibling = proto.Bool(true) // restore as child, so we can wait for the exit code
-		id := rand.Uint32()                    // Use a random number, since we don't have PID yet
-		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
+		id := rand.Uint32() // Use a random number, since we don't have PID yet
+		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 	} else {
 		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
@@ -117,45 +131,21 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	}
 	resp.PID = uint32(*criuResp.Pid)
 
-	if daemonless {
-		exited = exitCode // In daemonless mode, we return the exit code channel directly
-	} else {
-		exited = make(chan int, 1)
-	}
-
-	// If restoring as child of daemon (RstSibling), we need wait to close the exited channel
-	// as their could be goroutines waiting on it.
-
-	if criuOpts.GetRstSibling() {
+	if !reaper || req.Type == "process" {
 		opts.WG.Add(1)
 		go func() {
 			defer opts.WG.Done()
 			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
 			status, err := p.Wait()
 			if err != nil {
-				log.Debug().Err(err).Msg("process Wait()")
+				log.Trace().Err(err).Msg("process Wait()")
 			}
-			code := status.ExitCode()
-			log.Debug().Uint8("code", uint8(code)).Msg("process exited")
-			exitCode <- code
-			close(exited)
-			if exitCode != exited {
-				close(exitCode)
-			}
+			exitCode <- status.ExitCode()
+			close(exitCode)
 		}()
-
-		if !daemonless {
-			// Also kill the process if it's lifetime expires
-			opts.WG.Add(1)
-			go func() {
-				defer opts.WG.Done()
-				<-opts.Lifetime.Done()
-				syscall.Kill(int(resp.PID), syscall.SIGKILL)
-			}()
-		}
 	}
 
 	log.Debug().Int("CRIU", version).Msg("CRIU restore complete")
 
-	return exited, err
+	return code, err
 }

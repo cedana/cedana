@@ -54,7 +54,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	return resp, nil
 }
 
-func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (exitCode chan int, err error) {
+func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (code func() <-chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
@@ -86,7 +86,7 @@ func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (exitCode chan int
 
 // Adapter that inserts new adapters after itself based on the type of run.
 func pluginRunMiddleware(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		middleware := types.Middleware[types.Run]{}
 		t := req.GetType()
 		switch t {
@@ -116,7 +116,7 @@ func pluginRunMiddleware(next types.Run) types.Run {
 
 // Handler that returns the type-specific handler for the job
 func pluginRunHandler() types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		t := req.Type
 		var handler types.Run
 
@@ -132,12 +132,10 @@ func pluginRunHandler() types.Run {
 				return nil
 			}, t)
 			if daemonless {
-				err = features.RunDaemonlessSupport.IfAvailable(func(name string, support bool) error {
-					if !support {
-						return fmt.Errorf("plugin '%s' does not support daemonless run", name)
-					}
-					return nil
-				}, t)
+				supported, _ := features.RunDaemonlessSupport.IsAvailable(t)
+				if !supported {
+					return nil, fmt.Errorf("plugin '%s' does not support daemonless run", t)
+				}
 			}
 			if err != nil {
 				return nil, status.Error(codes.Unimplemented, err.Error())

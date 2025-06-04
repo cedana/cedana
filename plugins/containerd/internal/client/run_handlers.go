@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
@@ -23,19 +24,20 @@ var (
 	Manage types.Run = manage
 )
 
-func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 	container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container from context")
 	}
 
-	// Attach IO if requested, otherwise log to file
 	exitCode := make(chan int, 1)
+	code = channel.Broadcaster(exitCode)
+
 	var io cio.Opt
 	if req.Attachable {
 		// Use a random number, since we don't have PID yet
 		id := rand.Uint32()
-		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, exitCode)
+		stdIn, stdOut, stdErr := cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		io = cio.WithStreams(stdIn, stdOut, stdErr)
 	} else {
@@ -59,7 +61,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	resp.PID = uint32(task.Pid())
 
 	// Wait for the container to exit, send exit code
-	exited = make(chan int)
 	opts.WG.Add(1)
 	go func() {
 		defer opts.WG.Done()
@@ -69,18 +70,15 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
 		}
 		status := <-statusChan
-		code := status.ExitCode()
-		log.Debug().Uint32("code", code).Uint8("PID", uint8(resp.PID)).Msg("container exited")
-		exitCode <- int(code)
+		exitCode <- int(status.ExitCode())
 		container.Delete(ctx, containerd.WithSnapshotCleanup)
 		close(exitCode)
-		close(exited)
 	}()
 
-	return exited, nil
+	return code, nil
 }
 
-func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 	details := req.GetDetails().GetContainerd()
 
 	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
@@ -100,5 +98,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = uint32(task.Pid())
 
-	return utils.WaitForPid(resp.PID), nil
+	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.PID)), nil
 }

@@ -17,7 +17,7 @@ import (
 // Adapter that adds Cedana GPU interception to the container.
 // Modifies the spec as necessary.
 func Interception(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get spec from context")
@@ -39,7 +39,7 @@ func Interception(next types.Run) types.Run {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, id)
+		err = runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, id)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}

@@ -20,7 +20,7 @@ import (
 // sockets, the flag is deprecated. The correct way is to use the
 // --external flag in CRIU.
 func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {

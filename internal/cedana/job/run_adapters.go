@@ -24,7 +24,7 @@ const (
 // Allows management of existing processes as well (not started by the daemon).
 func Manage(jobs Manager) types.Adapter[types.Run] {
 	return func(next types.Run) types.Run {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 			if req.JID == "" {
 				req.JID = namegen.GetName(1)
 			}
@@ -57,7 +57,7 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 			lifetime, cancel := context.WithCancel(opts.Lifetime)
 			opts.Lifetime = lifetime
 
-			exited, err := next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				jobs.Delete(job.JID)
 				return nil, err
@@ -65,7 +65,7 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 
 			job.SetDetails(req.Details) // Set again, in case they get modified later
 
-			err = jobs.Manage(opts.Lifetime, job.JID, resp.PID, exited)
+			err = jobs.Manage(opts.Lifetime, job.JID, resp.PID, code())
 			if err != nil {
 				if req.Action == daemon.RunAction_START_NEW { // we don't want to cancel if manage was called for an existing process
 					cancel()
@@ -74,7 +74,7 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 				return nil, status.Errorf(codes.Internal, "failed to manage job: %v", err)
 			}
 
-			return exited, nil
+			return code, nil
 		}
 	}
 }

@@ -14,9 +14,7 @@ import (
 )
 
 func (s *Server) RestoreVM(ctx context.Context, req *daemon.RestoreVMReq) (*daemon.RestoreVMResp, error) {
-
 	middleware := types.Middleware[types.RestoreVM]{
-
 		pluginRestoreVMMiddleware, // middleware from plugins
 
 	}
@@ -45,7 +43,7 @@ func (s *Server) RestoreVM(ctx context.Context, req *daemon.RestoreVMReq) (*daem
 
 // Adapter that inserts new adapters after itself based on the type of dump.
 func pluginRestoreVMMiddleware(next types.RestoreVM) types.RestoreVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited func() <-chan int, err error) {
 		middleware := types.Middleware[types.RestoreVM]{}
 		t := req.GetType()
 		switch t {
@@ -68,7 +66,7 @@ func pluginRestoreVMMiddleware(next types.RestoreVM) types.RestoreVM {
 
 // Handler that returns the type-specific handler for the job
 func pluginRestoreVMHandler() types.RestoreVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreVMResp, req *daemon.RestoreVMReq) (exited func() <-chan int, err error) {
 		t := req.Type
 		var handler types.RestoreVM
 		switch t {
@@ -84,7 +82,6 @@ func pluginRestoreVMHandler() types.RestoreVM {
 			var end func()
 			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
 			defer end()
-
 		}
 
 		return handler(ctx, opts, resp, req)

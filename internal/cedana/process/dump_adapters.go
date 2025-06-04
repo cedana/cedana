@@ -23,7 +23,7 @@ const STATE_FILE = "process_state.json"
 // Sets the PID from the request to the process state
 // if not already set before.
 func SetPIDForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		if resp.GetState() == nil {
 			resp.State = &daemon.ProcessState{}
 		}
@@ -42,7 +42,7 @@ func SetPIDForDump(next types.Dump) types.Dump {
 
 // Fills process state in the dump response.
 func FillProcessStateForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(
@@ -69,7 +69,7 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 
 // Saves process state in the dump directory.
 func SaveProcessStateForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(
@@ -96,7 +96,7 @@ func SaveProcessStateForDump(next types.Dump) types.Dump {
 
 // Detect and sets shell job option for CRIU
 func DetectShellJobForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		var isShellJob bool
 		if state := resp.GetState(); state != nil {
 			if state.SID != state.PID {
@@ -120,7 +120,7 @@ func DetectShellJobForDump(next types.Dump) types.Dump {
 // XXX: Currently IO uring C/R is not supported by CRIU, so we return an error.
 // ref: https://criu.org/Google_Summer_of_Code_Ideas#IOUring_support
 func DetectIOUringForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")
@@ -139,7 +139,7 @@ func DetectIOUringForDump(next types.Dump) types.Dump {
 
 // Close common file descriptors b/w the parent and child process
 func CloseCommonFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		pid := resp.GetState().GetPID()
 		if pid == 0 {
 			return nil, status.Errorf(
@@ -161,7 +161,7 @@ func CloseCommonFilesForDump(next types.Dump) types.Dump {
 // and sets appropriate options for CRIU.
 // Also detects any TTY files and sets options for CRIU.
 func AddExternalFilesForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			log.Warn().Msg("no process info found. it should have been filled by an adapter")

@@ -30,7 +30,7 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_COMPRESSION = "lz4"
+	DEFAULT_COMPRESSION = "none"
 	DEFAULT_DUMP_DIR    = "/tmp"
 
 	DEFAULT_GPU_POOL_SIZE   = 0

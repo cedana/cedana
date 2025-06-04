@@ -101,12 +101,15 @@ var runCmd = &cobra.Command{
 			UID:        user.Uid,
 			GID:        user.Gid,
 			Groups:     user.Groups,
+			Details:    &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		if noServer {
+			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
+			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -128,6 +131,7 @@ var runCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
+		ctx := cmd.Context()
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
@@ -140,12 +144,6 @@ var runCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithValue(
-				cmd.Context(),
-				keys.DAEMONLESS_CONTEXT_KEY,
-				true,
-			)
-
 			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
@@ -156,7 +154,7 @@ var runCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			os.Exit(<-code)
+			os.Exit(<-code())
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

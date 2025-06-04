@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/rs/zerolog/log"
 
@@ -17,16 +16,24 @@ const signalBufferSize = 2048
 // while still forwarding all other signals to the process.
 // If notifySocket is present, use it to read systemd notifications from the container and
 // forward them to notifySocketHost.
-func NewSignalHandler(notifySocket *notifySocket) *SignalHandler {
-	// ensure that we have a large buffer size so that we do not miss any signals
-	// in case we are not processing them fast enough.
-	s := make(chan os.Signal, signalBufferSize)
-	// handle all signals for the process.
-	signal.Notify(s)
-	return &SignalHandler{
-		signals:      s,
-		notifySocket: notifySocket,
-	}
+func NewSignalHandler(notifySocket *notifySocket) chan *SignalHandler {
+	handler := make(chan *SignalHandler)
+	// signal.Notify is actually quite expensive, as it has to configure the
+	// signal mask and add signal handlers for all signals (all ~65 of them).
+	// So, defer this to a background thread while doing the rest of the io/tty
+	// setup.
+	go func() {
+		// ensure that we have a large buffer size so that we do not miss any
+		// signals in case we are not processing them fast enough.
+		s := make(chan os.Signal, signalBufferSize)
+		// handle all signals for the process.
+		signal.Notify(s)
+		handler <- &SignalHandler{
+			signals:      s,
+			notifySocket: notifySocket,
+		}
+	}()
+	return handler
 }
 
 // exit models a process exit status with the pid and
@@ -43,17 +50,17 @@ type SignalHandler struct {
 
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
-func (h *SignalHandler) Forward(process *libcontainer.Process, tty *Tty, detach bool) (int, error) {
+func (h *SignalHandler) Forward(pid1 int, tty *Tty, detach bool) (int, error) {
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.
 	if detach && h.notifySocket == nil {
 		return 0, nil
 	}
 
-	pid1, err := process.Pid()
-	if err != nil {
-		return -1, err
-	}
+	// pid1, err := process.Pid()
+	// if err != nil {
+	// 	return -1, err
+	// }
 
 	if h.notifySocket != nil {
 		if detach {
@@ -84,7 +91,7 @@ func (h *SignalHandler) Forward(process *libcontainer.Process, tty *Tty, detach 
 					// call Wait() on the process even though we already have the exit
 					// status because we must ensure that any of the go specific process
 					// fun such as flushing pipes are complete before we return.
-					_, _ = process.Wait()
+					// _, _ = process.Wait() // NOTE:IO is handled by us, so this is commented out
 					return e.status, nil
 				}
 			}

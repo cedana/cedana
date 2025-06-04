@@ -11,7 +11,7 @@ import (
 
 // Adapter that just checks all required fields are present in the request
 func ValidateDumpVMRequest(next types.DumpVM) types.DumpVM {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpVMResp, req *daemon.DumpVMReq) (code func() <-chan int, err error) {
 		if req.GetDetails() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing details")
 		}

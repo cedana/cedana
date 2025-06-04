@@ -10,7 +10,7 @@ import (
 )
 
 func ValidateRestoreRequest(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		if req.GetDetails().GetRunc() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing runc run options")
 		}

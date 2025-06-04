@@ -38,7 +38,7 @@ type Manager interface {
 	// Since this runs in background, it should be called with a waitgroup,
 	// to ensure the caller can wait for the job to finish. If no exited channel is given,
 	// uses the PID to wait for the job to exit.
-	Manage(lifetime context.Context, jid string, pid uint32, exited ...<-chan int) error
+	Manage(lifetime context.Context, jid string, pid uint32, code <-chan int) error
 
 	// Kill sends a signal to a job with the given JID.
 	// If the plugin for the job type exports a custom signal, it will be used instead.
@@ -69,6 +69,6 @@ type Manager interface {
 	//// Misc ////
 	//////////////
 
-  // Sync is used to force the manager to sync its state with the underlying storage.
-  Sync(ctx context.Context) error
+	// Sync is used to force the manager to sync its state with the underlying storage.
+	Sync(ctx context.Context) error
 }

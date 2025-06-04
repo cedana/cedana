@@ -28,6 +28,7 @@ setup_rootfs_cuda() {
 create_workload_bundle() {
     local workload="$1"
     local arg="$2"
+    local arg2="$3"
     local workload_path="$WORKLOADS/$workload"
     local workload_name=$(basename "$workload_path")
 
@@ -40,7 +41,9 @@ create_workload_bundle() {
     cp "$BUNDLE"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/$workload_name\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/$workload_name\",\"$arg\"]"
     else
         args="[\"/$workload_name\"]"
@@ -56,6 +59,7 @@ create_workload_bundle() {
 create_workload_bundle_cuda() {
     local workload="$1"
     local arg="$2"
+    local arg2="$3"
     local workload_path="$WORKLOADS/$workload"
     local workload_name=$(basename "$workload_path")
 
@@ -68,7 +72,9 @@ create_workload_bundle_cuda() {
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/$workload_name\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/$workload_name\",\"$arg\"]"
     else
         args="[\"/$workload_name\"]"
@@ -84,6 +90,7 @@ create_workload_bundle_cuda() {
 create_samples_workload_bundle() {
     local workload="$1"
     local arg="$2"
+    local arg2="$3"
     local workload_path="/cedana-samples/$workload"
     local workload_name=$(basename "$workload_path")
 
@@ -96,7 +103,9 @@ create_samples_workload_bundle() {
     cp "$BUNDLE"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/$workload_name\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/$workload_name\",\"$arg\"]"
     else
         args="[\"/$workload_name\"]"
@@ -112,6 +121,7 @@ create_samples_workload_bundle() {
 create_samples_workload_bundle_cuda() {
     local workload="$1"
     local arg="$2"
+    local arg2="$3"
     local workload_path="/cedana-samples/$workload"
     local workload_name=$(basename "$workload_path")
 
@@ -124,7 +134,9 @@ create_samples_workload_bundle_cuda() {
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/$workload_name\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/$workload_name\",\"$arg\"]"
     else
         args="[\"/$workload_name\"]"
@@ -140,13 +152,16 @@ create_samples_workload_bundle_cuda() {
 create_cmd_bundle() {
     local cmd="$1"
     local arg="$2"
+    local arg2="$3"
 
     local bundle=$(mktemp -d)
 
     cp "$BUNDLE"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/bin/sh\",\"-c\",\"$cmd\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/bin/sh\",\"-c\",\"$cmd\",\"$arg\"]"
     else
         args="[\"/bin/sh\",\"-c\",\"$cmd\"]"
@@ -162,13 +177,16 @@ create_cmd_bundle() {
 create_cmd_bundle_cuda() {
     local cmd="$1"
     local arg="$2"
+    local arg2="$3"
 
     local bundle=$(mktemp -d)
 
     cp "$BUNDLE_CUDA"/config.json "$bundle"
 
     local config="$bundle"/config.json
-    if [ -n "$arg" ]; then
+    if [ -n "$arg" ] && [ -n "$arg2" ]; then
+        args="[\"/bin/sh\",\"-c\",\"$cmd\",\"$arg\",\"$arg2\"]"
+    elif [ -n "$arg" ]; then
         args="[\"/bin/sh\",\"-c\",\"$cmd\",\"$arg\"]"
     else
         args="[\"/bin/sh\",\"-c\",\"$cmd\"]"
@@ -204,4 +222,9 @@ add_bind_mount() {
     jq ".mounts += [{\"source\":\"$src\",\"destination\":\"$dest\",\"type\":\"bind\",\"options\":[\"rbind\",\"rw\"]}]" "$bundle/config.json" > "$bundle/config.json.tmp"
 
     mv "$bundle/config.json.tmp" "$bundle/config.json"
+}
+
+container_status() {
+    local cid="$1"
+    runc list | awk -v id="$cid" 'NR>1 && $1==id {print $3}'
 }
