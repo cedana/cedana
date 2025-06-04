@@ -405,14 +405,14 @@ func (p *pool) Check(binary string) types.Check {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
 		controller, err := p.Spawn(ctx, binary)
-		defer func() {
-			p.Terminate(controller.ID)
-		}()
 		if err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, err.Error())
 			return []*daemon.HealthCheckComponent{component}
 		}
+		defer func() {
+			p.Terminate(controller.ID)
+		}()
 
 		components, err := controller.WaitForHealthCheck(ctx)
 		if components == nil && err != nil {
