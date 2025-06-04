@@ -261,7 +261,7 @@ func (p *pool) Terminate(id string) {
 	if c.PID == 0 {
 		return
 	}
-	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL) // To process group so even its workers are killed
+	syscall.Kill(-int(c.PID), CONTROLLER_TERMINATE_SIGNAL) // To process group so even its workers are killed
 	if c.ClientConn != nil {
 		c.ClientConn.Close()
 		c.ClientConn = nil
