@@ -32,8 +32,6 @@ type Server struct {
 
 	grpcServer *grpc.Server
 	listener   net.Listener
-	wg         *sync.WaitGroup // for waiting for all background tasks to finish
-	lifetime   context.Context // lifetime of the server, used for graceful shutdown
 
 	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
 	// to the appropriate clh vm api
@@ -94,8 +92,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		Cedana: Cedana{
-			gpus:    gpuManager,
-			plugins: pluginManager,
+			gpus:     gpuManager,
+			plugins:  pluginManager,
+			wg:       wg,
+			lifetime: ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
@@ -108,12 +108,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
-		db:       database,
-		jobs:     jobManager,
-		wg:       wg,
-		lifetime: ctx,
-		host:     host,
-		version:  opts.Version,
+		db:      database,
+		jobs:    jobManager,
+		host:    host,
+		version: opts.Version,
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)

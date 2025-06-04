@@ -45,7 +45,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
-			exited, err := next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return nil, err
 			}
@@ -54,7 +54,14 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
-			return exited, nil
+			opts.WG.Add(1)
+			go func() {
+				<-code()
+				gpus.Detach(resp.PID)
+				opts.WG.Done()
+			}()
+
+			return code, nil
 		}
 	}
 }

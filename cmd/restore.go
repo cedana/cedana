@@ -198,6 +198,8 @@ var restoreCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
+			cedana.Shutdown()
+
 			os.Exit(<-code())
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)

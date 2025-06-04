@@ -20,12 +20,14 @@ type ManagerSimple struct {
 
 	plugins plugins.Manager
 	sync    sync.Mutex // Used to prevent concurrent syncs
+	wg      *sync.WaitGroup
 }
 
-func NewSimpleManager(ctx context.Context, plugins plugins.Manager) (*ManagerSimple, error) {
+func NewSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
 		plugins:     plugins,
 		controllers: pool{},
+		wg:          serverWg,
 	}
 
 	err := manager.Sync(ctx)
@@ -63,7 +65,9 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		log.Debug().Str("ID", controller.ID).Msg("using free GPU controller")
 	}
 
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		defer controller.Busy.Store(false)
 		ok := false
 		select {

@@ -16,22 +16,35 @@ type Cedana struct {
 	plugins plugins.Manager
 	gpus    gpu.Manager
 
-	wg *sync.WaitGroup
+	wg       *sync.WaitGroup
+	lifetime context.Context
+	cancel   context.CancelFunc
 }
 
 func New(ctx context.Context) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
 
+	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx)
+
 	pluginManager := plugins.NewLocalManager()
 
-	gpuManager, err := gpu.NewSimpleManager(ctx, pluginManager)
+	gpuManager, err := gpu.NewSimpleManager(ctx, wg, pluginManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
 
 	return &Cedana{
-		plugins: pluginManager,
-		gpus:    gpuManager,
-		wg:      &sync.WaitGroup{},
+		plugins:  pluginManager,
+		gpus:     gpuManager,
+		wg:       wg,
+		lifetime: ctx,
+		cancel:   cancel,
 	}, nil
+}
+
+func (c *Cedana) Shutdown() {
+	c.cancel()
+
+	c.wg.Wait()
 }

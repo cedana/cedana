@@ -45,16 +45,16 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
-			exited, err := next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
 			if err != nil {
-				return exited, err
+				return code, err
 			}
 
 			job.SetState(resp.GetState())
 
 			jobs.AddCheckpoint(jid, resp.GetPath())
 
-			return exited, nil
+			return code, nil
 		}
 	}
 }

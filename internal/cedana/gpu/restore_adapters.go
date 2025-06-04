@@ -48,7 +48,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			next = next.With(InheritFilesForRestore)
 
-			exited, err := next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return nil, err
 			}
@@ -57,7 +57,14 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			log.Info().Uint32("PID", resp.PID).Str("controller", id).Msg("GPU support restored for process")
 
-			return exited, nil
+			opts.WG.Add(1)
+			go func() {
+				<-code()
+				gpus.Detach(resp.PID)
+				opts.WG.Done()
+			}()
+
+			return code, nil
 		}
 	}
 }

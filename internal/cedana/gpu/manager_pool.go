@@ -19,14 +19,14 @@ const SYNC_INTERVAL = 10 * time.Second
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
 type ManagerPool struct {
-	*ManagerSimple // Embed simple manager that can implement most of what we need
+	*ManagerSimple // Embed simple manager implements most of what we need
 	poolSize       int
 
 	plugins plugins.Manager
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
-	simpleManager, err := NewSimpleManager(lifetime, plugins)
+	simpleManager, err := NewSimpleManager(lifetime, serverWg, plugins)
 	if err != nil {
 		return nil, err
 	}

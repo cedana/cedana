@@ -22,14 +22,14 @@ import (
 // Adapter that writes PID to a file after the next handler is called.
 func WritePIDFileForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		exited, err := next(ctx, opts, resp, req)
+		code, err = next(ctx, opts, resp, req)
 		if err != nil {
-			return exited, err
+			return code, err
 		}
 
 		pidFile := req.PidFile
 		if pidFile == "" {
-			return exited, err
+			return code, err
 		}
 
 		file, err := os.Create(pidFile)
@@ -48,7 +48,7 @@ func WritePIDFileForRestore(next types.Restore) types.Restore {
 
 		// Do not fail the request if we cannot write the PID file
 
-		return exited, nil
+		return code, nil
 	}
 }
 
@@ -76,12 +76,7 @@ func ReloadProcessStateForRestore(next types.Restore) types.Restore {
 
 		resp.State = state
 
-		exited, err := next(ctx, opts, resp, req)
-		if err != nil {
-			return exited, err
-		}
-
-		return exited, err
+		return next(ctx, opts, resp, req)
 	}
 }
 
