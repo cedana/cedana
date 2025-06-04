@@ -45,6 +45,10 @@ const (
 	RESTORE_TIMEOUT  = 5 * time.Minute
 	HEALTH_TIMEOUT   = 30 * time.Second
 	INFO_TIMEOUT     = 30 * time.Second
+
+	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
+	PARALLEL_DUMP    = true
+	PARALLEL_RESTORE = false // XXX: Turned off until GPU hostmem file handling is resolved
 )
 
 type controller struct {
@@ -311,7 +315,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			}
 			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU dump complete")
 		}()
-		return nil
+		if PARALLEL_DUMP {
+			return nil
+		}
+		return utils.GRPCError(<-dumpErr)
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -389,12 +396,15 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
 			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
 		}()
-		return nil
+		if PARALLEL_RESTORE {
+			return nil
+		}
+		return utils.GRPCError(<-restoreErr)
 	}
 
 	// Wait for GPU restore to finish before resuming the process
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
-		return <-restoreErr
+		return utils.GRPCError(<-restoreErr)
 	}
 
 	return callback
