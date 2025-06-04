@@ -208,9 +208,10 @@ teardown_file() {
     assert_exists "$dump_file"
 
     cedana restore process --path "$dump_file" --no-server &
+    ppid=$!
 
     run wait_for_pid "$pid"
     assert_success
 
-    run kill "$pid" -KILL
+    run kill "$ppid"
 }
