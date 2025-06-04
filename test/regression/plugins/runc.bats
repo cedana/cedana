@@ -76,6 +76,21 @@ teardown_file() {
 }
 
 # bats test_tags=daemonless
+@test "run container (without daemon, detached)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    cedana run runc --no-server --bundle "$bundle" --detach --jid "$jid"
+
+    sleep 1
+
+    assert_equal "$(container_status "$jid")" "running"
+
+    run runc kill "$jid" KILL
+    run runc delete "$jid"
+}
+
+# bats test_tags=daemonless
 @test "run container (without daemon, PID file)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -87,26 +102,6 @@ teardown_file() {
     assert_output --partial "hello"
 
     assert_exists "$pid_file"
-
-    run runc delete "$jid"
-}
-
-# bats test_tags=daemonless
-@test "run container (without daemon, detached)" {
-    jid=$(unix_nano)
-    bundle="$(create_cmd_bundle "echo hello")"
-    pid_file="/tmp/$jid.pid"
-
-    run cedana run --no-server runc --bundle "$bundle" --jid "$jid" --detach --pid-file "$pid_file"
-
-    assert_success
-
-    sleep 1
-
-    assert_exists "$pid_file"
-    pid=$(cat "$pid_file")
-
-    pid_exists "$pid"
 
     run runc delete "$jid"
 }

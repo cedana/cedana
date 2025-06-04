@@ -4,52 +4,60 @@ import (
 	"sync"
 )
 
-// broadcaster is a type that manages fan-out broadcasting of values to multiple receiver channels.
+// broadcaster is a generic type that manages broadcasting values of type T to multiple receivers,
+// retaining a buffer of all sent values so new receivers get the entire history upon subscription.
+// It protects access with sync.RWMutex, holds all active receiver channels, a buffer of sent values,
+// and tracks whether the broadcaster has been closed.
 type broadcaster[T any] struct {
-	sync.RWMutex             // protects concurrent access to receivers and closed
-	receivers    chan chan T // channel of receiver channels
-	closed       bool        // indicates whether broadcasting has ended
+	sync.RWMutex
+	receivers []chan T // active receiver channels
+	buffer    []T      // all sent values stored for replay to new receivers
+	closed    bool     // tracks whether the broadcaster is closed
 }
 
-// Broadcaster returns a function that generates new receiver channels,
-// each receiving copies of all values sent on the input channel "in" until it is closed.
+// Broadcaster returns a function that when called, yields a new channel that receives all values
+// ever sent on the input channel 'in'. New channels receive the full history on subscription,
+// and receivers added after closure see the full buffer and an immediate close.
+// All channel access/updates are internally synchronized.
 func Broadcaster[T any](in <-chan T) func() <-chan T {
-	bc := &broadcaster[T]{
-		receivers: make(chan chan T, 1024), // buffer size for receiver registration
-	}
+	bc := &broadcaster[T]{}
 
-	// Start fan-out goroutine.
 	go func() {
 		for val := range in {
-			for ch := range bc.receivers {
+			bc.Lock()
+			// save value to buffer
+			bc.buffer = append(bc.buffer, val)
+			// send value to all receivers, non-blockingly
+			for _, ch := range bc.receivers {
 				select {
 				case ch <- val:
-				default: // Non-blocking send to avoid blocking the broadcaster
+				default:
 				}
 			}
+			bc.Unlock()
 		}
-		// Close all receivers when input is closed
 		bc.Lock()
 		bc.closed = true
-		bc.Unlock()
-
-		for ch := range bc.receivers {
+		for _, ch := range bc.receivers {
 			close(ch)
 		}
-		close(bc.receivers)
+		bc.Unlock()
 	}()
 
-	// Return a function to create a new receiver channel.
 	return func() <-chan T {
+		ch := make(chan T, 1)
 		bc.Lock()
-		defer bc.Unlock()
-		if bc.closed {
-			ch := make(chan T)
-			close(ch)
-			return ch
+		// First, replay all buffered data
+		for _, v := range bc.buffer {
+			ch <- v
 		}
-		ch := make(chan T, 16)
-		bc.receivers <- ch // Register receiver via channel
+		if bc.closed {
+			close(ch)
+			bc.Unlock()
+		} else {
+			bc.receivers = append(bc.receivers, ch)
+			bc.Unlock()
+		}
 		return ch
 	}
 }
