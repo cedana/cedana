@@ -37,6 +37,8 @@ teardown_file() {
     run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
     assert_success
 
+    sleep 1
+
     run cedana dump job "$jid" --dir cedana://ci
     assert_success
 
@@ -53,6 +55,8 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
+    sleep 1
+
     run cedana dump process $pid --name "$name" --compression tar --dir cedana://ci
     assert_success
 
@@ -64,6 +68,8 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
+
+    sleep 1
 
     run cedana dump process $pid --name "$name" --compression gzip --dir cedana://ci
     assert_success
@@ -77,6 +83,8 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
+    sleep 1
+
     run cedana dump process $pid --name "$name" --compression lz4 --dir cedana://ci
     assert_success
 
@@ -88,6 +96,8 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
+
+    sleep 1
 
     run cedana dump process $pid --name "$name" --compression zlib --dir cedana://ci
     assert_success
@@ -105,6 +115,8 @@ teardown_file() {
 
     run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
     assert_success
+
+    sleep 1
 
     run cedana dump job "$jid" --dir cedana://ci
     assert_success
@@ -125,6 +137,8 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
+    sleep 1
+
     run cedana dump process $pid --name "$name" --compression tar --dir cedana://ci
     assert_success
 
@@ -143,6 +157,8 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
+
+    sleep 1
 
     run cedana dump process $pid --name "$name" --compression gzip --dir cedana://ci
     assert_success
@@ -163,6 +179,8 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
+    sleep 1
+
     run cedana dump process $pid --name "$name" --compression lz4 --dir cedana://ci
     assert_success
 
@@ -181,6 +199,8 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
+
+    sleep 1
 
     run cedana dump process $pid --name "$name" --compression zlib --dir cedana://ci
     assert_success
