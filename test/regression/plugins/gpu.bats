@@ -207,11 +207,10 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore process --path "$dump_file" --no-server &
+    cedana restore process --path "$dump_file" --no-server &
 
-    sleep 2
-    run pid_exists "$pid"
+    run wait_for_pid "$pid"
     assert_success
 
-    run kill "$pid"
+    run kill "$pid" -KILL
 }

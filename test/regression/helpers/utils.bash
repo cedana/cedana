@@ -87,3 +87,20 @@ pid_exists() {
     fi
     kill -0 "$pid" 2>/dev/null
 }
+
+wait_for_pid() {
+    local pid=$1
+    local timeout=${2:-10}
+    local interval=${3:-0.1}
+    local elapsed=0
+
+    while ! kill -0 "$pid" 2>/dev/null; do
+        if (( $(echo "$elapsed >= $timeout" | bc -l) )); then
+            return 1
+        fi
+        sleep "$interval"
+        elapsed=$(echo "$elapsed + $interval" | bc)
+    done
+
+    return 0
+}
