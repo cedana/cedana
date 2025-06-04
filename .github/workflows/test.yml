@@ -298,7 +298,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: ${{ inputs.gpu }}
+      gpu: false
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
