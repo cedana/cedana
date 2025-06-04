@@ -9,7 +9,7 @@ import (
 // It protects access with sync.RWMutex, holds all active receiver channels, a buffer of sent values,
 // and tracks whether the broadcaster has been closed.
 type broadcaster[T any] struct {
-	sync.RWMutex
+	sync.Mutex
 	receivers []chan T // active receiver channels
 	buffer    []T      // all sent values stored for replay to new receivers
 	closed    bool     // tracks whether the broadcaster is closed
@@ -47,16 +47,15 @@ func Broadcaster[T any](in <-chan T) func() <-chan T {
 	return func() <-chan T {
 		ch := make(chan T, 1)
 		bc.Lock()
+		defer bc.Unlock()
 		// First, replay all buffered data
 		for _, v := range bc.buffer {
 			ch <- v
 		}
 		if bc.closed {
 			close(ch)
-			bc.Unlock()
 		} else {
 			bc.receivers = append(bc.receivers, ch)
-			bc.Unlock()
 		}
 		return ch
 	}
