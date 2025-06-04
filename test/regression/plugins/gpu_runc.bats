@@ -85,6 +85,8 @@ teardown_file() {
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
 
+    sleep 1
+
     run cedana dump job "$jid"
     assert_success
 
@@ -101,6 +103,8 @@ teardown_file() {
 
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
+
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
@@ -123,6 +127,8 @@ teardown_file() {
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
 
+    sleep 1
+
     run cedana dump job "$jid"
     assert_success
 
@@ -143,6 +149,8 @@ teardown_file() {
 
     run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
     assert_success
+
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
