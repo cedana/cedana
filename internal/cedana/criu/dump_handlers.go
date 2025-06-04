@@ -90,7 +90,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
 
-	log.Debug().Int("CRIU", version).Msg("CRIU dump complete")
+	log.Debug().Int("CRIU", version).Uint32("PID", resp.State.PID).Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
 }

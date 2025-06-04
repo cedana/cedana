@@ -145,7 +145,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		}()
 	}
 
-	log.Debug().Int("CRIU", version).Msg("CRIU restore complete")
+	log.Debug().Int("CRIU", version).Uint32("PID", resp.PID).Msg("CRIU restore complete")
 
 	return code, err
 }
