@@ -64,6 +64,7 @@ type controller struct {
 	Busy     atomic.Bool
 	ErrBuf   *bytes.Buffer
 
+	Termination sync.Mutex // To protect termination
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
@@ -256,6 +257,9 @@ func (p *pool) Terminate(id string) {
 	if c == nil {
 		return
 	}
+	c.Termination.Lock()
+	defer c.Termination.Unlock()
+
 	p.Delete(id) // Remove from the pool
 
 	if c.PID == 0 {
@@ -311,7 +315,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		// Begin GPU dump in parallel to CRIU dump
 
 		go func() {
+			controller.Termination.Lock() // Required to ensure the controller does not get terminated while dumping
+			defer controller.Termination.Unlock()
 			defer close(dumpErr)
+
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
@@ -387,6 +394,9 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 				restoreErr <- fmt.Errorf("GPU controller not found, is the process still running?")
 				return
 			}
+
+			controller.Termination.Lock() // Required to ensure the controller does not get terminated while restoring
+			defer controller.Termination.Unlock()
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
