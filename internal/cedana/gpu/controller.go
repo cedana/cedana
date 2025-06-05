@@ -269,7 +269,15 @@ func (p *pool) Terminate(id string) {
 	}
 	if !c.External {
 		// If we are the parent process of the GPU controller, we should clean it up properly
-		syscall.Wait4(int(c.PID), nil, 0, nil)
+		process, err := os.FindProcess(int(c.PID))
+		if err != nil {
+			return
+		}
+		state, err := process.Wait()
+		if err != nil {
+			log.Trace().Err(err).Str("ID", id).Msg("GPU controller Wait()")
+		}
+		log.Trace().Str("ID", id).Int("status", state.ExitCode()).Msg("GPU controller exited")
 	}
 }
 
