@@ -217,7 +217,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 		os.Environ(),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
-		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%d", config.Global.GPU.ShmSize),
+		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 	)
 
 	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id)
