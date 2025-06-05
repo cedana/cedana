@@ -54,13 +54,6 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
-			opts.WG.Add(1)
-			go func() {
-				<-code()
-				gpus.Detach(resp.PID)
-				opts.WG.Done()
-			}()
-
 			return code, nil
 		}
 	}

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -75,6 +76,11 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
 		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
+
+		if confDir == "" {
+			confDir = os.Getenv("CEDANA_CONFIG_DIR")
+		}
+
 		if err := config.Init(config.InitArgs{
 			Config:    conf,
 			ConfigDir: confDir,

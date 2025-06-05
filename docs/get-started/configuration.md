@@ -98,14 +98,18 @@ type DB struct {
 
 ```go
 type GPU struct {
-    // Number of warm GPU controllers to keep in pool
-    PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
-    // LogDir is the directory to write GPU logs to. By default, logs are written to daemon's stdout
-    LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+		// Number of warm GPU controllers to keep in pool
+		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
+		// LogDir is the directory to write GPU logs to
+		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+		// SockDir is the directory to use for the GPU sockets
+		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
+		// Track metrics associated with observability
+		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
 		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
-		ShmSize int `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 }
 ```
 

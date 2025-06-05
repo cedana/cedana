@@ -133,3 +133,32 @@ teardown_file() {
     run cedana job kill "$jid"
     run cedana job delete "$jid"
 }
+
+# bats test_tags=restore,daemonless
+@test "restore GPU container (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+
+    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    assert_success
+
+    sleep 1
+
+    run cedana dump job "$jid" --stream 4
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
+
+    run cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --stream 4 --no-server
+    assert_success
+
+    assert_equal "$(container_status "$jid")" "running"
+
+    runc kill "$jid" KILL
+    runc delete "$jid"
+}

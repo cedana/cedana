@@ -209,18 +209,20 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return code, nil
 		}
 
-		status, err := (<-handlerCh).Forward(int(resp.PID), tty, details.Detach) // ignore status code, as the restore handler reaps for it
-		if err != nil {
-			container.Signal(unix.SIGKILL)
-		}
-		exitCode <- status
-		close(exitCode)
-		if details.Detach {
-			return code, nil
-		}
-		if err == nil {
-			container.Destroy()
-		}
+		go func() {
+			status, err := (<-handlerCh).Forward(int(resp.PID), tty, details.Detach) // ignore status code, as the restore handler reaps for it
+			if err != nil {
+				container.Signal(unix.SIGKILL)
+			}
+			exitCode <- status
+			close(exitCode)
+			if details.Detach {
+				return
+			}
+			if err == nil {
+				container.Destroy()
+			}
+		}()
 
 		return code, nil
 	}

@@ -57,13 +57,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			log.Info().Uint32("PID", resp.PID).Str("controller", id).Msg("GPU support restored for process")
 
-			opts.WG.Add(1)
-			go func() {
-				<-code()
-				gpus.Detach(resp.PID)
-				opts.WG.Done()
-			}()
-
 			return code, nil
 		}
 	}

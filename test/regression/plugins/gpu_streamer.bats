@@ -142,3 +142,32 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore,daemonless
+@test "stream restore GPU process (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    assert_success
+
+    pid=$(pid_for_jid "$jid")
+
+    sleep 2
+
+    run cedana dump job "$jid" --stream 4
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
+
+    cedana restore process --path "$dump_file" --stream 4 --no-server &
+
+    run wait_for_pid "$pid"
+    assert_success
+
+    kill "$pid"
+}
+

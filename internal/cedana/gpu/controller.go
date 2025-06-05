@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	CONTROLLER_ADDRESS_FORMATTER  = "unix:///tmp/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_FORMATTER   = "/tmp/cedana-gpu-controller-%s.sock"
+	CONTROLLER_ADDRESS_FORMATTER  = "unix://%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_FORMATTER   = "%s/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_PATTERN     = "cedana-gpu-controller-(.*).sock"
 	CONTROLLER_SHM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s"
 	CONTROLLER_SHM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*)"
@@ -167,7 +167,7 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 		if c == nil {
 			c = &controller{
 				ID:       id,
-				Address:  fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id),
+				Address:  fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
 				External: true, // If we are here, we didn't spawn this controller, so it is external
 			}
 		} else if c.Busy.Load() {
@@ -221,7 +221,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 	)
 
-	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, id)
+	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id)
 	c.Busy.Store(true) // Busy until whoever spawned us sets us free
 
 	p.Store(id, c)
@@ -251,7 +251,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 }
 
 func (p *pool) Terminate(id string) {
-	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, id))
+	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 
 	c := p.Get(id)
 	if c == nil {

@@ -152,6 +152,8 @@ func (m *ManagerPool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *cri
 ////////////////////////
 
 func (m *ManagerPool) Shutdown(ctx context.Context) {
+	m.ManagerSimple.Sync(ctx) // Call the sync method of the embedded simple manager
+
 	m.sync.Lock()
 	defer m.sync.Unlock()
 
