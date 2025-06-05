@@ -454,6 +454,7 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana restore process --path "$dump_file" --no-server
+    echo "$output"
     assert_equal $status $code
 }
 
@@ -469,6 +470,7 @@ teardown_file() {
     assert_success
 
     run cedana restore job "$jid" --attach
+    echo "$output"
     assert_equal $status $code
 }
 
@@ -484,6 +486,7 @@ teardown_file() {
     assert_success
 
     run cedana restore job "$jid" --attach
+    echo "$output"
     assert_equal $status $code
 }
 
@@ -500,6 +503,7 @@ teardown_file() {
     assert_success
 
     run cedana restore job "$jid"
+    echo "$output"
     assert_success
 
     sleep 3
@@ -521,6 +525,7 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana restore process --path "$dump_file" --no-server
+    echo "$output"
     assert_equal $status $code
 }
 
