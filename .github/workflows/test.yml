@@ -328,7 +328,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: ${{ inputs.gpu }}
+      gpu: false # will be tested in the regression-gpu job already
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
