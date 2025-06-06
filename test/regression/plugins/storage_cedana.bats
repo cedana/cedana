@@ -132,6 +132,27 @@ teardown_file() {
 }
 
 # bats test_tags=restore
+@test "remote restore process (new job, without daemon)" {
+    jid=$(unix_nano)
+    code=42
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 7 $code --jid "$jid"
+    assert_success
+
+    sleep 1
+
+    run cedana dump job "$jid" --dir cedana://ci
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    run echo "$dump_file"
+    assert_output --partial "cedana://ci"
+
+    run cedana restore process --path "$dump_file" --no-server
+    assert_equal "$status" "$code"
+}
+
+# bats test_tags=restore
 @test "remote restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!

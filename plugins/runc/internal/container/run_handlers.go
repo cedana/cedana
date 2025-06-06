@@ -105,7 +105,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	os.Remove(logFile)
 	os.Remove(pidFile)
 
-	cmd := exec.CommandContext(ctx,
+	cmd := exec.Command(
 		RUNC_BINARY,
 		fmt.Sprintf("--root=%s", root),
 		fmt.Sprintf("--log=%s", logFile),

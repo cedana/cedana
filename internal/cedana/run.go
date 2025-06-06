@@ -54,7 +54,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	return resp, nil
 }
 
-func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (code func() <-chan int, err error) {
+func (s *Cedana) Run(req *daemon.RunReq) (code func() <-chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
@@ -71,13 +71,13 @@ func (s *Cedana) Run(ctx context.Context, req *daemon.RunReq) (code func() <-cha
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.Opts{
-		Lifetime: ctx,
+		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
 	}
 	resp := &daemon.RunResp{}
 
-	return run(ctx, opts, resp, req)
+	return run(s.lifetime, opts, resp, req)
 }
 
 //////////////////////////

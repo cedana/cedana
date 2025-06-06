@@ -8,7 +8,7 @@ start_containerd() {
         exit 1
     fi
 
-    containerd &
+    containerd > /dev/null &
 }
 
 stop_containerd() {

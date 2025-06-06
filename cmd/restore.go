@@ -193,7 +193,7 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			code, err := cedana.Restore(ctx, req)
+			code, err := cedana.Restore(req)
 			if err != nil {
 				cedana.Shutdown()
 				return utils.GRPCErrorColored(err)

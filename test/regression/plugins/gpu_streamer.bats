@@ -13,7 +13,6 @@ load_lib assert
 load_lib file
 
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
-export CEDANA_GPU_SHM_SIZE=$((1*GIBIBYTE)) # Since workloads here are small
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
@@ -168,6 +167,5 @@ teardown_file() {
     run wait_for_pid "$pid"
     assert_success
 
-    kill "$pid"
+    kill -KILL "$pid"
 }
-

@@ -38,6 +38,7 @@ const (
 	CONTROLLER_SHM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*)"
 	CONTROLLER_PROCESS_NAME       = "cedana-gpu-controller"
 	CONTROLLER_TERMINATE_SIGNAL   = syscall.SIGTERM
+	RESTORE_NEW_PID_SIGNAL        = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -144,9 +145,9 @@ func (p *pool) GetFree() *controller {
 
 // Sync with all existing GPU controllers in the system
 func (p *pool) Sync(ctx context.Context) (err error) {
-	list, err := os.ReadDir(os.TempDir())
+	list, err := os.ReadDir(config.Global.GPU.SockDir)
 	if err != nil {
-		return fmt.Errorf("failed to read temp directory: %w", err)
+		return fmt.Errorf("failed to read GPU sock directory: %w", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -202,7 +203,15 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 		ErrBuf: &bytes.Buffer{},
 	}
 
-	cmd := exec.Command(binary, id, observability, "--log-dir", config.Global.GPU.LogDir)
+	cmd := exec.Command(
+		binary,
+		id,
+		observability,
+		"--log-dir",
+		config.Global.GPU.LogDir,
+		"--sock-dir",
+		config.Global.GPU.SockDir,
+	)
 
 	// We create a new process group and session to essentially daemonize the controller process.
 	// So that workers of the controller can all be signaled together.
@@ -279,9 +288,9 @@ func (p *pool) Terminate(id string) {
 		}
 		state, err := process.Wait()
 		if err != nil {
-			log.Trace().Err(err).Str("ID", id).Msg("GPU controller Wait()")
+			log.Trace().Err(err).Str("ID", id).Uint32("PID", c.PID).Msg("GPU controller Wait()")
 		}
-		log.Trace().Str("ID", id).Int("status", state.ExitCode()).Msg("GPU controller exited")
+		log.Trace().Str("ID", id).Uint32("PID", c.PID).Int("status", state.ExitCode()).Msg("GPU controller exited")
 	}
 }
 
@@ -420,9 +429,20 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		return utils.GRPCError(<-restoreErr)
 	}
 
+	restoredPid := make(chan int32, 1)
+
 	// Wait for GPU restore to finish before resuming the process
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
+		restoredPid <- pid
+		close(restoredPid)
+
 		return utils.GRPCError(<-restoreErr)
+	}
+
+	// Signal the process so it knowns it may have a new PID (only useful for containers which get
+	// restore with a different host PID).
+	callback.PreResumeFunc = func(ctx context.Context) error {
+		return syscall.Kill(int(<-restoredPid), RESTORE_NEW_PID_SIGNAL)
 	}
 
 	return callback

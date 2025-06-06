@@ -8,6 +8,8 @@ export CEDANA_REMOTE=false
 export CEDANA_LOG_LEVEL=debug
 export CEDANA_PROFILING_ENABLED=false
 export CEDANA_CHECKPOINT_COMPRESSION=none
+: "${CEDANA_GPU_SHM_SIZE:=$((1*GIBIBYTE))}" # Since most workloads are small, we keep this default
+export CEDANA_GPU_SHM_SIZE
 
 WAIT_TIMEOUT=100
 
@@ -71,14 +73,14 @@ teardown_daemon() {
 start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
-    cedana daemon start --address "$sock" --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    cedana daemon start --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
 
 wait_for_start() {
     local sock=$1
     local i=0
-    while ! cedana --address "$sock" ps &>/dev/null; do
+    while ! cedana ps &>/dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -101,18 +103,12 @@ stop_daemon_at() {
 wait_for_stop() {
     local sock=$1
     local i=0
-    while cedana --address "$sock" ps &>/dev/null; do
+    while cedana ps &>/dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             echo "Daemon failed to stop" 1>&2
-
-            # HACK: Force kill if failed to stop. This is not good because there might be
-            # an actual issue causing the daemon to not stop. Once resolved, should remove this
-            # and just let the test fail with non-zero exit code.
-
-            kill_at_sock "$sock" KILL
-            break
+            exit 1
         fi
     done
 }
@@ -120,7 +116,7 @@ wait_for_stop() {
 daemon_log_file() {
     local sock=$1
     id=$(basename "$sock")
-    echo /var/log/cedana-daemon-"$id".log
+    echo /tmp/cedana-daemon-"$id".log
 }
 
 pid_for_jid() {

@@ -13,7 +13,6 @@ load_lib assert
 load_lib file
 
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
-export CEDANA_GPU_SHM_SIZE=$((1*GIBIBYTE)) # Since workloads here are small
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
@@ -120,3 +119,26 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore,daemonless
+@test "stream restore GPU process (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    assert_success
+
+    pid=$(pid_for_jid "$jid")
+
+    sleep 2
+
+    run cedana dump job "$jid" --stream 4 --dir cedana://ci
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+
+    cedana restore process --path "$dump_file" --stream 4 --no-server &
+
+    run wait_for_pid "$pid"
+    assert_success
+
+    kill -KILL "$pid"
+}

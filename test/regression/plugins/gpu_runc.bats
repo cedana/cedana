@@ -14,7 +14,6 @@ load_lib assert
 load_lib file
 
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
-export CEDANA_GPU_SHM_SIZE=$((1*GIBIBYTE)) # Since workloads here are small
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
@@ -180,13 +179,14 @@ teardown_file() {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
 
     sleep 1
 
-    run cedana dump job "$jid"
+    run cedana dump runc "$jid"
     assert_success
+
+    runc delete "$jid"
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
@@ -197,5 +197,6 @@ teardown_file() {
     assert_equal "$(container_status "$jid")" "running"
 
     runc kill "$jid" KILL
+    wait_for_container_status "$jid" "stopped"
     runc delete "$jid"
 }

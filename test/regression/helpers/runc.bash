@@ -228,3 +228,21 @@ container_status() {
     local cid="$1"
     runc list | awk -v id="$cid" 'NR>1 && $1==id {print $3}'
 }
+
+wait_for_container_status() {
+    local cid="$1"
+    local status="$2"
+    local timeout="${3:-30}"
+    local interval=1
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if [ "$(container_status "$cid")" == "$status" ]; then
+            return 0
+        fi
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    return 1
+}

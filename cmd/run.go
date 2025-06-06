@@ -149,7 +149,7 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
 			}
 
-			code, err := cedana.Run(ctx, req)
+			code, err := cedana.Run(req)
 			if err != nil {
 				cedana.Shutdown()
 				return utils.GRPCErrorColored(err)

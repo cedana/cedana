@@ -209,7 +209,9 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return code, nil
 		}
 
+		opts.WG.Add(1)
 		go func() {
+			defer opts.WG.Done()
 			status, err := (<-handlerCh).Forward(int(resp.PID), tty, details.Detach) // ignore status code, as the restore handler reaps for it
 			if err != nil {
 				container.Signal(unix.SIGKILL)

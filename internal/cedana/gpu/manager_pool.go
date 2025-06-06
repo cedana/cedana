@@ -50,7 +50,11 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 		for {
 			select {
 			case <-lifetime.Done():
-				manager.Shutdown(context.WithoutCancel(lifetime))
+				manager.poolSize = 0 // Reset it so all free controllers are terminated
+				err := manager.Sync(context.WithoutCancel(lifetime))
+				if err != nil {
+					log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
+				}
 				return
 			case <-time.After(SYNC_INTERVAL):
 				err := manager.Sync(lifetime)
@@ -145,27 +149,4 @@ func (m *ManagerPool) Checks() types.Checks {
 
 func (m *ManagerPool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
 	return m.controllers.CRIUCallback(id, freezeType...)
-}
-
-////////////////////////
-//// Helper Methods ////
-////////////////////////
-
-func (m *ManagerPool) Shutdown(ctx context.Context) {
-	m.ManagerSimple.Sync(ctx) // Call the sync method of the embedded simple manager
-
-	m.sync.Lock()
-	defer m.sync.Unlock()
-
-	// This action is used to shutdown the pool and terminate all free controllers
-
-	free, _, _ := m.controllers.List()
-
-	for _, controller := range free {
-		// Ensure we only terminate controllers that are still free
-		if controller.Busy.CompareAndSwap(false, true) {
-			log.Debug().Str("ID", controller.ID).Msg("terminating free GPU controller")
-			m.controllers.Terminate(controller.ID)
-		}
-	}
 }
