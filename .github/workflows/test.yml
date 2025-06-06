@@ -301,11 +301,11 @@ jobs:
           fi
 
       - name: Set sanitized plugin
+        env:
+          PLUGIN: ${{ matrix.plugin }}
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-        env:
-          MATRIX_PLUGIN: ${{ matrix.plugin }}
 
       - name: Upload report
         if: ${{ !cancelled() }}
@@ -376,11 +376,7 @@ jobs:
           path: report
 
       - name: Post report
-        uses: dorny/test-reporter@v2
-        if: ${{ !cancelled() }}
+        uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          name: Regression (${{ matrix.arch }})
-          path: report/**/*.xml
-          reporter: java-junit
-          fail-on-error: false
-          fail-on-empty: false
+          files: report/**/*.xml
+          check_name: Regression tests (${{ matrix.arch }})
