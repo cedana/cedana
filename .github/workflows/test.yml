@@ -203,9 +203,9 @@ jobs:
           ARGS: --output /tmp --report-formatter junit
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM ARGS=$ARGS
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM ARGS="$ARGS"
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM ARGS=$ARGS
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM ARGS="$ARGS"
           fi
 
       - name: Upload report
@@ -296,9 +296,9 @@ jobs:
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM ARGS=$ARGS
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM ARGS="$ARGS"
           else
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM ARGS=$ARGS
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM ARGS="$ARGS"
           fi
 
       - name: Upload report
@@ -352,6 +352,14 @@ jobs:
           - amd64
           - arm64
     steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Download reports
         id: download-reports
         uses: actions/download-artifact@v4

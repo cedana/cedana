@@ -142,15 +142,15 @@ jobs:
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS=$ARGS
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS"
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS=$ARGS
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS"
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS=$ARGS
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS="$ARGS"
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS=$ARGS
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS="$ARGS"
             fi
           fi
 
