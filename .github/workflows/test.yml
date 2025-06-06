@@ -4,6 +4,8 @@ permissions:
   contents: read
   packages: read
   id-token: write
+  pull-requests: write
+  checks: write
 
 on:
   workflow_call:
@@ -42,7 +44,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 4
+        default: 2
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -326,7 +328,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: false # will be tested in the regression-gpu job already
+      gpu: ${{ inputs.gpu }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}

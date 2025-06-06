@@ -47,7 +47,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 4
+        default: 2
 
 jobs:
   streamer:
