@@ -30,3 +30,7 @@ go.work.sum
 *.tar.gz
 rootfs
 _rootfs
+
+.cursor/
+prompts/
+specs/
