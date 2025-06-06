@@ -279,14 +279,6 @@ jobs:
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
-      - name: Set sanitized plugin
-        run: |
-          # replace slash in plugin with colon so that the tag is namespaced correctly
-          # e.g. storage/cedana -> storage:cedana
-          echo "PLUGIN=${MATRIX_PLUGIN//\//-}" >> $GITHUB_ENV
-        env:
-          MATRIX_PLUGIN: ${{ matrix.plugin }}
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
@@ -297,14 +289,23 @@ jobs:
         env:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          PLUGIN: ${{ env.PLUGIN }}
           ARGS: --output /tmp --report-formatter junit
         run: |
+          # replace slash in plugin with colon so that the tag is namespaced correctly
+          # e.g. storage/cedana -> storage:cedana
+          PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM ARGS="$ARGS"
           else
             make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM ARGS="$ARGS"
           fi
+
+      - name: Set sanitized plugin
+        run: |
+          PLUGIN=$(echo $PLUGIN | sed 's/\/-/g')
+          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+        env:
+          MATRIX_PLUGIN: ${{ matrix.plugin }}
 
       - name: Upload report
         if: ${{ !cancelled() }}
