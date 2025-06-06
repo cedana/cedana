@@ -401,7 +401,7 @@ jobs:
           pull-request: true
           title: ${{ matrix.arch }}
           update-comment: true
-          overwrite-comment: false
+          overwrite-comment: true
           comment-tag: test-report-${{ matrix.arch }}
           group-by: "suite"
           always-group-by: true
