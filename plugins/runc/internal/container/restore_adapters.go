@@ -195,9 +195,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			opts.WG.Add(1)
 			go func() {
 				defer opts.WG.Done()
-				log.Warn().Int("pid", int(resp.PID)).Msg("waiting for container process to exit")
 				p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-				log.Warn().Int("pid", int(resp.PID)).Msg("waited for container process to exit")
 				status, err := p.Wait()
 				if err != nil {
 					log.Trace().Err(err).Msg("container Wait()")
