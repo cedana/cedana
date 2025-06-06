@@ -153,8 +153,8 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
-BATS_CMD=bats --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
+BATS_CMD_TAGS=bats -T --filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
+BATS_CMD=bats -T --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
 
 test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 
