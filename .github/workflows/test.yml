@@ -407,3 +407,5 @@ jobs:
           comment-tag: test-report-${{ matrix.arch }}
           group-by: "suite"
           always-group-by: true
+          upload-artifact: true
+          artifact-name: ctrf-report-${{ matrix.arch }}

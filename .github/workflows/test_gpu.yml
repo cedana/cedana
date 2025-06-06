@@ -220,3 +220,5 @@ jobs:
           comment-tag: test-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
           group-by: "suite"
           always-group-by: true
+          upload-artifact: true
+          artifact-name: ctrf-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
