@@ -151,20 +151,19 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
-          ARGS: --output /tmp --report-formatter junit
-          RETRIES: 3
+          RETRIES: 2
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS" RETRIES=$RETRIES
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS" RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS="$ARGS" RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS="$ARGS" RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             fi
           fi
 
@@ -175,7 +174,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-streamer
           path: |
-            /tmp/report.xml
+            /tmp/report*.xml
 
   post-summary:
     name: Post Summary

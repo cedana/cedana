@@ -153,12 +153,14 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT=300
-RETRIES=0
+TIMEOUT?=300
+RETRIES?=0
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
-				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
+				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--output /tmp --report-formatter junit
 BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
-		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
+		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--output /tmp --report-formatter junit
 
 test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 
@@ -176,11 +178,17 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		else \
 			$(BATS_CMD_TAGS) -r test/regression ;\
 		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-isolated.xml ;\
+		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
 		else \
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
+		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-persisted.xml ;\
 		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \
