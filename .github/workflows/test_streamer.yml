@@ -156,7 +156,7 @@ jobs:
           fi
 
       - name: Upload report
-        if: ${{ !cancelled() }}
+        if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
