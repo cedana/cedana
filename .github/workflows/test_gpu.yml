@@ -1,5 +1,12 @@
 name: Test / CUDA
 
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   workflow_call:
     inputs:
@@ -38,6 +45,11 @@ on:
         description: "Runner machine for tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      post_summary:
+        type: boolean
+        description: "Post test summary"
+        required: false
+        default: false
 
 jobs:
   cuda:
@@ -158,3 +170,53 @@ jobs:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
           path: |
             /tmp/report.xml
+
+  post-summary:
+    name: Post Summary
+    if: inputs.post_summary && always()
+    needs: cuda
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda_version:
+          # - 11-8  TODO: re-enable once compatibility is fixed
+          # - 12-2
+          - 12-4
+          - 12-8
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download report
+        id: download-report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
+          path: report
+
+      - name: Generate consolidated report
+        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
+
+      - name: Post report
+        uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          report-path: ctrf/*.json
+          github-report: true
+          failed-folded-report: true
+          summary: true
+          pull-request: true
+          title: CUDA ${{ matrix.cuda_version }}, ${{ matrix.arch }}
+          update-comment: true
+          overwrite-comment: true
+          comment-tag: test-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
+          group-by: "suite"
+          always-group-by: true

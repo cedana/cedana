@@ -341,6 +341,7 @@ jobs:
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
 
   regression-gpu:
     name: GPU
@@ -355,6 +356,7 @@ jobs:
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
 
   post-summary:
     name: Post Summary
