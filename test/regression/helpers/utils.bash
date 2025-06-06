@@ -95,11 +95,11 @@ wait_for_pid() {
     local elapsed=0
 
     while ! kill -0 "$pid" 2>/dev/null; do
-        if (( $(echo "$elapsed >= $timeout" | bc -l) )); then
+        if (( elapsed >= timeout )); then
             return 1
         fi
         sleep "$interval"
-        elapsed=$(echo "$elapsed + $interval" | bc)
+        ((elapsed += interval))
     done
 
     return 0
