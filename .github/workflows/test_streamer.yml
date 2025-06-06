@@ -152,7 +152,7 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
           ARGS: --output /tmp --report-formatter junit
-          RETRIES: 2
+          RETRIES: 3
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
