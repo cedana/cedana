@@ -532,9 +532,9 @@ jobs:
           path: |
             /src/results
 
-  post_summary:
+  post-summary:
     name: Post Summary
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [cedana_runtime_1, cedana_runtime_2, cedana_cr_1, cedana_cr_2, native]
     permissions:
       contents: "read"

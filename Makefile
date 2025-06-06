@@ -152,8 +152,9 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 
 PARALLELISM?=8
 TAGS?=
-BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM)
-BATS_CMD=bats --jobs $(PARALLELISM)
+ARGS?=
+BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
+BATS_CMD=bats --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure
 
 test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 
@@ -182,13 +183,13 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
 			$(DOCKER_TEST_CREATE_CUDA) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_CREATE) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		fi ;\
 	fi

@@ -138,17 +138,27 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
+          ARGS: --output /tmp --report-formatter junit
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS=$ARGS
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS=$ARGS
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS=$ARGS
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS=$ARGS
             fi
           fi
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        id: upload-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.arch }}-streamer
+          path: |
+            /tmp/report.xml
