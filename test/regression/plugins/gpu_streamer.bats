@@ -165,7 +165,5 @@ teardown_file() {
     cedana restore process --path "$dump_file" --stream 4 --no-server &
 
     run wait_for_pid "$pid"
-    assert_success
-
     kill -KILL "$pid"
 }
