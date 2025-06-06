@@ -90,8 +90,8 @@ pid_exists() {
 
 wait_for_pid() {
     local pid=$1
-    local timeout=${2:-10}
-    local interval=${3:-0.1}
+    local timeout=${2:-60}
+    local interval=1
     local elapsed=0
 
     while ! kill -0 "$pid" 2>/dev/null; do

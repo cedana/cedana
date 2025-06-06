@@ -402,8 +402,6 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
 			defer cancel()
 
-			pid := uint32(opts.GetPid())
-
 			controller := p.Get(id)
 			if controller == nil {
 				restoreErr <- fmt.Errorf("GPU controller not found, is the process still running?")
@@ -415,11 +413,11 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
-				log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to restore GPU")
+				log.Error().Err(err).Str("ID", controller.ID).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU restore complete")
+			log.Info().Str("ID", controller.ID).Msg("GPU restore complete")
 
 			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
 			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).

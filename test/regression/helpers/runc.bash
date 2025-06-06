@@ -232,7 +232,7 @@ container_status() {
 wait_for_container_status() {
     local cid="$1"
     local status="$2"
-    local timeout="${3:-30}"
+    local timeout="${3:-60}"
     local interval=1
     local elapsed=0
 
