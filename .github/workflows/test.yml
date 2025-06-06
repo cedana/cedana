@@ -44,7 +44,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 2
+        default: 4
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -373,6 +373,9 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Setup node
+        uses: actions/setup-node@v4
+
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4
@@ -380,8 +383,49 @@ jobs:
           pattern: test-report-${{ matrix.arch }}*
           path: report
 
+      - name: Generate consolidated report
+        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
+
       - name: Post report
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: ctrf-io/github-test-reporter@v1
         with:
-          files: report/**/*.xml
-          check_name: Regression tests (${{ matrix.arch }})
+          report-path: ctrf/*.json # Path or glob pattern to the CTRF report JSON file.
+
+          summary-report: true
+          github-report: false
+          test-report: false
+          test-list-report: false
+          failed-report: false
+          fail-rate-report: true
+          flaky-report: true
+          flaky-rate-report: true
+          failed-folded-report: false
+          previous-results-report: false
+          insights-report: true
+          slowest-report: true
+          ai-report: false
+          skipped-report: false
+          suite-folded-report: true
+          suite-list-report: false
+          pull-request-report: true
+          commit-report: false
+          custom-report: false
+          community-report: false
+
+          summary: true # Post report to the job summary. Default is true
+          pull-request: true # Comment on pull request with report. Default is false
+          status-check: false # Create a status check for the workflow. Default is false
+          title: Test results (${{ matrix.arch }})
+          annotate: false # Add failed test annotations. Default is true
+          use-suite-name: false # Prefix test names with the suite name for better grouping. Default is false
+          update-comment: true
+          overwrite-comment: false
+          comment-tag: test-report-${{ matrix.arch }}
+
+          previous-results-max: 10 # Maximum number of previous test results to display in the report. Default is 10
+          fetch-previous-results: false # Always fetch previous workflow runs when using custom templates. Default is false
+          max-workflow-runs-to-check: 400 # Maximum number of workflow runs to check for previous results. Default is 400
+          group-by: "suite" # Specify grouping for applicable reports (e.g., suite or file path). Default is filePath
+          always-group-by: false # Force grouping by suite or file path for all reports. Default is false
+          report-order: "summary-report,failed-report,flaky-report,skipped-report,test-report" # Comma-separated list of report types to specify the order in which reports should be displayed
+          integrations-config: "{}" # JSON configuration for integrations with other developer tools
