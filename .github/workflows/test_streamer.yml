@@ -53,6 +53,7 @@ jobs:
   streamer:
     name: Streamer
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    timeout-minutes: ${{ inputs.large && 30 || 10 }}
     strategy:
       fail-fast: false
       matrix:

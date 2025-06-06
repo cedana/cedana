@@ -43,6 +43,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64 }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
+    timeout-minutes: ${{ inputs.large && 30 || 10 }}
     strategy:
       fail-fast: false
       matrix:
