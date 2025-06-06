@@ -302,7 +302,7 @@ jobs:
 
       - name: Set sanitized plugin
         run: |
-          PLUGIN=$(echo $PLUGIN | sed 's/\/-/g')
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
         env:
           MATRIX_PLUGIN: ${{ matrix.plugin }}
