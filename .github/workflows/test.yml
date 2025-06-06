@@ -305,8 +305,10 @@ jobs:
         if: ${{ !cancelled() }}
         id: upload-report
         uses: actions/upload-artifact@v4
+        env:
+          PLUGIN: ${{ matrix.plugin && fromJSON('["' + matrix.plugin.replace('/', '-') + '"]')[0] || '' }}
         with:
-          name: test-report-${{ matrix.arch }}-${{ matrix.plugin }}
+          name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             /tmp/report.xml
 
@@ -342,7 +344,7 @@ jobs:
 
   post-summary:
     name: Post Summary
-    if: ${{ !cancelled() }}
+    if: always()
     needs: [regression, regression-plugins, regression-streamer, regression-gpu]
     runs-on: ubuntu-latest
     strategy:
