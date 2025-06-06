@@ -368,19 +368,19 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Download reports
-        id: download-reports
+      - name: Download report
+        id: download-report
         uses: actions/download-artifact@v4
         with:
           pattern: test-report-${{ matrix.arch }}*
-          path: /reports
+          path: report
 
       - name: Post report
         uses: dorny/test-reporter@v2
         if: ${{ !cancelled() }}
         with:
           name: Regression (${{ matrix.arch }})
-          path: /reports/**/*.xml
+          path: report/**/*.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
