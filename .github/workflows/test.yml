@@ -146,7 +146,7 @@ jobs:
   regression:
     name: Basic
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
-    timeout-minutes: ${{ inputs.large && 30 || 10 }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -204,6 +204,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           ARGS: --output /tmp --report-formatter junit
+          BATS_TEST_TIMEOUT: ${{ inputs.large && 1200 || 600 }}
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM ARGS="$ARGS"
@@ -223,7 +224,7 @@ jobs:
   regression-plugins:
     name: Plugins
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
-    timeout-minutes: ${{ inputs.large && 30 || 10 }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -295,6 +296,7 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           ARGS: --output /tmp --report-formatter junit
           PLUGIN: ${{ matrix.plugin }}
+          BATS_TEST_TIMEOUT: ${{ inputs.large && 1200 || 600 }}
         run: |
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana
@@ -392,11 +394,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json # Path or glob pattern to the CTRF report JSON file.
+          report-path: ctrf/*.json
           github-report: true
+          failed-folded-report: true
           summary: true
           pull-request: true
-          title: Test results (${{ matrix.arch }})
+          title: ${{ matrix.arch }}
           update-comment: true
           overwrite-comment: false
           comment-tag: test-report-${{ matrix.arch }}

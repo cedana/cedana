@@ -43,7 +43,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64 }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
-    timeout-minutes: ${{ inputs.large && 30 || 10 }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -134,6 +134,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           ARGS: --output /tmp --report-formatter junit
+          BATS_TEST_TIMEOUT: ${{ inputs.large && 1200 || 600 }}
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then

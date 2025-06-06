@@ -53,7 +53,7 @@ jobs:
   streamer:
     name: Streamer
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
-    timeout-minutes: ${{ inputs.large && 30 || 10 }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +140,7 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
           ARGS: --output /tmp --report-formatter junit
+          BATS_TEST_TIMEOUT: ${{ inputs.large && 1200 || 600 }}
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
