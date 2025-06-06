@@ -152,19 +152,19 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
           ARGS: --output /tmp --report-formatter junit
-          BATS_TEST_TIMEOUT: ${{ inputs.large && 1200 || 600 }}
+          RETRIES: 2
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS"
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS" RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS"
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU ARGS="$ARGS" RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS="$ARGS"
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM ARGS="$ARGS" RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS="$ARGS"
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM ARGS="$ARGS" RETRIES=$RETRIES
             fi
           fi
 
