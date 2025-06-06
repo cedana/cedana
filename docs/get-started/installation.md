@@ -38,6 +38,7 @@ Download the latest release from the [releases](https://github.com/cedana/cedana
 
 ```sh
 curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-amd64.tar.gz
+tar -xzvf cedana.tar.gz
 chmod +x cedana
 mv cedana /usr/local/bin/cedana
 rm cedana.tar.gz
