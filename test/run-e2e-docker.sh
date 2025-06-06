@@ -114,6 +114,15 @@ run_test_container() {
         docker_args+=("--tmpfs" "/run")
         docker_args+=("--volume" "/sys/fs/cgroup:/sys/fs/cgroup:rw")
         docker_args+=("--cgroupns" "host")
+        
+        # Mount essential resources for Cedana helper to work
+        docker_args+=("--volume" "/var/run/docker.sock:/var/run/docker.sock")
+        docker_args+=("--volume" "/proc:/host/proc:ro")
+        docker_args+=("--volume" "/sys:/host/sys:ro")
+        docker_args+=("--volume" "/:/host:ro")
+        
+        # Share PID namespace so helper can see host processes
+        docker_args+=("--pid" "host")
     fi
 
     # Add environment variables

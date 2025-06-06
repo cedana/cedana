@@ -22,7 +22,18 @@ setup_k3s_cluster_with_helm() {
     mkdir -p /etc/rancher/k3s
     mkdir -p /var/lib/rancher/k3s
     
-    # Start k3s server directly in background
+    # Wait for containerd to be ready (started by entrypoint)
+    echo "Waiting for containerd to be ready..."
+    for i in $(seq 1 30); do
+        if ctr version >/dev/null 2>&1; then
+            echo "Containerd is ready"
+            break
+        fi
+        echo "Waiting for containerd (attempt $i/30)..."
+        sleep 2
+    done
+    
+    # Start k3s server directly in background with container-friendly settings
     echo "Starting k3s server..."
     nohup k3s server \
         --disable=traefik \
@@ -30,6 +41,8 @@ setup_k3s_cluster_with_helm() {
         --disable=metrics-server \
         --write-kubeconfig-mode=644 \
         --data-dir=/var/lib/rancher/k3s \
+        --snapshotter=native \
+        --rootless=false \
         > /tmp/k3s.log 2>&1 &
     
     K3S_PID=$!
@@ -143,29 +156,73 @@ deploy_cedana_helm_chart() {
 teardown_k3s_cluster() {
     echo "Tearing down k3s cluster..."
     
-    # Uninstall Cedana helm release if it exists
-    if [ -f /etc/rancher/k3s/k3s.yaml ]; then
-        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-        helm uninstall cedana -n cedanacontroller-system --wait 2>/dev/null || true
+    # Check if we're on bare metal or in container
+    if [ -f /.dockerenv ]; then
+        echo "Container environment detected, using container cleanup..."
+        
+        # Try graceful shutdown first
+        if command -v k3s-uninstall.sh &> /dev/null; then
+            echo "Running k3s uninstall script..."
+            timeout 60 k3s-uninstall.sh || echo "k3s uninstall script timed out or failed"
+        fi
+        
+        # Force kill any remaining processes
+        echo "Stopping k3s processes..."
+        pkill -f k3s-server || true
+        pkill -f containerd || true
+        pkill -f runc || true
+        sleep 2
+        
+        # Force kill if still running
+        pkill -9 -f k3s-server || true
+        pkill -9 -f containerd || true
+        pkill -9 -f runc || true
+        
+        # Clean up k3s data
+        echo "Cleaning up k3s data..."
+        rm -rf /var/lib/rancher/k3s || true
+        rm -rf /etc/rancher/k3s || true
+    else
+        echo "Bare metal environment detected, using systemd cleanup..."
+        
+        # Stop k3s service first
+        echo "Stopping k3s service..."
+        sudo systemctl stop k3s || true
+        sudo systemctl disable k3s || true
+        
+        # Run k3s uninstall script if available
+        if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
+            echo "Running k3s uninstall script..."
+            sudo /usr/local/bin/k3s-uninstall.sh || echo "k3s uninstall script failed"
+        fi
+        
+        # Additional cleanup for bare metal
+        echo "Cleaning up k3s systemd files..."
+        sudo rm -f /etc/systemd/system/k3s.service || true
+        sudo rm -f /etc/systemd/system/k3s.service.env || true
+        sudo systemctl daemon-reload || true
+        
+        # Clean up k3s data directories
+        echo "Cleaning up k3s data directories..."
+        sudo rm -rf /var/lib/rancher/k3s || true
+        sudo rm -rf /etc/rancher/k3s || true
+        
+        # Clean up k3s binaries
+        echo "Cleaning up k3s binaries..."
+        sudo rm -f /usr/local/bin/k3s || true
+        sudo rm -f /usr/local/bin/k3s-uninstall.sh || true
+        sudo rm -f /usr/local/bin/kubectl || true
+        sudo rm -f /usr/local/bin/crictl || true
+        sudo rm -f /usr/local/bin/ctr || true
+        
+        # Clean up containerd state
+        echo "Cleaning up containerd state..."
+        sudo pkill -f containerd || true
+        sudo rm -rf /run/containerd || true
+        sudo rm -rf /var/lib/containerd || true
     fi
     
-    # Stop k3s processes
-    pkill -f "k3s server" 2>/dev/null || true
-    pkill -f "k3s agent" 2>/dev/null || true
-    
-    # Wait for processes to stop
-    sleep 5
-    
-    # Uninstall k3s
-    if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
-        /usr/local/bin/k3s-uninstall.sh 2>/dev/null || true
-    fi
-    
-    # Clean up any remaining artifacts
-    rm -rf /etc/rancher/k3s /var/lib/rancher/k3s /run/k3s /tmp/k3s.log 2>/dev/null || true
-    
-    echo "k3s cluster teardown complete."
-    return 0
+    echo "k3s teardown complete"
 }
 
 #
@@ -457,4 +514,294 @@ function wait_for_action_complete() {
     echo "Error: Timed out waiting for action '$action_id' to complete."
     echo "Last known action info: $(api_get "/v2/actions" | jq --arg id "$action_id" '.[] | select(.action_id == $id)')"
     return 1
+}
+
+# Function to set up k3s cluster on bare metal
+setup_k3s_cluster_bare_metal() {
+    echo "Setting up k3s cluster on bare metal..."
+    
+    # Kill any existing k3s processes first
+    sudo pkill -f k3s-server || true
+    sudo pkill -f containerd || true
+    sleep 2
+    
+    # Clean up any existing k3s installation
+    if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
+        echo "Cleaning up existing k3s installation..."
+        sudo /usr/local/bin/k3s-uninstall.sh || true
+        sleep 5
+    fi
+    
+    # Install k3s with bare metal optimized settings
+    echo "Installing k3s on bare metal..."
+    curl -sfL https://get.k3s.io | sh -s - server \
+        --write-kubeconfig-mode=644 \
+        --disable=traefik \
+        --disable=servicelb \
+        --disable=metrics-server
+    
+    if [ $? -ne 0 ]; then
+        echo "Failed to install k3s"
+        return 1
+    fi
+    
+    # Wait for k3s service to be ready
+    echo "Waiting for k3s service to start..."
+    sudo systemctl enable k3s || true
+    sudo systemctl start k3s || true
+    
+    # Wait for kubeconfig to be available
+    echo "Waiting for kubeconfig to be created..."
+    local timeout=120
+    local count=0
+    while [ $count -lt $timeout ]; do
+        if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+            echo "Kubeconfig created"
+            sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+            break
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+    
+    if [ $count -ge $timeout ]; then
+        echo "Timeout waiting for kubeconfig"
+        return 1
+    fi
+    
+    # Wait for k3s cluster to be ready
+    echo "Waiting for k3s cluster to be ready..."
+    timeout=180
+    count=0
+    while [ $count -lt $timeout ]; do
+        if kubectl get nodes --kubeconfig=/etc/rancher/k3s/k3s.yaml 2>/dev/null | grep -q "Ready"; then
+            echo "k3s cluster is ready"
+            break
+        fi
+        sleep 2
+        count=$((count + 2))
+    done
+    
+    if [ $count -ge $timeout ]; then
+        echo "Timeout waiting for k3s cluster to be ready"
+        kubectl get nodes --kubeconfig=/etc/rancher/k3s/k3s.yaml || true
+        sudo systemctl status k3s || true
+        sudo journalctl -u k3s --no-pager -l || true
+        return 1
+    fi
+    
+    echo "k3s cluster is ready on bare metal"
+    return 0
+}
+
+# Function to set up k3s cluster
+setup_k3s_cluster() {
+    # Check if we're running on bare metal or in a container
+    if [ -f /.dockerenv ]; then
+        echo "Container environment detected, using container-optimized setup..."
+        
+        # Kill any existing k3s processes first
+        pkill -f k3s-server || true
+        pkill -f containerd || true
+        sleep 2
+        
+        # Start k3s with specific configuration for containers
+        # Use native snapshotter to avoid overlayfs issues in Docker
+        # Disable traefik to avoid port conflicts
+        timeout 300 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+            --write-kubeconfig-mode=644 \
+            --disable=traefik \
+            --snapshotter=native \
+            --container-runtime-endpoint=unix:///run/containerd/containerd.sock" sh -
+        
+        if [ $? -ne 0 ]; then
+            echo "Failed to install k3s within timeout"
+            return 1
+        fi
+        
+        # Wait for containerd to be ready with timeout
+        echo "Waiting for containerd to be ready..."
+        local timeout=120
+        local count=0
+        while [ $count -lt $timeout ]; do
+            if [ -S /run/containerd/containerd.sock ]; then
+                echo "Containerd socket is ready"
+                break
+            fi
+            sleep 1
+            count=$((count + 1))
+        done
+        
+        if [ $count -ge $timeout ]; then
+            echo "Timeout waiting for containerd socket"
+            return 1
+        fi
+        
+        # Wait for k3s to be ready with timeout
+        echo "Waiting for k3s to be ready..."
+        timeout=120
+        count=0
+        while [ $count -lt $timeout ]; do
+            if kubectl get nodes --kubeconfig=/etc/rancher/k3s/k3s.yaml &>/dev/null; then
+                echo "k3s is ready"
+                break
+            fi
+            sleep 1
+            count=$((count + 1))
+        done
+        
+        if [ $count -ge $timeout ]; then
+            echo "Timeout waiting for k3s to be ready"
+            return 1
+        fi
+        
+        echo "k3s cluster is ready in container"
+    else
+        echo "Bare metal environment detected, using bare metal setup..."
+        setup_k3s_cluster_bare_metal
+    fi
+}
+
+# Function to patch Cedana DaemonSet for Docker environment
+patch_cedana_for_docker() {
+    echo "Patching Cedana DaemonSet for Docker environment..."
+    
+    # Wait for any DaemonSet to exist in cedana-systems namespace
+    echo "Waiting for Cedana DaemonSet to be created..."
+    local daemonset_name=""
+    for i in $(seq 1 30); do
+        # Find DaemonSet in cedana-systems namespace
+        local daemonsets=$(kubectl get daemonset -n cedana-systems -o name 2>/dev/null || true)
+        if [ -n "$daemonsets" ]; then
+            # Get the first DaemonSet name (remove the "daemonset.apps/" prefix)
+            daemonset_name=$(echo "$daemonsets" | head -1 | sed 's|daemonset.apps/||')
+            echo "DaemonSet found: $daemonset_name"
+            break
+        fi
+        echo "Waiting for DaemonSet (attempt $i/30)..."
+        sleep 2
+    done
+    
+    if [ -z "$daemonset_name" ]; then
+        echo "❌ No DaemonSet found in cedana-systems namespace"
+        echo "Available pods in cedana-systems:"
+        kubectl get pods -n cedana-systems || true
+        echo "⚠️  Continuing without DaemonSet patch - helper may not work properly"
+        return 0  # Don't fail the test, just warn
+    fi
+    
+    # Get the actual container name from the DaemonSet
+    echo "Getting container information from DaemonSet..."
+    local container_name=$(kubectl get daemonset "$daemonset_name" -n cedana-systems -o jsonpath='{.spec.template.spec.containers[0].name}')
+    local container_image=$(kubectl get daemonset "$daemonset_name" -n cedana-systems -o jsonpath='{.spec.template.spec.containers[0].image}')
+    
+    echo "Container name: $container_name"
+    echo "Container image: $container_image"
+    
+    # Create patch for privileged DaemonSet with host access
+    cat > /tmp/cedana-daemonset-patch.yaml << EOF
+spec:
+  template:
+    spec:
+      hostPID: true
+      hostNetwork: true
+      hostIPC: true
+      containers:
+      - name: $container_name
+        image: $container_image
+        securityContext:
+          privileged: true
+          runAsUser: 0
+          capabilities:
+            add:
+            - SYS_ADMIN
+            - SYS_PTRACE
+            - SYS_CHROOT
+            - NET_ADMIN
+            - DAC_OVERRIDE
+            - SETUID
+            - SETGID
+        env:
+        - name: HOST_ROOT
+          value: "/host"
+        - name: CONTAINER_RUNTIME
+          value: "containerd"
+        - name: CONTAINERD_SOCKET
+          value: "/host/run/containerd/containerd.sock"
+        - name: RUNC_ROOT
+          value: "/host/run/containerd/runc"
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+          readOnly: true
+        - name: host-proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: host-sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: containerd-sock
+          mountPath: /host/run/containerd/containerd.sock
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+      - name: host-proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: host-sys
+        hostPath:
+          path: /sys
+          type: Directory
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+EOF
+    
+    # Apply the patch using strategic merge
+    echo "Applying DaemonSet patch..."
+    kubectl patch daemonset "$daemonset_name" -n cedana-systems --type=strategic --patch-file=/tmp/cedana-daemonset-patch.yaml
+    
+    if [ $? -eq 0 ]; then
+        echo "DaemonSet patched successfully"
+        
+        # Wait for DaemonSet to restart - this should succeed
+        echo "Waiting for DaemonSet to restart..."
+        kubectl rollout status daemonset/"$daemonset_name" -n cedana-systems --timeout=300s
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Cedana DaemonSet configured for Docker environment"
+            return 0
+        else
+            echo "❌ DaemonSet rollout failed"
+            echo "Pod status:"
+            kubectl get pods -n cedana-systems
+            echo "Pod logs:"
+            kubectl logs -n cedana-systems -l app=cedana-helper --tail=50 || true
+            return 1
+        fi
+    else
+        echo "❌ Failed to patch DaemonSet"
+        return 1
+    fi
 }

@@ -6,14 +6,14 @@ on:
     paths:
       - 'test/regression/e2e/k3s_pod_cr.bats'
       - 'test/regression/helpers/**'
-      - 'test/run-e2e-docker.sh'
+      - 'test/run-k3s-e2e-baremetal.sh'
       - '.github/workflows/k3s-cr-e2e.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'test/regression/e2e/k3s_pod_cr.bats'
       - 'test/regression/helpers/**'
-      - 'test/run-e2e-docker.sh'
+      - 'test/run-k3s-e2e-baremetal.sh'
   workflow_dispatch:
     inputs:
       test_level:
@@ -27,14 +27,14 @@ on:
         - debug
 
 env:
-  CEDANA_URL: https://ci.cedana.ai
+  CEDANA_URL: https://ci.cedana.ai/v1
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
 
 jobs:
   k3s-checkpoint-restore:
-    name: K3s Pod C/R E2E Test
+    name: K3s Pod C/R E2E Test (Bare Metal)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     
     steps:
     - name: Checkout code
@@ -42,8 +42,10 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Install prerequisites
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl bats jq
 
     - name: Validate environment
       run: |
@@ -53,31 +55,41 @@ jobs:
           exit 1
         fi
         echo "✓ Environment validation passed"
-        echo "✓ Using official test runner: ./test/run-e2e-docker.sh"
+        echo "✓ Using bare metal test runner: ./test/run-k3s-e2e-baremetal.sh"
 
-    - name: Run k3s pod checkpoint/restore test
+    - name: Run k3s pod checkpoint/restore test on bare metal
       run: |
-        echo "Running k3s pod checkpoint/restore E2E test..."
-        echo "Command: ./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats"
-        ./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats
+        echo "Running k3s pod checkpoint/restore E2E test on bare metal..."
+        echo "Command: ./test/run-k3s-e2e-baremetal.sh"
+        chmod +x ./test/run-k3s-e2e-baremetal.sh
+        ./test/run-k3s-e2e-baremetal.sh
+
+    - name: Cleanup on failure
+      if: failure()
+      run: |
+        echo "Cleaning up k3s in case of failure..."
+        sudo /usr/local/bin/k3s-uninstall.sh || true
+        sudo systemctl stop k3s || true
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: k3s-cr-test-results
+        name: k3s-cr-test-results-baremetal
         path: |
           test/regression/results/
           /tmp/bats-*.log
+          /tmp/cedana-e2e-state/
         retention-days: 7
 
     - name: Summary
       if: always()
       run: |
-        echo "## K3s Pod Checkpoint/Restore Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## K3s Pod Checkpoint/Restore Test Summary (Bare Metal)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Test file**: \`test/regression/e2e/k3s_pod_cr.bats\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Test runner**: \`./test/run-e2e-docker.sh\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test runner**: \`./test/run-k3s-e2e-baremetal.sh\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: Bare metal (Ubuntu runner)" >> $GITHUB_STEP_SUMMARY
         echo "- **Propagator URL**: $CEDANA_URL" >> $GITHUB_STEP_SUMMARY
         echo "- **Test result**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
 
@@ -109,8 +121,8 @@ jobs:
           exit 1
         fi
         
-        if [ ! -f "test/run-e2e-docker.sh" ]; then
-          echo "Error: run-e2e-docker.sh test runner not found"
+        if [ ! -f "test/run-k3s-e2e-baremetal.sh" ]; then
+          echo "Error: run-k3s-e2e-baremetal.sh test runner not found"
           exit 1
         fi
         
