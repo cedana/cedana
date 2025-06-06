@@ -388,6 +388,8 @@ jobs:
 
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           report-path: ctrf/*.json # Path or glob pattern to the CTRF report JSON file.
 
