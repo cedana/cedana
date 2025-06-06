@@ -120,7 +120,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
-@test "stream restore GPU process (mem throughput saxpy, without daemon)" {
+@test "remote stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
