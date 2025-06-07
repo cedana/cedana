@@ -105,6 +105,46 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
+@test "remote dump process (no compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir cedana://ci --compression none --leave-running
+    assert_success
+
+    pid_exists $pid
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir cedana://ci --compression none
+    assert_success
+
+    run kill $pid
+}
+
+# bats test_tags=dump
+@test "remote dump process (gzip compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir cedana://ci --compression gzip --leave-running
+    assert_success
+
+    pid_exists $pid
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir cedana://ci --compression gzip
+    assert_success
+
+    run kill $pid
+}
+
 ###############
 ### Restore ###
 ###############

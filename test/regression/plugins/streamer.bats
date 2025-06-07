@@ -206,6 +206,7 @@ teardown_file() {
     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression none --leave-running
     assert_success
 
+    pid_exists $pid
     assert_exists "/tmp/$name"
     assert_exists "/tmp/$name/img-0"
     assert_exists "/tmp/$name/img-1"
@@ -232,6 +233,7 @@ teardown_file() {
     run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression gzip --leave-running
     assert_success
 
+    pid_exists $pid
     assert_exists "/tmp/$name"
     assert_exists "/tmp/$name/img-0.gz"
     assert_exists "/tmp/$name/img-1.gz"
