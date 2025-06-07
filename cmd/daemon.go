@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/flags"
@@ -55,7 +55,7 @@ var startDaemonCmd = &cobra.Command{
 
 		log.Info().Str("version", rootCmd.Version).Msg("starting daemon")
 
-		server, err := server.NewServer(ctx, &server.ServeOpts{
+		server, err := cedana.NewServer(ctx, &cedana.ServeOpts{
 			Address:  config.Global.Address,
 			Protocol: config.Global.Protocol,
 			Metrics:  config.Global.Metrics,

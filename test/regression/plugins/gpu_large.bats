@@ -12,14 +12,20 @@ load_lib support
 load_lib assert
 load_lib file
 
-# One-time setup of downloading weights & pip installing
-setup_file() {
-    setup_file_daemon
-    if cmd_exists nvidia-smi; then
-        do_once install_requirements
-        do_once download_hf_models
-    fi
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
+setup_file() {
+    export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
+    setup_file_daemon
+    do_once install_requirements
+    do_once download_hf_models
+}
+
+teardown_file() {
+    teardown_file_daemon
 }
 
 #####################

@@ -11,7 +11,7 @@ import (
 )
 
 func FillMissingRestoreDefaults(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		if req.GetDetails() == nil {
 			req.Details = &daemon.Details{}
 		}
@@ -23,6 +23,9 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		}
 		if req.GetCriu() == nil {
 			req.Criu = &criu_proto.CriuOpts{}
+		}
+		if req.GetDetails().GetRunc().GetID() == "" {
+			req.Details.Runc.ID = req.GetDetails().GetJID()
 		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 

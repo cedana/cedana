@@ -26,15 +26,18 @@ const (
 	DEFAULT_SOCK_ADDR  = "/run/cedana.sock"
 	DEFAULT_SOCK_PERMS = 0o666
 
-	DEFAULT_PROTOCOL  = "unix"
-	DEFAULT_LOG_LEVEL = "info"
+	DEFAULT_PROTOCOL            = "unix"
+	DEFAULT_LOG_LEVEL           = "info"
+	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_COMPRESSION = "lz4"
+	DEFAULT_COMPRESSION = "none"
 	DEFAULT_DUMP_DIR    = "/tmp"
 
-	DEFAULT_GPU_POOL_SIZE         = 0
-	DEFAULT_GPU_LOG_DIR           = "/tmp"
-	DEFAULT_GPU_MULTIPROCESS_TYPE = "IPC"
+	DEFAULT_GPU_POOL_SIZE   = 0
+	DEFAULT_GPU_LOG_DIR     = "/tmp"
+	DEFAULT_GPU_SOCK_DIR    = "/tmp"
+	DEFAULT_GPU_FREEZE_TYPE = "IPC"
+	DEFAULT_GPU_SHM_SIZE    = 8 * utils.GIBIBYTE
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -46,8 +49,9 @@ const (
 var Global Config = Config{
 	// NOTE: Don't specify default address here as it depends on default protocol.
 	// Use above constants for default address for each protocol.
-	Protocol: DEFAULT_PROTOCOL,
-	LogLevel: DEFAULT_LOG_LEVEL,
+	Protocol:         DEFAULT_PROTOCOL,
+	LogLevel:         DEFAULT_LOG_LEVEL,
+	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Checkpoint: Checkpoint{
 		Dir:         DEFAULT_DUMP_DIR,
 		Compression: DEFAULT_COMPRESSION,
@@ -72,9 +76,11 @@ var Global Config = Config{
 		WaitForReady: false,
 	},
 	GPU: GPU{
-		PoolSize:         DEFAULT_GPU_POOL_SIZE,
-		LogDir:           DEFAULT_GPU_LOG_DIR,
-		MultiprocessType: DEFAULT_GPU_MULTIPROCESS_TYPE,
+		PoolSize:   DEFAULT_GPU_POOL_SIZE,
+		LogDir:     DEFAULT_GPU_LOG_DIR,
+		SockDir:    DEFAULT_GPU_SOCK_DIR,
+		FreezeType: DEFAULT_GPU_FREEZE_TYPE,
+		ShmSize:    DEFAULT_GPU_SHM_SIZE,
 	},
 	CRIU: CRIU{
 		LeaveRunning: false,
@@ -142,12 +148,7 @@ func Init(args InitArgs) error {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
 	} else {
-		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
-		if err != nil {
-			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
-				return fmt.Errorf("Failed to write config file: %w", err)
-			}
-		}
+		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
 	}
 
 	err = viper.UnmarshalExact(&Global)

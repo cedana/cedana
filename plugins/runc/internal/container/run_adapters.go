@@ -9,14 +9,13 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // LoadSpecFromBundle loads the spec from the bundle path, and sets it in the context
 func LoadSpecFromBundle(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		if req.Action != daemon.RunAction_START_NEW {
 			return next(ctx, opts, resp, req)
 		}
@@ -38,18 +37,6 @@ func LoadSpecFromBundle(next types.Run) types.Run {
 		}
 
 		ctx = context.WithValue(ctx, runc_keys.SPEC_CONTEXT_KEY, spec)
-
-		return next(ctx, opts, resp, req)
-	}
-}
-
-// SetUsChildSubreaper sets the current process as the child subreaper
-func SetUsChildSubreaper(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (chan int, error) {
-		err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, uintptr(1), 0, 0, 0)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to set us as child subreaper: %v", err)
-		}
 
 		return next(ctx, opts, resp, req)
 	}

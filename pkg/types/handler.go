@@ -34,5 +34,5 @@ type (
 	RestoreVM = Handler[daemon.RestoreVMReq, daemon.RestoreVMResp]
 	// RunVM     = Handler[daemon.RunVMReq, daemon.RunVMResp]
 
-	Handler[REQ, RESP any] func(context.Context, Opts, *RESP, *REQ) (exited chan int, err error)
+	Handler[REQ, RESP any] func(context.Context, Opts, *RESP, *REQ) (code func() <-chan int, err error)
 )

@@ -3,6 +3,7 @@ package main
 import (
 	"syscall"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
@@ -15,6 +16,7 @@ import (
 	"github.com/cedana/cedana/plugins/runc/internal/gpu"
 	"github.com/cedana/cedana/plugins/runc/internal/namespace"
 	"github.com/cedana/cedana/plugins/runc/internal/network"
+	"github.com/cedana/cedana/plugins/runc/internal/process"
 	"github.com/cedana/cedana/plugins/runc/internal/validation"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -37,8 +39,6 @@ var (
 	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
 )
 
-var KillSignal = syscall.SIGKILL
-
 var HealthChecks types.Checks = types.Checks{
 	List: []types.Check{
 		container.CheckBinary(),
@@ -54,8 +54,12 @@ var (
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		container.LoadSpecFromBundle,
-		container.SetUsChildSubreaper,
+		process.SetUsChildSubReaper[daemon.RunReq, daemon.RunResp],
 	}
+	RunDaemonlessSupport bool = true
+	KillSignal                = syscall.SIGKILL
+	Cleanup                   = container.Cleanup
+	Reaper                    = true // we handle our reaping on our own
 
 	ManageHandler types.Run = container.Manage
 
@@ -100,6 +104,8 @@ var (
 		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
+    container.RestoreConsole,
 		container.UpdateStateOnRestore,
+		process.SetUsChildSubReaper[daemon.RestoreReq, daemon.RestoreResp],
 	}
 )

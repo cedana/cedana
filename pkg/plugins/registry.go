@@ -63,23 +63,6 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
 	},
 
-	// Storage
-	{
-		Name:      "storage/cedana",
-		Type:      SUPPORTED,
-		Libraries: []Binary{{Name: "libcedana-storage-cedana.so"}},
-	},
-	{
-		Name:      "storage/s3",
-		Type:      SUPPORTED,
-		Libraries: []Binary{{Name: "libcedana-storage-s3.so"}},
-	},
-	{
-		Name:      "storage/gcs",
-		Type:      SUPPORTED,
-		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
-	},
-
 	// Others
 	{
 		Name:      "gpu",

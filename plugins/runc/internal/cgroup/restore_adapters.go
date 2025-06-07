@@ -30,7 +30,7 @@ import (
 // Sets the ManageCgroups field in the criu options to true.
 func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -72,7 +72,7 @@ func GetNetworkPid(bundlePath string) (int, error) {
 
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")
@@ -88,7 +88,6 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		config := container.Config()
 		var netpid int = 0
-		var err error
 		if req.Details.Runc != nil {
 			netpid, err = GetNetworkPid(req.Details.Runc.Bundle)
 			if err != nil {

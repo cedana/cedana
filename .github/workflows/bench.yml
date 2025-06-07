@@ -532,9 +532,9 @@ jobs:
           path: |
             /src/results
 
-  post_summary:
+  post-summary:
     name: Post Summary
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [cedana_runtime_1, cedana_runtime_2, cedana_cr_1, cedana_cr_2, native]
     permissions:
       contents: "read"
@@ -558,7 +558,8 @@ jobs:
           limit-access-to-actor: true
 
       - name: Download results (runtime 1)
-        if: (success() || failure()) && inputs.cedana
+        if: inputs.cedana
+        continue-on-error: true
         uses: actions/download-artifact@v4
         id: download-results-runtime-1
         with:
@@ -566,7 +567,8 @@ jobs:
           path: /src/results-runtime-1
 
       - name: Download results (runtime 2)
-        if: (success() || failure()) && inputs.cedana
+        if: inputs.cedana
+        continue-on-error: true
         uses: actions/download-artifact@v4
         id: download-results-runtime-2
         with:
@@ -574,7 +576,8 @@ jobs:
           path: /src/results-runtime-2
 
       - name: Download results (C/R 1)
-        if: (success() || failure()) && inputs.cedana
+        if: inputs.cedana
+        continue-on-error: true
         uses: actions/download-artifact@v4
         id: download-results-cr-1
         with:
@@ -582,7 +585,8 @@ jobs:
           path: /src/results-cr-1
 
       - name: Download results (C/R 2)
-        if: (success() || failure()) && inputs.cedana
+        if: inputs.cedana
+        continue-on-error: true
         uses: actions/download-artifact@v4
         id: download-results-cr-2
         with:
@@ -590,7 +594,8 @@ jobs:
           path: /src/results-cr-2
 
       - name: Download results (native)
-        if: (success() || failure()) && inputs.native
+        if: inputs.native
+        continue-on-error: true
         uses: actions/download-artifact@v4
         id: download-results-native
         with:
@@ -598,7 +603,6 @@ jobs:
           path: /src/results-native
 
       - name: Collate results
-        if: success() || failure()
         run: |
           mkdir -p /src/results
           mv /src/results-runtime-1/run-summary.json /src/results-runtime-1/run-summary-runtime-1.json || true
@@ -610,11 +614,13 @@ jobs:
           cp -Rf /src/results-cr-1/* /src/results || true
           cp -Rf /src/results-cr-2/* /src/results || true
           cp -Rf /src/results-native/* /src/results || true
-          ls -l /src/results
+          if [ ! -d /src/results ] || [ -z "$(ls -A /src/results)" ]; then
+            echo "No results found, exiting."
+            exit 1
+          fi
 
       - id: auth
         name: Authenticate to Google Cloud
-        if: success() || failure()
         uses: google-github-actions/auth@v1
         env:
           PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
@@ -633,14 +639,13 @@ jobs:
         run: ./bench results push
 
       - name: Pull last results
-        if: success() || failure()
         env:
           GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: ./bench results pull --runtime native:1 --runtime cedana:2
 
       - name: Plot comparison w/ native
-        if: (success() || failure()) && inputs.comparison_native
+        if: inputs.comparison_native
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_NATIVE }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
@@ -648,7 +653,7 @@ jobs:
           ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (comparison w/ native)
-        if: (success() || failure()) && inputs.comparison_native
+        if: inputs.comparison_native
         id: upload-plots-native
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -659,7 +664,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ native)
-        if: (success() || failure()) && inputs.comparison_native
+        if: inputs.comparison_native
         id: summary-native
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native-comparison/results
@@ -672,7 +677,7 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary to Slack (comparison w/ native)
-        if: (success() || failure()) && inputs.post_summary_slack && inputs.comparison_native
+        if: inputs.post_summary_slack && inputs.comparison_native
         id: slack-native
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -683,14 +688,14 @@ jobs:
             ${{ steps.summary-native.outputs.slack_summary }}
 
       - name: Post summary to PR (comparison w/ native)
-        if: (success() || failure()) && inputs.post_summary_pr && inputs.comparison_native
+        if: inputs.post_summary_pr && inputs.comparison_native
         uses: thollander/actions-comment-pull-request@v2
         with:
           filePath: /src/summary.md
           comment_tag: comparison_native
 
       - name: Plot comparison w/ last patch
-        if: (success() || failure()) && inputs.comparison_patch
+        if: inputs.comparison_patch
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
@@ -699,7 +704,7 @@ jobs:
           ./bench plot --runtime cedana:2 --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (comparison w/ last patch)
-        if: (success() || failure()) && inputs.comparison_patch
+        if: inputs.comparison_patch
         id: upload-plots-patch
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -710,7 +715,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (comparison w/ last patch)
-        if: success() || failure() && inputs.comparison_patch
+        if: inputs.comparison_patch
         id: summary-patch
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/patch-comparison/results
@@ -723,14 +728,14 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary to PR (comparison w/ last patch)
-        if: (success() || failure()) && inputs.post_summary_pr && inputs.comparison_patch
+        if: inputs.post_summary_pr && inputs.comparison_patch
         uses: thollander/actions-comment-pull-request@v2
         with:
           filePath: /src/summary.md
           comment_tag: comparison_patch
 
       - name: Post summary to Slack (comparison w/ last patch)
-        if: (success() || failure()) && inputs.post_summary_slack && inputs.comparison_patch
+        if: inputs.post_summary_slack && inputs.comparison_patch
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -741,7 +746,7 @@ jobs:
             ${{ steps.summary-patch.outputs.slack_summary }}
 
       - name: Plot (nightly)
-        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        if: inputs.post_summary_slack_nightly
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
@@ -750,7 +755,7 @@ jobs:
           ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
 
       - name: Upload plots (nightly)
-        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        if: inputs.post_summary_slack_nightly
         id: upload-plots-nightly
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -761,7 +766,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (nightly)
-        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        if: inputs.post_summary_slack_nightly
         id: summary-nightly
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly/results
@@ -772,7 +777,7 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary (nightly)
-        if: (success() || failure()) && inputs.post_summary_slack_nightly
+        if: inputs.post_summary_slack_nightly
         id: slack-nightly
         uses: slackapi/slack-github-action@v1.26.0
         env:
@@ -783,13 +788,13 @@ jobs:
             ${{ steps.summary-nightly.outputs.slack_summary }}
 
       - name: Plot (native)
-        if: (success() || failure()) && inputs.native
+        if: inputs.native
         env:
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
         run: ./bench plot --runtime native --save $FLAGS
 
       - name: Upload plots (native)
-        if: (success() || failure()) && inputs.native
+        if: inputs.native
         id: upload-plots
         uses: google-github-actions/upload-cloud-storage@v2
         with:
@@ -800,7 +805,7 @@ jobs:
           glob: "**/*.png"
 
       - name: Generate summary (native)
-        if: (success() || failure()) && inputs.native
+        if: inputs.native
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native/results
           RESULTS_DESCRIPTION: "> Native"

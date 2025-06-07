@@ -57,7 +57,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 
 	set := make(map[string]any)
 	for _, name := range filter {
-    nameOnly := strings.TrimSpace(name)
+		nameOnly := strings.TrimSpace(name)
 		if strings.Contains(name, "@") {
 			nameOnly = strings.Split(name, "@")[0]
 		}
@@ -274,7 +274,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 					dest = filepath.Join(LibDir, file.Name)
 				}
 				if e := os.Remove(dest); e != nil {
-					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
+					err = fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
 				}
 			}
@@ -286,9 +286,13 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 					dest = filepath.Join(BinDir, file.Name)
 				}
 				if e := os.Remove(dest); e != nil {
-					errs <- fmt.Errorf("Failed to remove %s: %w", name, e)
+					err = fmt.Errorf("Failed to remove %s: %w", name, e)
 					break
 				}
+			}
+			if err != nil {
+				errs <- err
+				continue
 			}
 
 			msgs <- style.NegativeColors.Sprintf("Removed %s", name)

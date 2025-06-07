@@ -36,9 +36,6 @@ download_hf_models() {
 
 run_inference_test() {
     local model="$1"
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
 
     jid=$(unix_nano)
     sleep_duration=$((RANDOM % 11 + 10))
