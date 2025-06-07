@@ -130,6 +130,7 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
 @test "dump process (invalid compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
@@ -142,6 +143,52 @@ teardown_file() {
     assert_not_exists "/tmp/$name.tar"
     assert_not_exists "/tmp/$name.tar.gz"
     assert_not_exists "/tmp/$name.tar.lz4"
+
+    run kill $pid
+}
+
+# bats test_tags=dump
+@test "dump process (no compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression none --leave-running
+    assert_success
+
+    pid_exists $pid
+    assert_exists "/tmp/$name"
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir /tmp --compression none
+    assert_success
+
+    assert_exists "/tmp/$name2"
+
+    run kill $pid
+}
+
+# bats test_tags=dump
+@test "dump process (gzip compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression gzip --leave-running
+    assert_success
+
+    pid_exists $pid
+    assert_exists "/tmp/$name.tar.gz"
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir /tmp --compression gzip
+    assert_success
+
+    assert_exists "/tmp/$name2.tar.gz"
 
     run kill $pid
 }

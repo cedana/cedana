@@ -86,11 +86,10 @@ func SetupDumpFS(next types.Dump) types.Dump {
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
 
 		// If remote storage, or compression needs to be done, we do it in CRIU's post-dump hook
-		// so that if we fail compression/upload, CRIU can still resume the process
+		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
-			callback := &criu_client.NotifyCallback{Name: "storage"}
-			callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) (err error) {
+			compress := func() error {
 				var path string
 				ext, err := io.ExtForCompression(compression)
 				if err != nil {
@@ -123,7 +122,27 @@ func SetupDumpFS(next types.Dump) types.Dump {
 				resp.Path = path
 				return nil
 			}
-			opts.CRIUCallback.Include(callback)
+
+			// If leave-running is requested, then we do not to block process for compress/upload, because the process
+			// will continue running regardless of the success of the dump/compress/upload. If leave-running is not set,
+			// then we need to ensure that the dump is compressed/uploaded in the post-dump hook so that it
+			// can be resumed on failure.
+
+			if req.GetCriu().GetLeaveRunning() {
+				defer func() {
+					if err == nil {
+						err = compress()
+					}
+				}()
+			} else {
+				callback := &criu_client.NotifyCallback{
+					Name: "storage",
+					PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) (err error) {
+						return compress()
+					},
+				}
+				opts.CRIUCallback.Include(callback)
+			}
 		} else {
 			// Nothing else to do, just set the path
 			resp.Path = imagesDirectory
