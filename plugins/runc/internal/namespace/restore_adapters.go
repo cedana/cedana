@@ -20,7 +20,7 @@ import (
 
 func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -47,7 +47,7 @@ func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[
 // and expect it to be setup correctly.
 func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
 				return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
@@ -130,7 +130,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 // For all other namespaces except NET and PID CRIU has
 // a simpler way of joining the existing namespace if set
 func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")

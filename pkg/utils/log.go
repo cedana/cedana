@@ -56,3 +56,31 @@ func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, forma
 
 	return
 }
+
+func LastMsgFromFile(logfile string, format ...func([]byte) (string, error)) (lastMsg string, err error) {
+	file, err := os.Open(logfile)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		if len(format) > 0 {
+			bytes := scanner.Bytes()
+			lastMsg, err = format[0](bytes)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			lastMsg = scanner.Text()
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return lastMsg, nil
+}

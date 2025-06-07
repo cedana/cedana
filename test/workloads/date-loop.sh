@@ -16,4 +16,5 @@ if [ "$#" -ne 2 ]; then
     exit 0
 fi
 
+echo "$2"
 exit "$2"

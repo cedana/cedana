@@ -15,7 +15,7 @@ func Timer[REQ, RESP any](next Handler[REQ, RESP]) Handler[REQ, RESP] {
 	var timedHandler Handler[REQ, RESP]
 	nextPc := reflect.ValueOf(next).Pointer()
 
-	timedHandler = func(ctx context.Context, server Opts, resp *RESP, req *REQ) (chan int, error) {
+	timedHandler = func(ctx context.Context, server Opts, resp *RESP, req *REQ) (func() <-chan int, error) {
 		// We skip profiling if the next handler is itself
 		if nextPc != reflect.ValueOf(timedHandler).Pointer() {
 			var end func()

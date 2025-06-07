@@ -44,7 +44,7 @@ jobs:
     name: Cedana
     runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64

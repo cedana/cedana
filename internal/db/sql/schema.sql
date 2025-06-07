@@ -46,10 +46,3 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     Size        INTEGER NOT NULL,
     FOREIGN KEY(JID) REFERENCES jobs(JID) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS gpu_controllers (
-    ID          TEXT PRIMARY KEY,
-    Address     TEXT NOT NULL,
-    PID         INTEGER NOT NULL,
-    AttachedPID INTEGER NOT NULL
-);

@@ -17,7 +17,7 @@ import (
 
 func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -31,7 +31,7 @@ func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] 
 }
 
 func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		manager, ok := ctx.Value(runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY).(cgroups.Manager)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get cgroup manager from context")

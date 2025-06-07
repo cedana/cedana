@@ -16,10 +16,9 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var (
-	DumpVMCmd *cobra.Command = cmd.DumpCmd
-	// RestoreVMCmd *cobra.Command = cmd.RestoreCmd
-)
+var DumpVMCmd *cobra.Command = cmd.DumpCmd
+
+// RestoreVMCmd *cobra.Command = cmd.RestoreCmd
 
 var (
 	DumpVMHandler    types.DumpVM                   = handlers.Dump

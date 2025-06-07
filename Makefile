@@ -5,7 +5,6 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
-# Debug flags
 DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 ifndef VERBOSE
@@ -19,7 +18,7 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 ##########
 
 BINARY=cedana
-BINARY_SOURCES=$(shell find . -name '*.go' -not -path './plugins/*')
+BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
 INSTALL_PATH=/usr/local/bin/cedana
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
@@ -88,13 +87,14 @@ reset-logs: ## Reset logs
 
 PLUGIN_SOURCES=$(shell find plugins -name '*.go')
 PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
+PKG_SOURCES=$(shell find pkg plugins -name '*.go')
 PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
 
 plugin: ## Build a plugin (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
-plugin-debug:
+plugin-debug: ## Build a plugin with debug symbols and no optimizations (PLUGIN=<plugin>)
 	@echo "Building plugin $$PLUGIN with debug symbols..."
 	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
 
@@ -113,7 +113,7 @@ plugins-debug: ## Build all plugins with debug symbols
 		fi ;\
 	done ;\
 
-$(PLUGIN_BINARIES): $(PLUGIN_SOURCES)
+$(PLUGIN_BINARIES): $(PLUGIN_SOURCES) $(PKG_SOURCES)
 	for path in $(wildcard plugins/*); do \
 		if [ -f $$path/*.go ]; then \
 			name=$$(basename $$path); \
@@ -152,8 +152,15 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 
 PARALLELISM?=8
 TAGS?=
-BATS_CMD_TAGS=bats --filter-tags $(TAGS) --jobs $(PARALLELISM)
-BATS_CMD=bats --jobs $(PARALLELISM)
+ARGS?=
+TIMEOUT?=300
+RETRIES?=0
+BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--output /tmp --report-formatter junit
+BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--output /tmp --report-formatter junit
 
 test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
 
@@ -161,9 +168,9 @@ test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>)
 	if [ -f /.dockerenv ]; then \
-		echo "Running all regression tests..." ;\
+		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		echo "Using unique instance of daemon per test..." ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -171,27 +178,45 @@ test-regression: ## Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<
 		else \
 			$(BATS_CMD_TAGS) -r test/regression ;\
 		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-isolated.xml ;\
+		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
 		else \
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
 		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_RUN_CUDA) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
+			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_RUN) make test-regression PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) ;\
+			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		fi ;\
 	fi
 
 test-enter: ## Enter the test environment
-	$(DOCKER_TEST_RUN) /bin/bash
+	$(DOCKER_TEST_CREATE) ;\
+	$(DOCKER_TEST_START) >/dev/null ;\
+	$(DOCKER_TEST_EXEC) /bin/bash ;\
+	$(DOCKER_TEST_REMOVE) >/dev/null
 
 test-enter-cuda: ## Enter the test environment (CUDA)
-	$(DOCKER_TEST_RUN_CUDA) /bin/bash
+	$(DOCKER_TEST_CREATE_CUDA) ;\
+	$(DOCKER_TEST_START) >/dev/null ;\
+	$(DOCKER_TEST_EXEC) /bin/bash ;\
+	$(DOCKER_TEST_REMOVE) >/dev/null
 
 ##########
 ##@ Docker
@@ -201,25 +226,50 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
+DOCKER_CONTAINER_NAME=cedana-test
+DOCKER_TEST_IMAGE=cedana/cedana-test:latest
+DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
+DOCKER_TEST_START=docker start $(DOCKER_CONTAINER_NAME)
+DOCKER_TEST_EXEC=docker exec -it $(DOCKER_CONTAINER_NAME)
+DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_CONTAINER_NAME)
+
 PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
 PLUGIN_BIN_MOUNTS_CRIU=$(shell find /usr/local/bin -type f -name 'criu' -exec printf '-v %s:%s ' {} {} \;)
-DOCKER_TEST_IMAGE=cedana/cedana-test:latest
-DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
-DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --ipc=host -it --rm \
-				-v $(PWD):/src:ro \
+
+PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
+
+DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --network=host -it --rm \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS_CRIU) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=private --network=host \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
-DOCKER_TEST_RUN_CUDA=docker run --gpus=all \
+DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_BIN_COPY_CRIU)
+DOCKER_TEST_RUN_CUDA=docker run --gpus=all --ipc=host \
 					 $(DOCKER_TEST_RUN_OPTS) \
 					 $(PLUGIN_LIB_MOUNTS_GPU) \
 					 $(PLUGIN_BIN_MOUNTS_GPU) \
 					 $(DOCKER_TEST_IMAGE_CUDA)
+DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_LIB_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_CRIU)
 
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."

@@ -4,9 +4,13 @@
 
 export PATH="./:$PATH" # ensure binaries are available
 export CEDANA_PROTOCOL="unix"
+export CEDANA_REMOTE=false
 export CEDANA_LOG_LEVEL=debug
+export CEDANA_LOG_LEVEL_NO_SERVER=debug
 export CEDANA_PROFILING_ENABLED=false
 export CEDANA_CHECKPOINT_COMPRESSION=none
+: "${CEDANA_GPU_SHM_SIZE:=$((1*GIBIBYTE))}" # Since most workloads are small, we keep this default
+export CEDANA_GPU_SHM_SIZE
 
 WAIT_TIMEOUT=100
 
@@ -29,8 +33,11 @@ WAIT_TIMEOUT=100
 setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        start_daemon_at "$SOCK"
+        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
+        export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
+        start_daemon_at "$SOCK"
     fi
 }
 teardown_file_daemon() {
@@ -41,8 +48,11 @@ teardown_file_daemon() {
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        start_daemon_at "$SOCK"
+        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
+        export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
+        start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
         tail -f "$log_file" &
@@ -52,7 +62,7 @@ setup_daemon() {
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
-    else
+    elif env_exists "TAIL_PID"; then
         kill "$TAIL_PID"
     fi
 }
@@ -64,14 +74,14 @@ teardown_daemon() {
 start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
-    cedana daemon start --address "$sock" --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    cedana daemon start --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
 
 wait_for_start() {
     local sock=$1
     local i=0
-    while ! cedana --address "$sock" ps &>/dev/null; do
+    while [ ! -S "$sock" ]; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
@@ -83,6 +93,10 @@ wait_for_start() {
 
 stop_daemon_at() {
     local sock=$1
+    if [ ! -e "$sock" ] || [ ! -S "$sock" ]; then
+        echo "Socket $sock does not exist, skipping stop"
+        return 0
+    fi
     kill_at_sock "$sock" TERM
     wait_for_stop "$sock"
 }
@@ -90,18 +104,12 @@ stop_daemon_at() {
 wait_for_stop() {
     local sock=$1
     local i=0
-    while cedana --address "$sock" ps &>/dev/null; do
+    while cedana ps &>/dev/null; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             echo "Daemon failed to stop" 1>&2
-
-            # HACK: Force kill if failed to stop. This is not good because there might be
-            # an actual issue causing the daemon to not stop. Once resolved, should remove this
-            # and just let the test fail with non-zero exit code.
-
-            kill_at_sock "$sock" KILL
-            break
+            exit 1
         fi
     done
 }
@@ -109,33 +117,11 @@ wait_for_stop() {
 daemon_log_file() {
     local sock=$1
     id=$(basename "$sock")
-    echo /var/log/cedana-daemon-"$id".log
+    echo /tmp/cedana-daemon-"$id".log
 }
 
 pid_for_jid() {
     local jid=$1
     table=$(cedana ps)
     echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
-}
-
-check_shm_size() {
-    local jid=$1
-    local expected_size=$2
-    local shm_file="/dev/shm/cedana-gpu.$jid"
-
-    if [[ ! -f "$shm_file" ]]; then
-        echo "Error: $shm_file not found."
-        return 1
-    fi
-
-    local actual_size
-    actual_size=$(stat --format="%s" "$shm_file")
-
-    if [[ "$actual_size" -ne "$expected_size" ]]; then
-        echo "Size mismatch: expected $expected_size, but got $actual_size"
-        return 1
-    fi
-
-    echo "Size check passed for $shm_file"
-    return 0
 }

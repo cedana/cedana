@@ -363,3 +363,12 @@ func IsTTY(path string) (bool, error) {
 	}
 	return isatty.IsTerminal(file.Fd()), nil
 }
+
+func Getenv(env []string, key string) string {
+	for _, e := range env {
+		if strings.HasPrefix(e, key+"=") {
+			return strings.TrimPrefix(e, key+"=")
+		}
+	}
+	return ""
+}

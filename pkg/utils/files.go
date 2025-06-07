@@ -126,20 +126,20 @@ func PathExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
-func WaitForFile(ctx context.Context, path string, timeout chan int) (string, error) {
+func WaitForFile[T any](ctx context.Context, path string, timeout <-chan T) ([]byte, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		case <-ticker.C:
 			if PathExists(path) {
-				return path, nil
+				return os.ReadFile(path)
 			}
 		case <-timeout:
-			return "", fmt.Errorf("timed out waiting for %s", path)
+			return nil, fmt.Errorf("timed out waiting for %s", path)
 		}
 	}
 }

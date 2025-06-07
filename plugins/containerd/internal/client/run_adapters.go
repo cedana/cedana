@@ -18,7 +18,7 @@ import (
 const waitForManageUpcomingTimeout = 2 * time.Minute
 
 func SetupForRun(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		ctx = namespaces.WithNamespace(ctx, details.Namespace)
@@ -36,7 +36,7 @@ func SetupForRun(next types.Run) types.Run {
 }
 
 func CreateContainerForRun(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)

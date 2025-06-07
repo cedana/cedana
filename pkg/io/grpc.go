@@ -133,7 +133,7 @@ func NewStreamIOSlave(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	pid uint32,
-	exitCode chan int,
+	exitCode <-chan int,
 ) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)

@@ -8,20 +8,21 @@ Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
 3. Install a GPU plugin.
 
-*   **Option 1: GPU Plugin**
+- **Option 1: GPU Plugin**
 
-    The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
+  The GPU plugin is Cedana's proprietary plugin for high performance GPU checkpoint/restore that supports multi-process/node. If unavailable to you, check option 2.
 
-    ```sh
-    sudo cedana plugin install gpu
-    ```
-*   **Option 2: CRIU CUDA Plugin**
+  ```sh
+  sudo cedana plugin install gpu
+  ```
 
-    The CRIU CUDA plugin (CRIUgpu) is developed by the CRIU community and uses the [NVIDIA CUDA checkpoint utility](https://github.com/NVIDIA/cuda-checkpoint) under the hood.
+- **Option 2: CRIU CUDA Plugin**
 
-    ```sh
-    sudo cedana plugin install criu/cuda
-    ```
+  The CRIU CUDA plugin (CRIUgpu) is developed by the CRIU community and uses the [NVIDIA CUDA checkpoint utility](https://github.com/NVIDIA/cuda-checkpoint) under the hood.
+
+  ```sh
+  sudo cedana plugin install criu/cuda
+  ```
 
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
@@ -30,8 +31,8 @@ Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.
 
 |                | Min driver | Max driver | Multi-GPU | Multi-process | Arch         |
 | -------------- | ---------- | ---------- | --------- | ------------- | ------------ |
-| **Cedana GPU** | 452        | 570        | ✅         | ✅             | amd64, arm64 |
-| **CRIU CUDA**  | 570        | 570        | ✅         | ❌             | amd64        |
+| **Cedana GPU** | 452        | 570        | ✅        | ✅            | amd64, arm64 |
+| **CRIU CUDA**  | 570        | 570        | ✅        | ❌            | amd64        |
 
 ## Usage (GPU plugin)
 
@@ -60,13 +61,13 @@ cedana restore job --attach <job_id>
 
 ### Multi-process/node
 
-For multi-process/node workloads, you just need to specify the `--gpu-type` option during run. If the workload is multi-process/multi-node and using [NCCL](https://developer.nvidia.com/nccl), use the `nccl` option.
+For multi-process/node workloads, you just need to specify the `--gpu-freeze-type` option during dump. If the workload is multi-process/multi-node and using [NCCL](https://developer.nvidia.com/nccl), use the `nccl` option.
 
 ```sh
-cedana run process --gpu-enabled --gpu-type nccl ...
+cedana dump job <job_id> --gpu-freeze-type nccl
 ```
 
-You can then checkpoint/restore as usual. You may also set the default GPU multi-process type in the [configuration](../../get-started/configuration.md).
+You can then restore as usual. You may also set the default GPU freeze type in the [configuration](../../get-started/configuration.md).
 
 ## Usage (CRIU CUDA plugin)
 

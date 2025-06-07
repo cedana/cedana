@@ -283,15 +283,14 @@ var attachJobCmd = &cobra.Command{
 
 		jid := args[0]
 
-		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		resp, err := client.Get(cmd.Context(), &daemon.GetReq{JID: jid})
 		if err != nil {
 			return err
 		}
-		if len(list.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
 
-		pid := list.Jobs[0].GetState().GetPID()
+		job := resp.GetJob()
+
+		pid := job.GetState().GetPID()
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},

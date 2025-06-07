@@ -63,6 +63,34 @@ teardown_file() {
 }
 
 # bats test_tags=daemonless
+@test "run container (without daemon, exit code)" {
+    jid=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "exit-code.sh" "$code")"
+
+    run cedana run --no-server runc --bundle "$bundle" --jid "$jid"
+
+    assert_equal $status $code
+
+    run runc delete "$jid"
+}
+
+# bats test_tags=daemonless
+@test "run container (without daemon, detached)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+
+    cedana run runc --no-server --bundle "$bundle" --detach --jid "$jid"
+
+    sleep 1
+
+    assert_equal "$(container_status "$jid")" "running"
+
+    run runc kill "$jid" KILL
+    run runc delete "$jid"
+}
+
+# bats test_tags=daemonless
 @test "run container (without daemon, PID file)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -550,7 +578,7 @@ teardown_file() {
 # bats test_tags=restore,daemonless
 @test "restore container (without daemon)" {
     id=$(unix_nano)
-    bundle="$(create_workload_bundle "date-loop.sh")"
+    bundle="$(create_workload_bundle "date-loop.sh" 3)"
 
     runc run --bundle "$bundle" "$id" &
 
@@ -570,9 +598,32 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
+@test "restore container (without daemon, exit code)" {
+    id=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 1
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server
+    assert_equal $status $code
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
+
+# bats test_tags=restore,daemonless
 @test "restore container (without daemon, PID file)" {
     id=$(unix_nano)
-    bundle="$(create_workload_bundle "date-loop.sh")"
+    bundle="$(create_workload_bundle "date-loop.sh" 3)"
     pid_file="/tmp/$id.pidfile"
 
     runc run --bundle "$bundle" "$id" &
@@ -594,30 +645,77 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# FIXME: Below test fails because when using detach, TTY is inherited
-# and CRIU does not know how to restore that.
-
 # bats test_tags=restore
-# @test "restore container (detached)" {
-#     id=$(unix_nano)
-#     bundle="$(create_workload_bundle "date-loop.sh")"
+@test "restore container (detached to attached)" {
+    id=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
 
-#     runc run --bundle "$bundle" "$id" --detach
+    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
 
-#     run cedana -P "$PORT" dump runc "$id"
-#     assert_success
+    run cedana dump runc "$id"
+    assert_success
 
-#     dump_file=$(echo "$output" | awk '{print $NF}')
-#     assert_exists "$dump_file"
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
 
-#     run runc delete "$id"
+    run runc delete "$id"
 
-#     run cedana -P "$PORT" restore runc "$id" --path "$dump_file" --bundle "$bundle"
-#     assert_success
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --attach
+    assert_equal $status $code
 
-#     run runc kill "$id" KILL
-#     run runc delete "$id"
-# }
+    status=$(container_status "$id")
+    assert_equal "$status" "" # should be automatically deleted (as it was attached)
+}
+
+# bats test_tags=restore,daemonless
+@test "restore container (detached to without daemon)" {
+    id=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
+
+    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc delete "$id"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server
+    assert_equal $status $code
+
+    status=$(container_status "$id")
+    assert_equal "$status" "" # should be automatically deleted (as not detached & without daemon)
+}
+
+# bats test_tags=restore,daemonless
+@test "restore container (detached to without daemon detached)" {
+    id=$(unix_nano)
+    code=42
+    bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
+
+    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
+
+    run cedana dump runc "$id"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc delete "$id"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --detach
+    assert_success
+
+    status=$(container_status "$id")
+    assert_equal "$status" "running"
+
+    run runc kill "$id" KILL
+    run runc delete "$id"
+}
 
 # bats test_tags=restore
 @test "restore container (new job)" {

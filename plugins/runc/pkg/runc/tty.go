@@ -31,7 +31,7 @@ func (t *Tty) copyIO(w io.Writer, r io.ReadCloser) {
 
 // setup pipes for the process so that advanced features like c/r are able to easily checkpoint
 // and restore the process's IO without depending on a host specific path or device
-func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int, stdin io.Reader, stdout, stderr io.Writer) (*Tty, error) {
+func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int) (*Tty, error) {
 	i, err := p.InitializeIO(rootuid, rootgid)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int, stdin io.R
 		},
 	}
 	// add the process's io to the post start closers if they support close
-	for _, cc := range []interface{}{
+	for _, cc := range []any{
 		p.Stdin,
 		p.Stdout,
 		p.Stderr,
@@ -53,15 +53,13 @@ func SetupProcessPipes(p *libcontainer.Process, rootuid, rootgid int, stdin io.R
 			t.postStart = append(t.postStart, c)
 		}
 	}
-	if stdin != nil {
-		go func() {
-			_, _ = io.Copy(i.Stdin, stdin)
-			_ = i.Stdin.Close()
-		}()
-	}
+	go func() {
+		_, _ = io.Copy(i.Stdin, os.Stdin)
+		_ = i.Stdin.Close()
+	}()
 	t.wg.Add(2)
-	go t.copyIO(stdout, i.Stdout)
-	go t.copyIO(stderr, i.Stderr)
+	go t.copyIO(os.Stdout, i.Stdout)
+	go t.copyIO(os.Stderr, i.Stderr)
 	return t, nil
 }
 

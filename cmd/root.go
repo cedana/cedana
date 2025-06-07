@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -75,6 +76,11 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
 		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
+
+		if confDir == "" {
+			confDir = os.Getenv("CEDANA_CONFIG_DIR")
+		}
+
 		if err := config.Init(config.InitArgs{
 			Config:    conf,
 			ConfigDir: confDir,
@@ -92,12 +98,12 @@ func Execute(ctx context.Context, version string) error {
 	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
 
 	rootCmd.Version = version
-  revision := getRevision()
-  versionTemplate := rootCmd.VersionTemplate()
-  if revision != "" {
-    versionTemplate = fmt.Sprintf("%sgit: %s\n", versionTemplate, revision)
-  }
-  rootCmd.SetVersionTemplate(versionTemplate)
+	revision := getRevision()
+	versionTemplate := rootCmd.VersionTemplate()
+	if revision != "" {
+		versionTemplate = fmt.Sprintf("%sgit: %s\n", versionTemplate, revision)
+	}
+	rootCmd.SetVersionTemplate(versionTemplate)
 
 	rootCmd.Long = rootCmd.Long + "\n " + version
 	rootCmd.SilenceUsage = true // only show usage when true usage error

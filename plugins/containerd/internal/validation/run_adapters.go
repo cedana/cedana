@@ -10,7 +10,7 @@ import (
 )
 
 func ValidateRunRequest(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		if req.GetDetails().GetContainerd() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd details")
 		}

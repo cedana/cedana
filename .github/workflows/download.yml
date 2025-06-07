@@ -36,7 +36,7 @@ jobs:
     if: ${{ inputs.cedana_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64
@@ -107,7 +107,7 @@ jobs:
     if: ${{ inputs.criu_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64
@@ -141,7 +141,7 @@ jobs:
     if: ${{ inputs.gpu_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64
@@ -177,7 +177,7 @@ jobs:
     if: ${{ inputs.streamer_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64

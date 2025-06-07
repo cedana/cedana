@@ -13,7 +13,6 @@ type DB interface {
 	Job
 	Host
 	Checkpoint
-	GPU
 }
 
 type Job interface {
@@ -36,22 +35,9 @@ type Checkpoint interface {
 	DeleteCheckpoint(ctx context.Context, id string) error
 }
 
-type GPU interface {
-	PutGPUController(ctx context.Context, controller *GPUController) error
-	ListGPUControllers(ctx context.Context, ids ...string) ([]*GPUController, error)
-	DeleteGPUController(ctx context.Context, id string) error
-}
-
 /////////////////
 //// Helpers ////
 /////////////////
-
-type GPUController struct {
-	ID          string
-	Address     string
-	PID         uint32
-	AttachedPID uint32
-}
 
 type UnimplementedDB struct{}
 
@@ -92,17 +78,5 @@ func (UnimplementedDB) ListCheckpointsByJID(ctx context.Context, jids ...string)
 }
 
 func (UnimplementedDB) DeleteCheckpoint(ctx context.Context, id string) error {
-	return errors.New("unimplemented")
-}
-
-func (UnimplementedDB) PutGPUController(ctx context.Context, controller *GPUController) error {
-	return errors.New("unimplemented")
-}
-
-func (UnimplementedDB) ListGPUControllers(ctx context.Context, ids ...string) ([]*GPUController, error) {
-	return nil, errors.New("unimplemented")
-}
-
-func (UnimplementedDB) DeleteGPUController(ctx context.Context, id string) error {
 	return errors.New("unimplemented")
 }

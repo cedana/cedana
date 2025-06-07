@@ -14,6 +14,8 @@ type (
 		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
 		// LogLevel is the default log level used by the server
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
+		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
@@ -90,10 +92,14 @@ type (
 		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
 		// LogDir is the directory to write GPU logs to
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+		// SockDir is the directory to use for the GPU sockets
+		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// Track metrics associated with observability
 		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
-		// MultiprocessType is the type of multiprocess support to use (IPC, NCCL)
-		MultiprocessType string `json:"multiprocess_type" key:"multiprocess_type" yaml:"multiprocess_type" mapstructure:"multiprocess_type"`
+		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
+		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
+		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
+		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 	}
 
 	Plugins struct {

@@ -315,59 +315,6 @@ func (db *SqliteDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return db.queries.DeleteCheckpoint(ctx, id)
 }
 
-/////////////////////
-/// GPU controller ///
-/////////////////////
-
-func (db *SqliteDB) PutGPUController(ctx context.Context, controller *GPUController) error {
-	if list, _ := db.queries.ListGPUControllersByIDs(ctx, []string{controller.ID}); len(list) > 0 {
-		return db.queries.UpdateGPUController(ctx, sql.UpdateGPUControllerParams{
-			ID:          controller.ID,
-			Address:     controller.Address,
-			Pid:         int64(controller.PID),
-			Attachedpid: int64(controller.AttachedPID),
-		})
-	}
-
-	return db.queries.CreateGPUController(ctx, sql.CreateGPUControllerParams{
-		ID:          controller.ID,
-		Address:     controller.Address,
-		Pid:         int64(controller.PID),
-		Attachedpid: int64(controller.AttachedPID),
-	})
-}
-
-func (db *SqliteDB) ListGPUControllers(ctx context.Context, ids ...string) ([]*GPUController, error) {
-	var dbControllers []sql.GpuController
-	var err error
-
-	if len(ids) == 0 {
-		dbControllers, err = db.queries.ListGPUControllers(ctx)
-	} else {
-		dbControllers, err = db.queries.ListGPUControllersByIDs(ctx, ids)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	controllers := []*GPUController{}
-	for _, dbController := range dbControllers {
-		controllers = append(controllers, &GPUController{
-			ID:          dbController.ID,
-			Address:     dbController.Address,
-			PID:         uint32(dbController.Pid),
-			AttachedPID: uint32(dbController.Attachedpid),
-		})
-	}
-
-	return controllers, nil
-}
-
-func (db *SqliteDB) DeleteGPUController(ctx context.Context, id string) error {
-	return db.queries.DeleteGPUController(ctx, id)
-}
-
 ///////////////
 /// Helpers ///
 ///////////////

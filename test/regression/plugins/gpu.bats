@@ -12,8 +12,12 @@ load_lib support
 load_lib assert
 load_lib file
 
-# One-time setup of downloading weights & pip installing
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+
 setup_file() {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
     setup_file_daemon
 }
 
@@ -34,10 +38,6 @@ teardown_file() {
 ###########
 
 @test "run GPU process (non-GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -51,42 +51,21 @@ teardown_file() {
 }
 
 @test "run GPU process (GPU binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --attach
     assert_success
-    assert_exists "$log_file"
 }
 
-@test "run GPU process (GPU binary) with modified env" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
+# bats test_tags=daemonless
+@test "run GPU process (GPU binary, without daemon)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
 
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --no-server
     assert_success
-    assert_exists "$log_file"
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
 }
 
 @test "run GPU process (non-existent binary)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -100,10 +79,6 @@ teardown_file() {
 }
 
 @test "exec GPU process (run process alias)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -118,10 +93,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -134,8 +105,6 @@ teardown_file() {
     run cedana dump job "$jid"
     assert_success
 
-    sleep 1
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -145,10 +114,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "dump GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -160,8 +125,6 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-
-    sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
@@ -176,10 +139,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -193,51 +152,8 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 3
-
     run cedana restore job "$jid"
     assert_success
-
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
-    run cedana job kill "$jid"
-    rm -rf "$dump_file"
-}
-
-# bats test_tags=restore
-@test "restore GPU process with smaller shm (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
-    assert_success
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
-
-    sleep 2
-
-    run cedana dump job "$jid"
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
-
-    sleep 3
-
-    run cedana restore job "$jid"
-    assert_success
-
-    # NOTE: GPU controller no longer uses JID, so below is commented out
-    # check_shm_size "$jid" "$expected_size"
 
     run cedana ps
     assert_success
@@ -249,10 +165,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
@@ -266,8 +178,6 @@ teardown_file() {
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    sleep 3
-
     run cedana restore job "$jid"
     assert_success
 
@@ -277,4 +187,27 @@ teardown_file() {
 
     run cedana job kill "$jid"
     rm -rf "$dump_file"
+}
+
+# bats test_tags=restore,daemonless
+@test "restore GPU process (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    assert_success
+
+    pid=$(pid_for_jid "$jid")
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    cedana restore process --path "$dump_file" --no-server &
+
+    run wait_for_pid "$pid"
+    kill -KILL "$pid"
 }

@@ -16,13 +16,6 @@ type Checkpoint struct {
 	Size int64
 }
 
-type GpuController struct {
-	ID          string
-	Address     string
-	Pid         int64
-	Attachedpid int64
-}
-
 type Host struct {
 	ID            string
 	Mac           string

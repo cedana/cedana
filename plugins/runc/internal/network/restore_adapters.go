@@ -17,7 +17,7 @@ import (
 )
 
 func UnlockNetworkAfterRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		callback := &criu.NotifyCallback{
 			NetworkUnlockFunc: func(ctx context.Context) error {
 				// Not implemented, yet
@@ -33,7 +33,7 @@ func UnlockNetworkAfterRestore(next types.Restore) types.Restore {
 }
 
 func RestoreNetworkConfiguration(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "failed to get container from context")

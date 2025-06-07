@@ -396,9 +396,9 @@ teardown_file() {
     run kill $pid
 }
 
-# bats test_tags=daemonless
+# bats test_tags=restore,daemonless
 @test "restore process (without daemon)" {
-    "$WORKLOADS"/date-loop.sh &
+    "$WORKLOADS"/date-loop.sh 3 &
     pid=$!
     name=$(unix_nano)
 
@@ -407,13 +407,25 @@ teardown_file() {
 
     run cedana restore process --path "/tmp/$name.tar" --no-server
     assert_success
-
-    run kill $pid
 }
 
-# bats test_tags=daemonless
+# bats test_tags=restore,daemonless
+@test "restore process (without daemon, exit code)" {
+    code=42
+    "$WORKLOADS"/date-loop.sh 3 "$code" &
+    pid=$!
+    name=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
+    assert_success
+
+    run cedana restore process --path "/tmp/$name.tar" --no-server
+    assert_equal $status $code
+}
+
+# bats test_tags=restore,daemonless
 @test "restore process (without daemon, PID file)" {
-    "$WORKLOADS"/date-loop.sh &
+    "$WORKLOADS"/date-loop.sh 3 &
     pid=$!
     name=$(unix_nano)
     pid_file="/tmp/$name.pid"
@@ -425,8 +437,91 @@ teardown_file() {
     assert_success
 
     assert_exists "$pid_file"
+}
 
-    run kill $pid
+# bats test_tags=restore
+@test "restore process (job to without daemon)" {
+    code=42
+    jid=$(unix_nano)
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore process --path "$dump_file" --no-server
+    assert_equal $status $code
+}
+
+# bats test_tags=restore
+@test "restore attach (non-attached to attached)" {
+    code=42
+    jid=$(unix_nano)
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana restore job "$jid" --attach
+    assert_equal $status $code
+}
+
+# bats test_tags=restore
+@test "restore attach (attached to attached)" {
+    code=42
+    jid=$(unix_nano)
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana restore job "$jid" --attach
+    assert_equal $status $code
+}
+
+# bats test_tags=restore
+@test "restore attach (attached to non-attached)" {
+    code=42
+    jid=$(unix_nano)
+    log_file="/var/log/cedana-output-$jid.log"
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana restore job "$jid"
+    assert_success
+
+    sleep 3
+    assert_file_contains "$log_file" "$code"
+}
+
+# bats test_tags=restore
+@test "restore attach (attached to without daemon)" {
+    code=42
+    jid=$(unix_nano)
+
+    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
+    assert_success
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run cedana restore process --path "$dump_file" --no-server
+    assert_equal $status $code
 }
 
 # bats test_tags=restore
