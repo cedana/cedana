@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -60,7 +59,6 @@ type Fs struct {
 // any IO errors that occurred during the streaming process.
 func NewStreamingFs(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	streamerBinary string,
 	imagesDir string,
 	storage cedana_io.Storage,
@@ -92,6 +90,7 @@ func NewStreamingFs(
 	}
 
 	// Start IO on the pipes from the dir
+	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
 	ioErr := make(chan error, parallelism)
 	paths, err := imgPaths(storage, storagePath, mode, parallelism)
@@ -99,7 +98,6 @@ func NewStreamingFs(
 		return nil, nil, err
 	}
 	for i := range parallelism {
-		io.Add(1)
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
@@ -111,6 +109,7 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
+			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
@@ -134,6 +133,7 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
+			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
@@ -213,7 +213,7 @@ func NewStreamingFs(
 		if err != nil {
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
-		log.Trace().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		log.Debug().Str("dir", imagesDir).Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
@@ -247,15 +247,14 @@ func NewStreamingFs(
 	fs.conn = conn.(*net.UnixConn)
 	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
 
-	signal.Ignored(syscall.SIGPIPE) // Avoid program termination due to broken pipe
-
 	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
 		// NOTE: The order of below operations is important.
 		fs.stopListener()
 		fs.conn.Close()
 		io.Wait()
-		signal.Reset(syscall.SIGPIPE) // Reset to default behavior
+		cmd.Process.Signal(syscall.SIGTERM)
+		wg.Wait()
 		close(ioErr)
 		return <-ioErr
 	}

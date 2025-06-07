@@ -86,7 +86,6 @@ func SetupRestoreFS(next types.Restore) types.Restore {
 		var waitForIO func() error
 		opts.DumpFs, waitForIO, err = NewStreamingFs(
 			streamerCtx,
-			opts.WG,
 			imgStreamer.BinaryPaths()[0],
 			imagesDirectory,
 			storage,
