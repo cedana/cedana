@@ -52,7 +52,7 @@ setup_file() {
 
     # Set up k3s cluster for bare metal
     echo "Setting up k3s cluster on bare metal..."
-    setup_k3s_cluster_bare_metal
+    setup_k3s_cluster
 
     # Export kubeconfig for the tests
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -85,6 +85,68 @@ setup_file() {
         kubectl get pods -n cedana-systems || true
         kubectl describe pods -n cedana-systems || true
         kubectl logs -n cedana-systems --all-containers=true --prefix=true || true
+        exit 1
+    fi
+
+    # Check for Cedana helper setup errors that indicate containerized environment
+    echo "Validating Cedana helper setup..."
+    sleep 15  # Give helper time to complete setup and potentially fail
+
+    # Get helper pod logs and check for setup errors
+    local helper_pod=$(kubectl get pods -n cedana-systems -l app.kubernetes.io/name=cedana-helper -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
+    if [ -n "$helper_pod" ]; then
+        local helper_logs=$(kubectl logs "$helper_pod" -n cedana-systems 2>/dev/null || echo "")
+
+        # Check if helper is in crash loop
+        local restart_count=$(kubectl get pod "$helper_pod" -n cedana-systems -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo "0")
+        if [ "$restart_count" -gt 0 ]; then
+            echo "❌ FATAL: Cedana helper is in crash loop (restart count: $restart_count)"
+            echo ""
+            echo "The helper pod is repeatedly crashing, indicating a fundamental"
+            echo "compatibility issue with the host environment."
+            echo ""
+            echo "Recent helper logs:"
+            kubectl logs "$helper_pod" -n cedana-systems --tail=50 || true
+            echo ""
+            echo "Previous logs (if available):"
+            kubectl logs "$helper_pod" -n cedana-systems --previous --tail=20 2>/dev/null || echo "No previous logs available"
+            echo ""
+            exit 1
+        fi
+
+        # Check helper pod status
+        local helper_status=$(kubectl get pod "$helper_pod" -n cedana-systems -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+        if [ "$helper_status" != "Running" ]; then
+            echo "❌ FATAL: Cedana helper pod is not running (status: $helper_status)"
+            echo ""
+            echo "Pod description:"
+            kubectl describe pod "$helper_pod" -n cedana-systems || true
+            echo ""
+            echo "Recent events:"
+            kubectl get events -n cedana-systems --field-selector involvedObject.name="$helper_pod" --sort-by='.lastTimestamp' || true
+            echo ""
+            exit 1
+        fi
+
+        # Check for successful initialization messages
+        if echo "$helper_logs" | grep -q "cedana service setup complete\|starting daemon"; then
+            echo "✅ Cedana helper setup validation passed"
+            echo "✅ Helper successfully initialized systemd service and daemon"
+        else
+            echo "⚠️  Warning: Could not confirm successful helper initialization"
+            echo "Recent helper logs:"
+            echo "$helper_logs" | tail -10
+            echo ""
+            echo "Proceeding with caution..."
+        fi
+    else
+        echo "❌ FATAL: Could not find Cedana helper pod"
+        echo ""
+        echo "Available pods in cedana-systems namespace:"
+        kubectl get pods -n cedana-systems || true
+        echo ""
+        echo "This indicates a fundamental issue with the Cedana installation."
         exit 1
     fi
 
