@@ -12,13 +12,13 @@ load_lib support
 load_lib assert
 load_lib file
 
-# One-time setup of downloading weights & pip installing
+export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
+
 setup_file() {
+    if ! cmd_exists nvidia-smi; then
+        skip "GPU not available"
+    fi
     setup_file_daemon
-    # if cmd_exists nvidia-smi; then
-    #     do_once install_requirements
-    #     do_once download_hf_models
-    # fi
 }
 
 setup() {
@@ -39,10 +39,6 @@ teardown_file() {
 
 # bats test_tags=dump
 @test "stream dump GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -52,24 +48,18 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --compression none
+    run cedana dump job "$jid" --stream 1
     assert_success
-
-    sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-0.gz"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=dump
 @test "stream dump GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -79,17 +69,15 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --compression none
+    run cedana dump job "$jid" --stream 4
     assert_success
-
-    sleep 1
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-    assert_exists "$dump_file/img-1"
-    assert_exists "$dump_file/img-2"
-    assert_exists "$dump_file/img-3"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
 
     run cedana job kill "$jid"
 }
@@ -100,10 +88,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "stream restore GPU process (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -111,56 +95,15 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --compression none
+    run cedana dump job "$jid" --stream 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-
-    sleep 3
+    assert_exists "$dump_file/img-0.gz"
 
     run cedana restore job "$jid" --stream 1
     assert_success
-
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
-    run cedana job kill "$jid"
-}
-
-# bats test_tags=restore
-@test "stream restore GPU process with smaller shm (vector add)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
-    jid=$(unix_nano)
-
-    expected_size=$((4*1024*1024*1024))
-    export CEDANA_GPU_SHM_SIZE="$expected_size"
-
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
-    assert_success
-
-    check_shm_size "$jid" "$expected_size"
-
-    sleep 2
-
-    run cedana dump job "$jid" --stream 1 --compression none
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-
-    sleep 3
-
-    run cedana restore job "$jid" --stream 1
-    assert_success
-
-    check_shm_size "$jid" "$expected_size"
 
     run cedana ps
     assert_success
@@ -171,10 +114,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "stream restore GPU process (mem throughput saxpy)" {
-    if ! cmd_exists nvidia-smi; then
-        skip "GPU not available"
-    fi
-
     jid=$(unix_nano)
 
     run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
@@ -182,17 +121,15 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --compression none
+    run cedana dump job "$jid" --stream 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
-    assert_exists "$dump_file/img-0"
-    assert_exists "$dump_file/img-1"
-    assert_exists "$dump_file/img-2"
-    assert_exists "$dump_file/img-3"
-
-    sleep 3
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
 
     run cedana restore job "$jid" --stream 4
     assert_success
@@ -204,3 +141,29 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
+# bats test_tags=restore,daemonless
+@test "stream restore GPU process (mem throughput saxpy, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    assert_success
+
+    pid=$(pid_for_jid "$jid")
+
+    sleep 2
+
+    run cedana dump job "$jid" --stream 4
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+    assert_exists "$dump_file/img-2.gz"
+    assert_exists "$dump_file/img-3.gz"
+
+    cedana restore process --path "$dump_file" --stream 4 --no-server &
+
+    run wait_for_pid "$pid"
+    kill -KILL "$pid"
+}

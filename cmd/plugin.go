@@ -89,6 +89,7 @@ var pluginListCmd = &cobra.Command{
 
 		tableWriter.SortBy([]table.SortBy{
 			{Name: "Status", Mode: table.Asc},
+			{Name: "Plugin", Mode: table.Asc},
 		})
 
 		for _, p := range list {
@@ -127,10 +128,6 @@ var pluginInstallCmd = &cobra.Command{
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, names []string) error {
-		if utils.IsRootUser() == false {
-			return fmt.Errorf("this command must be run as root")
-		}
-
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -182,10 +179,6 @@ var pluginRemoveCmd = &cobra.Command{
 	Args:              cobra.ArbitraryArgs,
 	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if utils.IsRootUser() == false {
-			return fmt.Errorf("this command must be run as root")
-		}
-
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
 			return fmt.Errorf("failed to get plugin manager")
@@ -324,15 +317,16 @@ var pluginFeaturesCmd = &cobra.Command{
 
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RunDaemonlessSupport, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.Cleanup, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.Reaper, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
 			tableWriter.AppendSeparator()
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointInspect, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointDecode, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.CheckpointEncode, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.Storage, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.QueryHandler, pluginNames, &errs))
 			tableWriter.AppendSeparator()

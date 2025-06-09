@@ -10,21 +10,25 @@ import (
 )
 
 type DB interface {
-	//// Job ////
+	Job
+	Host
+	Checkpoint
+}
 
+type Job interface {
 	PutJob(ctx context.Context, job *daemon.Job) error
 	ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error)
 	ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error)
 	DeleteJob(ctx context.Context, jid string) error
+}
 
-	//// Host ////
-
+type Host interface {
 	PutHost(ctx context.Context, host *daemon.Host) error
 	ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error)
 	DeleteHost(ctx context.Context, id string) error
+}
 
-	//// Checkpoint ////
-
+type Checkpoint interface {
 	PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error
 	ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error)
 	ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error)

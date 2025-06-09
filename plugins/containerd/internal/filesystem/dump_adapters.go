@@ -2,7 +2,11 @@ package filesystem
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -24,7 +28,7 @@ import (
 // Assumes client is already setup in context.
 // TODO: Do rootfs dump parallel to CRIU dump, possible using multiple CRIU callbacks and synchronizing them
 func DumpRootfs(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
@@ -48,7 +52,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		}
 
 		if info.Image == details.Image {
-			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image")
+			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image, current image: %s, dump image: %s", info.Image, details.Image)
 		}
 
 		task, err := container.Task(ctx, nil)
@@ -76,7 +80,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 			_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
 			defer end()
-			err = dumpRootfs(ctx, client, container, details.Image)
+			err = dumpRootfs(ctx, client, container, details.Image, details.Username, details.Secret)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
 			}
@@ -89,10 +93,10 @@ func DumpRootfs(next types.Dump) types.Dump {
 		rootfsErr := make(chan error, 1)
 
 		go func() {
-			rootfsErr <- dumpRootfs(ctx, client, container, details.Image)
+			rootfsErr <- dumpRootfs(ctx, client, container, details.Image, details.Username, details.Secret)
 		}()
 
-		exited, err = next(ctx, opts, resp, req)
+		code, err = next(ctx, opts, resp, req)
 		if err != nil {
 			<-rootfsErr // wait for rootfs dump cleanup
 			return nil, err
@@ -107,11 +111,11 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
 		}
 
-		return exited, nil
+		return code, nil
 	}
 }
 
-func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref string) error {
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) error {
 	id := container.ID()
 
 	info, err := container.Info(ctx)
@@ -144,7 +148,15 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 		contentStore = client.ContentStore()
 	)
 
-	diffLayerDesc, diffID, err := createDiff(ctx, id, contentStore, snapshotter, differ)
+	// TODO BS - the id+"-snapshot" is a hack right now. We should have proper sha256 hashes
+	// ex:
+	// KEY                                                                     PARENT                                                                  KIND
+	// sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a                                                                         Committed
+	// this is bad:
+	// test-snapshot                                                           sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
+	// test1-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
+	// test2-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
+	diffLayerDesc, diffID, err := createDiff(ctx, id+"-snapshot", contentStore, snapshotter, differ)
 	if err != nil {
 		return fmt.Errorf("failed to export layer: %w", err)
 	}
@@ -180,5 +192,89 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 		}
 	}
 
+	// If no username or secret is provided, we can try w/ local docker config as it may be a cli user
+	if username == "" || secret == "" {
+		log.Warn().Msgf("no username or secret provided, trying to read from docker config")
+		username, secret, err = readDockerConfig(ref)
+		if err != nil {
+			log.Warn().Msgf("failed to read docker config: %v", err)
+			return nil
+		}
+	}
+
+	if err := pushImage(context.WithoutCancel(ctx), client, ref, username, secret); err != nil {
+		log.Error().Msgf("failed to push image: %v", err)
+	}
+
+	log.Info().Msgf("pushed image %s successful", ref)
+
 	return nil
+}
+
+type DockerConfig struct {
+	Auths map[string]AuthEntry `json:"auths"`
+}
+
+type AuthEntry struct {
+	Auth string `json:"auth"`
+}
+
+func readDockerConfig(imageName string) (string, string, error) {
+	cfgPath := os.ExpandEnv("$HOME/.docker/config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read docker config: %w", err)
+	}
+
+	var config DockerConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return "", "", fmt.Errorf("failed to unmarshal docker config: %w", err)
+	}
+
+	registry := getRegistry(imageName)
+
+	auth, ok := config.Auths[registry]
+	if !ok {
+		auth, ok = config.Auths["https://"+registry+"/v1/"]
+		if !ok {
+			return "", "", fmt.Errorf("no auth found for registry %s", registry)
+		}
+	}
+
+	username, password, err := decodeAuth(auth.Auth)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to decode auth: %w", err)
+	}
+	return username, password, nil
+}
+
+func decodeAuth(auth string) (string, string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(auth)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to decode auth: %w", err)
+	}
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid auth format")
+	}
+	return parts[0], parts[1], nil
+}
+
+func getRegistry(imageRef string) string {
+	parts := strings.Split(imageRef, "/")
+
+	if len(parts) == 1 {
+		return "index.docker.io"
+	}
+	if len(parts) == 2 {
+		return "index.docker.io"
+	}
+	if len(parts) >= 3 && (strings.Contains(parts[0], ".") || strings.Contains(parts[0], ":")) {
+		if parts[0] == "docker.io" {
+			return "index.docker.io"
+		}
+		return parts[0]
+	}
+
+	return "index.docker.io"
 }

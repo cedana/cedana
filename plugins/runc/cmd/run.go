@@ -8,6 +8,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/style"
 	runc_flags "github.com/cedana/cedana/plugins/runc/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -15,8 +16,10 @@ import (
 func init() {
 	RunCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
 	RunCmd.Flags().StringP(runc_flags.BundleFlag.Full, runc_flags.BundleFlag.Short, "", "bundle")
+	RunCmd.Flags().BoolP(runc_flags.DetachFlag.Full, runc_flags.DetachFlag.Short, false, "detach from the container's process, ignored if not using --no-server and is always true")
 	RunCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "do not use pivot root to jail process inside rootfs.")
 	RunCmd.Flags().BoolP(runc_flags.NoNewKeyringFlag.Full, runc_flags.NoNewKeyringFlag.Short, false, "do not create a new session keyring.")
+	RunCmd.Flags().StringP(runc_flags.ConsoleSocketFlag.Full, runc_flags.ConsoleSocketFlag.Short, "", "path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal")
 }
 
 var RunCmd = &cobra.Command{
@@ -36,21 +39,34 @@ var RunCmd = &cobra.Command{
 
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 		bundle, _ := cmd.Flags().GetString(runc_flags.BundleFlag.Full)
+		detach, _ := cmd.Flags().GetBool(runc_flags.DetachFlag.Full)
 		noPivot, _ := cmd.Flags().GetBool(runc_flags.NoPivotFlag.Full)
 		noNewKeyring, _ := cmd.Flags().GetBool(runc_flags.NoNewKeyringFlag.Full)
+		consoleSocket, _ := cmd.Flags().GetString(runc_flags.ConsoleSocketFlag.Full)
 		wd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("Error getting working directory: %v", err)
 		}
 
+		daemonless, _ := cmd.Context().Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+		if !daemonless && detach {
+			fmt.Println(
+				style.WarningColors.Sprintf(
+					"Flag `%s` is ignored when running with daemon, as it always detaches.",
+					runc_flags.DetachFlag.Full,
+				))
+		}
+
 		req.Type = "runc"
 		req.Details = &daemon.Details{Runc: &runc.Runc{
-			Root:         root,
-			Bundle:       bundle,
-			ID:           id,
-			NoPivot:      noPivot,
-			NoNewKeyring: noNewKeyring,
-			WorkingDir:   wd,
+			Root:              root,
+			Bundle:            bundle,
+			Detach:            detach,
+			ID:                id,
+			NoPivot:           noPivot,
+			NoNewKeyring:      noNewKeyring,
+			WorkingDir:        wd,
+			ConsoleSocketPath: consoleSocket,
 		}}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)

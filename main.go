@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/cedana/cedana/cmd"
+	"github.com/cedana/cedana/internal/version"
 )
 
 // loaded from ldflag definitions
@@ -16,7 +17,10 @@ func main() {
 	// Grandparent context to deal with OS interrupts
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
+	signal.Ignore(syscall.SIGPIPE) // Avoid program termination due to broken pipes
+
 	defer stop()
+	version.PutVersion(Version)
 
 	if err := cmd.Execute(ctx, Version); err != nil {
 		os.Exit(1)

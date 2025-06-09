@@ -107,7 +107,7 @@ func newPropagator() propagation.TextMapPropagator {
 
 func newTracerProvider(ctx context.Context, version, endpoint, headers string) (*trace.TracerProvider, error) {
 	// set headers env var
-	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", headers); err != nil {
+	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "signoz-ingestion-key="+headers); err != nil {
 		return nil, err
 	}
 

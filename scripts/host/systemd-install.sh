@@ -4,17 +4,17 @@ set -e
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE"  ]; do
-    DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
     SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /*  ]] && SOURCE="$DIR/$SOURCE"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
-DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
 CEDANA_METRICS_ASR=${CEDANA_METRICS_ASR:-false}
-CEDANA_METRICS_OTEL=${CEDANA_METRICS_OTEL:-false}
+CEDANA_METRICS_OTEL=${CEDANA_METRICS_OTEL:true}
 DAEMON_ARGS=""
 
 if ! test -f "$APP_PATH"; then

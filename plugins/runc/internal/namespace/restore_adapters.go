@@ -20,7 +20,7 @@ import (
 
 func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			if req.Criu == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
@@ -47,7 +47,7 @@ func IgnoreNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[
 // and expect it to be setup correctly.
 func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 			if !ok {
 				return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
@@ -110,12 +110,11 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 				defer nsFd.Close()
 				extraFiles = append(extraFiles, nsFd)
 
-				criuOpts := req.GetCriu()
-				if criuOpts == nil {
-					criuOpts = &criu_proto.CriuOpts{}
+				if req.Criu == nil {
+					req.Criu = &criu_proto.CriuOpts{}
 				}
 
-				criuOpts.InheritFd = append(criuOpts.InheritFd, &criu_proto.InheritFd{
+				req.Criu.InheritFd = append(req.Criu.InheritFd, &criu_proto.InheritFd{
 					Key: proto.String(CriuNsToKey(t)),
 					Fd:  proto.Int32(int32(2 + len(extraFiles))),
 				})
@@ -131,7 +130,7 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 // For all other namespaces except NET and PID CRIU has
 // a simpler way of joining the existing namespace if set
 func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(runc_keys.CONTAINER_CONTEXT_KEY).(*libcontainer.Container)
 		if !ok {
 			return nil, status.Error(codes.FailedPrecondition, "failed to get container from context")
@@ -157,11 +156,10 @@ func JoinOtherExternalNamespacesForRestore(next types.Restore) types.Restore {
 				}
 				// CRIU will issue a warning for NEWUSER:
 				// criu/namespaces.c: 'join-ns with user-namespace is not fully tested and dangerous'
-				criuOpts := req.GetCriu()
-				if criuOpts == nil {
-					criuOpts = &criu_proto.CriuOpts{}
+				if req.Criu == nil {
+					req.Criu = &criu_proto.CriuOpts{}
 				}
-				criuOpts.JoinNs = append(criuOpts.JoinNs, &criu_proto.JoinNamespace{
+				req.Criu.JoinNs = append(req.Criu.JoinNs, &criu_proto.JoinNamespace{
 					Ns:     proto.String(configs.NsName(ns.Type)),
 					NsFile: proto.String(nsPath),
 				})

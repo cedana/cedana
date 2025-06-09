@@ -11,7 +11,8 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/internal/server"
+
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -20,6 +21,7 @@ import (
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -139,16 +141,19 @@ var restoreCmd = &cobra.Command{
 				ShellJob:       proto.Bool(shellJob),
 				LinkRemap:      proto.Bool(linkRemap),
 			},
-			Env:    env,
-			UID:    user.Uid,
-			GID:    user.Gid,
-			Groups: user.Groups,
+			Env:     env,
+			UID:     user.Uid,
+			GID:     user.Gid,
+			Groups:  user.Groups,
+			Details: &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		if noServer {
+			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
+			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -170,6 +175,7 @@ var restoreCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
+		ctx := cmd.Context()
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
@@ -182,23 +188,19 @@ var restoreCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithoutCancel(
-				context.WithValue(
-					cmd.Context(),
-					keys.DAEMONLESS_CONTEXT_KEY,
-					true,
-				),
-			)
-
-			root, err := server.NewRoot(ctx)
+			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			resp, err = root.Restore(ctx, req)
+			code, err := cedana.Restore(req)
 			if err != nil {
+				cedana.Shutdown()
 				return utils.GRPCErrorColored(err)
 			}
+			cedana.Shutdown()
+
+			os.Exit(<-code())
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

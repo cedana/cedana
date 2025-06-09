@@ -249,8 +249,8 @@ func (c *Client) Attach(ctx context.Context, args *daemon.AttachReq, opts ...grp
 	stdIn, stdOut, stdErr, exitCode, errors := cedana_io.NewStreamIOMaster(stream)
 
 	go io.Copy(stdIn, os.Stdin) // since stdin never closes
-	outDone := utils.CopyNotify(os.Stdout, stdOut)
-	errDone := utils.CopyNotify(os.Stderr, stdErr)
+	outDone := cedana_io.CopyNotify(os.Stdout, stdOut)
+	errDone := cedana_io.CopyNotify(os.Stderr, stdErr)
 	<-outDone // wait to capture all out
 	<-errDone // wait to capture all err
 

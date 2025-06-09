@@ -196,6 +196,60 @@ teardown_file() {
     run kill $pid
 }
 
+# bats test_tags=dump
+@test "stream dump process (no compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression none --leave-running
+    assert_success
+
+    pid_exists $pid
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0"
+    assert_exists "/tmp/$name/img-1"
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir /tmp --stream 2 --compression none
+    assert_success
+
+    assert_exists "/tmp/$name2"
+    assert_exists "/tmp/$name2/img-0"
+    assert_exists "/tmp/$name2/img-1"
+
+    run kill $pid
+}
+
+# bats test_tags=dump
+@test "stream dump process (gzip compression, leave running)" {
+    "$WORKLOADS"/date-loop.sh &
+    pid=$!
+    name=$(unix_nano)
+    name2=$(unix_nano)
+
+    run cedana dump process $pid --name "$name" --dir /tmp --stream 2 --compression gzip --leave-running
+    assert_success
+
+    pid_exists $pid
+    assert_exists "/tmp/$name"
+    assert_exists "/tmp/$name/img-0.gz"
+    assert_exists "/tmp/$name/img-1.gz"
+
+    sleep 1
+
+    run cedana dump process $pid --name "$name2" --dir /tmp --stream 2 --compression gzip
+    assert_success
+
+    assert_exists "/tmp/$name2"
+    assert_exists "/tmp/$name2/img-0.gz"
+    assert_exists "/tmp/$name2/img-1.gz"
+
+    run kill $pid
+}
+
 ###############
 ### Restore ###
 ###############

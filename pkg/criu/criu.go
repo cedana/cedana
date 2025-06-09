@@ -59,7 +59,6 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stderr = stderr
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid:    true,
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 
@@ -97,7 +96,7 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 	cln := c.swrkSk
 
 	// Try write a couple of times
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		var wrote int
 		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
 		if err == nil && wrote == len(reqB) {
@@ -208,9 +207,9 @@ func (c *Criu) doSwrkWithResp(
 
 		if !resp.GetSuccess() {
 			if resp.GetType() == criu.CriuReqType_RESTORE {
-				nfy.OnRestoreError(ctx)
+				nfy.OnRestoreError(ctx, opts)
 			} else if resp.GetType() == criu.CriuReqType_DUMP {
-				nfy.OnDumpError(ctx)
+				nfy.OnDumpError(ctx, opts)
 			}
 			return resp, fmt.Errorf("operation failed (msg:%s err:%d)",
 				resp.GetCrErrmsg(), resp.GetCrErrno())

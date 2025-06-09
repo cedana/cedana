@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/cedana/go-criu/v7/crit"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
@@ -282,15 +283,14 @@ var attachJobCmd = &cobra.Command{
 
 		jid := args[0]
 
-		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		resp, err := client.Get(cmd.Context(), &daemon.GetReq{JID: jid})
 		if err != nil {
 			return err
 		}
-		if len(list.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
 
-		pid := list.Jobs[0].GetState().GetPID()
+		job := resp.GetJob()
+
+		pid := job.GetState().GetPID()
 
 		return client.Attach(cmd.Context(), &daemon.AttachReq{PID: pid})
 	},
@@ -411,30 +411,26 @@ var (
 			}
 
 			id := args[0]
-			imgType, _ := cmd.Flags().GetString(flags.TypeFlag.Full)
 
 			resp, err := client.GetCheckpoint(cmd.Context(), &daemon.GetCheckpointReq{ID: proto.String(id)})
 			if err != nil {
 				return err
 			}
 
-			var info func(path string, imgType string) ([]byte, error)
-			features.CheckpointInspect.IfAvailable(func(name string, f func(path string, imgType string) ([]byte, error)) error {
-				info = f
-				return nil
-			})
-			if info == nil {
-				return fmt.Errorf("Please install a plugin that supports checkpoint inspection. Use `%s` to see available plugins.",
-					utils.FullUse(pluginListCmd),
-				)
-			}
+			image := crit.New(nil, nil, resp.GetCheckpoint().GetPath(), true, true)
 
-			bytes, err := info(resp.GetCheckpoint().GetPath(), imgType)
+			fds, err := image.ExploreFds()
 			if err != nil {
 				return err
 			}
 
-			fmt.Print(string(bytes))
+			for _, fd := range fds {
+				for _, file := range fd.Files {
+					fmt.Println(file.Path)
+				}
+			}
+
+			// TODO: Move checkpoint inespection to daemon, to allow inspecting compressed or even streamable checkpoints
 
 			return nil
 		},

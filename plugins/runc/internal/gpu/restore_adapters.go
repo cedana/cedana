@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	runc_gpu "github.com/cedana/cedana/plugins/runc/pkg/gpu"
@@ -18,7 +19,7 @@ import (
 // run is not enough. Upon restore, the container is likely being started
 // with it's original spec, which does not have the GPU interception.
 func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (chan int, error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(codes.Internal, "state should have been filled by an adapter")
@@ -32,9 +33,9 @@ func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to get spec from context")
 		}
 
-		jid := req.GetDetails().GetJID()
-		if jid == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "JID is required for restoring GPU interception.")
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
 		}
 
 		// Check if GPU plugin is installed
@@ -48,7 +49,7 @@ func RestoreInterceptionIfNeeded(next types.Restore) types.Restore {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err := runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, jid)
+		err = runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, id)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}

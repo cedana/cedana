@@ -4,6 +4,10 @@
 
 export WORKLOADS="test/workloads"
 
+export KIBIBYTE=1024
+export MEBIBYTE=$(( KIBIBYTE * 1024 ))
+export GIBIBYTE=$(( MEBIBYTE * 1024 ))
+
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load
 }
@@ -74,4 +78,29 @@ do_once() {
 
     "$func"
     mkdir "$lock.done"
+}
+
+pid_exists() {
+    local pid=$1
+    if [ -z "$pid" ]; then
+        return 1
+    fi
+    kill -0 "$pid" 2>/dev/null
+}
+
+wait_for_pid() {
+    local pid=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    while ! kill -0 "$pid" 2>/dev/null; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    return 0
 }

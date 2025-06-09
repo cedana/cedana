@@ -17,12 +17,16 @@ import (
 type PropagatorDB struct {
 	config.Connection
 	client *http.Client
+
+	// Fallback DBs are used for all unimplemented methods
+	fallback []DB
 }
 
-func NewPropagatorDB(ctx context.Context, connection config.Connection) *PropagatorDB {
+func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback ...DB) *PropagatorDB {
 	return &PropagatorDB{
 		connection,
 		&http.Client{},
+		fallback,
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,7 +18,7 @@ import (
 const waitForManageUpcomingTimeout = 2 * time.Minute
 
 func SetupForRun(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		ctx = namespaces.WithNamespace(ctx, details.Namespace)
@@ -35,7 +36,7 @@ func SetupForRun(next types.Run) types.Run {
 }
 
 func CreateContainerForRun(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (exited chan int, err error) {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
@@ -57,9 +58,11 @@ func CreateContainerForRun(next types.Run) types.Run {
 				ctx,
 				details.ID,
 				containerd.WithImage(image),
+				containerd.WithNewSnapshot(details.ID+"-snapshot", image),
+				containerd.WithNewSpec(oci.WithImageConfig(image)),
 			)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}
 			defer func() {
 				if err != nil {
