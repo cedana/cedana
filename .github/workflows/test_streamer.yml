@@ -54,7 +54,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 4
+        default: 2
       post_summary:
         type: boolean
         description: "Post test summary"
@@ -151,7 +151,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
-          RETRIES: 1
+          RETRIES: 0
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
