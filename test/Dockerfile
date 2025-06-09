@@ -14,7 +14,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     pkg-config libbsd-dev containerd runc libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
-    zip jq systemctl ca-certificates gnupg lsb-release
+    zip jq
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
