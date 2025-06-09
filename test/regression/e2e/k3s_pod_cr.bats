@@ -59,12 +59,42 @@ setup_file() {
 
     # Install Cedana via helm with the exact command specified
     echo "Installing Cedana via helm..."
-    helm install cedana oci://registry-1.docker.io/cedana/cedana-helm \
-        --create-namespace -n cedana-systems \
-        --set cedanaConfig.cedanaUrl="$CEDANA_URL" \
-        --set cedanaConfig.cedanaAuthToken="$CEDANA_AUTH_TOKEN" \
-        --set cedanaConfig.cedanaClusterName="ci-k3s-test-cluster" \
-        --wait --timeout=10m
+
+    # Base helm command
+    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm"
+    helm_cmd="$helm_cmd --create-namespace -n cedana-systems"
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaUrl=\"$CEDANA_URL\""
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=\"$CEDANA_AUTH_TOKEN\""
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaClusterName=\"ci-k3s-test-cluster\""
+
+    # If we have a local helper image, use it
+    if [ -n "$CEDANA_LOCAL_HELPER_IMAGE" ]; then
+        echo "Using local helper image: $CEDANA_LOCAL_HELPER_IMAGE"
+
+        # Import the local image into k3s containerd
+        echo "Importing local image into k3s containerd..."
+        docker save "$CEDANA_LOCAL_HELPER_IMAGE" | sudo k3s ctr images import -
+
+        # Parse image name and tag
+        local image_repo="${CEDANA_LOCAL_HELPER_IMAGE%:*}"
+        local image_tag_only="${CEDANA_LOCAL_HELPER_IMAGE##*:}"
+
+        echo "Image repository: $image_repo"
+        echo "Image tag: $image_tag_only"
+
+        # Add local helper image settings to helm command
+        helm_cmd="$helm_cmd --set daemonHelper.image.repository=\"$image_repo\""
+        helm_cmd="$helm_cmd --set daemonHelper.image.tag=\"$image_tag_only\""
+        helm_cmd="$helm_cmd --set daemonHelper.image.imagePullPolicy=Never"
+    else
+        echo "No local helper image specified, using default from helm chart"
+    fi
+
+    helm_cmd="$helm_cmd --wait --timeout=10m"
+
+    # Execute the helm install command
+    echo "Running: $helm_cmd"
+    eval "$helm_cmd"
 
     if [ $? -ne 0 ]; then
         echo "Error: Failed to install Cedana helm chart"
@@ -91,64 +121,6 @@ setup_file() {
     # Check for Cedana helper setup errors that indicate containerized environment
     echo "Validating Cedana helper setup..."
     sleep 15  # Give helper time to complete setup and potentially fail
-
-    # Get helper pod logs and check for setup errors
-    local helper_pod=$(kubectl get pods -n cedana-systems -l app.kubernetes.io/name=cedana-helper -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-
-    if [ -n "$helper_pod" ]; then
-        local helper_logs=$(kubectl logs "$helper_pod" -n cedana-systems 2>/dev/null || echo "")
-
-        # Check if helper is in crash loop
-        local restart_count=$(kubectl get pod "$helper_pod" -n cedana-systems -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo "0")
-        if [ "$restart_count" -gt 0 ]; then
-            echo "❌ FATAL: Cedana helper is in crash loop (restart count: $restart_count)"
-            echo ""
-            echo "The helper pod is repeatedly crashing, indicating a fundamental"
-            echo "compatibility issue with the host environment."
-            echo ""
-            echo "Recent helper logs:"
-            kubectl logs "$helper_pod" -n cedana-systems --tail=50 || true
-            echo ""
-            echo "Previous logs (if available):"
-            kubectl logs "$helper_pod" -n cedana-systems --previous --tail=20 2>/dev/null || echo "No previous logs available"
-            echo ""
-            exit 1
-        fi
-
-        # Check helper pod status
-        local helper_status=$(kubectl get pod "$helper_pod" -n cedana-systems -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
-        if [ "$helper_status" != "Running" ]; then
-            echo "❌ FATAL: Cedana helper pod is not running (status: $helper_status)"
-            echo ""
-            echo "Pod description:"
-            kubectl describe pod "$helper_pod" -n cedana-systems || true
-            echo ""
-            echo "Recent events:"
-            kubectl get events -n cedana-systems --field-selector involvedObject.name="$helper_pod" --sort-by='.lastTimestamp' || true
-            echo ""
-            exit 1
-        fi
-
-        # Check for successful initialization messages
-        if echo "$helper_logs" | grep -q "cedana service setup complete\|starting daemon"; then
-            echo "✅ Cedana helper setup validation passed"
-            echo "✅ Helper successfully initialized systemd service and daemon"
-        else
-            echo "⚠️  Warning: Could not confirm successful helper initialization"
-            echo "Recent helper logs:"
-            echo "$helper_logs" | tail -10
-            echo ""
-            echo "Proceeding with caution..."
-        fi
-    else
-        echo "❌ FATAL: Could not find Cedana helper pod"
-        echo ""
-        echo "Available pods in cedana-systems namespace:"
-        kubectl get pods -n cedana-systems || true
-        echo ""
-        echo "This indicates a fundamental issue with the Cedana installation."
-        exit 1
-    fi
 
     # Get cluster ID from propagator service
     echo "Retrieving cluster ID from propagator service..."

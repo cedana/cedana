@@ -44,6 +44,12 @@ PREREQUISITES:
     - systemctl (for managing k3s service)
     - sudo access (required for k3s installation)
     - bats (for running tests)
+    - docker (for building the local Cedana helper image)
+    - git (for generating the image tag)
+
+NOTE:
+    This test builds a local Cedana helper image with Pop!_OS support
+    to ensure PR and nightly testing uses the latest code changes.
 
 EOF
 }
@@ -67,7 +73,7 @@ check_prerequisites() {
     local missing_deps=()
     
     # Check for required commands
-    for cmd in curl sudo systemctl bats; do
+    for cmd in curl sudo systemctl bats docker git; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_deps+=("$cmd")
         fi
@@ -86,6 +92,11 @@ check_prerequisites() {
     if ! sudo -n true 2>/dev/null; then
         log "This script requires sudo access for k3s installation and management."
         log "You may be prompted for your password."
+    fi
+    
+    # Check docker access
+    if ! docker info &> /dev/null; then
+        error "Docker is not running or accessible. Please start Docker and ensure you have access."
     fi
     
     log "Prerequisites check passed"
@@ -116,9 +127,17 @@ run_k3s_test() {
     
     cd "$REPO_ROOT"
     
+    # Build local Cedana image first
+    build_local_cedana_image
+    
     # Export environment variables for the test
     export CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN"
     export CEDANA_URL="$CEDANA_URL"
+    
+    # Export the local image tag for the test to use
+    local image_tag=$(cat /tmp/cedana-local-image-tag)
+    export CEDANA_LOCAL_HELPER_IMAGE="$image_tag"
+    log "Using local helper image: $CEDANA_LOCAL_HELPER_IMAGE"
     
     # Add debug flags if requested
     local bats_args=()
@@ -140,6 +159,24 @@ run_k3s_test() {
     fi
     
     return $test_exit_code
+}
+
+build_local_cedana_image() {
+    log "Building local Cedana helper image with Pop!_OS support..."
+    
+    cd "$REPO_ROOT"
+    
+    # Build the local cedana image with a simple tag format
+    local image_tag="cedana-helper-local:$(git rev-parse --short HEAD)"
+    log "Building image: $image_tag"
+    
+    if ! docker build -t "$image_tag" -f Dockerfile .; then
+        error "Failed to build local Cedana image"
+    fi
+    
+    # Save the image tag for later use
+    log "Built local Cedana image: $image_tag"
+    echo "$image_tag" > /tmp/cedana-local-image-tag
 }
 
 main() {

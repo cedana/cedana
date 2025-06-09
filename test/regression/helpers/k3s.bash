@@ -129,20 +129,25 @@ deploy_cedana_helm_chart() {
     
     echo "Deploying Cedana Helm chart from OCI registry..."
     
-    # Install Cedana using OCI registry
-    helm install cedana oci://registry-1.docker.io/cedana/cedana-helm \
-        --create-namespace -n cedanacontroller-system \
-        --set cedanaConfig.cedanaAuthToken="$auth_token" \
-        --set cedanaConfig.cedanaUrl="$cedana_url" \
-        --set controllerManager.manager.resources.limits.cpu=200m \
-        --set controllerManager.manager.resources.limits.memory=128Mi \
-        --set controllerManager.manager.resources.requests.cpu=100m \
-        --set controllerManager.manager.resources.requests.memory=64Mi \
-        --wait --timeout=10m
+    # Build helm install command
+    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm"
+    helm_cmd="$helm_cmd --create-namespace -n cedana-systems"
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=\"$auth_token\""
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaUrl=\"$cedana_url\""
+    helm_cmd="$helm_cmd --set cedanaConfig.cedanaClusterName=\"ci-k3s-test-cluster\""
+    helm_cmd="$helm_cmd --set controllerManager.manager.resources.limits.cpu=200m"
+    helm_cmd="$helm_cmd --set controllerManager.manager.resources.limits.memory=128Mi"
+    helm_cmd="$helm_cmd --set controllerManager.manager.resources.requests.cpu=100m"
+    helm_cmd="$helm_cmd --set controllerManager.manager.resources.requests.memory=64Mi"
+    helm_cmd="$helm_cmd --wait --timeout=10m"
+    
+    # Execute the helm install command
+    echo "Running: $helm_cmd"
+    eval "$helm_cmd"
     
     if [ $? -ne 0 ]; then
         echo "Error: Failed to deploy Cedana Helm chart"
-        kubectl get pods -n cedanacontroller-system 2>/dev/null || true
+        kubectl get pods -n cedana-systems 2>/dev/null || true
         return 1
     fi
     
