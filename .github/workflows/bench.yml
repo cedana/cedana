@@ -676,7 +676,7 @@ jobs:
         id: slack-native
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
@@ -734,7 +734,7 @@ jobs:
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
