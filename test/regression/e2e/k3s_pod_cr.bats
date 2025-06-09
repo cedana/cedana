@@ -67,6 +67,9 @@ setup_file() {
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=\"$CEDANA_AUTH_TOKEN\""
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaClusterName=\"ci-k3s-test-cluster\""
 
+    # Set controller/manager image pull policy to Always
+    helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
+
     # If we have a local helper image, use it
     if [ -n "$CEDANA_LOCAL_HELPER_IMAGE" ]; then
         echo "Using local helper image: $CEDANA_LOCAL_HELPER_IMAGE"
