@@ -34,7 +34,7 @@ on:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 2
       runner:
         type: string
         description: "Runner machine for tests"
