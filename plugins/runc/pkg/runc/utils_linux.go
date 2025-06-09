@@ -74,14 +74,13 @@ func NewProcess(p specs.Process) (*libcontainer.Process, error) {
 }
 
 // setupIO modifies the given process config according to the options.
-func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*Tty, error) {
+func SetupIO(process *libcontainer.Process, container *libcontainer.Container, createTTY, detach bool, sockpath string) (*Tty, error) {
 	if createTTY {
 		process.Stdin = nil
 		process.Stdout = nil
 		process.Stderr = nil
 		t := &Tty{}
 		if !detach {
-			log.Debug().Msg("runc with tty")
 			if err := t.initHostConsole(); err != nil {
 				return nil, err
 			}
@@ -96,7 +95,6 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 				t.consoleC <- t.recvtty(parent)
 			}()
 		} else {
-			log.Debug().Msg("runc detached with tty")
 			// the caller of runc will handle receiving the console master
 			conn, err := net.Dial("unix", sockpath)
 			if err != nil {
@@ -119,11 +117,21 @@ func SetupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// when runc will detach the caller provides the stdio to runc via runc's 0,1,2
 	// and the container's process inherits runc's stdio.
 	if detach {
-		log.Debug().Msg("runc detached without tty")
 		inheritStdio(process)
 		return &Tty{}, nil
 	}
-	return SetupProcessPipes(process, rootuid, rootgid, os.Stdin, os.Stdout, os.Stderr)
+
+	config := container.Config()
+	rootuid, err := config.HostRootUID()
+	if err != nil {
+		return nil, err
+	}
+	rootgid, err := config.HostRootGID()
+	if err != nil {
+		return nil, err
+	}
+
+	return SetupProcessPipes(process, rootuid, rootgid)
 }
 
 // createPidFile creates a file containing the PID,

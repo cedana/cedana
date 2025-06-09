@@ -70,7 +70,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    if: always()
+    if: ${{ !cancalled() }}
     needs: [build, download]
     secrets: inherit
     with:

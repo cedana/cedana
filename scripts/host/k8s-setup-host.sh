@@ -4,12 +4,12 @@ set -e
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE"  ]; do
-    DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
     SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /*  ]] && SOURCE="$DIR/$SOURCE"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
-DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
@@ -41,16 +41,16 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-        debian | ubuntu)
-            install_apt_packages
-            ;;
-        rhel | centos | fedora | amzn)
-            install_yum_packages
-            ;;
-        *)
-            echo "Unknown distribution"
-            exit 1
-            ;;
+    debian | ubuntu)
+        install_apt_packages
+        ;;
+    rhel | centos | fedora | amzn)
+        install_yum_packages
+        ;;
+    *)
+        echo "Unknown distribution"
+        exit 1
+        ;;
     esac
 elif [ -f /etc/debian_version ]; then
     install_apt_packages

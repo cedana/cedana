@@ -1,5 +1,12 @@
 name: Test / Streamer
 
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   workflow_call:
     inputs:
@@ -47,12 +54,18 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 1 # Low parallelism to avoid OOM on the GPU runner
+        default: 2
+      post_summary:
+        type: boolean
+        description: "Post test summary"
+        required: false
+        default: false
 
 jobs:
   streamer:
     name: Streamer
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +77,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }}
+      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock
     env:
       CEDANA_URL: ${{ vars.CEDANA_URL }}
       CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -117,7 +130,7 @@ jobs:
         env:
           GPU: ${{ inputs.gpu }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio criu
+          sudo -E ./cedana plugin install runc containerd crio criu storage/cedana
           sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
@@ -138,17 +151,74 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
+          RETRIES: 0
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU
+              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU
+              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             fi
           fi
+
+      - name: Upload report
+        if: always()
+        id: upload-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.arch }}-streamer
+          path: |
+            /tmp/report*.xml
+
+  post-summary:
+    name: Post Summary
+    if: inputs.post_summary && always()
+    needs: streamer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download report
+        id: download-report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-report-${{ matrix.arch }}-streamer
+          path: report
+
+      - name: Generate consolidated report
+        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
+
+      - name: Post report
+        uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          report-path: ctrf/*.json
+          github-report: true
+          failed-folded-report: true
+          summary: true
+          pull-request: true
+          title: ${{ matrix.arch }}
+          update-comment: true
+          overwrite-comment: true
+          comment-tag: test-report-streamer-${{ matrix.arch }}
+          group-by: "suite"
+          always-group-by: true
+          upload-artifact: true
+          artifact-name: ctrf-report-streamer-${{ matrix.arch }}

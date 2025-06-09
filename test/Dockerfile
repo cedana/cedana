@@ -43,43 +43,18 @@ tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.
 EOT
 ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
 
-# install helm
+# Install Docker (CLI only)
 RUN <<EOT
-set -eux
-curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-chmod 700 get_helm.sh
-./get_helm.sh
-rm get_helm.sh
-EOT
-
-# install k3s (download only, will be installed in tests as needed)
-RUN <<EOT
-set -eux
-curl -sfL https://get.k3s.io -o /usr/local/bin/install-k3s.sh
-chmod +x /usr/local/bin/install-k3s.sh
-EOT
-
-# install k3d (for better Docker container support)
-RUN <<EOT
-set -eux
-curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-EOT
-
-# install docker (needed for k3d) with proper setup for containers
-RUN <<EOT
-set -eux
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+    https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$UBUNTU_CODENAME") stable" | \
+tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-EOT
-
-# install kubectl
-RUN <<EOT
-set -eux
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-chmod +x kubectl
-mv kubectl /usr/local/bin/kubectl
+apt-get install -y docker-ce docker-ce-cli
 EOT
 
 # copy cedana-samples

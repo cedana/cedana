@@ -7,7 +7,7 @@ import (
 	"os/exec"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/internal/server"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -29,8 +29,6 @@ func init() {
 	runCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	runCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
-	runCmd.PersistentFlags().
-		StringP(flags.GpuTypeFlag.Full, flags.GpuTypeFlag.Short, "", "multi-process type for GPU support (IPC, NCCL)")
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	runCmd.PersistentFlags().
@@ -68,7 +66,6 @@ var runCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
-		gpuType, _ := cmd.Flags().GetString(flags.GpuTypeFlag.Full)
 		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
@@ -94,23 +91,25 @@ var runCmd = &cobra.Command{
 
 		// Create initial request
 		req := &daemon.RunReq{
-			JID:                 jid,
-			Log:                 log,
-			PidFile:             pidFile,
-			GPUEnabled:          gpuEnabled,
-			GPUMultiprocessType: gpuType,
-			Attachable:          attach || attachable,
-			Action:              daemon.RunAction_START_NEW,
-			Env:                 env,
-			UID:                 user.Uid,
-			GID:                 user.Gid,
-			Groups:              user.Groups,
+			JID:        jid,
+			Log:        log,
+			PidFile:    pidFile,
+			GPUEnabled: gpuEnabled,
+			Attachable: attach || attachable,
+			Action:     daemon.RunAction_START_NEW,
+			Env:        env,
+			UID:        user.Uid,
+			GID:        user.Gid,
+			Groups:     user.Groups,
+			Details:    &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
 
 		if noServer {
+			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
+			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -132,6 +131,7 @@ var runCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
+		ctx := cmd.Context()
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
@@ -144,22 +144,19 @@ var runCmd = &cobra.Command{
 		var profiling *profiling.Data
 
 		if noServer {
-			ctx := context.WithValue(
-				cmd.Context(),
-				keys.DAEMONLESS_CONTEXT_KEY,
-				true,
-			)
-
-			root, err := server.NewRoot(ctx)
+			cedana, err := cedana.New(ctx)
 			if err != nil {
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
 			}
-			defer root.Shutdown()
 
-			resp, err = root.Run(ctx, req)
+			code, err := cedana.Run(req)
 			if err != nil {
+				cedana.Shutdown()
 				return utils.GRPCErrorColored(err)
 			}
+			cedana.Shutdown()
+
+			os.Exit(<-code())
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

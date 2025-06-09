@@ -51,6 +51,14 @@ teardown_file() {
 }
 
 # bats test_tags=daemonless
+@test "run process (without daemon, exit code)" {
+    code=42
+    run cedana run --no-server process "$WORKLOADS"/exit-code.sh "$code"
+
+    assert_equal $status $code
+}
+
+# bats test_tags=daemonless
 @test "run process (without daemon, PID file)" {
     pid_file=/tmp/$(unix_nano).pid
 
@@ -99,7 +107,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "run process with attach" {
+@test "attach" {
     jid=$(unix_nano)
 
     run cedana run process echo hello --jid "$jid" --attach
@@ -109,7 +117,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "run process with attach (exit code)" {
+@test "attach (exit code)" {
     jid=$(unix_nano)
     code=42
 
@@ -123,7 +131,8 @@ teardown_file() {
     jid=$(unix_nano)
     code=42
 
-    cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    run cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
+    assert_success
 
     pid=$(pid_for_jid "$jid")
 
@@ -133,7 +142,7 @@ teardown_file() {
 }
 
 # bats test_tags=attach
-@test "attach job" {
+@test "attach (job)" {
     jid=$(unix_nano)
     code=42
 
