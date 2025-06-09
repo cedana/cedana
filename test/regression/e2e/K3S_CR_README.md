@@ -122,12 +122,11 @@ test-k3s-cr: ## Run k3s pod checkpoint/restore test specifically
 
 ```
 test/
-├── run-e2e-docker.sh                  # Official test runner (USE THIS)
-├── Dockerfile                         # Test environment
+├── run-k3s-e2e-baremetal.sh           # Official test runner (USE THIS)
 └── regression/e2e/
     ├── k3s_pod_cr.bats                # Main test file
     └── helpers/
-        ├── propagator.bash             # Propagator API client
+        ├── propagator.bash            # Propagator API client
         ├── k3s.bash                   # k3s cluster helpers
         └── utils.bash                 # General utilities
 ```
