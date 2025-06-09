@@ -19,7 +19,7 @@ CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSIO
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 
 # NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
-PLUGINS="criu@$CEDANA_PLUGINS_CRIU_VERSION k8s-runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION"
+PLUGINS="criu@$CEDANA_PLUGINS_CRIU_VERSION k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION"
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
