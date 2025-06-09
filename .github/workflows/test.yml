@@ -416,6 +416,7 @@ jobs:
       - name: Post report to Slack
         if: ${{ inputs.post_summary_slack != '' }}
         env:
-          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
           TITLE: "Test results (${{ matrix.arch }})"
-        run: npx slack-ctrf results "ctrf/*.json" --title "$TITLE"
+        run: |
+          npx slack-ctrf results "ctrf/*.json" --title "$TITLE"

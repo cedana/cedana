@@ -65,7 +65,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      post_summary_slack: ${{ secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY }}
+      post_summary_slack: nightly
 
   bench:
     name: Bench
