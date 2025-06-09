@@ -11,12 +11,12 @@ normalize_url() {
     # Remove trailing slashes and /v1 suffix
     url="${url%/}"
     url="${url%/v1}"
-    
+
     # Add https:// if no protocol specified
     if [[ ! "$url" =~ ^https?:// ]]; then
         url="https://$url"
     fi
-    
+
     echo "$url"
 }
 
@@ -35,12 +35,12 @@ PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
 #
 setup_propagator_auth() {
     local token="${1:-$CEDANA_AUTH_TOKEN}"
-    
+
     if [ -z "$token" ]; then
         echo "Error: CEDANA_AUTH_TOKEN not set and no token provided"
         return 1
     fi
-    
+
     export PROPAGATOR_AUTH_TOKEN="$token"
     echo "Propagator authentication configured"
     return 0
@@ -52,15 +52,15 @@ setup_propagator_auth() {
 #
 get_available_clusters() {
     echo "Retrieving available clusters from propagator..."
-    
+
     local response
     response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/cluster" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
-    
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
         return 0
@@ -76,7 +76,7 @@ get_available_clusters() {
 get_cluster_id() {
     local clusters
     clusters=$(get_available_clusters 2>/dev/null)
-    
+
     if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ] && [ "$clusters" != "null" ]; then
         local cluster_id
         cluster_id=$(echo "$clusters" | jq -r '.[0].id' 2>/dev/null)
@@ -85,7 +85,7 @@ get_cluster_id() {
             return 0
         fi
     fi
-    
+
     # Return a placeholder cluster ID if none available
     echo "test-cluster-placeholder"
     return 0
@@ -104,14 +104,14 @@ checkpoint_pod_via_api() {
     local runc_root="$2"
     local namespace="$3"
     local cluster_id="$4"
-    
+
     if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ] || [ -z "$cluster_id" ]; then
         echo "Error: checkpoint_pod_via_api requires pod_name, runc_root, namespace, cluster_id" >&2
         return 1
     fi
-    
+
     echo "Checkpointing pod '$pod_name' in namespace '$namespace'..."
-    
+
     local payload
     payload=$(jq -n \
         --arg pod_name "$pod_name" \
@@ -124,17 +124,17 @@ checkpoint_pod_via_api() {
             "namespace": $namespace,
             "cluster_id": $cluster_id
         }')
-    
+
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/checkpoint/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
         -w "%{http_code}")
-    
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
         return 0
@@ -153,14 +153,14 @@ checkpoint_pod_via_api() {
 restore_pod_via_api() {
     local action_id="$1"
     local cluster_id="$2"
-    
+
     if [ -z "$action_id" ]; then
         echo "Error: restore_pod_via_api requires action_id" >&2
         return 1
     fi
-    
+
     echo "Restoring pod from action '$action_id'..."
-    
+
     local payload
     if [ -n "$cluster_id" ]; then
         payload=$(jq -n \
@@ -177,17 +177,21 @@ restore_pod_via_api() {
                 "action_id": $action_id
             }')
     fi
-    
+
+    echo "DEBUG: Restore payload: $payload"
+
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
         -w "%{http_code}")
-    
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
+    echo "DEBUG: Restore response HTTP $http_code: $body"
+
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
         return 0
@@ -205,35 +209,35 @@ restore_pod_via_api() {
 poll_action_status() {
     local action_id="$1"
     local operation="${2:-operation}"
-    
+
     if [ -z "$action_id" ]; then
         echo "Error: poll_action_status requires action_id" >&2
         return 1
     fi
-    
+
     echo "Polling status for $operation action '$action_id'..."
-    
+
     for i in $(seq 1 60); do  # 5 minute timeout
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions?type=$operation" \
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions?type=${operation}_pod" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
-        
+
         local http_code="${response: -3}"
         local body="${response%???}"
-        
+
         if [ "$http_code" -eq 200 ]; then
             local action_info
             action_info=$(echo "$body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
-            
+
             if [ -n "$action_info" ]; then
                 local status
                 status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
-                
+
                 echo "Action status: $status (attempt $i/60)"
-                
+
                 case "$status" in
-                    "completed"|"ready")
+                    "success"|"completed"|"ready")
                         echo "$operation action completed successfully"
                         return 0
                         ;;
@@ -252,10 +256,10 @@ poll_action_status() {
         else
             echo "Warning: Failed to get actions (HTTP $http_code) (attempt $i/60)"
         fi
-        
+
         sleep 5
     done
-    
+
     echo "Error: Timeout waiting for $operation action '$action_id' to complete" >&2
     return 1
 }
@@ -266,22 +270,22 @@ poll_action_status() {
 #
 cleanup_checkpoint() {
     local checkpoint_id="$1"
-    
+
     if [ -z "$checkpoint_id" ]; then
         echo "Error: cleanup_checkpoint requires checkpoint_id" >&2
         return 1
     fi
-    
+
     echo "Deprecating checkpoint '$checkpoint_id'..."
-    
+
     local response
     response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/checkpoints/deprecate/${checkpoint_id}" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
-        
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
     if [ "$http_code" -eq 200 ]; then
         echo "Checkpoint deprecated successfully"
         return 0
@@ -298,12 +302,12 @@ cleanup_checkpoint() {
 #
 extract_checkpoint_id() {
     local action_response="$1"
-    
+
     if [ -z "$action_response" ]; then
         echo "Error: extract_checkpoint_id requires action_response" >&2
         return 1
     fi
-    
+
     echo "$action_response" | jq -r '.checkpoint_id' 2>/dev/null || echo ""
 }
 
@@ -312,15 +316,15 @@ extract_checkpoint_id() {
 #
 validate_propagator_connectivity() {
     echo "Validating propagator service connectivity..."
-    
+
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/user" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
-    
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
     if [ "$http_code" -eq 200 ]; then
         echo "Propagator service connectivity validated"
         return 0
@@ -338,12 +342,12 @@ validate_propagator_connectivity() {
 parse_json_response() {
     local json="$1"
     local filter="$2"
-    
+
     if [ -z "$json" ] || [ -z "$filter" ]; then
         echo "Error: parse_json_response requires json and filter" >&2
         return 1
     fi
-    
+
     echo "$json" | jq -r "$filter" 2>/dev/null || echo ""
 }
 
@@ -354,22 +358,22 @@ parse_json_response() {
 #
 get_checkpoints() {
     local cluster_id="$1"
-    
+
     echo "Retrieving checkpoints from propagator..."
-    
+
     local url="${PROPAGATOR_BASE_URL}/v2/checkpoints"
     if [ -n "$cluster_id" ]; then
         url="${url}?cluster_id=${cluster_id}"
     fi
-    
+
     local response
     response=$(curl -s -X GET "$url" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
-    
+
     local http_code="${response: -3}"
     local body="${response%???}"
-    
+
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
         return 0
@@ -385,26 +389,26 @@ get_checkpoints() {
 #
 list_checkpoints() {
     local cluster_id="$1"
-    
+
     echo "=== Cedana Checkpoints ==="
-    
+
     local checkpoints
     checkpoints=$(get_checkpoints "$cluster_id")
     local exit_code=$?
-    
+
     if [ $exit_code -ne 0 ]; then
         echo "Failed to retrieve checkpoints"
         return $exit_code
     fi
-    
+
     if [ -z "$checkpoints" ] || [ "$checkpoints" = "[]" ] || [ "$checkpoints" = "null" ]; then
         echo "No checkpoints found"
         return 0
     fi
-    
+
     # Parse and display checkpoints in readable format
     echo "$checkpoints" | jq -r '.[] | "ID: \(.id // "N/A")\nStatus: \(.status // "N/A")\nPod: \(.pod_name // "N/A")\nNamespace: \(.namespace // "N/A")\nCluster: \(.cluster_id // "N/A")\nCreated: \(.created_at // "N/A")\n---"' 2>/dev/null || {
         echo "Raw response:"
         echo "$checkpoints"
     }
-} 
+}

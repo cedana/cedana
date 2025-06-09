@@ -327,8 +327,11 @@ EOF
 
     # Get the checkpoint details to extract checkpoint ID
     echo "Retrieving checkpoint details..."
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions?type=checkpoint_pod" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}")
+
+    echo "DEBUG: Raw /v2/actions response: $response"
+    echo "DEBUG: Response type: $(echo "$response" | jq -r 'type' 2>/dev/null || echo 'not valid JSON')"
 
     checkpoint_details=$(echo "$response" | jq --arg id "$ACTION_ID" '.[] | select(.action_id == $id)')
     CHECKPOINT_ID=$(echo "$checkpoint_details" | jq -r '.checkpoint_id // empty')
